@@ -20,14 +20,15 @@ describe("TerminalView source guards", () => {
     // session effect re-run (that used to disconnect/reconnect on every fit).
     expect(source).not.toContain("viewportSizeVersion")
     expect(source).not.toContain("setViewportSizeVersion")
-    expect(source).toContain("withTerminalSessionCreate")
+    expect(source).toContain("ensureClaimedTerminalSession")
+    expect(source).not.toContain("cleanupStaleCreatedTerminalSession")
     expect(source).toContain('splitPaneRightTab === "terminal"')
   })
 
   test("recovers from missing server sessions instead of locking the tab as exited", async () => {
     const source = await readFile(sourcePath, "utf8")
     expect(source).toContain("isMissingSession")
-    expect(source).toContain('setTabLifecycle(directory, tabId, "idle")')
+    expect(source).toContain('setTabSessionId(directory, tabId, null, { lifecycle: "idle" })')
     expect(source).toMatch(/session not found/i)
   })
 })

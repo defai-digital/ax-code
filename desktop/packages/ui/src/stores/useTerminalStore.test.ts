@@ -26,7 +26,7 @@ describe("useTerminalStore", () => {
     expect(normalizedState?.tabs.map((tab) => tab.id)).toEqual(["tab-1", secondTabId])
   })
 
-  test("does not rehydrate ephemeral terminal session ids from storage", () => {
+  test("does not rehydrate ephemeral terminal session state from storage", () => {
     const persistApi = (
       useTerminalStore as unknown as {
         persist: {
@@ -53,7 +53,7 @@ describe("useTerminalStore", () => {
                   label: "Terminal",
                   iconKey: null,
                   terminalSessionId: "stale-session-from-last-boot",
-                  lifecycle: "running",
+                  lifecycle: "exited",
                   createdAt: 1,
                 },
               ],
@@ -69,7 +69,7 @@ describe("useTerminalStore", () => {
     expect(tab?.terminalSessionId).toBeNull()
     expect(tab?.lifecycle).toBe("idle")
 
-    // partialize must also avoid writing session ids back out
+    // partialize must also avoid writing session ids or lifecycle back out
     useTerminalStore.setState({
       sessions: new Map([
         [
@@ -97,9 +97,25 @@ describe("useTerminalStore", () => {
       ]),
     })
     const partial = options.partialize?.(useTerminalStore.getState()) as {
-      sessions: Array<[string, { tabs: Array<{ terminalSessionId?: string | null; lifecycle: string }> }]>
+      sessions: Array<
+        [string, { tabs: Array<{ terminalSessionId?: string | null; lifecycle?: "idle" | "running" | "exited" }> }]
+      >
     }
     expect(partial.sessions[0][1].tabs[0]).not.toHaveProperty("terminalSessionId")
-    expect(partial.sessions[0][1].tabs[0].lifecycle).toBe("idle")
+    expect(partial.sessions[0][1].tabs[0]).not.toHaveProperty("lifecycle")
+  })
+
+  test("can atomically recover a missing server session to idle", () => {
+    const store = useTerminalStore.getState()
+    store.ensureDirectory("/repo")
+    const tabId = useTerminalStore.getState().getDirectoryState("/repo")?.tabs[0]?.id
+    expect(tabId).toBeTruthy()
+
+    store.setTabSessionId("/repo", tabId!, "live-session")
+    store.setTabSessionId("/repo", tabId!, null, { lifecycle: "idle" })
+
+    const tab = useTerminalStore.getState().getDirectoryState("/repo")?.tabs[0]
+    expect(tab?.terminalSessionId).toBeNull()
+    expect(tab?.lifecycle).toBe("idle")
   })
 })

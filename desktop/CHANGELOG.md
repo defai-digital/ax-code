@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Desktop: prevents the integrated terminal's shared session from being closed during renderer lifecycle races and restores stale terminal tabs as fresh shells.
+
 ## [6.11.2] - 2026-07-12
 
 ### Fixed

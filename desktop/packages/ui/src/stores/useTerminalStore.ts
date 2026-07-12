@@ -59,7 +59,12 @@ interface TerminalStore {
   setTabIconKey: (directory: string, tabId: string, iconKey: string | null) => void
   closeTab: (directory: string, tabId: string) => Promise<void>
 
-  setTabSessionId: (directory: string, tabId: string, sessionId: string | null) => void
+  setTabSessionId: (
+    directory: string,
+    tabId: string,
+    sessionId: string | null,
+    options?: { lifecycle?: TerminalTabLifecycle },
+  ) => void
   setTabLifecycle: (directory: string, tabId: string, lifecycle: TerminalTabLifecycle) => void
   setConnecting: (directory: string, tabId: string, isConnecting: boolean) => void
   appendToBuffer: (directory: string, tabId: string, chunk: string) => void
@@ -81,10 +86,10 @@ interface TerminalStore {
 
 const TERMINAL_BUFFER_LIMIT = 1_000_000
 const TERMINAL_STORE_NAME = "terminal-store"
-// PTY session ids are server-ephemeral and must not be restored across app
-// restarts (the utilityProcess server is gone). We still persist tab chrome
-// (labels/order) and an exited marker so intentional shell exits stay exited.
-type PersistedTerminalTab = Pick<TerminalTab, "id" | "label" | "iconKey" | "lifecycle" | "createdAt">
+// PTY session ids and lifecycle are server-ephemeral and must not be restored
+// across app restarts (the utilityProcess server is gone). Persist only tab
+// chrome; every restored tab starts idle and creates a fresh PTY when opened.
+type PersistedTerminalTab = Pick<TerminalTab, "id" | "label" | "iconKey" | "createdAt">
 
 type PersistedDirectoryTerminalState = {
   tabs: PersistedTerminalTab[]
@@ -358,7 +363,12 @@ export const useTerminalStore = create<TerminalStore>()(
           })
         },
 
-        setTabSessionId: (directory: string, tabId: string, sessionId: string | null) => {
+        setTabSessionId: (
+          directory: string,
+          tabId: string,
+          sessionId: string | null,
+          options?: { lifecycle?: TerminalTabLifecycle },
+        ) => {
           const key = normalizeDirectory(directory)
           set((state) => {
             const newSessions = new Map(state.sessions)
@@ -375,7 +385,8 @@ export const useTerminalStore = create<TerminalStore>()(
             const tab = existing.tabs[idx]
             const shouldResetBuffer = sessionId !== null && tab.terminalSessionId !== sessionId
 
-            const nextLifecycle = sessionId ? "running" : tab.terminalSessionId ? "exited" : tab.lifecycle
+            const nextLifecycle =
+              options?.lifecycle ?? (sessionId ? "running" : tab.terminalSessionId ? "exited" : tab.lifecycle)
 
             const nextTab: TerminalTab = {
               ...tab,
@@ -638,8 +649,6 @@ export const useTerminalStore = create<TerminalStore>()(
                 id: tab.id,
                 label: tab.label,
                 iconKey: tab.iconKey,
-                // Do not persist terminalSessionId — PTYs die with the server.
-                lifecycle: tab.lifecycle === "exited" ? "exited" : "idle",
                 createdAt: tab.createdAt,
               })),
             },
@@ -686,18 +695,15 @@ export const useTerminalStore = create<TerminalStore>()(
                 maxTabNum = Math.max(maxTabNum, num)
               }
 
-              const lifecycleRaw = rawTab.lifecycle
-              // Never restore server session ids from storage. Keep "exited" so
-              // intentionally closed shells stay closed; otherwise idle so the
-              // next open creates a fresh PTY.
-              const lifecycle: TerminalTabLifecycle = lifecycleRaw === "exited" ? "exited" : "idle"
-
               tabs.push({
                 id,
                 label: typeof rawTab.label === "string" ? rawTab.label : "Terminal",
                 iconKey: typeof rawTab.iconKey === "string" ? rawTab.iconKey : null,
                 terminalSessionId: null,
-                lifecycle,
+                // Never restore server session ids or lifecycle from storage.
+                // An exited marker without its PTY/output renders as a blank,
+                // permanently stopped terminal after an app restart.
+                lifecycle: "idle",
                 createdAt: typeof rawTab.createdAt === "number" ? rawTab.createdAt : Date.now(),
                 bufferChunks: [],
                 bufferLength: 0,

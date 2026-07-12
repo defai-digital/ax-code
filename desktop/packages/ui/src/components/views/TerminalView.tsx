@@ -24,8 +24,7 @@ import {
 } from "@/lib/terminalPreview"
 import { useI18n } from "@/lib/i18n"
 import { PROJECT_ACTION_ICON_MAP, type ProjectActionIconKey } from "@/lib/projectActions"
-import { cleanupStaleCreatedTerminalSession } from "./terminalCreateCleanup"
-import { withTerminalSessionCreate } from "./terminalCreateLock"
+import { ensureClaimedTerminalSession } from "./terminalCreateLock"
 
 type Modifier = "ctrl" | "cmd"
 type MobileKey = "esc" | "tab" | "enter" | "arrow-up" | "arrow-down" | "arrow-left" | "arrow-right"
@@ -114,7 +113,6 @@ export const TerminalView: React.FC = () => {
   const setActiveTab = useTerminalStore((s) => s.setActiveTab)
   const closeTab = useTerminalStore((s) => s.closeTab)
   const setTabSessionId = useTerminalStore((s) => s.setTabSessionId)
-  const setTabLifecycle = useTerminalStore((s) => s.setTabLifecycle)
   const setConnecting = useTerminalStore((s) => s.setConnecting)
   const appendToBuffer = useTerminalStore((s) => s.appendToBuffer)
   const setTabPreviewUrl = useTerminalStore((s) => s.setTabPreviewUrl)
@@ -402,8 +400,7 @@ export const TerminalView: React.FC = () => {
                     signalSegment: signal !== null ? t("terminalView.stream.processExitedWithSignal", { signal }) : "",
                   }),
                 )
-                setTabLifecycle(directory, tabId, "exited")
-                setTabSessionId(directory, tabId, null)
+                setTabSessionId(directory, tabId, null, { lifecycle: "exited" })
                 setConnecting(directory, tabId, false)
                 setConnectionError(isActionTab ? null : t("terminalView.error.sessionEnded"))
                 setIsFatalError(false)
@@ -438,15 +435,13 @@ export const TerminalView: React.FC = () => {
               rehydratedTerminalIdsRef.current.delete(terminalId)
               setConnectionError(null)
               setIsFatalError(false)
-              setTabLifecycle(directory, tabId, "idle")
-              setTabSessionId(directory, tabId, null)
+              setTabSessionId(directory, tabId, null, { lifecycle: "idle" })
               return
             }
 
             setConnectionError(t("terminalView.error.connectionFailed", { message: error.message }))
             setIsFatalError(true)
-            setTabLifecycle(directory, tabId, "exited")
-            setTabSessionId(directory, tabId, null)
+            setTabSessionId(directory, tabId, null, { lifecycle: "exited" })
           },
         },
         streamOptions,
@@ -464,7 +459,6 @@ export const TerminalView: React.FC = () => {
       focusTerminalWhenWindowActive,
       scanTerminalPreviewOutput,
       setConnecting,
-      setTabLifecycle,
       setTabSessionId,
       t,
       terminal,
@@ -536,40 +530,46 @@ export const TerminalView: React.FC = () => {
         try {
           // Coalesce concurrent creates from multiple mounted TerminalView hosts
           // (main tab + bottom dock + split pane) so only one PTY is spawned.
-          terminalId = await withTerminalSessionCreate(directory, tabId, async () => {
-            const existingSessionId = useTerminalStore
-              .getState()
-              .getDirectoryState(directory)
-              ?.tabs.find((entry) => entry.id === tabId)?.terminalSessionId
-            if (existingSessionId) {
-              return existingSessionId
-            }
-
-            const session = await terminal.createSession({
-              cwd: directory,
-              cols: size?.cols,
-              rows: size?.rows,
-            })
-            return session.sessionId
+          terminalId = await ensureClaimedTerminalSession(directory, tabId, {
+            getClaimedSessionId: () =>
+              useTerminalStore
+                .getState()
+                .getDirectoryState(directory)
+                ?.tabs.find((entry) => entry.id === tabId)?.terminalSessionId ?? null,
+            createSession: async () => {
+              const session = await terminal.createSession({
+                cwd: directory,
+                cols: size?.cols,
+                rows: size?.rows,
+              })
+              return session.sessionId
+            },
+            claimSession: (sessionId) => {
+              setTabSessionId(directory, tabId, sessionId)
+              return (
+                useTerminalStore
+                  .getState()
+                  .getDirectoryState(directory)
+                  ?.tabs.find((entry) => entry.id === tabId)?.terminalSessionId === sessionId
+              )
+            },
+            closeSession: terminal.close,
           })
+
+          if (!terminalId) {
+            setConnecting(directory, tabId, false)
+            return
+          }
 
           const stillActive = !cancelled && directoryRef.current === directory && activeTabIdRef.current === tabId
 
           if (!stillActive) {
-            // Only close a session we just orphaned if nothing else claimed it.
-            const claimedByStore = useTerminalStore
-              .getState()
-              .getDirectoryState(directory)
-              ?.tabs.some((entry) => entry.terminalSessionId === terminalId)
-            if (!claimedByStore && terminalId) {
-              await cleanupStaleCreatedTerminalSession(terminal.close, setConnecting, directory, tabId, terminalId)
-            } else {
-              setConnecting(directory, tabId, false)
-            }
+            // The coordinator has already claimed the PTY for the tab. A
+            // cancelled renderer relinquishes only its loading state; another
+            // mounted host (or the next effect) owns the shared session.
+            setConnecting(directory, tabId, false)
             return
           }
-
-          setTabSessionId(directory, tabId, terminalId)
         } catch (error) {
           if (cancelled) {
             setConnecting(directory, tabId, false)
@@ -617,7 +617,6 @@ export const TerminalView: React.FC = () => {
     terminalHydrated,
     ensureDirectory,
     setConnecting,
-    setTabLifecycle,
     setTabSessionId,
     startStream,
     disconnectStream,
@@ -1193,7 +1192,10 @@ export const TerminalView: React.FC = () => {
         ) : null}
       </div>
 
-      <div className="relative flex-1 overflow-hidden border-t border-border/40" style={{ backgroundColor: xtermTheme.background }}>
+      <div
+        className="relative flex-1 overflow-hidden border-t border-border/40"
+        style={{ backgroundColor: xtermTheme.background }}
+      >
         <div className="h-full w-full box-border pl-4 pr-1.5 pt-3 pb-4">
           <TerminalViewport
             key={terminalViewportKey}
