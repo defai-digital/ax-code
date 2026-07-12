@@ -1925,6 +1925,10 @@ export type ProviderConfig = {
      * Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted.
      */
     chunkTimeout?: number
+    /**
+     * Tool surface for constrained local providers such as AX Engine. "core" keeps coding/file tools only; "full" exposes every enabled tool.
+     */
+    toolProfile?: "core" | "full"
     [key: string]: unknown
   }
   models?: {
@@ -12240,7 +12244,14 @@ export type ProviderAxEnginePrepareData = {
   body?: {
     modelPath?: string
     binaryPath?: string
-    modelID?: "qwen3.6-27b-6bit" | "qwen3.6-35b-a3b" | "gemma-4-12b" | "gemma-4-26b" | "gemma-4-31b" | "glm-4.7-flash"
+    modelID?:
+      | "qwen3.6-27b-6bit"
+      | "qwen3-coder-next-6bit"
+      | "qwen3.6-35b-a3b"
+      | "gemma-4-12b"
+      | "gemma-4-26b"
+      | "gemma-4-31b"
+      | "glm-4.7-flash"
     quantization?: "mlx4bit" | "mlx6bit"
     download?: boolean
     start?: boolean
@@ -12272,7 +12283,14 @@ export type ProviderAxEngineStartData = {
   body?: {
     modelPath?: string
     binaryPath?: string
-    modelID?: "qwen3.6-27b-6bit" | "qwen3.6-35b-a3b" | "gemma-4-12b" | "gemma-4-26b" | "gemma-4-31b" | "glm-4.7-flash"
+    modelID?:
+      | "qwen3.6-27b-6bit"
+      | "qwen3-coder-next-6bit"
+      | "qwen3.6-35b-a3b"
+      | "gemma-4-12b"
+      | "gemma-4-26b"
+      | "gemma-4-31b"
+      | "glm-4.7-flash"
     quantization?: "mlx4bit" | "mlx6bit"
     download?: boolean
   }
