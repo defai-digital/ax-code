@@ -236,6 +236,15 @@ try {
     },
   )
 
+  // The checked-in snapshot is the cross-language public contract. Refresh it
+  // from the same runtime document used for the TypeScript clients so those
+  // artifacts cannot be generated from different API shapes.
+  const generatedOpenApi = await fs.readFile(path.join(dir, "openapi.json"), "utf8")
+  await fs.writeFile(
+    path.resolve(dir, "../openapi.json"),
+    generatedOpenApi.endsWith("\n") ? generatedOpenApi : `${generatedOpenApi}\n`,
+  )
+
   const generateClient = (outputPath: string) =>
     createClient({
       input: "./openapi.json",

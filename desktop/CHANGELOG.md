@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.11.2] - 2026-07-12
+
+### Fixed
+
+- Release: increases CI test capacity and strengthens SDK generation, repository policy, and Desktop-boundary verification.
+
 ## [6.11.1] - 2026-07-12
 
 ### Fixed

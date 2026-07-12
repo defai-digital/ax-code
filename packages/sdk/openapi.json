@@ -26687,6 +26687,194 @@
         ]
       }
     },
+    "/session/{sessionID}/move/validate": {
+      "post": {
+        "operationId": "session.move_validate",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Validate session move target",
+        "tags": [
+          "Session"
+        ],
+        "description": "Validate whether a session can move to a target directory without mutating session or project state.",
+        "responses": {
+          "200": {
+            "description": "Session move target validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionMoveValidation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "targetDirectory": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "targetDirectory"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.session.move_validate({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/session/{sessionID}/move": {
+      "post": {
+        "operationId": "session.move",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Move session",
+        "tags": [
+          "Session"
+        ],
+        "description": "Move a session to a validated target directory by updating the session's owning directory. This does not move files.",
+        "responses": {
+          "200": {
+            "description": "Updated session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "targetDirectory": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "targetDirectory"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.session.move({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/session/{sessionID}/rollback/preview": {
       "post": {
         "operationId": "session.rollback_preview",
@@ -29963,6 +30151,7 @@
                     "type": "string",
                     "enum": [
                       "qwen3.6-27b-6bit",
+                      "qwen3-coder-next-6bit",
                       "qwen3.6-35b-a3b",
                       "gemma-4-12b",
                       "gemma-4-26b",
@@ -30046,6 +30235,7 @@
                     "type": "string",
                     "enum": [
                       "qwen3.6-27b-6bit",
+                      "qwen3-coder-next-6bit",
                       "qwen3.6-35b-a3b",
                       "gemma-4-12b",
                       "gemma-4-26b",
@@ -40453,6 +40643,14 @@
                 "type": "integer",
                 "exclusiveMinimum": 0,
                 "maximum": 9007199254740991
+              },
+              "toolProfile": {
+                "description": "Tool surface for constrained local providers such as AX Engine. \"core\" keeps coding/file tools only; \"full\" exposes every enabled tool.",
+                "type": "string",
+                "enum": [
+                  "core",
+                  "full"
+                ]
               }
             },
             "additionalProperties": {}
@@ -40782,6 +40980,15 @@
           "full-access"
         ]
       },
+      "IsolationBackend": {
+        "description": "Isolation enforcement backend: app (portable tool checks, default), os (kernel sandbox for bash when available), auto (prefer os with app fallback)",
+        "type": "string",
+        "enum": [
+          "app",
+          "os",
+          "auto"
+        ]
+      },
       "IsolationConfig": {
         "description": "Execution isolation configuration",
         "type": "object",
@@ -40800,6 +41007,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "backend": {
+            "$ref": "#/components/schemas/IsolationBackend"
           }
         },
         "additionalProperties": false
@@ -45605,6 +45815,129 @@
           "partID",
           "tools",
           "kinds"
+        ]
+      },
+      "SessionMoveValidation": {
+        "type": "object",
+        "properties": {
+          "sessionID": {
+            "type": "string",
+            "pattern": "^ses.*"
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "target_missing",
+              "target_not_directory",
+              "outside_current_project",
+              "same_directory"
+            ]
+          },
+          "current": {
+            "type": "object",
+            "properties": {
+              "directory": {
+                "type": "string"
+              },
+              "projectID": {
+                "type": "string"
+              },
+              "worktree": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "directory",
+              "projectID",
+              "worktree"
+            ]
+          },
+          "target": {
+            "type": "object",
+            "properties": {
+              "directory": {
+                "type": "string"
+              },
+              "exists": {
+                "type": "boolean"
+              },
+              "isDirectory": {
+                "type": "boolean"
+              },
+              "sameDirectory": {
+                "type": "boolean"
+              },
+              "withinCurrentProject": {
+                "type": "boolean"
+              },
+              "git": {
+                "type": "object",
+                "properties": {
+                  "worktree": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "branch": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "dirty": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "worktree",
+                  "branch",
+                  "dirty"
+                ]
+              }
+            },
+            "required": [
+              "directory",
+              "exists",
+              "isDirectory",
+              "sameDirectory",
+              "withinCurrentProject",
+              "git"
+            ]
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "sessionID",
+          "valid",
+          "reason",
+          "current",
+          "target",
+          "warnings"
         ]
       },
       "SessionRollbackPreview": {

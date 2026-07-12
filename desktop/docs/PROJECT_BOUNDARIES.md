@@ -25,11 +25,12 @@ be fixed.
   and the server-side AX Code lifecycle adapter. Do not import SDK `dist/`
   internals.
 
-The enforced subset of these rules runs from the monorepo root with
-`pnpm run check:desktop-boundaries`. The legacy direct checker remains at
-`desktop/scripts/check-boundary-imports.mjs` for local Desktop-only checks.
-When a new cross-package entrypoint is genuinely needed, add it to the checker
-with a short reason in the change description.
+The authoritative checker for these rules runs from the monorepo root with
+`pnpm run check:desktop-boundaries` and fails on violations. The historical
+`desktop/scripts/check-boundary-imports.mjs` entrypoint delegates to that same
+checker, so local and CI policy cannot drift. When a new cross-package
+entrypoint is genuinely needed, add it to the checker with a short reason in
+the change description.
 
 ## Stability guidance
 

@@ -87,8 +87,23 @@ jobs:
             --format=table
 
       - name: Build SDK
-        run: pnpm exec tsc
-        working-directory: packages/sdk/js
+        run: pnpm --dir packages/sdk/js run build
+
+      - name: Verify generated SDK artifacts are current
+        shell: bash
+        run: |
+          drift="$(git status --porcelain=v1 --untracked-files=all -- \
+            packages/sdk/openapi.json \
+            packages/sdk/js/src/gen \
+            packages/sdk/js/src/v2/gen)"
+          if [ -n "$drift" ]; then
+            echo "Generated SDK artifacts are stale. Run: pnpm --dir packages/sdk/js run build"
+            printf '%s\n' "$drift"
+            exit 1
+          fi
+
+      - name: Test SDK
+        run: pnpm --dir packages/sdk/js test
 
       - name: Build Plugin
         run: pnpm --dir packages/plugin run build

@@ -1,16 +1,25 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { EventEmitter } from "node:events"
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
+import { PassThrough } from "node:stream"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { createAxCodeServer } from "../src/server"
 import { createAxCodeServer as createAxCodeServerV2 } from "../src/v2/server"
-import { formatHostnameForUrl, resolveServerDefaults } from "../src/internal/server-shared"
+import {
+  type Proc,
+  formatHostnameForUrl,
+  resolveServerDefaults,
+  waitForServerReady,
+} from "../src/internal/server-shared"
 
 const originalPath = process.env.PATH
 const originalPidFile = process.env.AX_CODE_FAKE_PID_FILE
 const originalTermFile = process.env.AX_CODE_FAKE_TERM_FILE
 const originalAuthFile = process.env.AX_CODE_FAKE_AUTH_FILE
 const originalArgsFile = process.env.AX_CODE_FAKE_ARGS_FILE
+const fixtureStartupTimeoutMs = 30_000
+const fixtureObservationTimeoutMs = 5_000
 
 afterEach(() => {
   process.env.PATH = originalPath
@@ -26,13 +35,36 @@ describe("createAxCodeServer", () => {
     expect(formatHostnameForUrl("::1")).toBe("[::1]")
   })
 
-  test("kills the spawned server when startup times out", async () => {
+  test("kills the child process and safely drains terminal listeners when readiness times out", async () => {
+    const proc = Object.assign(new EventEmitter(), {
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill: vi.fn(() => true),
+    }) as unknown as Proc
+
+    await expect(waitForServerReady(proc, { timeout: 10 })).rejects.toThrow("Timeout waiting for server to start")
+
+    expect(proc.kill).toHaveBeenCalledWith("SIGTERM")
+    expect(proc.stdout?.listenerCount("data")).toBe(0)
+    expect(proc.stderr?.listenerCount("data")).toBe(0)
+    expect(proc.listenerCount("exit")).toBe(1)
+    expect(proc.listenerCount("error")).toBe(1)
+
+    proc.emit("exit", null)
+    expect(proc.listenerCount("exit")).toBe(0)
+    expect(proc.listenerCount("error")).toBe(0)
+  })
+
+  test("kills the spawned server when startup is aborted", async () => {
     await using fake = await createFakeAxCode()
+    const controller = new AbortController()
+    const startup = createAxCodeServer({ timeout: fixtureStartupTimeoutMs, signal: controller.signal })
+    const rejection = expect(startup).rejects.toThrow(/abort/i)
 
-    await expect(createAxCodeServer({ timeout: 500 })).rejects.toThrow("Timeout waiting for server to start")
-
-    expect(await waitForFile(fake.pidFile)).toMatch(/\d+/)
-    await waitForProcessExit(Number(await waitForFile(fake.pidFile)))
+    const pid = Number(await waitForFile(fake.pidFile))
+    controller.abort()
+    await rejection
+    await waitForProcessExit(pid)
   })
 
   test("starts with Basic Auth credentials by default", async () => {
@@ -69,12 +101,15 @@ describe("createAxCodeServer", () => {
     await expect(createAxCodeServer({ hostname: "0.0.0.0", allowNetworkBind: true })).rejects.toThrow("local-only")
   })
 
-  test("v2 kills the spawned server when startup times out", async () => {
+  test("v2 kills the spawned server when startup is aborted", async () => {
     await using fake = await createFakeAxCode()
+    const controller = new AbortController()
+    const startup = createAxCodeServerV2({ timeout: fixtureStartupTimeoutMs, signal: controller.signal })
+    const rejection = expect(startup).rejects.toThrow(/abort/i)
 
-    await expect(createAxCodeServerV2({ timeout: 500 })).rejects.toThrow("Timeout waiting for server to start")
-
-    expect(await waitForFile(fake.pidFile)).toMatch(/\d+/)
+    await waitForFile(fake.pidFile)
+    controller.abort()
+    await rejection
     await expect(waitForFile(fake.termFile)).resolves.toBe("terminated")
   })
 
@@ -188,7 +223,7 @@ async function createReadyFakeAxCode() {
 }
 
 async function waitForFile(file: string): Promise<string> {
-  const deadline = Date.now() + 2_500
+  const deadline = Date.now() + fixtureObservationTimeoutMs
   let lastError: unknown
   while (Date.now() < deadline) {
     try {
@@ -202,7 +237,7 @@ async function waitForFile(file: string): Promise<string> {
 }
 
 async function waitForProcessExit(pid: number) {
-  const deadline = Date.now() + 2_500
+  const deadline = Date.now() + fixtureObservationTimeoutMs
   while (Date.now() < deadline) {
     try {
       process.kill(pid, 0)

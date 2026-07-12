@@ -3,6 +3,8 @@ import path from "path"
 import { spawnSync } from "node:child_process"
 import { V4Guardrails } from "../packages/ax-code/script/check-no-effect-solid-in-v4"
 import { exists, readText, scan, writeText } from "../packages/ax-code/script/fs-compat"
+import { extractImportSpecifiers } from "./import-specifiers"
+import { INTERNAL_ONLY_ROOTS } from "./repository-policy"
 
 const root = path.resolve(import.meta.dirname, "..")
 
@@ -48,7 +50,7 @@ const keep = [
   ".git",
   ".github",
   ".husky",
-  "ax-internal",
+  ...INTERNAL_ONLY_ROOTS,
   ".pnpm-store",
   ".qoder",
   ".ruff_cache",
@@ -90,12 +92,8 @@ async function list(dir: string) {
   return out.sort()
 }
 
-function spec(text: string) {
-  const out = [] as string[]
-  for (const match of text.matchAll(/from\s+["']([^"']+)["']/g)) out.push(match[1])
-  for (const match of text.matchAll(/import\s+["']([^"']+)["']/g)) out.push(match[1])
-  for (const match of text.matchAll(/import\(\s*["']([^"']+)["']\s*\)/g)) out.push(match[1])
-  return out
+function spec(text: string, file: string) {
+  return extractImportSpecifiers(text, file).map((item) => item.specifier)
 }
 
 function readJSON(file: string) {
@@ -117,7 +115,7 @@ async function deps() {
   for (const item of rule) {
     for (const file of await list(item.dir)) {
       const text = await readText(file)
-      for (const name of spec(text)) {
+      for (const name of spec(text, file)) {
         for (const bad of item.bad) {
           if (!name.includes(bad)) continue
           hit.push({
@@ -149,7 +147,7 @@ async function deep() {
   ]) {
     for (const file of await list(dir)) {
       const text = await readText(file)
-      for (const name of spec(text)) {
+      for (const name of spec(text, file)) {
         if (name.includes("@ax-code/") && name.includes("/src/")) {
           out.push({ file: rel(file), spec: name })
           continue
@@ -172,7 +170,7 @@ async function sdkSourceImports() {
   const seen = new Set<string>()
   for (const file of await list("packages/ax-code/src")) {
     const text = await readText(file)
-    for (const name of spec(text)) {
+    for (const name of spec(text, file)) {
       if (name.includes("sdk/js/src/") || name.includes("@ax-code/sdk/src/")) {
         const item = { file: rel(file), spec: name }
         const key = `${item.file}\0${item.spec}`
@@ -215,7 +213,7 @@ async function runtimeInternalBoundaries() {
     if (runtimeBoundaryAllowedFiles.has(relative)) continue
 
     const text = await readText(file)
-    for (const name of spec(text)) {
+    for (const name of spec(text, file)) {
       const target = resolveAxCodeImport(file, name)
       if (!target || !isAxCodeInterfaceTarget(target)) continue
       const key = `${relative}\0${name}`
@@ -373,12 +371,12 @@ function roots() {
 }
 
 function trackedInternalFiles() {
-  const result = spawnSync("git", ["ls-files", "ax-internal"], {
+  const result = spawnSync("git", ["ls-files", "--", ...INTERNAL_ONLY_ROOTS], {
     cwd: root,
   })
   if (result.status !== 0) {
     const message = (result.stderr?.toString() ?? "").trim()
-    throw new Error(message || "failed to inspect tracked ax-internal files")
+    throw new Error(message || "failed to inspect tracked internal-only files")
   }
   return result.stdout
     .toString()
@@ -449,10 +447,10 @@ async function main() {
   out.push("")
   out.push("## Internal Files")
   if (trackedInternal.length) {
-    out.push("- error: ax-internal files are tracked; remove them from git index before publishing")
+    out.push("- error: internal-only files are tracked; remove them from git index before publishing")
     for (const file of trackedInternal) out.push(`- ${file}`)
   } else {
-    out.push("- ok: no ax-internal files are tracked")
+    out.push("- ok: no internal-only files are tracked")
   }
   out.push("")
   out.push("## V4 Guardrails")

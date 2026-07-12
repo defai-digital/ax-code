@@ -155,25 +155,34 @@ export function waitForServerReady(proc: Proc, options: { timeout: number; signa
       settled = true
       clearTimeout(timer)
       cleanup()
+      proc.removeListener("exit", onExit)
+      proc.removeListener("error", onError)
       resolve(url)
     }
     const onAbort = () => {
       fail(new Error("Aborted"))
     }
-
-    proc.stdout?.on("data", onStdout)
-    proc.stderr?.on("data", onStderr)
-    proc.on("exit", (code) => {
+    const onExit = (code: number | null) => {
+      proc.removeListener("error", onError)
       const combined = [stdoutOutput, stderrOutput].filter(Boolean).join("\n")
       let msg = `Server exited with code ${code}`
       if (combined.trim()) {
         msg += `\nServer output: ${combined}`
       }
       fail(new Error(msg), false)
-    })
-    proc.on("error", (error) => {
+    }
+    const onError = (error: Error) => {
+      proc.removeListener("exit", onExit)
       fail(error, false)
-    })
+    }
+
+    proc.stdout?.on("data", onStdout)
+    proc.stderr?.on("data", onStderr)
+    // Keep one-shot process listeners after a timeout/abort until the child
+    // actually terminates. A late spawn error must remain observed, and the
+    // paired listener is removed by whichever terminal event arrives first.
+    proc.once("exit", onExit)
+    proc.once("error", onError)
     if (options.signal) {
       options.signal.addEventListener("abort", onAbort, { once: true })
     }

@@ -2069,6 +2069,11 @@ export type LayoutConfig = "auto" | "stretch"
 export type IsolationMode = "read-only" | "workspace-write" | "full-access"
 
 /**
+ * Isolation enforcement backend: app (portable tool checks, default), os (kernel sandbox for bash when available), auto (prefer os with app fallback)
+ */
+export type IsolationBackend = "app" | "os" | "auto"
+
+/**
  * Execution isolation configuration
  */
 export type IsolationConfig = {
@@ -2081,6 +2086,7 @@ export type IsolationConfig = {
    * Additional paths relative to workspace root that are protected from writes. .git and .ax-code are always protected
    */
   protected?: Array<string>
+  backend?: IsolationBackend
 }
 
 export type Config = {

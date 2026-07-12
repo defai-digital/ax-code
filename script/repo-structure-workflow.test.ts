@@ -18,6 +18,13 @@ describe("repo-structure workflow policy", () => {
     expect(installIndex).toBeGreaterThan(actionlintIndex)
   })
 
+  test("runs repository script tests before the structure audit", () => {
+    const testsIndex = workflow.indexOf("pnpm run test:scripts")
+    const structureIndex = workflow.indexOf("pnpm run check:structure")
+    expect(testsIndex).toBeGreaterThan(-1)
+    expect(structureIndex).toBeGreaterThan(testsIndex)
+  })
+
   test("guards both legacy and current internal planning folders", () => {
     expect(workflow).toContain('"ax-internal/**"')
     expect(workflow).toContain("git ls-files .internal ax-internal")
