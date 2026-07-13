@@ -69,6 +69,7 @@ type RpcWireTarget = {
   // fast-fail every pending call instead of waiting the full
   // RPC_TIMEOUT_MS each.
   onWireDeath?: (() => void) | null
+  wireClosed?: boolean
 }
 
 type BackendRuntime = {
@@ -225,6 +226,7 @@ export function createProcessWire(child: any, target: string): RpcWireTarget {
   const wire: RpcWireTarget = {
     onmessage: null,
     onWireDeath: null,
+    wireClosed: false,
     postMessage(data) {
       const stdin = child.stdin
       if (!stdin || stdin.destroyed) {
@@ -252,6 +254,8 @@ export function createProcessWire(child: any, target: string): RpcWireTarget {
   // Notify the RPC client from the child lifecycle too, so startup and
   // in-flight requests fail immediately instead of waiting for timeouts.
   const notifyWireDeath = () => {
+    if (wire.wireClosed) return
+    wire.wireClosed = true
     const onWireDeath = wire.onWireDeath
     wire.onmessage = null
     wire.onWireDeath = null

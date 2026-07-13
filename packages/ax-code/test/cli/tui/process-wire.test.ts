@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events"
 import { describe, expect, test, vi } from "vitest"
 import { createProcessWire } from "../../../src/cli/cmd/tui/thread"
+import { Rpc } from "../../../src/util/rpc"
 
 function createChild() {
   const child = new EventEmitter() as EventEmitter & {
@@ -37,5 +38,16 @@ describe("tui process RPC wire", () => {
     child.emit("error", new Error("spawn failed"))
 
     expect(onWireDeath).toHaveBeenCalledOnce()
+  })
+
+  test("rejects calls when the backend exits before the RPC client attaches", async () => {
+    const child = createChild()
+    const wire = createProcessWire(child, "test-backend")
+
+    child.emit("exit", 1, null)
+
+    const client = Rpc.client<{ health(input: undefined): Promise<void> }>(wire)
+    await expect(client.call("health", undefined)).rejects.toThrow("RPC wire closed")
+    expect(child.stdin.write).not.toHaveBeenCalled()
   })
 })

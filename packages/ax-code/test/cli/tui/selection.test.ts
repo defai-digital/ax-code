@@ -3,6 +3,11 @@ import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
 
 const originalCopy = Clipboard.copy
+type ToastInput = {
+  message: string
+  variant: "info" | "success" | "warning" | "error"
+  duration?: number
+}
 
 afterEach(() => {
   Clipboard.copy = originalCopy
@@ -23,10 +28,10 @@ describe("Selection.copy", () => {
         cleared++
       },
     }
-    const shown: Array<{ message: string; duration?: number }> = []
+    const shown: ToastInput[] = []
     const errors: unknown[] = []
     const toast = {
-      show: (input: { message: string; variant: "info" | "success" | "warning" | "error"; duration?: number }) => {
+      show: (input: ToastInput) => {
         shown.push(input)
       },
       error: (error: unknown) => {
@@ -56,10 +61,10 @@ describe("Selection.copy", () => {
         cleared++
       },
     }
-    const shown: Array<{ message: string; duration?: number }> = []
+    const shown: ToastInput[] = []
     const errors: unknown[] = []
     const toast = {
-      show: (input: { message: string; variant: "info" | "success" | "warning" | "error"; duration?: number }) => {
+      show: (input: ToastInput) => {
         shown.push(input)
       },
       error: (error: unknown) => {
