@@ -2,6 +2,8 @@ Launch multiple specialized agents in parallel for independent research or explo
 
 Use this when several digs do not depend on each other (for example: explore auth, explore billing, and explore infra at the same time). Prefer explore / read-only agents.
 
+Do NOT use this tool as a substitute for multi-provider **council** or **arena**. Those tools fan out to multiple LLM providers; task_parallel only runs local agents. If the user asked for council/arena, call those tools first with a short context brief — do not open multi-explore digs first.
+
 Do NOT use concurrent writers. If two or more agents can edit files or run bash mutations, this tool rejects the call. Run writers one at a time with the task tool, or use a single build agent.
 
 Available agent types:

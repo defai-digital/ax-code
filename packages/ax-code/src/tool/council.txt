@@ -1,17 +1,18 @@
 Fan out a structured review or design question to multiple connected LLM providers, then aggregate agreement into consensus / majority / singleton findings.
 
-Optional anonymous debate rounds (debateRounds or modes.council.debateRounds) re-share Chatham-House synthesis without member identities.
+**Call this tool early.** Put a short brief in `context` (stack + key paths). Do **not** run `task_parallel` or long monorepo explores first — that delays multi-provider review and often never reaches this tool.
 
-Use this for high-stakes architecture, security review, or design trade-offs where multiple independent perspectives increase confidence. Advisory only — does not edit files.
+Optional anonymous debate rounds (`debateRounds` or `modes.council.debateRounds`) re-share Chatham-House synthesis without member identities.
 
-Do not use for trivial one-line questions or as a substitute for running tests. Multi-model agreement on a patch is not proof of correctness.
+Use for high-stakes architecture, security, code-quality ratings, or design trade-offs where multiple independent perspectives increase confidence. Advisory only — does not edit files.
 
 Prefer when:
-- The user asks for a multi-model / council / second-opinion review
-- Architecture or security decisions with lasting blast radius
-- You want calibrated confidence (all agree vs one outlier)
+- Multi-model / council / second-opinion review
+- Architecture or security with lasting blast radius
+- “Good vs worse” quality findings with calibrated confidence
 
 Avoid when:
-- Only one provider is connected (report will be incomplete)
-- Privacy-sensitive context must not leave local inference
-- Latency-sensitive autocomplete-style work
+- Only one provider is connected (report incomplete)
+- Privacy-sensitive code must stay local-only
+- Latency-sensitive trivial questions
+- You only need parallel *file* digs without multi-provider ensemble → use task_parallel with explore instead (different tool)

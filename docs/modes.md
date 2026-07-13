@@ -103,6 +103,12 @@ Needs at least two successful members for meaningful consensus tiers; otherwise 
 - High-stakes code review where multi-model agreement raises confidence
 - User asks for a multi-model or “second opinion” review
 
+### Agent workflow (important)
+
+Call **`council` within the first 1–2 tool rounds** with a short `context` brief.  
+Do **not** open `task_parallel` multi-explore digs first — that path is for parallel file research, not multi-provider ensemble, and often never reaches `council`.  
+If the user asked for council/arena, `task_parallel` is rejected until the ensemble tool has been the intended primary action.
+
 ### When not to
 
 - Trivial questions (latency/cost)

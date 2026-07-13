@@ -1,17 +1,23 @@
-Run a multi-provider council review (advisory). Use the **council** tool.
+Run a multi-provider council review (advisory). Use the **council** tool **as the primary action**.
 
 Question / focus: $ARGUMENTS
 
+## HARD RULES (do not skip)
+
+1. Call the **council** tool within the first 1–2 tool rounds. Do **not** call `task_parallel` or multi-explore digs first.
+2. Put brief repo facts into the council `context` argument (stack, 3–10 key paths). Optional: one `read`/`list`/`bash` only — then **council**.
+3. Never run four “very thorough” explores before council. Multi-provider models need a short brief, not a full monorepo map.
+4. If council reports insufficient providers, stop and tell the user to connect ≥2 providers. Do not invent consensus.
+5. After council returns, summarize **consensus / majority / singleton** for the user. Do not apply patches solely because models agreed.
+
 ## Task fit
 
-- **council**: code quality findings, security, architecture trade-offs, “good vs worse” ratings with consensus/majority/singleton.
-- **arena plan**: compare *approaches* only (not a findings review).
-- **arena implement**: multi-model competing *patches* in worktrees.
+- **council** (this flow): quality findings, security, architecture trade-offs, “good vs worse” ratings.
+- **arena plan**: compare implementation *approaches* only.
+- **arena implement**: competing patches in git worktrees (not for pure review).
 
-## Instructions
+## Call shape
 
-1. Gather **brief** context (targeted read/grep). Avoid long monorepo tours before fan-out.
-2. Call **council** with `kind: review` (or `design` for architecture trade-offs). Optional `debateRounds: 1` for high stakes.
-3. Config is re-read each call. If disabled (`modes.council.enabled: false`), re-enable in `ax-code.json` and re-call — no session restart required.
-4. Needs connected providers with selectable models; aim for ≥2 for consensus tiers. If insufficient, stop and ask the user to connect providers — do not invent multi-model agreement.
-5. Summarize **consensus / majority / singleton** clearly. Advisory only — do not apply patches solely because models agreed; verify with tests when changing code.
+- `kind: review` for code quality; `kind: design` for architecture trade-offs.
+- Optional `debateRounds: 1` only if stakes are high and providers are already connected.
+- Config is re-read each call (`modes.council.enabled` defaults on).

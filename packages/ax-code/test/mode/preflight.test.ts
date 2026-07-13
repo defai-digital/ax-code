@@ -32,4 +32,10 @@ describe("EnsemblePreflight", () => {
     expect(msg).toContain("**0**")
     expect(msg).toContain("/connect")
   })
+
+  test("forbidsTaskParallelFirst detects council/arena turns", () => {
+    expect(EnsemblePreflight.forbidsTaskParallelFirst("Run multi-provider council review")).toBe(true)
+    expect(EnsemblePreflight.forbidsTaskParallelFirst("use the arena tool")).toBe(true)
+    expect(EnsemblePreflight.forbidsTaskParallelFirst("explore the auth module only")).toBe(false)
+  })
 })

@@ -111,4 +111,19 @@ export namespace EnsemblePreflight {
     }
     return "arena_plan"
   }
+
+  /**
+   * True when the user asked for multi-provider ensemble and agents should
+   * not open task_parallel monorepo digs first.
+   */
+  export function forbidsTaskParallelFirst(text: string): boolean {
+    const t = text.toLowerCase()
+    return (
+      /\bcouncil\b/.test(t) ||
+      /\barena\b/.test(t) ||
+      /\bbest-?of-?n\b/.test(t) ||
+      /\bmulti-?provider\b/.test(t) ||
+      /\bmulti-?model\b/.test(t)
+    )
+  }
 }

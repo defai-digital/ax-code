@@ -14,6 +14,7 @@ import { Permission } from "@/permission"
 import { Log } from "@/util/log"
 import { withTimeout } from "@/util/timeout"
 import { WriteIsolation } from "../session/write-isolation"
+import { EnsemblePreflight } from "../mode/preflight"
 import type { ModelID, ProviderID } from "../provider/schema"
 
 const MAX_DEPTH = 5
@@ -47,6 +48,22 @@ function errorDetails(error: unknown) {
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError"
+}
+
+/** Latest user text in the transcript (for ensemble vs digs routing). */
+function lastUserText(messages: MessageV2.WithParts[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i]
+    if (!message || message.info.role !== "user") continue
+    const chunks: string[] = []
+    for (const part of message.parts) {
+      if (part.type === "text" && typeof part.text === "string" && part.text.trim()) {
+        chunks.push(part.text)
+      }
+    }
+    if (chunks.length) return chunks.join("\n")
+  }
+  return ""
 }
 
 const TaskItem = z.object({
@@ -281,6 +298,17 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
     parameters,
     async execute(params: z.infer<typeof parameters>, toolCtx) {
       await assertDepth(toolCtx.sessionID)
+
+      // Hard gate: multi-provider ensemble requests must not open parallel digs first.
+      // Observed failure mode: /council → task_parallel ×4 explores → never calls council.
+      const userText = lastUserText(toolCtx.messages)
+      if (EnsemblePreflight.forbidsTaskParallelFirst(userText) && !toolCtx.extra?.bypassAgentCheck) {
+        throw new Error(
+          "This turn asks for multi-provider council/arena. Call the council or arena tool first " +
+            "with a short context brief. Do not use task_parallel monorepo digs before that " +
+            "(task_parallel is not multi-provider ensemble).",
+        )
+      }
 
       if (!toolCtx.extra?.bypassAgentCheck) {
         const types = [...new Set(params.tasks.map((t) => t.subagent_type))]
