@@ -47,4 +47,43 @@ describe("Budget.check", () => {
     if (!r.ok) throw new Error("expected ok")
     expect(r.allowedMembers).toBe(2)
   })
+
+  test("accounts for every planned call per member", () => {
+    const r = Budget.check({
+      kind: "council",
+      requestedMembers: 3,
+      callsPerMember: 3,
+      budget: {
+        maxMembers: 3,
+        maxContestants: 3,
+        timeoutMs: 1000,
+        maxEstimatedUsd: 6,
+        estimatedUsdPerMember: 1,
+      },
+    })
+
+    expect(r.ok).toBe(true)
+    if (!r.ok) throw new Error("expected ok")
+    expect(r.allowedMembers).toBe(2)
+    expect(r.estimatedUsd).toBe(6)
+    expect(r.reasons).toContain("calls_per_member:3")
+  })
+
+  test("does not undercount members at an exact decimal budget boundary", () => {
+    const r = Budget.check({
+      kind: "council",
+      requestedMembers: 3,
+      budget: {
+        maxMembers: 3,
+        maxContestants: 3,
+        timeoutMs: 1000,
+        maxEstimatedUsd: 0.3,
+        estimatedUsdPerMember: 0.1,
+      },
+    })
+
+    expect(r.ok).toBe(true)
+    if (!r.ok) throw new Error("expected ok")
+    expect(r.allowedMembers).toBe(3)
+  })
 })

@@ -193,7 +193,7 @@ export namespace Command {
     }
     commands[Default.COUNCIL] = {
       name: Default.COUNCIL,
-      description: "multi-provider council review (consensus / majority / singleton)",
+      description: "multi-provider council review (consensus / majority / minority / singleton)",
       source: "command",
       sourceTool: "builtin",
       scope: "builtin",

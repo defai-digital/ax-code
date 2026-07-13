@@ -8,7 +8,7 @@ Question / focus: $ARGUMENTS
 2. Put brief repo facts into the council `context` argument (stack, 3–10 key paths). Optional: one `read`/`list`/`bash` only — then **council**.
 3. Never run four “very thorough” explores before council. Multi-provider models need a short brief, not a full monorepo map.
 4. If council reports insufficient providers, stop and tell the user to connect ≥2 providers. Do not invent consensus.
-5. After council returns, summarize **consensus / majority / singleton** for the user. Do not apply patches solely because models agreed.
+5. After council returns, summarize **consensus / strict majority / minority / singleton** for the user. Do not apply patches solely because models agreed.
 
 ## Task fit
 
@@ -19,5 +19,5 @@ Question / focus: $ARGUMENTS
 ## Call shape
 
 - `kind: review` for code quality; `kind: design` for architecture trade-offs.
-- Optional `debateRounds: 1` only if stakes are high and providers are already connected.
+- Optional `debateRounds: 1` only if stakes are high and providers are already connected (maximum 3; stops early on convergence).
 - Config is re-read each call (`modes.council.enabled` defaults on).

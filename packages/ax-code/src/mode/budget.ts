@@ -15,6 +15,7 @@ export namespace Budget {
   export type CheckInput = {
     kind: "council" | "arena"
     requestedMembers: number
+    callsPerMember?: number
     budget: EnsembleBudget
   }
 
@@ -60,9 +61,16 @@ export namespace Budget {
     const per = input.budget.estimatedUsdPerMember
     const maxUsd = input.budget.maxEstimatedUsd
     if (typeof per === "number" && per >= 0 && typeof maxUsd === "number" && maxUsd >= 0) {
+      const callsPerMember =
+        typeof input.callsPerMember === "number" && Number.isFinite(input.callsPerMember)
+          ? Math.max(1, Math.floor(input.callsPerMember))
+          : 1
+      const estimatedPerMember = per * callsPerMember
+      if (callsPerMember > 1) reasons.push(`calls_per_member:${callsPerMember}`)
       // How many members fit under USD budget?
-      if (per > 0) {
-        const maxByUsd = Math.floor(maxUsd / per)
+      if (estimatedPerMember > 0) {
+        const tolerance = Number.EPSILON * Math.max(1, Math.abs(maxUsd), Math.abs(estimatedPerMember)) * 4
+        const maxByUsd = Math.floor((maxUsd + tolerance) / estimatedPerMember)
         if (maxByUsd < 2 && input.kind === "arena") {
           return {
             ok: false,
@@ -82,7 +90,7 @@ export namespace Budget {
           allowed = maxByUsd
         }
       }
-      const estimatedUsd = allowed * (per || 0)
+      const estimatedUsd = allowed * estimatedPerMember
       reasons.push(`estimated_usd:${estimatedUsd.toFixed(4)}`)
       return { ok: true, allowedMembers: allowed, estimatedUsd, reasons }
     }

@@ -1,6 +1,6 @@
 /**
  * Multi-LLM council aggregation (ADR-049 D4).
- * Pure — groups structured issues into consensus / majority / singleton.
+ * Pure — groups structured issues into consensus / majority / minority / singleton.
  */
 
 export namespace Council {
@@ -24,7 +24,7 @@ export namespace Council {
     error?: string
   }
 
-  export type AgreementTier = "consensus" | "majority" | "singleton"
+  export type AgreementTier = "consensus" | "majority" | "minority" | "singleton"
 
   export type AggregatedIssue = {
     key: string
@@ -46,20 +46,20 @@ export namespace Council {
     incomplete: boolean
     consensus: AggregatedIssue[]
     majority: AggregatedIssue[]
+    minority: AggregatedIssue[]
     singleton: AggregatedIssue[]
     memberErrors: Array<{ memberId: string; error: string }>
   }
 
   const SEVERITY_RANK: Record<Severity, number> = { high: 0, medium: 1, low: 2 }
 
-  /** Collapse whitespace / case for grouping; keep short. */
+  /** Collapse whitespace and case for deterministic grouping. */
   export function normalizeSummary(summary: string): string {
     return summary
       .toLowerCase()
       .replace(/[^\p{L}\p{N}\s]+/gu, " ")
       .replace(/\s+/g, " ")
       .trim()
-      .slice(0, 160)
   }
 
   export function issueKey(issue: Pick<CouncilIssue, "location" | "category" | "summary">): string {
@@ -76,8 +76,9 @@ export namespace Council {
   function classifyTier(support: number, total: number): AgreementTier {
     if (total <= 0) return "singleton"
     if (support >= total) return "consensus"
-    const majorityThreshold = Math.ceil(total / 2)
+    const majorityThreshold = Math.floor(total / 2) + 1
     if (support >= majorityThreshold && support >= 2) return "majority"
+    if (support >= 2) return "minority"
     return "singleton"
   }
 
@@ -125,6 +126,7 @@ export namespace Council {
 
     const consensus: AggregatedIssue[] = []
     const majority: AggregatedIssue[] = []
+    const minority: AggregatedIssue[] = []
     const singleton: AggregatedIssue[] = []
 
     for (const bucket of buckets.values()) {
@@ -144,6 +146,7 @@ export namespace Council {
       }
       if (tier === "consensus") consensus.push(item)
       else if (tier === "majority") majority.push(item)
+      else if (tier === "minority") minority.push(item)
       else singleton.push(item)
     }
 
@@ -155,6 +158,7 @@ export namespace Council {
 
     consensus.sort(bySeverityThenSupport)
     majority.sort(bySeverityThenSupport)
+    minority.sort(bySeverityThenSupport)
     singleton.sort(bySeverityThenSupport)
 
     return {
@@ -164,6 +168,7 @@ export namespace Council {
       incomplete,
       consensus,
       majority,
+      minority,
       singleton,
       memberErrors: failed.map((m) => ({ memberId: m.memberId, error: m.error ?? "unknown" })),
     }
@@ -204,6 +209,7 @@ export namespace Council {
 
     section("Consensus", report.consensus)
     section("Majority", report.majority)
+    section("Minority observations", report.minority)
     section("Singleton observations", report.singleton)
 
     lines.push(
@@ -231,16 +237,27 @@ export namespace Council {
     return id.split(/[-_]/)[0] || id
   }
 
-  export function selectDiverseMembers<T extends { providerID: string }>(
+  export function dedupeMembers<T extends { providerID: string; modelID?: unknown }>(candidates: readonly T[]): T[] {
+    const seen = new Set<string>()
+    return candidates.filter((candidate) => {
+      const key = `${candidate.providerID}\u0000${String(candidate.modelID ?? "")}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }
+
+  export function selectDiverseMembers<T extends { providerID: string; modelID?: unknown }>(
     candidates: readonly T[],
     maxMembers: number,
   ): T[] {
     const cap = Math.max(1, Math.min(maxMembers, 6))
+    const unique = dedupeMembers(candidates)
     const selected: T[] = []
     const seenFamilies = new Set<string>()
 
     // First pass: one per family
-    for (const c of candidates) {
+    for (const c of unique) {
       if (selected.length >= cap) break
       const fam = providerFamily(c.providerID)
       if (seenFamilies.has(fam)) continue
@@ -248,7 +265,7 @@ export namespace Council {
       selected.push(c)
     }
     // Second pass: fill remaining
-    for (const c of candidates) {
+    for (const c of unique) {
       if (selected.length >= cap) break
       if (selected.includes(c)) continue
       selected.push(c)

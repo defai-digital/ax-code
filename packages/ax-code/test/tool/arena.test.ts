@@ -33,6 +33,34 @@ describe("arena tool contract", () => {
     expect(parsed.strategy).toBe("verify_first")
     expect(parsed.enableIfDisabled).toBe(true)
   })
+
+  test("explicit arena selection requires at least two unique members", async () => {
+    const init = await ArenaTool.init()
+    expect(() =>
+      init.parameters.parse({
+        task: "Compare implementations",
+        providers: [{ providerID: "google", modelID: "gemini" }],
+      }),
+    ).toThrow()
+    expect(() =>
+      init.parameters.parse({
+        task: "Compare implementations",
+        providers: [
+          { providerID: "google", modelID: "gemini" },
+          { providerID: "google", modelID: "gemini" },
+        ],
+      }),
+    ).toThrow()
+    expect(() =>
+      init.parameters.parse({
+        task: "Compare implementations",
+        providers: [
+          { providerID: "google", modelID: "gemini-flash" },
+          { providerID: "google", modelID: "gemini-pro" },
+        ],
+      }),
+    ).toThrow()
+  })
 })
 
 describe("arena ranking used by tool", () => {

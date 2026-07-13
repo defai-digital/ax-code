@@ -72,6 +72,15 @@ export namespace Worktree {
 
   export type CreateInput = z.infer<typeof CreateInput>
 
+  const CreateReadyInput = CreateInput.extend({
+    startPoint: z
+      .string()
+      .min(1)
+      .max(1024)
+      .refine((value) => !value.startsWith("-"), "Git revision cannot start with '-'")
+      .optional(),
+  })
+
   export const RemoveInput = z
     .object({
       directory: z.string(),
@@ -474,10 +483,10 @@ export namespace Worktree {
     return candidate(root, base || undefined)
   }
 
-  export async function createFromInfo(info: Info, startCommand?: string) {
-    const created = await git(["worktree", "add", "--no-checkout", "-b", info.branch, info.directory], {
-      cwd: Instance.worktree,
-    })
+  export async function createFromInfo(info: Info, startCommand?: string, startPoint?: string) {
+    const args = ["worktree", "add", "--no-checkout", "-b", info.branch, info.directory]
+    if (startPoint) args.push(startPoint)
+    const created = await git(args, { cwd: Instance.worktree })
     if (created.exitCode !== 0) {
       throw new CreateFailedError({ message: errorText(created) || "Failed to create git worktree" })
     }
@@ -532,7 +541,7 @@ export namespace Worktree {
               },
             },
           })
-          return
+          return false
         }
 
         const booted = await Instance.provide({
@@ -555,7 +564,7 @@ export namespace Worktree {
             })
             return false
           })
-        if (!booted) return
+        if (!booted) return false
 
         const started = await runStartScripts(info.directory, { projectID, extra })
         if (!started) {
@@ -568,7 +577,7 @@ export namespace Worktree {
               },
             },
           })
-          return
+          return false
         }
 
         GlobalBus.emit("event", {
@@ -581,17 +590,19 @@ export namespace Worktree {
             },
           },
         })
+        return true
       }
 
       return start().catch((error) => {
         log.error("worktree start task failed", { directory: info.directory, error })
+        return false
       })
     }
   }
 
-  export const create = fn(CreateInput.optional(), async (input) => {
+  async function prepareCreate(input: CreateInput | undefined, startPoint?: string) {
     const info = await makeWorktreeInfo(input?.name)
-    const bootstrap = await createFromInfo(info, input?.startCommand).catch(async (error) => {
+    const bootstrap = await createFromInfo(info, input?.startCommand, startPoint).catch(async (error) => {
       await fs.rm(info.directory, { recursive: true, force: true }).catch((cleanupError) => {
         log.warn("failed to clean up failed worktree creation", {
           directory: info.directory,
@@ -600,6 +611,11 @@ export namespace Worktree {
       })
       throw error
     })
+    return { info, bootstrap }
+  }
+
+  export const create = fn(CreateInput.optional(), async (input) => {
+    const { info, bootstrap } = await prepareCreate(input)
     // Defer bootstrap to the next microtask so callers see the
     // worktree info synchronously before post-create hooks run.
     // Tracked via startScriptTimers so cancelPendingStartScripts()
@@ -612,6 +628,19 @@ export namespace Worktree {
     timer.unref?.()
     trackTimer(info.directory, timer)
     return info
+  })
+
+  export const createReady = fn(CreateReadyInput.optional(), async (input) => {
+    const { info, bootstrap } = await prepareCreate(input, input?.startPoint)
+    if (await bootstrap()) return info
+
+    await remove({ directory: info.directory }).catch((error) => {
+      log.warn("failed to clean up worktree that did not become ready", {
+        directory: info.directory,
+        error: toErrorMessage(error),
+      })
+    })
+    throw new StartCommandFailedError({ message: "Worktree failed to become ready" })
   })
 
   export const remove = fn(RemoveInput, async (input) => {

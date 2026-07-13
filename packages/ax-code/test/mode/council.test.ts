@@ -19,10 +19,17 @@ describe("Council.normalizeSummary / issueKey", () => {
     })
     expect(a).toBe(b)
   })
+
+  test("issueKey does not collide for findings that differ after a long prefix", () => {
+    const prefix = "same ".repeat(40)
+    const a = Council.issueKey({ category: "correctness", summary: `${prefix}first failure` })
+    const b = Council.issueKey({ category: "correctness", summary: `${prefix}second failure` })
+    expect(a).not.toBe(b)
+  })
 })
 
 describe("Council.aggregateCouncil", () => {
-  test("classifies consensus majority singleton", () => {
+  test("classifies consensus, majority, minority, and singleton findings", () => {
     const report = Council.aggregateCouncil([
       {
         memberId: "m1",
@@ -86,9 +93,7 @@ describe("Council.aggregateCouncil", () => {
     expect(report.consensus[0]!.summary.toLowerCase()).toContain("sql")
     expect(report.consensus[0]!.severity).toBe("high")
     expect(report.majority.length + report.singleton.length).toBeGreaterThan(0)
-    expect(report.singleton.some((i) => i.summary.includes("Naming") || i.summary.includes("nit"))).toBe(
-      true,
-    )
+    expect(report.singleton.some((i) => i.summary.includes("Naming") || i.summary.includes("nit"))).toBe(true)
   })
 
   test("marks incomplete with fewer than two successes", () => {
@@ -120,6 +125,38 @@ describe("Council.aggregateCouncil", () => {
     expect(report.consensus).toHaveLength(0)
   })
 
+  test("requires strictly more than half of an even-sized council for majority", () => {
+    const members: Council.CouncilMemberResult[] = Array.from({ length: 4 }, (_, index) => ({
+      memberId: `m${index + 1}`,
+      providerID: `p${index + 1}`,
+      modelID: "model",
+      issues:
+        index < 2
+          ? [
+              {
+                memberId: `m${index + 1}`,
+                severity: "medium" as const,
+                category: "correctness",
+                summary: "Shared by exactly half",
+              },
+            ]
+          : [],
+    }))
+
+    const split = Council.aggregateCouncil(members)
+    expect(split.majority).toHaveLength(0)
+    expect(split.minority[0]?.supportCount).toBe(2)
+
+    members[2]!.issues.push({
+      memberId: "m3",
+      severity: "medium",
+      category: "correctness",
+      summary: "Shared by exactly half",
+    })
+    const strictMajority = Council.aggregateCouncil(members)
+    expect(strictMajority.majority[0]?.supportCount).toBe(3)
+  })
+
   test("renderReportMarkdown includes advisory footer", () => {
     const md = Council.renderReportMarkdown(
       Council.aggregateCouncil([
@@ -147,5 +184,15 @@ describe("Council.selectDiverseMembers", () => {
     expect(selected).toHaveLength(3)
     const families = selected.map((s) => Council.providerFamily(s.providerID))
     expect(new Set(families).size).toBe(3)
+  })
+
+  test("deduplicates repeated provider/model members", () => {
+    const unique = Council.dedupeMembers([
+      { providerID: "google", modelID: "gemini", id: 1 },
+      { providerID: "google", modelID: "gemini", id: 2 },
+      { providerID: "google", modelID: "gemini-pro", id: 3 },
+    ])
+
+    expect(unique.map((member) => member.id)).toEqual([1, 3])
   })
 })

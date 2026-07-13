@@ -48,6 +48,29 @@ describe("Arena.rankArenaCandidates", () => {
     expect(ranked[0]!.id).toBe("safe")
   })
 
+  test("clamps invalid negative risk instead of awarding extra score", () => {
+    const ranked = Arena.rankArenaCandidates([
+      {
+        id: "negative",
+        providerID: "a",
+        modelID: "1",
+        verification: "pass",
+        riskScore: -10,
+      },
+      {
+        id: "zero",
+        providerID: "b",
+        modelID: "2",
+        verification: "pass",
+        riskScore: 0,
+      },
+    ])
+
+    expect(ranked.find((candidate) => candidate.id === "negative")?.score).toBe(120)
+    expect(ranked.find((candidate) => candidate.id === "zero")?.score).toBe(120)
+    expect(ranked.find((candidate) => candidate.id === "negative")?.reasons).toContain("risk:0")
+  })
+
   test("diversity penalizes duplicate fingerprints among passers", () => {
     const ranked = Arena.rankArenaCandidates(
       [
@@ -95,9 +118,7 @@ describe("Arena.rankArenaCandidates", () => {
 
   test("renderRankingMarkdown non-empty", () => {
     const md = Arena.renderRankingMarkdown(
-      Arena.rankArenaCandidates([
-        { id: "x", providerID: "p", modelID: "m", verification: "pass" },
-      ]),
+      Arena.rankArenaCandidates([{ id: "x", providerID: "p", modelID: "m", verification: "pass" }]),
     )
     expect(md).toContain("Arena ranking")
     expect(md).toContain("p/m")

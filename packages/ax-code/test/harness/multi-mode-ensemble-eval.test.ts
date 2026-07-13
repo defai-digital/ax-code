@@ -125,6 +125,7 @@ describe("multi-mode-ensemble-eval", () => {
         modelID: "m",
         completed: true,
         verification: "pass",
+        changedFiles: 1,
         worktreeDirectory: "/tmp/arena-wt",
         worktreeBranch: "ax-code/arena-p",
       },
@@ -134,6 +135,7 @@ describe("multi-mode-ensemble-eval", () => {
         modelID: "n",
         completed: true,
         verification: "fail",
+        changedFiles: 1,
       },
     ])
     expect(ranked[0]!.worktreeDirectory).toBe("/tmp/arena-wt")

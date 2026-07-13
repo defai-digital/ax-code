@@ -22,11 +22,11 @@ When behavior changes, verify against:
 
 TUI and Desktop expose a **work mode** control (Qoder-style). Default is **Agent**.
 
-| UI selection | Free-text send becomes |
-|--------------|------------------------|
-| **Agent** (default) | Normal single-agent prompt |
-| **Council** | `/council {your message}` multi-provider review |
-| **Arena** | `/arena {your message}` multi-model best-of-N |
+| UI selection        | Free-text send becomes                          |
+| ------------------- | ----------------------------------------------- |
+| **Agent** (default) | Normal single-agent prompt                      |
+| **Council**         | `/council {your message}` multi-provider review |
+| **Arena**           | `/arena {your message}` multi-model best-of-N   |
 
 - **Desktop & TUI:** one toggle that shows only the **active** mode (`Agent`, `Council`, or `Arena`). Click to cycle Agent → Council → Arena → Agent. Default is **Agent**.
 - **Desktop:** composer toolbar chip (next to Manual/Autonomous).
@@ -36,13 +36,13 @@ TUI and Desktop expose a **work mode** control (Qoder-style). Default is **Agent
 
 ## Placement modes at a glance
 
-| Mode | What it does | Mutates workspace? | Default |
-|------|----------------|--------------------|---------|
-| **local** | Prefer AX Engine (or configured local provider) | Yes (single agent) | When you pin local / hybrid places local |
-| **cloud** | Prefer hosted or CLI frontier providers | Yes (single agent) | When local unavailable |
-| **hybrid** | Policy chooses local vs cloud from availability + complexity + privacy | Yes (single path) | Set `modes.default: "hybrid"` |
-| **council** | Fan out structured review/design; classify consensus / majority / singleton | **No** (advisory) | Tool + `/council` or Work mode = Council |
-| **arena** | Multi-model plan comparison or worktree implement best-of-N | Plan: no. Implement: only in **worktrees** | Opt-in (`modes.arena.enabled`) + Work mode = Arena |
+| Mode        | What it does                                                                           | Mutates workspace?                         | Default                                            |
+| ----------- | -------------------------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------- |
+| **local**   | Prefer AX Engine (or configured local provider)                                        | Yes (single agent)                         | When you pin local / hybrid places local           |
+| **cloud**   | Prefer hosted or CLI frontier providers                                                | Yes (single agent)                         | When local unavailable                             |
+| **hybrid**  | Policy chooses local vs cloud from availability + complexity + privacy                 | Yes (single path)                          | Set `modes.default: "hybrid"`                      |
+| **council** | Fan out structured review/design; classify consensus / majority / minority / singleton | **No** (advisory)                          | Tool + `/council` or Work mode = Council           |
+| **arena**   | Multi-model plan comparison or worktree implement best-of-N                            | Plan: no. Implement: only in **worktrees** | Opt-in (`modes.arena.enabled`) + Work mode = Arena |
 
 Keyword specialist routing and complexity tiering (see [Auto-Route](auto-route.md)) are **orthogonal** to hybrid placement and ensemble modes.
 
@@ -78,14 +78,14 @@ In `ax-code.json`:
 }
 ```
 
-| Field | Meaning |
-|-------|---------|
-| `modes.default` | `local` \| `cloud` \| `hybrid` \| `arena` \| `council`. Unset: hybrid when local fits the policy signals, else cloud for single-path defaults. |
-| `modes.hybrid.*` | Local preference, high-complexity escalate to cloud, local provider id |
-| `modes.council.*` | Enable, member cap, timeout, optional anonymous debate rounds |
-| `modes.arena.enabled` | Must be `true` for the `arena` tool (default off). Mid-session edits are picked up on the next tool call (`Config.getFresh`). Or pass `enableIfDisabled: true` on the arena tool. |
-| `modes.arena.strategy` | `verify_first` (recommended for implement), `diversity`, or `hybrid_score` |
-| `modes.budget.*` | Fail-closed cap on estimated USD for ensemble fan-out |
+| Field                  | Meaning                                                                                                                                                                           |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modes.default`        | `local` \| `cloud` \| `hybrid` \| `arena` \| `council`. Unset: hybrid when local fits the policy signals, else cloud for single-path defaults.                                    |
+| `modes.hybrid.*`       | Local preference, high-complexity escalate to cloud, local provider id                                                                                                            |
+| `modes.council.*`      | Enable, member cap, timeout, optional anonymous debate rounds (maximum 3)                                                                                                         |
+| `modes.arena.enabled`  | Must be `true` for the `arena` tool (default off). Mid-session edits are picked up on the next tool call (`Config.getFresh`). Or pass `enableIfDisabled: true` on the arena tool. |
+| `modes.arena.strategy` | `verify_first` (recommended for implement), `diversity`, or `hybrid_score`                                                                                                        |
+| `modes.budget.*`       | Fail-closed cap on estimated USD for ensemble fan-out                                                                                                                             |
 
 ## Hybrid placement
 
@@ -107,8 +107,8 @@ Local models and memory guidance: [AX Engine Model Selection](ax-engine-model-se
 
 1. Selects diverse connected providers (family diversity; soft bias from outcome memory).
 2. Fans out a structured review or design prompt in parallel.
-3. Aggregates issues into **consensus** (all successful members), **majority**, and **singleton**.
-4. Optional **debate rounds**: anonymous (Chatham House) synthesis shared between rounds; no brand attribution.
+3. Aggregates issues into **consensus** (all successful members), strict **majority** (more than half), **minority** (at least two), and **singleton** tiers.
+4. Optional **debate rounds**: anonymous (Chatham House) synthesis shared between rounds; no brand attribution. Debate is capped at three rounds and stops early on convergence.
 5. Returns an **advisory** markdown report. Does not edit files.
 
 Needs at least two successful members for meaningful consensus tiers; otherwise the report is marked incomplete.
@@ -139,17 +139,18 @@ If the user asked for council/arena, `task_parallel` is rejected until the ensem
 
 ### `mode: "plan"` (default)
 
-- Each contestant proposes approach, steps, and risks (no workspace writes).
-- Ranked with diversity / risk (not pure popularity).
+- Each contestant proposes an approach, steps, risks, and a calibrated self-assessed risk score (no workspace writes).
+- Ranked with diversity / self-assessed risk (not pure popularity). Plan rankings are advisory and are not execution verification.
 - Advisory only.
 
 ### `mode: "implement"`
 
-- Creates a **git worktree per contestant** (main workspace not modified by contestants).
+- Requires a primary git worktree with at least one commit and no uncommitted changes, records its exact base commit, and creates a **git worktree per contestant** from that commit.
 - Runs an implement agent in each worktree.
-- Runs project verification commands (typecheck / test / lint when detected).
-- Ranks with **verify-first** by default: passers beat failers; among passers prefer lower risk and diverse patches.
-- **Does not auto-merge.** Report includes worktree paths and branches for you to inspect and promote.
+- Snapshots every contestant's tracked and untracked changes into a durable branch commit, including commits created by the agent itself.
+- Runs detected project verification commands (typecheck / test / lint) only after a non-empty patch is captured.
+- Ranks with **verify-first** by default: only completed, non-empty patches that pass verification can win; among passers prefer lower risk and diverse patches.
+- **Does not auto-merge.** Report includes worktree paths, branches, and commit ranges for you to inspect, merge, or cherry-pick.
 
 Implement arena requires a **git** project.
 
@@ -160,18 +161,18 @@ Naive majority vote on similar wrong patches is an anti-pattern (popularity trap
 
 ## Slash commands
 
-| Command | Purpose |
-|---------|---------|
-| `/mode …` | Explain modes and how to configure them |
-| `/council …` | Drive multi-provider advisory review |
-| `/arena …` | Drive plan or implement best-of-N |
+| Command      | Purpose                                 |
+| ------------ | --------------------------------------- |
+| `/mode …`    | Explain modes and how to configure them |
+| `/council …` | Drive multi-provider advisory review    |
+| `/arena …`   | Drive plan or implement best-of-N       |
 
 ## Safety and cost
 
 - **Sandbox / autonomous** still apply to single-agent work ([Sandbox](sandbox.md), [Autonomous](autonomous.md)).
 - Council and plan-arena do not write files.
-- Implement arena writers are isolated in worktrees; concurrent writers on the main tree remain rejected (same policy as parallel explore).
-- Ensemble fan-out multiplies provider egress and cost; use `modes.budget` and keep `maxMembers` / `maxContestants` small.
+- Implement arena writers are isolated in worktrees; a dirty primary worktree is rejected so uncommitted input cannot be silently omitted.
+- Ensemble fan-out multiplies provider egress and cost; use `modes.budget` and keep `maxMembers` / `maxContestants` small. Council budgeting includes the worst-case configured debate calls.
 - Multi-model agreement is **evidence, not proof** — run tests before shipping.
 
 ## Related

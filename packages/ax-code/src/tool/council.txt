@@ -1,8 +1,8 @@
-Fan out a structured review or design question to multiple connected LLM providers, then aggregate agreement into consensus / majority / singleton findings.
+Fan out a structured review or design question to multiple connected LLM providers, then aggregate agreement into consensus / strict-majority / minority / singleton findings.
 
 **Call this tool early.** Put a short brief in `context` (stack + key paths). Do **not** run `task_parallel` or long monorepo explores first — that delays multi-provider review and often never reaches this tool.
 
-Optional anonymous debate rounds (`debateRounds` or `modes.council.debateRounds`) re-share Chatham-House synthesis without member identities.
+Optional anonymous debate rounds (`debateRounds` or `modes.council.debateRounds`) re-share Chatham-House synthesis without member identities. Debate is capped at three rounds, stops early on convergence, and is included in the budget estimate.
 
 Use for high-stakes architecture, security, code-quality ratings, or design trade-offs where multiple independent perspectives increase confidence. Advisory only — does not edit files.
 

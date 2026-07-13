@@ -78,6 +78,48 @@ export function parsePackageScripts(raw: string): Record<string, string> {
   return decodePackageScripts(parsePackageJsonObject(raw))
 }
 
+function isIntentionalFailurePlaceholder(script: string | undefined): boolean {
+  if (!script) return false
+  const exitsNonZero = /(?:^|[;&|]\s*)exit\s+[1-9]\d*\b/.test(script)
+  const redirectsElsewhere = /\b(do not run|don't run|no tests?|not supported|unsupported|use .+ instead)\b/i.test(
+    script,
+  )
+  return exitsNonZero && redirectsElsewhere
+}
+
+function redirectedPackageScript(script: string, scripts: Record<string, string>): string | undefined {
+  const pattern = /\buse\s+(?:(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?)?([a-z0-9][a-z0-9:._-]*)\b/gi
+  for (const match of script.matchAll(pattern)) {
+    const name = match[1]
+    const target = name ? scripts[name] : undefined
+    if (!name || !target || isIntentionalFailurePlaceholder(target)) continue
+    return name
+  }
+  return undefined
+}
+
+function packageCommand(
+  name: "typecheck" | "lint" | "test",
+  scripts: Record<string, string>,
+  packageManager: string,
+): { command: string | null; declared: boolean } {
+  const script = scripts[name]
+  if (!Object.prototype.hasOwnProperty.call(scripts, name)) return { command: null, declared: false }
+  if (!script?.trim()) return { command: null, declared: true }
+  if (!isIntentionalFailurePlaceholder(script)) {
+    return {
+      command: name === "test" ? `${packageManager} test` : `${packageManager} run ${name}`,
+      declared: true,
+    }
+  }
+
+  const redirected = redirectedPackageScript(script, scripts)
+  return {
+    command: redirected ? `${packageManager} run ${redirected}` : null,
+    declared: true,
+  }
+}
+
 // Detect the project's package manager from its lockfile / packageManager field
 // so the suggested verification commands match how the project is actually run
 // (rather than assuming a single runtime). Defaults to npm — the universal
@@ -114,18 +156,23 @@ export async function resolveCommands(cwd: string, override?: CommandOverride): 
   }
   const pm = await detectPackageManager(cwd, pkg)
 
-  const typecheck =
-    override?.typecheck !== undefined ? override.typecheck : scripts.typecheck ? `${pm} run typecheck` : null
-  const lint = override?.lint !== undefined ? override.lint : scripts.lint ? `${pm} run lint` : null
+  const packageTypecheck = packageCommand("typecheck", scripts, pm)
+  const packageLint = packageCommand("lint", scripts, pm)
+  const packageTest = packageCommand("test", scripts, pm)
+
+  const typecheck = override?.typecheck !== undefined ? override.typecheck : packageTypecheck.command
+  const lint = override?.lint !== undefined ? override.lint : packageLint.command
   // `<pm> test` runs the package's test script for npm/pnpm/yarn; for bun it is
   // the conventional test invocation.
-  const test = override?.test !== undefined ? override.test : scripts.test ? `${pm} test` : null
+  const test = override?.test !== undefined ? override.test : packageTest.command
 
   const cargo = await cargoCommands(cwd)
   return {
-    typecheck: typecheck ?? (override?.typecheck === undefined ? (cargo?.typecheck ?? null) : null),
-    lint: lint ?? (override?.lint === undefined ? (cargo?.lint ?? null) : null),
-    test: test ?? (override?.test === undefined ? (cargo?.test ?? null) : null),
+    typecheck:
+      typecheck ??
+      (override?.typecheck === undefined && !packageTypecheck.declared ? (cargo?.typecheck ?? null) : null),
+    lint: lint ?? (override?.lint === undefined && !packageLint.declared ? (cargo?.lint ?? null) : null),
+    test: test ?? (override?.test === undefined && !packageTest.declared ? (cargo?.test ?? null) : null),
   }
 }
 

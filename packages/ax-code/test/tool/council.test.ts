@@ -30,6 +30,29 @@ describe("council tool contract", () => {
     expect(parsed.kind).toBe("design")
     expect(parsed.providers).toHaveLength(1)
   })
+
+  test("explicit council selection rejects an empty or duplicate member list", async () => {
+    const init = await CouncilTool.init()
+    expect(() => init.parameters.parse({ question: "Review auth", providers: [] })).toThrow()
+    expect(() =>
+      init.parameters.parse({
+        question: "Review auth",
+        providers: [
+          { providerID: "google", modelID: "gemini" },
+          { providerID: "google", modelID: "gemini" },
+        ],
+      }),
+    ).toThrow()
+    expect(() =>
+      init.parameters.parse({
+        question: "Review auth",
+        providers: [
+          { providerID: "google", modelID: "gemini-flash" },
+          { providerID: "google", modelID: "gemini-pro" },
+        ],
+      }),
+    ).toThrow()
+  })
 })
 
 describe("council aggregation used by tool", () => {

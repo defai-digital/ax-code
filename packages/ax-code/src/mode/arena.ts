@@ -41,9 +41,10 @@ export namespace Arena {
     else if (c.verification === "unknown") score += 40
 
     if (typeof c.riskScore === "number" && Number.isFinite(c.riskScore)) {
-      const riskContribution = Math.max(0, 20 - Math.min(20, c.riskScore))
+      const risk = Math.max(0, Math.min(20, c.riskScore))
+      const riskContribution = 20 - risk
       score += riskContribution
-      reasons.push(`risk:${c.riskScore}`)
+      reasons.push(`risk:${risk}`)
     } else {
       score += 10
       reasons.push("risk:neutral")

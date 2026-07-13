@@ -86,6 +86,39 @@ describe("resolveCommands", () => {
     expect(cmds.test).toBe("npm test")
   })
 
+  test("follows a valid replacement named by an intentional failure placeholder", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writePackageJson(tmp.path, {
+      test: "echo 'do not run tests from root; use test:unit instead' && exit 1",
+      "test:unit": "vitest run",
+      typecheck: "tsc --noEmit",
+    })
+    const cmds = await resolveCommands(tmp.path)
+    expect(cmds.test).toBe("npm run test:unit")
+    expect(cmds.typecheck).toBe("npm run typecheck")
+  })
+
+  test("suppresses cargo fallback for an intentional package-script failure without a valid replacement", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writePackageJson(tmp.path, {
+      test: "echo 'tests are unsupported here' && exit 1",
+    })
+    await fs.writeFile(path.join(tmp.path, "Cargo.toml"), '[package]\nname = "demo"\nversion = "0.1.0"\n')
+
+    const cmds = await resolveCommands(tmp.path)
+    expect(cmds.test).toBeNull()
+    expect(cmds.typecheck).toBe("cargo check")
+  })
+
+  test("does not replace an explicitly empty package script with a cargo command", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writePackageJson(tmp.path, { test: "" })
+    await fs.writeFile(path.join(tmp.path, "Cargo.toml"), '[package]\nname = "demo"\nversion = "0.1.0"\n')
+
+    const cmds = await resolveCommands(tmp.path)
+    expect(cmds.test).toBeNull()
+  })
+
   test("detects the project package manager (pnpm lockfile)", async () => {
     await using tmp = await tmpdir({ git: true })
     await writePackageJson(tmp.path, { typecheck: "tsc --noEmit", test: "vitest" })

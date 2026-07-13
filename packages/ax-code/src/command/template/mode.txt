@@ -6,7 +6,7 @@ Modes (ADR-049):
 - local: prefer AX Engine / local inference
 - cloud: prefer hosted/CLI frontier providers
 - hybrid: policy routes local vs cloud (complexity + privacy); set modes.default=hybrid in ax-code.json
-- council: multi-provider advisory review tool (consensus/majority/singleton; optional debate)
+- council: multi-provider advisory review tool (consensus/strict-majority/minority/singleton; optional debate)
 - arena: multi-provider plan best-of-N (requires modes.arena.enabled=true)
 
 Instructions:

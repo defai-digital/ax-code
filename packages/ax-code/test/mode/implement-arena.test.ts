@@ -11,6 +11,7 @@ describe("ImplementArena", () => {
           modelID: "m",
           completed: true,
           verification: "fail",
+          changedFiles: 1,
           riskScore: 1,
           patchFingerprint: "x",
         },
@@ -20,6 +21,7 @@ describe("ImplementArena", () => {
           modelID: "n",
           completed: true,
           verification: "pass",
+          changedFiles: 1,
           riskScore: 5,
           patchFingerprint: "y",
           worktreeDirectory: "/tmp/wt",
@@ -41,7 +43,10 @@ describe("ImplementArena", () => {
         modelID: "m",
         completed: true,
         verification: "pass",
+        changedFiles: 1,
         worktreeDirectory: "/wt/1",
+        baseCommit: "base123",
+        commit: "commit456",
         summary: "done",
       },
     ])
@@ -53,6 +58,41 @@ describe("ImplementArena", () => {
     expect(md).toContain("Implement arena")
     expect(md).toContain("/wt/1")
     expect(md).toContain("fix foo")
+    expect(md).toContain("commit456")
+    expect(md).toContain("base123..commit456")
+  })
+
+  test("cannot rank incomplete or empty-patch contestants as verified passers", () => {
+    const ranked = ImplementArena.rank([
+      {
+        id: "incomplete",
+        providerID: "a",
+        modelID: "m",
+        completed: false,
+        verification: "pass",
+        changedFiles: 1,
+      },
+      {
+        id: "empty",
+        providerID: "b",
+        modelID: "n",
+        completed: true,
+        verification: "pass",
+        changedFiles: 0,
+      },
+      {
+        id: "unknown-patch",
+        providerID: "c",
+        modelID: "o",
+        completed: true,
+        verification: "pass",
+      },
+    ])
+
+    expect(ranked.every((candidate) => candidate.verification === "fail")).toBe(true)
+    expect(ImplementArena.renderMarkdown({ task: "fix it", ranked, strategy: "verify_first" })).toContain(
+      "No verified winner",
+    )
   })
 
   test("isolationForContestants uses worktree when N>1", () => {

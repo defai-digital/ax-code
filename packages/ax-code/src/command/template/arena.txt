@@ -15,7 +15,7 @@ Task: $ARGUMENTS
 1. Call **arena** within the first 1–2 tool rounds. Do **not** call `task_parallel` or multi-explore digs first.
 2. Prefer **≤1 short context gather** (key files/stack). Do not map the whole monorepo before the fan-out.
 3. If disabled, re-call with `enableIfDisabled: true` (no session restart). Do **not** spend many turns debugging config.
-4. Arena needs **≥2 connected providers**. If insufficient, stop and tell the user to `/connect` — do not invent rankings.
+4. Arena needs **≥2 distinct connected providers**. If insufficient, stop and tell the user to `/connect` — do not invent rankings.
 5. Present ranked results honestly. Never fabricate multi-model output.
-6. Never run concurrent writers on the main workspace. Do not auto-merge implement worktrees.
+6. Implement arena needs a clean main worktree. Never run concurrent writers there, and do not auto-merge contestant worktrees.
 7. If the task is quality findings / “good vs worse”, switch to **council** instead of plan arena.

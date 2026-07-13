@@ -23,7 +23,7 @@ import { Agent } from "../agent/agent"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 import { Tool } from "./tool"
-import { runImplementArena } from "./arena-implement"
+import { inspectImplementArenaBase, runImplementArena } from "./arena-implement"
 import DESCRIPTION from "./arena.txt"
 
 const log = Log.create({ service: "tool.arena" })
@@ -34,10 +34,39 @@ const DEFAULT_TIMEOUT_MS = 60_000
 
 const ProposalSchema = z.object({
   approach: z.string().min(1).max(1200),
-  steps: z.array(z.string().min(1).max(300)).max(12),
+  steps: z.array(z.string().min(1).max(300)).min(1).max(12),
   risks: z.array(z.string().min(1).max(300)).max(8),
+  riskScore: z.number().int().min(0).max(20),
   confidence: z.number().min(0).max(1).optional(),
 })
+
+const MemberSelectionSchema = z.object({
+  providerID: z.string().min(1).max(200),
+  modelID: z.string().min(1).max(300).optional(),
+})
+
+function uniqueMemberSelections(selections: Array<z.infer<typeof MemberSelectionSchema>>, ctx: z.RefinementCtx): void {
+  const seen = new Set<string>()
+  selections.forEach((selection, index) => {
+    const key = `${selection.providerID}\u0000${selection.modelID ?? ""}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      return
+    }
+    ctx.addIssue({
+      code: "custom",
+      message: "Duplicate provider/model selection",
+      path: [index],
+    })
+  })
+  if (new Set(selections.map((selection) => selection.providerID)).size < 2) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Arena requires at least two distinct providers",
+      path: [],
+    })
+  }
+}
 
 const parameters = z.object({
   task: z.string().min(1).describe("The coding task to compare approaches for"),
@@ -48,15 +77,7 @@ const parameters = z.object({
     .describe(
       "plan (default): multi-model approach comparison only. implement: worktree-isolated implement arena with verify-first ranking.",
     ),
-  providers: z
-    .array(
-      z.object({
-        providerID: z.string().min(1),
-        modelID: z.string().optional(),
-      }),
-    )
-    .max(HARD_MAX)
-    .optional(),
+  providers: z.array(MemberSelectionSchema).min(2).max(HARD_MAX).superRefine(uniqueMemberSelections).optional(),
   strategy: z.enum(["verify_first", "diversity", "hybrid_score"]).optional(),
   enableIfDisabled: z
     .boolean()
@@ -67,6 +88,7 @@ const parameters = z.object({
 })
 
 type MemberSpec = { providerID: ProviderID; modelID: ModelID; memberId: string }
+type MemberResolution = { members: MemberSpec[]; rejected: string[] }
 
 async function snapshotSelectableProviders(): Promise<EnsemblePreflight.ProviderSnapshot> {
   await Provider.ready()
@@ -82,52 +104,73 @@ async function snapshotSelectableProviders(): Promise<EnsemblePreflight.Provider
 }
 
 function fingerprint(text: string): string {
-  const normalized = text.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 500)
+  const normalized = text.toLowerCase().replace(/\s+/g, " ").trim()
   return createHash("sha256").update(normalized).digest("hex").slice(0, 16)
 }
 
 async function resolveMembers(
-  cfg: Awaited<ReturnType<typeof Config.get>>,
   explicit: Array<{ providerID: string; modelID?: string }> | undefined,
   maxMembers: number,
-): Promise<MemberSpec[]> {
+  task: string,
+): Promise<MemberResolution> {
   await Provider.ready()
   const providers = await Provider.list()
 
   if (explicit?.length) {
     const out: MemberSpec[] = []
-    for (const item of explicit.slice(0, maxMembers)) {
+    const rejected: string[] = []
+    for (const item of explicit) {
       const providerID = ProviderID.make(item.providerID)
       const provider = providers[providerID]
-      if (!provider) continue
+      if (!provider) {
+        rejected.push(`Unknown provider ${JSON.stringify(item.providerID)}`)
+        continue
+      }
       let modelID: ModelID | undefined
-      if (item.modelID) modelID = ModelID.make(item.modelID)
-      else {
+      if (item.modelID) {
+        const model = Object.values(provider.models).find(
+          (candidate) =>
+            String(candidate.id) === item.modelID &&
+            modelSelectableForProvider(providerID, candidate) &&
+            !String(candidate.id).toLowerCase().includes("embed"),
+        )
+        modelID = model?.id
+        if (!modelID) {
+          rejected.push(`Unknown or unselectable model ${JSON.stringify(`${item.providerID}/${item.modelID}`)}`)
+        }
+      } else {
         const sorted = Provider.sort(
-          Object.values(provider.models).filter((m) => modelSelectableForProvider(providerID, m)),
+          Object.values(provider.models).filter(
+            (model) =>
+              modelSelectableForProvider(providerID, model) && !String(model.id).toLowerCase().includes("embed"),
+          ),
         )
         modelID = sorted[0]?.id
       }
-      if (!modelID) continue
+      if (!modelID) {
+        if (!item.modelID) rejected.push(`No selectable coding model for ${JSON.stringify(item.providerID)}`)
+        continue
+      }
       out.push({ providerID, modelID, memberId: `${providerID}/${modelID}` })
     }
-    return out
+    return { members: Council.dedupeMembers(out).slice(0, maxMembers), rejected }
   }
 
   let candidates: Array<{ providerID: string; modelID: ModelID }> = []
   for (const provider of Object.values(providers)) {
     const models = Provider.sort(
-      Object.values(provider.models).filter((m) => modelSelectableForProvider(provider.id, m)),
+      Object.values(provider.models).filter(
+        (model) => modelSelectableForProvider(provider.id, model) && !String(model.id).toLowerCase().includes("embed"),
+      ),
     )
     const model = models[0]
     if (!model) continue
-    if (String(model.id).toLowerCase().includes("embed")) continue
     candidates.push({ providerID: String(provider.id), modelID: model.id })
   }
 
   try {
     const store = await ModeMemory.load()
-    const stats = ModeMemory.aggregateStats(store.outcomes, ModeMemory.classifyTask("implement"))
+    const stats = ModeMemory.aggregateStats(store.outcomes, ModeMemory.classifyTask(task))
     candidates = ModeMemory.biasByMemory(
       candidates.map((c) => ({ ...c, modelID: String(c.modelID) })),
       stats,
@@ -137,11 +180,14 @@ async function resolveMembers(
   }
 
   const diverse = Council.selectDiverseMembers(candidates, maxMembers)
-  return diverse.map((c) => ({
-    providerID: ProviderID.make(c.providerID),
-    modelID: ModelID.make(String(c.modelID)),
-    memberId: `${c.providerID}/${c.modelID}`,
-  }))
+  return {
+    members: diverse.map((c) => ({
+      providerID: ProviderID.make(c.providerID),
+      modelID: ModelID.make(String(c.modelID)),
+      memberId: `${c.providerID}/${c.modelID}`,
+    })),
+    rejected: [],
+  }
 }
 
 async function runProposal(input: {
@@ -156,9 +202,11 @@ async function runProposal(input: {
   error?: string
 }> {
   const localAbort = new AbortController()
-  const onParent = () => localAbort.abort()
-  input.abort.addEventListener("abort", onParent)
+  const onParent = () => localAbort.abort(input.abort.reason)
+  if (input.abort.aborted) onParent()
+  else input.abort.addEventListener("abort", onParent, { once: true })
   const timer = setTimeout(() => localAbort.abort(), input.timeoutMs)
+  timer.unref?.()
   const started = Date.now()
   try {
     const model = await Provider.getModel(input.member.providerID, input.member.modelID)
@@ -173,14 +221,12 @@ async function runProposal(input: {
           role: "system",
           content: `You are one independent contestant in a coding-agent arena.
 Propose a concrete implementation approach for the task. Do not write full source files.
-Focus on approach, ordered steps, and risks. Be specific to the context.`,
+Focus on approach, ordered steps, and risks. Be specific to the context.
+Give an overall riskScore from 0 (low implementation risk) to 20 (high). Do not lower it by omitting risks.`,
         },
         {
           role: "user",
-          content: [
-            `Task: ${input.task}`,
-            input.context ? `\nContext:\n${input.context.slice(0, 20_000)}` : "",
-          ]
+          content: [`Task: ${input.task}`, input.context ? `\nContext:\n${input.context.slice(0, 20_000)}` : ""]
             .filter(Boolean)
             .join("\n"),
         },
@@ -222,6 +268,8 @@ type ArenaMetadata = {
   providerIDs?: string[]
   enabledThisCall?: boolean
   suggestedTool?: string
+  baseCommit?: string
+  selectionErrors?: string[]
 }
 
 export const ArenaTool = Tool.define("arena", async () => {
@@ -242,6 +290,45 @@ export const ArenaTool = Tool.define("arena", async () => {
       let enabledThisCall = false
       const providerSnap = await snapshotSelectableProviders()
       const suggestedTool = EnsemblePreflight.suggestTool(args.task)
+      const arenaMode = args.mode ?? "plan"
+      let baseCommit: string | undefined
+
+      if (arenaMode === "implement" && (modes?.arena?.enabled === true || args.enableIfDisabled === true)) {
+        const preflight = await inspectImplementArenaBase(Instance.worktree)
+        if (!preflight.ok) {
+          const strategy = args.strategy ?? modes?.arena?.strategy ?? "verify_first"
+          const metadata: ArenaMetadata = {
+            status: preflight.reason,
+            strategy,
+            mode: arenaMode,
+            providerCount: providerSnap.count,
+            providerIDs: providerSnap.ids,
+          }
+          const changes = preflight.changes.slice(0, 20).map((change) => `- ${JSON.stringify(change)}`)
+          const guidance =
+            preflight.reason === "not_git"
+              ? "Initialize a git repository and create an initial commit, then re-run the implement arena."
+              : preflight.reason === "no_base_commit"
+                ? "Create an initial commit, then re-run the implement arena."
+                : "Commit or stash these changes, then re-run the implement arena."
+          return {
+            title:
+              preflight.reason === "not_git"
+                ? "Implement arena requires git"
+                : preflight.reason === "no_base_commit"
+                  ? "Implement arena requires a base commit"
+                  : "Implement arena needs a clean worktree",
+            output: [
+              preflight.message,
+              ...(changes.length ? ["", "Uncommitted paths:", ...changes] : []),
+              "",
+              guidance,
+            ].join("\n"),
+            metadata,
+          }
+        }
+        baseCommit = preflight.baseCommit
+      }
 
       if (modes?.arena?.enabled !== true) {
         if (args.enableIfDisabled === true) {
@@ -263,7 +350,7 @@ export const ArenaTool = Tool.define("arena", async () => {
       if (modes?.arena?.enabled !== true) {
         const metadata: ArenaMetadata = {
           status: "disabled",
-          mode: args.mode ?? "plan",
+          mode: arenaMode,
           providerCount: providerSnap.count,
           providerIDs: providerSnap.ids,
           suggestedTool,
@@ -278,7 +365,6 @@ export const ArenaTool = Tool.define("arena", async () => {
         }
       }
 
-      const arenaMode = args.mode ?? "plan"
       const strategy =
         args.strategy ?? modes.arena?.strategy ?? (arenaMode === "implement" ? "verify_first" : "diversity")
       const timeoutMs = modes.council?.timeoutMs ?? DEFAULT_TIMEOUT_MS
@@ -311,7 +397,8 @@ export const ArenaTool = Tool.define("arena", async () => {
         }
       }
 
-      let members = await resolveMembers(cfg, args.providers, budgetCheck.allowedMembers)
+      const resolution = await resolveMembers(args.providers, budgetCheck.allowedMembers, args.task)
+      let members = resolution.members
       if (members.length > budgetCheck.allowedMembers) {
         members = members.slice(0, budgetCheck.allowedMembers)
       }
@@ -326,37 +413,44 @@ export const ArenaTool = Tool.define("arena", async () => {
           providerCount: providerSnap.count,
           providerIDs: providerSnap.ids,
           enabledThisCall,
+          selectionErrors: resolution.rejected,
         }
         return {
           title: "Arena: need ≥2 providers",
-          output: EnsemblePreflight.arenaInsufficientProvidersMessage(providerSnap),
+          output:
+            EnsemblePreflight.arenaInsufficientProvidersMessage(providerSnap) +
+            (resolution.rejected.length
+              ? `\n\nRequested selections skipped:\n${resolution.rejected.map((error) => `- ${error}`).join("\n")}`
+              : ""),
           metadata,
         }
       }
 
       // --- Implement arena (worktree-isolated writers + verify) ---
       if (arenaMode === "implement") {
+        if (!baseCommit) throw new Error("Implement arena base commit was not resolved")
         const agentName = await Agent.defaultAgent().catch(() => "build")
         const impl = await runImplementArena({
           members,
           task: args.task,
           context: args.context,
           parentSessionID: ctx.sessionID,
-          parentMessageID: ctx.messageID,
+          baseCommit,
           agentName,
           strategy,
           abort: ctx.abort,
         })
 
-        const failedIds = impl.results.filter((r) => r.verification === "fail" || r.error).map((r) => r.id)
+        const failedIds = impl.ranked.filter((result) => result.verification === "fail").map((result) => result.id)
+        const verifiedCount = impl.ranked.filter((result) => result.verification === "pass").length
         void ModeMemory.recordArenaRanking({
           task: args.task,
-          rankedIds: impl.ranked.filter((r) => r.verification !== "fail").map((r) => r.id),
+          rankedIds: impl.ranked.filter((r) => r.verification === "pass").map((r) => r.id),
           failedIds,
         }).catch(() => undefined)
 
         const metadata: ArenaMetadata = {
-          status: "ok",
+          status: verifiedCount > 0 ? "ok" : "no_verified_candidate",
           strategy,
           memberCount: members.length,
           rankedIds: impl.ranked.map((r) => r.id),
@@ -367,13 +461,19 @@ export const ArenaTool = Tool.define("arena", async () => {
           providerCount: providerSnap.count,
           providerIDs: providerSnap.ids,
           enabledThisCall,
+          baseCommit,
+          selectionErrors: resolution.rejected,
         }
 
         return {
-          title: `Implement arena ranked ${impl.ranked.length} contestants`,
+          title:
+            verifiedCount > 0
+              ? `Implement arena ranked ${impl.ranked.length} contestants`
+              : "Implement arena found no verified candidate",
           output:
             impl.markdown +
             (enabledThisCall ? "\n\n_Enabled `modes.arena.enabled` for this project during this call._" : "") +
+            (resolution.rejected.length ? `\n\n_Skipped selections: ${resolution.rejected.join("; ")}_` : "") +
             (budgetCheck.reasons.length ? `\n\n_Budget: ${budgetCheck.reasons.join(", ")}_` : ""),
           metadata,
         }
@@ -391,10 +491,12 @@ export const ArenaTool = Tool.define("arena", async () => {
           }),
         ),
       )
+      ctx.abort.throwIfAborted()
 
       const candidates: Arena.ArenaCandidate[] = []
       const proposalById = new Map<string, z.infer<typeof ProposalSchema>>()
       const errors: string[] = []
+      errors.push(...resolution.rejected.map((error) => `selection: ${error}`))
       const failedIds: string[] = []
 
       for (const r of results) {
@@ -412,13 +514,12 @@ export const ArenaTool = Tool.define("arena", async () => {
           continue
         }
         proposalById.set(r.member.memberId, r.proposal)
-        const risk = Math.min(20, (r.proposal.risks?.length ?? 0) * 3)
         candidates.push({
           id: r.member.memberId,
           providerID: String(r.member.providerID),
           modelID: String(r.member.modelID),
           verification: "unknown",
-          riskScore: risk,
+          riskScore: r.proposal.riskScore,
           patchFingerprint: fingerprint(r.proposal.approach + "|" + r.proposal.steps.join("|")),
           popularity: r.proposal.confidence ?? 0,
         })
@@ -437,6 +538,7 @@ export const ArenaTool = Tool.define("arena", async () => {
           detail.push("", "**Risks:**")
           for (const risk of p.risks) detail.push(`- ${risk}`)
         }
+        detail.push("", `**Self-assessed implementation risk:** ${p.riskScore}/20`)
       }
       if (errors.length) {
         detail.push("", "## Errors", ...errors.map((e) => `- ${e}`))
@@ -467,6 +569,7 @@ export const ArenaTool = Tool.define("arena", async () => {
         providerIDs: providerSnap.ids,
         enabledThisCall,
         suggestedTool,
+        selectionErrors: resolution.rejected,
       }
 
       const header =

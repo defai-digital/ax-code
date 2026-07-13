@@ -20,8 +20,11 @@ export namespace ImplementArena {
     verification: Arena.Verification
     verifyDetail?: string
     riskScore?: number
+    changedFiles?: number
     /** Normalized patch fingerprint (diff hash or empty) */
     patchFingerprint?: string
+    baseCommit?: string
+    commit?: string
     summary?: string
     error?: string
   }
@@ -32,15 +35,21 @@ export namespace ImplementArena {
     sessionID?: string
     summary?: string
     verifyDetail?: string
+    changedFiles?: number
+    baseCommit?: string
+    commit?: string
     error?: string
   }
 
   export function toArenaCandidate(result: ContestantResult): Arena.ArenaCandidate {
+    const hasPatch =
+      typeof result.changedFiles === "number" && Number.isFinite(result.changedFiles) && result.changedFiles > 0
+    const verification = !result.completed || !hasPatch ? "fail" : result.verification
     return {
       id: result.id,
       providerID: result.providerID,
       modelID: result.modelID,
-      verification: result.verification,
+      verification,
       riskScore: result.riskScore,
       patchFingerprint: result.patchFingerprint,
       popularity: 0,
@@ -63,6 +72,9 @@ export namespace ImplementArena {
         sessionID: src?.sessionID,
         summary: src?.summary,
         verifyDetail: src?.verifyDetail,
+        changedFiles: src?.changedFiles,
+        baseCommit: src?.baseCommit,
+        commit: src?.commit,
         error: src?.error,
       }
     })
@@ -73,16 +85,14 @@ export namespace ImplementArena {
     ranked: readonly RankedImplement[]
     strategy: Arena.Strategy
   }): string {
-    const lines = [
-      "# Implement arena ranking",
-      "",
-      `**Task:** ${input.task}`,
-      `**Strategy:** ${input.strategy}`,
-      "",
-    ]
+    const lines = ["# Implement arena ranking", "", `**Task:** ${input.task}`, `**Strategy:** ${input.strategy}`, ""]
     if (!input.ranked.length) {
       lines.push("_No contestants_")
       return lines.join("\n")
+    }
+    const hasVerifiedWinner = input.ranked.some((candidate) => candidate.verification === "pass")
+    if (!hasVerifiedWinner) {
+      lines.push("**No verified winner:** every contestant failed verification or lacked verifiable output.", "")
     }
     for (const c of input.ranked) {
       lines.push(
@@ -90,15 +100,20 @@ export namespace ImplementArena {
       )
       if (c.worktreeDirectory) lines.push(`   worktree: \`${c.worktreeDirectory}\``)
       if (c.worktreeBranch) lines.push(`   branch: \`${c.worktreeBranch}\``)
+      if (c.commit) lines.push(`   commit: \`${c.commit}\``)
+      if (c.baseCommit && c.commit) lines.push(`   commit range: \`${c.baseCommit}..${c.commit}\``)
       if (c.sessionID) lines.push(`   session: \`${c.sessionID}\``)
+      if (c.changedFiles !== undefined) lines.push(`   changed files: ${c.changedFiles}`)
       if (c.summary) lines.push(`   summary: ${c.summary.slice(0, 300)}`)
       if (c.verifyDetail) lines.push(`   verify: ${c.verifyDetail}`)
       if (c.error) lines.push(`   error: ${c.error}`)
       lines.push(`   reasons: ${c.reasons.join(", ")}`)
     }
+    lines.push("")
     lines.push(
-      "",
-      "_Winner is not auto-merged. Inspect the worktree, run extra checks, then cherry-pick or merge the branch._",
+      hasVerifiedWinner
+        ? "_Winner is not auto-merged. Inspect the worktree, run extra checks, then merge its branch or cherry-pick the displayed commit range._"
+        : "_No branch is recommended for promotion. Inspect failed candidates only for diagnosis or salvage._",
       "_Multi-writer isolation uses worktrees (WorktreePolicy). Main workspace is untouched by contestants._",
     )
     return lines.join("\n")

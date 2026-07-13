@@ -116,6 +116,56 @@ test("runStartScripts fails when the worktree start command fails", async () => 
   }
 })
 
+test("createReady returns only after checkout and start scripts complete", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await fs.writeFile(path.join(tmp.path, "tracked.txt"), "ready\n")
+  execFileSync("git", ["add", "tracked.txt"], { cwd: tmp.path, stdio: "pipe" })
+  execFileSync("git", ["commit", "-m", "tracked baseline"], { cwd: tmp.path, stdio: "pipe" })
+  const marker = path.join(tmp.path, "arena-ready.txt")
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Project.update({
+        projectID: Instance.project.id,
+        commands: { start: `printf ready > ${JSON.stringify(marker)}` },
+      })
+
+      const info = await Worktree.createReady({ name: "ready-now" })
+      expect(await fs.readFile(path.join(info.directory, "tracked.txt"), "utf8")).toBe("ready\n")
+      expect(await fs.readFile(marker, "utf8")).toBe("ready")
+      await Worktree.remove({ directory: info.directory })
+    },
+  })
+})
+
+test("createReady rolls back a worktree whose start scripts fail", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Project.update({
+        projectID: Instance.project.id,
+        commands: { start: "exit 7" },
+      })
+
+      await expect(Worktree.createReady({ name: "never-ready" })).rejects.toMatchObject({
+        name: "WorktreeStartCommandFailedError",
+        data: { message: "Worktree failed to become ready" },
+      })
+      const projectRoot = path.join(Global.Path.data, "worktree", Instance.project.id)
+      await expect(fs.stat(path.join(projectRoot, "never-ready"))).rejects.toThrow()
+      expect(
+        execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: tmp.path, encoding: "utf8" }),
+      ).not.toContain("never-ready")
+      expect(execFileSync("git", ["branch", "--list"], { cwd: tmp.path, encoding: "utf8" })).not.toContain(
+        "never-ready",
+      )
+    },
+  })
+})
+
 test("reset cancels pending bootstrap before queueing start scripts", async () => {
   await using tmp = await tmpdir({ git: true })
   await fs.writeFile(path.join(tmp.path, "tracked.txt"), "ready\n")
