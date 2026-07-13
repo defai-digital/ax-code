@@ -27,7 +27,7 @@ type BaselineScanner = {
 }
 
 type BaselineFile = {
-  version: 1
+  version: 2
   scope: string
   scanners: Partial<Record<ScannerName, BaselineScanner>>
 }
@@ -109,20 +109,40 @@ function normalizeWhitespace(value: string | undefined) {
   return (value ?? "").replace(/\s+/g, " ").trim()
 }
 
-function normalizeRaceFinding(finding: DebugEngineTypes.RaceFinding): NormalizedFinding {
+function createSourceAnchor() {
+  const sourceLines = new Map<string, Promise<string[]>>()
+
+  return async (file: string, line: number, endLine?: number) => {
+    const absolute = path.isAbsolute(file) ? file : path.resolve(packageDir, file)
+    let lines = sourceLines.get(absolute)
+    if (!lines) {
+      lines = fs
+        .readFile(absolute, "utf8")
+        .then((content) => content.split("\n"))
+        .catch(() => [])
+      sourceLines.set(absolute, lines)
+    }
+
+    const source = await lines
+    // Source context stays stable when unrelated edits shift line numbers.
+    const start = Math.max(0, line - 1)
+    const end = Math.min(source.length, Math.max(line, endLine ?? line) + 2)
+    return normalizeWhitespace(source.slice(start, end).join("\n"))
+  }
+}
+
+type SourceAnchor = ReturnType<typeof createSourceAnchor>
+
+async function normalizeRaceFinding(
+  finding: DebugEngineTypes.RaceFinding,
+  sourceAnchor: SourceAnchor,
+): Promise<NormalizedFinding> {
   const file = normalizeFile(finding.file)
   const kind = finding.pattern
+  const anchor = normalizeWhitespace(finding.code) || (await sourceAnchor(finding.file, finding.line, finding.endLine))
   return {
     scanner: "race_scan",
-    fingerprint: fingerprint([
-      "race_scan",
-      file,
-      String(finding.line),
-      String(finding.endLine ?? ""),
-      finding.severity,
-      finding.pattern,
-      normalizeWhitespace(finding.code),
-    ]),
+    fingerprint: fingerprint(["race_scan:v2", file, finding.severity, finding.pattern, anchor]),
     file,
     line: finding.line,
     endLine: finding.endLine,
@@ -132,19 +152,22 @@ function normalizeRaceFinding(finding: DebugEngineTypes.RaceFinding): Normalized
   }
 }
 
-function normalizeLifecycleFinding(finding: DebugEngineTypes.LifecycleFinding): NormalizedFinding {
+async function normalizeLifecycleFinding(
+  finding: DebugEngineTypes.LifecycleFinding,
+  sourceAnchor: SourceAnchor,
+): Promise<NormalizedFinding> {
   const file = normalizeFile(finding.file)
   const kind = `${finding.resourceType}:${finding.pattern}`
+  const anchor = await sourceAnchor(finding.file, finding.line)
   return {
     scanner: "lifecycle_scan",
     fingerprint: fingerprint([
-      "lifecycle_scan",
+      "lifecycle_scan:v2",
       file,
-      String(finding.line),
       finding.severity,
       finding.resourceType,
       finding.pattern,
-      normalizeWhitespace(finding.cleanupLocation ?? ""),
+      anchor,
     ]),
     file,
     line: finding.line,
@@ -154,18 +177,22 @@ function normalizeLifecycleFinding(finding: DebugEngineTypes.LifecycleFinding): 
   }
 }
 
-function normalizeSecurityFinding(finding: DebugEngineTypes.SecurityFinding): NormalizedFinding {
+async function normalizeSecurityFinding(
+  finding: DebugEngineTypes.SecurityFinding,
+  sourceAnchor: SourceAnchor,
+): Promise<NormalizedFinding> {
   const file = normalizeFile(finding.file)
   const kind = finding.pattern
+  const anchor = await sourceAnchor(finding.file, finding.line)
   return {
     scanner: "security_scan",
     fingerprint: fingerprint([
-      "security_scan",
+      "security_scan:v2",
       file,
-      String(finding.line),
       finding.severity,
       finding.pattern,
       finding.userControlled ? "user-controlled" : "not-user-controlled",
+      anchor,
     ]),
     file,
     line: finding.line,
@@ -175,20 +202,16 @@ function normalizeSecurityFinding(finding: DebugEngineTypes.SecurityFinding): No
   }
 }
 
-function normalizeHardcodeFinding(finding: DebugEngineTypes.HardcodeFinding): NormalizedFinding {
+async function normalizeHardcodeFinding(
+  finding: DebugEngineTypes.HardcodeFinding,
+  sourceAnchor: SourceAnchor,
+): Promise<NormalizedFinding> {
   const file = normalizeFile(finding.file)
   const kind = finding.kind
+  const anchor = await sourceAnchor(finding.file, finding.line)
   return {
     scanner: "hardcode_scan",
-    fingerprint: fingerprint([
-      "hardcode_scan",
-      file,
-      String(finding.line),
-      String(finding.column),
-      finding.severity,
-      finding.kind,
-      finding.value,
-    ]),
+    fingerprint: fingerprint(["hardcode_scan:v2", file, finding.severity, finding.kind, finding.value, anchor]),
     file,
     line: finding.line,
     severity: finding.severity,
@@ -222,7 +245,7 @@ function baselineFromResults(results: ScanResult[]): BaselineFile {
     }
   }
   return {
-    version: 1,
+    version: 2,
     scope: sourceScope,
     scanners,
   }
@@ -231,7 +254,7 @@ function baselineFromResults(results: ScanResult[]): BaselineFile {
 async function readBaseline(file: string): Promise<BaselineFile> {
   const text = await fs.readFile(file, "utf8")
   const parsed = JSON.parse(text) as BaselineFile
-  if (parsed.version !== 1 || typeof parsed.scanners !== "object" || parsed.scanners === null) {
+  if (parsed.version !== 2 || typeof parsed.scanners !== "object" || parsed.scanners === null) {
     throw new Error(`Unsupported self-scan baseline format: ${file}`)
   }
   return parsed
@@ -242,37 +265,51 @@ async function writeBaseline(file: string, baseline: BaselineFile) {
   await fs.writeFile(file, `${JSON.stringify(baseline, null, 2)}\n`)
 }
 
-function baselineFingerprints(baseline: BaselineFile) {
-  const out = new Map<ScannerName, Set<string>>()
+function fingerprintCounts(findings: ReadonlyArray<Pick<BaselineEntry, "fingerprint">>) {
+  const counts = new Map<string, number>()
+  for (const finding of findings) counts.set(finding.fingerprint, (counts.get(finding.fingerprint) ?? 0) + 1)
+  return counts
+}
+
+function consumeFingerprintCount(counts: Map<string, number>, fingerprint: string) {
+  const count = counts.get(fingerprint) ?? 0
+  if (count === 0) return false
+  if (count === 1) counts.delete(fingerprint)
+  else counts.set(fingerprint, count - 1)
+  return true
+}
+
+function baselineFingerprintCounts(baseline: BaselineFile) {
+  const out = new Map<ScannerName, Map<string, number>>()
   for (const scanner of scannerOrder) {
-    out.set(scanner, new Set((baseline.scanners[scanner]?.findings ?? []).map((finding) => finding.fingerprint)))
+    out.set(scanner, fingerprintCounts(baseline.scanners[scanner]?.findings ?? []))
   }
   return out
 }
 
-function currentFingerprints(results: ScanResult[]) {
-  const out = new Map<ScannerName, Set<string>>()
+function currentFingerprintCounts(results: ScanResult[]) {
+  const out = new Map<ScannerName, Map<string, number>>()
   for (const result of results) {
-    out.set(result.scanner, new Set(result.findings.map((finding) => finding.fingerprint)))
+    out.set(result.scanner, fingerprintCounts(result.findings))
   }
   return out
 }
 
 function findNewFindings(results: ScanResult[], baseline: BaselineFile) {
-  const baselineByScanner = baselineFingerprints(baseline)
+  const baselineByScanner = baselineFingerprintCounts(baseline)
   return results.flatMap((result) => {
-    const accepted = baselineByScanner.get(result.scanner) ?? new Set<string>()
-    return result.findings.filter((finding) => !accepted.has(finding.fingerprint))
+    const accepted = new Map(baselineByScanner.get(result.scanner))
+    return result.findings.filter((finding) => !consumeFingerprintCount(accepted, finding.fingerprint))
   })
 }
 
 function findStaleBaselineEntries(results: ScanResult[], baseline: BaselineFile) {
-  const currentByScanner = currentFingerprints(results)
+  const currentByScanner = currentFingerprintCounts(results)
   const stale: NormalizedFinding[] = []
   for (const scanner of scannerOrder) {
-    const current = currentByScanner.get(scanner) ?? new Set<string>()
+    const current = new Map(currentByScanner.get(scanner))
     for (const finding of baseline.scanners[scanner]?.findings ?? []) {
-      if (!current.has(finding.fingerprint)) stale.push({ scanner, ...finding })
+      if (!consumeFingerprintCount(current, finding.fingerprint)) stale.push({ scanner, ...finding })
     }
   }
   return sortFindings(stale)
@@ -347,6 +384,7 @@ async function writeReport(file: string | undefined, content: string) {
 }
 
 async function runScans(): Promise<ScanResult[]> {
+  const sourceAnchor = createSourceAnchor()
   const commonInput = {
     include: sourceGlobs,
     excludeTests: true,
@@ -366,7 +404,9 @@ async function runScans(): Promise<ScanResult[]> {
         scanner: "race_scan",
         filesScanned: race.filesScanned,
         truncated: race.truncated,
-        findings: sortFindings(race.findings.map(normalizeRaceFinding)),
+        findings: sortFindings(
+          await Promise.all(race.findings.map((finding) => normalizeRaceFinding(finding, sourceAnchor))),
+        ),
       })
 
       const lifecycle = await DebugEngine.detectLifecycle(projectID, commonInput)
@@ -374,7 +414,9 @@ async function runScans(): Promise<ScanResult[]> {
         scanner: "lifecycle_scan",
         filesScanned: lifecycle.filesScanned,
         truncated: lifecycle.truncated,
-        findings: sortFindings(lifecycle.findings.map(normalizeLifecycleFinding)),
+        findings: sortFindings(
+          await Promise.all(lifecycle.findings.map((finding) => normalizeLifecycleFinding(finding, sourceAnchor))),
+        ),
       })
 
       const security = await DebugEngine.detectSecurity(projectID, commonInput)
@@ -382,7 +424,9 @@ async function runScans(): Promise<ScanResult[]> {
         scanner: "security_scan",
         filesScanned: security.filesScanned,
         truncated: security.truncated,
-        findings: sortFindings(security.findings.map(normalizeSecurityFinding)),
+        findings: sortFindings(
+          await Promise.all(security.findings.map((finding) => normalizeSecurityFinding(finding, sourceAnchor))),
+        ),
       })
 
       const hardcodes = await DebugEngine.detectHardcodes(projectID, {
@@ -393,7 +437,9 @@ async function runScans(): Promise<ScanResult[]> {
         scanner: "hardcode_scan",
         filesScanned: hardcodes.filesScanned,
         truncated: hardcodes.truncated,
-        findings: sortFindings(hardcodes.findings.map(normalizeHardcodeFinding)),
+        findings: sortFindings(
+          await Promise.all(hardcodes.findings.map((finding) => normalizeHardcodeFinding(finding, sourceAnchor))),
+        ),
       })
 
       return results

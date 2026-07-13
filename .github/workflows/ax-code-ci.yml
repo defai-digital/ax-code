@@ -112,7 +112,7 @@ jobs:
         run: pnpm --dir packages/ax-code run typecheck
 
       - name: Download coverage baseline
-        if: always()
+        if: always() && github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -151,18 +151,30 @@ jobs:
             deterministic
             --rerun-on-fail
             1
-            --coverage
-            --coverage-dir
-            .tmp/coverage
-            --coverage-summary-out
-            .tmp/coverage-summary.json
-            --coverage-report-out
-            .tmp/coverage-report.md
           )
 
-          baseline="$(find packages/ax-code/.tmp/coverage-baseline -name '*.json' | head -n1 || true)"
-          if [ -n "$baseline" ]; then
-            cmd+=(--coverage-baseline "${baseline#packages/ax-code/}")
+          # Full V8 coverage is retained on post-merge dev pushes, where it
+          # produces the baseline artifact. Running it on every PR keeps
+          # hundreds of instrumented test files in memory and makes feedback
+          # unacceptably slow.
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            export NODE_OPTIONS="--max-old-space-size=12288"
+            export AX_TEST_MAX_WORKERS="1"
+            export AX_TEST_SHARD_SIZE="25"
+            cmd+=(
+              --coverage
+              --coverage-dir
+              .tmp/coverage
+              --coverage-summary-out
+              .tmp/coverage-summary.json
+              --coverage-report-out
+              .tmp/coverage-report.md
+            )
+
+            baseline="$(find packages/ax-code/.tmp/coverage-baseline -name '*.json' | head -n1 || true)"
+            if [ -n "$baseline" ]; then
+              cmd+=(--coverage-baseline "${baseline#packages/ax-code/}")
+            fi
           fi
 
           "${cmd[@]}"
@@ -182,7 +194,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload coverage artifacts
-        if: always()
+        if: always() && github.event_name == 'push'
         uses: actions/upload-artifact@v7
         with:
           name: ax-code-coverage-report
