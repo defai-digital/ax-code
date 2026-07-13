@@ -538,10 +538,17 @@ export function Prompt(props: PromptProps) {
 
   const footerRunMode = createMemo(() => runMode({ autonomous: sync.data.autonomous, superLong: sync.data.superLong }))
 
+  const footerWorkMode = createMemo(() => WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)))
+  const footerWorkModeLabel = createMemo(() =>
+    WorkMode.ALL.map((id) => (id === footerWorkMode() ? `[${WorkMode.shortLabel(id)}]` : WorkMode.shortLabel(id))).join(
+      "|",
+    ),
+  )
   const footerLayout = createMemo(() =>
     promptFooterLayout({
       contentWidth: promptContentWidth(),
       toggleWidth:
+        footerToggleLabel(footerWorkModeLabel(), footerWorkMode() !== "agent").length +
         footerToggleLabel(runModeLabel(footerRunMode()), footerRunMode() !== "none").length +
         footerToggleLabel("Sandbox", sync.data.isolation.mode !== "full-access").length,
       mode: store.mode,
@@ -2153,13 +2160,8 @@ export function Prompt(props: PromptProps) {
               <box flexDirection="row" flexShrink={0}>
                 {footerToggleChip({
                   // Show all three options with the active one marked (Qoder-style cycle control).
-                  label: (() => {
-                    const current = WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT))
-                    return WorkMode.ALL.map((id) =>
-                      id === current ? `[${WorkMode.shortLabel(id)}]` : WorkMode.shortLabel(id),
-                    ).join("|")
-                  })(),
-                  active: WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)) !== "agent",
+                  label: footerWorkModeLabel(),
+                  active: footerWorkMode() !== "agent",
                   activeFg: theme.text,
                   inactiveFg: theme.textMuted,
                   background: theme.accent,

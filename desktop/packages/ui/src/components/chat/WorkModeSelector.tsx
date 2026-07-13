@@ -4,7 +4,8 @@ import type { IconName } from "@/components/icon/icons"
 import { cn } from "@/lib/utils"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useWorkModeStore } from "@/stores/useWorkModeStore"
-import { WORK_MODES, type WorkModeId } from "@/lib/workMode"
+import { normalizeDirectoryKey } from "@/stores/utils/directoryKey"
+import { DEFAULT_WORK_MODE, parseWorkMode, WORK_MODES, type WorkModeId } from "@/lib/workMode"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 type ModeMeta = {
@@ -49,7 +50,9 @@ export const WorkModeSelector: React.FC<WorkModeSelectorProps> = ({
   iconSizeClass = "h-3.5 w-3.5",
 }) => {
   const currentDirectory = useDirectoryStore((s) => s.currentDirectory)
-  const mode = useWorkModeStore((s) => s.getMode(currentDirectory))
+  const dirKey = normalizeDirectoryKey(currentDirectory)
+  // Subscribe to the raw map entry so UI updates immediately on setMode.
+  const mode = useWorkModeStore((s) => parseWorkMode(s.modeByDirectory[dirKey], DEFAULT_WORK_MODE))
   const setMode = useWorkModeStore((s) => s.setMode)
 
   return (

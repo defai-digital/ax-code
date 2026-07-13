@@ -137,10 +137,13 @@ export function routeMessage(params: {
 
     // Work mode (Agent | Council | Arena) — Qoder-style send routing.
     // Explicit slash commands stay unchanged; free-text is remapped when mode ≠ agent.
+    // Note: shell mode returns above, so this path is never shell.
     let content = params.content
     let forcedCommand: { name: string; arguments: string } | null = null
-    if (params.inputMode !== "shell" && !content.trimStart().startsWith("/")) {
-      const workMode = useWorkModeStore.getState().getMode(params.directory)
+    if (!content.trimStart().startsWith("/")) {
+      // Prefer explicit directory, else current project directory so mode selection sticks.
+      const dirForMode = params.directory ?? useDirectoryStore.getState().currentDirectory
+      const workMode = useWorkModeStore.getState().getMode(dirForMode)
       const routed = routeWorkModeInput(workMode, content)
       if (routed.kind === "command") {
         forcedCommand = { name: routed.command, arguments: routed.arguments }
