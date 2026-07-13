@@ -77,6 +77,11 @@ const quarantined = new Set([
   "test/lsp/request-collapse.test.ts",
   "test/code-intelligence/builder.test.ts",
   "test/control-plane/sse.test.ts",
+  // Passes only when it inherits state from neighboring prompt suites; when
+  // isolated it leaves the resume loop running indefinitely and eventually
+  // exhausts the release runner heap. Keep it as targeted integration coverage
+  // until the test owns and closes its prompt-loop lifecycle.
+  "test/session/prompt-resume.test.ts",
 ])
 
 export const defaultExcludedTests = [...live, ...e2e, ...recovery, ...quarantined]

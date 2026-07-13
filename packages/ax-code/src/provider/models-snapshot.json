@@ -5732,7 +5732,7 @@
         "tool_call": false,
         "temperature": true,
         "knowledge": "2025-01",
-        "release_date": "2026-05-28",
+        "release_date": "2025-09-01",
         "last_updated": "2026-05-28",
         "modalities": {
           "input": [
@@ -8699,7 +8699,7 @@
         "open_weights": false,
         "limit": {
           "context": 1000000,
-          "output": 64000
+          "output": 8192
         }
       },
       "anthropic/claude-haiku-4.5": {
@@ -9045,7 +9045,7 @@
         "open_weights": false,
         "limit": {
           "context": 200000,
-          "output": 32000
+          "output": 8192
         }
       },
       "anthropic/claude-opus-4.6": {
@@ -9316,8 +9316,7 @@
         "modalities": {
           "input": [
             "text",
-            "image",
-            "video"
+            "image"
           ],
           "output": [
             "text"
@@ -11725,7 +11724,7 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 128000,
+          "context": 163840,
           "output": 128000
         }
       },
@@ -33206,8 +33205,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 256000,
-          "output": 128000
+          "context": 262144,
+          "output": 262144
         }
       },
       "moonshot/kimi-k2.7-code": {
@@ -58774,33 +58773,6 @@
           "output": 32766
         }
       },
-      "qwen-vl-max": {
-        "id": "qwen-vl-max",
-        "name": "Qwen-VL Max",
-        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2024-04",
-        "release_date": "2024-04-08",
-        "last_updated": "2025-08-13",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 131072,
-          "output": 8192
-        }
-      },
       "llama-3-8b-instruct": {
         "id": "llama-3-8b-instruct",
         "name": "Llama 3 8B Instruct",
@@ -59596,33 +59568,6 @@
           "output": 65536
         }
       },
-      "qwq-plus": {
-        "id": "qwq-plus",
-        "name": "QwQ Plus",
-        "description": "Qwen reasoning model for deliberate problem solving, math, and coding",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2024-04",
-        "release_date": "2025-03-05",
-        "last_updated": "2025-03-05",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 131072,
-          "output": 8192
-        }
-      },
       "qwen3-vl-30b-a3b-instruct": {
         "id": "qwen3-vl-30b-a3b-instruct",
         "name": "Qwen3 VL 30B A3B Instruct",
@@ -60322,33 +60267,6 @@
           "output": 262144
         }
       },
-      "qwen-turbo": {
-        "id": "qwen-turbo",
-        "name": "Qwen Turbo",
-        "description": "Efficient Qwen model for fast chat, extraction, and high-volume workloads",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2024-04",
-        "release_date": "2024-11-01",
-        "last_updated": "2025-04-28",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 16384
-        }
-      },
       "custom": {
         "id": "custom",
         "name": "Custom Model",
@@ -60624,33 +60542,6 @@
           "context": 400000,
           "input": 272000,
           "output": 128000
-        }
-      },
-      "qwen-vl-plus": {
-        "id": "qwen-vl-plus",
-        "name": "Qwen-VL Plus",
-        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2024-04",
-        "release_date": "2024-01-25",
-        "last_updated": "2025-08-15",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 131072,
-          "output": 8192
         }
       },
       "qwen3.6-plus": {
@@ -87231,6 +87122,34 @@
           "output": 524288
         }
       },
+      "mistral-small-4": {
+        "id": "mistral-small-4",
+        "name": "Mistral Small 4",
+        "description": "Fast Mistral production model for chat, extraction, and cost-sensitive agents",
+        "family": "mistral-small",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-06",
+        "release_date": "2026-03-16",
+        "last_updated": "2026-03-16",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 256000,
+          "output": 65536
+        }
+      },
       "mimo-v2-5": {
         "id": "mimo-v2-5",
         "name": "MiMo V2.5",
@@ -87453,6 +87372,34 @@
           "context": 256000,
           "input": 256000,
           "output": 131072
+        }
+      },
+      "mistral-medium-3": {
+        "id": "mistral-medium-3",
+        "name": "Mistral Medium 3",
+        "description": "Mistral model for multilingual chat, reasoning, and tool-assisted workflows",
+        "family": "mistral-medium",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2025-05-07",
+        "last_updated": "2025-05-07",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 130000,
+          "output": 40000
         }
       },
       "qwen3-5-4b": {
@@ -128655,6 +128602,41 @@
           "output": 262144
         }
       },
+      "z-ai/glm-5.2": {
+        "id": "z-ai/glm-5.2",
+        "name": "GLM-5.2",
+        "description": "Flagship GLM model for hybrid reasoning, coding, and agentic engineering",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 101376,
+          "output": 101376
+        }
+      },
       "zai-org/GLM-5.2-FP8": {
         "id": "zai-org/GLM-5.2-FP8",
         "name": "GLM-5.2",
@@ -128662,7 +128644,15 @@
         "family": "glm",
         "attachment": false,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "temperature": true,
@@ -128680,6 +128670,41 @@
         "limit": {
           "context": 202752,
           "output": 202752
+        }
+      },
+      "ambient/large": {
+        "id": "ambient/large",
+        "name": "Ambient Large",
+        "description": "Flagship GLM model for hybrid reasoning, coding, and agentic engineering",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 101376,
+          "output": 101376
         }
       }
     }

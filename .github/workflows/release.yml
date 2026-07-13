@@ -46,11 +46,8 @@ jobs:
       - name: Test
         run: pnpm --dir packages/ax-code run test:ci -- deterministic --rerun-on-fail 1
         env:
-          # The session-heavy deterministic shard needs more than the former
-          # 6 GiB cap. Use a single worker and leave headroom on the hosted
-          # runner so it can complete without competing heaps.
-          NODE_OPTIONS: --max-old-space-size=12288
-          AX_TEST_MAX_WORKERS: "1"
+          NODE_OPTIONS: --max-old-space-size=6144
+          AX_TEST_MAX_WORKERS: "2"
           # The session-heavy deterministic suite can exhaust a 6 GiB Node heap
           # within a 100-file worker group. Keep each fresh Vitest process below
           # that limit while retaining the two-worker cap.
