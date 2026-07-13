@@ -4,6 +4,8 @@
  */
 
 import { createHash } from "crypto"
+import fs from "node:fs/promises"
+import path from "node:path"
 import { Agent } from "../agent/agent"
 import { Instance } from "../project/instance"
 import { InstanceBootstrap } from "../project/bootstrap"
@@ -82,6 +84,28 @@ async function attachSnapshotBranch(cwd: string, branch: string, commit: string)
     { cwd },
   )
   if (attached.exitCode !== 0) throw gitError(attached, "Failed to attach contestant snapshot branch")
+}
+
+export async function linkPrimaryNodeModules(primaryWorktree: string, contestantWorktree: string): Promise<boolean> {
+  const source = path.join(primaryWorktree, "node_modules")
+  const destination = path.join(contestantWorktree, "node_modules")
+  const sourceExists = await fs
+    .stat(source)
+    .then((entry) => entry.isDirectory())
+    .catch(() => false)
+  if (!sourceExists) return false
+
+  const destinationExists = await fs
+    .lstat(destination)
+    .then(() => true)
+    .catch(() => false)
+  if (destinationExists) return false
+
+  const ignored = await git(["check-ignore", "--quiet", "--", "node_modules"], { cwd: contestantWorktree })
+  if (ignored.exitCode !== 0) return false
+
+  await fs.symlink(source, destination, process.platform === "win32" ? "junction" : "dir")
+  return true
 }
 
 export type ImplementArenaBasePreflight =
@@ -352,6 +376,7 @@ export async function runImplementContestant(input: {
 }): Promise<ImplementArena.ContestantResult> {
   const timeoutMs = input.timeoutMs ?? IMPLEMENT_TIMEOUT_MS
   const started = Date.now()
+  const primaryWorktree = Instance.worktree
   let worktree: Awaited<ReturnType<typeof Worktree.createReady>> | undefined
   let contestantSessionID: SessionID | undefined
 
@@ -390,6 +415,12 @@ export async function runImplementContestant(input: {
     if (readyStatus.stdout.length) {
       throw new Error("Worktree start scripts left uncommitted changes before the contestant began")
     }
+    await linkPrimaryNodeModules(primaryWorktree, worktree.directory).catch((error) => {
+      log.warn("failed to link primary node_modules into arena worktree", {
+        directory: worktree?.directory,
+        error: toErrorMessage(error),
+      })
+    })
 
     const result = await Instance.provide({
       directory: worktree.directory,

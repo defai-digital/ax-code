@@ -166,6 +166,22 @@ test("createReady rolls back a worktree whose start scripts fail", async () => {
   })
 })
 
+test("createReady rejects option-like git start points before creating a worktree", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect(() => Worktree.createReady({ name: "invalid-start", startPoint: "--orphan" })).toThrow(
+        "Git revision cannot start",
+      )
+      expect(
+        execFileSync("git", ["branch", "--list", "ax-code/invalid-start"], { cwd: tmp.path, encoding: "utf8" }),
+      ).toBe("")
+    },
+  })
+})
+
 test("reset cancels pending bootstrap before queueing start scripts", async () => {
   await using tmp = await tmpdir({ git: true })
   await fs.writeFile(path.join(tmp.path, "tracked.txt"), "ready\n")

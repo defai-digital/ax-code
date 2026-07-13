@@ -2,7 +2,11 @@ import { execFileSync } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { describe, expect, test } from "vitest"
-import { inspectImplementArenaBase, snapshotContestantPatch } from "../../src/tool/arena-implement"
+import {
+  inspectImplementArenaBase,
+  linkPrimaryNodeModules,
+  snapshotContestantPatch,
+} from "../../src/tool/arena-implement"
 import { tmpdir } from "../fixture/fixture"
 
 function git(cwd: string, args: string[]) {
@@ -10,6 +14,26 @@ function git(cwd: string, args: string[]) {
 }
 
 describe("implement arena git lifecycle", () => {
+  test("links ignored Node dependencies into an isolated contestant worktree", async () => {
+    await using primary = await tmpdir({ git: true })
+    await using contestant = await tmpdir({ git: true })
+    await using nonIgnored = await tmpdir({ git: true })
+    await fs.mkdir(path.join(primary.path, "node_modules", "example"), { recursive: true })
+    await fs.writeFile(path.join(primary.path, "node_modules", "example", "index.js"), "module.exports = 1\n")
+    await fs.writeFile(path.join(contestant.path, ".gitignore"), "node_modules\n")
+
+    await expect(linkPrimaryNodeModules(primary.path, contestant.path)).resolves.toBe(true)
+    expect(await fs.readFile(path.join(contestant.path, "node_modules", "example", "index.js"), "utf8")).toBe(
+      "module.exports = 1\n",
+    )
+    const status = git(contestant.path, ["status", "--porcelain=v1", "--untracked-files=all"])
+    expect(status).toContain(".gitignore")
+    expect(status).not.toContain("node_modules")
+    await expect(linkPrimaryNodeModules(primary.path, contestant.path)).resolves.toBe(false)
+    await expect(linkPrimaryNodeModules(primary.path, nonIgnored.path)).resolves.toBe(false)
+    await expect(fs.lstat(path.join(nonIgnored.path, "node_modules"))).rejects.toMatchObject({ code: "ENOENT" })
+  })
+
   test("preflight reports non-git and unborn repositories without throwing", async () => {
     await using tmp = await tmpdir()
     const outsideGit = await inspectImplementArenaBase(tmp.path)

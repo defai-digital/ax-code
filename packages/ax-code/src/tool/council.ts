@@ -443,8 +443,9 @@ export const CouncilTool = Tool.define("council", async () => {
         ctx.abort.throwIfAborted()
         report = Council.aggregateCouncil(results)
         debateRoundsRun = round
-        debateStopReason = Debate.shouldContinueDebate({ round, maxRounds, report }).reason
-        if (!Debate.shouldContinueDebate({ round, maxRounds, report }).continue) break
+        const postRound = Debate.shouldContinueDebate({ round, maxRounds, report })
+        debateStopReason = postRound.reason
+        if (!postRound.continue) break
       }
 
       const markdown = Council.renderReportMarkdown(report, args.question)

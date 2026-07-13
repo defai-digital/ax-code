@@ -72,13 +72,14 @@ export namespace Worktree {
 
   export type CreateInput = z.infer<typeof CreateInput>
 
+  const StartPoint = z
+    .string()
+    .min(1)
+    .max(1024)
+    .refine((value) => !value.startsWith("-"), "Git revision cannot start with '-'")
+
   const CreateReadyInput = CreateInput.extend({
-    startPoint: z
-      .string()
-      .min(1)
-      .max(1024)
-      .refine((value) => !value.startsWith("-"), "Git revision cannot start with '-'")
-      .optional(),
+    startPoint: StartPoint.optional(),
   })
 
   export const RemoveInput = z
@@ -485,7 +486,7 @@ export namespace Worktree {
 
   export async function createFromInfo(info: Info, startCommand?: string, startPoint?: string) {
     const args = ["worktree", "add", "--no-checkout", "-b", info.branch, info.directory]
-    if (startPoint) args.push(startPoint)
+    if (startPoint) args.push(StartPoint.parse(startPoint))
     const created = await git(args, { cwd: Instance.worktree })
     if (created.exitCode !== 0) {
       throw new CreateFailedError({ message: errorText(created) || "Failed to create git worktree" })

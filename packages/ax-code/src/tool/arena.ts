@@ -551,14 +551,17 @@ export const ArenaTool = Tool.define("arena", async () => {
         "_Plans are not execution-verified. Use mode=implement for worktree-isolated implement arena with verify-first ranking._",
       )
 
-      void ModeMemory.recordArenaRanking({
-        task: args.task,
-        rankedIds: ranked.filter((r) => r.verification !== "fail").map((r) => r.id),
-        failedIds,
-      }).catch(() => undefined)
+      const successfulCount = proposalById.size
+      if (successfulCount >= 2) {
+        void ModeMemory.recordArenaRanking({
+          task: args.task,
+          rankedIds: ranked.filter((r) => r.verification !== "fail").map((r) => r.id),
+          failedIds,
+        }).catch(() => undefined)
+      }
 
       const metadata: ArenaMetadata = {
-        status: "ok",
+        status: successfulCount >= 2 ? "ok" : successfulCount === 0 ? "no_successful_candidate" : "incomplete",
         strategy,
         memberCount: members.length,
         rankedIds: ranked.map((r) => r.id),
@@ -579,7 +582,12 @@ export const ArenaTool = Tool.define("arena", async () => {
           : "")
 
       return {
-        title: `Arena ranked ${ranked.length} contestants`,
+        title:
+          successfulCount >= 2
+            ? `Arena ranked ${ranked.length} contestants`
+            : successfulCount === 0
+              ? "Arena produced no valid proposals"
+              : `Arena incomplete (${successfulCount}/${members.length} proposals)`,
         output: header + rankingMd + detail.join("\n"),
         metadata,
       }

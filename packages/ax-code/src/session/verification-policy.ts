@@ -239,7 +239,7 @@ export namespace VerificationPolicy {
 
     // Prefer runner-resolved commands when available (handles monorepo / cargo root).
     const resolved = await resolveCommands(root)
-    if (resolved.typecheck || resolved.lint || resolved.test) {
+    if (hasPackageJson || resolved.typecheck || resolved.lint || resolved.test) {
       const preferred = [resolved.test, resolved.typecheck, resolved.lint].filter((cmd): cmd is string => Boolean(cmd))
       return {
         ecosystem: detectEcosystem(signals),

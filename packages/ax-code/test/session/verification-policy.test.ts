@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest"
+import fs from "node:fs/promises"
+import path from "node:path"
 import { VerificationPolicy } from "../../src/session/verification-policy"
+import { tmpdir } from "../fixture/fixture"
 
 describe("VerificationPolicy.detectEcosystem", () => {
   test("prefers node when package.json is present", () => {
@@ -43,6 +46,18 @@ describe("VerificationPolicy.preferredCommands", () => {
       packageManager: "npm",
       scripts: {},
     })
+    expect(commands.preferred).toEqual([])
+  })
+
+  test("filesystem resolution does not revive an intentional failing test placeholder", async () => {
+    await using tmp = await tmpdir()
+    await fs.writeFile(
+      path.join(tmp.path, "package.json"),
+      JSON.stringify({ scripts: { test: "echo 'tests unsupported' && exit 1" } }),
+    )
+
+    const commands = await VerificationPolicy.resolvePreferredCommands(tmp.path)
+    expect(commands.test).toBeNull()
     expect(commands.preferred).toEqual([])
   })
 })

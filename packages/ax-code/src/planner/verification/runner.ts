@@ -140,9 +140,10 @@ async function detectPackageManager(cwd: string, pkg: Record<string, unknown>): 
 
 // Resolve the typecheck/lint/test commands for a project. Defaults pick up the
 // detected package manager's `run <script>` when package.json defines the
-// matching script, then fall back to Cargo checks when the directory belongs to
-// a Rust workspace; `override` lets callers force a specific command (or null to
-// skip).
+// matching script, then fall back to Cargo checks when that package script is
+// absent and the directory belongs to a Rust workspace. Deliberate failure
+// placeholders either route to their named replacement or suppress that slot.
+// `override` lets callers force a specific command (or null to skip).
 export async function resolveCommands(cwd: string, override?: CommandOverride): Promise<CommandSet> {
   const pkgPath = path.join(cwd, "package.json")
   let scripts: Record<string, string> = {}

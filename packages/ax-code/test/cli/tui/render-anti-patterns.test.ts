@@ -930,15 +930,14 @@ describe("tui OpenTUI stability guardrails", () => {
     const submitStart = prompt.indexOf("async function submit()")
     const submitEnd = prompt.indexOf("const selectedModel", submitStart)
     const submitBody = prompt.slice(submitStart, submitEnd)
-    const slashDispatch = submitBody.indexOf(
-      'if (currentMode === "normal" && slashName && !slashHasArguments && command.trySlash(slashName)) {',
-    )
+    const slashDispatch = submitBody.indexOf("command.trySlash(slashName)")
     const autocompleteReturn = submitBody.indexOf("if (autocomplete?.visible) {")
 
     expect(slashDispatch).toBeGreaterThan(-1)
     expect(autocompleteReturn).toBeGreaterThan(-1)
     expect(slashDispatch).toBeLessThan(autocompleteReturn)
-    expect(submitBody).toContain("const slashHasArguments = slashToken ? inputText.trim() !== slashToken : false")
+    expect(submitBody).toContain("const slashHasArguments = slashToken ? routedText.trim() !== slashToken : false")
+    expect(submitBody).toContain('workRouted.kind === "prompt"')
 
     const textareaSubmitStart = prompt.indexOf("if (isPromptSubmitKey(e)) {")
     const textareaSubmitEnd = prompt.indexOf("// Handle clipboard paste", textareaSubmitStart)

@@ -29,10 +29,14 @@ export namespace JsonParseGuard {
 
   // Files exempt from the guard entirely: low-level runtime-compat shims
   // that must replicate an underlying API's raw throw-on-parse-failure
-  // contract (Bun.file().json() / $`cmd`.json()), and generated-code
-  // sources where "JSON.parse" appears as embedded script text, not a real
-  // call in this codebase's runtime.
-  export const AllowedFiles: ReadonlySet<string> = new Set(["src/bun/node-compat.ts", "src/quality/dre-graph-assets.ts"])
+  // contract (Bun.file().json() / $`cmd`.json()), plus generated or hook
+  // sources where "JSON.parse" appears inside embedded script text rather
+  // than as a call in this TypeScript runtime.
+  export const AllowedFiles: ReadonlySet<string> = new Set([
+    "src/bun/node-compat.ts",
+    "src/hooks/lifecycle.ts",
+    "src/quality/dre-graph-assets.ts",
+  ])
 
   // Pre-existing bare JSON.parse call sites, grandfathered pending
   // migration to the shared helper. Remove an entry once its file stops

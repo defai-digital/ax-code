@@ -11,25 +11,34 @@
 import { spawnSync } from "child_process"
 import fs from "fs/promises"
 import path from "path"
+import z from "zod"
 import { Log } from "@/util/log"
+import { parseJsonResult } from "@/util/json-value"
 import { Global } from "@/global"
 import { Instance } from "@/project/instance"
 
 const log = Log.create({ service: "hooks.lifecycle" })
 
 export namespace LifecycleHooks {
-  export type EventName = "PreToolUse" | "PostToolUse" | "Stop"
+  const EventNameSchema = z.enum(["PreToolUse", "PostToolUse", "Stop"])
+  const HookCommandSchema = z.object({
+    event: EventNameSchema,
+    /** Shell command; receives env HOOK_EVENT, HOOK_TOOL, HOOK_SESSION_ID, HOOK_ARGS_JSON. */
+    command: z.string().min(1).max(100_000),
+    /** Optional matcher: tool id glob (* = all). */
+    matcher: z.string().max(500).optional(),
+    /** When true, non-zero exit blocks the tool (PreToolUse only). */
+    blockOnFailure: z.boolean().optional(),
+    pack: z.string().max(500).optional(),
+  })
 
-  export type HookCommand = {
-    event: EventName
-    /** Shell command; receives env HOOK_EVENT, HOOK_TOOL, HOOK_SESSION_ID, HOOK_ARGS_JSON */
-    command: string
-    /** Optional matcher: tool id glob (* = all) */
-    matcher?: string
-    /** When true, non-zero exit blocks the tool (PreToolUse only) */
-    blockOnFailure?: boolean
-    pack?: string
-  }
+  export type EventName = z.infer<typeof EventNameSchema>
+  export type HookCommand = z.infer<typeof HookCommandSchema>
+
+  const ProjectHooksSchema = z.object({
+    hooks: z.array(HookCommandSchema).max(100).optional(),
+    packs: z.array(z.string().min(1).max(500)).max(100).optional(),
+  })
 
   export type Pack = {
     name: string
@@ -59,8 +68,7 @@ export namespace LifecycleHooks {
         {
           event: "PostToolUse",
           matcher: "edit|write|multiedit|apply_patch",
-          command:
-            'echo "[hook:format-after-edit] Consider formatting changed files (prettier/eslint --fix/rustfmt)."',
+          command: 'echo "[hook:format-after-edit] Consider formatting changed files (prettier/eslint --fix/rustfmt)."',
           pack: "format-after-edit",
         },
       ],
@@ -123,7 +131,10 @@ export namespace LifecycleHooks {
   export function matcherHits(matcher: string | undefined, tool: string | undefined): boolean {
     if (!matcher || matcher === "*") return true
     if (!tool) return matcher === "*"
-    const parts = matcher.split("|").map((p) => p.trim()).filter(Boolean)
+    const parts = matcher
+      .split("|")
+      .map((p) => p.trim())
+      .filter(Boolean)
     return parts.some((part) => {
       if (part.endsWith("*")) return tool.startsWith(part.slice(0, -1))
       return part === tool
@@ -138,7 +149,11 @@ export namespace LifecycleHooks {
     const file = path.join(directory, ".ax-code", "hooks.json")
     try {
       const raw = await fs.readFile(file, "utf8")
-      const parsed = JSON.parse(raw) as { hooks?: HookCommand[]; packs?: string[] }
+      const decoded = parseJsonResult(raw)
+      if (!decoded.ok) return []
+      const result = ProjectHooksSchema.safeParse(decoded.value)
+      if (!result.success) return []
+      const parsed = result.data
       const fromPacks: HookCommand[] = []
       for (const name of parsed.packs ?? []) {
         const pack = BUILTIN_PACKS.find((p) => p.name === name)
@@ -221,7 +236,9 @@ export namespace LifecycleHooks {
       "",
       "| Pack | Events | Description |",
       "|------|--------|-------------|",
-      ...BUILTIN_PACKS.map((p) => `| \`${p.name}\` | ${[...new Set(p.hooks.map((h) => h.event))].join(", ")} | ${p.description} |`),
+      ...BUILTIN_PACKS.map(
+        (p) => `| \`${p.name}\` | ${[...new Set(p.hooks.map((h) => h.event))].join(", ")} | ${p.description} |`,
+      ),
       "",
     ]
     return lines.join("\n")

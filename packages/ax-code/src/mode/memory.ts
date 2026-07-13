@@ -5,28 +5,32 @@
 
 import fs from "fs/promises"
 import path from "path"
+import z from "zod"
 import { Global } from "../global"
+import { parseJsonResult } from "../util/json-value"
 import { Log } from "../util/log"
 
 export namespace ModeMemory {
   const log = Log.create({ service: "mode.memory" })
+  const MAX_OUTCOMES = 2000
 
-  export type TaskClass =
-    | "review"
-    | "design"
-    | "implement"
-    | "debug"
-    | "security"
-    | "general"
+  const TaskClassSchema = z.enum(["review", "design", "implement", "debug", "security", "general"])
+  const OutcomeResultSchema = z.enum(["win", "place", "fail", "participate"])
+  const OutcomeSchema = z.object({
+    taskClass: TaskClassSchema,
+    providerID: z.string().min(1).max(512),
+    modelID: z.string().min(1).max(512),
+    result: OutcomeResultSchema,
+    at: z.number().finite(),
+  })
 
-  export type Outcome = {
-    taskClass: TaskClass
-    providerID: string
-    modelID: string
-    /** win | place | fail | participate */
-    result: "win" | "place" | "fail" | "participate"
-    at: number
-  }
+  const StoreSchema = z.object({
+    version: z.literal(1),
+    outcomes: z.array(OutcomeSchema),
+  })
+
+  export type TaskClass = z.infer<typeof TaskClassSchema>
+  export type Outcome = z.infer<typeof OutcomeSchema>
 
   export type Stats = {
     providerID: string
@@ -38,12 +42,7 @@ export namespace ModeMemory {
     score: number
   }
 
-  export type Store = {
-    version: 1
-    outcomes: Outcome[]
-  }
-
-  const MAX_OUTCOMES = 2000
+  export type Store = z.infer<typeof StoreSchema>
 
   export function classifyTask(text: string): TaskClass {
     const t = text.toLowerCase()
@@ -68,10 +67,7 @@ export namespace ModeMemory {
     }
   }
 
-  export function aggregateStats(
-    outcomes: readonly Outcome[],
-    taskClass?: TaskClass,
-  ): Stats[] {
+  export function aggregateStats(outcomes: readonly Outcome[], taskClass?: TaskClass): Stats[] {
     const filtered = taskClass ? outcomes.filter((o) => o.taskClass === taskClass) : [...outcomes]
     const map = new Map<string, Stats>()
     for (const o of filtered) {
@@ -121,11 +117,11 @@ export namespace ModeMemory {
   export async function load(): Promise<Store> {
     try {
       const raw = await fs.readFile(storePath(), "utf8")
-      const parsed = JSON.parse(raw) as Store
-      if (parsed?.version !== 1 || !Array.isArray(parsed.outcomes)) {
-        return { version: 1, outcomes: [] }
-      }
-      return parsed
+      const parsed = parseJsonResult(raw)
+      if (!parsed.ok) return { version: 1, outcomes: [] }
+      const store = StoreSchema.safeParse(parsed.value)
+      if (!store.success) return { version: 1, outcomes: [] }
+      return { version: 1, outcomes: store.data.outcomes.slice(-MAX_OUTCOMES) }
     } catch {
       return { version: 1, outcomes: [] }
     }

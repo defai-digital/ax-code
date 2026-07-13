@@ -61,4 +61,16 @@ describe("LifecycleHooks matcher and run", () => {
     const hooks = await LifecycleHooks.loadProjectHooks(dir)
     expect(hooks.some((h) => h.pack === "log-bash-commands")).toBe(true)
   })
+
+  test("rejects malformed project hook entries instead of trusting parsed JSON", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-hooks-invalid-"))
+    await fs.mkdir(path.join(dir, ".ax-code"), { recursive: true })
+    await fs.writeFile(
+      path.join(dir, ".ax-code", "hooks.json"),
+      JSON.stringify({ hooks: [{ event: "NotAnEvent", command: 42 }] }),
+      "utf8",
+    )
+
+    await expect(LifecycleHooks.loadProjectHooks(dir)).resolves.toEqual([])
+  })
 })
