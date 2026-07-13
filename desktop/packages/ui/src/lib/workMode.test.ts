@@ -6,7 +6,8 @@ describe("workMode", () => {
     expect(DEFAULT_WORK_MODE).toBe("agent")
   })
 
-  test("cycles agent → council → arena → agent", () => {
+  test("cycles agent → council → arena → agent on one control", () => {
+    // Single toggle: each click advances one mode (Desktop + TUI).
     expect(cycleWorkMode("agent")).toBe("council")
     expect(cycleWorkMode("council")).toBe("arena")
     expect(cycleWorkMode("arena")).toBe("agent")
