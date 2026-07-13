@@ -679,11 +679,14 @@ export namespace SessionPrompt {
           modelID: model.id,
           providerID: model.providerID,
         })
-        await createSyntheticFailureAssistant({
+        const assistant = await createSyntheticFailureAssistant({
           sessionID,
           lastUser,
           message: preflightCompaction.message,
         })
+        // The synthetic transcript message is useful in every client, but
+        // headless and `run` clients determine failure from this event.
+        Session.publishError({ sessionID, error: assistant.error })
         reason = "error"
         break
       }

@@ -487,7 +487,7 @@ export function createDialogProviderOptions() {
                           </text>
                         </box>
                         <text fg={theme.textMuted}>
-                          Install the CLI and ensure it is available in your PATH, then restart ax-code.
+                          Install the CLI and ensure it is available in your PATH, then close this message and select the provider again.
                         </text>
                       </box>
                     ))

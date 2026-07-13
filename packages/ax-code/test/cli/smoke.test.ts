@@ -150,6 +150,8 @@ describe("cli smoke", () => {
     expect(out.code).toBe(1)
     expect(text).not.toContain("File not found: testfile.txt")
     expect(text).toContain("You must provide a message or a command")
+    expect(text).not.toContain("Unexpected error")
+    expect(text).not.toContain("UICancelledError")
   }, 20000)
 
   test("isolates global data paths under AX_CODE_TEST_HOME in fresh processes", async () => {

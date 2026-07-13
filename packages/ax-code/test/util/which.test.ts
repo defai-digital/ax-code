@@ -43,6 +43,25 @@ describe("util.which", () => {
     expect(which("opencode-missing-command-for-test")).toBeNull()
   })
 
+  test("detects a CLI installed after an earlier failed lookup", async () => {
+    await using tmp = await tmpdir()
+    const original = process.env.AX_CODE_TEST_HOME
+    const name = `ax-code-appears-${Math.random().toString(36).slice(2)}`
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    try {
+      expect(which(name)).toBeNull()
+
+      const bin = path.join(tmp.path, ".grok", "bin")
+      await fs.mkdir(bin, { recursive: true })
+      const file = await cmd(bin, name)
+
+      same(which(name), file)
+    } finally {
+      if (original === undefined) delete process.env.AX_CODE_TEST_HOME
+      else process.env.AX_CODE_TEST_HOME = original
+    }
+  })
+
   test("finds a command from PATH override", async () => {
     await using tmp = await tmpdir()
     const bin = path.join(tmp.path, "bin")

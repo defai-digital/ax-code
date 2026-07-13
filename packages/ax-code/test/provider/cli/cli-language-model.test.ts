@@ -1,5 +1,5 @@
 import { test, expect, describe, vi } from "vitest"
-import { buildCliCommand, CliLanguageModel } from "../../../src/provider/cli/cli-language-model"
+import { buildCliCommand, cliEnv, CliLanguageModel } from "../../../src/provider/cli/cli-language-model"
 import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
 import {
   antigravityCliParser,
@@ -782,6 +782,34 @@ describe("CliLanguageModel", () => {
     } finally {
       restoreAutonomous()
     }
+  })
+
+  test("adds Qoder's automatic permission mode in autonomous mode", () => {
+    process.env.AX_CODE_AUTONOMOUS = "true"
+    try {
+      const cmd = buildCliCommand(
+        {
+          providerID: "qoder-cli",
+          modelID: "qoder-cli",
+          binary: "qodercli",
+          args: ["--output-format", "stream-json"],
+          parser: claudeCodeParser,
+          promptMode: "arg",
+          promptFlag: "-p",
+        },
+        "write file",
+      )
+      expect(cmd).toContain("--permission-mode")
+      expect(cmd).toContain("auto")
+    } finally {
+      restoreAutonomous()
+    }
+  })
+
+  test("runs Qoder commands through a non-login POSIX shell", () => {
+    const env = cliEnv([], "qoder-cli")
+    if (process.platform === "win32") expect(env.SHELL).not.toBe("/bin/sh")
+    else expect(env.SHELL).toBe("/bin/sh")
   })
 
   test("runs Gemini CLI headless without interactive workspace trust prompts", () => {

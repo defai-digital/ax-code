@@ -52,12 +52,15 @@ function formatCliTimeout(stdout: Buffer, stderr: Buffer) {
 
 const CLI_TIMEOUT_MS = 300_000 // 5 minutes
 
-export function cliEnv(providerEnvKeys: readonly string[] = []) {
+export function cliEnv(providerEnvKeys: readonly string[] = [], providerID?: string) {
   const env: Record<string, string> = {
     ...Env.withCliProviderKeys(Env.sanitize()),
     TERM: "dumb",
     NO_COLOR: "1",
   }
+  // Qoder runs its command tool through $SHELL. A login Bash shell can load
+  // unrelated user profile scripts or fail before the requested command runs.
+  if (providerID === "qoder-cli" && process.platform !== "win32") env.SHELL = "/bin/sh"
   for (const key of providerEnvKeys) {
     const value = process.env[key]
     if (value !== undefined) env[key] = value
@@ -69,6 +72,7 @@ function autonomousCliArgs(providerID: string): string[] {
   if (!ScopedFlag.autonomous()) return []
   if (providerID === "claude-code") return ["--dangerously-skip-permissions"]
   if (providerID === "gemini-cli") return ["--approval-mode", "yolo"]
+  if (providerID === "qoder-cli") return ["--permission-mode", "auto"]
   return []
 }
 
@@ -178,7 +182,7 @@ export class CliLanguageModel implements LanguageModelV3 {
       stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
       stderr: "pipe",
-      env: cliEnv(this.config.providerEnvKeys),
+      env: cliEnv(this.config.providerEnvKeys, this.config.providerID),
     })
     const abort = this.setupProcessAbort(proc, options.abortSignal, "cli generate")
     // Remove materialized attachment temp files once the process exits
@@ -267,7 +271,7 @@ export class CliLanguageModel implements LanguageModelV3 {
       stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
       stderr: "pipe",
-      env: cliEnv(this.config.providerEnvKeys),
+      env: cliEnv(this.config.providerEnvKeys, this.config.providerID),
     })
     const abort = this.setupProcessAbort(proc, options.abortSignal, "cli stream")
     // Remove materialized attachment temp files once the process exits

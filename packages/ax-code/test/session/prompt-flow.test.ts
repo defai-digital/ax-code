@@ -210,29 +210,42 @@ describe("session.prompt flow", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({ title: "Prompt Preflight Test" })
-        const message = await SessionPrompt.prompt({
-          sessionID: session.id,
-          agent: "build",
-          parts: [{ type: "text", text: "x".repeat(PREFLIGHT_OVER_BUDGET_TEXT_CHARS) }],
+        const errors: unknown[] = []
+        const unsubscribe = Bus.subscribe(Session.Event.Error, (event) => {
+          errors.push(event.properties)
         })
+        try {
+          const session = await Session.create({ title: "Prompt Preflight Test" })
+          const message = await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "x".repeat(PREFLIGHT_OVER_BUDGET_TEXT_CHARS) }],
+          })
 
-        expect(streamSpy).not.toHaveBeenCalled()
-        expect(
-          message.parts.some(
-            (part) =>
-              part.type === "text" && part.text.includes("Automatic compaction cannot help this new or tiny session"),
-          ),
-        ).toBe(true)
+          expect(streamSpy).not.toHaveBeenCalled()
+          expect(
+            message.parts.some(
+              (part) =>
+                part.type === "text" && part.text.includes("Automatic compaction cannot help this new or tiny session"),
+            ),
+          ).toBe(true)
 
-        const messages = await Session.messages({ sessionID: session.id })
-        expect(
-          messages.some(
-            (entry) => entry.info.role === "user" && entry.parts.some((part) => part.type === "compaction"),
-          ),
-        ).toBe(false)
-        expect(await SessionStatus.get(session.id)).toEqual({ type: "idle" })
-        await Session.remove(session.id)
+          const messages = await Session.messages({ sessionID: session.id })
+          expect(
+            messages.some(
+              (entry) => entry.info.role === "user" && entry.parts.some((part) => part.type === "compaction"),
+            ),
+          ).toBe(false)
+          expect(await SessionStatus.get(session.id)).toEqual({ type: "idle" })
+          expect(errors).toHaveLength(1)
+          expect(errors[0]).toMatchObject({
+            sessionID: session.id,
+            error: { data: { message: expect.stringContaining("Automatic compaction cannot help") } },
+          })
+          await Session.remove(session.id)
+        } finally {
+          unsubscribe()
+        }
       },
     })
   })

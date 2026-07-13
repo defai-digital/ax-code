@@ -382,7 +382,7 @@ export namespace Worktree {
     if (process.platform === "win32") {
       return Process.run(["cmd", "/c", cmd], { cwd: directory, nothrow: true })
     }
-    return Process.run(["bash", "-lc", cmd], { cwd: directory, nothrow: true })
+    return Process.run(["bash", "-c", cmd], { cwd: directory, nothrow: true })
   }
 
   type StartKind = "project" | "worktree"

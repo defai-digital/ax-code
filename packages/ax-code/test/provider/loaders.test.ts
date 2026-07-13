@@ -595,6 +595,7 @@ describe("offline provider loaders", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        await Provider.ready()
         const providers = await Provider.list()
         const ollama = providers[ProviderID.make("ollama")]
         expect(ollama).toBeDefined()

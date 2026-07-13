@@ -12,9 +12,11 @@ function searchPath(base: string) {
   return [...(base ? base.split(path.delimiter) : []), ...extra].filter(Boolean).join(path.delimiter)
 }
 
-// Cache which() results to avoid repeated filesystem searches.
-// CLI binaries don't move during a session, so this is safe.
-const whichCache = new Map<string, { result: string | null; timestamp: number }>()
+// Cache successful lookups to avoid repeated filesystem searches. A missing
+// executable is deliberately not cached: users commonly install a provider
+// CLI while AX Code is already running, and the next provider selection must
+// see the new binary immediately.
+const whichCache = new Map<string, { result: string; timestamp: number }>()
 const WHICH_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 export function which(cmd: string, env?: NodeJS.ProcessEnv) {
@@ -34,7 +36,7 @@ export function which(cmd: string, env?: NodeJS.ProcessEnv) {
   })
   const resolved = typeof result === "string" ? result : null
 
-  if (!env) {
+  if (!env && resolved) {
     whichCache.set(cmd, { result: resolved, timestamp: Date.now() })
   }
 
