@@ -936,6 +936,8 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(slashDispatch).toBeGreaterThan(-1)
     expect(autocompleteReturn).toBeGreaterThan(-1)
     expect(slashDispatch).toBeLessThan(autocompleteReturn)
+    const slashDispatchBlock = submitBody.slice(slashDispatch, autocompleteReturn)
+    expect(slashDispatchBlock).toContain("clearPromptDraft()")
     expect(submitBody).toContain("const slashHasArguments = slashToken ? routedText.trim() !== slashToken : false")
     expect(submitBody).toContain('workRouted.kind === "prompt"')
 
