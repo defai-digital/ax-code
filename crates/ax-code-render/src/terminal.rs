@@ -349,14 +349,19 @@ impl Terminal {
     /// Zig `processCapabilityResponse` (DECRPM subset) — apply capabilities
     /// reported by the terminal's query responses. xtversion/iTerm/OSC-99
     /// sub-parsing (terminal-name + notification-from-xtversion) is not modeled.
+    ///
+    /// Unicode width method is **not** updated from DECRPM `2027` or terminal-name
+    /// heuristics here: the OpenTUI Zig backend keeps the env-detected method
+    /// (e.g. Apple_Terminal → wcwidth) and only *enables* mode 2027 later in
+    /// `enableDetectedFeatures` when unicode is already selected. Matching that
+    /// keeps ADR-046 PCR differential parity.
     pub fn process_capability_response(&mut self, response: &[u8]) {
         let has = |needle: &str| find_subslice(response, needle.as_bytes());
         if has("1016;2$y") {
             self.caps.sgr_pixels = true;
         }
-        if has("2027;2$y") {
-            self.caps.unicode = WidthMethod::Unicode;
-        }
+        // Note: `2027;2$y` is intentionally ignored for caps.unicode — see doc
+        // comment above. Zig does not flip width method from this DECRPM report.
         if has("2031;1$y") || has("2031;2$y") {
             self.caps.color_scheme_updates = true;
         }
@@ -375,8 +380,8 @@ impl Terminal {
         // kitty_keyboard/kitty_graphics mode caps are NOT set here — the Zig
         // renderer consumes+resets them in enableDetectedFeatures (unported), so
         // they stay at their (off) init value to preserve differential parity.
+        // Unicode width is also left unchanged (Zig keeps env-detected method).
         if contains_ignore_case(&s, "kitty") {
-            self.caps.unicode = WidthMethod::Unicode;
             self.caps.rgb = true;
             self.caps.ansi256 = true;
             self.caps.sixel = true;

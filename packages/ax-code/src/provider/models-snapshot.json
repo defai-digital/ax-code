@@ -40504,6 +40504,92 @@
           "output": 128000
         }
       },
+      "openai-gpt-5.6-terra": {
+        "id": "openai-gpt-5.6-terra",
+        "name": "GPT-5.6 Terra",
+        "description": "Balanced GPT-5.6 model for capable, cost-efficient everyday work",
+        "family": "gpt-terra",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-02-16",
+        "release_date": "2026-07-09",
+        "last_updated": "2026-07-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "status": "beta"
+      },
+      "openai-gpt-5.6-sol": {
+        "id": "openai-gpt-5.6-sol",
+        "name": "GPT-5.6 Sol",
+        "description": "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
+        "family": "gpt-sol",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-02-16",
+        "release_date": "2026-07-09",
+        "last_updated": "2026-07-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "status": "beta"
+      },
       "claude-sonnet-4-5": {
         "id": "claude-sonnet-4-5",
         "name": "Claude Sonnet 4.5 (latest)",
@@ -40607,6 +40693,49 @@
           "context": 128000,
           "output": 32768
         }
+      },
+      "openai-gpt-5.6-luna": {
+        "id": "openai-gpt-5.6-luna",
+        "name": "GPT-5.6 Luna",
+        "description": "Cost-efficient GPT-5.6 model for fast, high-volume workloads",
+        "family": "gpt-luna",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-02-16",
+        "release_date": "2026-07-09",
+        "last_updated": "2026-07-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "status": "beta"
       },
       "claude-opus-4-8": {
         "id": "claude-opus-4-8",
@@ -65779,6 +65908,88 @@
           "npm": "ai-gateway-provider"
         }
       },
+      "openai/gpt-5.6-luna": {
+        "id": "openai/gpt-5.6-luna",
+        "name": "GPT-5.6 Luna",
+        "description": "Cost-efficient GPT-5.6 model for fast, high-volume workloads",
+        "family": "gpt-luna",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-02-16",
+        "release_date": "2026-07-09",
+        "last_updated": "2026-07-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        }
+      },
+      "openai/gpt-5.6-terra": {
+        "id": "openai/gpt-5.6-terra",
+        "name": "GPT-5.6 Terra",
+        "description": "Balanced GPT-5.6 model for capable, cost-efficient everyday work",
+        "family": "gpt-terra",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-02-16",
+        "release_date": "2026-07-09",
+        "last_updated": "2026-07-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        }
+      },
       "openai/o1": {
         "id": "openai/o1",
         "name": "o1",
@@ -65916,6 +66127,47 @@
         "limit": {
           "context": 128000,
           "output": 16384
+        }
+      },
+      "openai/gpt-5.6-sol": {
+        "id": "openai/gpt-5.6-sol",
+        "name": "GPT-5.6 Sol",
+        "description": "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
+        "family": "gpt-sol",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-02-16",
+        "release_date": "2026-07-09",
+        "last_updated": "2026-07-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
         }
       },
       "openai/gpt-5.2-codex": {
@@ -89262,6 +89514,37 @@
     "name": "GitLab Duo",
     "doc": "https://docs.gitlab.com/user/duo_agent_platform/",
     "models": {
+      "duo-chat-gpt-5-6-terra": {
+        "id": "duo-chat-gpt-5-6-terra",
+        "name": "Agentic Chat (GPT-5.6 Terra)",
+        "description": "Balanced GPT-5.6 model for capable, cost-efficient everyday work",
+        "family": "gpt-terra",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-02-16",
+        "release_date": "2026-07-09",
+        "last_updated": "2026-07-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        }
+      },
       "duo-chat-opus-4-5": {
         "id": "duo-chat-opus-4-5",
         "name": "Agentic Chat (Claude Opus 4.5)",
@@ -89317,6 +89600,37 @@
         "open_weights": false,
         "limit": {
           "context": 1000000,
+          "output": 128000
+        }
+      },
+      "duo-chat-gpt-5-6-sol": {
+        "id": "duo-chat-gpt-5-6-sol",
+        "name": "Agentic Chat (GPT-5.6 Sol)",
+        "description": "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
+        "family": "gpt-sol",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-02-16",
+        "release_date": "2026-07-09",
+        "last_updated": "2026-07-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
           "output": 128000
         }
       },
@@ -89377,6 +89691,37 @@
         "limit": {
           "context": 400000,
           "input": 272000,
+          "output": 128000
+        }
+      },
+      "duo-chat-gpt-5-6-luna": {
+        "id": "duo-chat-gpt-5-6-luna",
+        "name": "Agentic Chat (GPT-5.6 Luna)",
+        "description": "Cost-efficient GPT-5.6 model for fast, high-volume workloads",
+        "family": "gpt-luna",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-02-16",
+        "release_date": "2026-07-09",
+        "last_updated": "2026-07-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
           "output": 128000
         }
       },
@@ -106613,6 +106958,87 @@
           "output": 128000
         }
       },
+      "databricks-gpt-5-6-sol": {
+        "id": "databricks-gpt-5-6-sol",
+        "name": "GPT-5.6 Sol",
+        "description": "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
+        "family": "gpt-sol",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-02-16",
+        "release_date": "2026-07-09",
+        "last_updated": "2026-07-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        }
+      },
+      "databricks-gpt-5-6-terra": {
+        "id": "databricks-gpt-5-6-terra",
+        "name": "GPT-5.6 Terra",
+        "description": "Balanced GPT-5.6 model for capable, cost-efficient everyday work",
+        "family": "gpt-terra",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-02-16",
+        "release_date": "2026-07-09",
+        "last_updated": "2026-07-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        }
+      },
       "databricks-gpt-5": {
         "id": "databricks-gpt-5",
         "name": "GPT-5",
@@ -107027,6 +107453,46 @@
         "limit": {
           "context": 1048576,
           "output": 65536
+        }
+      },
+      "databricks-gpt-5-6-luna": {
+        "id": "databricks-gpt-5-6-luna",
+        "name": "GPT-5.6 Luna",
+        "description": "Cost-efficient GPT-5.6 model for fast, high-volume workloads",
+        "family": "gpt-luna",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-02-16",
+        "release_date": "2026-07-09",
+        "last_updated": "2026-07-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 400000,
+          "input": 272000,
+          "output": 128000
         }
       },
       "databricks-gemini-3-pro": {
