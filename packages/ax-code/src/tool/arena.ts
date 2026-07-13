@@ -16,9 +16,11 @@ import type { ModePolicy } from "../mode/policy"
 import { Provider } from "../provider/provider"
 import { modelSelectableForProvider } from "../provider/model-selectability"
 import { ModelID, ProviderID } from "../provider/schema"
+import { Agent } from "../agent/agent"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 import { Tool } from "./tool"
+import { runImplementArena } from "./arena-implement"
 import DESCRIPTION from "./arena.txt"
 
 const log = Log.create({ service: "tool.arena" })
@@ -37,6 +39,12 @@ const ProposalSchema = z.object({
 const parameters = z.object({
   task: z.string().min(1).describe("The coding task to compare approaches for"),
   context: z.string().optional().describe("Optional codebase or requirements context"),
+  mode: z
+    .enum(["plan", "implement"])
+    .optional()
+    .describe(
+      "plan (default): multi-model approach comparison only. implement: worktree-isolated implement arena with verify-first ranking.",
+    ),
   providers: z
     .array(
       z.object({
@@ -186,6 +194,8 @@ type ArenaMetadata = {
   rankedIds?: string[]
   errorCount?: number
   budgetReasons?: string[]
+  mode?: "plan" | "implement"
+  worktrees?: string[]
 }
 
 export const ArenaTool = Tool.define("arena", async () => {
@@ -197,22 +207,24 @@ export const ArenaTool = Tool.define("arena", async () => {
         permission: "arena",
         patterns: ["*"],
         always: ["*"],
-        metadata: { task: args.task.slice(0, 200) },
+        metadata: { task: args.task.slice(0, 200), mode: args.mode ?? "plan" },
       })
 
       const cfg = await Config.get()
       const modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
       if (modes?.arena?.enabled !== true) {
-        const metadata: ArenaMetadata = { status: "disabled" }
+        const metadata: ArenaMetadata = { status: "disabled", mode: args.mode ?? "plan" }
         return {
           title: "Arena disabled",
           output:
-            "Arena mode is disabled. Enable with `modes.arena.enabled: true` in ax-code.json (ADR-049 Phase 2).",
+            "Arena mode is disabled. Enable with `modes.arena.enabled: true` in ax-code.json (ADR-049).",
           metadata,
         }
       }
 
-      const strategy = args.strategy ?? modes.arena?.strategy ?? "diversity"
+      const arenaMode = args.mode ?? "plan"
+      const strategy =
+        args.strategy ?? modes.arena?.strategy ?? (arenaMode === "implement" ? "verify_first" : "diversity")
       const timeoutMs = modes.council?.timeoutMs ?? DEFAULT_TIMEOUT_MS
       const maxContestants = Math.min(HARD_MAX, Math.max(1, modes.arena?.maxContestants ?? DEFAULT_MAX))
 
@@ -228,7 +240,7 @@ export const ArenaTool = Tool.define("arena", async () => {
         },
       })
       if (!budgetCheck.ok) {
-        const metadata: ArenaMetadata = { status: "budget_rejected", strategy }
+        const metadata: ArenaMetadata = { status: "budget_rejected", strategy, mode: arenaMode }
         return {
           title: "Arena budget rejected",
           output: budgetCheck.message,
@@ -247,6 +259,7 @@ export const ArenaTool = Tool.define("arena", async () => {
           memberCount: members.length,
           strategy,
           budgetReasons: budgetCheck.reasons,
+          mode: arenaMode,
         }
         return {
           title: "Arena: need ≥2 providers",
@@ -256,6 +269,48 @@ export const ArenaTool = Tool.define("arena", async () => {
         }
       }
 
+      // --- Implement arena (worktree-isolated writers + verify) ---
+      if (arenaMode === "implement") {
+        const agentName = await Agent.defaultAgent().catch(() => "build")
+        const impl = await runImplementArena({
+          members,
+          task: args.task,
+          context: args.context,
+          parentSessionID: ctx.sessionID,
+          parentMessageID: ctx.messageID,
+          agentName,
+          strategy,
+          abort: ctx.abort,
+        })
+
+        const failedIds = impl.results.filter((r) => r.verification === "fail" || r.error).map((r) => r.id)
+        void ModeMemory.recordArenaRanking({
+          task: args.task,
+          rankedIds: impl.ranked.filter((r) => r.verification !== "fail").map((r) => r.id),
+          failedIds,
+        }).catch(() => undefined)
+
+        const metadata: ArenaMetadata = {
+          status: "ok",
+          strategy,
+          memberCount: members.length,
+          rankedIds: impl.ranked.map((r) => r.id),
+          errorCount: failedIds.length,
+          budgetReasons: budgetCheck.reasons,
+          mode: "implement",
+          worktrees: impl.results.map((r) => r.worktreeDirectory).filter((d): d is string => Boolean(d)),
+        }
+
+        return {
+          title: `Implement arena ranked ${impl.ranked.length} contestants`,
+          output:
+            impl.markdown +
+            (budgetCheck.reasons.length ? `\n\n_Budget: ${budgetCheck.reasons.join(", ")}_` : ""),
+          metadata,
+        }
+      }
+
+      // --- Plan arena (approach comparison only) ---
       const results = await Promise.all(
         members.map((member) =>
           runProposal({
@@ -293,7 +348,7 @@ export const ArenaTool = Tool.define("arena", async () => {
           id: r.member.memberId,
           providerID: String(r.member.providerID),
           modelID: String(r.member.modelID),
-          verification: "unknown", // plan stage — not execution-verified
+          verification: "unknown",
           riskScore: risk,
           patchFingerprint: fingerprint(r.proposal.approach + "|" + r.proposal.steps.join("|")),
           popularity: r.proposal.confidence ?? 0,
@@ -322,8 +377,7 @@ export const ArenaTool = Tool.define("arena", async () => {
       }
       detail.push(
         "",
-        "_Plans are not execution-verified. Implement the winner under sandbox and run verify_project before claiming done._",
-        "_Multi-writer implement arena requires worktree isolation (WorktreePolicy); this tool is plan-only._",
+        "_Plans are not execution-verified. Use mode=implement for worktree-isolated implement arena with verify-first ranking._",
       )
 
       void ModeMemory.recordArenaRanking({
@@ -339,6 +393,7 @@ export const ArenaTool = Tool.define("arena", async () => {
         rankedIds: ranked.map((r) => r.id),
         errorCount: errors.length,
         budgetReasons: budgetCheck.reasons,
+        mode: "plan",
       }
 
       return {

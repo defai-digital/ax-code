@@ -20,6 +20,17 @@ describe("arena tool contract", () => {
     const parsed = init.parameters.parse({ task: "Refactor auth" })
     expect(parsed.task).toBe("Refactor auth")
   })
+
+  test("parameter schema accepts implement mode", async () => {
+    const init = await ArenaTool.init()
+    const parsed = init.parameters.parse({
+      task: "Add rate limiting",
+      mode: "implement",
+      strategy: "verify_first",
+    })
+    expect(parsed.mode).toBe("implement")
+    expect(parsed.strategy).toBe("verify_first")
+  })
 })
 
 describe("arena ranking used by tool", () => {

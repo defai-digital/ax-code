@@ -1,7 +1,9 @@
-Compare multiple model approaches for the same coding task (arena / best-of-N).
+Compare multiple models on the same coding task (arena / best-of-N).
 
-Fans out a structured plan-or-approach proposal to diverse connected providers, then ranks candidates using verification-aware diversity scoring (never pure popularity). Advisory — does not apply patches or write files.
+Modes:
+- plan (default): fan out structured approach proposals; rank by diversity/risk (advisory, no file writes).
+- implement: create a git worktree per contestant, run an implement agent in each, run project verification, rank verify-first. Main workspace is not modified by contestants. Winner is not auto-merged.
 
-Use for high-stakes ambiguous tasks where you want several independent approaches ranked. Prefer verify_project / tests before promoting any approach into implementation.
+Requires modes.arena.enabled=true and at least two connected providers. Prefer verify_first strategy for implement.
 
-Do not use for trivial edits or when only one provider is connected.
+Do not use for trivial one-line edits. Do not treat ranking as auto-merge authority.
