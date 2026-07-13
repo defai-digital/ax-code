@@ -52,7 +52,8 @@ jobs:
             pnpm run setup:cli
             echo "$HOME/.local/share/ax-code/bin" >> "$GITHUB_PATH" || true
             echo "$PWD/packages/ax-code/bin" >> "$GITHUB_PATH" || true
-            export PATH="$PATH:$(pwd)/node_modules/.bin"
+            node_bin="$(pwd)/node_modules/.bin"
+            export PATH="$PATH:$node_bin"
           fi
           command -v ax-code || pnpm --dir packages/ax-code exec node --version
           ax-code --version || pnpm run cli -- --version || true
