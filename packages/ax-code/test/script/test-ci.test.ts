@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import path from "path"
 import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
-import { num, parseJUnit, resolveTestCIGroup, renderSummaryText } from "../../script/test-ci"
+import { num, parseJUnit, resolveTestCIGroup, renderSummaryText, shardFiles } from "../../script/test-ci"
 
 describe("script.test-ci", () => {
   test("parses valid non-negative integers and keeps default when option missing", () => {
@@ -25,6 +25,11 @@ describe("script.test-ci", () => {
     } finally {
       process.argv = saved
     }
+  })
+
+  test("splits deterministic files into bounded sequential shards", () => {
+    expect(shardFiles(["a", "b", "c", "d", "e"], 2)).toEqual([["a", "b"], ["c", "d"], ["e"]])
+    expect(() => shardFiles(["a"], 0)).toThrow("Shard size must be a positive integer")
   })
 
   test("returns zeroed junit metrics when junit xml file is missing", async () => {

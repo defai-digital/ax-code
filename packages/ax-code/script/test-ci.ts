@@ -54,6 +54,13 @@ export function num(name: string, fallback = 0) {
   return parsed
 }
 
+export function shardFiles(files: string[], size: number) {
+  if (!Number.isSafeInteger(size) || size < 1) throw new Error(`Shard size must be a positive integer: ${size}`)
+  const shards: string[][] = []
+  for (let index = 0; index < files.length; index += size) shards.push(files.slice(index, index + size))
+  return shards
+}
+
 function attrs(text: string) {
   return Object.fromEntries(Array.from(text.matchAll(/(\w+)="([^"]*)"/g)).map((part) => [part[1], part[2]]))
 }
@@ -99,8 +106,8 @@ function tee(stream: Readable | null, writer: NodeJS.WriteStream): Promise<strin
   })
 }
 
-async function run(group: string, files: string[], dir: string, run: number) {
-  const file = path.join(dir, `${group}-${run}.xml`)
+async function run(group: string, files: string[], dir: string, run: number, shard?: number) {
+  const file = path.join(dir, `${group}-${run}${shard ? `-shard-${shard}` : ""}.xml`)
   const coverageDir = flag("--coverage") ? path.join(root, arg("--coverage-dir") ?? ".tmp/coverage") : undefined
   // The 30s per-test timeout and setup/preload files come from vitest.config.ts.
   // The exact file set is passed through the config's `include` via AX_TEST_FILES
@@ -203,12 +210,34 @@ async function main() {
   await fs.mkdir(dir, { recursive: true })
   await fs.writeFile(path.join(dir, ".keep"), "")
 
+  const shardSize = process.env.AX_TEST_SHARD_SIZE ? Number.parseInt(process.env.AX_TEST_SHARD_SIZE, 10) : files.length
+  const shards = shardFiles(files, shardSize)
+  const runPass = async (runNumber: number): Promise<Result> => {
+    const results: Result[] = []
+    for (const [index, shard] of shards.entries())
+      results.push(await run(group, shard, dir, runNumber, shards.length > 1 ? index + 1 : undefined))
+    return {
+      code: results.some((result) => result.code !== 0) ? 1 : 0,
+      file: path.join(dir, `${group}-${runNumber}${shards.length > 1 ? "-shards" : ""}.xml`),
+      ignored: results.reduce((sum, result) => sum + result.ignored, 0),
+      stats: results.reduce(
+        (sum, result) => ({
+          tests: sum.tests + result.stats.tests,
+          failures: sum.failures + result.stats.failures,
+          skipped: sum.skipped + result.stats.skipped,
+          time: sum.time + result.stats.time,
+        }),
+        { tests: 0, failures: 0, skipped: 0, time: 0 },
+      ),
+    }
+  }
+
   const reruns = num("--rerun-on-fail")
   const runs = [] as Result[]
-  runs.push(await run(group, files, dir, 1))
+  runs.push(await runPass(1))
   for (let i = 0; i < reruns; i++) {
     if (runs[runs.length - 1]?.code === 0) break
-    runs.push(await run(group, files, dir, i + 2))
+    runs.push(await runPass(i + 2))
   }
 
   await summary(group, runs)

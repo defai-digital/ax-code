@@ -48,6 +48,7 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=6144
           AX_TEST_MAX_WORKERS: "2"
+          AX_TEST_SHARD_SIZE: "100"
           AX_CODE_DISABLE_AUTOUPDATE: "1"
           AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
           AX_CODE_DISABLE_MODELS_FETCH: "1"
