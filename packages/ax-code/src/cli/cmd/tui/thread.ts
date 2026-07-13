@@ -69,6 +69,7 @@ type RpcWireTarget = {
   // fast-fail every pending call instead of waiting the full
   // RPC_TIMEOUT_MS each.
   onWireDeath?: (() => void) | null
+  wireClosed?: boolean
 }
 
 type BackendRuntime = {
@@ -221,10 +222,11 @@ function isBackendProtocolMessage(line: string) {
   return type === "rpc.result" || type === "rpc.error" || type === "rpc.event"
 }
 
-function createProcessWire(child: any, target: string): RpcWireTarget {
+export function createProcessWire(child: any, target: string): RpcWireTarget {
   const wire: RpcWireTarget = {
     onmessage: null,
     onWireDeath: null,
+    wireClosed: false,
     postMessage(data) {
       const stdin = child.stdin
       if (!stdin || stdin.destroyed) {
@@ -233,9 +235,7 @@ function createProcessWire(child: any, target: string): RpcWireTarget {
         // waiting the full 60s `RPC_TIMEOUT_MS` each. Idempotent —
         // null'd handlers below mean a second death event is a no-op.
         DiagnosticLog.recordProcess("tui.backendStdinUnavailable", { target })
-        wire.onWireDeath?.()
-        wire.onmessage = null
-        wire.onWireDeath = null
+        notifyWireDeath()
         return
       }
       try {
@@ -246,11 +246,20 @@ function createProcessWire(child: any, target: string): RpcWireTarget {
           target,
           error: toErrorMessage(error),
         })
-        wire.onWireDeath?.()
-        wire.onmessage = null
-        wire.onWireDeath = null
+        notifyWireDeath()
       }
     },
+  }
+  // The backend can exit before a write discovers the broken stdin pipe.
+  // Notify the RPC client from the child lifecycle too, so startup and
+  // in-flight requests fail immediately instead of waiting for timeouts.
+  const notifyWireDeath = () => {
+    if (wire.wireClosed) return
+    wire.wireClosed = true
+    const onWireDeath = wire.onWireDeath
+    wire.onmessage = null
+    wire.onWireDeath = null
+    onWireDeath?.()
   }
   // Stream-level "error" events (EPIPE, broken pipe on SIGKILL, etc.)
   // crash the parent process if no listener is attached. These pipes
@@ -264,10 +273,12 @@ function createProcessWire(child: any, target: string): RpcWireTarget {
       target,
       error: toErrorMessage(error),
     })
-    wire.onWireDeath?.()
-    wire.onmessage = null
-    wire.onWireDeath = null
+    notifyWireDeath()
   })
+  // `exit` is emitted for a running backend that stops. `error` covers a
+  // spawn failure where no exit event is guaranteed. The helper is idempotent.
+  child.on?.("exit", notifyWireDeath)
+  child.on?.("error", notifyWireDeath)
   child.stdout?.on("error", (error: unknown) => {
     DiagnosticLog.recordProcess("tui.backendStdoutStreamError", { target, error })
     Log.Default.warn("TUI backend stdout stream error", {

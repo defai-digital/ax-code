@@ -26,6 +26,12 @@ export namespace Rpc {
      * up to a minute while in-flight calls drain one by one.
      */
     onWireDeath?: (() => void) | null
+    /**
+     * Indicates the physical transport closed before the RPC client attached
+     * its `onWireDeath` handler. This preserves the startup failure signal so
+     * the first client call fails immediately instead of timing out.
+     */
+    wireClosed?: boolean
   }
 
   export type WireMessage = Record<string, any> & {
@@ -254,19 +260,26 @@ export namespace Rpc {
     // a lot of RPC traffic through here; the bound is defensive.
     const ID_WRAP = Number.MAX_SAFE_INTEGER - 1
     let id = 0
+    let wireClosed = false
+    const wireClosedError = () => new Error("RPC wire closed")
     // Fast-fail every pending call when the wire signals it's dead.
     // Without this hook, a backend crash leaves callers waiting up to
     // RPC_TIMEOUT_MS each before they reject — which is what made the
     // TUI appear frozen for ~60s after a backend exit.
-    target.onWireDeath = () => {
-      if (pending.size === 0) return
-      const error = new Error("RPC wire closed")
+    const handleWireDeath = () => {
+      if (wireClosed) return
+      wireClosed = true
+      const error = wireClosedError()
       for (const [pendingId, entry] of pending) {
         clearTimeout(entry.timer)
         entry.reject(error)
         pending.delete(pendingId)
       }
     }
+    target.onWireDeath = handleWireDeath
+    // A process transport can exit while the TUI is still constructing its
+    // client. Honor that already-observed failure after installing the handler.
+    if (target.wireClosed) handleWireDeath()
     target.onmessage = async (evt) => {
       // See Rpc.listen — drop malformed messages instead of crashing.
       const parsed = parseWireMessage(evt.data)
@@ -294,6 +307,7 @@ export namespace Rpc {
     }
     return {
       call<Method extends keyof T>(method: Method, input: Parameters<T[Method]>[0]): Promise<ReturnType<T[Method]>> {
+        if (wireClosed) return Promise.reject(wireClosedError())
         const requestId = id
         id = id >= ID_WRAP ? 0 : id + 1
         return new Promise((resolve, reject) => {

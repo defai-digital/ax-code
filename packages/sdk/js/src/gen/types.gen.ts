@@ -789,6 +789,13 @@ export type EventMcpBrowserOpenFailed = {
   }
 }
 
+export type EventVcsBranchUpdated = {
+  type: "vcs.branch.updated"
+  properties: {
+    branch?: string
+  }
+}
+
 export type EventCommandExecuted = {
   type: "command.executed"
   properties: {
@@ -805,6 +812,97 @@ export type EventCommandExecuted = {
       message: string
       severity: "info" | "warn" | "error"
     }>
+  }
+}
+
+export type EventTaskQueueCreated = {
+  type: "task.queue.created"
+  properties: {
+    item: {
+      id: string
+      projectID: string
+      directory: string
+      worktree?: string
+      sessionID?: string
+      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      status:
+        | "queued"
+        | "waiting_for_idle"
+        | "running"
+        | "blocked_permission"
+        | "blocked_question"
+        | "paused"
+        | "failed"
+        | "completed"
+        | "cancelled"
+      priority: number
+      position: number
+      title: string
+      agent?: string
+      model?: unknown
+      sourceMessageID?: string
+      sourceTaskID?: string
+      payload: {
+        [key: string]: unknown
+      }
+      error?: string
+      time: {
+        created: number
+        updated?: number
+        started?: number
+        completed?: number
+      }
+    }
+  }
+}
+
+export type EventTaskQueueUpdated = {
+  type: "task.queue.updated"
+  properties: {
+    item: {
+      id: string
+      projectID: string
+      directory: string
+      worktree?: string
+      sessionID?: string
+      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      status:
+        | "queued"
+        | "waiting_for_idle"
+        | "running"
+        | "blocked_permission"
+        | "blocked_question"
+        | "paused"
+        | "failed"
+        | "completed"
+        | "cancelled"
+      priority: number
+      position: number
+      title: string
+      agent?: string
+      model?: unknown
+      sourceMessageID?: string
+      sourceTaskID?: string
+      payload: {
+        [key: string]: unknown
+      }
+      error?: string
+      time: {
+        created: number
+        updated?: number
+        started?: number
+        completed?: number
+      }
+    }
+  }
+}
+
+export type EventTaskQueueDeleted = {
+  type: "task.queue.deleted"
+  properties: {
+    id: string
+    projectID: string
+    sessionID?: string
   }
 }
 
@@ -1273,6 +1371,135 @@ export type EventWorkflowVerificationAttached = {
   }
 }
 
+export type EventScheduledTaskCreated = {
+  type: "scheduled.task.created"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+      lastQueueID?: string
+      lastWorkflowRunID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+  }
+}
+
+export type EventScheduledTaskUpdated = {
+  type: "scheduled.task.updated"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+      lastQueueID?: string
+      lastWorkflowRunID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+  }
+}
+
+export type EventScheduledTaskDeleted = {
+  type: "scheduled.task.deleted"
+  properties: {
+    id: string
+    projectID: string
+  }
+}
+
+export type EventWorktreeReady = {
+  type: "worktree.ready"
+  properties: {
+    name: string
+    branch: string
+  }
+}
+
+export type EventWorktreeFailed = {
+  type: "worktree.failed"
+  properties: {
+    message: string
+  }
+}
+
 export type EventCodeIndexProgress = {
   type: "code.index.progress"
   properties: {
@@ -1440,218 +1667,6 @@ export type EventTuiSessionSelect = {
   }
 }
 
-export type EventVcsBranchUpdated = {
-  type: "vcs.branch.updated"
-  properties: {
-    branch?: string
-  }
-}
-
-export type EventTaskQueueCreated = {
-  type: "task.queue.created"
-  properties: {
-    item: {
-      id: string
-      projectID: string
-      directory: string
-      worktree?: string
-      sessionID?: string
-      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
-      status:
-        | "queued"
-        | "waiting_for_idle"
-        | "running"
-        | "blocked_permission"
-        | "blocked_question"
-        | "paused"
-        | "failed"
-        | "completed"
-        | "cancelled"
-      priority: number
-      position: number
-      title: string
-      agent?: string
-      model?: unknown
-      sourceMessageID?: string
-      sourceTaskID?: string
-      payload: {
-        [key: string]: unknown
-      }
-      error?: string
-      time: {
-        created: number
-        updated?: number
-        started?: number
-        completed?: number
-      }
-    }
-  }
-}
-
-export type EventTaskQueueUpdated = {
-  type: "task.queue.updated"
-  properties: {
-    item: {
-      id: string
-      projectID: string
-      directory: string
-      worktree?: string
-      sessionID?: string
-      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
-      status:
-        | "queued"
-        | "waiting_for_idle"
-        | "running"
-        | "blocked_permission"
-        | "blocked_question"
-        | "paused"
-        | "failed"
-        | "completed"
-        | "cancelled"
-      priority: number
-      position: number
-      title: string
-      agent?: string
-      model?: unknown
-      sourceMessageID?: string
-      sourceTaskID?: string
-      payload: {
-        [key: string]: unknown
-      }
-      error?: string
-      time: {
-        created: number
-        updated?: number
-        started?: number
-        completed?: number
-      }
-    }
-  }
-}
-
-export type EventTaskQueueDeleted = {
-  type: "task.queue.deleted"
-  properties: {
-    id: string
-    projectID: string
-    sessionID?: string
-  }
-}
-
-export type EventScheduledTaskCreated = {
-  type: "scheduled.task.created"
-  properties: {
-    task: {
-      id: string
-      projectID: string
-      directory: string
-      title: string
-      prompt: string
-      schedule:
-        | {
-            type: "once"
-            runAt: number
-          }
-        | {
-            type: "daily"
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "weekly"
-            day: number
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "cron"
-            expression: string
-            timezone?: string
-          }
-      status: "active" | "paused" | "disabled"
-      agent?: string
-      model?: unknown
-      workflowTemplateID?: string
-      workflowStartOptions?: {
-        allowScaleBeyondDefaults?: boolean
-        allowWriteWorkflows?: boolean
-        durableChildren?: boolean
-        enqueueChildren?: boolean
-      }
-      lastQueueID?: string
-      lastWorkflowRunID?: string
-      error?: string
-      nextRunAt?: number
-      lastRunAt?: number
-      time: {
-        created: number
-        updated?: number
-      }
-    }
-  }
-}
-
-export type EventScheduledTaskUpdated = {
-  type: "scheduled.task.updated"
-  properties: {
-    task: {
-      id: string
-      projectID: string
-      directory: string
-      title: string
-      prompt: string
-      schedule:
-        | {
-            type: "once"
-            runAt: number
-          }
-        | {
-            type: "daily"
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "weekly"
-            day: number
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "cron"
-            expression: string
-            timezone?: string
-          }
-      status: "active" | "paused" | "disabled"
-      agent?: string
-      model?: unknown
-      workflowTemplateID?: string
-      workflowStartOptions?: {
-        allowScaleBeyondDefaults?: boolean
-        allowWriteWorkflows?: boolean
-        durableChildren?: boolean
-        enqueueChildren?: boolean
-      }
-      lastQueueID?: string
-      lastWorkflowRunID?: string
-      error?: string
-      nextRunAt?: number
-      lastRunAt?: number
-      time: {
-        created: number
-        updated?: number
-      }
-    }
-  }
-}
-
-export type EventScheduledTaskDeleted = {
-  type: "scheduled.task.deleted"
-  properties: {
-    id: string
-    projectID: string
-  }
-}
-
 export type Pty = {
   id: string
   title: string
@@ -1691,21 +1706,6 @@ export type EventPtyDeleted = {
   }
 }
 
-export type EventWorktreeReady = {
-  type: "worktree.ready"
-  properties: {
-    name: string
-    branch: string
-  }
-}
-
-export type EventWorktreeFailed = {
-  type: "worktree.failed"
-  properties: {
-    message: string
-  }
-}
-
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
@@ -1736,7 +1736,11 @@ export type Event =
   | EventDebugEngineCorrelatedDiagnostics
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
+  | EventVcsBranchUpdated
   | EventCommandExecuted
+  | EventTaskQueueCreated
+  | EventTaskQueueUpdated
+  | EventTaskQueueDeleted
   | EventWorkflowRunCreated
   | EventWorkflowRunUpdated
   | EventWorkflowRunStarted
@@ -1761,6 +1765,11 @@ export type Event =
   | EventWorkflowBudgetWarning
   | EventWorkflowBudgetExceeded
   | EventWorkflowVerificationAttached
+  | EventScheduledTaskCreated
+  | EventScheduledTaskUpdated
+  | EventScheduledTaskDeleted
+  | EventWorktreeReady
+  | EventWorktreeFailed
   | EventCodeIndexProgress
   | EventCodeIndexState
   | EventSessionCreated
@@ -1773,19 +1782,10 @@ export type Event =
   | EventTuiCommandExecute
   | EventTuiToastShow
   | EventTuiSessionSelect
-  | EventVcsBranchUpdated
-  | EventTaskQueueCreated
-  | EventTaskQueueUpdated
-  | EventTaskQueueDeleted
-  | EventScheduledTaskCreated
-  | EventScheduledTaskUpdated
-  | EventScheduledTaskDeleted
   | EventPtyCreated
   | EventPtyUpdated
   | EventPtyExited
   | EventPtyDeleted
-  | EventWorktreeReady
-  | EventWorktreeFailed
 
 export type GlobalEvent = {
   directory: string
@@ -2440,6 +2440,83 @@ export type Config = {
      * Run the autonomous-mode diff critic at every phase boundary. Default: false.
      */
     critic_enabled?: boolean
+  }
+  /**
+   * Execution modes: local, cloud, hybrid placement, multi-provider council, and arena ensemble (ADR-049).
+   */
+  modes?: {
+    /**
+     * Default execution mode. When unset: hybrid if local AX Engine is available, else cloud. Arena/council are typically invoked via tools rather than as the global default.
+     */
+    default?: "local" | "cloud" | "hybrid" | "arena" | "council"
+    /**
+     * Hybrid local/cloud placement policy
+     */
+    hybrid?: {
+      /**
+       * Prefer local placement when AX Engine (or configured local) is available. Default: true.
+       */
+      preferLocalWhenAvailable?: boolean
+      /**
+       * Route high-complexity work to cloud when hybrid is active. Default: true.
+       */
+      escalateOnHighComplexity?: boolean
+      /**
+       * Provider id treated as local for hybrid placement. Default: ax-engine.
+       */
+      localProviderID?: string
+    }
+    /**
+     * Multi-provider council (advisory review / design) settings
+     */
+    council?: {
+      /**
+       * Allow the council multi-provider advisory tool. Default: true.
+       */
+      enabled?: boolean
+      /**
+       * Maximum council members per invocation (default: 3, hard max: 6).
+       */
+      maxMembers?: number
+      /**
+       * Per-member timeout in ms for council fan-out (default: 60000).
+       */
+      timeoutMs?: number
+      /**
+       * Optional multi-round anonymous debate rounds (default: 0; Phase 3+).
+       */
+      debateRounds?: number
+    }
+    /**
+     * Arena best-of-N implementation comparison settings
+     */
+    arena?: {
+      /**
+       * Enable arena multi-contestant mode tools. Default: false until Phase 2.
+       */
+      enabled?: boolean
+      /**
+       * Maximum arena contestants (default: 3, hard max: 5).
+       */
+      maxContestants?: number
+      /**
+       * Ranking strategy for arena candidates. verify_first is the recommended default (never pure popularity).
+       */
+      strategy?: "verify_first" | "diversity" | "hybrid_score"
+    }
+    /**
+     * Ensemble cost budget controls
+     */
+    budget?: {
+      /**
+       * Maximum estimated USD for an ensemble fan-out (fail-closed when exceeded).
+       */
+      maxEstimatedUsd?: number
+      /**
+       * Rough USD cost per council/arena member call used with maxEstimatedUsd to cap fan-out size.
+       */
+      estimatedUsdPerMember?: number
+    }
   }
 }
 

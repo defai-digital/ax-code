@@ -56,11 +56,7 @@ export function displayCommands(input: {
     url: string
     client: {
       session: {
-        summarize: (input: {
-          sessionID: string
-          modelID: string
-          providerID: string
-        }) => Promise<{ error?: unknown }>
+        summarize: (input: { sessionID: string; modelID: string; providerID: string }) => Promise<{ error?: unknown }>
       }
     }
   }
@@ -508,7 +504,7 @@ export function displayCommands(input: {
         }
 
         Clipboard.copy(result.text)
-          .then(() => input.toast.show({ message: "Message copied to clipboard!", variant: "success" }))
+          .then(() => input.toast.show({ message: "Message copied to clipboard!", variant: "success", duration: 1500 }))
           .catch(() => input.toast.show({ message: "Failed to copy to clipboard", variant: "error" }))
         dialog.clear()
       },
@@ -535,7 +531,7 @@ export function displayCommands(input: {
             agents: input.agents,
           })
           await Clipboard.copy(transcript)
-          input.toast.show({ message: "Session transcript copied to clipboard!", variant: "success" })
+          input.toast.show({ message: "Session transcript copied to clipboard!", variant: "success", duration: 1500 })
         } catch {
           input.toast.show({ message: "Failed to copy session transcript", variant: "error" })
         }

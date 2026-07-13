@@ -3,6 +3,11 @@ import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
 
 const originalCopy = Clipboard.copy
+type ToastInput = {
+  message: string
+  variant: "info" | "success" | "warning" | "error"
+  duration?: number
+}
 
 afterEach(() => {
   Clipboard.copy = originalCopy
@@ -23,11 +28,11 @@ describe("Selection.copy", () => {
         cleared++
       },
     }
-    const shown: string[] = []
+    const shown: ToastInput[] = []
     const errors: unknown[] = []
     const toast = {
-      show: (input: { message: string; variant: "info" | "success" | "warning" | "error" }) => {
-        shown.push(input.message)
+      show: (input: ToastInput) => {
+        shown.push(input)
       },
       error: (error: unknown) => {
         errors.push(error)
@@ -41,7 +46,7 @@ describe("Selection.copy", () => {
     await Promise.resolve()
 
     expect(cleared).toBe(1)
-    expect(shown).toEqual(["Copied to clipboard"])
+    expect(shown).toEqual([{ message: "Copied to clipboard", variant: "info", duration: 1500 }])
     expect(errors).toEqual([])
   })
 
@@ -56,11 +61,11 @@ describe("Selection.copy", () => {
         cleared++
       },
     }
-    const shown: string[] = []
+    const shown: ToastInput[] = []
     const errors: unknown[] = []
     const toast = {
-      show: (input: { message: string; variant: "info" | "success" | "warning" | "error" }) => {
-        shown.push(input.message)
+      show: (input: ToastInput) => {
+        shown.push(input)
       },
       error: (error: unknown) => {
         errors.push(error)

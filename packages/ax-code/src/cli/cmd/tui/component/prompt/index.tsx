@@ -1137,6 +1137,10 @@ export function Prompt(props: PromptProps) {
       !slashHasArguments &&
       command.trySlash(slashName)
     ) {
+      // Local slash commands dispatch through the command dialog instead of
+      // the async message path below, so settle the draft here as well.
+      clearPromptDraft()
+      props.onSubmit?.()
       log.info("tui.prompt.submit: slash command dispatched", { command: slashName })
       return
     }
@@ -1266,8 +1270,7 @@ export function Prompt(props: PromptProps) {
     // commands and shell input keep the existing async routes; new sessions and
     // idle sessions dispatch immediately below.
     const isKnownSlashCommand =
-      workRouted.kind === "command" ||
-      (slashName != null && sync.data.command.some((x) => x.name === slashName))
+      workRouted.kind === "command" || (slashName != null && sync.data.command.some((x) => x.name === slashName))
     if (
       queueModeEnabled() &&
       currentMode === "normal" &&

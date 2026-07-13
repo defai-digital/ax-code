@@ -29,6 +29,7 @@ import { registerSyncLifecycle } from "./sync-lifecycle"
 import { parseSyncedSessionRisk } from "./sync-session-risk"
 import { createRuntimeSyncProbeScheduler } from "./sync-runtime-probe"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
+import { sessionDerivedRequestHeaders, sessionGoalURL, sessionRiskURL } from "./sync-session-urls"
 
 const BOOTSTRAP_REQUEST_TIMEOUT_MS = 10_000
 const SESSION_SYNC_REQUEST_TIMEOUT_MS = 10_000
@@ -36,24 +37,6 @@ const MAX_SESSION_MESSAGES = 100
 
 function withSyncTimeout<T>(label: string, promise: Promise<T>, timeoutMs = BOOTSTRAP_REQUEST_TIMEOUT_MS) {
   return withTimeout(promise, timeoutMs, `${label} timed out after ${timeoutMs}ms`)
-}
-
-function sessionRiskURL(input: { baseUrl: string; sessionID: string; directory?: string }) {
-  const url = new URL(`${input.baseUrl}/session/${encodeURIComponent(input.sessionID)}/risk`)
-  url.searchParams.set("quality", "true")
-  url.searchParams.set("findings", "true")
-  url.searchParams.set("envelopes", "true")
-  url.searchParams.set("reviewResults", "true")
-  url.searchParams.set("debug", "true")
-  url.searchParams.set("hints", "true")
-  if (input.directory) url.searchParams.set("directory", input.directory)
-  return url.toString()
-}
-
-function sessionGoalURL(input: { baseUrl: string; sessionID: string; directory?: string }) {
-  const url = new URL(`${input.baseUrl}/session/${encodeURIComponent(input.sessionID)}/goal`)
-  if (input.directory) url.searchParams.set("directory", input.directory)
-  return url.toString()
 }
 
 export const { use: useSync, provider: SyncProvider } = createSimpleContext({
@@ -105,8 +88,8 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           sessionRiskURL({
             baseUrl: sdk.url,
             sessionID,
-            directory: sdk.directory,
           }),
+          { headers: sessionDerivedRequestHeaders(sdk.directory) },
         )
         if (!response.ok) throw new Error(`session risk request failed: ${response.status}`)
         return { data: parseSyncedSessionRisk(await response.json()) }
@@ -116,8 +99,8 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           sessionGoalURL({
             baseUrl: sdk.url,
             sessionID,
-            directory: sdk.directory,
           }),
+          { headers: sessionDerivedRequestHeaders(sdk.directory) },
         )
         if (!response.ok) throw new Error(`session goal request failed: ${response.status}`)
         return { data: (await response.json()) as SessionGoal.PublicInfo | null }

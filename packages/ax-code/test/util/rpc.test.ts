@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { EventEmitter } from "node:events"
 import { Rpc } from "../../src/util/rpc"
 
 type Endpoint = {
   onmessage: ((event: { data: string }) => void | Promise<void>) | null
+  onWireDeath?: (() => void) | null
   postMessage(data: string): void
 }
 
@@ -92,6 +93,20 @@ describe("Rpc", () => {
     } finally {
       pair.restore()
     }
+  })
+
+  test("rejects new calls immediately after the transport has closed", async () => {
+    const postMessage = vi.fn()
+    const target: Endpoint = {
+      onmessage: null,
+      postMessage,
+    }
+    const client = Rpc.client<{ health(input: undefined): Promise<void> }>(target)
+
+    target.onWireDeath?.()
+
+    await expect(client.call("health", undefined)).rejects.toThrow("RPC wire closed")
+    expect(postMessage).not.toHaveBeenCalled()
   })
 
   test("serializes unprintable worker handler failures", async () => {

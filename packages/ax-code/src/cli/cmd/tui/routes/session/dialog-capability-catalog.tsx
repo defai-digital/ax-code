@@ -2,6 +2,7 @@ import { createMemo, createResource, onMount } from "solid-js"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
 import { useSDK } from "@tui/context/sdk"
+import { directoryRequestHeaders } from "@tui/util/request-headers"
 import { createAbortableResourceFetcher } from "../../util/abortable-resource"
 import {
   capabilityCatalogOptions,
@@ -26,8 +27,10 @@ async function loadCapabilityCatalog(sdk: ReturnType<typeof useSDK>, signal: Abo
   }
 
   const url = new URL("/capability", sdk.url)
-  if (sdk.directory) url.searchParams.set("directory", sdk.directory)
-  const response = await sdk.fetch(url, { signal })
+  const response = await sdk.fetch(url, {
+    signal,
+    headers: directoryRequestHeaders({ directory: sdk.directory, accept: "application/json" }),
+  })
   if (!response.ok) throw new Error(`Failed to load capability catalog: ${response.status}`)
   return normalizeCapabilityCatalogItems(await response.json())
 }
