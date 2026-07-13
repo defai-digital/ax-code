@@ -137,6 +137,12 @@ jobs:
           find "$dest" -maxdepth 2 -type f -print || true
 
       - name: Run deterministic ax-code tests
+        env:
+          # Coverage for the session-heavy deterministic suite can exceed the
+          # default Node heap when several Vitest workers retain V8 data.
+          NODE_OPTIONS: --max-old-space-size=12288
+          AX_TEST_MAX_WORKERS: "1"
+          AX_TEST_SHARD_SIZE: "25"
         shell: bash
         run: |
           set -euo pipefail
