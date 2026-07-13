@@ -48,9 +48,12 @@ See [Hooks](../hooks.md) for the five official lifecycle packs (`format-after-ed
 
 ## Eval harness
 
-Run the agentic runtime gate suite:
+Run the agentic runtime gate suite and multi-mode ensemble policy suite:
 
 ```bash
 cd packages/ax-code
 pnpm exec vitest run test/harness/agentic-runtime-eval.test.ts
+pnpm exec vitest run test/harness/multi-mode-ensemble-eval.test.ts
 ```
+
+See also [Execution Modes](../modes.md) for local/cloud/hybrid/council/arena.

@@ -28,6 +28,7 @@ The root [README](../README.md) is the shortest path to install and launch AX Co
 | [Autonomous Mode](autonomous.md)                          | Unattended execution, approval behavior, headless usage, and safeguards                                  |
 | [MCP Integrations](mcp.md)                                | MCP trust, permissions, prompt/resource handling, and server-route security                              |
 | [Auto-Route](auto-route.md)                               | Keyword-based specialist routing (active by default) and optional fast-model complexity routing          |
+| [Execution Modes](modes.md)                               | Local, cloud, hybrid placement; multi-provider council consensus and arena best-of-N                     |
 | [Supported Providers and Models](supported-providers.md)  | Default Cloud API providers, CLI providers, and AX Engine local models                                   |
 | [Custom and Gateway Providers](custom-provider.md)        | Connect any OpenAI- or Anthropic-compatible endpoint or self-hosted gateway via custom provider config   |
 | [AX Engine Model Selection](ax-engine-model-selection.md) | Local AX Engine model ranking, memory guidance, and practical default choices                            |
@@ -67,6 +68,7 @@ Public docs should stay close to the shipped runtime. Before a release or major 
 | Install, runtime, package manager, and local launcher behavior | Root `package.json`, `packages/ax-code/package.json`, `script/setup-cli.ts`, `packages/ax-code/script/build.ts` | Package names, Bun/pnpm requirements, build/link commands, and `ax-code doctor` runtime labels       |
 | Local AX Engine provider and model selection                   | `packages/ax-code/src/provider/ax-engine/` and `docs/ax-engine-model-selection.md`                              | Platform gates, selectable models, quantization, memory guidance, disk requirements, and model ids   |
 | Sandbox, autonomous mode, routing, and TUI status labels       | Runtime config, TUI command handlers, and status view models under `packages/ax-code/src/`                      | Defaults, command names, environment variables, persisted config keys, and user-facing labels        |
+| Execution modes (local/cloud/hybrid/council/arena)             | `packages/ax-code/src/mode/`, `tool/council.ts`, `tool/arena.ts`, `docs/modes.md`                               | Config keys, tool names, ranking rules, and isolation guarantees                                     |
 | SDK and OpenAPI integration                                    | `packages/sdk/js/package.json`, `packages/sdk/openapi.json`, SDK exports, and `docs/sdk-http-openapi.md`        | Official entry points, version examples, generated-client guidance, and service-boundary limitations |
 | Architecture and semantic behavior                             | Current implementation plus architecture docs such as `semantic-layer.md`                                       | Whether a document describes current behavior, roadmap intent, or historical context                 |
 
