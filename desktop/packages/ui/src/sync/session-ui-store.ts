@@ -32,7 +32,7 @@ import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
 import { useCommandsStore } from "@/stores/useCommandsStore"
 import { useWorkModeStore } from "@/stores/useWorkModeStore"
-import { routeWorkModeInput } from "@/lib/workMode"
+import { resolveWorkModeSend } from "@/lib/workMode"
 import { toast } from "@/components/ui"
 import { getSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
@@ -138,20 +138,15 @@ export function routeMessage(params: {
     // Work mode (Agent | Council | Arena) — Qoder-style send routing.
     // Explicit slash commands stay unchanged; free-text is remapped when mode ≠ agent.
     // Note: shell mode returns above, so this path is never shell.
-    let content = params.content
-    let forcedCommand: { name: string; arguments: string } | null = null
-    if (!content.trimStart().startsWith("/")) {
-      // Prefer explicit directory, else current project directory so mode selection sticks.
-      const dirForMode = params.directory ?? useDirectoryStore.getState().currentDirectory
-      const workMode = useWorkModeStore.getState().getMode(dirForMode)
-      const routed = routeWorkModeInput(workMode, content)
-      if (routed.kind === "command") {
-        forcedCommand = { name: routed.command, arguments: routed.arguments }
-        content = `/${routed.command} ${routed.arguments}`.trimEnd()
-      }
-    }
+    // Prefer explicit directory, else current project directory so mode selection sticks.
+    const dirForMode = params.directory ?? useDirectoryStore.getState().currentDirectory
+    const workMode = useWorkModeStore.getState().getMode(dirForMode)
+    const resolved = resolveWorkModeSend(workMode, params.content)
+    const content = resolved.content
+    const forcedCommand = resolved.forcedCommand
 
-    // Slash commands — fire and forget, SSE delivers messages and status
+    // Slash commands — fire and forget, SSE delivers messages and status.
+    // content is already trimStart-normalized for explicit slashes (fixes "  /help").
     if (content.startsWith("/") || forcedCommand) {
       const [head = "", ...tail] = content.split(" ")
       const cmdName = forcedCommand?.name ?? head.slice(1)
@@ -686,6 +681,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         },
       }
     })
+    // Switching project on a new-chat draft should not inherit sticky council/arena.
+    useWorkModeStore.getState().resetToAgent(nextDirectory)
     void activateConfigForDirectory(nextDirectory)
   },
 

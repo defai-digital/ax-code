@@ -43,8 +43,35 @@ export function routeWorkModeInput(mode: WorkModeId, text: string): WorkModeRout
   const raw = text
   const trimmed = text.trim()
   if (!trimmed) return { kind: "prompt", text: raw }
-  if (trimmed.startsWith("/")) return { kind: "prompt", text: raw }
+  // Strip leading whitespace so "  /help" still counts as an explicit slash command.
+  if (trimmed.startsWith("/")) return { kind: "prompt", text: trimmed }
   if (mode === "agent") return { kind: "prompt", text: raw }
-  if (mode === "council") return { kind: "command", command: "council", arguments: raw }
-  return { kind: "command", command: "arena", arguments: raw }
+  // Trimmed body keeps council/arena $ARGUMENTS clean.
+  if (mode === "council") return { kind: "command", command: "council", arguments: trimmed }
+  return { kind: "command", command: "arena", arguments: trimmed }
+}
+
+/**
+ * Resolve send content through work mode + slash detection.
+ * Shared by routeMessage so leading whitespace cannot bypass slash/work-mode routing.
+ */
+export function resolveWorkModeSend(
+  mode: WorkModeId,
+  content: string,
+): {
+  content: string
+  forcedCommand: { name: "council" | "arena"; arguments: string } | null
+} {
+  const routed = routeWorkModeInput(mode, content)
+  if (routed.kind === "command") {
+    return {
+      content: `/${routed.command} ${routed.arguments}`.trimEnd(),
+      forcedCommand: { name: routed.command, arguments: routed.arguments },
+    }
+  }
+  // Explicit slash (possibly after leading whitespace) — use normalized text.
+  if (routed.text.trimStart().startsWith("/")) {
+    return { content: routed.text, forcedCommand: null }
+  }
+  return { content: routed.text, forcedCommand: null }
 }

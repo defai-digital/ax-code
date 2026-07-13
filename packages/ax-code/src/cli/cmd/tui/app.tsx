@@ -1332,6 +1332,8 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
     sdk.event.on(SessionApi.Event.Deleted.type, (evt) => {
       if (route.data.type === "session" && route.data.sessionID === evt.properties.info.id) {
+        // Returning to the new-chat surface: default work mode to Agent.
+        kv.set("work_mode", WorkMode.DEFAULT)
         route.navigate({ type: "home" })
         toast.show({
           variant: "info",

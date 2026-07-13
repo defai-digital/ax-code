@@ -382,6 +382,7 @@ export function Session() {
           message: `Failed to load session: ${sessionID}`,
           variant: "error",
         })
+        // Fall back to new-chat surface (Agent default applied via session.new / Home once).
         navigate({ type: "home" })
       })
   }

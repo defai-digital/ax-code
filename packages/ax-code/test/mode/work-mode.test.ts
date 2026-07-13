@@ -37,4 +37,17 @@ describe("WorkMode", () => {
     expect(WorkMode.routeInput("council", "/model")).toEqual({ kind: "prompt", text: "/model" })
     expect(WorkMode.routeInput("arena", "/sessions")).toEqual({ kind: "prompt", text: "/sessions" })
   })
+
+  test("routeInput strips leading whitespace for slash detection", () => {
+    expect(WorkMode.routeInput("arena", "  /help")).toEqual({ kind: "prompt", text: "/help" })
+    expect(WorkMode.routeInput("council", "\n/mode")).toEqual({ kind: "prompt", text: "/mode" })
+  })
+
+  test("routeInput trims free-text arguments for council/arena", () => {
+    expect(WorkMode.routeInput("council", "  rate quality  ")).toEqual({
+      kind: "command",
+      command: "council",
+      arguments: "rate quality",
+    })
+  })
 })

@@ -121,6 +121,8 @@ export namespace EnsemblePreflight {
     return (
       /\bcouncil\b/.test(t) ||
       /\barena\b/.test(t) ||
+      /(^|\n)\s*\/council\b/.test(t) ||
+      /(^|\n)\s*\/arena\b/.test(t) ||
       /\bbest-?of-?n\b/.test(t) ||
       /\bmulti-?provider\b/.test(t) ||
       /\bmulti-?model\b/.test(t)

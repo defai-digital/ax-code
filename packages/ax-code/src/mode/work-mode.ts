@@ -67,15 +67,18 @@ export namespace WorkMode {
 
   /**
    * Map free-text input through the selected work mode.
-   * Explicit slash commands are left unchanged.
+   * Explicit slash commands are left unchanged (leading whitespace stripped so
+   * "  /help" is still recognized as a slash command).
    */
   export function routeInput(mode: Id, text: string): Routed {
     const raw = text
     const trimmed = text.trim()
     if (!trimmed) return { kind: "prompt", text: raw }
-    if (trimmed.startsWith("/")) return { kind: "prompt", text: raw }
+    // Preserve slash detection after accidental leading whitespace/newlines.
+    if (trimmed.startsWith("/")) return { kind: "prompt", text: trimmed }
     if (mode === "agent") return { kind: "prompt", text: raw }
-    if (mode === "council") return { kind: "command", command: "council", arguments: raw }
-    return { kind: "command", command: "arena", arguments: raw }
+    // Use trimmed body for $ARGUMENTS so council/arena templates stay clean.
+    if (mode === "council") return { kind: "command", command: "council", arguments: trimmed }
+    return { kind: "command", command: "arena", arguments: trimmed }
   }
 }

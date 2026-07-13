@@ -34,6 +34,10 @@ import { isNonEmptyRecord } from "@/util/record"
 // re-inject and auto-resubmit the CLI prompt — spawning a fresh agent run —
 // on every Home visit.
 let startupPromptConsumed = false
+// Apply Agent work-mode default only once per process on first Home entry.
+// Home remounts (e.g. clearing initialPrompt) must not wipe a mode the user
+// just selected on the new-chat surface. /new and session-delete still reset.
+let homeDefaultWorkModeApplied = false
 
 export function Home() {
   const sync = useSync()
@@ -48,8 +52,10 @@ export function Home() {
   // a new session started from Home would be created in the previous session's
   // workspace instead of the one Home is showing. Mirrors the session route.
   createEffect(() => sdk.setWorkspace(route.workspaceID))
-  // Home is the new-chat surface: always start in Agent work mode.
+  // Cold-start Home: default to Agent once (overrides sticky kv from prior runs).
   onMount(() => {
+    if (homeDefaultWorkModeApplied) return
+    homeDefaultWorkModeApplied = true
     kv.set("work_mode", WorkMode.DEFAULT)
   })
   const promptRef = usePromptRef()
