@@ -951,11 +951,16 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(submitCall).toBeGreaterThan(preventDefault)
   })
 
-  test("exposes the durable goal backend command in slash autocomplete", async () => {
+  test("exposes durable backend prompt commands in slash autocomplete", async () => {
     const autocomplete = await fs.readFile(AUTOCOMPLETE_SRC, "utf8")
     const displayCommands = await fs.readFile(DISPLAY_COMMANDS_SRC, "utf8")
 
-    expect(autocomplete).toContain('new Set(["init", "review", "impact", "goal"])')
+    // Server-side Command.Default builtins must be allowlisted or "/" autocomplete hides them.
+    expect(autocomplete).toContain('"goal"')
+    expect(autocomplete).toContain('"council"')
+    expect(autocomplete).toContain('"arena"')
+    expect(autocomplete).toContain('"mode"')
+    expect(autocomplete).toContain("defaultCommandSlashAllowlist")
     expect(autocomplete).not.toContain('serverCommand.source === "skill") continue')
     expect(displayCommands).toContain('title: "View session goal"')
     expect(displayCommands).toContain('value: "session.goal"')

@@ -484,7 +484,20 @@ export function Autocomplete(props: {
   const commands = createMemo((): AutocompleteOption[] => {
     const clientSlashes = command.slashes()
     const results: AutocompleteOption[] = [...clientSlashes]
-    const defaultCommandSlashAllowlist = new Set(["init", "review", "impact", "goal"])
+    // Builtin server-side prompt commands that should appear in "/" autocomplete.
+    // Keep in sync with Command.Default in packages/ax-code/src/command/index.ts.
+    // Client-only slashes (e.g. /model, /sessions) are registered separately via command.slashes().
+    const defaultCommandSlashAllowlist = new Set([
+      "init",
+      "review",
+      "adr",
+      "impact",
+      "prd",
+      "goal",
+      "council",
+      "arena",
+      "mode",
+    ])
 
     // Collect slash names already registered client-side so we skip duplicates
     // from the server list. A duplicate would show two identical suggestions
