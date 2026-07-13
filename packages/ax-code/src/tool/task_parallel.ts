@@ -301,14 +301,10 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
 
       // Hard gate: multi-provider ensemble requests must not open parallel digs first.
       // Observed failure mode: /council → task_parallel ×4 explores → never calls council.
-      const userText = lastUserText(toolCtx.messages)
-      if (EnsemblePreflight.forbidsTaskParallelFirst(userText) && !toolCtx.extra?.bypassAgentCheck) {
-        throw new Error(
-          "This turn asks for multi-provider council/arena. Call the council or arena tool first " +
-            "with a short context brief. Do not use task_parallel monorepo digs before that " +
-            "(task_parallel is not multi-provider ensemble).",
-        )
-      }
+      EnsemblePreflight.assertTaskParallelAllowed(
+        lastUserText(toolCtx.messages),
+        toolCtx.extra?.bypassAgentCheck === true,
+      )
 
       if (!toolCtx.extra?.bypassAgentCheck) {
         const types = [...new Set(params.tasks.map((t) => t.subagent_type))]

@@ -126,4 +126,16 @@ export namespace EnsemblePreflight {
       /\bmulti-?model\b/.test(t)
     )
   }
+
+  export const TASK_PARALLEL_ENSEMBLE_BLOCK_MESSAGE =
+    "This turn asks for multi-provider council/arena. Call the council or arena tool first " +
+    "with a short context brief. Do not use task_parallel monorepo digs before that " +
+    "(task_parallel is not multi-provider ensemble)."
+
+  /** Throws when task_parallel is used before council/arena on ensemble turns. */
+  export function assertTaskParallelAllowed(userText: string, bypass?: boolean): void {
+    if (bypass) return
+    if (!forbidsTaskParallelFirst(userText)) return
+    throw new Error(TASK_PARALLEL_ENSEMBLE_BLOCK_MESSAGE)
+  }
 }

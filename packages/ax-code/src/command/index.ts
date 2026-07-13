@@ -197,6 +197,9 @@ export namespace Command {
       source: "command",
       sourceTool: "builtin",
       scope: "builtin",
+      // Pin build + preserve routing so keyword auto-route does not switch to
+      // architect/survey-first workflows that open task_parallel before council.
+      agent: "build",
       get template() {
         return PROMPT_COUNCIL
       },
@@ -208,6 +211,7 @@ export namespace Command {
       source: "command",
       sourceTool: "builtin",
       scope: "builtin",
+      agent: "build",
       get template() {
         return PROMPT_ARENA
       },
