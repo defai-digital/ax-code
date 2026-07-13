@@ -46,9 +46,9 @@ const MODES: ModeMeta[] = [
     icon: "sparkling",
     label: "Arena",
     hint: "Multi-model best-of-N. Click to cycle: Agent → Council → Arena.",
-    // Yellow
+    // Purple
     buttonClass:
-      "bg-amber-400/20 text-amber-800 border border-amber-500/40 hover:bg-amber-400/30 dark:text-amber-200 dark:border-amber-400/45",
+      "bg-purple-500/15 text-purple-700 border border-purple-500/35 hover:bg-purple-500/25 dark:text-purple-300 dark:border-purple-400/40",
   },
 ]
 
@@ -59,7 +59,7 @@ interface WorkModeSelectorProps {
 
 /**
  * Single colored toggle: shows only the active mode.
- * Agent = green, Council = blue, Arena = yellow.
+ * Agent = green, Council = blue, Arena = purple.
  * Click cycles Agent → Council → Arena → Agent.
  */
 export const WorkModeSelector: React.FC<WorkModeSelectorProps> = ({

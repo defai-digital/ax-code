@@ -118,7 +118,7 @@ export type { PromptProps, PromptRef } from "./prompt-types"
 
 const log = Log.create({ service: "tui.prompt" })
 const SUPER_LONG_PINK = RGBA.fromHex("#ff4db8")
-/** Work-mode chip backgrounds — fixed greens/blues/yellows (not theme tokens). */
+/** Work-mode chip backgrounds — fixed green/blue/purple (not theme tokens). */
 const WORK_MODE_CHIP_BG: Record<WorkMode.Id, RGBA> = {
   agent: RGBA.fromHex(WorkMode.chipColorHex("agent")),
   council: RGBA.fromHex(WorkMode.chipColorHex("council")),

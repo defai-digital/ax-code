@@ -26,9 +26,9 @@ describe("workMode", () => {
     expect(routeWorkModeInput("council", "/help")).toEqual({ kind: "prompt", text: "/help" })
   })
 
-  test("chip colors are fixed green / blue / yellow", () => {
+  test("chip colors are fixed green / blue / purple", () => {
     expect(workModeChipColorHex("agent")).toBe("#22c55e")
     expect(workModeChipColorHex("council")).toBe("#3b82f6")
-    expect(workModeChipColorHex("arena")).toBe("#eab308")
+    expect(workModeChipColorHex("arena")).toBe("#a855f7")
   })
 })

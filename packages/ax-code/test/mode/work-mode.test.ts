@@ -9,10 +9,10 @@ describe("WorkMode", () => {
     expect(WorkMode.cycle("arena")).toBe("agent")
   })
 
-  test("chip colors are fixed green / blue / yellow (not theme-dependent)", () => {
+  test("chip colors are fixed green / blue / purple (not theme-dependent)", () => {
     expect(WorkMode.chipColorHex("agent")).toBe("#22c55e")
     expect(WorkMode.chipColorHex("council")).toBe("#3b82f6")
-    expect(WorkMode.chipColorHex("arena")).toBe("#eab308")
+    expect(WorkMode.chipColorHex("arena")).toBe("#a855f7")
   })
 
   test("routeInput leaves agent free-text unchanged", () => {
