@@ -118,6 +118,12 @@ export type { PromptProps, PromptRef } from "./prompt-types"
 
 const log = Log.create({ service: "tui.prompt" })
 const SUPER_LONG_PINK = RGBA.fromHex("#ff4db8")
+/** Work-mode chip backgrounds — fixed greens/blues/yellows (not theme tokens). */
+const WORK_MODE_CHIP_BG: Record<WorkMode.Id, RGBA> = {
+  agent: RGBA.fromHex(WorkMode.chipColorHex("agent")),
+  council: RGBA.fromHex(WorkMode.chipColorHex("council")),
+  arena: RGBA.fromHex(WorkMode.chipColorHex("arena")),
+}
 // Upper bound for parts kept around after their extmark disappears (undo);
 // enough for any realistic undo depth without letting the map grow unbounded.
 const MAX_ORPHANED_PROMPT_PARTS = 50
@@ -2156,21 +2162,13 @@ export function Prompt(props: PromptProps) {
               </Show>
               <box flexDirection="row" flexShrink={0}>
                 {footerToggleChip({
-                  // One mode at a time; click cycles. Colors: Agent=green, Council=blue, Arena=yellow.
+                  // One mode at a time; click cycles. Fixed colors (not theme.primary —
+                  // default theme primary is peach, which made Council look wrong).
                   label: footerWorkModeLabel(),
                   active: true,
                   activeFg: theme.text,
                   inactiveFg: theme.textMuted,
-                  background: (() => {
-                    switch (footerWorkMode()) {
-                      case "agent":
-                        return theme.success // green
-                      case "council":
-                        return theme.primary // blue/cyan
-                      case "arena":
-                        return theme.warning // yellow
-                    }
-                  })(),
+                  background: WORK_MODE_CHIP_BG[footerWorkMode()],
                   onMouseUp: () => command.trigger("app.cycle.work_mode"),
                 })}
                 {footerToggleChip({

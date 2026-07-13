@@ -21,4 +21,18 @@ describe("useWorkModeStore", () => {
     useWorkModeStore.getState().setMode("C:\\Repo\\", "arena")
     expect(useWorkModeStore.getState().getMode("c:/Repo")).toBe("arena")
   })
+
+  test("resetToAgent restores agent for a directory", () => {
+    useWorkModeStore.getState().setMode("/repo", "arena")
+    useWorkModeStore.getState().setMode("/other", "council")
+    useWorkModeStore.getState().resetToAgent("/repo")
+    expect(useWorkModeStore.getState().getMode("/repo")).toBe("agent")
+    expect(useWorkModeStore.getState().getMode("/other")).toBe("council")
+  })
+
+  test("resetToAgent with no directory clears all sticky modes", () => {
+    useWorkModeStore.getState().setMode("/repo", "arena")
+    useWorkModeStore.getState().resetToAgent()
+    expect(useWorkModeStore.getState().getMode("/repo")).toBe("agent")
+  })
 })

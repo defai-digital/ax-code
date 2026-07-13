@@ -45,6 +45,22 @@ export namespace WorkMode {
     }
   }
 
+  /**
+   * Fixed chip colors (match Desktop WorkModeSelector):
+   * Agent = green, Council = blue, Arena = yellow.
+   * Not theme.primary/etc. — those vary (e.g. default theme primary is peach).
+   */
+  export function chipColorHex(mode: Id): `#${string}` {
+    switch (mode) {
+      case "agent":
+        return "#22c55e" // green-500
+      case "council":
+        return "#3b82f6" // blue-500
+      case "arena":
+        return "#eab308" // yellow-500
+    }
+  }
+
   export type Routed =
     | { kind: "prompt"; text: string }
     | { kind: "command"; command: "council" | "arena"; arguments: string }

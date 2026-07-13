@@ -638,6 +638,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       error: null,
     })
 
+    // New chat always starts in Agent work mode (not sticky council/arena).
+    useWorkModeStore.getState().resetToAgent(directory)
+
     // Clear composer attachments when opening a new session draft.
     // Attachments from the previous session (e.g. restored by revert) must
     // not bleed into the new session's input.

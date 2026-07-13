@@ -14,6 +14,8 @@ type WorkModeState = {
 type WorkModeActions = {
   getMode: (directory: string | null | undefined) => WorkModeId
   setMode: (directory: string | null | undefined, mode: WorkModeId) => void
+  /** Reset to Agent for a directory (or all dirs when directory is null/undefined). Used on new chat. */
+  resetToAgent: (directory?: string | null | undefined) => void
 }
 
 type WorkModeStore = WorkModeState & WorkModeActions
@@ -34,6 +36,20 @@ export const useWorkModeStore = create<WorkModeStore>()(
           modeByDirectory: {
             ...state.modeByDirectory,
             [key]: parseWorkMode(mode),
+          },
+        }))
+      },
+
+      resetToAgent: (directory) => {
+        if (directory === undefined || directory === null || directory === "") {
+          set({ modeByDirectory: {} })
+          return
+        }
+        const key = normalizeDirectoryKey(directory)
+        set((state) => ({
+          modeByDirectory: {
+            ...state.modeByDirectory,
+            [key]: DEFAULT_WORK_MODE,
           },
         }))
       },

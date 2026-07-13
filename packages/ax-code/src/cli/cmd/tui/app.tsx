@@ -818,6 +818,8 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         aliases: ["clear"],
       },
       onSelect: () => {
+        // New chat always starts in Agent work mode (not sticky council/arena).
+        kv.set("work_mode", WorkMode.DEFAULT)
         const current = promptRef.current
         // Don't require focus - if there's any text, preserve it
         const currentPrompt = current?.current?.input ? current.current : undefined

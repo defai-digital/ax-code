@@ -9,6 +9,12 @@ describe("WorkMode", () => {
     expect(WorkMode.cycle("arena")).toBe("agent")
   })
 
+  test("chip colors are fixed green / blue / yellow (not theme-dependent)", () => {
+    expect(WorkMode.chipColorHex("agent")).toBe("#22c55e")
+    expect(WorkMode.chipColorHex("council")).toBe("#3b82f6")
+    expect(WorkMode.chipColorHex("arena")).toBe("#eab308")
+  })
+
   test("routeInput leaves agent free-text unchanged", () => {
     const r = WorkMode.routeInput("agent", "fix the bug")
     expect(r).toEqual({ kind: "prompt", text: "fix the bug" })

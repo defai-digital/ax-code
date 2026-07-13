@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { cycleWorkMode, DEFAULT_WORK_MODE, routeWorkModeInput } from "./workMode"
+import { cycleWorkMode, DEFAULT_WORK_MODE, routeWorkModeInput, workModeChipColorHex } from "./workMode"
 
 describe("workMode", () => {
   test("default is agent", () => {
@@ -24,5 +24,11 @@ describe("workMode", () => {
 
   test("keeps slash commands intact", () => {
     expect(routeWorkModeInput("council", "/help")).toEqual({ kind: "prompt", text: "/help" })
+  })
+
+  test("chip colors are fixed green / blue / yellow", () => {
+    expect(workModeChipColorHex("agent")).toBe("#22c55e")
+    expect(workModeChipColorHex("council")).toBe("#3b82f6")
+    expect(workModeChipColorHex("arena")).toBe("#eab308")
   })
 })

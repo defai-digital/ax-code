@@ -22,6 +22,18 @@ export function cycleWorkMode(current: WorkModeId): WorkModeId {
   return WORK_MODES[(i + 1) % WORK_MODES.length]!
 }
 
+/** Fixed chip colors matching TUI WorkMode.chipColorHex — Agent green, Council blue, Arena yellow. */
+export function workModeChipColorHex(mode: WorkModeId): `#${string}` {
+  switch (mode) {
+    case "agent":
+      return "#22c55e"
+    case "council":
+      return "#3b82f6"
+    case "arena":
+      return "#eab308"
+  }
+}
+
 export type WorkModeRouted =
   | { kind: "prompt"; text: string }
   | { kind: "command"; command: "council" | "arena"; arguments: string }

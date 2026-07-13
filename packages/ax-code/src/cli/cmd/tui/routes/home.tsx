@@ -22,8 +22,10 @@ import { useRoute, useRouteData } from "@tui/context/route"
 import { useSDK } from "@tui/context/sdk"
 import { useKeybind } from "../context/keybind"
 import { usePromptRef } from "../context/prompt"
+import { useKV } from "../context/kv"
 import { Installation } from "@/installation"
 import { useLocal } from "../context/local"
+import { WorkMode } from "@/mode/work-mode"
 import { recordTuiStartupOnce } from "@tui/util/startup-trace"
 import { isNonEmptyRecord } from "@/util/record"
 
@@ -40,11 +42,16 @@ export function Home() {
   const keybind = useKeybind()
   const route = useRouteData("home")
   const sdk = useSDK()
+  const kv = useKV()
   // Reset the pinned workspace when landing on Home. A session route pins
   // `sdk.setWorkspace(session.directory)`; without this, that pin would leak and
   // a new session started from Home would be created in the previous session's
   // workspace instead of the one Home is showing. Mirrors the session route.
   createEffect(() => sdk.setWorkspace(route.workspaceID))
+  // Home is the new-chat surface: always start in Agent work mode.
+  onMount(() => {
+    kv.set("work_mode", WorkMode.DEFAULT)
+  })
   const promptRef = usePromptRef()
   const args = useArgs()
   const local = useLocal()
