@@ -545,7 +545,7 @@ export function Prompt(props: PromptProps) {
     promptFooterLayout({
       contentWidth: promptContentWidth(),
       toggleWidth:
-        footerToggleLabel(footerWorkModeLabel(), footerWorkMode() !== "agent").length +
+        footerToggleLabel(footerWorkModeLabel(), true).length +
         footerToggleLabel(runModeLabel(footerRunMode()), footerRunMode() !== "none").length +
         footerToggleLabel("Sandbox", sync.data.isolation.mode !== "full-access").length,
       mode: store.mode,
@@ -2156,12 +2156,21 @@ export function Prompt(props: PromptProps) {
               </Show>
               <box flexDirection="row" flexShrink={0}>
                 {footerToggleChip({
-                  // One mode at a time; click cycles Agent → Council → Arena (like run-mode toggle).
+                  // One mode at a time; click cycles. Colors: Agent=green, Council=blue, Arena=yellow.
                   label: footerWorkModeLabel(),
-                  active: footerWorkMode() !== "agent",
+                  active: true,
                   activeFg: theme.text,
                   inactiveFg: theme.textMuted,
-                  background: theme.accent,
+                  background: (() => {
+                    switch (footerWorkMode()) {
+                      case "agent":
+                        return theme.success // green
+                      case "council":
+                        return theme.primary // blue/cyan
+                      case "arena":
+                        return theme.warning // yellow
+                    }
+                  })(),
                   onMouseUp: () => command.trigger("app.cycle.work_mode"),
                 })}
                 {footerToggleChip({
