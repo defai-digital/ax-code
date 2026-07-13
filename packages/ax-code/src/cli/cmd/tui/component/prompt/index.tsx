@@ -538,12 +538,9 @@ export function Prompt(props: PromptProps) {
 
   const footerRunMode = createMemo(() => runMode({ autonomous: sync.data.autonomous, superLong: sync.data.superLong }))
 
+  // Single active mode only (click cycles Agent → Council → Arena), same pattern as run mode.
   const footerWorkMode = createMemo(() => WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)))
-  const footerWorkModeLabel = createMemo(() =>
-    WorkMode.ALL.map((id) => (id === footerWorkMode() ? `[${WorkMode.shortLabel(id)}]` : WorkMode.shortLabel(id))).join(
-      "|",
-    ),
-  )
+  const footerWorkModeLabel = createMemo(() => WorkMode.label(footerWorkMode()))
   const footerLayout = createMemo(() =>
     promptFooterLayout({
       contentWidth: promptContentWidth(),
@@ -2159,7 +2156,7 @@ export function Prompt(props: PromptProps) {
               </Show>
               <box flexDirection="row" flexShrink={0}>
                 {footerToggleChip({
-                  // Show all three options with the active one marked (Qoder-style cycle control).
+                  // One mode at a time; click cycles Agent → Council → Arena (like run-mode toggle).
                   label: footerWorkModeLabel(),
                   active: footerWorkMode() !== "agent",
                   activeFg: theme.text,
