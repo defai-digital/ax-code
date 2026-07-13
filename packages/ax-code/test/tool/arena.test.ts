@@ -21,15 +21,17 @@ describe("arena tool contract", () => {
     expect(parsed.task).toBe("Refactor auth")
   })
 
-  test("parameter schema accepts implement mode", async () => {
+  test("parameter schema accepts implement mode and enableIfDisabled", async () => {
     const init = await ArenaTool.init()
     const parsed = init.parameters.parse({
       task: "Add rate limiting",
       mode: "implement",
       strategy: "verify_first",
+      enableIfDisabled: true,
     })
     expect(parsed.mode).toBe("implement")
     expect(parsed.strategy).toBe("verify_first")
+    expect(parsed.enableIfDisabled).toBe(true)
   })
 })
 

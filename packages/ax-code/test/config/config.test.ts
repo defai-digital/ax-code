@@ -69,6 +69,35 @@ test("loads config with defaults when no files exist", async () => {
   })
 })
 
+test("getFresh reloads modes after mid-session ax-code.json edit", async () => {
+  await using tmp = await tmpdir()
+  await writeConfig(tmp.path, {
+    isolation: { mode: "workspace-write", network: false },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Config.get()
+      expect((before as { modes?: { arena?: { enabled?: boolean } } }).modes?.arena?.enabled).toBeUndefined()
+
+      await writeConfig(tmp.path, {
+        isolation: { mode: "workspace-write", network: false },
+        modes: { arena: { enabled: true, maxContestants: 2 } },
+      })
+      // Cached get may still see old snapshot
+      const cached = await Config.get()
+      // Fresh read must pick up disk edit without session restart
+      const fresh = await Config.getFresh()
+      expect((fresh as { modes?: { arena?: { enabled?: boolean } } }).modes?.arena?.enabled).toBe(true)
+      expect((fresh as { modes?: { arena?: { maxContestants?: number } } }).modes?.arena?.maxContestants).toBe(2)
+      // After getFresh, subsequent get uses the new cache
+      const after = await Config.get()
+      expect((after as { modes?: { arena?: { enabled?: boolean } } }).modes?.arena?.enabled).toBe(true)
+      void cached
+    },
+  })
+})
+
 test("rejects unsafe integer config values", () => {
   const unsafe = Number.MAX_SAFE_INTEGER + 1
   const parsed = Config.Info.safeParse({

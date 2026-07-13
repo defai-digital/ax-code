@@ -7,12 +7,15 @@
 import { generateObject } from "ai"
 import { createHash } from "crypto"
 import z from "zod"
+import path from "path"
 import { Config } from "../config/config"
 import { Arena } from "../mode/arena"
 import { Budget } from "../mode/budget"
 import { Council } from "../mode/council"
+import { EnsemblePreflight } from "../mode/preflight"
 import { ModeMemory } from "../mode/memory"
 import type { ModePolicy } from "../mode/policy"
+import { Instance } from "../project/instance"
 import { Provider } from "../provider/provider"
 import { modelSelectableForProvider } from "../provider/model-selectability"
 import { ModelID, ProviderID } from "../provider/schema"
@@ -55,9 +58,28 @@ const parameters = z.object({
     .max(HARD_MAX)
     .optional(),
   strategy: z.enum(["verify_first", "diversity", "hybrid_score"]).optional(),
+  enableIfDisabled: z
+    .boolean()
+    .optional()
+    .describe(
+      "If arena is disabled in config, write modes.arena.enabled=true to project ax-code.json and continue (same session).",
+    ),
 })
 
 type MemberSpec = { providerID: ProviderID; modelID: ModelID; memberId: string }
+
+async function snapshotSelectableProviders(): Promise<EnsemblePreflight.ProviderSnapshot> {
+  await Provider.ready()
+  const providers = await Provider.list()
+  const ids: string[] = []
+  for (const provider of Object.values(providers)) {
+    const models = Object.values(provider.models).filter((m) => modelSelectableForProvider(provider.id, m))
+    if (models.length === 0) continue
+    if (models.every((m) => String(m.id).toLowerCase().includes("embed"))) continue
+    ids.push(String(provider.id))
+  }
+  return { count: ids.length, ids: ids.sort() }
+}
 
 function fingerprint(text: string): string {
   const normalized = text.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 500)
@@ -196,6 +218,10 @@ type ArenaMetadata = {
   budgetReasons?: string[]
   mode?: "plan" | "implement"
   worktrees?: string[]
+  providerCount?: number
+  providerIDs?: string[]
+  enabledThisCall?: boolean
+  suggestedTool?: string
 }
 
 export const ArenaTool = Tool.define("arena", async () => {
@@ -210,14 +236,44 @@ export const ArenaTool = Tool.define("arena", async () => {
         metadata: { task: args.task.slice(0, 200), mode: args.mode ?? "plan" },
       })
 
-      const cfg = await Config.get()
-      const modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
+      // Re-read project config so mid-session ax-code.json edits apply (no restart).
+      let cfg = await Config.getFresh()
+      let modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
+      let enabledThisCall = false
+      const providerSnap = await snapshotSelectableProviders()
+      const suggestedTool = EnsemblePreflight.suggestTool(args.task)
+
       if (modes?.arena?.enabled !== true) {
-        const metadata: ArenaMetadata = { status: "disabled", mode: args.mode ?? "plan" }
+        if (args.enableIfDisabled === true) {
+          await Config.update({
+            modes: {
+              arena: {
+                enabled: true,
+                maxContestants: modes?.arena?.maxContestants ?? DEFAULT_MAX,
+                strategy: args.strategy ?? modes?.arena?.strategy ?? "verify_first",
+              },
+            },
+          })
+          enabledThisCall = true
+          cfg = await Config.getFresh()
+          modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
+        }
+      }
+
+      if (modes?.arena?.enabled !== true) {
+        const metadata: ArenaMetadata = {
+          status: "disabled",
+          mode: args.mode ?? "plan",
+          providerCount: providerSnap.count,
+          providerIDs: providerSnap.ids,
+          suggestedTool,
+        }
         return {
           title: "Arena disabled",
-          output:
-            "Arena mode is disabled. Enable with `modes.arena.enabled: true` in ax-code.json (ADR-049).",
+          output: EnsemblePreflight.arenaDisabledMessage({
+            providers: providerSnap,
+            projectConfigHint: path.join(Instance.directory, "ax-code.json"),
+          }),
           metadata,
         }
       }
@@ -240,7 +296,14 @@ export const ArenaTool = Tool.define("arena", async () => {
         },
       })
       if (!budgetCheck.ok) {
-        const metadata: ArenaMetadata = { status: "budget_rejected", strategy, mode: arenaMode }
+        const metadata: ArenaMetadata = {
+          status: "budget_rejected",
+          strategy,
+          mode: arenaMode,
+          providerCount: providerSnap.count,
+          providerIDs: providerSnap.ids,
+          enabledThisCall,
+        }
         return {
           title: "Arena budget rejected",
           output: budgetCheck.message,
@@ -260,11 +323,13 @@ export const ArenaTool = Tool.define("arena", async () => {
           strategy,
           budgetReasons: budgetCheck.reasons,
           mode: arenaMode,
+          providerCount: providerSnap.count,
+          providerIDs: providerSnap.ids,
+          enabledThisCall,
         }
         return {
           title: "Arena: need ≥2 providers",
-          output:
-            "Arena requires at least two connected providers with selectable models. Connect more providers or pass explicit providers[].",
+          output: EnsemblePreflight.arenaInsufficientProvidersMessage(providerSnap),
           metadata,
         }
       }
@@ -299,12 +364,16 @@ export const ArenaTool = Tool.define("arena", async () => {
           budgetReasons: budgetCheck.reasons,
           mode: "implement",
           worktrees: impl.results.map((r) => r.worktreeDirectory).filter((d): d is string => Boolean(d)),
+          providerCount: providerSnap.count,
+          providerIDs: providerSnap.ids,
+          enabledThisCall,
         }
 
         return {
           title: `Implement arena ranked ${impl.ranked.length} contestants`,
           output:
             impl.markdown +
+            (enabledThisCall ? "\n\n_Enabled `modes.arena.enabled` for this project during this call._" : "") +
             (budgetCheck.reasons.length ? `\n\n_Budget: ${budgetCheck.reasons.join(", ")}_` : ""),
           metadata,
         }
@@ -394,11 +463,21 @@ export const ArenaTool = Tool.define("arena", async () => {
         errorCount: errors.length,
         budgetReasons: budgetCheck.reasons,
         mode: "plan",
+        providerCount: providerSnap.count,
+        providerIDs: providerSnap.ids,
+        enabledThisCall,
+        suggestedTool,
       }
+
+      const header =
+        (enabledThisCall ? "_Enabled `modes.arena.enabled` for this project during this call._\n\n" : "") +
+        (suggestedTool === "council"
+          ? "_Note: this task looks like a quality/review finding request — **council** may fit better than plan arena._\n\n"
+          : "")
 
       return {
         title: `Arena ranked ${ranked.length} contestants`,
-        output: rankingMd + detail.join("\n"),
+        output: header + rankingMd + detail.join("\n"),
         metadata,
       }
     },

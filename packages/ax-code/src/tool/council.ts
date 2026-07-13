@@ -9,6 +9,7 @@ import { Config } from "../config/config"
 import { Budget } from "../mode/budget"
 import { Council } from "../mode/council"
 import { Debate } from "../mode/debate"
+import { EnsemblePreflight } from "../mode/preflight"
 import { ModeMemory } from "../mode/memory"
 import { ModePolicy } from "../mode/policy"
 import { Provider } from "../provider/provider"
@@ -241,6 +242,21 @@ type CouncilMetadata = {
   debateRoundsRun?: number
   debateStopReason?: string
   budgetReasons?: string[]
+  providerCount?: number
+  providerIDs?: string[]
+}
+
+async function snapshotSelectableProviders(): Promise<EnsemblePreflight.ProviderSnapshot> {
+  await Provider.ready()
+  const providers = await Provider.list()
+  const ids: string[] = []
+  for (const provider of Object.values(providers)) {
+    const models = Object.values(provider.models).filter((m) => modelSelectableForProvider(provider.id, m))
+    if (models.length === 0) continue
+    if (models.every((m) => String(m.id).toLowerCase().includes("embed"))) continue
+    ids.push(String(provider.id))
+  }
+  return { count: ids.length, ids: ids.sort() }
 }
 
 export const CouncilTool = Tool.define("council", async () => {
@@ -258,13 +274,19 @@ export const CouncilTool = Tool.define("council", async () => {
         },
       })
 
-      const cfg = await Config.get()
+      // Re-read project config so mid-session ax-code.json edits apply.
+      const cfg = await Config.getFresh()
       const modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
+      const providerSnap = await snapshotSelectableProviders()
       if (modes?.council?.enabled === false) {
-        const metadata: CouncilMetadata = { status: "disabled" }
+        const metadata: CouncilMetadata = {
+          status: "disabled",
+          providerCount: providerSnap.count,
+          providerIDs: providerSnap.ids,
+        }
         return {
           title: "Council disabled",
-          output: "Council mode is disabled in config (`modes.council.enabled: false`).",
+          output: EnsemblePreflight.councilDisabledMessage(),
           metadata,
         }
       }
@@ -303,11 +325,16 @@ export const CouncilTool = Tool.define("council", async () => {
       }
 
       if (members.length === 0) {
-        const metadata: CouncilMetadata = { status: "no_members", totalMembers: 0, successfulMembers: 0 }
+        const metadata: CouncilMetadata = {
+          status: "no_members",
+          totalMembers: 0,
+          successfulMembers: 0,
+          providerCount: providerSnap.count,
+          providerIDs: providerSnap.ids,
+        }
         return {
           title: "Council: no members",
-          output:
-            "No connected providers with selectable models were found for the council. Connect at least two providers via /connect or providers login.",
+          output: EnsemblePreflight.councilInsufficientProvidersMessage(providerSnap),
           metadata,
         }
       }

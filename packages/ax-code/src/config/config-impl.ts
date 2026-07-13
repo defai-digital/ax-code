@@ -1170,6 +1170,25 @@ export namespace Config {
     return state().then((x) => x.config)
   }
 
+  /**
+   * Drop the cached config so the next `get()` re-reads disk.
+   * Use after mid-session edits to `ax-code.json` (e.g. enabling arena)
+   * without a full `Instance.reload()` (which tears down LSP/MCP/etc.).
+   * Prefer this over restarting the session for `modes.*` opt-ins.
+   */
+  export async function invalidate() {
+    await state.invalidate()
+  }
+
+  /**
+   * Invalidate cache then return a freshly loaded config.
+   * Ensemble tools (council/arena) call this so mid-session config edits apply.
+   */
+  export async function getFresh() {
+    await invalidate()
+    return get()
+  }
+
   export async function mcpEntries() {
     const { config, mcpSources } = await state()
     return Object.fromEntries(

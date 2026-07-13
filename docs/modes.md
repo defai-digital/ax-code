@@ -67,7 +67,7 @@ In `ax-code.json`:
 | `modes.default` | `local` \| `cloud` \| `hybrid` \| `arena` \| `council`. Unset: hybrid when local fits the policy signals, else cloud for single-path defaults. |
 | `modes.hybrid.*` | Local preference, high-complexity escalate to cloud, local provider id |
 | `modes.council.*` | Enable, member cap, timeout, optional anonymous debate rounds |
-| `modes.arena.enabled` | Must be `true` for the `arena` tool (default off) |
+| `modes.arena.enabled` | Must be `true` for the `arena` tool (default off). Mid-session edits are picked up on the next tool call (`Config.getFresh`). Or pass `enableIfDisabled: true` on the arena tool. |
 | `modes.arena.strategy` | `verify_first` (recommended for implement), `diversity`, or `hybrid_score` |
 | `modes.budget.*` | Fail-closed cap on estimated USD for ensemble fan-out |
 

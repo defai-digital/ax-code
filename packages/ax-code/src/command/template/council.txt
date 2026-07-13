@@ -1,10 +1,17 @@
-Run a multi-provider council review (advisory). Use the council tool.
+Run a multi-provider council review (advisory). Use the **council** tool.
 
 Question / focus: $ARGUMENTS
 
-Instructions:
-1. Gather relevant code or design context with read/grep as needed.
-2. Call the council tool with kind=review (or design if this is an architecture trade-off).
-3. Optionally set debateRounds=1 or 2 for anonymous multi-round refinement when the stakes are high.
-4. Summarize consensus vs majority vs singleton findings for the user.
-5. Do not apply patches solely because models agreed — verify with tests when changing code.
+## Task fit
+
+- **council**: code quality findings, security, architecture trade-offs, “good vs worse” ratings with consensus/majority/singleton.
+- **arena plan**: compare *approaches* only (not a findings review).
+- **arena implement**: multi-model competing *patches* in worktrees.
+
+## Instructions
+
+1. Gather **brief** context (targeted read/grep). Avoid long monorepo tours before fan-out.
+2. Call **council** with `kind: review` (or `design` for architecture trade-offs). Optional `debateRounds: 1` for high stakes.
+3. Config is re-read each call. If disabled (`modes.council.enabled: false`), re-enable in `ax-code.json` and re-call — no session restart required.
+4. Needs connected providers with selectable models; aim for ≥2 for consensus tiers. If insufficient, stop and ask the user to connect providers — do not invent multi-model agreement.
+5. Summarize **consensus / majority / singleton** clearly. Advisory only — do not apply patches solely because models agreed; verify with tests when changing code.

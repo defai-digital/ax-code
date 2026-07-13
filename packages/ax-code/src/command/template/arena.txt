@@ -1,11 +1,20 @@
-Run a multi-provider arena (best-of-N). Use the arena tool.
+Run a multi-provider arena (best-of-N). Use the **arena** tool.
 
 Task: $ARGUMENTS
 
-Instructions:
-1. Ensure modes.arena.enabled is true (config); if the tool reports disabled, tell the user how to enable it.
-2. Gather brief context (key files, constraints) if helpful.
-3. For approach comparison only: call arena with mode=plan (default).
-4. For real multi-model implementation: call arena with mode=implement (worktree-isolated writers + verify-first ranking). Requires git.
-5. Present the ranked results and recommend a winner. Do not auto-merge implement worktrees.
-6. Never run concurrent writers on the main workspace.
+## Task fit (pick before calling)
+
+| User goal | Prefer |
+|-----------|--------|
+| Rate code quality / findings / security review | **council** tool (`kind: review`) — not plan arena |
+| Compare approaches / strategies only | arena `mode: plan` |
+| Compete on real patches | arena `mode: implement` (git required; worktrees; no auto-merge) |
+
+## Instructions
+
+1. Prefer **≤1 short context gather** (key files/stack). Do not map the whole monorepo before the fan-out.
+2. Call **arena** once with the right `mode`. If disabled, call again with `enableIfDisabled: true` (writes `modes.arena.enabled` and continues — no session restart). Do **not** spend many turns debugging config.
+3. Arena needs **≥2 connected providers**. If insufficient, stop and tell the user to `/connect` more providers — do not invent rankings.
+4. Present ranked results honestly. Never fabricate multi-model output.
+5. Never run concurrent writers on the main workspace. Do not auto-merge implement worktrees.
+6. If the task is quality findings, switch to **council** instead of plan arena.
