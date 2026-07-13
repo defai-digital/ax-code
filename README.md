@@ -10,7 +10,7 @@ AX Code runs coding agents against your actual repositories through AX Code Desk
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
-[![Release v6.11.4](https://img.shields.io/badge/Release-v6.11.4-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v6.11.4)
+[![Release v7.0.0](https://img.shields.io/badge/Release-v7.0.0-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v7.0.0)
 [![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![Windows x64](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![Windows ARM64 CLI](https://img.shields.io/badge/Windows%20ARM64-CLI-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
@@ -23,12 +23,12 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ### Supported Install Targets
 
-| Platform            | Status                  | Install path                                                      |
-| ------------------- | ----------------------- | ----------------------------------------------------------------- |
-| macOS Apple Silicon | Active support          | Homebrew CLI formula and Desktop cask                             |
-| Windows x64         | Active support          | PowerShell CLI installer and Desktop release installer            |
-| Windows ARM64       | Active support          | PowerShell CLI installer and Desktop release installer            |
-| Linux x64 / arm64   | Active support          | Bash release installer (`install` script) for CLI                 |
+| Platform            | Status         | Install path                                           |
+| ------------------- | -------------- | ------------------------------------------------------ |
+| macOS Apple Silicon | Active support | Homebrew CLI formula and Desktop cask                  |
+| Windows x64         | Active support | PowerShell CLI installer and Desktop release installer |
+| Windows ARM64       | Active support | PowerShell CLI installer and Desktop release installer |
+| Linux x64 / arm64   | Active support | Bash release installer (`install` script) for CLI      |
 
 **Recommended: AX Code Desktop**
 

@@ -7,8 +7,8 @@ minor before reporting a vulnerability against an older line.
 
 | Version | Supported |
 | ------- | --------- |
-| 6.11.x  | Yes       |
-| < 6.11  | No        |
+| 7.0.x   | Yes       |
+| < 7.0   | No        |
 
 ## Reporting a Vulnerability
 
@@ -53,11 +53,11 @@ Key properties:
 
 #### Isolation backends
 
-| Backend | Behavior |
-| ------- | -------- |
-| **app** (default) | Portable application-layer checks on every tool |
-| **os** | App checks **plus** kernel sandbox for bash (macOS Seatbelt via `sandbox-exec`, Linux bubblewrap when `bwrap` is installed). Fails closed if OS tools are missing |
-| **auto** | Prefer OS bash wrap when available; fall back to app-layer only |
+| Backend           | Behavior                                                                                                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **app** (default) | Portable application-layer checks on every tool                                                                                                                   |
+| **os**            | App checks **plus** kernel sandbox for bash (macOS Seatbelt via `sandbox-exec`, Linux bubblewrap when `bwrap` is installed). Fails closed if OS tools are missing |
+| **auto**          | Prefer OS bash wrap when available; fall back to app-layer only                                                                                                   |
 
 ```json
 {

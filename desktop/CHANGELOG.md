@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.0.0] - 2026-07-13
+
+### Changed
+
+- Desktop: refreshes the signed Desktop release line and aligns the application version with AX Code 7.0.0.
+- Work mode: uses the Arena purple treatment consistently in Desktop and the terminal UI.
+
+### Fixed
+
+- Release: runs deterministic CLI tests in bounded sequential shards to avoid memory exhaustion before signed release builds.
+
 ## [6.11.4] - 2026-07-12
 
 ### Fixed
