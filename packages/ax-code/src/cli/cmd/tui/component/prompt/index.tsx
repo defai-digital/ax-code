@@ -2152,7 +2152,13 @@ export function Prompt(props: PromptProps) {
               </Show>
               <box flexDirection="row" flexShrink={0}>
                 {footerToggleChip({
-                  label: WorkMode.label(WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT))),
+                  // Show all three options with the active one marked (Qoder-style cycle control).
+                  label: (() => {
+                    const current = WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT))
+                    return WorkMode.ALL.map((id) =>
+                      id === current ? `[${WorkMode.shortLabel(id)}]` : WorkMode.shortLabel(id),
+                    ).join("|")
+                  })(),
                   active: WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)) !== "agent",
                   activeFg: theme.text,
                   inactiveFg: theme.textMuted,

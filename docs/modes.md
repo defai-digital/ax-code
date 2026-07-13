@@ -28,8 +28,8 @@ TUI and Desktop expose a **work mode** control (Qoder-style). Default is **Agent
 | **Council** | `/council {your message}` multi-provider review |
 | **Arena** | `/arena {your message}` multi-model best-of-N |
 
-- **Desktop:** composer toolbar → **Work mode** dropdown (next to Manual/Autonomous).
-- **TUI:** prompt footer chip **Agent / Council / Arena** (click) or palette **Cycle work mode** / `/work-mode`.
+- **Desktop:** composer toolbar → segmented **Agent | Council | Arena** buttons (next to Manual/Autonomous).
+- **TUI:** prompt footer chip shows `agent|council|arena` with the active mode in `[brackets]` (click to cycle), or palette **Cycle work mode** / `/work-mode`.
 - Explicit `/commands` are never rewritten.
 - Specialist agents (architect, security, …) stay on the separate agent picker.
 
