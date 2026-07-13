@@ -23,11 +23,11 @@ describe("Selection.copy", () => {
         cleared++
       },
     }
-    const shown: string[] = []
+    const shown: Array<{ message: string; duration?: number }> = []
     const errors: unknown[] = []
     const toast = {
-      show: (input: { message: string; variant: "info" | "success" | "warning" | "error" }) => {
-        shown.push(input.message)
+      show: (input: { message: string; variant: "info" | "success" | "warning" | "error"; duration?: number }) => {
+        shown.push(input)
       },
       error: (error: unknown) => {
         errors.push(error)
@@ -41,7 +41,7 @@ describe("Selection.copy", () => {
     await Promise.resolve()
 
     expect(cleared).toBe(1)
-    expect(shown).toEqual(["Copied to clipboard"])
+    expect(shown).toEqual([{ message: "Copied to clipboard", variant: "info", duration: 1500 }])
     expect(errors).toEqual([])
   })
 
@@ -56,11 +56,11 @@ describe("Selection.copy", () => {
         cleared++
       },
     }
-    const shown: string[] = []
+    const shown: Array<{ message: string; duration?: number }> = []
     const errors: unknown[] = []
     const toast = {
-      show: (input: { message: string; variant: "info" | "success" | "warning" | "error" }) => {
-        shown.push(input.message)
+      show: (input: { message: string; variant: "info" | "success" | "warning" | "error"; duration?: number }) => {
+        shown.push(input)
       },
       error: (error: unknown) => {
         errors.push(error)

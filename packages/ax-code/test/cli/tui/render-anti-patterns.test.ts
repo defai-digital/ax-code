@@ -1181,7 +1181,7 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(app).toContain("renderer.console.onCopySelection = async (text: string) => {")
     expect(app).toContain(".then(() => {")
-    expect(app).toContain('toast.show({ message: "Copied to clipboard", variant: "info" })')
+    expect(app).toContain('toast.show({ message: "Copied to clipboard", variant: "info", duration: 1500 })')
     expect(app).toContain("renderer.clearSelection()")
   })
 

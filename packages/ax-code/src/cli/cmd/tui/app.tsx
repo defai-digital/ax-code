@@ -391,7 +391,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
     await Clipboard.copy(text)
       .then(() => {
-        toast.show({ message: "Copied to clipboard", variant: "info" })
+        toast.show({ message: "Copied to clipboard", variant: "info", duration: 1500 })
         renderer.clearSelection()
       })
       .catch(toast.error)

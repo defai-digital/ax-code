@@ -130,7 +130,7 @@ export function DialogQualityDetail(props: {
           }
           await Clipboard.copy(current.prompt.input)
             .then(() => {
-              toast.show({ message: "Copied quality next-step prompt", variant: "success" })
+              toast.show({ message: "Copied quality next-step prompt", variant: "success", duration: 1500 })
             })
             .catch((error) => {
               toast.show({
@@ -153,7 +153,7 @@ export function DialogQualityDetail(props: {
           }
           await Clipboard.copy(renderSessionQualityBrief(current))
             .then(() => {
-              toast.show({ message: "Copied quality readiness brief", variant: "success" })
+              toast.show({ message: "Copied quality readiness brief", variant: "success", duration: 1500 })
             })
             .catch((error) => {
               toast.show({
