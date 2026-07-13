@@ -18,15 +18,30 @@ When behavior changes, verify against:
 - `packages/ax-code/src/config/schema-impl.ts` — `modes` config schema
 - `packages/ax-code/src/command/template/{council,arena,mode}.txt` — `/council`, `/arena`, `/mode`
 
-## Modes at a Glance
+## Work mode selector (Agent | Council | Arena)
+
+TUI and Desktop expose a **work mode** control (Qoder-style). Default is **Agent**.
+
+| UI selection | Free-text send becomes |
+|--------------|------------------------|
+| **Agent** (default) | Normal single-agent prompt |
+| **Council** | `/council {your message}` multi-provider review |
+| **Arena** | `/arena {your message}` multi-model best-of-N |
+
+- **Desktop:** composer toolbar → **Work mode** dropdown (next to Manual/Autonomous).
+- **TUI:** prompt footer chip **Agent / Council / Arena** (click) or palette **Cycle work mode** / `/work-mode`.
+- Explicit `/commands` are never rewritten.
+- Specialist agents (architect, security, …) stay on the separate agent picker.
+
+## Placement modes at a glance
 
 | Mode | What it does | Mutates workspace? | Default |
 |------|----------------|--------------------|---------|
 | **local** | Prefer AX Engine (or configured local provider) | Yes (single agent) | When you pin local / hybrid places local |
 | **cloud** | Prefer hosted or CLI frontier providers | Yes (single agent) | When local unavailable |
 | **hybrid** | Policy chooses local vs cloud from availability + complexity + privacy | Yes (single path) | Set `modes.default: "hybrid"` |
-| **council** | Fan out structured review/design; classify consensus / majority / singleton | **No** (advisory) | Tool + `/council` |
-| **arena** | Multi-model plan comparison or worktree implement best-of-N | Plan: no. Implement: only in **worktrees** | Opt-in (`modes.arena.enabled`) |
+| **council** | Fan out structured review/design; classify consensus / majority / singleton | **No** (advisory) | Tool + `/council` or Work mode = Council |
+| **arena** | Multi-model plan comparison or worktree implement best-of-N | Plan: no. Implement: only in **worktrees** | Opt-in (`modes.arena.enabled`) + Work mode = Arena |
 
 Keyword specialist routing and complexity tiering (see [Auto-Route](auto-route.md)) are **orthogonal** to hybrid placement and ensemble modes.
 

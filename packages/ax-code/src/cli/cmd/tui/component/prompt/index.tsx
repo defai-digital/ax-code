@@ -90,6 +90,7 @@ import { KeyHint } from "@tui/ui/primitives/key-hint"
 import { selectedForeground } from "@tui/context/theme"
 import { footerToggleLabel } from "./footer-toggle"
 import { footerHintWidth, promptFooterLayout } from "./footer-layout"
+import { WorkMode } from "@/mode/work-mode"
 import { computeSessionMainPaneWidth } from "../../routes/session/layout"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
 import {
@@ -1110,14 +1111,27 @@ export function Prompt(props: PromptProps) {
 
     // Capture mode before it gets reset
     const currentMode = store.mode
-    const firstLine = inputText.split("\n")[0]
-    const slashToken = inputText.startsWith("/") ? firstLine.split(" ")[0] : undefined
+    // Work mode (Agent | Council | Arena): remap free-text to slash command routes.
+    const activeWorkMode = WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT))
+    const workRouted = WorkMode.routeInput(activeWorkMode, inputText)
+    const routedText =
+      workRouted.kind === "command" ? `/${workRouted.command} ${workRouted.arguments}`.trimEnd() : workRouted.text
+    const firstLine = routedText.split("\n")[0]
+    const slashToken = routedText.startsWith("/") ? firstLine.split(" ")[0] : undefined
     const slashName = slashToken?.slice(1)
-    const slashHasArguments = slashToken ? inputText.trim() !== slashToken : false
-    if (currentMode === "normal" && slashName && !slashHasArguments && command.trySlash(slashName)) {
+    const slashHasArguments = slashToken ? routedText.trim() !== slashToken : false
+    if (
+      currentMode === "normal" &&
+      workRouted.kind === "prompt" &&
+      slashName &&
+      !slashHasArguments &&
+      command.trySlash(slashName)
+    ) {
       log.info("tui.prompt.submit: slash command dispatched", { command: slashName })
       return
     }
+    // From here on, use routedText for network submission (inputText kept for local settle).
+    const submitText = routedText
 
     if (autocomplete?.visible) {
       log.info("tui.prompt.submit: autocomplete visible, skipping")
@@ -1241,7 +1255,9 @@ export function Prompt(props: PromptProps) {
     // client-owned queue and let the drain effect replay them when idle. Slash
     // commands and shell input keep the existing async routes; new sessions and
     // idle sessions dispatch immediately below.
-    const isKnownSlashCommand = slashName != null && sync.data.command.some((x) => x.name === slashName)
+    const isKnownSlashCommand =
+      workRouted.kind === "command" ||
+      (slashName != null && sync.data.command.some((x) => x.name === slashName))
     if (
       queueModeEnabled() &&
       currentMode === "normal" &&
@@ -1254,7 +1270,7 @@ export function Prompt(props: PromptProps) {
           {
             id: PartID.ascending(),
             type: "text",
-            text: inputText,
+            text: submitText,
           },
           ...nonTextParts.map(assign),
         ],
@@ -1304,23 +1320,28 @@ export function Prompt(props: PromptProps) {
               providerID: selectedModel.providerID,
               modelID: selectedModel.modelID,
             },
-            command: inputText,
+            command: submitText,
           },
         })
         setStore("mode", "normal")
       } else if (
-        inputText.startsWith("/") &&
-        iife(() => {
-          const command = firstLine.split(" ")[0].slice(1)
-          return sync.data.command.some((x) => x.name === command)
-        })
+        workRouted.kind === "command" ||
+        (submitText.startsWith("/") &&
+          iife(() => {
+            const command = firstLine.split(" ")[0].slice(1)
+            return sync.data.command.some((x) => x.name === command)
+          }))
       ) {
         // Parse command from first line, preserve multi-line content in arguments
-        const firstLineEnd = inputText.indexOf("\n")
-        const commandLine = firstLineEnd === -1 ? inputText : inputText.slice(0, firstLineEnd)
+        const firstLineEnd = submitText.indexOf("\n")
+        const commandLine = firstLineEnd === -1 ? submitText : submitText.slice(0, firstLineEnd)
         const [commandName, ...firstLineArgs] = commandLine.split(" ")
-        const restOfInput = firstLineEnd === -1 ? "" : inputText.slice(firstLineEnd + 1)
-        const args = firstLineArgs.join(" ") + (restOfInput ? "\n" + restOfInput : "")
+        const restOfInput = firstLineEnd === -1 ? "" : submitText.slice(firstLineEnd + 1)
+        const args =
+          workRouted.kind === "command"
+            ? workRouted.arguments
+            : firstLineArgs.join(" ") + (restOfInput ? "\n" + restOfInput : "")
+        const commandId = workRouted.kind === "command" ? workRouted.command : commandName.slice(1)
 
         submitAction = "Command submission"
         await submitAsyncRoute({
@@ -1329,7 +1350,7 @@ export function Prompt(props: PromptProps) {
           action: submitAction,
           signal: nextSubmitAbort.signal,
           body: {
-            command: commandName.slice(1),
+            command: commandId,
             arguments: args,
             agent: local.agent.current().name,
             model: providerModelKey(selectedModel),
@@ -1360,7 +1381,7 @@ export function Prompt(props: PromptProps) {
               {
                 id: PartID.ascending(),
                 type: "text",
-                text: inputText,
+                text: submitText,
               },
               ...nonTextParts.map(assign),
             ],
@@ -2130,6 +2151,14 @@ export function Prompt(props: PromptProps) {
                 </box>
               </Show>
               <box flexDirection="row" flexShrink={0}>
+                {footerToggleChip({
+                  label: WorkMode.label(WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT))),
+                  active: WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)) !== "agent",
+                  activeFg: theme.text,
+                  inactiveFg: theme.textMuted,
+                  background: theme.accent,
+                  onMouseUp: () => command.trigger("app.cycle.work_mode"),
+                })}
                 {footerToggleChip({
                   label: runModeLabel(footerRunMode()),
                   active: footerRunMode() !== "none",

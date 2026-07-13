@@ -19,6 +19,7 @@ import {
 import { Dynamic } from "solid-js/web"
 import { win32DisableProcessedInput, win32FlushInputBuffer, win32InstallCtrlCGuard } from "./win32"
 import { Flag } from "@/flag/flag"
+import { WorkMode } from "@/mode/work-mode"
 import { providerModelKey } from "@/provider/model-key"
 import { DialogProvider, useDialog } from "@tui/ui/dialog"
 import { SDKProvider, useSDK } from "@tui/context/sdk"
@@ -1215,6 +1216,26 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       category: "System",
       onSelect: (dialog) => {
         setRunMode(nextRunMode(currentRunMode()))
+        dialog.clear()
+      },
+    },
+    {
+      title: `Cycle work mode (current: ${WorkMode.label(WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)))})`,
+      value: "app.cycle.work_mode",
+      category: "Agent",
+      slash: {
+        name: "work-mode",
+        aliases: ["workmode"],
+      },
+      onSelect: (dialog) => {
+        const current = WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT))
+        const next = WorkMode.cycle(current)
+        kv.set("work_mode", next)
+        toast.show({
+          message: `Work mode: ${WorkMode.label(next)}`,
+          variant: "info",
+          duration: 2500,
+        })
         dialog.clear()
       },
     },

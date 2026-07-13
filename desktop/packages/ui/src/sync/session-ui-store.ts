@@ -31,6 +31,8 @@ import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from "@/stores/
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
 import { useCommandsStore } from "@/stores/useCommandsStore"
+import { useWorkModeStore } from "@/stores/useWorkModeStore"
+import { routeWorkModeInput } from "@/lib/workMode"
 import { toast } from "@/components/ui"
 import { getSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
@@ -133,21 +135,37 @@ export function routeMessage(params: {
         .then(() => {})
     }
 
+    // Work mode (Agent | Council | Arena) — Qoder-style send routing.
+    // Explicit slash commands stay unchanged; free-text is remapped when mode ≠ agent.
+    let content = params.content
+    let forcedCommand: { name: string; arguments: string } | null = null
+    if (params.inputMode !== "shell" && !content.trimStart().startsWith("/")) {
+      const workMode = useWorkModeStore.getState().getMode(params.directory)
+      const routed = routeWorkModeInput(workMode, content)
+      if (routed.kind === "command") {
+        forcedCommand = { name: routed.command, arguments: routed.arguments }
+        content = `/${routed.command} ${routed.arguments}`.trimEnd()
+      }
+    }
+
     // Slash commands — fire and forget, SSE delivers messages and status
-    if (params.content.startsWith("/")) {
-      const [head = "", ...tail] = params.content.split(" ")
-      const cmdName = head.slice(1)
+    if (content.startsWith("/") || forcedCommand) {
+      const [head = "", ...tail] = content.split(" ")
+      const cmdName = forcedCommand?.name ?? head.slice(1)
+      const cmdArgs = forcedCommand?.arguments ?? tail.join(" ")
 
       const dirState = getDirectoryState(params.directory ?? undefined)
       const syncCommands = dirState?.command ?? []
       const storeCommands = useCommandsStore.getState().commands
 
-      const isCommand = syncCommands.find((c) => c.name === cmdName) || storeCommands.find((c) => c.name === cmdName)
+      const isCommand =
+        forcedCommand != null ||
+        Boolean(syncCommands.find((c) => c.name === cmdName) || storeCommands.find((c) => c.name === cmdName))
 
-      if (isCommand) {
+      if (isCommand && cmdName) {
         return optimisticSend({
           sessionId: params.sessionId,
-          content: params.content,
+          content,
           providerID: params.providerID,
           modelID: params.modelID,
           agent: params.agent,
@@ -159,7 +177,7 @@ export function routeMessage(params: {
                 providerID: params.providerID,
                 modelID: params.modelID,
                 command: cmdName,
-                arguments: tail.join(" "),
+                arguments: cmdArgs,
                 agent: params.agent,
                 variant: params.variant,
                 files: params.files,

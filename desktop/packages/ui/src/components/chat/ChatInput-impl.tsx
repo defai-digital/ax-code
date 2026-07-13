@@ -31,6 +31,7 @@ import { SnippetAutocomplete, type SnippetAutocompleteHandle } from "./SnippetAu
 import { cn, formatDirectoryName, isMacOS } from "@/lib/utils"
 import { ModelControls } from "./ModelControls"
 import { ExecutionModeSelector } from "./ExecutionModeSelector"
+import { WorkModeSelector } from "./WorkModeSelector"
 import { SandboxToggle } from "./SandboxToggle"
 import { parseAgentMentions } from "@/lib/messages/agentMentions"
 import { StatusRow } from "./StatusRow"
@@ -4478,6 +4479,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                       withTooltip
                     />
                     <div className="mx-0.5 h-3.5 w-px flex-shrink-0 bg-border/40" aria-hidden />
+                    <WorkModeSelector iconSizeClass={iconSizeClass} />
                     <ExecutionModeSelector iconSizeClass={iconSizeClass} />
                     <SandboxToggle iconSizeClass={iconSizeClass} />
                   </div>
