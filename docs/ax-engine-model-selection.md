@@ -9,6 +9,9 @@ AX Code can use AX Engine as a local provider on eligible Apple Silicon Macs. Th
 model-selection policy for the built-in `ax-engine` provider: which local models are surfaced, why the
 default is conservative, and how to choose a model by memory budget.
 
+Integration shape (sidecar HTTP, not in-process SDK): see
+[local-engine-integration.md](./local-engine-integration.md).
+
 The current AX Code provider list is intentionally narrower than the full AX Engine research or benchmark
 matrix. In this checkout it exposes curated 6-bit MLX variants, matching the model definitions in
 [`packages/ax-code/src/provider/ax-engine/constants.ts`](../packages/ax-code/src/provider/ax-engine/constants.ts).

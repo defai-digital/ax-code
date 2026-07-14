@@ -6,6 +6,7 @@ import { AxEngineServerRuntimeStatus, getServerStatus } from "./server"
 import { AX_ENGINE_ERROR, resolveAxEngineApiKey } from "./constants"
 import { toErrorMessage } from "../../util/error-message"
 import { parseAxEngineModelContracts } from "./model-card"
+import { mapAxEngineStatusToLifecycle, type LocalEngineLifecycle } from "./lifecycle"
 
 export const AxEngineCapabilityStatus = z.object({
   toolcall: z.boolean(),
@@ -99,4 +100,11 @@ export async function getAxEngineStatus(options: AxEngineRuntimeOptions = {}): P
     server,
     capability,
   }
+}
+
+
+export async function getAxEngineLifecycle(
+  options: AxEngineRuntimeOptions = {},
+): Promise<LocalEngineLifecycle> {
+  return mapAxEngineStatusToLifecycle(await getAxEngineStatus(options))
 }
