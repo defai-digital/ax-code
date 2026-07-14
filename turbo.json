@@ -10,10 +10,20 @@
     },
     "ax-code-desktop#build": {
       "dependsOn": ["@ax-code/sdk#build", "@openchamber/ui#build"],
+      "inputs": ["$TURBO_DEFAULT$", "../ui/src/**", "../../../packages/sdk/js/**"],
       "outputs": ["dist/**"]
     },
     "@ax-code/electron#build": {
       "dependsOn": ["ax-code-desktop#build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "../web/src/**",
+        "../web/server/**",
+        "../web/bin/**",
+        "../web/package.json",
+        "../ui/src/**",
+        "../../../packages/sdk/js/**"
+      ],
       "outputs": ["dist/**", "out/**"]
     },
     "@ax-code/electron#dev": {

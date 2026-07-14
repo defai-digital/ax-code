@@ -1,7 +1,17 @@
 import { describe, expect, test } from "vitest"
-import { parseArgs } from "./smoke-packaged-app.mjs"
+import { buildSmokeAppArgs, parseArgs } from "./smoke-packaged-app.mjs"
 
 describe("smoke-packaged-app args", () => {
+  test("uses an isolated Electron profile so an installed app cannot take the single-instance lock", () => {
+    expect(buildSmokeAppArgs({ userDataDir: "/tmp/ax-code-smoke-user-data" })).toEqual([
+      "--user-data-dir=/tmp/ax-code-smoke-user-data",
+    ])
+  })
+
+  test("requires a temporary Electron profile", () => {
+    expect(() => buildSmokeAppArgs({ userDataDir: "" })).toThrow("temporary Electron user-data directory")
+  })
+
   test("uses environment defaults", () => {
     expect(
       parseArgs([], {

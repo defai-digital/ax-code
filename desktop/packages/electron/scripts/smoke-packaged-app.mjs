@@ -45,6 +45,11 @@ export const parseArgs = (argv, env = process.env) => {
   return result
 }
 
+export const buildSmokeAppArgs = ({ userDataDir }) => {
+  if (!userDataDir) throw new Error("A temporary Electron user-data directory is required")
+  return [`--user-data-dir=${userDataDir}`]
+}
+
 const pathExists = async (candidate) => {
   try {
     await fs.access(candidate, fsConstants.F_OK)
@@ -237,12 +242,13 @@ const main = async () => {
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-desktop-smoke-"))
   const stubAxCode = await createStubAxCode(tmpDir)
+  const userDataDir = path.join(tmpDir, "electron-user-data")
   const serverPort = await allocatePort()
   const executable = await findMacExecutable(appPath)
   const stdout = []
   const stderr = []
 
-  const child = spawn(executable, [], {
+  const child = spawn(executable, buildSmokeAppArgs({ userDataDir }), {
     env: {
       ...process.env,
       AX_CODE_BINARY: stubAxCode,

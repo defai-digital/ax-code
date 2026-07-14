@@ -64,6 +64,11 @@ export const observeTerminalShellStartup = (ptyProcess, graceMs) =>
     timer = setTimeout(() => finish({ crashed: false }), graceMs)
   })
 
+// A shell can load configuration successfully, then terminate just after the
+// initial prompt would normally appear. Keep the candidate under observation
+// long enough to fall back before exposing a dead terminal tab to the UI.
+export const TERMINAL_SHELL_STARTUP_GRACE_MS = 1_500
+
 export function createTerminalRuntime({
   app,
   server,
@@ -154,8 +159,6 @@ export function createTerminalRuntime({
   // to the next candidate. Keep observing even after the first output: a shell
   // can print a banner and exit before it becomes a usable interactive session.
   // Startup output is buffered so the prompt isn't lost.
-  const TERMINAL_SHELL_STARTUP_GRACE_MS = 500
-
   const spawnTerminalPtyWithFallback = async (pty, { cols, rows, cwd, env }) => {
     const shellCandidates = getTerminalShellCandidates()
     if (shellCandidates.length === 0) {

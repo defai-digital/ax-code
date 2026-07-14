@@ -23,7 +23,6 @@ import { deriveMessageRole } from "./message/messageRole"
 import { filterVisibleParts, normalizeParts } from "./message/partUtils"
 import { normalizeUserDisplayParts } from "./message/normalizeUserDisplayParts"
 import { flattenAssistantTextParts } from "@/lib/messages/messageText"
-import { isLikelyProviderAuthFailure, PROVIDER_AUTH_FAILURE_MESSAGE } from "@/lib/messages/providerAuthError"
 import type { TurnGroupingContext } from "./lib/turns/types"
 import { copyTextToClipboard } from "@/lib/clipboard"
 import { FadeInOnReveal } from "./message/FadeInOnReveal"
@@ -36,6 +35,7 @@ import {
 import { LazyToolOutputDialog } from "./message/LazyToolOutputDialog"
 import { clearCopyResetTimer, replaceCopyResetTimer } from "./copyResetTimer"
 import { isBashTool, isEditTool } from "./message/parts/toolRenderUtils"
+import { getAssistantErrorPresentation } from "./message/assistantErrorPresentation"
 
 const USER_BUBBLE_STYLE: React.CSSProperties = {
   backgroundColor: "var(--chat-user-message-bg)",
@@ -657,51 +657,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   const headerVariant = !isUser && modelHasVariants ? (headerVariantRaw ?? "Default") : undefined
 
   const assistantError = React.useMemo(() => {
-    if (isUser) {
-      return undefined
-    }
-    const errorInfo = (message.info as { error?: unknown } | undefined)?.error as
-      | { data?: { message?: unknown }; message?: unknown; name?: unknown }
-      | undefined
-    if (!errorInfo) {
-      return undefined
-    }
-    const dataMessage = typeof errorInfo.data?.message === "string" ? errorInfo.data.message : undefined
-    const errorMessage = typeof errorInfo.message === "string" ? errorInfo.message : undefined
-    const errorName = typeof errorInfo.name === "string" ? errorInfo.name : undefined
-    const detail = dataMessage || errorMessage || errorName
-    if (!detail) {
-      return undefined
-    }
-    if (errorName === "SessionRetry") {
-      return {
-        text: `AX Code failed to send a message. Retry attempt info: \n\`${detail}\``,
-        variant: "info" as const,
-      }
-    }
-    if (isLikelyProviderAuthFailure(detail)) {
-      return {
-        text: PROVIDER_AUTH_FAILURE_MESSAGE,
-        variant: "error" as const,
-      }
-    }
-    if (detail.trim().toLowerCase() === "aborted") {
-      return {
-        text: "The running turn was stopped before AX Code could send the next message.",
-        variant: "info" as const,
-      }
-    }
-    if (errorName === "AutonomousLimitExceededError" || detail.includes("AutonomousLimitExceededError")) {
-      return {
-        text: "Autonomous mode reached its built-in safety limit for a single run and stopped. Any changes made so far have been kept. To keep going, send a follow-up message (for example, “continue”) and AX Code will resume from where it left off.",
-        variant: "info" as const,
-      }
-    }
-    return {
-      text: `AX Code failed to send message with error:\n\`${detail}\``,
-      variant: "error" as const,
-    }
-  }, [isUser, message.info])
+    return getAssistantErrorPresentation({
+      isUser,
+      error: (message.info as { error?: unknown } | undefined)?.error,
+      isLastAssistantInTurn: turnGroupingContext?.isLastAssistantInTurn ?? true,
+    })
+  }, [isUser, message.info, turnGroupingContext?.isLastAssistantInTurn])
 
   const assistantErrorText = assistantError?.text
   const assistantErrorVariant = assistantError?.variant

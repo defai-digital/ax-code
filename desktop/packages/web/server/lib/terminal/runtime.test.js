@@ -3,7 +3,11 @@ import fs from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 
-import { createTerminalRuntime, observeTerminalShellStartup } from "./runtime.js"
+import {
+  TERMINAL_SHELL_STARTUP_GRACE_MS,
+  createTerminalRuntime,
+  observeTerminalShellStartup,
+} from "./runtime.js"
 import { createMockResponse, createRouteRegistry } from "../../test-helpers/route-harness.js"
 
 function createRuntime(server, overrides = {}) {
@@ -56,6 +60,28 @@ describe("terminal runtime", () => {
       exitCode: 139,
       signal: 11,
       earlyOutput: "startup banner\\r\\n",
+    })
+  })
+
+  it("keeps a shell under observation long enough to catch delayed startup exits", async () => {
+    let onExit = null
+    const ptyProcess = {
+      onData() {
+        return { dispose() {} }
+      },
+      onExit(callback) {
+        onExit = callback
+        return { dispose() {} }
+      },
+    }
+
+    const outcomePromise = observeTerminalShellStartup(ptyProcess, TERMINAL_SHELL_STARTUP_GRACE_MS)
+    setTimeout(() => onExit({ exitCode: 0, signal: 11 }), 550)
+
+    await expect(outcomePromise).resolves.toMatchObject({
+      crashed: true,
+      exitCode: 0,
+      signal: 11,
     })
   })
 
