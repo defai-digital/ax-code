@@ -1,5 +1,6 @@
 import { Log } from "@/util/log"
 import { toErrorMessage } from "@/util/error-message"
+import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
 import { flushTuiStdout, resetTuiTerminalState } from "../terminal-cleanup"
 
 const log = Log.create({ service: "tui.lifecycle" })
@@ -77,6 +78,12 @@ export function registerTuiProcessHandler(
 export function createTuiCrashHandler(input: { onError?: (error: unknown) => void } = {}): ProcessHandler {
   let scheduled = false
   return (error: unknown) => {
+    // Aborts, cancellations, and broken-pipe noise must not tear down an
+    // otherwise healthy interactive session (user Esc, tool cancel, SSE reset).
+    if (isHarmlessInterrupt(error)) {
+      log.warn("ignored harmless process fault", { error: toErrorMessage(error) })
+      return
+    }
     input.onError?.(error)
     log.error("tui crashed", { error: toErrorMessage(error) })
     process.exitCode = 1

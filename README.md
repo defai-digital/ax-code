@@ -246,6 +246,7 @@ ranking, GLM-4.7-Flash placement, and memory-based recommendations.
 - [AX Engine Model Selection](docs/ax-engine-model-selection.md): local AX Engine model ranking and memory guidance
 - [Semantic Layer](docs/semantic-layer.md): provenance and replay boundaries for graph and LSP-backed answers
 - [Repo Wiki (OpenWiki)](docs/wiki.md): semantic multi-page wiki via OpenWiki; complements `ax-code index`
+- [Stability](docs/stability.md): crash hygiene, aborts vs faults, TUI lifecycle, timeouts
 
 ## Common Commands
 

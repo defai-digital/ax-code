@@ -21,6 +21,7 @@ import fs from "node:fs/promises"
 import { runResilientStream, type StreamConnectionStatus } from "./util/resilient-stream"
 import { registerShutdownSignals } from "@/util/signals"
 import { toErrorMessage } from "@/util/error-message"
+import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
 import { stopServer as stopAxEngineServer } from "@/provider/ax-engine"
 import { registerTuiProcessHandler } from "./util/lifecycle"
 import { startShellEnvLoad } from "@/runtime/shell-env"
@@ -62,6 +63,10 @@ await Log.init({
 registerTuiProcessHandler(
   "unhandledRejection",
   (e) => {
+    if (isHarmlessInterrupt(e)) {
+      Log.Default.warn("ignored harmless worker rejection", { message: toErrorMessage(e) })
+      return
+    }
     DiagnosticLog.recordProcess("worker.unhandledRejection", { error: e })
     const error = e as Error
     Log.Default.error("rejection", {
@@ -76,6 +81,10 @@ registerTuiProcessHandler(
 registerTuiProcessHandler(
   "uncaughtException",
   (e) => {
+    if (isHarmlessInterrupt(e)) {
+      Log.Default.warn("ignored harmless worker exception", { message: toErrorMessage(e) })
+      return
+    }
     DiagnosticLog.recordProcess("worker.uncaughtException", { error: e })
     const error = e as Error
     Log.Default.error("exception", {

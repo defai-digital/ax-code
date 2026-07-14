@@ -22,6 +22,12 @@ import { normalize as normalizePathValue, diffSummary } from "./format"
 import { Global } from "@/global"
 import { withTimeout } from "@/util/timeout"
 import { errorPayloadMessage } from "../../util/error-message"
+import {
+  createPermissionSubmitLatch,
+  endPermissionSubmit,
+  tryBeginPermissionSubmit,
+  type PermissionSubmitLatch,
+} from "../../util/permission-submit-latch"
 
 const log = Log.create({ service: "tui.permission" })
 
@@ -206,18 +212,25 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
   const [store, setStore] = createStore({
     stage: "permission" as PermissionStage,
     // Latch so repeated clicks/Enter while a reply is in flight cannot send
-    // duplicate replies for the same request. See #241.
-    submitting: false,
+    // duplicate replies for the same request. Pure transitions live in
+    // permission-submit-latch.ts (ADR-047 / runtime-stability). See #241.
+    latch: createPermissionSubmitLatch(props.request.id) as PermissionSubmitLatch,
   })
 
   // This component instance is reused when the next queued request becomes
   // permissions()[0] without the list ever emptying (replied + asked events
   // land in one batched flush). Re-arm the latch and stage per request or
-  // the previous reply's `submitting` swallows every input for the new one.
+  // the previous reply's submitting swallows every input for the new one.
   createEffect(
     on(
       () => props.request.id,
-      () => setStore({ submitting: false, stage: "permission" }),
+      (id) =>
+        setStore({
+          stage: "permission",
+          // Always re-arm from a clean latch for the new request id so a
+          // mid-flight previous reply cannot leave submitting=true.
+          latch: createPermissionSubmitLatch(id),
+        }),
       { defer: true },
     ),
   )
@@ -280,8 +293,9 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
   function submitPermissionReply(run: () => Promise<unknown>, failureLabel: string, failureMessage: string) {
     // Idempotent guard: ignore further submissions once a reply for this
     // request is already in flight. See #241.
-    if (store.submitting) return
-    setStore("submitting", true)
+    const next = tryBeginPermissionSubmit(store.latch, props.request.id)
+    if (!next) return
+    setStore("latch", next)
     // Capture the reply target now: by the time the reply resolves,
     // props.request may already be the next queued request.
     const { sessionID, id } = props.request
@@ -303,8 +317,8 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
         // so a transient API/network error does not permanently wedge the
         // prompt. The prompt stays mounted on failure, so the user can
         // retry. See #255, #341.
-        setStore("submitting", false)
-        log.warn(failureLabel, { error, requestID: props.request.id })
+        setStore("latch", endPermissionSubmit(store.latch))
+        log.warn(failureLabel, { error, requestID: id })
         toast.show({
           message: error instanceof Error ? error.message : failureMessage,
           variant: "error",

@@ -18,4 +18,15 @@ describe("util.timeout", () => {
 
     await expect(withTimeout(slowPromise, 50)).rejects.toThrow("Operation timed out after 50ms")
   })
+
+  test("should not surface late rejection after timeout as unhandled", async () => {
+    let rejectLate!: (err: Error) => void
+    const late = new Promise<string>((_resolve, reject) => {
+      rejectLate = reject
+    })
+    await expect(withTimeout(late, 20)).rejects.toThrow(/timed out/)
+    // If the implementation mishandles this, Node would emit unhandledRejection.
+    rejectLate(new Error("late failure"))
+    await new Promise((r) => setTimeout(r, 30))
+  })
 })

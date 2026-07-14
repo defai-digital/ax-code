@@ -24,6 +24,7 @@ The root [README](../README.md) is the shortest path to install and launch AX Co
 | Document                                                  | Summary                                                                                                  |
 | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | [Sandbox Mode](sandbox.md)                                | Execution isolation, protected paths, network behavior, and configuration                                |
+| [Stability](stability.md)                                 | Crash hygiene, aborts vs faults, TUI lifecycle, timeouts, permission latch                               |
 | [Installation and Runtime Channels](install-runtime.md)   | Platform policy, package channels, `ax-code doctor` runtime labels, updates, and local launcher behavior |
 | [Autonomous Mode](autonomous.md)                          | Unattended execution, approval behavior, headless usage, and safeguards                                  |
 | [MCP Integrations](mcp.md)                                | MCP trust, permissions, prompt/resource handling, and server-route security                              |

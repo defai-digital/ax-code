@@ -15,6 +15,9 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, message?: string
   // after the tool already returned), Node would log an
   // `unhandledRejection` warning or crash with
   // `--unhandled-rejections=throw`.
+  //
+  // The timer is unref'd so a pending timeout never alone keeps the process
+  // alive during shutdown (same pattern as sleep()).
   let settled = false
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -22,6 +25,7 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, message?: string
       settled = true
       reject(new Error(message ?? `Operation timed out after ${ms}ms`))
     }, ms)
+    timer.unref?.()
     promise.then(
       (value) => {
         if (settled) return
