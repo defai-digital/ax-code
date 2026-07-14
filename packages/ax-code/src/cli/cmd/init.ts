@@ -13,7 +13,7 @@ import {
   startQuietHeartbeat,
   OPENWIKI_INSTALL_HINT,
   resolveBinary,
-  resolveWikiCommand,
+  resolveWikiRuntimeConfig,
 } from "../../wiki"
 
 export const InitCommand: CommandModule<
@@ -94,14 +94,25 @@ export const InitCommand: CommandModule<
       }
     }
 
+    const wikiCfg = await resolveWikiRuntimeConfig().catch(() => null)
+
     // Soft path: if a wiki already exists, keep AGENTS.md pointer fresh without --wiki.
     if (!args.wiki) {
       try {
-        const existing = await detectWiki({ root })
-        if (existing.wikiExists) {
-          const soft = await ensureAgentsWikiPointers(root)
+        const existing = await detectWiki({
+          root,
+          dir: wikiCfg?.dir,
+          command: wikiCfg?.command,
+        })
+        if (existing.wikiExists && wikiCfg?.autoInjectAgents !== false) {
+          const soft = await ensureAgentsWikiPointers(root, {
+            wikiRel: existing.wikiDirRelative,
+            touchClaudeMd: wikiCfg?.touchClaudeMd !== false,
+          })
           if (soft.updated.length) {
-            console.log(`\nOpenWiki: wiki present at ${existing.wikiDirRelative}/; updated markers: ${soft.updated.join(", ")}`)
+            console.log(
+              `\nOpenWiki: wiki present at ${existing.wikiDirRelative}/; updated markers: ${soft.updated.join(", ")}`,
+            )
           }
         }
       } catch {
@@ -111,7 +122,12 @@ export const InitCommand: CommandModule<
     }
 
     console.log("\nOpenWiki bootstrap (--wiki)…")
-    const ensured = await ensureAgentsWikiPointers(root)
+    const dir = wikiCfg?.dir ?? "openwiki"
+    const command = wikiCfg?.command ?? "openwiki"
+    const ensured = await ensureAgentsWikiPointers(root, {
+      wikiRel: dir,
+      touchClaudeMd: wikiCfg?.touchClaudeMd !== false,
+    })
     if (ensured.updated.length) {
       console.log(`  Markers: updated ${ensured.updated.join(", ")}`)
     } else {
@@ -124,7 +140,6 @@ export const InitCommand: CommandModule<
       return
     }
 
-    const command = resolveWikiCommand()
     const binary = await resolveBinary(command)
     if (!binary) {
       console.log(`  OpenWiki CLI not found ("${command}").`)
@@ -165,7 +180,10 @@ export const InitCommand: CommandModule<
         return
       }
       // Re-ensure markers after OpenWiki may have rewritten AGENTS.md
-      await ensureAgentsWikiPointers(root)
+      await ensureAgentsWikiPointers(root, {
+        wikiRel: dir,
+        touchClaudeMd: wikiCfg?.touchClaudeMd !== false,
+      })
       console.log(`  Wiki generate completed in ${formatElapsed(run.durationMs)}`)
     } finally {
       stopHeartbeat()

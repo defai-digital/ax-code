@@ -22,6 +22,16 @@ describe("wiki/status", () => {
     expect(recs.some((r) => r.includes("not found") || r.includes("Install OpenWiki"))).toBe(true)
   })
 
+  test("stale extra adds update recommendation", () => {
+    const det = base({
+      wikiExists: true,
+      hasIndex: true,
+      binary: { found: true, command: "openwiki", path: "/bin/openwiki" },
+    })
+    const recs = buildRecommendations(det, { stale: true })
+    expect(recs.some((r) => r.includes("stale"))).toBe(true)
+  })
+
   test("healthy when wiki + index present even without binary", () => {
     const det = base({
       wikiExists: true,

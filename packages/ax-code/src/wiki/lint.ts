@@ -151,7 +151,11 @@ export async function lintWiki(input: {
   dir?: string
   command?: string
 }): Promise<WikiLintReport> {
-  const det = await detectWiki({ root: input.root, dir: input.dir, command: input.command })
+  const det = await detectWiki({
+    root: input.root,
+    dir: input.dir,
+    command: input.command,
+  })
   const headCommit = await gitHeadCommit(input.root)
 
   if (!det.wikiExists) {

@@ -8,6 +8,7 @@ import {
   renderCardsMarkdown,
   buildSymbolIndex,
   findPagesForSymbol,
+  findPagesByMention,
   loadWikiPages,
   isWikiStale,
   evaluateLint,
@@ -40,6 +41,18 @@ symbols: [Foo, Bar]
 body
 `)
     expect(symbols).toEqual(["Foo", "Bar"])
+  })
+
+  test("parseWikiFrontmatter drops empty symbol entries", () => {
+    const { symbols } = parseWikiFrontmatter(`---
+symbols:
+  - 
+  - Ok
+  - ""
+---
+body
+`)
+    expect(symbols).toEqual(["Ok"])
   })
 
   test("cardsFromPages and renderCardsMarkdown", async () => {
@@ -95,6 +108,23 @@ symbols:
     expect(isWikiStale("abcdef", "abcdef123")).toBe(false)
     expect(isWikiStale("abcdef123", "abcdef")).toBe(false)
     expect(isWikiStale("aaaa", "bbbb")).toBe(true)
+  })
+
+  test("findPagesByMention ignores empty or tiny needles", () => {
+    const pages = [
+      {
+        absPath: "/x",
+        relPath: "openwiki/x.md",
+        wikiRel: "x.md",
+        title: "X",
+        summary: "",
+        symbols: [],
+        meta: {},
+        body: "a",
+      },
+    ]
+    expect(findPagesByMention(pages, "")).toEqual([])
+    expect(findPagesByMention(pages, "a")).toEqual([])
   })
 
   test("evaluateLint flags missing wiki and stale cursor", () => {

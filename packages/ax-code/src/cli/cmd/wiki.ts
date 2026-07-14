@@ -17,11 +17,25 @@ import {
   buildWikiCards,
   writeWikiCards,
   relatedWikiPages,
+  resolveWikiRuntimeConfig,
   type WikiStatus,
+  type WikiRuntimeConfig,
 } from "../../wiki"
 
 function rootFromArgs(directory?: string): string {
   return directory || Filesystem.callerCwd()
+}
+
+async function wikiOpts(args: { directory?: string; command?: string; dir?: string }): Promise<{
+  root: string
+  cfg: WikiRuntimeConfig
+}> {
+  const root = rootFromArgs(args.directory)
+  const cfg = await resolveWikiRuntimeConfig({
+    command: args.command,
+    dir: args.dir,
+  })
+  return { root, cfg }
 }
 
 function printStatus(status: WikiStatus, json: boolean) {
@@ -80,6 +94,11 @@ function printStatus(status: WikiStatus, json: boolean) {
   }
 }
 
+const dirOption = {
+  type: "string" as const,
+  describe: "wiki directory relative to project root (default: openwiki or config wiki.dir)",
+}
+
 export const WikiStatusCommand = cmd({
   command: "status",
   describe: "show OpenWiki binary + openwiki/ directory status",
@@ -87,12 +106,18 @@ export const WikiStatusCommand = cmd({
     yargs
       .option("json", { type: "boolean", default: false, describe: "machine-readable JSON" })
       .option("directory", { type: "string", describe: "project root (default: cwd)" })
-      .option("command", { type: "string", describe: "OpenWiki executable (default: openwiki)" }),
+      .option("command", { type: "string", describe: "OpenWiki executable (default: openwiki)" })
+      .option("dir", dirOption),
   handler: async (args) => {
-    const root = rootFromArgs(args.directory)
-    const status = await getWikiStatus({ root, command: args.command })
+    const { root, cfg } = await wikiOpts(args)
+    const status = await getWikiStatus({
+      root,
+      command: cfg.command,
+      dir: cfg.dir,
+      checkStale: true,
+    })
     printStatus(status, args.json === true)
-    if (!status.healthy && args.json !== true) process.exitCode = 1
+    if (!status.healthy) process.exitCode = 1
   },
 })
 
@@ -103,25 +128,42 @@ export const WikiDoctorCommand = cmd({
     yargs
       .option("json", { type: "boolean", default: false, describe: "machine-readable JSON" })
       .option("directory", { type: "string", describe: "project root (default: cwd)" })
-      .option("command", { type: "string", describe: "OpenWiki executable (default: openwiki)" }),
+      .option("command", { type: "string", describe: "OpenWiki executable (default: openwiki)" })
+      .option("dir", dirOption),
   handler: async (args) => {
-    const root = rootFromArgs(args.directory)
-    const status = await getWikiStatus({ root, command: args.command })
-    printStatus(status, args.json === true)
-    if (!args.json) {
+    const { root, cfg } = await wikiOpts(args)
+    const status = await getWikiStatus({
+      root,
+      command: cfg.command,
+      dir: cfg.dir,
+      checkStale: true,
+    })
+    const lint = await lintWiki({ root, command: cfg.command, dir: cfg.dir })
+
+    if (args.json) {
+      console.log(JSON.stringify({ status, lint }, null, 2))
+    } else {
+      printStatus(status, false)
+      UI.println("")
+      UI.println("Lint:")
+      UI.println(`  ok=${lint.ok}  stale=${lint.stale}  pages=${lint.stats.pageCount}  symbols=${lint.stats.symbolCount}`)
+      for (const issue of lint.issues.slice(0, 8)) {
+        UI.println(`  [${issue.level}] ${issue.code}: ${issue.message}`)
+      }
       UI.println("")
       UI.println("Knowledge routing:")
       UI.println("  AGENTS.md          → policy, build commands, safety")
-      UI.println("  openwiki/          → architecture & design intent (OpenWiki)")
+      UI.println(`  ${cfg.dir}/          → architecture & design intent (OpenWiki)`)
       UI.println("  ax-code index      → structural graph (symbols / callers)")
       UI.println("  .ax-code/memory    → preferences & decisions")
+      UI.println("  .ax-code/wiki-cards.md → dense cards (ax-code wiki cards)")
       if (!status.binary.found) {
         UI.println("")
         UI.println(OPENWIKI_INSTALL_HINT)
       }
     }
-    // Doctor is non-zero only when neither wiki nor a path to create it exists.
     if (!status.wikiExists && !status.binary.found) process.exitCode = 1
+    else if (!lint.ok || lint.stale) process.exitCode = 1
   },
 })
 
@@ -131,10 +173,24 @@ export const WikiEnsureAgentsCommand = cmd({
   builder: (yargs: Argv) =>
     yargs
       .option("directory", { type: "string", describe: "project root (default: cwd)" })
-      .option("dry-run", { type: "boolean", default: false, describe: "preview without writing" }),
+      .option("dir", dirOption)
+      .option("dry-run", { type: "boolean", default: false, describe: "preview without writing" })
+      .option("force", {
+        type: "boolean",
+        default: false,
+        describe: "write markers even when config wiki.autoInjectAgents is false",
+      }),
   handler: async (args) => {
-    const root = rootFromArgs(args.directory)
-    const result = await ensureAgentsWikiPointers(root, { dryRun: args["dry-run"] === true })
+    const { root, cfg } = await wikiOpts(args)
+    if (!cfg.autoInjectAgents && args.force !== true) {
+      UI.println("Skipped: wiki.autoInjectAgents is false (use --force to override).")
+      return
+    }
+    const result = await ensureAgentsWikiPointers(root, {
+      dryRun: args["dry-run"] === true,
+      wikiRel: cfg.dir,
+      touchClaudeMd: cfg.touchClaudeMd,
+    })
     if (args["dry-run"]) {
       for (const [file, content] of Object.entries(result.previews)) {
         UI.println(`--- ${file} (preview) ---`)
@@ -152,14 +208,15 @@ export const WikiEnsureAgentsCommand = cmd({
 
 async function runGenerateOrUpdate(
   action: "generate" | "update",
-  args: { directory?: string; command?: string; "skip-agents"?: boolean; quiet?: boolean },
+  args: { directory?: string; command?: string; dir?: string; "skip-agents"?: boolean; quiet?: boolean },
 ) {
-  const root = rootFromArgs(args.directory)
+  const { root, cfg } = await wikiOpts(args)
   const quiet = args.quiet === true
   UI.println(
     `${UI.Style.TEXT_INFO_BOLD}${action === "generate" ? "Generating" : "Updating"} repo wiki via OpenWiki…${UI.Style.TEXT_NORMAL}`,
   )
   UI.println(`  root: ${root}`)
+  UI.println(`  dir:  ${cfg.dir}/`)
   UI.println(`  note: long-running LLM job — output streams live; heartbeats every 15s when quiet`)
 
   const started = Date.now()
@@ -179,7 +236,7 @@ async function runGenerateOrUpdate(
     const result = await runOpenWiki({
       root,
       action,
-      command: args.command,
+      command: cfg.command,
       onProgress: quiet
         ? undefined
         : (ev) => {
@@ -189,12 +246,10 @@ async function runGenerateOrUpdate(
           },
     })
 
-    // When quiet, print buffered output at the end (or always print nothing live).
     if (quiet) {
       if (result.stdout.trim()) process.stdout.write(result.stdout.endsWith("\n") ? result.stdout : result.stdout + "\n")
       if (result.stderr.trim()) process.stderr.write(result.stderr.endsWith("\n") ? result.stderr : result.stderr + "\n")
     } else {
-      // Ensure trailing newline after stream chunks that may not end with \n
       if (result.stdout.length && !result.stdout.endsWith("\n")) process.stdout.write("\n")
       if (result.stderr.length && !result.stderr.endsWith("\n")) process.stderr.write("\n")
     }
@@ -208,8 +263,11 @@ async function runGenerateOrUpdate(
 
     UI.println(`OpenWiki ${action} completed in ${formatElapsed(result.durationMs)}`)
 
-    if (args["skip-agents"] !== true) {
-      const ensured = await ensureAgentsWikiPointers(root)
+    if (args["skip-agents"] !== true && cfg.autoInjectAgents) {
+      const ensured = await ensureAgentsWikiPointers(root, {
+        wikiRel: cfg.dir,
+        touchClaudeMd: cfg.touchClaudeMd,
+      })
       if (ensured.updated.length) {
         UI.println(`Agents markers updated: ${ensured.updated.join(", ")}`)
       }
@@ -226,6 +284,7 @@ export const WikiGenerateCommand = cmd({
     yargs
       .option("directory", { type: "string", describe: "project root (default: cwd)" })
       .option("command", { type: "string", describe: "OpenWiki executable (default: openwiki)" })
+      .option("dir", dirOption)
       .option("skip-agents", { type: "boolean", default: false, describe: "do not touch AGENTS.md markers" })
       .option("quiet", {
         type: "boolean",
@@ -242,6 +301,7 @@ export const WikiUpdateCommand = cmd({
     yargs
       .option("directory", { type: "string", describe: "project root (default: cwd)" })
       .option("command", { type: "string", describe: "OpenWiki executable (default: openwiki)" })
+      .option("dir", dirOption)
       .option("skip-agents", { type: "boolean", default: false, describe: "do not touch AGENTS.md markers" })
       .option("quiet", {
         type: "boolean",
@@ -258,10 +318,11 @@ export const WikiLintCommand = cmd({
     yargs
       .option("json", { type: "boolean", default: false, describe: "machine-readable JSON" })
       .option("directory", { type: "string", describe: "project root (default: cwd)" })
-      .option("command", { type: "string", describe: "OpenWiki executable (default: openwiki)" }),
+      .option("command", { type: "string", describe: "OpenWiki executable (default: openwiki)" })
+      .option("dir", dirOption),
   handler: async (args) => {
-    const root = rootFromArgs(args.directory)
-    const report = await lintWiki({ root, command: args.command })
+    const { root, cfg } = await wikiOpts(args)
+    const report = await lintWiki({ root, command: cfg.command, dir: cfg.dir })
     if (args.json) {
       console.log(JSON.stringify(report, null, 2))
     } else {
@@ -293,12 +354,13 @@ export const WikiCardsCommand = cmd({
   builder: (yargs: Argv) =>
     yargs
       .option("directory", { type: "string", describe: "project root (default: cwd)" })
+      .option("dir", dirOption)
       .option("json", { type: "boolean", default: false, describe: "print JSON cards to stdout" })
       .option("stdout", { type: "boolean", default: false, describe: "print markdown to stdout instead of writing" })
       .option("output", { type: "string", describe: "output path (default: .ax-code/wiki-cards.md)" }),
   handler: async (args) => {
-    const root = rootFromArgs(args.directory)
-    const result = await buildWikiCards({ root })
+    const { root, cfg } = await wikiOpts(args)
+    const result = await buildWikiCards({ root, dir: cfg.dir })
     if ("error" in result) {
       UI.println(`${UI.Style.TEXT_WARNING}${result.error}${UI.Style.TEXT_NORMAL}`)
       process.exitCode = 1
@@ -325,6 +387,7 @@ export const WikiRelatedCommand = cmd({
     yargs
       .positional("symbol", { type: "string", demandOption: true, describe: "symbol or type name" })
       .option("directory", { type: "string", describe: "project root (default: cwd)" })
+      .option("dir", dirOption)
       .option("json", { type: "boolean", default: false, describe: "machine-readable JSON" })
       .option("exact", {
         type: "boolean",
@@ -332,10 +395,17 @@ export const WikiRelatedCommand = cmd({
         describe: "only frontmatter symbols: matches (no body mention fallback)",
       }),
   handler: async (args) => {
-    const root = rootFromArgs(args.directory)
+    const symbol = String(args.symbol ?? "").trim()
+    if (!symbol) {
+      UI.println("Symbol is required.")
+      process.exitCode = 1
+      return
+    }
+    const { root, cfg } = await wikiOpts(args)
     const result = await relatedWikiPages({
       root,
-      symbol: String(args.symbol),
+      symbol,
+      dir: cfg.dir,
       mentionFallback: args.exact !== true,
     })
     if ("error" in result) {

@@ -73,7 +73,16 @@ export function parseWikiFrontmatter(content: string): {
   let inSymbols = false
 
   for (const line of lines) {
-    if (/^\s*#/.test(line) || line.trim() === "") continue
+    if (/^\s*#/.test(line)) continue
+
+    // Blank lines: keep symbols list open; otherwise skip.
+    if (line.trim() === "") {
+      if (!inSymbols) continue
+      continue
+    }
+
+    // Empty list bullet while in symbols list — ignore without ending the list.
+    if (inSymbols && /^\s*-\s*$/.test(line)) continue
 
     const listItem = line.match(/^\s*-\s+(.+?)\s*$/)
     if (inSymbols && listItem) {
@@ -103,10 +112,11 @@ export function parseWikiFrontmatter(content: string): {
       continue
     }
 
-    meta[key] = stripQuotes(raw)
+    const value = stripQuotes(raw)
+    if (value) meta[key] = value
   }
 
-  return { meta, symbols: unique(symbols), body }
+  return { meta, symbols: unique(symbols.filter(Boolean)), body }
 }
 
 function stripQuotes(s: string): string {

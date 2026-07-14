@@ -38,22 +38,26 @@ jobs:
       - name: Configure OpenWiki env
         # Map your provider secrets into the names OpenWiki expects.
         # Example uses OpenRouter; change for Anthropic/OpenAI/etc.
-        run: |
-          mkdir -p "$HOME/.openwiki"
-          cat > "$HOME/.openwiki/.env" <<EOF
-          OPENWIKI_PROVIDER=${{ secrets.OPENWIKI_PROVIDER || 'openrouter' }}
-          OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
-          OPENWIKI_MODEL_ID=${{ secrets.OPENWIKI_MODEL_ID }}
-          EOF
-
-      - name: Update wiki (non-interactive)
-        # OpenWiki creates openwiki/ if missing; --print avoids interactive chat.
-        run: openwiki code --update --print
+        # NOTE: unindented heredoc body so .env lines have no leading whitespace.
         env:
-          # Prefer secrets over writing .env when possible
           OPENWIKI_PROVIDER: ${{ secrets.OPENWIKI_PROVIDER }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENWIKI_MODEL_ID: ${{ secrets.OPENWIKI_MODEL_ID }}
+        run: |
+          mkdir -p "$HOME/.openwiki"
+          {
+            echo "OPENWIKI_PROVIDER=${OPENWIKI_PROVIDER:-openrouter}"
+            echo "OPENROUTER_API_KEY=${OPENROUTER_API_KEY}"
+            echo "OPENWIKI_MODEL_ID=${OPENWIKI_MODEL_ID}"
+          } > "$HOME/.openwiki/.env"
+
+      - name: Update wiki (non-interactive)
+        # OpenWiki creates openwiki/ if missing; --print avoids interactive chat.
+        env:
+          OPENWIKI_PROVIDER: ${{ secrets.OPENWIKI_PROVIDER }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENWIKI_MODEL_ID: ${{ secrets.OPENWIKI_MODEL_ID }}
+        run: openwiki code --update --print
 
       - name: Ensure AGENTS markers (optional, requires ax-code on PATH)
         # If ax-code is available in CI, keep OPENWIKI markers in AGENTS.md in sync.
@@ -62,8 +66,9 @@ jobs:
           if command -v ax-code >/dev/null 2>&1; then
             ax-code wiki ensure-agents
             ax-code wiki cards || true
+            ax-code wiki lint || true
           else
-            echo "ax-code not installed; skipping ensure-agents / cards"
+            echo "ax-code not installed; skipping ensure-agents / cards / lint"
           fi
 
       - name: Create Pull Request

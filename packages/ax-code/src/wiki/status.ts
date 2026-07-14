@@ -11,7 +11,10 @@ export type WikiStatus = WikiDetectResult & {
   recommendations: string[]
 }
 
-export function buildRecommendations(det: WikiDetectResult): string[] {
+export function buildRecommendations(
+  det: WikiDetectResult,
+  extras?: { stale?: boolean; cardsHint?: boolean },
+): string[] {
   const recs: string[] = []
 
   if (!det.wikiExists) {
@@ -26,7 +29,11 @@ export function buildRecommendations(det: WikiDetectResult): string[] {
     recs.push(`OpenWiki CLI not found ("${det.binary.command}"). ${OPENWIKI_INSTALL_HINT}`)
   }
 
-  if (det.wikiExists && det.binary.found) {
+  if (extras?.stale) {
+    recs.push("Wiki appears stale vs git HEAD. Run: ax-code wiki update  (or ax-code wiki lint for details)")
+  }
+
+  if (det.wikiExists && det.binary.found && !extras?.stale) {
     recs.push("To refresh after code changes: ax-code wiki update")
   }
 
@@ -34,6 +41,9 @@ export function buildRecommendations(det: WikiDetectResult): string[] {
     recs.push(
       "Agent routing: architecture questions → read wiki index first; precise symbols → code_intelligence / lsp.",
     )
+    if (extras?.cardsHint !== false) {
+      recs.push("Dense index: ax-code wiki cards → .ax-code/wiki-cards.md; symbol jump: ax-code wiki related <Name>")
+    }
   }
 
   if (recs.length === 0) {
@@ -52,11 +62,23 @@ export async function getWikiStatus(input: {
   root: string
   dir?: string
   command?: string
+  /** When true, include stale-vs-HEAD recommendation (extra git call). Default false. */
+  checkStale?: boolean
 }): Promise<WikiStatus> {
   const det = await detectWiki(input)
+  let stale = false
+  if (input.checkStale && det.wikiExists) {
+    try {
+      const { isWikiStale, gitHeadCommit } = await import("./lint")
+      const head = await gitHeadCommit(input.root)
+      stale = isWikiStale(det.lastUpdate?.commit, head)
+    } catch {
+      // ignore
+    }
+  }
   return {
     ...det,
     healthy: isHealthy(det),
-    recommendations: buildRecommendations(det),
+    recommendations: buildRecommendations(det, { stale }),
   }
 }

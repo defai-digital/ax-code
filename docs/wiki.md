@@ -56,11 +56,13 @@ If wiki content and code disagree, **trust the code** (and graph/LSP), then refr
 Useful flags:
 
 - `--directory <path>` — project root (default: cwd)
-- `--command <bin>` — OpenWiki executable (default: `openwiki`, or `OPENWIKI_COMMAND`)
+- `--dir <rel>` — wiki directory relative to root (default: `openwiki` or config `wiki.dir`)
+- `--command <bin>` — OpenWiki executable (default: `openwiki`, or `OPENWIKI_COMMAND` / config `wiki.command`)
 - `--skip-agents` — do not rewrite AGENTS markers after generate/update
 - `--quiet` — buffer OpenWiki output until completion (disables live stream and 15s heartbeats)
-- `--json` — machine-readable output for `status` / `doctor`
+- `--json` — machine-readable output for `status` / `doctor` / `lint` / `related` / `cards`
 - `--dry-run` — preview `ensure-agents` without writing
+- `--force` — with `ensure-agents`, override `wiki.autoInjectAgents: false`
 
 Generate/update stream OpenWiki stdout/stderr live and print a heartbeat every 15s while the process is quiet (long LLM jobs).
 

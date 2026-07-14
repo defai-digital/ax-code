@@ -191,8 +191,9 @@ export namespace SystemPrompt {
           wiki?: { enabled?: boolean; dir?: string; command?: string }
         }
       ).wiki
+      // enabled defaults to true when unset; only explicit false suppresses.
       const wikiBlock = await maybeRenderRepoWikiProtocol(Instance.directory, {
-        enabled: wikiCfg?.enabled,
+        enabled: wikiCfg?.enabled !== false,
         dir: wikiCfg?.dir,
         command: wikiCfg?.command,
       })

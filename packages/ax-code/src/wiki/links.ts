@@ -82,7 +82,10 @@ export function findPagesForSymbol(index: WikiLinkIndex, symbol: string): WikiPa
  * Fallback: pages whose title or body mention the symbol as a whole word (bounded).
  */
 export function findPagesByMention(pages: WikiPage[], symbol: string, limit = 10): WikiPage[] {
-  const re = new RegExp(`\\b${escapeRegExp(symbol)}\\b`, "i")
+  const needle = symbol.trim()
+  // Empty or tiny needles would match too broadly (or break word boundaries).
+  if (needle.length < 2) return []
+  const re = new RegExp(`\\b${escapeRegExp(needle)}\\b`, "i")
   const hits: WikiPage[] = []
   for (const p of pages) {
     if (re.test(p.title) || re.test(p.body)) {

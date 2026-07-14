@@ -83,3 +83,5 @@ export {
   type WikiLintIssue,
   type WikiLintLevel,
 } from "./lint"
+
+export { resolveWikiRuntimeConfig, type WikiRuntimeConfig } from "./config"
