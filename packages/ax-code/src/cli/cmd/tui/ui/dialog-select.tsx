@@ -220,9 +220,23 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       })
   }
 
+  // Nested dialogs opened from an Enter keypress (e.g. Providers → "already
+  // connected") used to inherit a residual submit/return from the parent
+  // dialog. That immediately confirmed the first nested option ("Use saved
+  // key") and made Disconnect / Replace key unreachable. Ignore confirm for a
+  // short window after mount; arrow/mouse interaction arms confirm early.
+  const openedAt = Date.now()
+  const CONFIRM_GRACE_MS = 150
+  let confirmArmed = false
+  function armConfirm() {
+    confirmArmed = true
+  }
+
   let confirmInFlight = false
   function confirmSelected() {
     if (confirmInFlight) return
+    if (!confirmArmed && Date.now() - openedAt < CONFIRM_GRACE_MS) return
+    confirmArmed = true
     const option = selected()
     if (!option) return
     if (option.disabled) {
@@ -250,12 +264,30 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   useKeyboard((evt) => {
     setStore("input", "keyboard")
 
-    if (evt.name === "up" || (evt.ctrl && evt.name === "p")) move(-1)
-    if (evt.name === "down" || (evt.ctrl && evt.name === "n")) move(1)
-    if (evt.name === "pageup") move(-10)
-    if (evt.name === "pagedown") move(10)
-    if (evt.name === "home") moveTo(0)
-    if (evt.name === "end") moveTo(flat().length - 1)
+    if (evt.name === "up" || (evt.ctrl && evt.name === "p")) {
+      armConfirm()
+      move(-1)
+    }
+    if (evt.name === "down" || (evt.ctrl && evt.name === "n")) {
+      armConfirm()
+      move(1)
+    }
+    if (evt.name === "pageup") {
+      armConfirm()
+      move(-10)
+    }
+    if (evt.name === "pagedown") {
+      armConfirm()
+      move(10)
+    }
+    if (evt.name === "home") {
+      armConfirm()
+      moveTo(0)
+    }
+    if (evt.name === "end") {
+      armConfirm()
+      moveTo(flat().length - 1)
+    }
 
     if (evt.name === "return") {
       evt.preventDefault()
@@ -309,6 +341,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
             onSubmit={confirmSelected}
             keyBindings={[{ name: "return", action: "submit" }]}
             onInput={(e: string) => {
+              armConfirm()
               batch(() => {
                 setStore("filter", e)
                 props.onFilter?.(e)
@@ -385,6 +418,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                         id={optionIndex() >= 0 ? optionID(optionIndex()) : undefined}
                         flexDirection="row"
                         onMouseMove={() => {
+                          armConfirm()
                           setStore("input", "mouse")
                         }}
                         onMouseUp={() => {
@@ -392,6 +426,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                           // Route clicks through confirmSelected so the
                           // confirmInFlight latch also guards the mouse path
                           // against double-fires.
+                          armConfirm()
                           const index = flat().findIndex((x) => isDeepEqual(x.value, option.value))
                           if (index === -1) return
                           if (index !== store.selected) moveTo(index)
@@ -399,11 +434,13 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                         }}
                         onMouseOver={() => {
                           if (store.input !== "mouse") return
+                          armConfirm()
                           const index = flat().findIndex((x) => isDeepEqual(x.value, option.value))
                           if (index === -1) return
                           moveTo(index)
                         }}
                         onMouseDown={() => {
+                          armConfirm()
                           const index = flat().findIndex((x) => isDeepEqual(x.value, option.value))
                           if (index === -1) return
                           moveTo(index)

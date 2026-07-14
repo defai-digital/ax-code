@@ -1081,7 +1081,7 @@ export const settingsDict = {
   "settings.providers.page.auth.oauthMethodFallback": "OAuth method {index}",
   "settings.providers.page.auth.pasteAuthorizationCodePlaceholder": "Paste authorization code",
   "settings.providers.page.auth.connected": "Connected",
-  "settings.providers.page.auth.useReconnectHint": "· Use Reconnect to update credentials",
+  "settings.providers.page.auth.useReconnectHint": "· Use Reconnect to change key, or Disconnect below to remove",
   "settings.providers.page.connectionDetails.title": "Connection Details",
   "settings.providers.page.connectionDetails.configuredIn": "Configured in:",
   "settings.providers.page.connectionDetails.noActiveSource": "No active configuration source",

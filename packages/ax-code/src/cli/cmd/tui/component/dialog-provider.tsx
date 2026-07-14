@@ -83,7 +83,12 @@ function runProviderDialogAction(input: {
   toast: ReturnType<typeof useToast>
   run: () => Promise<void> | void
 }) {
-  void Promise.resolve()
+  // Return the promise so DialogSelect's confirmInFlight latch spans the full
+  // connect/disconnect/replace flow (including nested action menus). Fire-and-
+  // forget here used to release the parent latch before the nested "already
+  // connected" menu mounted, so a residual Enter auto-selected "Use saved key"
+  // and skipped Disconnect / Replace key entirely.
+  return Promise.resolve()
     .then(input.run)
     .catch((error) => {
       log.warn("provider dialog action failed", {
@@ -282,7 +287,7 @@ export function createDialogProviderOptions() {
           descriptionFg: isConnected ? theme.warning : isOfflineKind ? theme.textMuted : undefined,
           category: providerDialogCategory(provider.id),
           onSelect() {
-            runProviderDialogAction({
+            return runProviderDialogAction({
               providerID: provider.id,
               action: "select-provider",
               fallbackMessage: `Failed to update ${provider.name}`,
@@ -422,7 +427,7 @@ export function createDialogProviderOptions() {
                         )}
                         onConfirm={(value) => {
                           if (!value) return
-                          runProviderDialogAction({
+                          return runProviderDialogAction({
                             providerID: provider.id,
                             action: "offline-endpoint-confirm",
                             fallbackMessage: `Failed to update ${provider.name} endpoint`,

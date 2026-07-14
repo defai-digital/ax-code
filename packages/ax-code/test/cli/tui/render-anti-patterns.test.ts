@@ -619,7 +619,9 @@ describe("tui OpenTUI stability guardrails", () => {
     const dialogProvider = await fs.readFile(DIALOG_PROVIDER_SRC, "utf8")
 
     expect(dialogProvider).toContain("function runProviderDialogAction(")
-    expect(dialogProvider).toContain("void Promise.resolve()")
+    // Must return the promise (not fire-and-forget) so DialogSelect's
+    // confirmInFlight latch spans nested Disconnect/Replace menus.
+    expect(dialogProvider).toContain("return Promise.resolve()")
     expect(dialogProvider).toContain('log.warn("provider dialog action failed"')
     expect(dialogProvider).toContain('action: "select-provider"')
   })

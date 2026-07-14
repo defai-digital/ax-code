@@ -52,6 +52,26 @@ describe("tui dialog action dispatch", () => {
     expect(mouseUpBlock).not.toContain("runDialogSelectAction")
   })
 
+  test("dialog select ignores residual Enter for a short window after mount", async () => {
+    const dialogSelect = await fs.readFile(DIALOG_SELECT_SRC, "utf8")
+
+    // Nested action menus (Providers → already connected) must not auto-confirm
+    // the first option when they inherit a residual return from the parent.
+    expect(dialogSelect).toContain("CONFIRM_GRACE_MS")
+    expect(dialogSelect).toContain("confirmArmed")
+    expect(dialogSelect).toMatch(/if \(!confirmArmed && Date\.now\(\) - openedAt < CONFIRM_GRACE_MS\) return/)
+  })
+
+  test("provider dialog onSelect returns the action promise so the latch spans nested menus", async () => {
+    const dialogProvider = await fs.readFile(DIALOG_PROVIDER_SRC, "utf8")
+
+    // Fire-and-forget void Promise.resolve().then(run) released the parent
+    // DialogSelect latch before the nested Disconnect/Replace menu mounted.
+    expect(dialogProvider).toContain("return Promise.resolve()")
+    expect(dialogProvider).toContain("return runProviderDialogAction({")
+    expect(dialogProvider).not.toMatch(/void Promise\.resolve\(\)\s*\.then\(input\.run\)/)
+  })
+
   test("heap snapshot palette action cannot float an unhandled rejection", async () => {
     const app = await fs.readFile(APP_SRC, "utf8")
 

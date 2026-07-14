@@ -65,6 +65,7 @@ export const ProvidersPage: React.FC = () => {
   const providers = useConfigStore((state) => state.providers)
   const providersLoading = useConfigStore((state) => state.providersLoading)
   const providersError = useConfigStore((state) => state.providersError)
+  const loadProviders = useConfigStore((state) => state.loadProviders)
   const selectedProviderId = useConfigStore((state) => state.selectedProviderId)
   const setSelectedProvider = useConfigStore((state) => state.setSelectedProvider)
   const getModelMetadata = useConfigStore((state) => state.getModelMetadata)
@@ -95,7 +96,13 @@ export const ProvidersPage: React.FC = () => {
   const [providerSearchQuery, setProviderSearchQuery] = React.useState("")
   const [providerDropdownOpen, setProviderDropdownOpen] = React.useState(false)
   const [providerSources, setProviderSources] = React.useState<Record<string, ProviderSources>>({})
+  // Start collapsed; selecting a different provider re-collapses so Connect/
+  // Reconnect is always one click away from the "Connected" summary row.
   const [showAuthPanel, setShowAuthPanel] = React.useState(false)
+
+  React.useEffect(() => {
+    setShowAuthPanel(false)
+  }, [selectedProviderId])
 
   React.useEffect(() => {
     if (!selectedProviderId && providers.length > 0) {
@@ -442,7 +449,16 @@ export const ProvidersPage: React.FC = () => {
     try {
       const payload = await disconnectProviderAuth(providerId, directory, "all")
 
+      // Only claim success when something was actually removed. A false
+      // "Provider disconnected" toast left the provider listed and made
+      // Disconnect look broken (credentials/config still present).
+      if (payload?.removed === false) {
+        toast.error(t("settings.providers.page.toast.providerDisconnectFailed"))
+        return
+      }
+
       toast.success(t("settings.providers.page.toast.providerDisconnected"))
+      setShowAuthPanel(false)
       if (payload?.requiresReload) {
         await waitForQueuedAxCodeReload({
           message: payload.message,
@@ -451,6 +467,13 @@ export const ProvidersPage: React.FC = () => {
           scopes: ["providers"],
           mode: "active",
         })
+      } else {
+        // Ensure the sidebar drops the provider even when AX Code did not need
+        // a full restart (e.g. config-only disconnect with no daemon reload).
+        await loadProviders({ directory })
+      }
+      if (selectedProviderId === providerId) {
+        setSelectedProvider(ADD_PROVIDER_ID)
       }
     } catch (error) {
       console.error("Failed to disconnect provider:", error)
@@ -874,16 +897,29 @@ export const ProvidersPage: React.FC = () => {
             <h3 className="typography-ui-header font-medium text-foreground">
               {t("settings.providers.page.auth.title")}
             </h3>
-            <Button
-              variant="outline"
-              size="xs"
-              className="!font-normal"
-              onClick={() => setShowAuthPanel((prev) => !prev)}
-            >
-              {showAuthPanel
-                ? t("settings.providers.page.actions.hide")
-                : t("settings.providers.page.actions.reconnect")}
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="xs"
+                className="!font-normal"
+                onClick={() => setShowAuthPanel((prev) => !prev)}
+              >
+                {showAuthPanel
+                  ? t("settings.providers.page.actions.hide")
+                  : t("settings.providers.page.actions.reconnect")}
+              </Button>
+              <Button
+                variant="ghost"
+                size="xs"
+                className="!font-normal text-[var(--status-error)] hover:text-[var(--status-error)]"
+                onClick={() => void handleDisconnectProvider(selectedProvider.id)}
+                disabled={authBusyKey === `disconnect:${selectedProvider.id}`}
+              >
+                {authBusyKey === `disconnect:${selectedProvider.id}`
+                  ? t("settings.providers.page.actions.disconnecting")
+                  : t("settings.providers.page.actions.disconnect")}
+              </Button>
+            </div>
           </div>
 
           <section className="px-2 pb-2 pt-0">
