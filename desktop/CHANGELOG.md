@@ -4,7 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [7.0.1] - 2026-07-13
+## [7.0.1] - 2026-07-14
+
+### Added
+
+- Wiki: adds the OpenWiki semantic repository layer with generation, status, lint, path-safety, cards, and related-link support.
 
 ### Changed
 
@@ -14,7 +18,9 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Desktop: keeps Arena and Council work-mode routing consistent across the native shell and web server, including Qwen JSON fan-out.
+- Providers: restores disconnect and change-key actions after a provider has connected.
 - Server: returns validated route errors for malformed requests instead of surfacing internal parsing failures.
+- TUI: hardens abort handling, timeout cleanup, and permission-submit latching.
 - TUI: preserves the selected Unicode-width method during terminal rendering.
 - Self-scan: refreshes repository policy coverage and baseline fingerprints for the current source tree.
 
