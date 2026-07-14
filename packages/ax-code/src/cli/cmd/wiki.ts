@@ -13,6 +13,10 @@ import {
   formatElapsed,
   startQuietHeartbeat,
   OPENWIKI_INSTALL_HINT,
+  lintWiki,
+  buildWikiCards,
+  writeWikiCards,
+  relatedWikiPages,
   type WikiStatus,
 } from "../../wiki"
 
@@ -247,6 +251,119 @@ export const WikiUpdateCommand = cmd({
   handler: async (args) => runGenerateOrUpdate("update", args),
 })
 
+export const WikiLintCommand = cmd({
+  command: "lint",
+  describe: "lint wiki health (stale vs HEAD, index, symbol links)",
+  builder: (yargs: Argv) =>
+    yargs
+      .option("json", { type: "boolean", default: false, describe: "machine-readable JSON" })
+      .option("directory", { type: "string", describe: "project root (default: cwd)" })
+      .option("command", { type: "string", describe: "OpenWiki executable (default: openwiki)" }),
+  handler: async (args) => {
+    const root = rootFromArgs(args.directory)
+    const report = await lintWiki({ root, command: args.command })
+    if (args.json) {
+      console.log(JSON.stringify(report, null, 2))
+    } else {
+      UI.println(`${UI.Style.TEXT_INFO_BOLD}Wiki lint${UI.Style.TEXT_NORMAL}`)
+      UI.println(`  wiki:   ${report.wikiDirRelative}/`)
+      UI.println(`  ok:     ${report.ok ? "yes" : "no"}`)
+      UI.println(`  stale:  ${report.stale ? "yes" : "no"}`)
+      if (report.headCommit) UI.println(`  HEAD:   ${report.headCommit.slice(0, 12)}`)
+      if (report.wikiCommit) UI.println(`  cursor: ${report.wikiCommit.slice(0, 12)}`)
+      UI.println(
+        `  pages:  ${report.stats.pageCount}  symbols: ${report.stats.symbolCount}  linked pages: ${report.stats.linkedPageCount}`,
+      )
+      if (report.issues.length) {
+        UI.println("")
+        for (const issue of report.issues) {
+          UI.println(`  [${issue.level}] ${issue.code}: ${issue.message}`)
+        }
+      } else {
+        UI.println("  No issues.")
+      }
+    }
+    if (!report.ok || report.stale) process.exitCode = 1
+  },
+})
+
+export const WikiCardsCommand = cmd({
+  command: "cards",
+  describe: "build Knowledge Cards-lite index from openwiki pages (.ax-code/wiki-cards.md)",
+  builder: (yargs: Argv) =>
+    yargs
+      .option("directory", { type: "string", describe: "project root (default: cwd)" })
+      .option("json", { type: "boolean", default: false, describe: "print JSON cards to stdout" })
+      .option("stdout", { type: "boolean", default: false, describe: "print markdown to stdout instead of writing" })
+      .option("output", { type: "string", describe: "output path (default: .ax-code/wiki-cards.md)" }),
+  handler: async (args) => {
+    const root = rootFromArgs(args.directory)
+    const result = await buildWikiCards({ root })
+    if ("error" in result) {
+      UI.println(`${UI.Style.TEXT_WARNING}${result.error}${UI.Style.TEXT_NORMAL}`)
+      process.exitCode = 1
+      return
+    }
+    if (args.json) {
+      console.log(JSON.stringify({ wiki: result.wikiDirRelative, cards: result.cards }, null, 2))
+      return
+    }
+    if (args.stdout) {
+      process.stdout.write(result.markdown.endsWith("\n") ? result.markdown : result.markdown + "\n")
+      return
+    }
+    const out = args.output || result.defaultOutputPath
+    await writeWikiCards(out, result.markdown)
+    UI.println(`Wrote ${result.cards.length} card(s) → ${out}`)
+  },
+})
+
+export const WikiRelatedCommand = cmd({
+  command: "related <symbol>",
+  describe: "find wiki pages linked to a symbol (frontmatter symbols: or mention fallback)",
+  builder: (yargs: Argv) =>
+    yargs
+      .positional("symbol", { type: "string", demandOption: true, describe: "symbol or type name" })
+      .option("directory", { type: "string", describe: "project root (default: cwd)" })
+      .option("json", { type: "boolean", default: false, describe: "machine-readable JSON" })
+      .option("exact", {
+        type: "boolean",
+        default: false,
+        describe: "only frontmatter symbols: matches (no body mention fallback)",
+      }),
+  handler: async (args) => {
+    const root = rootFromArgs(args.directory)
+    const result = await relatedWikiPages({
+      root,
+      symbol: String(args.symbol),
+      mentionFallback: args.exact !== true,
+    })
+    if ("error" in result) {
+      UI.println(`${UI.Style.TEXT_WARNING}${result.error}${UI.Style.TEXT_NORMAL}`)
+      process.exitCode = 1
+      return
+    }
+    if (args.json) {
+      console.log(JSON.stringify(result, null, 2))
+      return
+    }
+    UI.println(`${UI.Style.TEXT_INFO_BOLD}Wiki related: ${result.symbol}${UI.Style.TEXT_NORMAL}`)
+    UI.println(
+      `  index: ${result.indexStats.pageCount} pages, ${result.indexStats.symbolCount} symbols, ${result.indexStats.linkedPageCount} linked`,
+    )
+    if (result.matches.length === 0) {
+      UI.println("  No matching wiki pages.")
+      UI.println("  Tip: add frontmatter symbols: on wiki pages, or use code_intelligence for the graph.")
+      process.exitCode = 1
+      return
+    }
+    for (const m of result.matches) {
+      UI.println(`  - [${m.via}] ${m.title}  (${m.path})`)
+      if (m.summary) UI.println(`      ${m.summary}`)
+    }
+  },
+})
+
 export const WikiCommand = cmd({
   command: "wiki",
   describe: "OpenWiki repo wiki (generate, update, status) — complementary to ax-code index",
@@ -257,6 +374,9 @@ export const WikiCommand = cmd({
       .command(WikiEnsureAgentsCommand)
       .command(WikiGenerateCommand)
       .command(WikiUpdateCommand)
+      .command(WikiLintCommand)
+      .command(WikiCardsCommand)
+      .command(WikiRelatedCommand)
       .demandCommand(),
   async handler() {},
 })

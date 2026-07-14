@@ -46,3 +46,40 @@ export {
 export { getWikiStatus, buildRecommendations, isHealthy, type WikiStatus } from "./status"
 
 export { renderRepoWikiProtocol, maybeRenderRepoWikiProtocol } from "./protocol"
+
+export {
+  listMarkdownFiles,
+  parseWikiFrontmatter,
+  loadWikiPages,
+  extractTitle,
+  extractSummary,
+  type WikiPage,
+} from "./pages"
+
+export {
+  cardsFromPages,
+  renderCardsMarkdown,
+  buildWikiCards,
+  writeWikiCards,
+  type WikiCard,
+  type WikiCardsResult,
+} from "./cards"
+
+export {
+  buildSymbolIndex,
+  findPagesForSymbol,
+  findPagesByMention,
+  relatedWikiPages,
+  type WikiSymbolLink,
+  type WikiLinkIndex,
+} from "./links"
+
+export {
+  lintWiki,
+  evaluateLint,
+  isWikiStale,
+  gitHeadCommit,
+  type WikiLintReport,
+  type WikiLintIssue,
+  type WikiLintLevel,
+} from "./lint"

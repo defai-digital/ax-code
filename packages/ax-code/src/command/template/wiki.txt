@@ -11,10 +11,13 @@ Parse $ARGUMENTS as an optional subcommand (case-insensitive):
 | empty / help | Summarize `ax-code wiki doctor` guidance and recommend next steps |
 | status | Run or describe `ax-code wiki status` |
 | doctor | Run or describe `ax-code wiki doctor` |
+| lint | Run `ax-code wiki lint` (stale vs HEAD, index, symbol links) |
+| cards | Run `ax-code wiki cards` (write `.ax-code/wiki-cards.md`) |
+| related \<Symbol\> | Run `ax-code wiki related <Symbol>` |
 | ensure / ensure-agents | Run `ax-code wiki ensure-agents` |
 | generate / init | Run `ax-code wiki generate` (long LLM job; stream progress) |
 | update / refresh | Run `ax-code wiki update` |
-| otherwise | Treat as a free-form question: read `openwiki/quickstart.md` or `openwiki/index.md` first, then answer |
+| otherwise | Treat as a free-form question: read `openwiki/quickstart.md` or `.ax-code/wiki-cards.md` first, then answer |
 
 Rules:
 

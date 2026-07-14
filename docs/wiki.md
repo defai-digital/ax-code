@@ -44,6 +44,9 @@ If wiki content and code disagree, **trust the code** (and graph/LSP), then refr
 |---------|---------|
 | `ax-code wiki status` | Show wiki directory + OpenWiki binary status |
 | `ax-code wiki doctor` | Health checks and remediation hints |
+| `ax-code wiki lint` | Stale-vs-HEAD, missing index, symbol-link coverage |
+| `ax-code wiki cards` | Build Knowledge Cards-lite → `.ax-code/wiki-cards.md` |
+| `ax-code wiki related <symbol>` | Find wiki pages for a symbol (frontmatter or mention) |
 | `ax-code wiki ensure-agents` | Inject/update `<!-- OPENWIKI:… -->` markers in `AGENTS.md` (and `CLAUDE.md` if present) |
 | `ax-code wiki generate` | Create or refresh the wiki via OpenWiki |
 | `ax-code wiki update` | Incremental update via OpenWiki |
@@ -148,9 +151,62 @@ Do not use the wiki alone for rename impact, call-graph proof, or refactor blast
 ax-code wiki doctor
 ```
 
+## Cards-lite and symbol links
+
+### Knowledge Cards-lite
+
+```bash
+ax-code wiki cards
+# → writes .ax-code/wiki-cards.md (agent-friendly dense index)
+ax-code wiki cards --json
+ax-code wiki cards --stdout
+```
+
+Cards are derived **from** `openwiki/` pages (titles, summaries, frontmatter symbols). They live under `.ax-code/` so OpenWiki regenerations do not wipe them.
+
+### Wiki ↔ graph cross-links
+
+Optionally declare symbols on wiki pages via frontmatter:
+
+```markdown
+---
+title: Auth flow
+symbols:
+  - AuthService
+  - login
+---
+
+# Auth flow
+...
+```
+
+Then:
+
+```bash
+ax-code wiki related AuthService
+ax-code wiki related AuthService --exact   # frontmatter only
+```
+
+Use `code_intelligence` for structural truth; use `related` to jump to narrative pages. TUI/Desktop UI is **not** required — agents and CLI consume these paths.
+
+### Lint
+
+```bash
+ax-code wiki lint
+ax-code wiki lint --json
+```
+
+Checks include: missing wiki/index, empty pages, **stale cursor** (`openwiki/.last-update.json` commit vs `git HEAD`), and lack of `symbols:` frontmatter. Exit code is non-zero when unhealthy or stale (useful in CI).
+
 ## CI (optional)
 
-OpenWiki can run on a schedule and open a documentation PR. Copy the upstream examples from the [OpenWiki repository](https://github.com/langchain-ai/openwiki) (for example `examples/openwiki-update.yml`) and provide model credentials as secrets. AX Code does not require CI wiki updates for local use.
+OpenWiki can run on a schedule and open a documentation PR.
+
+1. Copy the example workflow: [`docs/examples/openwiki-update.yml`](examples/openwiki-update.yml) → `.github/workflows/openwiki-update.yml`
+2. Add repository secrets for your OpenWiki provider (for example `OPENROUTER_API_KEY`, `OPENWIKI_MODEL_ID`)
+3. Optionally install `ax-code` in the job for `wiki ensure-agents` / `wiki cards`
+
+Upstream OpenWiki also ships CI templates: [langchain-ai/openwiki](https://github.com/langchain-ai/openwiki). AX Code does not require CI wiki updates for local use.
 
 ## Non-goals
 

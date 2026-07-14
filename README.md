@@ -257,7 +257,7 @@ ranking, GLM-4.7-Flash placement, and memory-based recommendations.
 | `ax-code models`                               | List available provider/model IDs            |
 | `ax-code init`                                 | Create or update repository `AGENTS.md`      |
 | `ax-code init --wiki`                          | AGENTS.md + OpenWiki bootstrap               |
-| `ax-code wiki`                                 | OpenWiki status / generate / update          |
+| `ax-code wiki`                                 | OpenWiki status / generate / update / lint / cards |
 | `ax-code index`                                | Build code-intelligence indexes              |
 | `ax-code graph`                                | Inspect the repository graph                 |
 | `ax-code mcp list --tools`                     | Review MCP servers, exposed tools, and rules |

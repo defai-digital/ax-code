@@ -21,9 +21,11 @@ export function renderRepoWikiProtocol(input: {
     `<repo_wiki>`,
     `  A compiled OpenWiki repository wiki is available under ${wikiRel}/.`,
     `  Start at ${indexRel} for architecture, module responsibilities, and design intent.`,
+    `  Optional dense index: .ax-code/wiki-cards.md (ax-code wiki cards). Optional symbol links: ax-code wiki related <Name>.`,
     `  Prefer reading wiki pages before wide greps when answering "how does X work?" or cross-module design questions.`,
     `  For precise symbol locations, callers, callees, and references, use code_intelligence or lsp — not the wiki alone.`,
     `  If wiki content conflicts with the current code, trust the code and suggest updating the wiki (ax-code wiki update).`,
+    `  Check freshness with ax-code wiki lint when docs may be stale after large refactors.`,
     `  Do not dump the entire wiki into the conversation; read the index, then drill into relevant pages.`,
     `</repo_wiki>`,
   ].join("\n")
