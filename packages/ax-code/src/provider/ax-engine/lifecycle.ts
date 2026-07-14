@@ -1,5 +1,5 @@
 import { AX_ENGINE_ERROR } from "./constants"
-import type { AxEngineStatus } from "./status"
+import type { AxEngineStatusCore } from "./status"
 
 /**
  * Shared Local Engine lifecycle phases (ax-engine docs/LOCAL-ENGINE-CLIENTS.md).
@@ -42,9 +42,10 @@ function mostSevere(phases: LocalEnginePhase[]): LocalEnginePhase {
 }
 
 /**
- * Map AX Code's rich AxEngineStatus into the shared cross-product phase set.
+ * Map AX Code's rich status core into the shared cross-product phase set.
+ * Accepts status with or without an attached `lifecycle` field.
  */
-export function mapAxEngineStatusToLifecycle(status: AxEngineStatus): LocalEngineLifecycle {
+export function mapAxEngineStatusToLifecycle(status: AxEngineStatusCore): LocalEngineLifecycle {
   const blockers: string[] = []
   const candidates: LocalEnginePhase[] = []
 

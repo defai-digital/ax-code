@@ -6,7 +6,13 @@ import { AxEngineServerRuntimeStatus, getServerStatus } from "./server"
 import { AX_ENGINE_ERROR, resolveAxEngineApiKey } from "./constants"
 import { toErrorMessage } from "../../util/error-message"
 import { parseAxEngineModelContracts } from "./model-card"
-import { mapAxEngineStatusToLifecycle, type LocalEngineLifecycle } from "./lifecycle"
+import {
+  AX_CODE_LOCAL_ENGINE_BACKEND,
+  mapAxEngineStatusToLifecycle,
+  type LocalEngineBackendKind,
+  type LocalEngineLifecycle,
+  type LocalEnginePhase,
+} from "./lifecycle"
 
 export const AxEngineCapabilityStatus = z.object({
   toolcall: z.boolean(),
@@ -15,6 +21,21 @@ export const AxEngineCapabilityStatus = z.object({
 })
 export type AxEngineCapabilityStatus = z.infer<typeof AxEngineCapabilityStatus>
 
+export const LocalEngineLifecycleStatus = z.object({
+  phase: z.enum([
+    "unavailable",
+    "missing_dependency",
+    "missing_model",
+    "starting",
+    "ready",
+    "degraded",
+    "error",
+  ]),
+  backend: z.enum(["in_process", "sidecar_http"]),
+  blockers: z.array(z.string()).default([]),
+})
+export type LocalEngineLifecycleStatus = z.infer<typeof LocalEngineLifecycleStatus>
+
 export const AxEngineStatus = z.object({
   eligibility: AxEnginePlatformEligibility,
   dependency: AxEngineDependencyStatus,
@@ -22,8 +43,13 @@ export const AxEngineStatus = z.object({
   model: AxEngineModelStatus,
   server: AxEngineServerRuntimeStatus,
   capability: AxEngineCapabilityStatus,
+  /** Shared cross-product lifecycle (ax-engine LOCAL-ENGINE-CLIENTS contract). */
+  lifecycle: LocalEngineLifecycleStatus,
 })
 export type AxEngineStatus = z.infer<typeof AxEngineStatus>
+
+/** Status fields used to derive lifecycle (before lifecycle is attached). */
+export type AxEngineStatusCore = Omit<AxEngineStatus, "lifecycle">
 
 export type AxEngineRuntimeOptions = {
   binaryPath?: unknown
@@ -108,7 +134,7 @@ export async function getAxEngineStatus(options: AxEngineRuntimeOptions = {}): P
   ])
   const capability = await getCapabilityStatus(server, options)
 
-  return {
+  const core: AxEngineStatusCore = {
     eligibility,
     dependency,
     disk,
@@ -116,11 +142,20 @@ export async function getAxEngineStatus(options: AxEngineRuntimeOptions = {}): P
     server,
     capability,
   }
-}
+  const lifecycle = mapAxEngineStatusToLifecycle(core)
 
+  return {
+    ...core,
+    lifecycle,
+  }
+}
 
 export async function getAxEngineLifecycle(
   options: AxEngineRuntimeOptions = {},
 ): Promise<LocalEngineLifecycle> {
-  return mapAxEngineStatusToLifecycle(await getAxEngineStatus(options))
+  return (await getAxEngineStatus(options)).lifecycle
 }
+
+/** Re-export phase types for API consumers. */
+export type { LocalEngineBackendKind, LocalEngineLifecycle, LocalEnginePhase }
+export { AX_CODE_LOCAL_ENGINE_BACKEND }

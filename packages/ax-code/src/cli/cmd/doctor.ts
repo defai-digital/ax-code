@@ -98,40 +98,59 @@ export function getAxEngineDoctorCheck(status: Awaited<ReturnType<typeof getAxEn
       detail: "not enabled on this host",
     }
   }
+
+  // Prefer shared lifecycle phase when present (LOCAL-ENGINE-CLIENTS contract).
+  const phase = status.lifecycle?.phase
+  const phasePrefix = phase ? `phase=${phase} backend=${status.lifecycle?.backend ?? "sidecar_http"}; ` : ""
+
   if (!status.eligibility.supported) {
     return {
       name: "AX Engine local provider",
       status: "warn",
-      detail: status.eligibility.blockers.join("; "),
+      detail: `${phasePrefix}${status.eligibility.blockers.join("; ")}`,
     }
   }
   if (!status.dependency.available) {
     return {
       name: "AX Engine local provider",
       status: "warn",
-      detail: status.dependency.blockers.join("; "),
+      detail: `${phasePrefix}${status.dependency.blockers.join("; ")}`,
     }
   }
   if (!status.model.present && status.disk && !status.disk.ok) {
     return {
       name: "AX Engine local provider",
       status: "warn",
-      detail: status.disk.blockers.join("; "),
+      detail: `${phasePrefix}${status.disk.blockers.join("; ")}`,
     }
   }
   if (!status.model.present) {
     return {
       name: "AX Engine local provider",
       status: "warn",
-      detail: "eligible; ax-engine available; AX Engine MLX model not prepared",
+      detail: `${phasePrefix}eligible; ax-engine available; AX Engine MLX model not prepared`,
+    }
+  }
+  if (phase === "error") {
+    return {
+      name: "AX Engine local provider",
+      status: "error",
+      detail: `${phasePrefix}${(status.lifecycle?.blockers ?? status.server.blockers).join("; ") || "engine error"}`,
+    }
+  }
+  if (phase === "degraded") {
+    return {
+      name: "AX Engine local provider",
+      status: "warn",
+      detail: `${phasePrefix}${status.capability.reason ?? "running with limited capability"}`,
     }
   }
   return {
     name: "AX Engine local provider",
-    status: status.server.ready ? "ok" : "warn",
+    status: status.server.ready || phase === "ready" ? "ok" : "warn",
     detail: status.server.ready
-      ? `ready at ${status.server.state?.baseURL}`
-      : `model prepared at ${status.model.path}; server not running`,
+      ? `${phasePrefix}ready at ${status.server.state?.baseURL}`
+      : `${phasePrefix}model prepared at ${status.model.path}; server not running`,
   }
 }
 

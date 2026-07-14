@@ -256,6 +256,12 @@ export const ProvidersCommand = cmd({
 async function printAxEngineStatus(status: any) {
   const prompts = await import("@clack/prompts")
   prompts.intro("AX Engine")
+  if (status.lifecycle?.phase) {
+    prompts.log.info(
+      `Lifecycle: ${status.lifecycle.phase} [${status.lifecycle.backend ?? "sidecar_http"}]`,
+    )
+    for (const blocker of status.lifecycle.blockers ?? []) prompts.log.warn(blocker)
+  }
   const eligibilityStatus = status.eligibility.supported ? "ok" : "blocked"
   prompts.log.info(`Eligibility: ${eligibilityStatus}`)
   for (const blocker of status.eligibility.blockers ?? []) prompts.log.error(blocker)
