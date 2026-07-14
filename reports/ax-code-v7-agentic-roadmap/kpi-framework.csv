@@ -1,0 +1,8 @@
+metric,definition,decision_use,role
+Verified Task Success Rate,Tasks passing task-specific acceptance and regression guardrails divided by eligible attempted tasks,"Primary quality outcome; compare by task class, mode, model, and cost band",Primary KPI
+Human Attention per Accepted Change,"Active review, steering, and intervention minutes divided by accepted verified changes",Tests whether the platform reduces the true scarce resource,Primary KPI
+Cost per Accepted Change,"Model, sandbox, and external-tool cost divided by accepted verified changes",Prevents multi-agent quality gains from hiding uneconomic execution,Primary KPI
+Routing Precision,Router-selected multi-agent runs that beat or match the single-agent counterfactual under quality/cost utility,Gate automatic routing and identify task classes where coordination pays,Driver
+Recovery Success Rate,Forced-failure runs that resume from the latest safe checkpoint and reach a valid terminal state,Gate workflow GA and always-on operation,Reliability guardrail
+Regression or Rollback Rate,Accepted agent changes reverted or linked to a confirmed regression within the review window,Prevents throughput optimization from reducing downstream quality,Quality guardrail
+Unsafe Action Escape Rate,Policy-relevant actions executed despite a deny or escalation rule divided by policy-relevant actions,Release-blocking security measure; controlled-suite target is zero,Security guardrail

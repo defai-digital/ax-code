@@ -1,0 +1,4 @@
+release,theme,decision,do_not_ship
+7.1,Agentic Core and Evaluation,"Trustworthy comparison and hardening of Agent, Council, Arena, and workflow preview",No automatic multi-agent routing or broad workflow GA
+7.2,Durable Workflows and Supervision,"Recoverable, typed, approval-aware execution with a control-center UI",No unattended issue-to-production operation
+7.3,Always-on Agentic Coding Platform,"Issue-to-verified-PR operation, policy/identity, reusable agent packages, feedback-to-eval loop",No autonomous production deployment without explicit policy and promotion

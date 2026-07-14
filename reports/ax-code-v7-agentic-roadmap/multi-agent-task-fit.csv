@@ -1,0 +1,4 @@
+scenario,task_property,architecture,relative_change,reported_range_low,reported_range_high,tool_density_note,interpretation
+Parallel task,High decomposability,Centralized orchestrator and workers,0.809,0.809,0.809,Coordination cost was justified by independent subtasks,Multi-agent coordination improved performance
+Sequential — mild penalty,Strict sequential dependency,Best observed multi-agent variant,-0.39,-0.70,-0.39,Communication fragmented the reasoning chain,Even the least harmful multi-agent variant degraded performance
+Sequential — severe penalty,Strict sequential dependency,Worst observed multi-agent variant,-0.70,-0.70,-0.39,Communication fragmented the reasoning chain,The coordination penalty reached seventy percent

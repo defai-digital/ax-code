@@ -132,6 +132,24 @@ jobs:
       - name: Build Plugin
         run: pnpm --dir packages/plugin run build
 
+      - name: Require Apple signing and notarization credentials
+        if: ${{ matrix.targets == 'darwin-arm64' }}
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY_B64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_TEAM_ID APPLE_API_KEY_B64 APPLE_API_KEY_ID APPLE_API_ISSUER; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is required for signed macOS releases"
+              exit 1
+            fi
+          done
+
       - name: Install Apple certificate
         if: ${{ env.HAS_APPLE_CERT == 'true' }}
         env:
@@ -164,8 +182,6 @@ jobs:
           echo "AX_CODE_APPLE_CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
 
       # Notarize via the App Store Connect API key (not Apple ID + app password).
-      # Exported only when the Apple certificate is configured so fork and local
-      # release dry-runs can still produce ad-hoc-signed macOS archives.
       - name: Configure Apple API key for notarization
         if: ${{ env.HAS_APPLE_CERT == 'true' }}
         env:
@@ -186,10 +202,6 @@ jobs:
             echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID"
             echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
           } >> "$GITHUB_ENV"
-
-      - name: Note unsigned macOS CLI notarization state
-        if: ${{ matrix.targets == 'darwin-arm64' && env.HAS_APPLE_CERT != 'true' }}
-        run: echo "::warning::No Apple signing certificate configured; macOS CLI archive will use ad-hoc native-library signing and will not be notarized."
 
       # ADR-046: build the Rust render addon per platform so build-node-tui can
       # ship its .node. Without this the dist has no @ax-code/render binding and

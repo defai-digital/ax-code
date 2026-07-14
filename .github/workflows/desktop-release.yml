@@ -181,6 +181,23 @@ jobs:
       - name: Build SDK
         run: pnpm --dir packages/sdk/js run build
 
+      - name: Require Apple signing and notarization credentials
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY_B64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_TEAM_ID APPLE_API_KEY_B64 APPLE_API_KEY_ID APPLE_API_ISSUER; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is required for signed macOS Desktop releases"
+              exit 1
+            fi
+          done
+
       - name: Install Apple certificate
         if: ${{ env.HAS_APPLE_CERT == 'true' }}
         env:
@@ -201,9 +218,7 @@ jobs:
 
       # Notarize via the App Store Connect API key (not Apple ID + app password).
       # electron-builder reads APPLE_API_KEY (path) / APPLE_API_KEY_ID /
-      # APPLE_API_ISSUER. Exported via GITHUB_ENV so they are set ONLY when a
-      # cert is configured — otherwise electron-builder would error on a partial
-      # API-key config instead of building unsigned.
+      # APPLE_API_ISSUER. Exported via GITHUB_ENV after the required-secret gate.
       - name: Configure Apple API key for notarization
         if: ${{ env.HAS_APPLE_CERT == 'true' }}
         env:
@@ -228,9 +243,6 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ env.HAS_APPLE_CERT }}
         run: |
           set -euo pipefail
-          if [ "$HAS_APPLE_CERT" != "true" ]; then
-            echo "::warning::No Apple signing certificate configured; building unsigned macOS artifacts."
-          fi
           pnpm --filter @ax-code/electron run build
           node desktop/packages/electron/scripts/package.mjs --mac --arm64 --publish=never
 

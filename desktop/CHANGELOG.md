@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.0.1] - 2026-07-13
+
+### Changed
+
+- Models: refreshes the bundled provider snapshot used by the CLI and Desktop runtime.
+- Release: moves Windows Desktop Authenticode signing to the DEFAI certificate in Azure Key Vault and verifies the certificate thumbprint and RFC 3161 timestamp during packaging.
+
+### Fixed
+
+- Desktop: keeps Arena and Council work-mode routing consistent across the native shell and web server, including Qwen JSON fan-out.
+- Server: returns validated route errors for malformed requests instead of surfacing internal parsing failures.
+- TUI: preserves the selected Unicode-width method during terminal rendering.
+- Self-scan: refreshes repository policy coverage and baseline fingerprints for the current source tree.
+
 ## [7.0.0] - 2026-07-13
 
 ### Changed

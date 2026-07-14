@@ -1,6 +1,6 @@
 {
   "name": "ax-code-desktop",
-  "version": "7.0.0",
+  "version": "7.0.1",
   "description": "AX Code local web runtime.",
   "private": false,
   "license": "Apache-2.0",

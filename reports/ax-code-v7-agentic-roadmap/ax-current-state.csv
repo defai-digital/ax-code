@@ -1,0 +1,8 @@
+layer,working_now,material_gap
+Single-agent execution,"Durable sessions, tools, compaction, autonomous loop, goal and verification controls",No common AgenticRun outcome contract across all modes
+Council,"Independent multi-provider review, dissent tiers, optional anonymous debate, budget gate","Exact-key clustering, uncalibrated confidence, evidence support is not mechanically verified"
+Arena,"Plan and implement best-of-N, worktree isolation, patch snapshots, verify-first ranking","Generic verification, model-supplied risk, exact-diff rather than semantic diversity"
+Workflow,"Versioned spec, dependencies, fan-out, budgets, artifacts, verification, write policies","Preview flag, limited pattern/eval corpus, incomplete checkpoint/fork product semantics"
+Replay and evidence,"Event reconstruction, divergence checks, verification envelopes, audit export","Trace replay is not clean rerun, tool simulation, or checkpoint fork"
+Security and policy,"OS sandbox, permission rules, network controls, tool/MCP boundaries","No per-run workload identity, short-lived scoped authority, or signed run manifest"
+Evaluation,Workflow eval structure and one seeded built-in case,"No broad fresh corpus, counterfactual mode comparison, judge calibration, or long-horizon fault suite"
