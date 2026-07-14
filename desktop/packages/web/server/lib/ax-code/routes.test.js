@@ -217,6 +217,47 @@ describe("ax-code routes", () => {
         error: "Unknown command: abc123",
         retryable: false,
       })
+      expect(String(response.body.message)).toContain("Unknown command: abc123")
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("forwards explicit command-not-found 400 responses from newer CLIs", async () => {
+    const { app } = createApp()
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            name: "InvalidRequestError",
+            message: 'Command not found: "arena". Available commands: init, review',
+            status: 400,
+            details: { resource: "command" },
+            retryable: false,
+          }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+    )
+
+    try {
+      const response = await request(app)
+        .post("/api/session/ses-1/command?directory=/tmp/project")
+        .send({
+          command: "arena",
+          arguments: "compare plans",
+          model: "provider/model",
+          messageID: "msg-1",
+        })
+        .expect(400)
+
+      expect(response.body).toMatchObject({
+        error: 'Command not found: "arena". Available commands: init, review',
+        retryable: false,
+      })
     } finally {
       globalThis.fetch = originalFetch
     }

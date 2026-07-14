@@ -662,6 +662,32 @@ describe("server route validation", () => {
     })
   })
 
+  test("command not found NamedError maps to 400 with the real message", async () => {
+    const { NamedError } = await import("@ax-code/util/error")
+    const err = new NamedError.Unknown({
+      message: 'Command not found: "arena". Available commands: init, review, council',
+    })
+    expect(appErrorEnvelope({ error: err })).toMatchObject({
+      name: "InvalidRequestError",
+      message: 'Command not found: "arena". Available commands: init, review, council',
+      status: 400,
+      details: { resource: "command" },
+      retryable: false,
+    })
+  })
+
+  test("command requires argument NamedError maps to 400", async () => {
+    const { NamedError } = await import("@ax-code/util/error")
+    const err = new NamedError.Unknown({
+      message: 'Command "goal" requires an argument. Usage: /goal <argument>',
+    })
+    expect(appErrorEnvelope({ error: err })).toMatchObject({
+      name: "InvalidRequestError",
+      status: 400,
+      details: { resource: "command" },
+    })
+  })
+
   test("revert and unrevert routes assert that the session is not busy", async () => {
     const src = await fs.readFile(path.join(import.meta.dirname, "../../src/server/routes/session-impl.ts"), "utf-8")
     const revertStart = src.indexOf('"/:sessionID/revert"')

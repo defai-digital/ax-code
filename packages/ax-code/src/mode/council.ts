@@ -184,6 +184,22 @@ export namespace Council {
         (report.incomplete ? " — **incomplete** (need ≥2 successes for consensus tiers)" : ""),
     )
 
+    if (report.incomplete) {
+      lines.push(
+        "",
+        "## Result status",
+        `**Incomplete** — ${report.successfulMembers}/${report.totalMembers} providers succeeded.`,
+        report.successfulMembers <= 1
+          ? "Consensus tiers are **unavailable** (singleton / incomplete fan-out). Do not imply multi-model agreement."
+          : "Consensus tiers require ≥2 successful providers.",
+      )
+      if (report.memberErrors.length) {
+        lines.push(
+          `Failed: ${report.memberErrors.map((e) => `${e.memberId} (${classifyMemberFailure(e.error)})`).join("; ")}`,
+        )
+      }
+    }
+
     if (report.memberErrors.length) {
       lines.push("", "## Member errors")
       for (const err of report.memberErrors) {
@@ -217,6 +233,23 @@ export namespace Council {
       "_Advisory only. Multi-model agreement is evidence, not proof — verify with tests before applying changes._",
     )
     return lines.join("\n")
+  }
+
+  /** Classify a member failure for concise incomplete-result summaries. */
+  export function classifyMemberFailure(error: string): string {
+    const text = error.toLowerCase()
+    if (text.includes("timeout") || text.includes("aborted") || text.includes("abort")) return "timeout"
+    if (
+      text.includes("json") ||
+      text.includes("response_format") ||
+      text.includes("schema") ||
+      text.includes("must contain the word")
+    ) {
+      return "JSON schema requirement"
+    }
+    if (text.includes("quota") || text.includes("rate") || text.includes("429")) return "rate limit"
+    if (text.includes("auth") || text.includes("401") || text.includes("403")) return "auth"
+    return "error"
   }
 
   /**

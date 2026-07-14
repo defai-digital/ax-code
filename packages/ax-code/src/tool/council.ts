@@ -9,6 +9,7 @@ import { Config } from "../config/config"
 import { Budget } from "../mode/budget"
 import { Council } from "../mode/council"
 import { Debate } from "../mode/debate"
+import { ensureJsonModeInstruction } from "../mode/json-mode-prompt"
 import { EnsemblePreflight } from "../mode/preflight"
 import { ModeMemory } from "../mode/memory"
 import { ModePolicy } from "../mode/policy"
@@ -92,15 +93,17 @@ type MemberSpec = { providerID: ProviderID; modelID: ModelID; memberId: string }
 type MemberResolution = { members: MemberSpec[]; rejected: string[] }
 
 function systemPrompt(kind: "review" | "design"): string {
+  // ensureJsonModeInstruction: Qwen/Alibaba require the word "json" when generateObject
+  // uses response_format json_object.
   if (kind === "design") {
-    return `You are one independent member of an engineering design council.
+    return ensureJsonModeInstruction(`You are one independent member of an engineering design council.
 Evaluate the question and context. Return structured issues covering trade-offs, risks, and recommendations.
-Be concrete. Prefer fewer high-signal issues. Do not claim other models' opinions.`
+Be concrete. Prefer fewer high-signal issues. Do not claim other models' opinions.`)
   }
-  return `You are one independent member of a multi-LLM code review council.
+  return ensureJsonModeInstruction(`You are one independent member of a multi-LLM code review council.
 Review the provided context for correctness, security, architecture, and maintainability.
 Return structured issues with severity, category, optional location (file:line), summary, and suggested fix.
-Be concrete. Prefer fewer high-signal issues. Do not claim other models' opinions.`
+Be concrete. Prefer fewer high-signal issues. Do not claim other models' opinions.`)
 }
 
 async function resolveMembers(

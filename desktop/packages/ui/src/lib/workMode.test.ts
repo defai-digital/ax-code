@@ -5,6 +5,7 @@ import {
   resolveWorkModeSend,
   routeWorkModeInput,
   workModeChipColorHex,
+  workModeFallbackPrompt,
 } from "./workMode"
 
 describe("workMode", () => {
@@ -54,6 +55,15 @@ describe("workMode", () => {
       content: "/sessions",
       forcedCommand: null,
     })
+  })
+
+  test("workModeFallbackPrompt embeds tool instructions for version-skew CLI", () => {
+    const council = workModeFallbackPrompt("council", "rate quality")
+    expect(council).toContain("council")
+    expect(council).toContain("rate quality")
+    const arena = workModeFallbackPrompt("arena", "compare plans")
+    expect(arena).toContain("arena")
+    expect(arena).toContain("compare plans")
   })
 
   test("chip colors are fixed green / blue / purple", () => {

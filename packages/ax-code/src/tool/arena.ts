@@ -12,6 +12,7 @@ import { Config } from "../config/config"
 import { Arena } from "../mode/arena"
 import { Budget } from "../mode/budget"
 import { Council } from "../mode/council"
+import { ensureJsonModeInstruction } from "../mode/json-mode-prompt"
 import { EnsemblePreflight } from "../mode/preflight"
 import { ModeMemory } from "../mode/memory"
 import type { ModePolicy } from "../mode/policy"
@@ -219,10 +220,12 @@ async function runProposal(input: {
       messages: [
         {
           role: "system",
-          content: `You are one independent contestant in a coding-agent arena.
+          // ensureJsonModeInstruction: Qwen/Alibaba require the word "json" when generateObject
+          // uses response_format json_object.
+          content: ensureJsonModeInstruction(`You are one independent contestant in a coding-agent arena.
 Propose a concrete implementation approach for the task. Do not write full source files.
 Focus on approach, ordered steps, and risks. Be specific to the context.
-Give an overall riskScore from 0 (low implementation risk) to 20 (high). Do not lower it by omitting risks.`,
+Give an overall riskScore from 0 (low implementation risk) to 20 (high). Do not lower it by omitting risks.`),
         },
         {
           role: "user",
@@ -581,6 +584,27 @@ export const ArenaTool = Tool.define("arena", async () => {
           ? "_Note: this task looks like a quality/review finding request — **council** may fit better than plan arena._\n\n"
           : "")
 
+      const successfulIds = [...proposalById.keys()]
+      const statusBanner =
+        successfulCount >= 2
+          ? ""
+          : [
+              "## Result status",
+              successfulCount === 0
+                ? `**No successful candidates** — 0/${members.length} providers returned a valid proposal. Ranking is unavailable.`
+                : `**Incomplete** — ${successfulCount}/${members.length} providers succeeded. Multi-model comparison is incomplete; do not treat this as consensus.`,
+              successfulIds.length ? `Successful: ${successfulIds.join(", ")}` : "",
+              failedIds.length
+                ? `Failed: ${results
+                    .filter((r) => r.error || !r.proposal)
+                    .map((r) => `${r.member.memberId} (${Council.classifyMemberFailure(r.error ?? "no proposal")})`)
+                    .join("; ")}`
+                : "",
+              "",
+            ]
+              .filter((line) => line !== "")
+              .join("\n") + "\n\n"
+
       return {
         title:
           successfulCount >= 2
@@ -588,7 +612,7 @@ export const ArenaTool = Tool.define("arena", async () => {
             : successfulCount === 0
               ? "Arena produced no valid proposals"
               : `Arena incomplete (${successfulCount}/${members.length} proposals)`,
-        output: header + rankingMd + detail.join("\n"),
+        output: header + statusBanner + rankingMd + detail.join("\n"),
         metadata,
       }
     },

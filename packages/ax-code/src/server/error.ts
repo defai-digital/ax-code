@@ -161,6 +161,22 @@ function namedErrorEnvelope(error: NamedError, logRef?: string): AppErrorEnvelop
       details: { resource: "worktree" },
     }
   }
+  // NamedError.Unknown stores the real message in data.message, while Error.message
+  // is the class name ("UnknownError"). Surface client-caused command failures as 400
+  // so Desktop does not remap them to a generic "Unknown command" from a 500.
+  if (error.name === "UnknownError") {
+    const data = namedErrorData(error)
+    const message = typeof data.message === "string" ? data.message : ""
+    if (/^Command not found:/i.test(message) || /requires an argument\./i.test(message)) {
+      return {
+        name: "InvalidRequestError",
+        message,
+        status: 400,
+        details: { resource: "command" },
+        retryable: false,
+      }
+    }
+  }
   return {
     name: "UnknownError",
     message: "Internal server error",

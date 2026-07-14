@@ -233,6 +233,19 @@ export const registerAxCodeRoutes = (app, dependencies) => {
     try {
       const result = await fetchAxCodeJsonRoute(req, upstreamPath, bodyText)
       const payload = parseJsonBodyText(result.bodyText)
+      // Prefer real client errors from the CLI (command not found is now a 400).
+      if (
+        result.status === 400 &&
+        typeof payload?.message === "string" &&
+        /^Command not found:/i.test(payload.message)
+      ) {
+        return res.status(400).json({
+          error: payload.message,
+          message: payload.message,
+          retryable: false,
+        })
+      }
+      // Legacy CLI: command-not-found used to leak as opaque 500 UnknownError.
       if (
         result.status === 500 &&
         payload?.name === "UnknownError" &&
@@ -242,7 +255,7 @@ export const registerAxCodeRoutes = (app, dependencies) => {
       ) {
         return res.status(400).json({
           error: `Unknown command: ${command}`,
-          message: `Unknown command: ${command}`,
+          message: `Unknown command: ${command}. If this is council/arena, upgrade the ax-code CLI to match Desktop (v6.11.3+ / v7).`,
           retryable: false,
         })
       }

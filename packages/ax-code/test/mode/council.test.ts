@@ -123,6 +123,22 @@ describe("Council.aggregateCouncil", () => {
     expect(report.memberErrors).toHaveLength(1)
     // Incomplete: all tiers collapse to singleton classification path
     expect(report.consensus).toHaveLength(0)
+
+    const md = Council.renderReportMarkdown(report, "review me")
+    expect(md).toContain("## Result status")
+    expect(md).toContain("**Incomplete**")
+    expect(md.toLowerCase()).toContain("unavailable")
+    expect(md).toContain("timeout")
+  })
+
+  test("classifyMemberFailure distinguishes timeout and JSON schema errors", () => {
+    expect(Council.classifyMemberFailure("timeout or aborted: AbortError")).toBe("timeout")
+    expect(
+      Council.classifyMemberFailure(
+        "'messages' must contain the word 'json' in some form, to use 'response_format' of type 'json_object'.",
+      ),
+    ).toBe("JSON schema requirement")
+    expect(Council.classifyMemberFailure("rate limit exceeded 429")).toBe("rate limit")
   })
 
   test("requires strictly more than half of an even-sized council for majority", () => {

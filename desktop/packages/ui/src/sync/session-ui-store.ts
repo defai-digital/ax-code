@@ -32,7 +32,7 @@ import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
 import { useCommandsStore } from "@/stores/useCommandsStore"
 import { useWorkModeStore } from "@/stores/useWorkModeStore"
-import { resolveWorkModeSend } from "@/lib/workMode"
+import { resolveWorkModeSend, workModeFallbackPrompt } from "@/lib/workMode"
 import { toast } from "@/components/ui"
 import { getSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
@@ -155,12 +155,14 @@ export function routeMessage(params: {
       const dirState = getDirectoryState(params.directory ?? undefined)
       const syncCommands = dirState?.command ?? []
       const storeCommands = useCommandsStore.getState().commands
+      const knownCommand = Boolean(
+        syncCommands.find((c) => c.name === cmdName) || storeCommands.find((c) => c.name === cmdName),
+      )
+      // Empty lists usually mean "not synced yet"; do not treat that as "command missing".
+      const commandsLoaded = syncCommands.length > 0 || storeCommands.length > 0
 
-      const isCommand =
-        forcedCommand != null ||
-        Boolean(syncCommands.find((c) => c.name === cmdName) || storeCommands.find((c) => c.name === cmdName))
-
-      if (isCommand && cmdName) {
+      // Known command, or forced work-mode while command catalog not loaded yet.
+      if (cmdName && (knownCommand || (forcedCommand != null && !commandsLoaded))) {
         return optimisticSend({
           sessionId: params.sessionId,
           content,
@@ -176,6 +178,33 @@ export function routeMessage(params: {
                 modelID: params.modelID,
                 command: cmdName,
                 arguments: cmdArgs,
+                agent: params.agent,
+                variant: params.variant,
+                files: params.files,
+                messageId: messageID,
+              })
+              .then(() => {}),
+        })
+      }
+
+      // Work-mode council/arena selected, but connected CLI lacks the slash command
+      // (version skew). Fall back to free-text that still instructs the ensemble tool.
+      if (forcedCommand && commandsLoaded && !knownCommand) {
+        const fallback = workModeFallbackPrompt(forcedCommand.name, forcedCommand.arguments)
+        return optimisticSend({
+          sessionId: params.sessionId,
+          content: fallback,
+          providerID: params.providerID,
+          modelID: params.modelID,
+          agent: params.agent,
+          files: params.files,
+          send: (messageID) =>
+            axCodeClient
+              .sendMessage({
+                id: params.sessionId,
+                providerID: params.providerID,
+                modelID: params.modelID,
+                text: fallback,
                 agent: params.agent,
                 variant: params.variant,
                 files: params.files,
