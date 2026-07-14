@@ -164,7 +164,7 @@ describe("distribution support guardrails", () => {
     expect(job.indexOf("Sign release assets")).toBeLessThan(job.indexOf("Upload release assets"))
   })
 
-  test("release workflow Developer ID signs and notarizes the macOS CLI archive when Apple certs are configured", async () => {
+  test("release workflow requires Developer ID signing and notarizes the macOS CLI archive", async () => {
     const text = await readFile(releaseWorkflow, "utf-8")
     const buildJob = text.match(/\n  build:[\s\S]*?(?=\n  publish:|$)/)
     expect(buildJob).not.toBeNull()
@@ -173,12 +173,14 @@ describe("distribution support guardrails", () => {
     expect(job).toContain("fail-fast: false")
     expect(job).toContain("HAS_APPLE_CERT")
     expect(job).toContain("secrets.APPLE_CERTIFICATE")
+    expect(job).toContain("Require Apple signing and notarization credentials")
+    expect(job).toContain("is required for signed macOS releases")
     expect(job).toContain("Install Apple certificate")
     expect(job).toContain("Developer ID Application")
     expect(job).toContain("AX_CODE_APPLE_CODESIGN_IDENTITY")
     expect(job).toContain("Configure Apple API key for notarization")
     expect(job).toContain("APPLE_API_KEY_B64")
-    expect(job).toContain("Note unsigned macOS CLI notarization state")
+    expect(job).not.toContain("Note unsigned macOS CLI notarization state")
     expect(job).toContain("Notarize macOS CLI archive")
     expect(job).toContain('ARCHIVE="packages/ax-code/dist/ax-code-${{ matrix.targets }}.zip"')
     expect(job).toContain("xcrun notarytool submit")
