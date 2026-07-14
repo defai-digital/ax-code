@@ -276,7 +276,7 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(permission).toContain("function submitPermissionReply(")
     expect(permission).toContain("void Promise.resolve()")
-    expect(permission).toContain("log.warn(failureLabel, { error, requestID: props.request.id })")
+    expect(permission).toContain("log.warn(failureLabel, { error, requestID: id })")
     expect(permission).toContain('"permission prompt once-reply failed"')
     expect(permission).toContain('"permission prompt always-reply failed"')
     expect(permission).toContain('"permission prompt reject failed"')

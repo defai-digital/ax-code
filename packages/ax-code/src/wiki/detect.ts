@@ -6,6 +6,8 @@ import path from "path"
 import { access, readFile, readdir, stat } from "fs/promises"
 import { execFile } from "child_process"
 import { promisify } from "util"
+import { parseJsonResult } from "../util/json-value"
+import { isRecord } from "../util/record"
 import {
   INDEX_CANDIDATES,
   LAST_UPDATE_FILE,
@@ -139,7 +141,9 @@ async function readLastUpdate(wikiDir: string): Promise<WikiLastUpdate | undefin
   const p = path.join(wikiDir, LAST_UPDATE_FILE)
   if (!(await exists(p))) return undefined
   try {
-    const raw = JSON.parse(await readFile(p, "utf-8")) as Record<string, unknown>
+    const parsed = parseJsonResult(await readFile(p, "utf-8"))
+    if (!parsed.ok || !isRecord(parsed.value)) return undefined
+    const raw = parsed.value
     return {
       commit: typeof raw.commit === "string" ? raw.commit : typeof raw.sha === "string" ? raw.sha : undefined,
       timestamp:

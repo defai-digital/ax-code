@@ -5,26 +5,30 @@ import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
-vi.mock("child_process", () => ({
-  spawn() {
-    const proc = new EventEmitter() as any
-    proc.stdin = undefined
-    proc.stdout = undefined
-    proc.stderr = undefined
-    proc.exitCode = null
-    proc.signalCode = null
-    proc.pid = 98765
-    proc.kill = () => true
-
-    setTimeout(() => {
+vi.mock("child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("child_process")>()
+  return {
+    ...actual,
+    spawn() {
+      const proc = new EventEmitter() as any
+      proc.stdin = undefined
+      proc.stdout = undefined
+      proc.stderr = undefined
       proc.exitCode = null
-      proc.signalCode = "SIGTERM"
-      proc.emit("close", null, "SIGTERM")
-    }, 0)
+      proc.signalCode = null
+      proc.pid = 98765
+      proc.kill = () => true
 
-    return proc
-  },
-}))
+      setTimeout(() => {
+        proc.exitCode = null
+        proc.signalCode = "SIGTERM"
+        proc.emit("close", null, "SIGTERM")
+      }, 0)
+
+      return proc
+    },
+  }
+})
 
 const { executeShellCommand } = await import("../../src/session/prompt-shell-command")
 
