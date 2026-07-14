@@ -3,17 +3,14 @@ import { describe, expect, test } from "vitest"
 import { getAssistantErrorPresentation } from "./assistantErrorPresentation"
 
 describe("getAssistantErrorPresentation", () => {
-  test("shows a non-terminal recovery notice when a later assistant attempt exists", () => {
+  test("hides a recovered attempt when a later assistant response exists", () => {
     expect(
       getAssistantErrorPresentation({
         isUser: false,
         isLastAssistantInTurn: false,
         error: { name: "APIError", data: { message: "invalid access token or token expired" } },
       }),
-    ).toEqual({
-      text: "This attempt did not complete. AX Code is continuing the same request automatically.",
-      variant: "info",
-    })
+    ).toBeUndefined()
   })
 
   test("keeps a final provider authentication failure prominent", () => {

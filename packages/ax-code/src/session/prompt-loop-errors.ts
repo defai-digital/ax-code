@@ -71,6 +71,19 @@ function nonRetryableProviderError(error: unknown) {
   return Boolean(data && typeof data === "object" && (data as { isRetryable?: unknown }).isRetryable === false)
 }
 
+function terminalProviderErrorMessage(error: unknown) {
+  if (error && typeof error === "object") {
+    const data = (error as { data?: unknown }).data
+    if (data && typeof data === "object" && typeof (data as { message?: unknown }).message === "string") {
+      return (data as { message: string }).message
+    }
+    if (typeof (error as { message?: unknown }).message === "string") {
+      return (error as { message: string }).message
+    }
+  }
+  return "Provider request failed without a recoverable fallback."
+}
+
 export async function handlePromptLoopError(
   input: {
     sessionID: SessionID
@@ -108,10 +121,9 @@ export async function handlePromptLoopError(
         to: fallbackSwitch.to,
         reason: fallbackSwitch.reason,
       })
-      ;(deps.publishError ?? Session.publishError)({
-        sessionID: input.sessionID,
-        message: fallbackSwitch.message,
-      })
+      // The request is continuing automatically. Publishing a session.error
+      // here makes every client show a terminal failure even when the
+      // fallback returns a successful response in the same turn.
       return {
         action: "fallback",
         fallbackModel: fallback,
@@ -147,6 +159,10 @@ export async function handlePromptLoopError(
       consecutiveErrors: input.consecutiveErrors,
       step: input.step,
       sessionID: input.sessionID,
+    })
+    ;(deps.publishError ?? Session.publishError)({
+      sessionID: input.sessionID,
+      message: terminalProviderErrorMessage(input.error),
     })
     return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
   }

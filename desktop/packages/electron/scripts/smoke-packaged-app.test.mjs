@@ -1,11 +1,16 @@
 import { describe, expect, test } from "vitest"
-import { buildSmokeAppArgs, parseArgs } from "./smoke-packaged-app.mjs"
+import { buildSmokeAppArgs, buildSmokeBundleIdentifier, parseArgs } from "./smoke-packaged-app.mjs"
 
 describe("smoke-packaged-app args", () => {
-  test("uses an isolated Electron profile so an installed app cannot take the single-instance lock", () => {
+  test("uses an isolated Electron profile", () => {
     expect(buildSmokeAppArgs({ userDataDir: "/tmp/ax-code-smoke-user-data" })).toEqual([
       "--user-data-dir=/tmp/ax-code-smoke-user-data",
     ])
+  })
+
+  test("creates a distinct macOS bundle identifier for each smoke app copy", () => {
+    expect(buildSmokeBundleIdentifier("smoke-run-123")).toBe("ai.defai.ax-code-app.smoke.smokerun123")
+    expect(() => buildSmokeBundleIdentifier("")).toThrow("smoke run identifier")
   })
 
   test("requires a temporary Electron profile", () => {

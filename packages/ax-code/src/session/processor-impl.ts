@@ -1203,11 +1203,10 @@ export namespace SessionProcessor {
               } else {
                 input.assistantMessage.error ??= error
               }
-              Session.publishError({
-                sessionID: input.assistantMessage.sessionID,
-                error: input.assistantMessage.error,
-              })
-              await SessionStatus.set(input.sessionID, { type: "idle" })
+              // The prompt loop decides whether this provider failure can be
+              // recovered by retrying or switching providers. It publishes a
+              // terminal session error and transitions to idle only after
+              // that decision is final.
             }
           }
           // Resolve async snapshot before batching final DB writes

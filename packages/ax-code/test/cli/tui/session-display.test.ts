@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import type { AssistantMessage, Part, UserMessage } from "@ax-code/sdk/v2"
 import {
   lastAssistantText,
+  recoveredAssistantMessageIDs,
   scrollDelta,
   scrollTo,
   transcriptItems,
@@ -125,5 +126,14 @@ describe("tui session display helpers", () => {
       { info: user("a"), parts: [text("p1", "a", "hello")] },
       { info: assistant("b"), parts: [] },
     ])
+  })
+
+  test("hides only a failed assistant attempt that has a later successful sibling", () => {
+    const failed = { ...assistant("failed", "u"), error: { name: "APIError" } }
+    const recovered = assistant("recovered", "u")
+    const unrelated = assistant("unrelated", "other")
+
+    expect(recoveredAssistantMessageIDs([failed, recovered, unrelated])).toEqual(new Set(["failed"]))
+    expect(recoveredAssistantMessageIDs([failed, unrelated])).toEqual(new Set())
   })
 })

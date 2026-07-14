@@ -78,6 +78,7 @@ import { coalesceParts, type DisplayPart } from "./coalesce"
 import { autonomousActiveView, isAutonomousProducedMessage, isLiveAutonomousText } from "./autonomous-active"
 import { useAutonomousPulse } from "./autonomous-pulse"
 import { footerSessionStatusOrIdle } from "./footer-view-model"
+import { recoveredAssistantMessageIDs } from "./display"
 import { childAction, firstChildID, nextChildID } from "./child"
 import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
 import { messageScroll, messageTarget, nextVisibleMessage } from "./navigation"
@@ -254,6 +255,7 @@ export function Session() {
   const lastAssistant = createMemo(() => {
     return messages().findLast((x) => x.role === "assistant")
   })
+  const recoveredAssistantIDs = createMemo(() => recoveredAssistantMessageIDs(messages()))
 
   const dimensions = useTerminalDimensions()
   // Default to auto-showing the sidebar on wide terminals. Narrow terminals
@@ -1219,11 +1221,13 @@ export function Session() {
                       </>
                     </Match>
                     <Match when={message.role === "assistant"}>
-                      <AssistantMessage
-                        last={lastAssistant()?.id === message.id}
-                        message={message as AssistantMessage}
-                        parts={sync.data.part[message.id] ?? []}
-                      />
+                      <Show when={!recoveredAssistantIDs().has(message.id)}>
+                        <AssistantMessage
+                          last={lastAssistant()?.id === message.id}
+                          message={message as AssistantMessage}
+                          parts={sync.data.part[message.id] ?? []}
+                        />
+                      </Show>
                     </Match>
                   </Switch>
                 )}

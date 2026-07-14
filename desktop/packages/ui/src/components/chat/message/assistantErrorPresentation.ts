@@ -30,10 +30,9 @@ export const getAssistantErrorPresentation = (input: {
   }
 
   if (!input.isLastAssistantInTurn) {
-    return {
-      text: "This attempt did not complete. AX Code is continuing the same request automatically.",
-      variant: "info",
-    }
+    // A later assistant message in the same turn means recovery succeeded.
+    // Do not leave the failed transport attempt visible to the customer.
+    return undefined
   }
 
   if (errorName === "SessionRetry") {

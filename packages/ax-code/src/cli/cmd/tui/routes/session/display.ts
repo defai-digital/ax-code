@@ -3,6 +3,8 @@ import type { MessageWithParts } from "../../util/transcript"
 type Message = {
   id: string
   role: string
+  parentID?: string
+  error?: unknown
 }
 
 type Part = {
@@ -53,4 +55,23 @@ export function transcriptItems(
   parts: Record<string, MessageWithParts["parts"][number][] | undefined>,
 ): MessageWithParts[] {
   return messages.map((info) => ({ info, parts: parts[info.id] ?? [] }))
+}
+
+export function recoveredAssistantMessageIDs(messages: Message[]) {
+  const recovered = new Set<string>()
+  const laterSuccessfulParents = new Set<string>()
+
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index]
+    if (message.role !== "assistant" || !message.parentID) continue
+
+    if (laterSuccessfulParents.has(message.parentID)) {
+      recovered.add(message.id)
+    }
+    if (!message.error) {
+      laterSuccessfulParents.add(message.parentID)
+    }
+  }
+
+  return recovered
 }

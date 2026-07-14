@@ -5,7 +5,14 @@ import path from "node:path"
 import { mergePathValues } from "./path-utils.js"
 
 export const createAxCodeEnvRuntime = (deps) => {
-  const { state, normalizeDirectoryPath, readSettingsFromDiskMigrated, ENV_CONFIGURED_AX_CODE_WSL_DISTRO } = deps
+  const {
+    state,
+    normalizeDirectoryPath,
+    readSettingsFromDiskMigrated,
+    ENV_CONFIGURED_AX_CODE_WSL_DISTRO,
+    execFile: execFileImpl = execFile,
+    loginShellEnvTimeoutMs = 2_000,
+  } = deps
 
   const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
 
@@ -173,7 +180,7 @@ export const createAxCodeEnvRuntime = (deps) => {
       return windowsSnapshot
     }
 
-    const shellCandidates = [process.env.SHELL, "/bin/zsh", "/bin/bash", "/bin/sh"].filter(Boolean)
+    const shellCandidates = [...new Set([process.env.SHELL, "/bin/zsh", "/bin/bash", "/bin/sh"].filter(Boolean))]
 
     for (const shellPath of shellCandidates) {
       if (!isExecutable(shellPath)) {
@@ -249,7 +256,9 @@ export const createAxCodeEnvRuntime = (deps) => {
       return
     }
 
-    const shellCandidates = [process.env.SHELL, "/bin/zsh", "/bin/bash", "/bin/sh"].filter(Boolean)
+    const shellCandidates = [...new Set([process.env.SHELL, "/bin/zsh", "/bin/bash", "/bin/sh"].filter(Boolean))]
+    const shellEnvTimeoutMs =
+      Number.isFinite(loginShellEnvTimeoutMs) && loginShellEnvTimeoutMs > 0 ? loginShellEnvTimeoutMs : 2_000
 
     for (const shellPath of shellCandidates) {
       if (!isExecutable(shellPath)) {
@@ -257,23 +266,43 @@ export const createAxCodeEnvRuntime = (deps) => {
       }
 
       try {
-        const stdout = await new Promise((resolve, reject) => {
-          execFile(
+        const stdout = await new Promise((resolve) => {
+          let settled = false
+          let timer
+          const finish = (value) => {
+            if (settled) return
+            settled = true
+            clearTimeout(timer)
+            resolve(value)
+          }
+          const child = execFileImpl(
             shellPath,
             ["-lic", "env -0"],
             {
               encoding: "utf8",
               maxBuffer: 10 * 1024 * 1024,
               windowsHide: true,
+              timeout: shellEnvTimeoutMs,
+              killSignal: "SIGTERM",
             },
             (error, stdout) => {
               if (error) {
-                reject(error)
+                finish(null)
               } else {
-                resolve(stdout || "")
+                finish(stdout || "")
               }
             },
           )
+          // execFile's timeout waits for inherited output streams to close.
+          // A shell init script can leave descendants holding those streams,
+          // so startup needs its own completion deadline as well.
+          if (!settled) {
+            timer = setTimeout(() => {
+              child?.kill("SIGTERM")
+              finish(null)
+            }, shellEnvTimeoutMs)
+            timer.unref?.()
+          }
         })
 
         const parsed = parseNullSeparatedEnvSnapshot(stdout)

@@ -5,6 +5,7 @@ import { constants as fsConstants } from "node:fs"
 import http from "node:http"
 import os from "node:os"
 import path from "node:path"
+import { randomUUID } from "node:crypto"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 
@@ -50,6 +51,11 @@ export const buildSmokeAppArgs = ({ userDataDir }) => {
   return [`--user-data-dir=${userDataDir}`]
 }
 
+export const buildSmokeBundleIdentifier = (runID) => {
+  if (!runID) throw new Error("A smoke run identifier is required")
+  return `ai.defai.ax-code-app.smoke.${String(runID).replaceAll("-", "")}`
+}
+
 const pathExists = async (candidate) => {
   try {
     await fs.access(candidate, fsConstants.F_OK)
@@ -79,6 +85,21 @@ const findMacExecutable = async (appPath) => {
     if (stat.isFile()) return candidate
   }
   throw new Error(`No executable found in ${macosDir}`)
+}
+
+const createSmokeAppCopy = async ({ appPath, tmpDir }) => {
+  const smokeAppPath = path.join(tmpDir, "AX Code Smoke.app")
+  // Frameworks inside an app bundle contain relative symlinks. Preserving them
+  // is required for the copied app to remain signable.
+  await fs.cp(appPath, smokeAppPath, { recursive: true, verbatimSymlinks: true })
+
+  // macOS treats packaged apps with the same bundle identifier as one
+  // instance, even when --user-data-dir differs. Use an isolated app identity
+  // so this smoke test can run while a normal AX Code installation is open.
+  const infoPlist = path.join(smokeAppPath, "Contents", "Info.plist")
+  await execFileAsync("plutil", ["-replace", "CFBundleIdentifier", "-string", buildSmokeBundleIdentifier(randomUUID()), infoPlist])
+  await execFileAsync("codesign", ["--force", "--deep", "--sign", "-", smokeAppPath])
+  return smokeAppPath
 }
 
 const allocatePort = () =>
@@ -226,6 +247,34 @@ const copyLogIfPresent = async (artifactsDir) => {
   }
 }
 
+const waitForChildExit = (child, timeoutMs) =>
+  new Promise((resolve) => {
+    if (child.exitCode !== null || child.signalCode) {
+      resolve(true)
+      return
+    }
+
+    const onExit = () => {
+      clearTimeout(timeout)
+      resolve(true)
+    }
+    const timeout = setTimeout(() => {
+      child.removeListener("exit", onExit)
+      resolve(false)
+    }, timeoutMs)
+    child.once("exit", onExit)
+  })
+
+const terminateChild = async (child) => {
+  if (child.exitCode !== null || child.signalCode) return
+
+  child.kill("SIGTERM")
+  if (await waitForChildExit(child, 3_000)) return
+
+  child.kill("SIGKILL")
+  await waitForChildExit(child, 3_000)
+}
+
 const main = async () => {
   const args = parseArgs(process.argv.slice(2))
   const appPath = args.app || (await resolveDefaultAppPath())
@@ -244,7 +293,8 @@ const main = async () => {
   const stubAxCode = await createStubAxCode(tmpDir)
   const userDataDir = path.join(tmpDir, "electron-user-data")
   const serverPort = await allocatePort()
-  const executable = await findMacExecutable(appPath)
+  const smokeAppPath = await createSmokeAppCopy({ appPath, tmpDir })
+  const executable = await findMacExecutable(smokeAppPath)
   const stdout = []
   const stderr = []
 
@@ -357,9 +407,8 @@ const main = async () => {
     }
     throw error
   } finally {
-    child.kill("SIGTERM")
+    await terminateChild(child)
     await cleanupStubProcesses(stubAxCode)
-    setTimeout(() => child.kill("SIGKILL"), 3000).unref()
     await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {})
   }
 }

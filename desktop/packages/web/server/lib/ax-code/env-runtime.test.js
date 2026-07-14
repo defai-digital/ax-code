@@ -10,6 +10,7 @@ const originalPath = process.env.PATH
 const originalSystemRoot = process.env.SystemRoot
 const originalWslBinary = process.env.WSL_BINARY
 const originalOpenChamberWslBinary = process.env.AX_CODE_DESKTOP_WSL_BINARY
+const originalShell = process.env.SHELL
 const originalPlatform = process.platform
 const tempDirs = []
 const itIf = (condition) => (condition ? it : it.skip)
@@ -70,9 +71,15 @@ afterEach(() => {
   } else {
     delete process.env.AX_CODE_DESKTOP_WSL_BINARY
   }
+
+  if (typeof originalShell === "string") {
+    process.env.SHELL = originalShell
+  } else {
+    delete process.env.SHELL
+  }
 })
 
-const createRuntime = (settings) => {
+const createRuntime = (settings, overrides = {}) => {
   const state = {
     cachedLoginShellEnvSnapshot: null,
     resolvedAxCodeBinary: null,
@@ -84,6 +91,7 @@ const createRuntime = (settings) => {
     resolvedNodeBinary: null,
     resolvedBunBinary: null,
     managedAxCodeShellEnvSnapshot: null,
+    ...overrides.state,
   }
 
   const runtime = createAxCodeEnvRuntime({
@@ -91,12 +99,66 @@ const createRuntime = (settings) => {
     normalizeDirectoryPath: (value) => value,
     readSettingsFromDiskMigrated: async () => settings,
     ENV_CONFIGURED_AX_CODE_WSL_DISTRO: null,
+    ...overrides.deps,
   })
 
   return { runtime, state }
 }
 
 describe("AX Code env runtime", () => {
+  it("times out login-shell environment capture instead of blocking Desktop startup", async () => {
+    const shell = path.join(createTempDir("openchamber-login-shell-"), "shell")
+    fs.writeFileSync(shell, "#!/bin/sh\nexit 0\n")
+    fs.chmodSync(shell, 0o755)
+    process.env.SHELL = shell
+    const calls = []
+    const { runtime, state } = createRuntime(
+      {},
+      {
+        state: { cachedLoginShellEnvSnapshot: undefined },
+        deps: {
+          loginShellEnvTimeoutMs: 1234,
+          execFile: (_file, _args, options, callback) => {
+            calls.push(options)
+            callback(new Error("timed out"))
+          },
+        },
+      },
+    )
+
+    await runtime.ensureLoginShellEnvSnapshotAsync()
+
+    expect(calls.length).toBeGreaterThan(0)
+    expect(calls.every((options) => options.timeout === 1234 && options.killSignal === "SIGTERM")).toBe(true)
+    expect(state.cachedLoginShellEnvSnapshot).toBeNull()
+  })
+
+  it("continues startup when a timed-out shell leaves its output stream open", async () => {
+    const shell = path.join(createTempDir("openchamber-stuck-login-shell-"), "shell")
+    fs.writeFileSync(shell, "#!/bin/sh\nexit 0\n")
+    fs.chmodSync(shell, 0o755)
+    process.env.SHELL = shell
+    const killed = []
+    const { runtime, state } = createRuntime(
+      {},
+      {
+        state: { cachedLoginShellEnvSnapshot: undefined },
+        deps: {
+          loginShellEnvTimeoutMs: 1,
+          execFile: () => ({
+            kill: (signal) => killed.push(signal),
+          }),
+        },
+      },
+    )
+
+    await runtime.ensureLoginShellEnvSnapshotAsync()
+
+    expect(killed.length).toBeGreaterThan(0)
+    expect(killed.every((signal) => signal === "SIGTERM")).toBe(true)
+    expect(state.cachedLoginShellEnvSnapshot).toBeNull()
+  })
+
   it("throws a specific error for a missing configured AX Code binary in strict mode", async () => {
     const { runtime } = createRuntime({ axCodeBinary: "/missing/ax-code" })
 

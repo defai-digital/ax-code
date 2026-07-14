@@ -20,6 +20,7 @@ import { hasPendingUserSendAnimation, consumePendingUserSendAnimation } from "@/
 import { streamPerfCount, streamPerfMeasure } from "@/stores/utils/streamDebug"
 import type { StreamPhase } from "./message/types"
 import { normalizeParts } from "./message/partUtils"
+import { omitRecoveredAssistantMessages } from "./lib/turns/recoveredAssistantMessages"
 
 const MESSAGE_LIST_VIRTUALIZE_THRESHOLD = 5
 const MESSAGE_LIST_OVERSCAN = 6
@@ -595,18 +596,19 @@ const TurnBlock = React.memo(
     }, [activeStreamingMessageId, turn.assistantMessages])
 
     const visibleAssistantMessages = React.useMemo(() => {
+      const assistantMessages = omitRecoveredAssistantMessages(turn.assistantMessages)
       if (chatRenderMode === "live") {
-        return turn.assistantMessages
+        return assistantMessages
       }
 
-      const completed = turn.assistantMessages.filter(isAssistantMessageCompleted)
-      if (completed.length === turn.assistantMessages.length) {
-        return turn.assistantMessages
+      const completed = assistantMessages.filter(isAssistantMessageCompleted)
+      if (completed.length === assistantMessages.length) {
+        return assistantMessages
       }
 
       if (streamingAssistantMessageId) {
         const completedIds = new Set(completed.map((assistant) => assistant.info.id))
-        return turn.assistantMessages.filter(
+        return assistantMessages.filter(
           (assistant) => completedIds.has(assistant.info.id) || assistant.info.id === streamingAssistantMessageId,
         )
       }
@@ -614,15 +616,16 @@ const TurnBlock = React.memo(
       if (completed.length > 0) {
         return completed
       }
-      const firstAssistant = turn.assistantMessages[0]
+      const firstAssistant = assistantMessages[0]
       return firstAssistant ? [firstAssistant] : []
     }, [chatRenderMode, streamingAssistantMessageId, turn.assistantMessages])
 
     const completedAssistantMessages = React.useMemo(() => {
+      const assistantMessages = omitRecoveredAssistantMessages(turn.assistantMessages)
       if (chatRenderMode !== "sorted") {
-        return turn.assistantMessages
+        return assistantMessages
       }
-      return turn.assistantMessages.filter(isAssistantMessageCompleted)
+      return assistantMessages.filter(isAssistantMessageCompleted)
     }, [chatRenderMode, turn.assistantMessages])
 
     const visibleAssistantIds = React.useMemo(() => {

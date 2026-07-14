@@ -753,7 +753,7 @@ describe("session.processor", () => {
     })
   })
 
-  test("publishes one error event after retry exhaustion", async () => {
+  test("defers error publication after retry exhaustion to the prompt loop", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -824,7 +824,7 @@ describe("session.processor", () => {
           })
 
           expect(result).toBe("stop")
-          expect(events).toHaveLength(1)
+          expect(events).toHaveLength(0)
         } finally {
           unsub()
         }

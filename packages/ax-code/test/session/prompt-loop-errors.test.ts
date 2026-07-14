@@ -14,7 +14,7 @@ const fallbackModel = {
 }
 
 describe("prompt loop error transitions", () => {
-  test("switches to fallback model for repeated retryable provider errors", async () => {
+  test("switches to fallback model for repeated retryable provider errors without publishing a terminal error", async () => {
     const sessionID = SessionID.descending()
     const warnings: { message: string; fields: Record<string, unknown> }[] = []
     const published: { sessionID: SessionID; message: string }[] = []
@@ -62,15 +62,10 @@ describe("prompt loop error transitions", () => {
         },
       },
     ])
-    expect(published).toEqual([
-      {
-        sessionID,
-        message: "Provider primary failed: rate limited. Switching to fallback/fallback-model.",
-      },
-    ])
+    expect(published).toEqual([])
   })
 
-  test("switches to fallback model immediately for provider quota exhaustion", async () => {
+  test("switches to fallback model immediately for provider quota exhaustion without publishing a terminal error", async () => {
     const sessionID = SessionID.descending()
     const published: { sessionID: SessionID; message: string }[] = []
 
@@ -106,13 +101,7 @@ describe("prompt loop error transitions", () => {
       fallbackModel,
       consecutiveErrors: 0,
     })
-    expect(published).toEqual([
-      {
-        sessionID,
-        message:
-          "Provider primary failed: Your token-plan quota has been exhausted. Switching to fallback/fallback-model.",
-      },
-    ])
+    expect(published).toEqual([])
   })
 
   test("passes previously failed providers to fallback lookup", async () => {
@@ -244,7 +233,12 @@ describe("prompt loop error transitions", () => {
         },
       },
     ])
-    expect(published).toEqual([])
+    expect(published).toEqual([
+      {
+        sessionID,
+        message: "request did not terminate",
+      },
+    ])
   })
 
   test("publishes stop errors when the consecutive error limit is reached", async () => {
