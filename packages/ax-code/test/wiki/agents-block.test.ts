@@ -48,4 +48,32 @@ describe("wiki/agents-block", () => {
     expect(v2.split(OPENWIKI_START).length - 1).toBe(1)
     expect(v2.split(OPENWIKI_END).length - 1).toBe(1)
   })
+
+  test("finds END after START even if a stray END appears earlier", () => {
+    const content = [
+      "<!-- OPENWIKI:END -->",
+      "# Project",
+      "",
+      OPENWIKI_START,
+      "old body",
+      OPENWIKI_END,
+      "",
+      "tail",
+      "",
+    ].join("\n")
+    const next = upsertOpenWikiBlock(content, defaultOpenWikiBlockBody("openwiki"))
+    expect(next).toContain("# Project")
+    expect(next).toContain("tail")
+    expect(next).toContain("Repo Wiki")
+    expect(next.split(OPENWIKI_START).length - 1).toBe(1)
+  })
+
+  test("repairs orphan START without duplicating markers", () => {
+    const content = `# Head\n\n${OPENWIKI_START}\nbroken without end\n`
+    const next = upsertOpenWikiBlock(content, defaultOpenWikiBlockBody("openwiki"))
+    expect(next).toContain("# Head")
+    expect(next).toContain(OPENWIKI_END)
+    expect(next.split(OPENWIKI_START).length - 1).toBe(1)
+    expect(next).not.toContain("broken without end")
+  })
 })

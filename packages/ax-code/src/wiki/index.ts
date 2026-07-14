@@ -13,6 +13,7 @@ export {
   AGENTS_FILENAME,
   CLAUDE_FILENAME,
   INDEX_CANDIDATES,
+  sanitizeWikiDirRel,
 } from "./paths"
 
 export {

@@ -3,7 +3,7 @@
  */
 
 import path from "path"
-import { access, readFile, readdir } from "fs/promises"
+import { access, readFile, readdir, stat } from "fs/promises"
 import { execFile } from "child_process"
 import { promisify } from "util"
 import {
@@ -11,6 +11,7 @@ import {
   LAST_UPDATE_FILE,
   OPENWIKI_COMMAND_DEFAULT,
   WIKI_DIR_DEFAULT,
+  sanitizeWikiDirRel,
 } from "./paths"
 
 const execFileAsync = promisify(execFile)
@@ -45,6 +46,15 @@ async function exists(p: string): Promise<boolean> {
   try {
     await access(p)
     return true
+  } catch {
+    return false
+  }
+}
+
+async function isDirectory(p: string): Promise<boolean> {
+  try {
+    const s = await stat(p)
+    return s.isDirectory()
   } catch {
     return false
   }
@@ -152,9 +162,10 @@ export async function detectWiki(input: {
   command?: string
 }): Promise<WikiDetectResult> {
   const root = path.resolve(input.root)
-  const wikiDirRelative = (input.dir?.trim() || WIKI_DIR_DEFAULT).replace(/\\/g, "/").replace(/\/+$/, "") || WIKI_DIR_DEFAULT
+  const wikiDirRelative = sanitizeWikiDirRel(input.dir, WIKI_DIR_DEFAULT)
   const wikiDir = path.join(root, wikiDirRelative)
-  const wikiExists = await exists(wikiDir)
+  // Must be a directory — a regular file named openwiki must not count as a wiki.
+  const wikiExists = await isDirectory(wikiDir)
 
   const command = resolveWikiCommand(input.command)
   const binaryPath = await resolveBinary(command)

@@ -24,11 +24,15 @@ export type WikiCardsResult = {
   defaultOutputPath: string
 }
 
+function pageStem(wikiRel: string): string {
+  return path.basename(wikiRel).replace(/\.md$/i, "")
+}
+
 export function cardsFromPages(pages: WikiPage[]): WikiCard[] {
   // Prefer content pages over pure indexes for card density
   const ranked = [...pages].sort((a, b) => {
-    const aIndex = /^(quickstart|index|readme|cards)$/i.test(path.basename(a.wikiRel, ".md")) ? 1 : 0
-    const bIndex = /^(quickstart|index|readme|cards)$/i.test(path.basename(b.wikiRel, ".md")) ? 1 : 0
+    const aIndex = /^(quickstart|index|readme|cards)$/i.test(pageStem(a.wikiRel)) ? 1 : 0
+    const bIndex = /^(quickstart|index|readme|cards)$/i.test(pageStem(b.wikiRel)) ? 1 : 0
     if (aIndex !== bIndex) return aIndex - bIndex
     return a.title.localeCompare(b.title)
   })

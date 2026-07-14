@@ -5,7 +5,14 @@
 
 import path from "path"
 import { readFile, writeFile, access } from "fs/promises"
-import { OPENWIKI_END, OPENWIKI_START, AGENTS_FILENAME, CLAUDE_FILENAME, WIKI_DIR_DEFAULT } from "./paths"
+import {
+  OPENWIKI_END,
+  OPENWIKI_START,
+  AGENTS_FILENAME,
+  CLAUDE_FILENAME,
+  WIKI_DIR_DEFAULT,
+  sanitizeWikiDirRel,
+} from "./paths"
 
 export function hasOpenWikiBlock(content: string): boolean {
   return content.includes(OPENWIKI_START) && content.includes(OPENWIKI_END)
@@ -31,16 +38,22 @@ export function defaultOpenWikiBlockBody(wikiRel: string = WIKI_DIR_DEFAULT): st
 
 /**
  * Insert or replace the OpenWiki marker block. Content outside markers is preserved.
+ * END is always searched *after* START so a stray END earlier cannot block updates.
+ * An orphan START (no END) is replaced through end-of-file rather than duplicating.
  */
 export function upsertOpenWikiBlock(content: string, blockBody?: string): string {
   const block = (blockBody ?? defaultOpenWikiBlockBody()).trimEnd()
   const start = content.indexOf(OPENWIKI_START)
-  const end = content.indexOf(OPENWIKI_END)
 
-  if (start !== -1 && end !== -1 && end > start) {
+  if (start !== -1) {
+    const end = content.indexOf(OPENWIKI_END, start + OPENWIKI_START.length)
     const before = content.slice(0, start).replace(/\s*$/, "\n\n")
-    const after = content.slice(end + OPENWIKI_END.length).replace(/^\s*/, "\n")
-    return `${before}${block}${after}`.replace(/\n{3,}/g, "\n\n").trimEnd() + "\n"
+    if (end !== -1) {
+      const after = content.slice(end + OPENWIKI_END.length).replace(/^\s*/, "\n")
+      return `${before}${block}${after}`.replace(/\n{3,}/g, "\n\n").trimEnd() + "\n"
+    }
+    // Orphan START: drop the broken tail and write a complete block.
+    return `${before}${block}\n`.replace(/\n{3,}/g, "\n\n")
   }
 
   const trimmed = content.replace(/\s*$/, "")
@@ -78,7 +91,7 @@ export async function ensureAgentsWikiPointers(
     touchClaudeMd?: boolean
   },
 ): Promise<EnsureAgentsResult> {
-  const wikiRel = opts?.wikiRel ?? WIKI_DIR_DEFAULT
+  const wikiRel = sanitizeWikiDirRel(opts?.wikiRel, WIKI_DIR_DEFAULT)
   const dryRun = opts?.dryRun === true
   const createAgents = opts?.createAgents !== false
   const touchClaudeMd = opts?.touchClaudeMd !== false

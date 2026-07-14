@@ -13,6 +13,26 @@ describe("wiki/detect + ensureAgents (fs)", () => {
     expect(det.binary.found).toBe(false)
   })
 
+  test("does not treat a file named openwiki as a wiki directory", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "ax-wiki-"))
+    await writeFile(path.join(root, "openwiki"), "not a dir\n", "utf-8")
+    const det = await detectWiki({ root, command: "openwiki-definitely-missing-xyz" })
+    expect(det.wikiExists).toBe(false)
+  })
+
+  test("rejects path-traversal dir and falls back to openwiki", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "ax-wiki-"))
+    await mkdir(path.join(root, "openwiki"), { recursive: true })
+    await writeFile(path.join(root, "openwiki", "quickstart.md"), "# QS\n", "utf-8")
+    const det = await detectWiki({
+      root,
+      dir: "../outside",
+      command: "openwiki-definitely-missing-xyz",
+    })
+    expect(det.wikiDirRelative).toBe("openwiki")
+    expect(det.wikiExists).toBe(true)
+  })
+
   test("detects wiki with quickstart and page count", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "ax-wiki-"))
     await mkdir(path.join(root, "openwiki"), { recursive: true })

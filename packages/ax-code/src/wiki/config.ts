@@ -4,7 +4,7 @@
  */
 
 import { Config } from "../config/config"
-import { OPENWIKI_COMMAND_DEFAULT, WIKI_DIR_DEFAULT } from "./paths"
+import { OPENWIKI_COMMAND_DEFAULT, WIKI_DIR_DEFAULT, sanitizeWikiDirRel } from "./paths"
 import { resolveWikiCommand } from "./detect"
 
 export type WikiRuntimeConfig = {
@@ -53,8 +53,9 @@ export async function resolveWikiRuntimeConfig(overrides?: {
   dir?: string
 }): Promise<WikiRuntimeConfig> {
   const slice = await readWikiConfigSlice()
+  // CLI flag > config > env (via resolveWikiCommand) > default
   const command = resolveWikiCommand(overrides?.command ?? slice?.command)
-  const dir = (overrides?.dir?.trim() || slice?.dir?.trim() || DEFAULTS.dir).replace(/\\/g, "/").replace(/\/+$/, "") || DEFAULTS.dir
+  const dir = sanitizeWikiDirRel(overrides?.dir ?? slice?.dir, DEFAULTS.dir)
 
   return {
     enabled: slice?.enabled !== false,

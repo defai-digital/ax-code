@@ -125,8 +125,22 @@ export async function runOpenWiki(input: {
       resolve(result)
     }
 
+    let killTimer: ReturnType<typeof setTimeout> | undefined
     const timer = setTimeout(() => {
-      child.kill("SIGTERM")
+      try {
+        child.kill("SIGTERM")
+      } catch {
+        // ignore
+      }
+      // Escalate if the process ignores SIGTERM (common with nested agent children).
+      killTimer = setTimeout(() => {
+        try {
+          child.kill("SIGKILL")
+        } catch {
+          // ignore
+        }
+      }, 5_000)
+      killTimer.unref?.()
       finish({
         ok: false,
         action: input.action,
@@ -155,6 +169,7 @@ export async function runOpenWiki(input: {
 
     child.on("error", (err: NodeJS.ErrnoException) => {
       clearTimeout(timer)
+      if (killTimer) clearTimeout(killTimer)
       const missing = err.code === "ENOENT"
       finish({
         ok: false,
@@ -172,6 +187,7 @@ export async function runOpenWiki(input: {
 
     child.on("close", (code) => {
       clearTimeout(timer)
+      if (killTimer) clearTimeout(killTimer)
       finish({
         ok: code === 0,
         action: input.action,
