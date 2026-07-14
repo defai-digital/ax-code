@@ -32,6 +32,7 @@ export function generate(info: ProjectInfo, config: Partial<GeneratorConfig> = {
   sections.push(metadataHeader(info))
   sections.push(projectHeader(info))
   sections.push(buildCommands(info))
+  sections.push(knowledgeRouting())
 
   if (depth !== "basic" || complexity !== "small") {
     sections.push(architectureOverview(info))
@@ -103,6 +104,21 @@ function projectHeader(info: ProjectInfo): string {
   }
 
   return parts.join("\n")
+}
+
+function knowledgeRouting(): string {
+  return `## Knowledge routing
+
+Keep this file **thin**. Do not dump full architecture into AGENTS.md.
+
+| Need | Prefer |
+|------|--------|
+| Build / test / safety / style rules | This file (\`AGENTS.md\`) |
+| Architecture, module intent, design narrative | \`openwiki/\` (OpenWiki) — start at \`openwiki/quickstart.md\` or \`openwiki/index.md\` |
+| Precise symbols, callers, callees, references | \`code_intelligence\` / \`lsp\` (\`ax-code index\`) |
+| Personal prefs / past decisions | Project memory (\`.ax-code/memory.json\`) |
+
+Bootstrap wiki: \`ax-code init --wiki\` or \`ax-code wiki generate\`. Refresh: \`ax-code wiki update\`. If wiki and code disagree, trust the code.`
 }
 
 function buildCommands(info: ProjectInfo): string {

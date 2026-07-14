@@ -17,6 +17,7 @@ import PROMPT_PRD from "./template/prd.txt"
 import PROMPT_COUNCIL from "./template/council.txt"
 import PROMPT_ARENA from "./template/arena.txt"
 import PROMPT_MODE from "./template/mode.txt"
+import PROMPT_WIKI from "./template/wiki.txt"
 
 export namespace Command {
   export const Event = {
@@ -109,6 +110,7 @@ export namespace Command {
     COUNCIL: "council",
     ARENA: "arena",
     MODE: "mode",
+    WIKI: "wiki",
   } as const
 
   const state = Instance.state(async () => {
@@ -227,6 +229,17 @@ export namespace Command {
         return PROMPT_MODE
       },
       hints: hints(PROMPT_MODE),
+    }
+    commands[Default.WIKI] = {
+      name: Default.WIKI,
+      description: "OpenWiki repo wiki status / generate / update (semantic wiki, not code index)",
+      source: "command",
+      sourceTool: "builtin",
+      scope: "builtin",
+      get template() {
+        return PROMPT_WIKI.replace("${path}", () => ctx.worktree)
+      },
+      hints: hints(PROMPT_WIKI),
     }
 
     for (const [name, command] of Object.entries(cfg.command ?? {})) {

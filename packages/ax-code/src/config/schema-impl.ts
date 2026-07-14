@@ -970,6 +970,35 @@ export const Info = z
       .describe(
         "Execution modes: local, cloud, hybrid placement, multi-provider council, and arena ensemble (ADR-049).",
       ),
+    wiki: z
+      .object({
+        enabled: z
+          .boolean()
+          .optional()
+          .describe(
+            "When true (default), inject <repo_wiki> system protocol if the wiki directory exists. Set false to suppress.",
+          ),
+        command: z
+          .string()
+          .optional()
+          .describe("OpenWiki executable name or path. Default: openwiki (or OPENWIKI_COMMAND env)."),
+        dir: z
+          .string()
+          .optional()
+          .describe("Wiki directory relative to project root. Default: openwiki (OpenWiki code-mode default)."),
+        autoInjectAgents: z
+          .boolean()
+          .optional()
+          .describe("Allow wiki ensure-agents / init --wiki to rewrite OPENWIKI marker blocks. Default: true."),
+        touchClaudeMd: z
+          .boolean()
+          .optional()
+          .describe("When ensuring markers, also update CLAUDE.md if it already exists. Default: true."),
+      })
+      .optional()
+      .describe(
+        "OpenWiki repo semantic wiki (ADR-050). Complements structural ax-code index; does not replace code_intelligence.",
+      ),
   })
   .strict()
   .meta({

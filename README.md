@@ -189,7 +189,7 @@ AX Code is designed for agent work that touches real files, shells, sessions, an
 - **Terminal command center**: prompt editing, provider/model picker, agent picker, session list, MCP status, skill dialog, sandbox/autonomous toggles, and live tool progress.
 - **Controlled execution**: tools such as read, edit, write, grep, glob, bash, web fetch/search, todo, task, and skill execution all pass through permission and isolation boundaries.
 - **Durable sessions**: resume, fork, compact, export/import, replay, compare, rollback, and inspect session risk instead of losing work when a chat closes.
-- **Repository intelligence**: `ax-code init` writes `AGENTS.md`; `ax-code index`, `graph`, semantic diff, LSP-backed context, and risk/DRE views help agents reason over larger codebases.
+- **Repository intelligence**: `ax-code init` writes a thin `AGENTS.md`; `ax-code wiki` integrates OpenWiki for multi-page semantic docs; `ax-code index`, `graph`, semantic diff, LSP-backed context, and risk/DRE views provide structural precision on larger codebases.
 - **Provider flexibility**: connect hosted or local providers from `/connect` or `ax-code providers login`; list available models with `ax-code models`.
 - **Extensibility**: add MCP servers, create custom agents, validate Agent Skills, and embed custom SDK tools without rebuilding the orchestration layer.
 
@@ -208,9 +208,9 @@ See [Sandbox Mode](docs/sandbox.md), [Autonomous Mode](docs/autonomous.md), [MCP
 
 1. Open a repository and run `ax-code`.
 2. Use `/connect` to add a provider or switch models. For automation, use `ax-code providers login` or provider environment variables.
-3. Run `ax-code init` so `AGENTS.md` captures local conventions, safety rules, and project context.
+3. Run `ax-code init` so `AGENTS.md` captures local conventions, safety rules, and project context. Use `ax-code init --wiki` (or `ax-code wiki generate`) when you want an OpenWiki semantic wiki under `openwiki/`.
 4. Keep the default sandbox for broad edits; change it only when the task needs a different boundary.
-5. Run `ax-code index` on larger repos when semantic search and code-intelligence workflows matter.
+5. Run `ax-code index` on larger repos when structural code-intelligence (symbols, callers, refs) matters; use the wiki for architecture narrative.
 6. Use `ax-code run`, `ax-code serve`, or `@ax-code/sdk` when the same agent workflow needs to move into scripts, CI, bots, or applications.
 
 Grok defaults to `Grok Build CLI` in `/connect`, using the local `grok` command and its CLI login/session. The hosted `Grok Cloud API` provider still works for explicit `xai` configuration or existing credentials, but is hidden from the default provider list.
@@ -255,6 +255,8 @@ ranking, GLM-4.7-Flash placement, and memory-based recommendations.
 | `ax-code providers login`                      | Configure provider credentials               |
 | `ax-code models`                               | List available provider/model IDs            |
 | `ax-code init`                                 | Create or update repository `AGENTS.md`      |
+| `ax-code init --wiki`                          | AGENTS.md + OpenWiki bootstrap               |
+| `ax-code wiki`                                 | OpenWiki status / generate / update          |
 | `ax-code index`                                | Build code-intelligence indexes              |
 | `ax-code graph`                                | Inspect the repository graph                 |
 | `ax-code mcp list --tools`                     | Review MCP servers, exposed tools, and rules |

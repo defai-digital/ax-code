@@ -29,6 +29,7 @@ import { IndexCommand } from "./cmd/index-graph"
 import { InitCommand } from "./cmd/init"
 import { McpCommand } from "./cmd/mcp"
 import { MemoryCommand } from "./cmd/memory"
+import { WikiCommand } from "./cmd/wiki"
 import { ModelsCommand } from "./cmd/models"
 import { PrCommand } from "./cmd/pr"
 import { ReleaseCommand } from "./cmd/release"
@@ -97,6 +98,7 @@ const cmds = [
   SessionCommand,
   DbCommand,
   MemoryCommand,
+  WikiCommand,
   SkillCommand,
   WorkflowCommand,
   DesignCheckCommand,

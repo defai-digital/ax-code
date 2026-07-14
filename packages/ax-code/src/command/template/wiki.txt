@@ -1,0 +1,21 @@
+Help with the OpenWiki repository wiki for this project (path: ${path}).
+
+OpenWiki is the semantic wiki layer (architecture, module intent). It does **not** replace `code_intelligence` / `lsp` for precise symbols.
+
+User request: $ARGUMENTS
+
+Do the following:
+
+1. If the user asked for status or diagnosis, prefer running or summarizing:
+   - `ax-code wiki status`
+   - `ax-code wiki doctor`
+2. If they want generation or refresh and OpenWiki is installed:
+   - generate: `ax-code wiki generate`
+   - update: `ax-code wiki update`
+   If the CLI is missing, tell them: `npm install -g openwiki` and configure `~/.openwiki/.env`.
+3. Ensure AGENTS.md has the OpenWiki pointer block when a wiki exists:
+   - `ax-code wiki ensure-agents`
+4. After a wiki exists, for architecture questions read `openwiki/quickstart.md` or `openwiki/index.md` first, then drill into linked pages. Prefer `code_intelligence` for callers/callees/refs.
+5. Keep AGENTS.md thin — do not paste the whole wiki into AGENTS.md.
+
+If $ARGUMENTS is empty, run a short status summary and recommend next steps (generate vs update vs just read the wiki).

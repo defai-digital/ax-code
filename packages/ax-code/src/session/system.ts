@@ -29,6 +29,7 @@ import { ModeProtocol } from "../mode/protocol"
 import { Config } from "../config/config"
 import type { ModePolicy } from "../mode/policy"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
+import { maybeRenderRepoWikiProtocol } from "../wiki/protocol"
 
 export namespace SystemPrompt {
   const log = Log.create({ service: "session.system-prompt" })
@@ -172,6 +173,7 @@ export namespace SystemPrompt {
         ]
 
     let executionModesProtocol: string[] = []
+    let wikiProtocol: string[] = []
     try {
       const cfg = await Config.get()
       const modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
@@ -184,9 +186,26 @@ export namespace SystemPrompt {
           localAvailable: model.providerID === localProvider,
         }),
       ]
+      const wikiCfg = (
+        cfg as {
+          wiki?: { enabled?: boolean; dir?: string; command?: string }
+        }
+      ).wiki
+      const wikiBlock = await maybeRenderRepoWikiProtocol(Instance.directory, {
+        enabled: wikiCfg?.enabled,
+        dir: wikiCfg?.dir,
+        command: wikiCfg?.command,
+      })
+      if (wikiBlock) wikiProtocol = [wikiBlock]
     } catch (error) {
       log.warn("execution modes protocol resolve failed", { error })
       executionModesProtocol = [ModeProtocol.renderExecutionModes()]
+      try {
+        const wikiBlock = await maybeRenderRepoWikiProtocol(Instance.directory)
+        if (wikiBlock) wikiProtocol = [wikiBlock]
+      } catch (wikiError) {
+        log.warn("repo wiki protocol resolve failed", { error: wikiError })
+      }
     }
 
     return [
@@ -204,6 +223,7 @@ export namespace SystemPrompt {
         ...autonomousWorkflow,
         ...verificationProtocol,
         ...executionModesProtocol,
+        ...wikiProtocol,
         ...htmlDevWorkflow,
         ...debugEngineWorkflow,
       ].join("\n"),

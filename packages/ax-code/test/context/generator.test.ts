@@ -54,6 +54,14 @@ describe("context generator", () => {
     expect(content).toContain("Verify with the narrowest relevant test")
   })
 
+  test("includes knowledge routing for OpenWiki vs index", () => {
+    const content = generate(baseInfo, { depth: "standard" })
+    expect(content).toContain("## Knowledge routing")
+    expect(content).toContain("openwiki/")
+    expect(content).toContain("code_intelligence")
+    expect(content).toContain("ax-code wiki")
+  })
+
   test("includes MCP suggestions section when suggestedMcp is set", () => {
     const info: ProjectInfo = { ...baseInfo, suggestedMcp: ["@playwright/mcp — browser screenshot"] }
     const content = generate(info)
