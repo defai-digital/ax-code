@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-07-04
+Last reviewed: 2026-07-13
 Owner: ax-code runtime
 
 The root [README](../README.md) keeps the primary install path. This page is the source of truth for supported CLI installer channels, `ax-code doctor` runtime labels, local launcher behavior, and how those channels relate to Desktop installers.
@@ -48,6 +48,8 @@ Desktop is installed through separate platform-specific channels:
 
 The Windows PowerShell `install.ps1` script installs the CLI only; it does not install the Desktop app.
 
+Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**. SmartScreen may still warn while a new build develops download reputation, but the prompt must identify that expected publisher. Do not run an installer shown as **Unknown publisher**; use `Get-AuthenticodeSignature` as documented in the Desktop README when an explicit signature check is required.
+
 ## Channel Matrix
 
 | Channel                              | Install or setup command                                                                                                                       | Expected runtime label | Support status       | Use when                                                           |
@@ -75,7 +77,7 @@ The Windows PowerShell `install.ps1` script installs the CLI only; it does not i
   `brew install ax-code` form.
 - Linux: use the Bash release installer (`install` script from GitHub Releases). It supports `linux-x64` and `linux-arm64` (including musl/baseline variants when detected). Requires `curl`, `tar`, and `minisign` for signature verification.
 - Windows CLI: use the native PowerShell installer. It installs the GitHub release asset into a user-local directory and updates the user PATH unless `-NoModifyPath` is provided. The Bash installer is not the canonical Windows user experience.
-- Windows Desktop: use the signed Electron installer from GitHub Releases, named `AX-Code-<version>-win-x64.exe` or `AX-Code-<version>-win-arm64.exe`. Do not describe `install.ps1` as a Desktop installer.
+- Windows Desktop: use the signed Electron installer from GitHub Releases, named `AX-Code-<version>-win-x64.exe` or `AX-Code-<version>-win-arm64.exe`. The expected Authenticode publisher is `DEFAI Private Limited`. Do not describe `install.ps1` as a Desktop installer.
 - npm: not a supported install or upgrade channel.
 
 One-line remote execution is a convenience path, not the only path. Keep an inspectable installer flow in the docs, use pinned versions in CI, and document platform installers only with install-matrix coverage that verifies `ax-code --version` and verifies `ax-code doctor` reports the expected runtime mode for that platform.

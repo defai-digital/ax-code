@@ -69,6 +69,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/d
 - Intel/AMD Windows: download and run the latest `AX-Code-<version>-win-x64.exe`.
 - Windows on Arm: download and run the latest `AX-Code-<version>-win-arm64.exe`.
 
+Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**. SmartScreen may still warn for a newly released build while it develops download reputation; continue only when Windows shows that expected publisher. Do not run an installer reported as **Unknown publisher**.
+
 The PowerShell `install.ps1` path installs the CLI only. It does not install the Desktop app.
 
 AX Code Desktop is the primary graphical workspace. It shares the AX Code runtime and provider setup, and its source lives in this monorepo under [`desktop/`](desktop/). The standalone Desktop source repository has been retired.

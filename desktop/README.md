@@ -56,9 +56,22 @@ xattr -cr "/Applications/AX Code.app"
 
 ### Installer (recommended)
 
-1. Download the latest `.exe` installer from the [Releases page](https://github.com/defai-digital/ax-code/releases).
-2. Run the installer.
-3. Start **AX Code** from the Start Menu or Desktop shortcut.
+1. Download the appropriate `.exe` installer from the [Releases page](https://github.com/defai-digital/ax-code/releases):
+   - Intel/AMD Windows: `AX-Code-<version>-win-x64.exe`
+   - Windows on Arm: `AX-Code-<version>-win-arm64.exe`
+2. Confirm Windows identifies the publisher as **DEFAI Private Limited**.
+3. Run the installer.
+4. Start **AX Code** from the Start Menu or Desktop shortcut.
+
+For an additional signature check, run the following from PowerShell in the download directory, replacing the example filename with the file you downloaded:
+
+```powershell
+$signature = Get-AuthenticodeSignature -LiteralPath ".\AX-Code-<version>-win-x64.exe"
+$signature.Status
+$signature.SignerCertificate.Subject
+```
+
+The status must be `Valid`, and the subject must contain `CN=DEFAI Private Limited`. Do not run the installer if the signature is missing, invalid, or belongs to another publisher.
 
 ### Portable ZIP
 
@@ -68,7 +81,7 @@ xattr -cr "/Applications/AX Code.app"
 
 Do not run the executable directly from inside the ZIP viewer — extract first so the app can find its bundled resources.
 
-If Windows SmartScreen warns about an unknown publisher, click **More info → Run anyway** only if you downloaded from the official [Releases page](https://github.com/defai-digital/ax-code/releases) and the release notes state the expected Windows signing and SmartScreen status for that build.
+SmartScreen may still show **Windows protected your PC** for a correctly signed new release while that specific build develops download reputation. Select **More info → Run anyway** only after confirming the download came from the official Releases page and Windows shows **DEFAI Private Limited** as the publisher. If Windows reports **Unknown publisher**, do not run the file.
 
 ## Before You Start
 
@@ -88,12 +101,12 @@ Code CLI/server integration.
 
 AX Code Desktop targets macOS and Windows first, but local model acceleration is intentionally platform-specific:
 
-| Capability                     | macOS Apple Silicon                      | Windows x64   |
-| ------------------------------ | ---------------------------------------- | ------------- |
-| Desktop app                    | Supported                                | Supported     |
-| AX Code CLI/server integration | Supported                                | Supported     |
-| Hosted providers               | Supported                                | Supported     |
-| AX Engine local provider       | Supported on eligible Apple Silicon Macs | Not supported |
+| Capability                     | macOS Apple Silicon                      | Windows x64 / ARM64 |
+| ------------------------------ | ---------------------------------------- | ------------------- |
+| Desktop app                    | Supported                                | Supported           |
+| AX Code CLI/server integration | Supported                                | Supported           |
+| Hosted providers               | Supported                                | Supported           |
+| AX Engine local provider       | Supported on eligible Apple Silicon Macs | Not supported       |
 
 AX Engine uses the local MLX/Apple Silicon path. It can be enabled on supported macOS hosts through AX Code provider setup. Windows Desktop users should use hosted providers or OpenAI-compatible provider gateways; remote AX Code servers are intentionally unsupported.
 
@@ -145,7 +158,7 @@ brew upgrade --cask ax-code-desktop
 
 ### Desktop
 
-- Native desktop shell for macOS Apple Silicon and Windows x64.
+- Native desktop shell for macOS Apple Silicon and Windows x64 / ARM64.
 - Multi-window workflows.
 - Deep links and desktop menu actions.
 - Local runtime management for the web UI.
@@ -157,6 +170,7 @@ brew upgrade --cask ax-code-desktop
 | macOS Apple Silicon    | Supported     | Homebrew (recommended) or DMG                                      |
 | macOS Intel/x64        | Not supported | No artifact is built                                               |
 | Windows x64            | Supported     | Installer or portable ZIP; AX Engine local provider is unavailable |
+| Windows ARM64          | Supported     | Installer or portable ZIP; AX Engine local provider is unavailable |
 | Linux                  | Not supported | No artifact is built                                               |
 | Mobile/tablet browsers | Not supported | Blocked to reduce data-leakage risk                                |
 
@@ -170,7 +184,7 @@ For manual downloads, only use the official [Releases page](https://github.com/d
 RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A
 ```
 
-Windows SmartScreen may warn for unsigned or low-reputation builds. Release notes must state whether Windows artifacts are Authenticode-signed and what first-run warning users should expect. Detached minisign signatures verify release asset integrity, but they do not replace Windows SmartScreen reputation, Windows Authenticode signing, or macOS Gatekeeper/notarization trust.
+Windows Desktop releases are Authenticode-signed by **DEFAI Private Limited**, and release CI fails if signing or timestamp verification does not succeed. SmartScreen can still warn for a newly released, low-reputation file; a signed warning should identify the expected publisher, while **Unknown publisher** is a reason to stop. Release notes should state the expected first-run SmartScreen behavior. Detached minisign signatures verify release asset integrity, but they do not replace Windows SmartScreen reputation, Windows Authenticode signing, or macOS Gatekeeper/notarization trust.
 
 AX Code Desktop is intended for trusted office workstations and offline environments. Its UI, managed server, SDK HTTP helpers, and native bridge servers are restricted to loopback addresses. SSH instance access, remote host switching, LAN binding, mDNS discovery, reverse-proxy deployment, and Cloudflare or other public tunnels are unsupported and disabled at runtime.
 

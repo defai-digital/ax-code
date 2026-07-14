@@ -34,9 +34,9 @@ const result = spawnSync("npx", ["electron-builder", `-c.electronVersion=${elect
   cwd: electronDir,
   shell: true,
   // Windows Authenticode is handled by the custom electron-builder sign hook
-  // (scripts/sign-windows.cjs) using Azure Trusted Signing. CI provides the
-  // AZURE_TRUSTED_SIGNING_* / SIGNTOOL_PATH / AZURE_CODESIGNING_DLIB env; with
-  // no signing env the installer + portable zip are built unsigned.
+  // (scripts/sign-windows.cjs) using AzureSignTool and an Azure Key Vault key.
+  // Release CI requires signing; local builds with no signing env remain
+  // unsigned.
   env: process.env,
 })
 

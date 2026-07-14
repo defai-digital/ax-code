@@ -276,8 +276,6 @@ jobs:
   build-windows:
     needs: create-release
     runs-on: windows-2022
-    env:
-      HAS_AZURE_SIGNING: ${{ secrets.AZURE_CLIENT_SECRET != '' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -299,28 +297,15 @@ jobs:
         shell: bash
         run: pnpm --dir packages/sdk/js run build
 
-      - name: Set up nuget
-        if: ${{ env.HAS_AZURE_SIGNING == 'true' }}
-        uses: nuget/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123 # v4
-
-      - name: Set up Azure Trusted Signing tools
-        if: ${{ env.HAS_AZURE_SIGNING == 'true' }}
+      - name: Set up AzureSignTool
         shell: pwsh
-        env:
-          ARCH: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
         run: |
           $ErrorActionPreference = "Stop"
-          $tools = Join-Path $env:RUNNER_TEMP "ts-tools"
-          # Omit -Version to take latest stable; pin once a build is verified.
-          nuget install Microsoft.Trusted.Signing.Client -ExcludeVersion -OutputDirectory $tools
-          nuget install Microsoft.Windows.SDK.BuildTools -ExcludeVersion -OutputDirectory $tools
-          $dlib = Join-Path $tools "Microsoft.Trusted.Signing.Client/bin/$env:ARCH/Azure.CodeSigning.Dlib.dll"
-          $signtool = Get-ChildItem (Join-Path $tools "Microsoft.Windows.SDK.BuildTools/bin") -Recurse -Filter signtool.exe |
-            Where-Object { $_.FullName -match "\\$env:ARCH\\" } | Select-Object -First 1 -ExpandProperty FullName
-          if (-not (Test-Path $dlib)) { throw "Azure dlib not found at $dlib" }
-          if (-not $signtool) { throw "signtool.exe not found for $env:ARCH" }
-          "AZURE_CODESIGNING_DLIB=$dlib" | Out-File $env:GITHUB_ENV -Append
-          "SIGNTOOL_PATH=$signtool"      | Out-File $env:GITHUB_ENV -Append
+          $toolDirectory = Join-Path $env:RUNNER_TEMP "azuresigntool"
+          dotnet tool install AzureSignTool --tool-path $toolDirectory --version 7.0.1
+          $tool = Join-Path $toolDirectory "AzureSignTool.exe"
+          if (-not (Test-Path $tool)) { throw "AzureSignTool not found at $tool" }
+          "AZURE_SIGNTOOL_PATH=$tool" | Out-File $env:GITHUB_ENV -Append
 
       - name: Build Windows Electron app
         shell: bash
@@ -328,14 +313,12 @@ jobs:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
-          AZURE_TRUSTED_SIGNING_ACCOUNT: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT }}
-          AZURE_TRUSTED_SIGNING_PROFILE: ${{ secrets.AZURE_TRUSTED_SIGNING_PROFILE }}
+          AZURE_KEY_VAULT_URL: https://keyvault-defai.vault.azure.net
+          AZURE_KEY_VAULT_CERTIFICATE: cert-defai
+          WINDOWS_CERTIFICATE_SHA1: FC40F1109912C025E751E804AA9BD1538A2D12EF
+          WINDOWS_SIGNING_REQUIRED: "true"
         run: |
           set -euo pipefail
-          if [ "${HAS_AZURE_SIGNING:-}" != "true" ]; then
-            echo "::warning::No Azure Trusted Signing configured; building unsigned Windows artifacts."
-          fi
           pnpm --filter @ax-code/electron run build
           node desktop/packages/electron/scripts/package.mjs --win --x64 --publish=never
 
@@ -365,8 +348,6 @@ jobs:
   build-windows-arm64:
     needs: create-release
     runs-on: windows-11-arm
-    env:
-      HAS_AZURE_SIGNING: ${{ secrets.AZURE_CLIENT_SECRET != '' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -388,28 +369,15 @@ jobs:
         shell: bash
         run: pnpm --dir packages/sdk/js run build
 
-      - name: Set up nuget
-        if: ${{ env.HAS_AZURE_SIGNING == 'true' }}
-        uses: nuget/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123 # v4
-
-      - name: Set up Azure Trusted Signing tools
-        if: ${{ env.HAS_AZURE_SIGNING == 'true' }}
+      - name: Set up AzureSignTool
         shell: pwsh
-        env:
-          ARCH: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
         run: |
           $ErrorActionPreference = "Stop"
-          $tools = Join-Path $env:RUNNER_TEMP "ts-tools"
-          # Omit -Version to take latest stable; pin once a build is verified.
-          nuget install Microsoft.Trusted.Signing.Client -ExcludeVersion -OutputDirectory $tools
-          nuget install Microsoft.Windows.SDK.BuildTools -ExcludeVersion -OutputDirectory $tools
-          $dlib = Join-Path $tools "Microsoft.Trusted.Signing.Client/bin/$env:ARCH/Azure.CodeSigning.Dlib.dll"
-          $signtool = Get-ChildItem (Join-Path $tools "Microsoft.Windows.SDK.BuildTools/bin") -Recurse -Filter signtool.exe |
-            Where-Object { $_.FullName -match "\\$env:ARCH\\" } | Select-Object -First 1 -ExpandProperty FullName
-          if (-not (Test-Path $dlib)) { throw "Azure dlib not found at $dlib" }
-          if (-not $signtool) { throw "signtool.exe not found for $env:ARCH" }
-          "AZURE_CODESIGNING_DLIB=$dlib" | Out-File $env:GITHUB_ENV -Append
-          "SIGNTOOL_PATH=$signtool"      | Out-File $env:GITHUB_ENV -Append
+          $toolDirectory = Join-Path $env:RUNNER_TEMP "azuresigntool"
+          dotnet tool install AzureSignTool --tool-path $toolDirectory --version 7.0.1
+          $tool = Join-Path $toolDirectory "AzureSignTool.exe"
+          if (-not (Test-Path $tool)) { throw "AzureSignTool not found at $tool" }
+          "AZURE_SIGNTOOL_PATH=$tool" | Out-File $env:GITHUB_ENV -Append
 
       - name: Build Windows Electron app
         shell: bash
@@ -417,14 +385,12 @@ jobs:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
-          AZURE_TRUSTED_SIGNING_ACCOUNT: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT }}
-          AZURE_TRUSTED_SIGNING_PROFILE: ${{ secrets.AZURE_TRUSTED_SIGNING_PROFILE }}
+          AZURE_KEY_VAULT_URL: https://keyvault-defai.vault.azure.net
+          AZURE_KEY_VAULT_CERTIFICATE: cert-defai
+          WINDOWS_CERTIFICATE_SHA1: FC40F1109912C025E751E804AA9BD1538A2D12EF
+          WINDOWS_SIGNING_REQUIRED: "true"
         run: |
           set -euo pipefail
-          if [ "${HAS_AZURE_SIGNING:-}" != "true" ]; then
-            echo "::warning::No Azure Trusted Signing configured; building unsigned Windows artifacts."
-          fi
           pnpm --filter @ax-code/electron run build
           node desktop/packages/electron/scripts/package.mjs --win --arm64 --publish=never
 

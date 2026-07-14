@@ -82,12 +82,17 @@ win:
   # exactly its own arch. The ${arch} token keeps the per-arch installer/zip/
   # blockmap names distinct on the shared release.
   icon: build/icon.ico
-  # Authenticode via Azure Trusted Signing. electron-builder 25 can't sign
-  # against Trusted Signing natively, so this custom hook signs each artifact
-  # with signtool + the Azure dlib (CI sets SIGNTOOL_PATH / AZURE_CODESIGNING_DLIB
-  # and the AZURE_TRUSTED_SIGNING_* env). The hook no-ops (unsigned) when that env
-  # is absent, so forks/PRs without secrets still build.
-  sign: scripts/sign-windows.cjs
+  # Authenticode via the DEFAI certificate in Azure Key Vault. The custom hook
+  # invokes AzureSignTool while electron-builder is packaging, so application
+  # binaries and the final NSIS installer are signed before update hashes and
+  # blockmaps are generated. Local builds without signing env remain unsigned;
+  # release CI sets WINDOWS_SIGNING_REQUIRED=true and fails closed.
+  signtoolOptions:
+    sign: scripts/sign-windows.cjs
+    signingHashAlgorithms: [sha256]
+    # electron-builder cannot infer the publisher from a remote signing key.
+    # Set it explicitly so electron-updater verifies the expected publisher.
+    publisherName: DEFAI Private Limited
 
 nsis:
   oneClick: false
