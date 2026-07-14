@@ -29,6 +29,7 @@ The root [README](../README.md) is the shortest path to install and launch AX Co
 | [MCP Integrations](mcp.md)                                | MCP trust, permissions, prompt/resource handling, and server-route security                              |
 | [Auto-Route](auto-route.md)                               | Keyword-based specialist routing (active by default) and optional fast-model complexity routing          |
 | [Execution Modes](modes.md)                               | Local, cloud, hybrid placement; multi-provider council consensus and arena best-of-N                     |
+| [Repo Wiki (OpenWiki)](wiki.md)                           | Semantic multi-page wiki via OpenWiki; complements structural `ax-code index`                            |
 | [Supported Providers and Models](supported-providers.md)  | Default Cloud API providers, CLI providers, and AX Engine local models                                   |
 | [Custom and Gateway Providers](custom-provider.md)        | Connect any OpenAI- or Anthropic-compatible endpoint or self-hosted gateway via custom provider config   |
 | [AX Engine Model Selection](ax-engine-model-selection.md) | Local AX Engine model ranking, memory guidance, and practical default choices                            |
@@ -41,6 +42,7 @@ The root [README](../README.md) is the shortest path to install and launch AX Co
 | Document                            | Summary                                                                                   |
 | ----------------------------------- | ----------------------------------------------------------------------------------------- |
 | [Semantic Layer](semantic-layer.md) | Current semantic contract for graph and LSP-backed answers, provenance, audit, and replay |
+| [Repo Wiki (OpenWiki)](wiki.md)     | OpenWiki semantic wiki layer, AGENTS markers, and routing vs structural index             |
 
 ## Specs and Reference
 

@@ -245,6 +245,7 @@ ranking, GLM-4.7-Flash placement, and memory-based recommendations.
 - [Supported Providers and Models](docs/supported-providers.md): Cloud API providers, CLI providers, and AX Engine model ids
 - [AX Engine Model Selection](docs/ax-engine-model-selection.md): local AX Engine model ranking and memory guidance
 - [Semantic Layer](docs/semantic-layer.md): provenance and replay boundaries for graph and LSP-backed answers
+- [Repo Wiki (OpenWiki)](docs/wiki.md): semantic multi-page wiki via OpenWiki; complements `ax-code index`
 
 ## Common Commands
 

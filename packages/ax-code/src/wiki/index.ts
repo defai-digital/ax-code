@@ -35,9 +35,12 @@ export {
 export {
   runOpenWiki,
   buildOpenWikiArgs,
+  formatElapsed,
+  startQuietHeartbeat,
   OPENWIKI_INSTALL_HINT,
   type WikiRunAction,
   type WikiRunResult,
+  type WikiRunProgress,
 } from "./runner"
 
 export { getWikiStatus, buildRecommendations, isHealthy, type WikiStatus } from "./status"

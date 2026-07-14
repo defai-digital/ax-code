@@ -10,6 +10,8 @@ import {
   ensureAgentsWikiPointers,
   getWikiStatus,
   runOpenWiki,
+  formatElapsed,
+  startQuietHeartbeat,
   OPENWIKI_INSTALL_HINT,
   type WikiStatus,
 } from "../../wiki"
@@ -146,37 +148,70 @@ export const WikiEnsureAgentsCommand = cmd({
 
 async function runGenerateOrUpdate(
   action: "generate" | "update",
-  args: { directory?: string; command?: string; "skip-agents"?: boolean },
+  args: { directory?: string; command?: string; "skip-agents"?: boolean; quiet?: boolean },
 ) {
   const root = rootFromArgs(args.directory)
+  const quiet = args.quiet === true
   UI.println(
     `${UI.Style.TEXT_INFO_BOLD}${action === "generate" ? "Generating" : "Updating"} repo wiki via OpenWiki…${UI.Style.TEXT_NORMAL}`,
   )
   UI.println(`  root: ${root}`)
+  UI.println(`  note: long-running LLM job — output streams live; heartbeats every 15s when quiet`)
 
-  const result = await runOpenWiki({
-    root,
-    action,
-    command: args.command,
-  })
+  const started = Date.now()
+  let lastActivity = started
+  const stopHeartbeat = quiet
+    ? () => {}
+    : startQuietHeartbeat({
+        intervalMs: 15_000,
+        getLastActivityMs: () => lastActivity,
+        getStartedMs: () => started,
+        onTick: (elapsedMs) => {
+          process.stderr.write(`[ax-code wiki] still running… elapsed ${formatElapsed(elapsedMs)}\n`)
+        },
+      })
 
-  if (result.stdout.trim()) process.stdout.write(result.stdout.endsWith("\n") ? result.stdout : result.stdout + "\n")
-  if (result.stderr.trim()) process.stderr.write(result.stderr.endsWith("\n") ? result.stderr : result.stderr + "\n")
+  try {
+    const result = await runOpenWiki({
+      root,
+      action,
+      command: args.command,
+      onProgress: quiet
+        ? undefined
+        : (ev) => {
+            lastActivity = Date.now()
+            const out = ev.stream === "stdout" ? process.stdout : process.stderr
+            out.write(ev.chunk)
+          },
+    })
 
-  if (!result.ok) {
-    UI.println(`${UI.Style.TEXT_WARNING}${result.error ?? "OpenWiki failed"}${UI.Style.TEXT_NORMAL}`)
-    if (result.installHint) UI.println(result.installHint)
-    process.exitCode = 1
-    return
-  }
-
-  UI.println(`OpenWiki ${action} completed in ${Math.round(result.durationMs / 1000)}s`)
-
-  if (args["skip-agents"] !== true) {
-    const ensured = await ensureAgentsWikiPointers(root)
-    if (ensured.updated.length) {
-      UI.println(`Agents markers updated: ${ensured.updated.join(", ")}`)
+    // When quiet, print buffered output at the end (or always print nothing live).
+    if (quiet) {
+      if (result.stdout.trim()) process.stdout.write(result.stdout.endsWith("\n") ? result.stdout : result.stdout + "\n")
+      if (result.stderr.trim()) process.stderr.write(result.stderr.endsWith("\n") ? result.stderr : result.stderr + "\n")
+    } else {
+      // Ensure trailing newline after stream chunks that may not end with \n
+      if (result.stdout.length && !result.stdout.endsWith("\n")) process.stdout.write("\n")
+      if (result.stderr.length && !result.stderr.endsWith("\n")) process.stderr.write("\n")
     }
+
+    if (!result.ok) {
+      UI.println(`${UI.Style.TEXT_WARNING}${result.error ?? "OpenWiki failed"}${UI.Style.TEXT_NORMAL}`)
+      if (result.installHint) UI.println(result.installHint)
+      process.exitCode = 1
+      return
+    }
+
+    UI.println(`OpenWiki ${action} completed in ${formatElapsed(result.durationMs)}`)
+
+    if (args["skip-agents"] !== true) {
+      const ensured = await ensureAgentsWikiPointers(root)
+      if (ensured.updated.length) {
+        UI.println(`Agents markers updated: ${ensured.updated.join(", ")}`)
+      }
+    }
+  } finally {
+    stopHeartbeat()
   }
 }
 
@@ -187,7 +222,12 @@ export const WikiGenerateCommand = cmd({
     yargs
       .option("directory", { type: "string", describe: "project root (default: cwd)" })
       .option("command", { type: "string", describe: "OpenWiki executable (default: openwiki)" })
-      .option("skip-agents", { type: "boolean", default: false, describe: "do not touch AGENTS.md markers" }),
+      .option("skip-agents", { type: "boolean", default: false, describe: "do not touch AGENTS.md markers" })
+      .option("quiet", {
+        type: "boolean",
+        default: false,
+        describe: "buffer OpenWiki output until completion (no live stream / heartbeats)",
+      }),
   handler: async (args) => runGenerateOrUpdate("generate", args),
 })
 
@@ -198,7 +238,12 @@ export const WikiUpdateCommand = cmd({
     yargs
       .option("directory", { type: "string", describe: "project root (default: cwd)" })
       .option("command", { type: "string", describe: "OpenWiki executable (default: openwiki)" })
-      .option("skip-agents", { type: "boolean", default: false, describe: "do not touch AGENTS.md markers" }),
+      .option("skip-agents", { type: "boolean", default: false, describe: "do not touch AGENTS.md markers" })
+      .option("quiet", {
+        type: "boolean",
+        default: false,
+        describe: "buffer OpenWiki output until completion (no live stream / heartbeats)",
+      }),
   handler: async (args) => runGenerateOrUpdate("update", args),
 })
 

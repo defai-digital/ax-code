@@ -20,6 +20,12 @@ export type WikiRunResult = {
   error?: string
 }
 
+export type WikiRunProgress = {
+  stream: "stdout" | "stderr"
+  chunk: string
+  elapsedMs: number
+}
+
 export const OPENWIKI_INSTALL_HINT =
   "Install OpenWiki: npm install -g openwiki  (then configure ~/.openwiki/.env with a model provider). Docs: https://github.com/langchain-ai/openwiki"
 
@@ -28,10 +34,40 @@ export const OPENWIKI_INSTALL_HINT =
  * OpenWiki treats `code --update --print` as create-if-missing + non-interactive.
  */
 export function buildOpenWikiArgs(action: WikiRunAction, extraArgs: string[] = []): string[] {
-  // generate and update both use code --update --print in Phase 1:
+  // generate and update both use code --update --print:
   // OpenWiki creates the wiki when absent; --print avoids interactive chat.
   void action
   return ["code", "--update", "--print", ...extraArgs]
+}
+
+export function formatElapsed(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000))
+  const min = Math.floor(totalSec / 60)
+  const sec = totalSec % 60
+  if (min === 0) return `${sec}s`
+  return `${min}m ${sec.toString().padStart(2, "0")}s`
+}
+
+/**
+ * Heartbeat helper for long OpenWiki runs. Calls onTick when quiet for intervalMs.
+ * Returns a disposer that clears the timer.
+ */
+export function startQuietHeartbeat(input: {
+  intervalMs?: number
+  getLastActivityMs: () => number
+  getStartedMs: () => number
+  onTick: (elapsedMs: number, quietMs: number) => void
+}): () => void {
+  const intervalMs = input.intervalMs ?? 15_000
+  const timer = setInterval(() => {
+    const now = Date.now()
+    const quietMs = now - input.getLastActivityMs()
+    if (quietMs >= intervalMs) {
+      input.onTick(now - input.getStartedMs(), quietMs)
+    }
+  }, Math.min(intervalMs, 5_000))
+  timer.unref?.()
+  return () => clearInterval(timer)
 }
 
 export async function runOpenWiki(input: {
@@ -43,6 +79,8 @@ export async function runOpenWiki(input: {
   timeoutMs?: number
   /** Optional pre-resolved binary path */
   binaryPath?: string
+  /** Live stream callback (chunk may be partial lines). */
+  onProgress?: (event: WikiRunProgress) => void
 }): Promise<WikiRunResult> {
   const command = resolveWikiCommand(input.command)
   const args = buildOpenWikiArgs(input.action, input.extraArgs ?? [])
@@ -102,11 +140,17 @@ export async function runOpenWiki(input: {
       })
     }, timeoutMs)
 
+    const emit = (stream: "stdout" | "stderr", chunk: string) => {
+      if (stream === "stdout") stdout += chunk
+      else stderr += chunk
+      input.onProgress?.({ stream, chunk, elapsedMs: Date.now() - started })
+    }
+
     child.stdout?.on("data", (chunk: Buffer | string) => {
-      stdout += String(chunk)
+      emit("stdout", String(chunk))
     })
     child.stderr?.on("data", (chunk: Buffer | string) => {
-      stderr += String(chunk)
+      emit("stderr", String(chunk))
     })
 
     child.on("error", (err: NodeJS.ErrnoException) => {

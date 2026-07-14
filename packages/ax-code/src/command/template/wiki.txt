@@ -1,21 +1,25 @@
 Help with the OpenWiki repository wiki for this project (path: ${path}).
 
-OpenWiki is the semantic wiki layer (architecture, module intent). It does **not** replace `code_intelligence` / `lsp` for precise symbols.
+OpenWiki is the **semantic** wiki layer (architecture, module intent). It does **not** replace `code_intelligence` / `lsp` for precise symbols. Guide: docs/wiki.md
 
 User request: $ARGUMENTS
 
-Do the following:
+Parse $ARGUMENTS as an optional subcommand (case-insensitive):
 
-1. If the user asked for status or diagnosis, prefer running or summarizing:
-   - `ax-code wiki status`
-   - `ax-code wiki doctor`
-2. If they want generation or refresh and OpenWiki is installed:
-   - generate: `ax-code wiki generate`
-   - update: `ax-code wiki update`
-   If the CLI is missing, tell them: `npm install -g openwiki` and configure `~/.openwiki/.env`.
-3. Ensure AGENTS.md has the OpenWiki pointer block when a wiki exists:
-   - `ax-code wiki ensure-agents`
-4. After a wiki exists, for architecture questions read `openwiki/quickstart.md` or `openwiki/index.md` first, then drill into linked pages. Prefer `code_intelligence` for callers/callees/refs.
-5. Keep AGENTS.md thin — do not paste the whole wiki into AGENTS.md.
+| Arg | Action |
+|-----|--------|
+| empty / help | Summarize `ax-code wiki doctor` guidance and recommend next steps |
+| status | Run or describe `ax-code wiki status` |
+| doctor | Run or describe `ax-code wiki doctor` |
+| ensure / ensure-agents | Run `ax-code wiki ensure-agents` |
+| generate / init | Run `ax-code wiki generate` (long LLM job; stream progress) |
+| update / refresh | Run `ax-code wiki update` |
+| otherwise | Treat as a free-form question: read `openwiki/quickstart.md` or `openwiki/index.md` first, then answer |
 
-If $ARGUMENTS is empty, run a short status summary and recommend next steps (generate vs update vs just read the wiki).
+Rules:
+
+1. Prefer the real CLI (`ax-code wiki …`) over re-implementing OpenWiki inside the session.
+2. If OpenWiki CLI is missing, tell the user: `npm install -g openwiki` and configure `~/.openwiki/.env`.
+3. After generate/update, ensure AGENTS markers: `ax-code wiki ensure-agents`.
+4. Keep AGENTS.md thin — never paste the whole wiki into it.
+5. For architecture Q&A, read the wiki index then drill down; for callers/callees use `code_intelligence`.

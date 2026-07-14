@@ -5,7 +5,16 @@
 import type { CommandModule } from "yargs"
 import { Context, type DepthLevel } from "../../context"
 import { Filesystem } from "../../util/filesystem"
-import { ensureAgentsWikiPointers, runOpenWiki, OPENWIKI_INSTALL_HINT, resolveBinary, resolveWikiCommand } from "../../wiki"
+import {
+  detectWiki,
+  ensureAgentsWikiPointers,
+  runOpenWiki,
+  formatElapsed,
+  startQuietHeartbeat,
+  OPENWIKI_INSTALL_HINT,
+  resolveBinary,
+  resolveWikiCommand,
+} from "../../wiki"
 
 export const InitCommand: CommandModule<
   {},
@@ -85,7 +94,21 @@ export const InitCommand: CommandModule<
       }
     }
 
-    if (!args.wiki) return
+    // Soft path: if a wiki already exists, keep AGENTS.md pointer fresh without --wiki.
+    if (!args.wiki) {
+      try {
+        const existing = await detectWiki({ root })
+        if (existing.wikiExists) {
+          const soft = await ensureAgentsWikiPointers(root)
+          if (soft.updated.length) {
+            console.log(`\nOpenWiki: wiki present at ${existing.wikiDirRelative}/; updated markers: ${soft.updated.join(", ")}`)
+          }
+        }
+      } catch {
+        // never fail init on soft wiki inject
+      }
+      return
+    }
 
     console.log("\nOpenWiki bootstrap (--wiki)…")
     const ensured = await ensureAgentsWikiPointers(root)
@@ -110,18 +133,42 @@ export const InitCommand: CommandModule<
       return
     }
 
-    console.log("  Running OpenWiki generate (may take several minutes)…")
-    const run = await runOpenWiki({ root, action: "generate", binaryPath: binary, command })
-    if (run.stdout.trim()) process.stdout.write(run.stdout.endsWith("\n") ? run.stdout : run.stdout + "\n")
-    if (run.stderr.trim()) process.stderr.write(run.stderr.endsWith("\n") ? run.stderr : run.stderr + "\n")
-    if (!run.ok) {
-      console.log(`  OpenWiki generate failed: ${run.error ?? "unknown error"}`)
-      if (run.installHint) console.log(`  ${run.installHint}`)
-      process.exitCode = 1
-      return
+    console.log("  Running OpenWiki generate (may take several minutes; live stream + 15s heartbeats)…")
+    const started = Date.now()
+    let lastActivity = started
+    const stopHeartbeat = startQuietHeartbeat({
+      intervalMs: 15_000,
+      getLastActivityMs: () => lastActivity,
+      getStartedMs: () => started,
+      onTick: (elapsedMs) => {
+        process.stderr.write(`  [ax-code init --wiki] still running… elapsed ${formatElapsed(elapsedMs)}\n`)
+      },
+    })
+    try {
+      const run = await runOpenWiki({
+        root,
+        action: "generate",
+        binaryPath: binary,
+        command,
+        onProgress: (ev) => {
+          lastActivity = Date.now()
+          const out = ev.stream === "stdout" ? process.stdout : process.stderr
+          out.write(ev.chunk)
+        },
+      })
+      if (run.stdout.length && !run.stdout.endsWith("\n")) process.stdout.write("\n")
+      if (run.stderr.length && !run.stderr.endsWith("\n")) process.stderr.write("\n")
+      if (!run.ok) {
+        console.log(`  OpenWiki generate failed: ${run.error ?? "unknown error"}`)
+        if (run.installHint) console.log(`  ${run.installHint}`)
+        process.exitCode = 1
+        return
+      }
+      // Re-ensure markers after OpenWiki may have rewritten AGENTS.md
+      await ensureAgentsWikiPointers(root)
+      console.log(`  Wiki generate completed in ${formatElapsed(run.durationMs)}`)
+    } finally {
+      stopHeartbeat()
     }
-    // Re-ensure markers after OpenWiki may have rewritten AGENTS.md
-    await ensureAgentsWikiPointers(root)
-    console.log(`  Wiki generate completed in ${Math.round(run.durationMs / 1000)}s`)
   },
 }
