@@ -32,6 +32,7 @@ import {
   AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES,
   axEngineLoader,
   axEngineServerLaunchArgs,
+  commandLooksLikeAxEngineServer,
   evaluateDiskStatus,
   evaluateAxEngineModelFit,
   evaluateAxEngineCapabilityFromModels,
@@ -606,6 +607,43 @@ describe("ax-engine server lifecycle", () => {
       expect(alive(decoy.pid!)).toBe(true)
     } finally {
       decoy.kill("SIGKILL")
+    }
+  })
+
+  test("commandLooksLikeAxEngineServer requires binary + serve, not a path substring", () => {
+    expect(commandLooksLikeAxEngineServer("/opt/homebrew/bin/ax-engine serve /models/qwen --port 18181")).toBe(true)
+    expect(commandLooksLikeAxEngineServer("/tmp/ax-engine serve /models/qwen", "/tmp/ax-engine")).toBe(true)
+    // Shell-script servers show the interpreter as argv0 on macOS.
+    expect(commandLooksLikeAxEngineServer("/bin/sh /tmp/ax-engine serve /models/qwen", "/tmp/ax-engine")).toBe(true)
+    expect(commandLooksLikeAxEngineServer("tail -f /Users/me/.cache/ax-engine/server.log")).toBe(false)
+    expect(commandLooksLikeAxEngineServer("rg ax-engine packages/")).toBe(false)
+    expect(commandLooksLikeAxEngineServer("vim /Users/me/code/ax-engine/README.md")).toBe(false)
+    expect(commandLooksLikeAxEngineServer("sleep 60 ax-engine-not-a-server")).toBe(false)
+    expect(commandLooksLikeAxEngineServer("ax-engine")).toBe(false)
+    expect(commandLooksLikeAxEngineServer("ax-engine serve")).toBe(false)
+  })
+
+  test("stopServer never signals a process that only mentions ax-engine in its argv", async () => {
+    await using tmp = await tmpdir()
+    // Substring matching used to treat any argv containing "ax-engine" as the
+    // server (e.g. tailing the server log) and SIGKILL it on stop/reclaim.
+    // Rename sleep's argv0 so `ps` shows a log-tailer path under ax-engine.
+    const decoy = spawn("sh", ["-c", `exec -a "tail -f ${tmp.path}/ax-engine/server.log" sleep 60`])
+    try {
+      // Give the shell time to exec into the renamed sleep process.
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      expect(alive(decoy.pid!)).toBe(true)
+      await withServerPaths(tmp.path, async () => {
+        await fs.writeFile(
+          AxEnginePaths.serverState,
+          JSON.stringify(fakeServerState({ pid: decoy.pid, binaryPath: "/opt/homebrew/bin/ax-engine" })),
+        )
+        await stopServer()
+        await expect(fs.access(AxEnginePaths.serverState)).rejects.toThrow()
+      })
+      expect(alive(decoy.pid!)).toBe(true)
+    } finally {
+      if (decoy.pid && alive(decoy.pid)) decoy.kill("SIGKILL")
     }
   })
 
@@ -1672,6 +1710,37 @@ describe("ax-engine doctor status", () => {
         data: [{ id: "qwen3.6-27b", capabilities: { toolcall: false, attachment: false } }],
       }),
     ).toMatchObject({ toolcall: false, attachment: false })
+  })
+
+  test("prefers the active model card over an earlier non-toolcall listing", () => {
+    expect(
+      evaluateAxEngineCapabilityFromModels(
+        {
+          data: [
+            { id: "chat-default", capabilities: { toolcall: false, attachment: false } },
+            {
+              id: "qwen3.6-27b",
+              capabilities: { toolcall: false, attachment: false },
+              ax_engine: { openai_tool_calling_supported: true },
+            },
+          ],
+        },
+        ["qwen3.6-27b"],
+      ),
+    ).toMatchObject({ toolcall: true, attachment: false, reason: undefined })
+
+    // Without a preferred id, any toolcall-capable card wins over a bare first card.
+    expect(
+      evaluateAxEngineCapabilityFromModels({
+        data: [
+          { id: "chat-default", capabilities: { toolcall: false, attachment: false } },
+          {
+            id: "qwen3.6-27b",
+            ax_engine: { openai_tool_calling_supported: true },
+          },
+        ],
+      }),
+    ).toMatchObject({ toolcall: true })
   })
 
   test("reports disk blockers before model preparation when dependency is available", () => {

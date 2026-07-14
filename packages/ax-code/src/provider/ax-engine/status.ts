@@ -32,8 +32,21 @@ export type AxEngineRuntimeOptions = {
   [key: string]: unknown
 }
 
-export function evaluateAxEngineCapabilityFromModels(payload: unknown): AxEngineCapabilityStatus {
-  const model = parseAxEngineModelContracts(payload)[0]
+export function evaluateAxEngineCapabilityFromModels(
+  payload: unknown,
+  preferredModelIDs: string[] = [],
+): AxEngineCapabilityStatus {
+  const contracts = parseAxEngineModelContracts(payload)
+  const preferred = preferredModelIDs.map((id) => id.trim()).filter(Boolean)
+  const model =
+    preferred.length > 0
+      ? (contracts.find((contract) => preferred.includes(contract.id)) ??
+        // Prefer any card that advertises tool calling when the active id is
+        // missing from the list — better than treating the first non-toolcall
+        // card as authoritative after a multi-model / model-switch response.
+        contracts.find((contract) => contract.toolcall) ??
+        contracts[0])
+      : (contracts.find((contract) => contract.toolcall) ?? contracts[0])
   const toolcall = model?.toolcall ?? false
   const attachment = model?.attachment ?? false
 
@@ -72,7 +85,10 @@ async function getCapabilityStatus(
       response.body?.cancel()
       throw new Error(`HTTP ${response.status}`)
     }
-    return evaluateAxEngineCapabilityFromModels(await response.json())
+    const preferred = [server.state.apiModelID, server.state.modelID].filter(
+      (id): id is string => typeof id === "string" && id.length > 0,
+    )
+    return evaluateAxEngineCapabilityFromModels(await response.json(), preferred)
   } catch (error) {
     return {
       toolcall: false,

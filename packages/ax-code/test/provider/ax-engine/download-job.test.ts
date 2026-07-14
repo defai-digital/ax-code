@@ -80,6 +80,29 @@ describe("ax-engine download jobs", () => {
     expect(jobs.find((job) => job.id === first.id)?.status).toBe("complete")
   })
 
+  test("cancelled download that still resolves stays cancelled, not complete", async () => {
+    let resolveDownload!: (state: typeof preparedState) => void
+    let downloadStarted!: () => void
+    const downloadRunning = new Promise<void>((resolve) => (downloadStarted = resolve))
+    const runtime = runtimeWith(() => {
+      downloadStarted()
+      return new Promise((resolve) => (resolveDownload = resolve)) as any
+    })
+
+    const job = await startDownloadJob({ modelID: MODEL_ID }, runtime)
+    await downloadRunning
+    const cancelled = await cancelDownloadJob(job.id)
+    expect(cancelled?.status).toBe("cancelled")
+
+    resolveDownload(preparedState)
+    await vi.waitFor(async () => {
+      const jobs = await listDownloadJobs()
+      expect(jobs.find((entry) => entry.id === job.id)?.status).toBe("cancelled")
+    })
+    const jobs = await listDownloadJobs()
+    expect(jobs.find((entry) => entry.id === job.id)?.status).not.toBe("complete")
+  })
+
   test("a superseded job's cleanup does not evict its replacement from the job list", async () => {
     // First download: never settles until we release it, so its run() is still
     // in flight (and its `finally` cleanup still pending) when the job is

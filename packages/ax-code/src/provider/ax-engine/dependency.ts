@@ -108,14 +108,19 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
 
   const managed = await getManagedBinary()
   if (managed) {
+    // Prefer the live --version output when present; fall back to the install
+    // marker so a bumped AX_ENGINE_MIN_VERSION still gates stale managed installs
+    // the same way PATH/configured binaries are gated.
+    const detectedVersion = (await version(managed.path)) ?? managed.version
+    const versionBlocker = unsupportedVersionBlocker(detectedVersion)
     return {
-      available: true,
+      available: !versionBlocker,
       mode: "managed",
       binaryPath: managed.path,
-      version: await version(managed.path),
+      version: detectedVersion,
       managedVersion: managed.version,
-      installable: false,
-      blockers: [],
+      installable: versionBlocker ? isAxEngineInstallable() : false,
+      blockers: versionBlocker ? [versionBlocker] : [],
     }
   }
 

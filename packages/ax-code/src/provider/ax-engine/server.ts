@@ -1,4 +1,5 @@
 import fs from "fs/promises"
+import path from "path"
 import { Socket } from "node:net"
 import z from "zod"
 import { FileLock } from "@/util/filelock"
@@ -133,14 +134,39 @@ function pidLive(pid: number) {
 
 // `kill(pid, 0)` only proves *some* process owns the pid — after a reboot or
 // pid recycling it can be an unrelated process. Before trusting (or, worse,
-// killing) a pid recorded in server.json, check that its command line still
-// looks like the ax-engine server it was recorded as.
+// killing) a pid recorded in server.json, require the command line to look like
+// the serve invocation we spawn (`<binary> serve <modelPath> …`), not merely
+// any process whose argv or cwd path mentions "ax-engine" (e.g. `tail -f
+// …/ax-engine/server.log`, an editor on a path under ax-engine, grep, etc.).
+function tokenLooksLikeAxEngineBinary(token: string, binaryPath?: string): boolean {
+  const base = path.basename(token)
+  if (binaryPath && (token === binaryPath || base === path.basename(binaryPath))) return true
+  // Managed/path installs and test fixtures use names like `ax-engine` or
+  // `ax-engine-exits`; require the basename, not a path *containing* ax-engine.
+  return base === "ax-engine" || /^ax-engine[-_.]/.test(base)
+}
+
+export function commandLooksLikeAxEngineServer(command: string, binaryPath?: string): boolean {
+  const tokens = command.trim().split(/\s+/).filter(Boolean)
+  if (tokens.length < 2) return false
+
+  const serveIndex = tokens.findIndex((token) => token === "serve")
+  // Real servers always pass a model path (and usually flags) after `serve`.
+  if (serveIndex <= 0 || serveIndex >= tokens.length - 1) return false
+
+  // macOS `ps` often shows shell-script servers as `/bin/sh <script> serve …`
+  // rather than `<script> serve …`. Accept either argv0 or the token immediately
+  // before `serve` as the engine binary — never a bare substring anywhere in argv.
+  const candidates = [tokens[0]!, tokens[serveIndex - 1]!].filter(Boolean)
+  return candidates.some((token) => tokenLooksLikeAxEngineBinary(token, binaryPath))
+}
+
 async function pidIsAxEngineServer(pid: number, binaryPath?: string): Promise<boolean> {
   const result = await Process.text(["ps", "-o", "command=", "-p", String(pid)], { timeout: 3000, nothrow: true })
   if (result.code !== 0) return false
   const command = result.text.trim()
   if (!command) return false
-  return command.includes("ax-engine") || (!!binaryPath && command.includes(binaryPath))
+  return commandLooksLikeAxEngineServer(command, binaryPath)
 }
 
 async function serverProcessAlive(state: Pick<AxEngineServerState, "pid" | "binaryPath">): Promise<boolean> {

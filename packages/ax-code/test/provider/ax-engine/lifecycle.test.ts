@@ -154,4 +154,14 @@ describe("mapAxEngineStatusToLifecycle", () => {
     expect(LOCAL_ENGINE_PHASE_RANK.error).toBeGreaterThan(LOCAL_ENGINE_PHASE_RANK.missing_model)
     expect(lifecycle.phase).toBe("error")
   })
+
+  test("does not report missing_model when prepared but server is idle", () => {
+    const lifecycle = mapAxEngineStatusToLifecycle(
+      baseStatus({
+        server: { running: false, ready: false, blockers: [] },
+      }),
+    )
+    expect(lifecycle.phase).not.toBe("missing_model")
+    expect(lifecycle.phase).not.toBe("ready")
+  })
 })

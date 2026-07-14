@@ -104,7 +104,13 @@ export function mapAxEngineStatusToLifecycle(status: AxEngineStatus): LocalEngin
   }
 
   if (candidates.length === 0) {
-    candidates.push(status.dependency.available ? "missing_model" : "missing_dependency")
+    // Fully prepared + eligible but server not running is a normal idle state,
+    // not a missing model. Prefer "starting" only when a process is mid-boot
+    // (handled above); for cold idle use the least-severe non-ready phase that
+    // does not prompt a false re-download.
+    if (!status.dependency.available) candidates.push("missing_dependency")
+    else if (!modelReady) candidates.push("missing_model")
+    else candidates.push("starting")
   }
 
   return {

@@ -240,6 +240,35 @@ describe("dependency resolution picks up the managed binary", () => {
       await fs.rm(dir, { recursive: true, force: true })
     }
   })
+
+  test("blocks managed installs older than the supported contract", async () => {
+    const stale: AxEngineBinaryRelease = {
+      version: "6.6.0",
+      assetName: "ax-engine-6.6.0-darwin-arm64.tar.gz",
+      url: "https://example.com/ax-engine-6.6.0-darwin-arm64.tar.gz",
+      sha256: "c".repeat(64),
+    }
+    await installAxEngineBinary(
+      {},
+      baseRuntime({
+        resolveRelease: () => stale,
+        install: (async (input: { bin: string }) => {
+          await fs.mkdir(path.dirname(input.bin), { recursive: true })
+          await fs.writeFile(input.bin, "#!/bin/sh\necho 'ax-engine 6.6.0'\n", { mode: 0o755 })
+          return input.bin
+        }) as unknown as NonNullable<AxEngineInstallRuntime["install"]>,
+      }),
+    )
+
+    const status = await getDependencyStatus()
+    // A real ax-engine on PATH would win; CI hosts typically don't have one.
+    if (status.mode === "path") return
+    expect(status.mode).toBe("managed")
+    expect(status.available).toBe(false)
+    expect(status.version).toContain("6.6.0")
+    expect(status.blockers.join(" ")).toContain("AX_ENGINE_VERSION_UNSUPPORTED")
+    expect(status.installable).toBe(true)
+  })
 })
 
 // Exercise the real download → sha256-verify → extract → chmod → marker path

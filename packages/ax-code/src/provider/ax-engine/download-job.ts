@@ -106,6 +106,17 @@ export async function startDownloadJob(
         quantization,
         signal: controller.signal,
       })
+      // Cancel can race a late successful download: never leave the job as
+      // "complete" after the user (or a superseding start) aborted it.
+      // cancelDownloadJob sets status to cancelled before the download promise
+      // settles; re-read the mutable job field so TypeScript cannot narrow it
+      // away as still "running".
+      if (controller.signal.aborted || (job.status as AxEngineModelJobStatus) === "cancelled") {
+        job.status = "cancelled"
+        job.finishedAt = Date.now()
+        job.error = "Download cancelled"
+        return summarize(job)
+      }
       job.status = "complete"
       job.finishedAt = Date.now()
       job.path = prepared.path
@@ -113,7 +124,7 @@ export async function startDownloadJob(
       return summarize(job)
     } catch (error) {
       job.finishedAt = Date.now()
-      if (controller.signal.aborted) {
+      if (controller.signal.aborted || (job.status as AxEngineModelJobStatus) === "cancelled") {
         job.status = "cancelled"
         job.error = "Download cancelled"
       } else {

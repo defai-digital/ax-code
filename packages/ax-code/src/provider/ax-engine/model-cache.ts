@@ -312,6 +312,7 @@ export async function getModelStatus(options: AxEngineModelOptions = {}): Promis
     AxEnginePaths.managedModelDir(modelID, quantization),
   ].filter((item): item is string => !!item)
 
+  const inspectErrors: string[] = []
   for (const candidate of candidates) {
     try {
       if (!(await exists(candidate))) continue
@@ -332,13 +333,24 @@ export async function getModelStatus(options: AxEngineModelOptions = {}): Promis
         blockers: [],
       }
     } catch (error) {
-      return {
-        present: false,
-        modelID,
-        quantization,
-        complete: false,
-        blockers: [`${AX_ENGINE_ERROR.ModelMissing}: failed to inspect model path (${toErrorMessage(error)})`],
-      }
+      // One unreadable candidate (EACCES on a configured path, flaky FS, etc.)
+      // must not hide a later healthy HF snapshot or managed copy.
+      inspectErrors.push(`${candidate}: ${toErrorMessage(error)}`)
+      continue
+    }
+  }
+
+  // Prefer inspect failures over a generic "not prepared" message so permission
+  // problems stay actionable. Healthy later candidates already returned above.
+  if (inspectErrors.length > 0) {
+    return {
+      present: false,
+      modelID,
+      quantization,
+      complete: false,
+      blockers: [
+        `${AX_ENGINE_ERROR.ModelMissing}: failed to inspect model path (${inspectErrors.join("; ")})`,
+      ],
     }
   }
 
