@@ -1159,6 +1159,17 @@ export namespace MessageV2 {
           },
           { cause: e },
         ).toObject()
+      case e instanceof Error && (e as { isRetryable?: unknown }).isRetryable === false:
+        // CLI adapters can report a terminal provider-side failure without an
+        // HTTP response. Preserve the explicit classification so the prompt
+        // loop surfaces it once instead of treating it as an unknown retry.
+        return new MessageV2.APIError(
+          {
+            message: e.message,
+            isRetryable: false,
+          },
+          { cause: e },
+        ).toObject()
       case e instanceof Error:
         return new NamedError.Unknown({ message: NamedError.message(e) }, { cause: e }).toObject()
       default:

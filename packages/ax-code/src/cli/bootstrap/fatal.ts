@@ -67,8 +67,8 @@ export function fatal(err: unknown, dep: FatalDep) {
   DiagnosticLog.recordProcess("fatal", { error: detail })
   error("fatal", detail)
   const formatted = format(err)
-  if (formatted) {
-    ui(formatted)
+  if (formatted !== undefined) {
+    if (formatted) ui(formatted)
     return
   }
 

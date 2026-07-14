@@ -7,6 +7,7 @@ import { Provider } from "../../src/provider/provider"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Env } from "../../src/env"
 import { which } from "../../src/util/which"
+import { selectPreferredCodexBinary } from "../../src/provider/cli/binary"
 
 const originalFetch = globalThis.fetch
 
@@ -53,6 +54,15 @@ async function expectMissingCliProvider(input: {
 }
 
 describe("CLI provider loaders", () => {
+  test("prefers the newest Codex executable when PATH contains a stale launcher", () => {
+    expect(
+      selectPreferredCodexBinary([
+        { path: "/Users/test/.local/bin/codex", version: "codex-cli 0.142.5" },
+        { path: "/Applications/ChatGPT.app/Contents/Resources/codex", version: "codex-cli 0.144.2" },
+      ]),
+    ).toBe("/Applications/ChatGPT.app/Contents/Resources/codex")
+  })
+
   test("CLI provider discovery publishes resolved external model ids", async () => {
     const src = await readFile(path.join(import.meta.dirname, "../../src/provider/loaders.ts"), "utf-8")
     expect(src).toContain("return cliModels(opts.providerID, provider, resolved.model)")
@@ -563,7 +573,9 @@ describe("offline provider loaders", () => {
   })
 
   test("ollama provider autoloads when server reachable and explicitly enabled", async () => {
-    // Test ollama discovery — this only passes when ollama is running locally
+    // A reachable local server may legitimately have no models installed. This
+    // test covers provider discovery; model parsing is covered above with a
+    // deterministic response.
     const reachable = await fetch("http://localhost:11434/api/tags", { signal: AbortSignal.timeout(1000) })
       .then((r) => r.ok)
       .catch(() => false)
@@ -586,7 +598,6 @@ describe("offline provider loaders", () => {
         const providers = await Provider.list()
         const ollama = providers[ProviderID.make("ollama")]
         expect(ollama).toBeDefined()
-        expect(Object.keys(ollama.models).length).toBeGreaterThan(0)
       },
     })
   })

@@ -89,11 +89,6 @@ function estimatedUsage(input: string, output: string): LanguageModelV3Usage {
   })
 }
 
-function rawStreamFallbackText(output: string): string {
-  const text = output.replace(/\r?\n$/, "")
-  return text.trim().length > 0 ? text : ""
-}
-
 function readAbortError(signal: AbortSignal): Error {
   const reason = signal.reason
   if (reason instanceof Error) return reason
@@ -429,12 +424,13 @@ export class CliLanguageModel implements LanguageModelV3 {
               controller.enqueue({ type: "text-delta", id: textId, delta })
             }
           }
-          if (!emitted) {
-            const fallback = rawStreamFallbackText(raw.join(""))
-            if (fallback) {
-              output.push(fallback)
-              controller.enqueue({ type: "text-delta", id: textId, delta: fallback })
-            }
+          // Stream parsers intentionally ignore control and error events.
+          // Parse the complete payload before emitting a raw fallback so a
+          // structured CLI error cannot be rendered as an assistant reply.
+          const complete = parser.parseComplete(raw.join(""))
+          if (!emitted && complete.text) {
+            output.push(complete.text)
+            controller.enqueue({ type: "text-delta", id: textId, delta: complete.text })
           }
         }
         const finishSuccess = () => {
@@ -483,7 +479,12 @@ export class CliLanguageModel implements LanguageModelV3 {
         onStdoutEnd = () => {
           if (closed()) return
           stdoutEnded = true
-          flushOutput()
+          try {
+            flushOutput()
+          } catch (error) {
+            fail(error)
+            return
+          }
           finishSuccess()
           finishFailure()
         }

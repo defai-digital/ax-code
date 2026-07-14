@@ -476,12 +476,12 @@ describe("chaos: tool failures", () => {
 // ERROR EVENT PUBLISHING
 // ============================================================
 describe("chaos: error events", () => {
-  test("14. non-retryable error publishes exactly one Bus error event", async () => {
+  test("14. processor defers terminal Bus errors until the prompt loop decides recovery", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const { process } = await setup(tmp)
+        const { processor, process } = await setup(tmp)
         const errors: unknown[] = []
         const unsub = Bus.subscribe(Session.Event.Error, (e) => errors.push(e.properties.error))
         try {
@@ -489,7 +489,11 @@ describe("chaos: error events", () => {
             throw new Error("Unexpected provider failure")
           })
           await process()
-          expect(errors).toHaveLength(1)
+          expect(processor.message.error).toBeDefined()
+          // The prompt loop chooses retry/fallback/terminal behavior. Emitting
+          // here would make clients show a false terminal error before a
+          // fallback provider can complete the same turn.
+          expect(errors).toHaveLength(0)
         } finally {
           unsub()
         }

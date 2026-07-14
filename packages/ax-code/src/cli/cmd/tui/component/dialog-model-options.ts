@@ -3,7 +3,10 @@ import { modelSelectableForProvider } from "@/provider/model-selectability"
 type DialogModelOptionInfo = {
   id?: string
   tool_call?: boolean
-  capabilities?: { toolcall?: boolean }
+  capabilities?: {
+    toolcall?: boolean
+    output?: { text?: boolean }
+  }
   options?: { minMemoryBytes?: unknown }
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   antigravityCliParser,
   claudeCodeParser,
+  CliOutputError,
   codexCliParser,
   geminiCliParser,
   grokBuildCliParser,
@@ -65,6 +66,17 @@ describe("provider CLI parser nested content", () => {
       ),
     ).toEqual({ text: "OK" })
     expect(codexCliParser.parseStreamLine('{"type":"item.completed","item":{"text":123,"content":"OK"}}')).toBe("OK")
+  })
+
+  test("codex parser surfaces JSON error events instead of treating them as assistant text", () => {
+    const output = [
+      '{"type":"item.completed","item":{"type":"error","message":"Model metadata is unavailable"}}',
+      '{"type":"error","message":"{\\"type\\":\\"error\\",\\"error\\":{\\"message\\":\\"The selected model requires a newer Codex CLI\\"}}"}',
+      '{"type":"turn.failed","error":{"message":"{\\"type\\":\\"error\\",\\"error\\":{\\"message\\":\\"The selected model requires a newer Codex CLI\\"}}"}}',
+    ].join("\n")
+
+    expect(() => codexCliParser.parseComplete(output)).toThrow(CliOutputError)
+    expect(() => codexCliParser.parseComplete(output)).toThrow("The selected model requires a newer Codex CLI")
   })
 })
 

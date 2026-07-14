@@ -1,6 +1,15 @@
 import type { ProviderModel, ProviderWithModelList } from "@/types/providerModels"
 
 export const getProviderModelDisabledReason = (model: Record<string, unknown> | null | undefined): string => {
+  const capabilities = model?.capabilities
+  const output =
+    capabilities && typeof capabilities === "object" && "output" in capabilities
+      ? (capabilities as { output?: unknown }).output
+      : undefined
+  if (output && typeof output === "object" && (output as { text?: unknown }).text === false) {
+    return "This model cannot return text responses required by AX Code."
+  }
+
   const options = model?.options
   if (!options || typeof options !== "object") return ""
 

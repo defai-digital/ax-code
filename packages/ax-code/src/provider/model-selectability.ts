@@ -15,7 +15,10 @@ const TOOLCALL_OPTIONAL_PROVIDER_IDS = new Set([
 
 type SelectableModel = {
   tool_call?: boolean
-  capabilities?: { toolcall?: boolean }
+  capabilities?: {
+    toolcall?: boolean
+    output?: { text?: boolean }
+  }
   options?: { minMemoryBytes?: unknown }
 }
 
@@ -39,6 +42,10 @@ export function providerModelSelectable(input: { providerID: string; toolcall?: 
 export function modelSelectableForProvider(providerID: string, model: SelectableModel | undefined) {
   if (!model) return false
   if (modelMemoryBlockReason(providerID, model)) return false
+  // AX Code's agent loop requires a textual assistant response. Models that
+  // explicitly advertise image-only (or other non-text) output cannot produce
+  // a usable coding turn, even when they accept tool schemas.
+  if (model.capabilities?.output?.text === false) return false
   return providerModelSelectable({
     providerID,
     toolcall: model.capabilities?.toolcall ?? model.tool_call,

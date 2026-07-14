@@ -17,6 +17,28 @@ describe("providerModelSelectable", () => {
   })
 })
 
+describe("modelSelectableForProvider", () => {
+  test("rejects models that explicitly cannot return text", () => {
+    expect(
+      modelSelectableForProvider("alibaba-token-plan", {
+        capabilities: { toolcall: false, output: { text: false } },
+      }),
+    ).toBe(false)
+  })
+
+  test("keeps text-capable CLI models selectable without tool-call metadata", () => {
+    expect(
+      modelSelectableForProvider("grok-build-cli", {
+        capabilities: { toolcall: false, output: { text: true } },
+      }),
+    ).toBe(true)
+  })
+
+  test("does not reject models whose output capability is not known", () => {
+    expect(modelSelectableForProvider("grok-build-cli", { capabilities: { toolcall: false } })).toBe(true)
+  })
+})
+
 describe("ax-engine local MLX model list", () => {
   // All AX Engine local models are expected to advertise tool calling. This
   // keeps every catalog model selectable through the normal model picker path.

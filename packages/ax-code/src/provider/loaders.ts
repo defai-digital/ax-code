@@ -1,9 +1,11 @@
 import type { Provider } from "./provider"
 import { ProviderID, ModelID } from "./schema"
-import { which } from "../util/which"
+import { which, whichAll } from "../util/which"
+import { Process } from "../util/process"
 import { Ssrf } from "../util/ssrf"
 import { CliLanguageModel } from "./cli/cli-language-model"
 import type { CliOutputParser } from "./cli/parser"
+import { selectPreferredCodexBinary } from "./cli/binary"
 import { resolveCliModel } from "./cli/resolve"
 import { getCliProviderDefinition } from "./cli/config"
 import { checkCliProviderAuth } from "./cli/connect"
@@ -320,6 +322,46 @@ const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
   "antigravity-cli": "Antigravity CLI default",
 }
 
+// A stale standalone `codex` launcher can shadow the newer executable bundled
+// with the ChatGPT app. Codex CLI models are version-coupled, so prefer the
+// newest executable found on the real PATH rather than failing a selected
+// model solely because an older duplicate appears first.
+const cliBinaryCache = new Map<string, Promise<string | null>>()
+
+async function resolveCliBinary(providerID: string, binary: string) {
+  const cacheKey = `${providerID}:${binary}`
+  const cached = cliBinaryCache.get(cacheKey)
+  if (cached) return cached
+
+  const resolving = (async () => {
+    const primary = which(binary)
+    if (!primary || providerID !== "codex-cli") return primary
+
+    const candidates = [...new Set(whichAll(binary, undefined, { extraDirs: false }))]
+    if (candidates.length < 2) return primary
+
+    const inspected = await Promise.all(
+      candidates.map(async (candidate) => {
+        const result = await Process.run([candidate, "--version"], { timeout: 2_000, nothrow: true }).catch(
+          () => undefined,
+        )
+        return {
+          path: candidate,
+          version: result?.code === 0 ? `${result.stdout}\n${result.stderr}` : undefined,
+        }
+      }),
+    )
+    const selected = selectPreferredCodexBinary(inspected) ?? primary
+    if (selected !== primary) {
+      log.info("selected newer Codex CLI executable", { primary, selected })
+    }
+    return selected
+  })()
+
+  cliBinaryCache.set(cacheKey, resolving)
+  return resolving
+}
+
 function cliModels(providerID: string, provider: Provider.Info, resolved?: string): Record<string, Provider.Model> {
   const base = Object.values(provider.models)[0]
   if (!base) return {}
@@ -365,10 +407,10 @@ interface CliLoaderOpts {
 
 function cliLoader(opts: CliLoaderOpts): CustomLoader {
   return async (provider) => {
-    const path = which(opts.binary)
     return {
       autoload: false,
       async getModel(_sdk: any, modelID: string) {
+        const path = await resolveCliBinary(opts.providerID, opts.binary)
         if (!path) throw new Error(`${opts.binary} CLI not found in PATH`)
         const authError = await checkCliProviderAuth(opts.providerID, path)
         if (authError) throw new Error(authError)
@@ -386,6 +428,7 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
         })
       },
       async discoverModels() {
+        const path = await resolveCliBinary(opts.providerID, opts.binary)
         if (!path) return {}
         const authError = await checkCliProviderAuth(opts.providerID, path)
         if (authError) return {}

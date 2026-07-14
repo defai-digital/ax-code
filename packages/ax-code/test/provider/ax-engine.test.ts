@@ -44,7 +44,7 @@ import {
   isServerReady,
   stopServer,
   getModelStatus,
-  isPlausiblySupportedHost,
+  isSupportedHost,
   markPrepared,
   normalizeQuantization,
   noteActiveAxEngineServer,
@@ -1205,7 +1205,7 @@ describe("ax-engine provider integration", () => {
   })
 
   test("configured provider is available without starting ax-engine during provider list", async () => {
-    if (!isPlausiblySupportedHost()) return
+    if (!(await isSupportedHost())) return
 
     await using tmp = await tmpdir({
       config: {
@@ -1233,7 +1233,7 @@ describe("ax-engine provider integration", () => {
   })
 
   test("empty configured provider is enough for TUI ax-engine connect flow", async () => {
-    if (!isPlausiblySupportedHost()) return
+    if (!(await isSupportedHost())) return
 
     await using tmp = await tmpdir({
       config: {
@@ -1256,7 +1256,7 @@ describe("ax-engine provider integration", () => {
   })
 
   test("name-only configured provider is enough for TUI ax-engine connect flow", async () => {
-    if (!isPlausiblySupportedHost()) return
+    if (!(await isSupportedHost())) return
 
     await using tmp = await tmpdir({
       config: {
@@ -1612,7 +1612,7 @@ describe("ax-engine provider integration", () => {
   })
 
   test("loader throws actionable ModelNotPrepared error when model is not downloaded", async () => {
-    if (!isPlausiblySupportedHost()) return
+    if (!(await isSupportedHost())) return
 
     const loader = await axEngineLoader()({
       id: AX_ENGINE_PROVIDER_ID,

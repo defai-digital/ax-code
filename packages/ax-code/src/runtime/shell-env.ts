@@ -5,6 +5,43 @@ import { text } from "node:stream/consumers"
 
 let shellEnvReady: Promise<void> | undefined
 
+type ShellEnvProcess = Pick<Process.Child, "exited" | "stdout" | "stderr" | "unref">
+
+export async function waitForShellEnvCapture(
+  proc: ShellEnvProcess,
+  timeoutMs: number,
+  onTimeout: () => void,
+): Promise<[number, string, string] | undefined> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (value: [number, string, string] | undefined) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(value)
+    }
+    const timer = setTimeout(() => {
+      // A shell profile can leave its process uninterruptible even after the
+      // child-process timeout fires. Detach its handles so it cannot hold the
+      // CLI or provider initialization hostage.
+      proc.stdout?.destroy()
+      proc.stderr?.destroy()
+      proc.unref?.()
+      onTimeout()
+      finish(undefined)
+    }, timeoutMs)
+
+    Promise.all([
+      proc.exited,
+      proc.stdout ? text(proc.stdout) : Promise.resolve(""),
+      proc.stderr ? text(proc.stderr) : Promise.resolve(""),
+    ]).then(
+      ([code, stdout, stderr]) => finish([code, stdout, stderr]),
+      () => finish(undefined),
+    )
+  })
+}
+
 /**
  * Await this before accessing environment variables that may come from the
  * user's shell profile (e.g., API keys set in .zshrc/.bashrc). The shell env
@@ -39,25 +76,20 @@ async function loadShellEnv(env: Record<string, string | undefined>) {
       env: { ...env, TERM: "dumb", NO_COLOR: "1" },
       timeout: shellTimeoutMs,
     })
-    let result: [number, string, string] | undefined
-    try {
-      const [code, stdout, stderr] = await Promise.all([
-        proc.exited,
-        proc.stdout ? text(proc.stdout) : Promise.resolve(""),
-        proc.stderr ? text(proc.stderr) : Promise.resolve(""),
-      ])
-      if (code === 124) {
-        throw new Error(`Shell env load timed out after ${shellTimeoutMs / 1000}s: ${stderr}`)
-      }
-      result = [code, stdout, stderr]
-    } catch (err) {
-      Log.Default.debug("shell env load failed", { error: toErrorMessage(err) })
-      await stopShellEnvProcess(proc)
-      result = undefined
-    }
+    const result = await waitForShellEnvCapture(proc, shellTimeoutMs, () => {
+      Log.Default.debug("shell env load timed out; continuing without shell environment")
+      void stopShellEnvProcess(proc)
+    })
     if (!result) return
     const [code, stdout] = result
-    if (code !== 0 || !stdout) return
+    if (code !== 0 || !stdout) {
+      if (code === 124) {
+        Log.Default.debug("shell env load failed", {
+          error: `Shell env load timed out after ${shellTimeoutMs / 1000}s`,
+        })
+      }
+      return
+    }
 
     for (const entry of stdout.split("\0")) {
       const eq = entry.indexOf("=")

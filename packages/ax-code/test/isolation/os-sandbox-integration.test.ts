@@ -11,6 +11,14 @@ import { spawnSync } from "child_process"
 
 const isDarwin = process.platform === "darwin"
 
+function systemHomeDirectory() {
+  try {
+    return os.userInfo().homedir || os.homedir()
+  } catch {
+    return os.homedir()
+  }
+}
+
 describe("OsSandbox seatbelt integration", () => {
   test.skipIf(!isDarwin)("allows workspace write + mktemp; denies outside write", () => {
     const avail = OsSandbox.probeAvailability("darwin")
@@ -20,7 +28,10 @@ describe("OsSandbox seatbelt integration", () => {
     }
 
     // Workspace under home so it is distinct from tempWriteRoots (/var/folders, /tmp).
-    const homeBase = path.join(os.homedir(), ".ax-code-os-sandbox-test")
+    // `os.homedir()` follows HOME. Test runners may intentionally set HOME
+    // beneath /tmp, which is an approved write root for mktemp; use the
+    // account's system home so the outside path is genuinely outside it.
+    const homeBase = path.join(systemHomeDirectory(), ".ax-code-os-sandbox-test")
     fs.mkdirSync(homeBase, { recursive: true })
     const workspace = fs.mkdtempSync(path.join(homeBase, "ws-"))
     const realWorkspace = OsSandbox.canonicalPath(workspace)

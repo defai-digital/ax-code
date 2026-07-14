@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { handlePromptLoopError, resolvePromptLoopErrorTransition } from "../../src/session/prompt-loop-errors"
 import { SessionID } from "../../src/session/schema"
+import { MessageV2 } from "../../src/session/message-v2"
 
 const primaryModel = {
   providerID: "primary" as ProviderID,
@@ -239,6 +240,33 @@ describe("prompt loop error transitions", () => {
         message: "request did not terminate",
       },
     ])
+  })
+
+  test("stops immediately for an explicitly non-retryable CLI error", async () => {
+    const sessionID = SessionID.descending()
+    const published: { sessionID: SessionID; message: string }[] = []
+
+    const result = await handlePromptLoopError(
+      {
+        sessionID,
+        currentModel: primaryModel,
+        error: MessageV2.fromError(
+          Object.assign(new Error("The selected model requires a newer Codex CLI"), { isRetryable: false }),
+          { providerID: primaryModel.providerID },
+        ),
+        consecutiveErrors: 1,
+        step: 1,
+      },
+      {
+        warn() {},
+        publishError(input) {
+          published.push(input)
+        },
+      },
+    )
+
+    expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 1 })
+    expect(published).toEqual([{ sessionID, message: "The selected model requires a newer Codex CLI" }])
   })
 
   test("publishes stop errors when the consecutive error limit is reached", async () => {

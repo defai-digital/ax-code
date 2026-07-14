@@ -63,6 +63,7 @@ function providerFallbackUnavailableMessage(input: {
 
 function nonRetryableProviderError(error: unknown) {
   if (!error || typeof error !== "object") return false
+  if ((error as { isRetryable?: unknown }).isRetryable === false) return true
   const name = (error as { name?: unknown }).name
   if (name !== "APIError" && name !== "AI_APICallError") return false
   const direct = (error as { isRetryable?: unknown }).isRetryable

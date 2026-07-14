@@ -347,6 +347,26 @@ describe("cli.boot.data", () => {
 })
 
 describe("cli.boot.fatal", () => {
+  test("does not render a fallback error when formatting intentionally suppresses output", () => {
+    const ui: string[] = []
+    const out: string[] = []
+
+    fatal(new Error("cancelled"), {
+      error: () => {},
+      format: () => "",
+      ui: (text) => void ui.push(text),
+      out: {
+        write(text: string) {
+          out.push(text)
+          return true
+        },
+      },
+    })
+
+    expect(ui).toEqual([])
+    expect(out).toEqual([])
+  })
+
   test("prints fallback output when no formatted error exists", () => {
     const ui: string[] = []
     const out: string[] = []

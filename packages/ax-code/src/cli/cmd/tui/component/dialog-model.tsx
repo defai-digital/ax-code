@@ -9,8 +9,7 @@ import { useKeybind } from "../context/keybind"
 import * as fuzzysort from "fuzzysort"
 import { useConnected } from "./provider-state"
 import { modelDisplayInfo } from "./model-vision-label"
-import { providerModelSelectable } from "./dialog-provider-options"
-import { modelMemoryBlockReason } from "@/provider/model-selectability"
+import { modelMemoryBlockReason, modelSelectableForProvider } from "@/provider/model-selectability"
 import { useTheme } from "../context/theme"
 import { dialogModelOptionDisabled } from "./dialog-model-options"
 
@@ -80,9 +79,7 @@ export function DialogModel(props: { providerID?: string }) {
           provider.models,
           entries(),
           filter(([_, info]) => info.status !== "deprecated"),
-          filter(([_, info]) =>
-            providerModelSelectable({ providerID: provider.id, toolcall: info.capabilities.toolcall }),
-          ),
+          filter(([_, info]) => modelSelectableForProvider(provider.id, info)),
           filter(([_, info]) => (props.providerID ? info.providerID === props.providerID : true)),
           map(([model, info]) => {
             const display = modelDisplayInfo(model, info)

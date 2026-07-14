@@ -2,6 +2,7 @@ import type { Argv } from "yargs"
 import { Instance } from "../../project/instance"
 import { providerModelKey } from "../../provider/model-key"
 import { Provider } from "../../provider/provider"
+import { modelSelectableForProvider } from "../../provider/model-selectability"
 import { ProviderID } from "../../provider/schema"
 import { cmd } from "./cmd"
 import { UI } from "../ui"
@@ -9,7 +10,7 @@ import { EOL } from "os"
 
 export const ModelsCommand = cmd({
   command: "models [provider]",
-  describe: "list all available models",
+  describe: "list models usable by AX Code",
   builder: (yargs: Argv) => {
     return yargs
       .positional("provider", {
@@ -41,7 +42,9 @@ export const ModelsCommand = cmd({
 
         function printModels(providerID: ProviderID, verbose?: boolean) {
           const provider = providers[providerID]
-          const sortedModels = Object.entries(provider.models).sort(([a], [b]) => a.localeCompare(b))
+          const sortedModels = Object.entries(provider.models)
+            .filter(([, model]) => modelSelectableForProvider(providerID, model))
+            .sort(([a], [b]) => a.localeCompare(b))
           for (const [modelID, model] of sortedModels) {
             process.stdout.write(providerModelKey({ providerID, modelID }))
             process.stdout.write(EOL)

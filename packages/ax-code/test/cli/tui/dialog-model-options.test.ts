@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest"
 import { dialogModelOptionDisabled } from "../../../src/cli/cmd/tui/component/dialog-model-options"
 
-function model(toolcall: boolean, options: Record<string, unknown> = {}) {
+function model(toolcall: boolean, options: Record<string, unknown> = {}, text = true) {
   return {
     id: "model",
-    capabilities: { toolcall },
+    capabilities: { toolcall, output: { text } },
     options,
   }
 }
@@ -23,6 +23,10 @@ describe("dialog model options", () => {
   test("disables unavailable and explicitly hidden models", () => {
     expect(dialogModelOptionDisabled("xai", "missing", undefined)).toBe(true)
     expect(dialogModelOptionDisabled("opencode", "gpt-nano", model(true))).toBe(true)
+  })
+
+  test("disables image-only models", () => {
+    expect(dialogModelOptionDisabled("alibaba-token-plan", "qwen-image-2.0", model(false, {}, false))).toBe(true)
   })
 
   test("disables local models blocked by memory requirements", () => {
