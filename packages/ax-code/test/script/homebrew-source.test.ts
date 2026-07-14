@@ -267,7 +267,8 @@ describe("distribution support guardrails", () => {
     // the CLI formula must not unlink the ax-code command. The cask installs
     // under its own token; a cask named plain "ax-code" is a failure.
     expect(text).toContain("brew install --cask defai-digital/ax-code-desktop/ax-code-desktop")
-    expect(text).toContain("brew list --cask ax-code >/dev/null")
+    expect(text).toContain('brew list --cask | grep -Fx "ax-code"')
+    expect(text).not.toContain("brew list --cask ax-code >/dev/null")
     expect(text).toContain("command -v ax-code")
     expect(text).toContain("Invoke-RestMethod -Uri")
     expect(text).toContain("& $Installer -Version $Version")

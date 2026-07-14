@@ -120,7 +120,11 @@ jobs:
           # distinct token and the CLI must stay resolvable next to it.
           brew tap defai-digital/ax-code-desktop 2>&1 || true
           brew install --cask defai-digital/ax-code-desktop/ax-code-desktop
-          if brew list --cask ax-code >/dev/null 2>&1; then
+          # Query the installed-token list directly. `brew list --cask ax-code`
+          # follows cask_renames.json, so the intentional ax-code ->
+          # ax-code-desktop migration makes that command succeed even though
+          # the installed token is correctly distinct.
+          if brew list --cask | grep -Fx "ax-code"; then
             echo "FAIL: a cask named ax-code is installed; it collides with the CLI formula token"
             exit 1
           fi
