@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -120,24 +119,26 @@ export function ProjectSwitcher<TProject extends { id: string }>({
             scrollbarClassName="overlay-scrollbar--flush overlay-scrollbar--dense overlay-scrollbar--zero"
             disableHorizontal
           >
-            <CommandEmpty>{t("chat.chatInput.noProjectsFound")}</CommandEmpty>
-
-            <CommandGroup>
-              {filtered.map((project) => {
-                const isActive = project.id === selectedProjectId
-                return (
-                  <CommandItem
-                    key={project.id}
-                    value={project.id}
-                    onSelect={() => handleSelect(project.id)}
-                    className="gap-1.5"
-                  >
-                    <span className="flex min-w-0 flex-1 items-center">{renderLabel(project)}</span>
-                    {isActive ? <Icon name="check" className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
-                  </CommandItem>
-                )
-              })}
-            </CommandGroup>
+            {filtered.length === 0 ? (
+              <div className="py-6 text-center typography-ui-label">{t("chat.chatInput.noProjectsFound")}</div>
+            ) : (
+              <CommandGroup>
+                {filtered.map((project) => {
+                  const isActive = project.id === selectedProjectId
+                  return (
+                    <CommandItem
+                      key={project.id}
+                      value={project.id}
+                      onSelect={() => handleSelect(project.id)}
+                      className="gap-1.5"
+                    >
+                      <span className="flex min-w-0 flex-1 items-center">{renderLabel(project)}</span>
+                      {isActive ? <Icon name="check" className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
+                    </CommandItem>
+                  )
+                })}
+              </CommandGroup>
+            )}
 
             <CommandSeparator />
 
