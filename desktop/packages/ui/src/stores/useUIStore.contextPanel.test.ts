@@ -105,4 +105,29 @@ describe("useUIStore context panel", () => {
 
     expect(partialize?.(useUIStore.getState())).not.toHaveProperty("browserPanel")
   })
+
+  test("persists manually resized panels and the file-diff layout", () => {
+    const partialize = useUIStore.persist.getOptions().partialize
+    expect(partialize).toBeTypeOf("function")
+
+    useUIStore.setState({
+      sidebarWidth: 344,
+      hasManuallyResizedLeftSidebar: true,
+      rightSidebarWidth: 428,
+      hasManuallyResizedRightSidebar: true,
+      bottomTerminalHeight: 312,
+      hasManuallyResizedBottomTerminal: true,
+      diffFileLayout: { "src/index.ts": "inline" },
+    })
+
+    expect(partialize?.(useUIStore.getState())).toMatchObject({
+      sidebarWidth: 344,
+      hasManuallyResizedLeftSidebar: true,
+      rightSidebarWidth: 428,
+      hasManuallyResizedRightSidebar: true,
+      bottomTerminalHeight: 312,
+      hasManuallyResizedBottomTerminal: true,
+      diffFileLayout: { "src/index.ts": "inline" },
+    })
+  })
 })

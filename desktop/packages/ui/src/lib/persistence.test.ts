@@ -84,4 +84,26 @@ describe("updateDesktopSettings", () => {
     await rejection
     expect(fetch).toHaveBeenCalledTimes(1)
   })
+
+  test("flushes a pending save when the page is closing", async () => {
+    const save = vi.fn().mockResolvedValue(null)
+    vi.doMock("@/contexts/runtimeAPIRegistry", () => ({
+      getRegisteredRuntimeAPIs: () => ({
+        settings: {
+          load: vi.fn(),
+          save,
+        },
+      }),
+    }))
+
+    const { updateDesktopSettings } = await import("./persistence")
+    const update = updateDesktopSettings({ themeId: "dark" })
+
+    window.dispatchEvent(new Event("pagehide"))
+
+    expect(save).toHaveBeenCalledWith({ themeId: "dark" })
+    await expect(update).resolves.toBeUndefined()
+    await vi.runAllTimersAsync()
+    expect(save).toHaveBeenCalledTimes(1)
+  })
 })

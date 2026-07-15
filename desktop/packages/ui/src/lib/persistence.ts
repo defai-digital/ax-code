@@ -1244,7 +1244,7 @@ const _flushSettingsUpdateOnUnload = (): void => {
     if (runtimeSettings) {
       // Electron: best-effort IPC save; may not complete on a hard quit.
       try {
-        void runtimeSettings.save(changes)
+        void Promise.resolve(runtimeSettings.save(changes)).catch(() => {})
       } catch {
         /* ignore */
       }
