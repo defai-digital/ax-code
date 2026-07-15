@@ -50,6 +50,11 @@ function formatCliTimeout(stdout: Buffer, stderr: Buffer) {
   return detail ? `${base}: ${detail.slice(0, 1000)}` : base
 }
 
+function rawFallbackText(output: string) {
+  const text = output.replace(/\r?\n$/, "")
+  return text.trim() ? text : ""
+}
+
 const CLI_TIMEOUT_MS = 300_000 // 5 minutes
 
 export function cliEnv(providerEnvKeys: readonly string[] = [], providerID?: string) {
@@ -428,13 +433,15 @@ export class CliLanguageModel implements LanguageModelV3 {
               controller.enqueue({ type: "text-delta", id: textId, delta })
             }
           }
-          // Stream parsers intentionally ignore control and error events.
-          // Parse the complete payload before emitting a raw fallback so a
-          // structured CLI error cannot be rendered as an assistant reply.
-          const complete = parser.parseComplete(raw.join(""))
-          if (!emitted && complete.text) {
-            output.push(complete.text)
-            controller.enqueue({ type: "text-delta", id: textId, delta: complete.text })
+          // Stream parsers intentionally ignore control and error events. Let
+          // the complete parser surface structured errors first, then retain
+          // non-empty plain stdout when that parser has no text to return.
+          const rawOutput = raw.join("")
+          const complete = parser.parseComplete(rawOutput)
+          const fallback = complete.text || rawFallbackText(rawOutput)
+          if (!emitted && fallback) {
+            output.push(fallback)
+            controller.enqueue({ type: "text-delta", id: textId, delta: fallback })
           }
         }
         const finishSuccess = () => {
