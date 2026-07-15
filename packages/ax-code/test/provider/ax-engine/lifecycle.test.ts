@@ -4,10 +4,10 @@ import {
   AX_ENGINE_ERROR,
   LOCAL_ENGINE_PHASE_RANK,
   mapAxEngineStatusToLifecycle,
-  type AxEngineStatus,
+  type AxEngineStatusCore,
 } from "../../../src/provider/ax-engine"
 
-function baseStatus(over: Partial<AxEngineStatus> = {}): AxEngineStatus {
+function baseStatus(over: Partial<AxEngineStatusCore> = {}): AxEngineStatusCore {
   return {
     eligibility: {
       supported: true,

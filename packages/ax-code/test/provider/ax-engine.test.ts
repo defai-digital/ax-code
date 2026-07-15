@@ -1772,4 +1772,23 @@ describe("ax-engine doctor status", () => {
     expect(check.status).toBe("warn")
     expect(check.detail).toContain("not prepared")
   })
+
+  test("reports a shared lifecycle engine error as a failed doctor check", () => {
+    const check = getAxEngineDoctorCheck({
+      eligibility: { supported: true, blockers: [], warnings: [] },
+      dependency: { available: true, binaryPath: "/bin/ax-engine", blockers: [] },
+      disk: { ok: true, blockers: [] },
+      model: { present: true, blockers: [] },
+      server: { running: false, ready: false, blockers: ["AX_ENGINE_SERVER_START_FAILED: exited"] },
+      capability: { toolcall: false, attachment: false },
+      lifecycle: {
+        phase: "error",
+        backend: "sidecar_http",
+        blockers: ["AX_ENGINE_SERVER_START_FAILED: exited"],
+      },
+    } as any)
+
+    expect(check.status).toBe("fail")
+    expect(check.detail).toContain("AX_ENGINE_SERVER_START_FAILED")
+  })
 })

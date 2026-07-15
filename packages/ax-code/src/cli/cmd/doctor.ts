@@ -134,7 +134,7 @@ export function getAxEngineDoctorCheck(status: Awaited<ReturnType<typeof getAxEn
   if (phase === "error") {
     return {
       name: "AX Engine local provider",
-      status: "error",
+      status: "fail",
       detail: `${phasePrefix}${(status.lifecycle?.blockers ?? status.server.blockers).join("; ") || "engine error"}`,
     }
   }
