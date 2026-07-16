@@ -34,6 +34,7 @@ type Args = {
   deleteSessions: (ids: string[]) => Promise<{ deletedIds: string[]; failedIds: string[] }>
   archiveSession: (id: string) => Promise<boolean>
   archiveSessions: (ids: string[]) => Promise<{ archivedIds: string[]; failedIds: string[] }>
+  unarchiveSession: (id: string) => Promise<boolean>
   childrenMap: Map<string, Session[]>
   showDeletionDialog: boolean
   setDeleteSessionConfirm: DeleteSessionConfirmSetter
@@ -171,6 +172,18 @@ export const useSessionActions = (args: Args) => {
     [args, t],
   )
 
+  const handleUnarchiveSession = React.useCallback(
+    async (sessionId: string) => {
+      const restored = await args.unarchiveSession(sessionId)
+      if (restored) {
+        toast.success(t("sessions.sidebar.session.unarchive.success"))
+      } else {
+        toast.error(t("sessions.sidebar.session.unarchive.error"))
+      }
+    },
+    [args, t],
+  )
+
   const collectDescendants = React.useCallback(
     (sessionId: string): Session[] => {
       const collected: Session[] = []
@@ -263,6 +276,7 @@ export const useSessionActions = (args: Args) => {
     handleShareSession,
     handleCopyShareUrl,
     handleUnshareSession,
+    handleUnarchiveSession,
     handleDeleteSession,
     confirmDeleteSession,
   }

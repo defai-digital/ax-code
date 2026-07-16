@@ -51,6 +51,7 @@ import {
   createSession as createSessionAction,
   deleteSession as deleteSessionAction,
   archiveSession as archiveSessionAction,
+  unarchiveSession as unarchiveSessionAction,
   updateSessionTitle as updateSessionTitleAction,
   shareSession as shareSessionAction,
   unshareSession as unshareSessionAction,
@@ -364,6 +365,7 @@ export type SessionUIState = {
   deleteSessions: (ids: string[]) => Promise<{ deletedIds: string[]; failedIds: string[] }>
   archiveSession: (id: string) => Promise<boolean>
   archiveSessions: (ids: string[]) => Promise<{ archivedIds: string[]; failedIds: string[] }>
+  unarchiveSession: (id: string) => Promise<boolean>
   updateSessionTitle: (sessionId: string, title: string) => Promise<void>
   validateSessionMoveTarget: (sessionId: string, targetDirectory: string) => Promise<SessionMoveValidation>
   moveSession: (sessionId: string, targetDirectory: string) => Promise<Session>
@@ -1110,6 +1112,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     }
     return { archivedIds, failedIds }
   },
+
+  unarchiveSession: (id) => unarchiveSessionAction(id),
 
   // ---------------------------------------------------------------------------
   // updateSessionTitle — calls SDK, SSE event updates child store

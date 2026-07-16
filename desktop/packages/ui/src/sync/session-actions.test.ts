@@ -149,6 +149,16 @@ const mockScopedClient = {
         },
       })
     }),
+    update: vi.fn((params: Record<string, unknown>) => {
+      sessionCalls.push({ method: "session.update", params })
+      return Promise.resolve({
+        data: {
+          id: params.sessionID,
+          directory: params.directory,
+          time: { created: 1, updated: 6 },
+        },
+      })
+    }),
   },
   question: {
     reply: vi.fn((params: Record<string, unknown>) => {
@@ -418,6 +428,29 @@ describe("createSession passes directory", () => {
     await expect(createSession("Desktop session", "/selected/project", null)).rejects.toThrow(
       "Failed to create session: Project directory is not accessible",
     )
+  })
+})
+
+describe("unarchiveSession", () => {
+  test("clears the archive timestamp through the session's scoped client and restores the global list", async () => {
+    const { setActionRefs, unarchiveSession } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as AxCodeClient, createChildStores([]), () => "/current/project")
+
+    await expect(unarchiveSession("session-a")).resolves.toBe(true)
+
+    expect(sessionCalls).toContainEqual({
+      method: "session.update",
+      params: {
+        sessionID: "session-a",
+        directory: "/test/project",
+        time: { archived: null },
+      },
+    })
+    expect(upsertSessionMock).toHaveBeenCalledWith({
+      id: "session-a",
+      directory: "/test/project",
+      time: { created: 1, updated: 6 },
+    })
   })
 })
 

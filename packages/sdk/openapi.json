@@ -25826,9 +25826,16 @@
                     "type": "object",
                     "properties": {
                       "archived": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 9007199254740991
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     }
                   },
@@ -41820,6 +41827,32 @@
                     "minimum": 0
                   }
                 }
+              }
+            }
+          },
+          "wiki": {
+            "description": "OpenWiki repo semantic wiki (ADR-050). Complements structural ax-code index; does not replace code_intelligence.",
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "description": "When true (default), inject <repo_wiki> system protocol if the wiki directory exists. Set false to suppress.",
+                "type": "boolean"
+              },
+              "command": {
+                "description": "OpenWiki executable name or path. Default: openwiki (or OPENWIKI_COMMAND env).",
+                "type": "string"
+              },
+              "dir": {
+                "description": "Wiki directory relative to project root. Default: openwiki (OpenWiki code-mode default).",
+                "type": "string"
+              },
+              "autoInjectAgents": {
+                "description": "Allow wiki ensure-agents / init --wiki to rewrite OPENWIKI marker blocks. Default: true.",
+                "type": "boolean"
+              },
+              "touchClaudeMd": {
+                "description": "When ensuring markers, also update CLAUDE.md if it already exists. Default: true.",
+                "type": "boolean"
               }
             }
           }

@@ -685,6 +685,24 @@ export async function archiveSession(sessionId: string): Promise<boolean> {
   }
 }
 
+export async function unarchiveSession(sessionId: string): Promise<boolean> {
+  const sessionDirectory = getSessionDirectory(sessionId)
+  try {
+    const result = await scopedClientForDirectory(sessionDirectory).session.update({
+      sessionID: sessionId,
+      directory: sessionDirectory,
+      time: { archived: null },
+    })
+    if (result.data) {
+      useGlobalSessionsStore.getState().upsertSession(result.data)
+    }
+    return true
+  } catch (error) {
+    console.error("[session-actions] unarchiveSession failed", error)
+    return false
+  }
+}
+
 export async function updateSessionTitle(sessionId: string, title: string): Promise<void> {
   const sessionDirectory = getSessionDirectory(sessionId)
   const result = await scopedClientForDirectory(sessionDirectory).session.update({

@@ -1243,6 +1243,11 @@ export const TerminalView: React.FC = () => {
             enableTouchScroll={useTouchTerminalInput}
             autoFocus={!useTouchTerminalInput && isTerminalVisible}
             isVisible={isTerminalVisible}
+            onInitializeError={(error) => {
+              setConnectionError(t("terminalView.error.rendererFailed", { message: error.message }))
+              setIsFatalError(true)
+              setIsReconnectPending(false)
+            }}
           />
         </div>
         {isConnecting && bufferChunks.length === 0 ? (

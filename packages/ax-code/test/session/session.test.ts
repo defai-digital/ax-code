@@ -159,7 +159,7 @@ describe("session.updatePartDelta", () => {
 })
 
 describe("session.setArchived", () => {
-  test("updates time.updated when archiving", async () => {
+  test("updates time.updated when archiving and clears the archive timestamp when restoring", async () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
@@ -171,11 +171,19 @@ describe("session.setArchived", () => {
         try {
           const before = await Session.get(session.id)
           await Session.setArchived({ sessionID: session.id, time: archivedAt })
-          const after = await Session.get(session.id)
+          const archived = await Session.get(session.id)
 
-          expect(after.time.archived).toBe(archivedAt)
-          expect(after.time.updated).toBe(updatedAt)
-          expect(after.time.updated).not.toBe(before.time.updated)
+          expect(archived.time.archived).toBe(archivedAt)
+          expect(archived.time.updated).toBe(updatedAt)
+          expect(archived.time.updated).not.toBe(before.time.updated)
+
+          const restoredAt = 60_000
+          nowSpy.mockReturnValue(restoredAt)
+          await Session.setArchived({ sessionID: session.id, time: null })
+          const restored = await Session.get(session.id)
+
+          expect(restored.time.archived).toBeUndefined()
+          expect(restored.time.updated).toBe(restoredAt)
         } finally {
           nowSpy.mockRestore()
           await Session.remove(session.id)

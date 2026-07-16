@@ -536,6 +536,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const deleteSessions = useSessionUIStore((state) => state.deleteSessions)
   const archiveSession = useSessionUIStore((state) => state.archiveSession)
   const archiveSessions = useSessionUIStore((state) => state.archiveSessions)
+  const unarchiveSession = useSessionUIStore((state) => state.unarchiveSession)
 
   const {
     copiedSessionId,
@@ -546,6 +547,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     handleShareSession,
     handleCopyShareUrl,
     handleUnshareSession,
+    handleUnarchiveSession,
     handleDeleteSession,
     confirmDeleteSession,
   } = useSessionActions({
@@ -568,6 +570,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     deleteSessions,
     archiveSession,
     archiveSessions,
+    unarchiveSession,
     childrenMap,
     showDeletionDialog,
     setDeleteSessionConfirm,
@@ -1147,6 +1150,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         copiedSessionId={copiedSessionId}
         handleCopyShareUrl={handleCopyShareUrl}
         handleUnshareSession={handleUnshareSession}
+        handleUnarchiveSession={handleUnarchiveSession}
         openSidebarMenuKey={openSidebarMenuKey}
         setOpenSidebarMenuKey={setOpenSidebarMenuKey}
         renamingFolderId={renamingFolderId}
@@ -1185,6 +1189,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       copiedSessionId,
       handleCopyShareUrl,
       handleUnshareSession,
+      handleUnarchiveSession,
       openSidebarMenuKey,
       setOpenSidebarMenuKey,
       renamingFolderId,
