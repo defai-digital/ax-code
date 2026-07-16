@@ -101,6 +101,8 @@ export type AutocompleteOption = {
   onSelect?: () => void
   path?: string
   group?: string
+  /** Client-side slash actions execute immediately and must not stay in the prompt draft. */
+  clearPromptOnSelect?: boolean
 }
 
 const normalizeSlashAutocompleteQuery = (value: string): string =>
@@ -170,10 +172,18 @@ export function shouldHideAutocompleteOnInput(input: {
   return false
 }
 
+export function shouldClearPromptForAutocompleteSelection(input: {
+  visible: AutocompleteRef["visible"]
+  option: Pick<AutocompleteOption, "clearPromptOnSelect"> | undefined
+}): boolean {
+  return input.visible === "/" && input.option?.clearPromptOnSelect === true
+}
+
 export function Autocomplete(props: {
   value: string
   sessionID?: string
   setPrompt: (input: (prompt: PromptInfo) => void) => void
+  clearPrompt: () => void
   setExtmark: (partIndex: number, extmarkId: number) => void
   anchor: () => BoxRenderable
   input: () => TextareaRenderable
@@ -482,7 +492,10 @@ export function Autocomplete(props: {
   })
 
   const commands = createMemo((): AutocompleteOption[] => {
-    const clientSlashes = command.slashes()
+    const clientSlashes = command.slashes().map((slash) => ({
+      ...slash,
+      clearPromptOnSelect: true,
+    }))
     const results: AutocompleteOption[] = [...clientSlashes]
     // Builtin server-side prompt commands that should appear in "/" autocomplete.
     // Keep in sync with Command.Default in packages/ax-code/src/command/index.ts.
@@ -628,7 +641,9 @@ export function Autocomplete(props: {
       hide()
       return false
     }
+    const visible = store.visible
     hide()
+    if (shouldClearPromptForAutocompleteSelection({ visible, option: selected })) props.clearPrompt()
     selected.onSelect?.()
     return true
   }

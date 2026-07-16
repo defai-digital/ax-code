@@ -1733,6 +1733,7 @@ export function Prompt(props: PromptProps) {
         setPrompt={(cb) => {
           setStore("prompt", produce(cb))
         }}
+        clearPrompt={clearPromptDraft}
         setExtmark={(partIndex, extmarkId) => {
           setStore("extmarkToPartIndex", (map: Map<number, number>) => {
             const newMap = new Map(map)

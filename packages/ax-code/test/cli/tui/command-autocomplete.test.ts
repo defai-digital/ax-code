@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
   rankSlashAutocompleteOptions,
+  shouldClearPromptForAutocompleteSelection,
   shouldHideAutocompleteOnInput,
 } from "../../../src/cli/cmd/tui/component/prompt/autocomplete"
 import { commandAutocompleteSuffix } from "../../../src/cli/cmd/tui/component/prompt/autocomplete-command"
@@ -58,5 +59,26 @@ describe("tui command autocomplete", () => {
         cursorOffset: "/review staged".length,
       }),
     ).toBe(true)
+  })
+
+  test("clears the draft when autocomplete executes a client-side slash action", () => {
+    expect(
+      shouldClearPromptForAutocompleteSelection({
+        visible: "/",
+        option: { clearPromptOnSelect: true },
+      }),
+    ).toBe(true)
+    expect(
+      shouldClearPromptForAutocompleteSelection({
+        visible: "/",
+        option: {},
+      }),
+    ).toBe(false)
+    expect(
+      shouldClearPromptForAutocompleteSelection({
+        visible: "@",
+        option: { clearPromptOnSelect: true },
+      }),
+    ).toBe(false)
   })
 })
