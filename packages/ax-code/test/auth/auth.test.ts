@@ -115,6 +115,16 @@ test("all filters invalid auth entries and keeps valid ones", async () => {
   expect(data["broken"]).toBeUndefined()
 })
 
+test("coalesces concurrent first-run reads while creating the auth canary", async () => {
+  await fs.writeFile(file, "{}")
+
+  const [first, second] = await Promise.all([Auth.all(), Auth.all()])
+
+  expect(first).toEqual({})
+  expect(second).toEqual({})
+  expect(JSON.parse(await fs.readFile(file, "utf-8")).__canary).toBeDefined()
+})
+
 test("canary migration preserves entries that fail to decode instead of erasing them", async () => {
   await fs.writeFile(
     file,
