@@ -817,7 +817,7 @@ export const SessionRoutes = lazy(() =>
           title: z.string().optional(),
           time: z
             .object({
-              archived: JsonNumber(z.number().int().min(0)).optional(),
+              archived: JsonNumber(z.number().int().min(0)).nullable().optional(),
             })
             .optional(),
           metadata: Session.Metadata.optional(),

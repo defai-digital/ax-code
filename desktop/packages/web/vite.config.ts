@@ -1,11 +1,13 @@
-import { defineConfig } from "vite"
+import { defineConfig, type Plugin } from "vite"
 import react from "@vitejs/plugin-react"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 import { themeStoragePlugin } from "../../vite-theme-plugin"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const requireFromUi = createRequire(path.resolve(__dirname, "../ui/package.json"))
 const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf-8"))
 const reactScanToggle = (process.env.VITE_ENABLE_REACT_SCAN ?? "").toLowerCase()
 const enableReactScan =
@@ -43,6 +45,30 @@ function getBuildWarningMessage(warning: unknown): string {
 function isHighRiskBuildWarning(warning: unknown): boolean {
   const message = getBuildWarningMessage(warning)
   return highRiskBuildWarningPatterns.some((pattern) => pattern.test(message))
+}
+
+function ghosttyWasmAssetPlugin(): Plugin {
+  // TerminalViewport loads this file at runtime rather than importing it, so
+  // Vite cannot discover and emit it as part of the normal module graph.
+  const ghosttyWasmPath = requireFromUi.resolve("ghostty-web/ghostty-vt.wasm")
+  const readWasm = () => readFileSync(ghosttyWasmPath)
+
+  return {
+    name: "emit-ghostty-wasm",
+    configureServer(server) {
+      server.middlewares.use("/ghostty-vt.wasm", (_request, response) => {
+        response.setHeader("Content-Type", "application/wasm")
+        response.end(readWasm())
+      })
+    },
+    generateBundle() {
+      this.emitFile({
+        type: "asset",
+        fileName: "ghostty-vt.wasm",
+        source: readWasm(),
+      })
+    },
+  }
 }
 
 function getPackageNameFromNodeModuleId(id: string): string | null {
@@ -115,6 +141,7 @@ export default defineConfig({
       },
     },
     themeStoragePlugin(),
+    ghosttyWasmAssetPlugin(),
   ],
   resolve: {
     alias: [

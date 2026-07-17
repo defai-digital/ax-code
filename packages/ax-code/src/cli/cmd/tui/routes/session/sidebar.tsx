@@ -19,7 +19,7 @@ import { SessionRollbackView } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
 import { Todo } from "@/session/todo"
 import { footerSessionStatusOrIdle, footerSessionStatusView } from "./footer-view-model"
-import { followUpText } from "../../component/prompt/follow-up-queue"
+import { followUpPreview, followUpText } from "../../component/prompt/follow-up-queue"
 import {
   dispatchFollowUp,
   followUpQueue,
@@ -59,15 +59,6 @@ const QUEUED_SEND_ICON = "▸"
 const QUEUED_SEND_ICON_WIDTH = 2
 const QUEUED_EDIT_ICON = "✎"
 const QUEUED_EDIT_ICON_WIDTH = 2
-const QUEUE_SNIPPET_MAX = 48
-
-function queuedSnippet(parts: { type: string; text?: string; synthetic?: boolean; ignored?: boolean }[]) {
-  const text = parts.find((p) => p.type === "text" && !p.synthetic && !p.ignored)?.text?.trim()
-  if (!text) return "(empty message)"
-  const single = text.replace(/\s+/g, " ")
-  return single.length > QUEUE_SNIPPET_MAX ? single.slice(0, QUEUE_SNIPPET_MAX - 1) + "…" : single
-}
-
 export function activityColor(status: string, theme: ReturnType<typeof useTheme>["theme"]) {
   switch (status) {
     case "running":
@@ -623,7 +614,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                             <text style={{ fg: theme.warning }}>{QUEUED_DELETE_ICON}</text>
                           </box>
                           <text fg={theme.textMuted} wrapMode="word">
-                            {queuedSnippet(item.parts)}
+                            {followUpPreview(item)}
                           </text>
                         </box>
                       )}

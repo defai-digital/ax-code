@@ -172,6 +172,11 @@ export namespace SessionPrompt {
       })
     }
 
+    const loopTimer = log.time("loop", {
+      sessionID,
+      resumeExisting: isResumingActiveLoop,
+    })
+    await using _loopTimer = defer(() => loopTimer.stop())
     await using _ = defer(() => {
       return finishPromptLoopQueue({
         sessionID,

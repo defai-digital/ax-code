@@ -29,6 +29,7 @@ export interface CliLanguageModelConfig {
   parser: CliOutputParser
   promptMode: "stdin" | "arg" | "positional"
   promptFlag?: string
+  workspaceArg?: string
   providerEnvKeys?: readonly string[]
 }
 
@@ -42,6 +43,13 @@ function formatCliDetail(stdout: Buffer, stderr: Buffer) {
 function formatCliFailure(code: number, stdout: Buffer, stderr: Buffer) {
   const detail = formatCliDetail(stdout, stderr)
   return detail ? `CLI exited with code ${code}: ${detail.slice(0, 500)}` : `CLI exited with code ${code}`
+}
+
+function formatCliNoOutput(stdout: Buffer, stderr: Buffer) {
+  const detail = formatCliDetail(stdout, stderr)
+  return detail
+    ? `CLI exited successfully without producing assistant output: ${detail.slice(0, 1000)}`
+    : "CLI exited successfully without producing assistant output"
 }
 
 function formatCliTimeout(stdout: Buffer, stderr: Buffer) {
@@ -82,8 +90,9 @@ function autonomousCliArgs(providerID: string): string[] {
   return []
 }
 
-export function buildCliCommand(config: CliLanguageModelConfig, prompt: string) {
+export function buildCliCommand(config: CliLanguageModelConfig, prompt: string, workspaceDirectory?: string) {
   const cmd = [config.binary, ...config.args, ...autonomousCliArgs(config.providerID)]
+  if (config.workspaceArg && workspaceDirectory) cmd.push(config.workspaceArg, workspaceDirectory)
   if (config.modelID !== config.providerID) cmd.push("--model", config.modelID)
   if (config.promptMode === "arg") cmd.push(config.promptFlag ?? "-p", prompt)
   if (config.promptMode === "positional") cmd.push(prompt)
@@ -126,7 +135,7 @@ export class CliLanguageModel implements LanguageModelV3 {
   }
 
   private buildCmd(prompt: string) {
-    return buildCliCommand(this.config, prompt)
+    return buildCliCommand(this.config, prompt, currentInstanceDirectory())
   }
 
   private useStdin() {
@@ -255,6 +264,7 @@ export class CliLanguageModel implements LanguageModelV3 {
     }
 
     const parsed = this.config.parser.parseComplete(stdout.toString())
+    if (!parsed.text.trim()) throw new Error(formatCliNoOutput(stdout, stderr))
 
     return {
       content: [{ type: "text" as const, text: parsed.text }],
@@ -446,7 +456,11 @@ export class CliLanguageModel implements LanguageModelV3 {
           }
         }
         const finishSuccess = () => {
-          if (!stdoutEnded || exitCode === undefined || exitCode !== 0 || closed()) return
+          if (!stdoutEnded || !stderrEnded || exitCode === undefined || exitCode !== 0 || closed()) return
+          if (!output.join("").trim()) {
+            fail(new Error(formatCliNoOutput(Buffer.from(raw.join("")), Buffer.concat(stderrRaw))))
+            return
+          }
           endText()
           controller.enqueue({
             type: "finish",
@@ -482,6 +496,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         onStderrEnd = () => {
           if (closed()) return
           stderrEnded = true
+          finishSuccess()
           finishFailure()
         }
         onStdoutData = (chunk: Buffer) => {

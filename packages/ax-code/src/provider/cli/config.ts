@@ -15,6 +15,7 @@ export interface CliProviderDefinition {
   parser: CliOutputParser
   promptMode: "stdin" | "arg" | "positional"
   promptFlag?: string
+  workspaceArg?: string
 }
 
 export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
@@ -57,6 +58,7 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     parser: antigravityCliParser,
     promptMode: "arg",
     promptFlag: "-p",
+    workspaceArg: "--add-dir",
   },
   // Kimi Code CLI (membership): non-interactive print mode with Message-format JSONL.
   "kimi-cli": {

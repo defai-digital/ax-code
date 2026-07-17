@@ -77,6 +77,7 @@ interface TerminalViewportProps {
   enableTouchScroll?: boolean
   autoFocus?: boolean
   isVisible?: boolean
+  onInitializeError?: (error: Error) => void
 }
 
 const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportProps>(
@@ -93,6 +94,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       enableTouchScroll,
       autoFocus = true,
       isVisible = true,
+      onInitializeError,
     },
     ref,
   ) => {
@@ -123,10 +125,12 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
     const cursorBlinkStateRef = React.useRef<boolean | null>(null)
     const focusArmedRef = React.useRef(!enableTouchScroll)
     const previousVisibleRef = React.useRef(isVisible)
+    const initializeErrorHandlerRef = React.useRef(onInitializeError)
     const [, forceRender] = React.useReducer((x) => x + 1, 0)
     const [terminalReadyVersion, bumpTerminalReady] = React.useReducer((x) => x + 1, 0)
     inputHandlerRef.current = onInput
     resizeHandlerRef.current = onResize
+    initializeErrorHandlerRef.current = onInitializeError
 
     const isAndroid =
       typeof navigator !== "undefined" &&
@@ -1157,8 +1161,10 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
               fitTerminal()
             }, 0)
           }
-        } catch {
-          // ignored
+        } catch (error) {
+          if (!disposed) {
+            initializeErrorHandlerRef.current?.(error instanceof Error ? error : new Error(String(error)))
+          }
         }
       }
 

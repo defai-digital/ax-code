@@ -219,11 +219,11 @@ Grok defaults to `Grok Build CLI` in `/connect`, using the local `grok` command 
 
 Default setup flows support three provider families:
 
-| Family                   | Providers                                                                                      | Model source                                                      |
-| ------------------------ | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Cloud API providers      | Google, GroqCloud, OpenRouter, Alibaba Coding/Token Plan, GitHub Copilot, and Z.AI Coding Plan | Hosted provider model catalogs bundled with AX Code               |
+| Family                   | Providers                                                                                         | Model source                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Cloud API providers      | Google, GroqCloud, OpenRouter, Alibaba Coding/Token Plan, GitHub Copilot, and Z.AI Coding Plan    | Hosted provider model catalogs bundled with AX Code               |
 | CLI providers            | Claude Code, Gemini CLI, Codex CLI, Grok Build CLI, Qoder CLI, Antigravity CLI, and Kimi Code CLI | One model id per CLI bridge, using the local vendor CLI session   |
-| AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                     | Curated 6-bit MLX MTP models: Qwen3.6, Gemma 4, and GLM 4.7 Flash |
+| AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                        | Curated 6-bit MLX MTP models: Qwen3.6, Gemma 4, and GLM 4.7 Flash |
 
 See [Supported Providers and Models](docs/supported-providers.md) for provider ids, credential variables, and the exact supported model ids.
 
@@ -250,23 +250,23 @@ ranking, GLM-4.7-Flash placement, and memory-based recommendations.
 
 ## Common Commands
 
-| Command                                        | Purpose                                      |
-| ---------------------------------------------- | -------------------------------------------- |
-| `ax-code`                                      | Open the interactive terminal UI             |
-| `ax-code run "debug why the build is failing"` | Run a one-shot headless task                 |
-| `ax-code providers login`                      | Configure provider credentials               |
-| `ax-code models`                               | List available provider/model IDs            |
-| `ax-code init`                                 | Create or update repository `AGENTS.md`      |
-| `ax-code init --wiki`                          | AGENTS.md + OpenWiki bootstrap               |
+| Command                                        | Purpose                                            |
+| ---------------------------------------------- | -------------------------------------------------- |
+| `ax-code`                                      | Open the interactive terminal UI                   |
+| `ax-code run "debug why the build is failing"` | Run a one-shot headless task                       |
+| `ax-code providers login`                      | Configure provider credentials                     |
+| `ax-code models`                               | List available provider/model IDs                  |
+| `ax-code init`                                 | Create or update repository `AGENTS.md`            |
+| `ax-code init --wiki`                          | AGENTS.md + OpenWiki bootstrap                     |
 | `ax-code wiki`                                 | OpenWiki status / generate / update / lint / cards |
-| `ax-code index`                                | Build code-intelligence indexes              |
-| `ax-code graph`                                | Inspect the repository graph                 |
-| `ax-code mcp list --tools`                     | Review MCP servers, exposed tools, and rules |
-| `ax-code mcp add`                              | Add a local or remote MCP server             |
-| `ax-code agent create`                         | Generate a custom project or global agent    |
-| `ax-code skill list`                           | List discovered Agent Skills                 |
-| `ax-code serve`                                | Start the local HTTP/OpenAPI server          |
-| `ax-code doctor`                               | Diagnose install, runtime, storage, and auth |
+| `ax-code index`                                | Build code-intelligence indexes                    |
+| `ax-code graph`                                | Inspect the repository graph                       |
+| `ax-code mcp list --tools`                     | Review MCP servers, exposed tools, and rules       |
+| `ax-code mcp add`                              | Add a local or remote MCP server                   |
+| `ax-code agent create`                         | Generate a custom project or global agent          |
+| `ax-code skill list`                           | List discovered Agent Skills                       |
+| `ax-code serve`                                | Start the local HTTP/OpenAPI server                |
+| `ax-code doctor`                               | Diagnose install, runtime, storage, and auth       |
 
 ## Community
 

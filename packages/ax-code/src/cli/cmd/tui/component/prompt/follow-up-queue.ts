@@ -70,3 +70,11 @@ export function followUpText(item: QueuedFollowUp): string {
   }
   return ""
 }
+
+/** A single-line preview for compact transcript and sidebar queue rows. */
+export function followUpPreview(item: QueuedFollowUp, maxLength = 48): string {
+  const text = followUpText(item).replace(/\s+/g, " ")
+  if (!text) return "(empty message)"
+  if (text.length <= maxLength) return text
+  return text.slice(0, Math.max(1, maxLength - 1)) + "…"
+}

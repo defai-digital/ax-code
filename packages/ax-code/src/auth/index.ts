@@ -235,6 +235,11 @@ export namespace Auth {
   export const Info = Object.assign(InfoSchema, { zod: InfoSchema })
   export type Info = z.infer<typeof InfoSchema>
 
+  // Config and provider initialization read auth concurrently. Coalesce the
+  // first read so both callers share the same canary migration and cannot race
+  // on the auth lock during a fresh install.
+  let allPending: Promise<Record<string, Info>> | undefined
+
   export const AuthError = NamedError.create(
     "AuthError",
     z.object({
@@ -274,7 +279,7 @@ export namespace Auth {
     return (await all())[providerID]
   }
 
-  export async function all(): Promise<Record<string, Info>> {
+  async function loadAll(): Promise<Record<string, Info>> {
     let data: Record<string, unknown>
     try {
       data = await readAuthData()
@@ -359,6 +364,22 @@ export namespace Auth {
     }
 
     return entries
+  }
+
+  export function all(): Promise<Record<string, Info>> {
+    if (allPending) return allPending
+
+    const pending = loadAll()
+    allPending = pending
+    pending.then(
+      () => {
+        if (allPending === pending) allPending = undefined
+      },
+      () => {
+        if (allPending === pending) allPending = undefined
+      },
+    )
+    return pending
   }
 
   export async function set(key: string, info: Info) {

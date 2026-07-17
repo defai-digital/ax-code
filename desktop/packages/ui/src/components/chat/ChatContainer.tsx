@@ -4,6 +4,7 @@ import type { PermissionRequest } from "@/types/permission"
 import type { QuestionRequest } from "@/types/question"
 
 import { ChatInput } from "./ChatInput"
+import { shouldAutoOpenChatDraft } from "./chatDraftState"
 import { DraftPresetChips } from "./DraftPresetChips"
 import { ActivityBreadcrumb } from "./ActivityBreadcrumb"
 import { useInputStore } from "@/sync/input-store"
@@ -623,7 +624,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
   const promptReadOnly = readOnly || Boolean(parentSession)
 
   React.useEffect(() => {
-    if (autoOpenDraft && !currentSessionId && !draftOpen) {
+    const hasSessionRoute = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("session")
+    if (shouldAutoOpenChatDraft({ autoOpenDraft, currentSessionId, draftOpen, hasSessionRoute })) {
       openNewSessionDraft()
     }
   }, [autoOpenDraft, currentSessionId, draftOpen, openNewSessionDraft])

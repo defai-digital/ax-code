@@ -2518,6 +2518,31 @@ export type Config = {
       estimatedUsdPerMember?: number
     }
   }
+  /**
+   * OpenWiki repo semantic wiki (ADR-050). Complements structural ax-code index; does not replace code_intelligence.
+   */
+  wiki?: {
+    /**
+     * When true (default), inject <repo_wiki> system protocol if the wiki directory exists. Set false to suppress.
+     */
+    enabled?: boolean
+    /**
+     * OpenWiki executable name or path. Default: openwiki (or OPENWIKI_COMMAND env).
+     */
+    command?: string
+    /**
+     * Wiki directory relative to project root. Default: openwiki (OpenWiki code-mode default).
+     */
+    dir?: string
+    /**
+     * Allow wiki ensure-agents / init --wiki to rewrite OPENWIKI marker blocks. Default: true.
+     */
+    autoInjectAgents?: boolean
+    /**
+     * When ensuring markers, also update CLAUDE.md if it already exists. Default: true.
+     */
+    touchClaudeMd?: boolean
+  }
 }
 
 export type AppErrorEnvelope = {
@@ -10480,7 +10505,7 @@ export type SessionUpdateData = {
   body?: {
     title?: string
     time?: {
-      archived?: number
+      archived?: number | null
     }
     metadata?: SessionMetadata
   }

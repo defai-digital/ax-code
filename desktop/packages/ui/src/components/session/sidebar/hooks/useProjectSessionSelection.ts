@@ -23,6 +23,12 @@ type Args = {
   worktreeMetadata: Map<string, { path?: string | null }>
 }
 
+export const shouldOpenDraftForEmptyProject = (input: {
+  currentSessionId: string | null
+  sessionCount: number
+  hasSessionRoute: boolean
+}): boolean => !input.currentSessionId && !input.hasSessionRoute && input.sessionCount === 0
+
 export const useProjectSessionSelection = (args: Args): { currentSessionDirectory: string | null } => {
   const {
     projectSections,
@@ -111,9 +117,14 @@ export const useProjectSessionSelection = (args: Args): { currentSessionDirector
       return
     }
 
+    // An active session may be temporarily absent from the project tree while
+    // global/recent session data is hydrating. Do not replace it with a draft.
+    const hasSessionRoute = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("session")
     if (!projectMap || projectMap.size === 0) {
-      setActiveMainTab("chat")
-      openNewSessionDraft({ directoryOverride: section.project.normalizedPath })
+      if (shouldOpenDraftForEmptyProject({ currentSessionId, sessionCount: 0, hasSessionRoute })) {
+        setActiveMainTab("chat")
+        openNewSessionDraft({ directoryOverride: section.project.normalizedPath })
+      }
       return
     }
 

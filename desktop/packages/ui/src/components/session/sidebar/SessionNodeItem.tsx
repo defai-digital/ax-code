@@ -98,6 +98,7 @@ type Props = {
   copiedSessionId: string | null
   handleCopyShareUrl: (url: string, sessionId: string) => void
   handleUnshareSession: (sessionId: string) => void
+  handleUnarchiveSession: (sessionId: string) => void
   openSidebarMenuKey: string | null
   setOpenSidebarMenuKey: (key: string | null) => void
   renamingFolderId: string | null
@@ -292,6 +293,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     copiedSessionId,
     handleCopyShareUrl,
     handleUnshareSession,
+    handleUnarchiveSession,
     openSidebarMenuKey,
     setOpenSidebarMenuKey,
     renamingFolderId,
@@ -984,6 +986,12 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
       ) : null}
 
       <DropdownMenuSeparator />
+      {archivedBucket ? (
+        <DropdownMenuItem onClick={() => void handleUnarchiveSession(session.id)} className="[&>svg]:mr-1">
+          <Icon name="inbox-unarchive" className="mr-1 h-4 w-4" />
+          {t("sessions.sidebar.session.menu.unarchive")}
+        </DropdownMenuItem>
+      ) : null}
       <DropdownMenuItem
         className="text-destructive focus:text-destructive [&>svg]:mr-1"
         onClick={() => handleDeleteSession(session, { archivedBucket })}

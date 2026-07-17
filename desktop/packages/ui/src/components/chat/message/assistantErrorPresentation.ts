@@ -11,6 +11,17 @@ export type AssistantErrorPresentation = {
   variant: "error" | "info"
 }
 
+const isAbortError = (errorName: string | undefined, detail: string): boolean => {
+  if (errorName === "AbortError") return true
+
+  const normalized = detail.trim().toLowerCase()
+  return (
+    normalized === "aborted" ||
+    normalized === "this operation was aborted" ||
+    normalized === "the operation was aborted"
+  )
+}
+
 export const getAssistantErrorPresentation = (input: {
   isUser: boolean
   error: unknown
@@ -47,7 +58,7 @@ export const getAssistantErrorPresentation = (input: {
       variant: "error",
     }
   }
-  if (detail.trim().toLowerCase() === "aborted") {
+  if (isAbortError(errorName, detail)) {
     return {
       text: "The running turn was stopped before AX Code could send the next message.",
       variant: "info",

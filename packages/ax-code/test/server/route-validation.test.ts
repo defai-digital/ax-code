@@ -332,6 +332,37 @@ describe("server route validation", () => {
     })
   })
 
+  test("session update route restores an archived session when archived is null", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        try {
+          const archived = await Server.Default().request(`/session/${session.id}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ time: { archived: 50_000 } }),
+          })
+
+          expect(archived.status).toBe(200)
+          expect((await archived.json() as Session.Info).time.archived).toBe(50_000)
+
+          const restored = await Server.Default().request(`/session/${session.id}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ time: { archived: null } }),
+          })
+
+          expect(restored.status).toBe(200)
+          expect((await restored.json() as Session.Info).time.archived).toBeUndefined()
+          expect((await Session.get(session.id)).time.archived).toBeUndefined()
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
   test("busy session route returns a retryable busy envelope", async () => {
     await Instance.provide({
       directory: root,

@@ -23,6 +23,29 @@ describe("getAssistantErrorPresentation", () => {
     ).toMatchObject({ variant: "error" })
   })
 
+  test("shows an intentional cancellation as an informational state", () => {
+    expect(
+      getAssistantErrorPresentation({
+        isUser: false,
+        isLastAssistantInTurn: true,
+        error: { name: "AbortError", message: "This operation was aborted" },
+      }),
+    ).toEqual({
+      text: "The running turn was stopped before AX Code could send the next message.",
+      variant: "info",
+    })
+  })
+
+  test("recognizes the transport cancellation message even without AbortError", () => {
+    expect(
+      getAssistantErrorPresentation({
+        isUser: false,
+        isLastAssistantInTurn: true,
+        error: { message: "This operation was aborted" },
+      }),
+    ).toMatchObject({ variant: "info" })
+  })
+
   test("does not render an error presentation for user messages", () => {
     expect(
       getAssistantErrorPresentation({

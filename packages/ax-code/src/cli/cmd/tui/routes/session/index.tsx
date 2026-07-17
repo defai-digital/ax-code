@@ -112,6 +112,8 @@ import { buildSubagentStatusView, type SubagentRollupTask } from "./subagent-sta
 import { SessionRouteContext as context, useSessionRouteContext as use } from "./context"
 import { coalescedToolLabel } from "./tool-rendering"
 import { toolRendererComponent } from "./tool-renderers"
+import { followUpPreview, type QueuedFollowUp } from "../../component/prompt/follow-up-queue"
+import { followUpQueue } from "../../component/prompt/follow-up-queue-store"
 
 addDefaultParsers(parsers.parsers)
 
@@ -179,6 +181,7 @@ export function Session() {
       .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   })
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
+  const queuedFollowUps = createMemo(() => followUpQueue(route.sessionID))
   // Extract task parts per-message with mapArray so a single streamed part
   // update only re-scans the one message whose parts changed, instead of
   // rescanning every part of every message (which this memo is read 6+ times
@@ -1232,6 +1235,7 @@ export function Session() {
                   </Switch>
                 )}
               </For>
+              <QueuedFollowUps items={queuedFollowUps()} />
             </scrollbox>
             <box flexShrink={0}>
               <Show when={permissions().length > 0}>
@@ -1292,6 +1296,26 @@ export function Session() {
         </Show>
       </box>
     </context.Provider>
+  )
+}
+
+function QueuedFollowUps(props: { items: QueuedFollowUp[] }) {
+  const { theme } = useTheme()
+
+  return (
+    <Show when={props.items.length > 0}>
+      <box paddingTop={1} paddingBottom={1} paddingLeft={2} flexShrink={0}>
+        <For each={props.items}>
+          {(item, index) => (
+            <text fg={theme.textMuted} wrapMode="word">
+              <span style={{ fg: theme.accent }}>↳</span>
+              <span> queued{props.items.length > 1 ? ` ${index() + 1}/${props.items.length}` : ""}: </span>
+              <span>{followUpPreview(item, 64)}</span>
+            </text>
+          )}
+        </For>
+      </box>
+    </Show>
   )
 }
 

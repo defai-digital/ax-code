@@ -3,6 +3,7 @@ import path from "node:path"
 import { describe, expect, test } from "vitest"
 
 const sourcePath = path.resolve(__dirname, "TerminalView.tsx")
+const viteConfigPath = path.resolve(__dirname, "../../../../web/vite.config.ts")
 
 describe("TerminalView source guards", () => {
   test("creates a terminal session with fallback dimensions instead of rendering a blank dock", async () => {
@@ -34,5 +35,17 @@ describe("TerminalView source guards", () => {
       /setTabSessionId\(directory, tabId, null, \{\s*lifecycle: "idle",\s*expectedSessionId: terminalId/,
     )
     expect(source).toMatch(/session not found/i)
+  })
+
+  test("ships the Ghostty runtime asset instead of leaving the terminal renderer blank", async () => {
+    const [terminalViewportSource, viteConfigSource] = await Promise.all([
+      readFile(path.resolve(__dirname, "../terminal/TerminalViewport.tsx"), "utf8"),
+      readFile(viteConfigPath, "utf8"),
+    ])
+
+    expect(viteConfigSource).toContain('requireFromUi.resolve("ghostty-web/ghostty-vt.wasm")')
+    expect(viteConfigSource).toContain('fileName: "ghostty-vt.wasm"')
+    expect(viteConfigSource).toContain('server.middlewares.use("/ghostty-vt.wasm"')
+    expect(terminalViewportSource).toContain("onInitializeError")
   })
 })

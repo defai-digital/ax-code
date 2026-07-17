@@ -502,7 +502,7 @@ export namespace Session {
   )
 
   export const setArchived = fn(
-    z.object({ sessionID: SessionID.zod, time: z.number().int().min(0).optional() }),
+    z.object({ sessionID: SessionID.zod, time: z.number().int().min(0).nullable().optional() }),
     async (input) => updateAndPublish(input.sessionID, { time_archived: input.time, time_updated: Date.now() }),
   )
 
