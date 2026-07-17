@@ -4,6 +4,7 @@ import {
   codexCliParser,
   geminiCliParser,
   grokBuildCliParser,
+  kimiCliParser,
   qoderCliParser,
   type CliOutputParser,
 } from "./parser"
@@ -54,6 +55,14 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     binary: "agy",
     args: [],
     parser: antigravityCliParser,
+    promptMode: "arg",
+    promptFlag: "-p",
+  },
+  // Kimi Code CLI (membership): headless -p with Message-format stream-json.
+  "kimi-cli": {
+    binary: "kimi",
+    args: ["--output-format", "stream-json"],
+    parser: kimiCliParser,
     promptMode: "arg",
     promptFlag: "-p",
   },

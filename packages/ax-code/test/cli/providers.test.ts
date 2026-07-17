@@ -42,6 +42,7 @@ describe("providers command", () => {
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("grok-build-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("qoder-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("antigravity-cli")).toBe(true)
+    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("kimi-cli")).toBe(true)
   })
 
   test("providers login accepts default Cloud API provider ids directly", async () => {

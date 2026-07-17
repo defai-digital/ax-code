@@ -54431,6 +54431,45 @@
           "output": 32768
         }
       },
+      "inkling": {
+        "id": "inkling",
+        "name": "Inkling",
+        "description": "Multimodal reasoning model for visual analysis, planning, and tool use",
+        "family": "ling",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-07-16",
+        "last_updated": "2026-07-17",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 65536
+        }
+      },
       "claude-opus-4-8-fast": {
         "id": "claude-opus-4-8-fast",
         "name": "Claude Opus 4.8 Fast",
@@ -99562,7 +99601,8 @@
         "limit": {
           "context": 262144,
           "output": 65536
-        }
+        },
+        "status": "deprecated"
       },
       "meta-llama/Llama-4-Scout-17B-16E-Instruct": {
         "id": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
@@ -102914,6 +102954,49 @@
           "output": 131000
         },
         "status": "deprecated"
+      },
+      "thinkingmachines/inkling": {
+        "id": "thinkingmachines/inkling",
+        "name": "Inkling",
+        "description": "Multimodal reasoning model for visual analysis, planning, and tool use",
+        "family": "ling",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-07-15",
+        "last_updated": "2026-07-15",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048576,
+          "output": 32768
+        }
       },
       "MiniMaxAI/MiniMax-M2.5": {
         "id": "MiniMaxAI/MiniMax-M2.5",
@@ -109683,6 +109766,47 @@
           "output": 163840
         }
       },
+      "thinkingmachines/Inkling": {
+        "id": "thinkingmachines/Inkling",
+        "name": "Inkling",
+        "description": "Multimodal MoE reasoning model (975B total, 41B active) for text, image, and audio",
+        "family": "ling",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "max",
+              "xhigh",
+              "high",
+              "medium",
+              "low",
+              "none"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-07-15",
+        "last_updated": "2026-07-15",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 524288,
+          "output": 131072
+        }
+      },
       "MiniMaxAI/MiniMax-M2.5": {
         "id": "MiniMaxAI/MiniMax-M2.5",
         "name": "MiniMax-M2.5",
@@ -111836,7 +111960,19 @@
         "family": "ling",
         "attachment": true,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-07-15",
@@ -134765,6 +134901,39 @@
         },
         "limit": {
           "context": 200000,
+          "output": 16384
+        },
+        "options": {},
+        "status": "active"
+      }
+    }
+  },
+  "kimi-cli": {
+    "id": "kimi-cli",
+    "name": "Kimi Code CLI",
+    "env": [],
+    "npm": "cli",
+    "models": {
+      "kimi-cli": {
+        "id": "kimi-cli",
+        "name": "Kimi Code CLI",
+        "family": "kimi",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2026-07-01",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "limit": {
+          "context": 262144,
           "output": 16384
         },
         "options": {},

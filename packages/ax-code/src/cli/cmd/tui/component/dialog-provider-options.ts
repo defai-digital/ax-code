@@ -51,6 +51,7 @@ export const CLI_BINARIES: Record<string, string> = {
   "grok-build-cli": "grok",
   "qoder-cli": "qodercli",
   "antigravity-cli": "agy",
+  "kimi-cli": "kimi",
 }
 
 export const OFFLINE_PROVIDERS = new Set(["ax-engine", "ax-studio", "ollama"])
@@ -61,6 +62,7 @@ export const CLI_PROVIDERS = new Set([
   "grok-build-cli",
   "qoder-cli",
   "antigravity-cli",
+  "kimi-cli",
 ])
 
 const HIDDEN_PROVIDERS = new Set(["google", "github-copilot"])

@@ -18,6 +18,7 @@ describe("dialog model options", () => {
   test("keeps CLI provider non-toolcall models selectable", () => {
     expect(dialogModelOptionDisabled("qoder-cli", "qwen3-coder-next", model(false))).toBe(false)
     expect(dialogModelOptionDisabled("antigravity-cli", "default", model(false))).toBe(false)
+    expect(dialogModelOptionDisabled("kimi-cli", "kimi-cli", model(false))).toBe(false)
   })
 
   test("disables unavailable and explicitly hidden models", () => {

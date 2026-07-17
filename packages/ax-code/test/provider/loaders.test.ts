@@ -114,6 +114,15 @@ describe("CLI provider loaders", () => {
       discoveredModelIDs: [],
     })
   })
+
+  test("kimi-cli configured provider does not discover runnable variants when binary missing", async () => {
+    await expectMissingCliProvider({
+      providerID: "kimi-cli",
+      binary: "kimi",
+      baseModelID: "kimi-cli",
+      discoveredModelIDs: [],
+    })
+  })
 })
 
 describe("online provider loaders", () => {

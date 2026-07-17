@@ -932,4 +932,84 @@ describe("CliLanguageModel", () => {
 
     expect(cmd).toEqual(["agy", "-p", "write file"])
   })
+
+  test("passes Kimi Code CLI prompt through stream-json -p mode", () => {
+    process.env.AX_CODE_AUTONOMOUS = "false"
+    try {
+      const definition = CLI_PROVIDER_DEFINITIONS["kimi-cli"]
+      expect(definition).toBeDefined()
+
+      const cmd = buildCliCommand(
+        {
+          providerID: "kimi-cli",
+          modelID: "kimi-cli",
+          binary: "kimi",
+          args: definition?.args ?? [],
+          parser: definition!.parser,
+          promptMode: definition?.promptMode ?? "arg",
+          promptFlag: definition?.promptFlag,
+        },
+        "write file",
+      )
+
+      expect(cmd).toEqual(["kimi", "--output-format", "stream-json", "-p", "write file"])
+    } finally {
+      restoreAutonomous()
+    }
+  })
+
+  test("passes resolved Kimi model via --model", () => {
+    process.env.AX_CODE_AUTONOMOUS = "false"
+    try {
+      const definition = CLI_PROVIDER_DEFINITIONS["kimi-cli"]
+      expect(definition).toBeDefined()
+
+      const cmd = buildCliCommand(
+        {
+          providerID: "kimi-cli",
+          modelID: "kimi-code/kimi-for-coding",
+          binary: "kimi",
+          args: definition?.args ?? [],
+          parser: definition!.parser,
+          promptMode: definition?.promptMode ?? "arg",
+          promptFlag: definition?.promptFlag,
+        },
+        "ping",
+      )
+
+      expect(cmd).toEqual([
+        "kimi",
+        "--output-format",
+        "stream-json",
+        "--model",
+        "kimi-code/kimi-for-coding",
+        "-p",
+        "ping",
+      ])
+    } finally {
+      restoreAutonomous()
+    }
+  })
+
+  test("adds Kimi Code CLI yolo approval in autonomous mode", () => {
+    delete process.env.AX_CODE_AUTONOMOUS
+    try {
+      const definition = CLI_PROVIDER_DEFINITIONS["kimi-cli"]
+      const cmd = buildCliCommand(
+        {
+          providerID: "kimi-cli",
+          modelID: "kimi-cli",
+          binary: "kimi",
+          args: definition?.args ?? [],
+          parser: definition!.parser,
+          promptMode: definition?.promptMode ?? "arg",
+          promptFlag: definition?.promptFlag,
+        },
+        "write file",
+      )
+      expect(cmd).toContain("--yolo")
+    } finally {
+      restoreAutonomous()
+    }
+  })
 })

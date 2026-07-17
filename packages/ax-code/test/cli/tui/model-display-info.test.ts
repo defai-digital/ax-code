@@ -10,6 +10,7 @@ describe("modelDisplayInfo", () => {
       "grok-build-cli",
       "qoder-cli",
       "antigravity-cli",
+      "kimi-cli",
     ]) {
       const display = modelDisplayInfo(providerID, {
         providerID,

@@ -7,6 +7,7 @@ const CLI_WEB_SEARCH_PROVIDER_IDS = new Set([
   "grok-build-cli",
   "qoder-cli",
   "antigravity-cli",
+  "kimi-cli",
 ])
 
 export type DisplayCapableModel = {

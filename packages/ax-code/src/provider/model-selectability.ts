@@ -11,6 +11,7 @@ const TOOLCALL_OPTIONAL_PROVIDER_IDS = new Set([
   "grok-build-cli",
   "qoder-cli",
   "antigravity-cli",
+  "kimi-cli",
 ])
 
 type SelectableModel = {

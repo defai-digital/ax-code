@@ -91,6 +91,7 @@ describe("isCliProvider", () => {
     expect(isCliProvider("grok-build-cli")).toBe(true)
     expect(isCliProvider("qoder-cli")).toBe(true)
     expect(isCliProvider("antigravity-cli")).toBe(true)
+    expect(isCliProvider("kimi-cli")).toBe(true)
     expect(isCliProvider("openai")).toBe(false)
   })
 })

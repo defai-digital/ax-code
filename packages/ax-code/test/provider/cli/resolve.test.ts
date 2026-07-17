@@ -178,6 +178,84 @@ describe("resolveCliModel", () => {
     }
   })
 
+  test("returns default for kimi-cli when no config", async () => {
+    await using tmp = await tmpdir()
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    const originalModel = process.env.KIMI_MODEL
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    delete process.env.KIMI_MODEL
+    try {
+      const info = await resolveCliModel("kimi-cli")
+      expect(info).toEqual({ model: "kimi-cli", source: "default" })
+    } finally {
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
+      if (originalModel !== undefined) process.env.KIMI_MODEL = originalModel
+      else delete process.env.KIMI_MODEL
+    }
+  })
+
+  test("kimi-cli respects KIMI_MODEL env var", async () => {
+    const original = process.env.KIMI_MODEL
+    process.env.KIMI_MODEL = "kimi-code/k3"
+    try {
+      const info = await resolveCliModel("kimi-cli")
+      expect(info.model).toBe("kimi-code/k3")
+      expect(info.source).toBe("KIMI_MODEL")
+    } finally {
+      if (original !== undefined) process.env.KIMI_MODEL = original
+      else delete process.env.KIMI_MODEL
+    }
+  })
+
+  test("kimi-cli reads default_model from ~/.kimi-code/config.toml", async () => {
+    await using tmp = await tmpdir()
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    const originalModel = process.env.KIMI_MODEL
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    delete process.env.KIMI_MODEL
+    try {
+      const configDir = path.join(tmp.path, ".kimi-code")
+      await fs.mkdir(configDir, { recursive: true })
+      await fs.writeFile(path.join(configDir, "config.toml"), 'default_model = "kimi-code/kimi-for-coding"\n')
+
+      const info = await resolveCliModel("kimi-cli")
+      expect(info).toEqual({
+        model: "kimi-code/kimi-for-coding",
+        source: "~/.kimi-code/config.toml",
+      })
+    } finally {
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
+      if (originalModel !== undefined) process.env.KIMI_MODEL = originalModel
+      else delete process.env.KIMI_MODEL
+    }
+  })
+
+  test("kimi-cli falls back to legacy ~/.kimi/config.toml", async () => {
+    await using tmp = await tmpdir()
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    const originalModel = process.env.KIMI_MODEL
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    delete process.env.KIMI_MODEL
+    try {
+      const configDir = path.join(tmp.path, ".kimi")
+      await fs.mkdir(configDir, { recursive: true })
+      await fs.writeFile(path.join(configDir, "config.toml"), 'default_model = "kimi-for-coding"\n')
+
+      const info = await resolveCliModel("kimi-cli")
+      expect(info).toEqual({
+        model: "kimi-for-coding",
+        source: "~/.kimi/config.toml",
+      })
+    } finally {
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
+      if (originalModel !== undefined) process.env.KIMI_MODEL = originalModel
+      else delete process.env.KIMI_MODEL
+    }
+  })
+
   test("returns unknown for unrecognized provider", async () => {
     const info = await resolveCliModel("nonexistent")
     expect(info.model).toBe("unknown")

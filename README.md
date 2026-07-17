@@ -222,7 +222,7 @@ Default setup flows support three provider families:
 | Family                   | Providers                                                                                      | Model source                                                      |
 | ------------------------ | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | Cloud API providers      | Google, GroqCloud, OpenRouter, Alibaba Coding/Token Plan, GitHub Copilot, and Z.AI Coding Plan | Hosted provider model catalogs bundled with AX Code               |
-| CLI providers            | Claude Code, Gemini CLI, Codex CLI, Grok Build CLI, Qoder CLI, and Antigravity CLI             | One model id per CLI bridge, using the local vendor CLI session   |
+| CLI providers            | Claude Code, Gemini CLI, Codex CLI, Grok Build CLI, Qoder CLI, Antigravity CLI, and Kimi Code CLI | One model id per CLI bridge, using the local vendor CLI session   |
 | AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                     | Curated 6-bit MLX MTP models: Qwen3.6, Gemma 4, and GLM 4.7 Flash |
 
 See [Supported Providers and Models](docs/supported-providers.md) for provider ids, credential variables, and the exact supported model ids.

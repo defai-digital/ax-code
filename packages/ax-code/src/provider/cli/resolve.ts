@@ -15,6 +15,7 @@ const DEFAULTS: Record<string, string> = {
   "grok-build-cli": "grok-build-cli",
   "qoder-cli": "qoder-cli",
   "antigravity-cli": "antigravity-cli",
+  "kimi-cli": "kimi-cli",
 }
 
 type JsonLike = CliJsonObject
@@ -128,6 +129,29 @@ async function resolveAntigravityModel(): Promise<CliModelInfo> {
   })
 }
 
+function resolveTomlDefaultModel(toml: string): string | undefined {
+  const match = toml.match(/^default_model\s*=\s*"([^"]+)"/m)
+  return match?.[1]
+}
+
+async function resolveKimiModel(): Promise<CliModelInfo> {
+  const envModel = process.env.KIMI_MODEL
+  if (envModel) return { model: envModel, source: "KIMI_MODEL" }
+
+  // Prefer Kimi Code CLI config (~/.kimi-code), fall back to legacy kimi-cli (~/.kimi).
+  for (const [relativePath, sourceLabel] of [
+    [".kimi-code/config.toml", "~/.kimi-code/config.toml"],
+    [".kimi/config.toml", "~/.kimi/config.toml"],
+  ] as const) {
+    const toml = await readText(join(homeDir(), relativePath))
+    if (!toml) continue
+    const model = resolveTomlDefaultModel(toml)
+    if (model) return { model, source: sourceLabel }
+  }
+
+  return { model: DEFAULTS["kimi-cli"]!, source: "default" }
+}
+
 const RESOLVERS: Record<string, () => Promise<CliModelInfo>> = {
   "claude-code": resolveClaudeModel,
   "gemini-cli": resolveGeminiModel,
@@ -135,6 +159,7 @@ const RESOLVERS: Record<string, () => Promise<CliModelInfo>> = {
   "grok-build-cli": async () => ({ model: DEFAULTS["grok-build-cli"]!, source: "default" }),
   "qoder-cli": resolveQoderModel,
   "antigravity-cli": resolveAntigravityModel,
+  "kimi-cli": resolveKimiModel,
 }
 
 export async function resolveCliModel(providerID: string): Promise<CliModelInfo> {

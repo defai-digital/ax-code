@@ -14,6 +14,7 @@ const WEB_SEARCH_CLI_PROVIDERS = new Set([
   "grok-build-cli",
   "qoder-cli",
   "antigravity-cli",
+  "kimi-cli",
 ])
 
 const CLI_WEB_SEARCH_HINT = [

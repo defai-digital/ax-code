@@ -273,3 +273,45 @@ export const antigravityCliParser: CliOutputParser = {
     return null
   },
 }
+
+function kimiMessageContentText(content: unknown): string | undefined {
+  if (typeof content === "string") {
+    const text = content.trim().length > 0 ? content : undefined
+    return text
+  }
+  if (!Array.isArray(content)) return undefined
+  const text = content
+    .filter((block) => isRecord(block) && block.type === "text" && typeof block.text === "string")
+    .map((block) => (block as { text: string }).text)
+    .join("")
+  return text.trim().length > 0 ? text : undefined
+}
+
+function kimiAssistantText(event: CliJsonObject): string | undefined {
+  if (event.role !== "assistant") return undefined
+  return kimiMessageContentText(event.content) ?? (typeof event.text === "string" ? event.text : undefined)
+}
+
+// Kimi Code CLI stream-json emits Message-format JSONL:
+//   {"role":"assistant","content":"..."}
+//   {"role":"tool",...}
+//   {"role":"meta","type":"session.resume_hint",...}
+// Prefer the last non-empty assistant message and ignore tool/meta noise.
+export const kimiCliParser: CliOutputParser = {
+  parseComplete(output: string) {
+    const lines = output.split("\n")
+    let last: string | undefined
+    for (const line of lines) {
+      const event = parseCliJsonEventLine(line)
+      if (!event) continue
+      const text = kimiAssistantText(event)
+      if (text) last = text
+    }
+    return { text: last ?? rawCompleteText(output) }
+  },
+  parseStreamLine(line: string) {
+    const event = parseCliJsonEventLine(line)
+    if (!event) return rawTextLine(line)
+    return kimiAssistantText(event) ?? null
+  },
+}
