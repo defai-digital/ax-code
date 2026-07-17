@@ -188,6 +188,20 @@ describe("CliLanguageModel", () => {
     ).rejects.toThrow(/CLI exited with code/)
   })
 
+  test("doGenerate rejects a successful CLI that produces no assistant output", async () => {
+    const model = makeModel({
+      binary: process.execPath,
+      args: ["-e", "process.stderr.write('command permission denied')", "--"],
+      promptMode: "arg",
+    })
+
+    await expect(
+      model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "what's this project" }] }],
+      }),
+    ).rejects.toThrow(/without producing assistant output.*command permission denied/)
+  })
+
   test("doGenerate throws on non-zero exit even when stdout is present", async () => {
     const model = makeModel({
       binary: process.execPath,
@@ -430,6 +444,32 @@ describe("CliLanguageModel", () => {
     const error = parts.find((part) => part.type === "error")
     expect(error).toBeDefined()
     expect(String(error.error)).toContain("CLI exited with code 9: partial output")
+  })
+
+  test("doStream reports a successful CLI with no assistant output as an error", async () => {
+    const model = makeModel({
+      binary: process.execPath,
+      args: ["-e", "process.stderr.write('command permission denied')", "--"],
+      promptMode: "stdin",
+    })
+
+    const { stream } = await model.doStream({
+      prompt: [{ role: "user", content: [{ type: "text", text: "what's this project" }] }],
+    })
+
+    const parts: any[] = []
+    const reader = stream.getReader()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      parts.push(value)
+    }
+
+    expect(parts.find((part) => part.type === "finish")).toBeUndefined()
+    const error = parts.find((part) => part.type === "error")
+    expect(error).toBeDefined()
+    expect(String(error.error)).toContain("without producing assistant output")
+    expect(String(error.error)).toContain("command permission denied")
   })
 
   test("doStream includes stdout and stderr that drain after process exit", async () => {
@@ -931,5 +971,27 @@ describe("CliLanguageModel", () => {
     )
 
     expect(cmd).toEqual(["agy", "-p", "write file"])
+  })
+
+  test("passes Antigravity CLI the active workspace for headless prompts", () => {
+    const definition = CLI_PROVIDER_DEFINITIONS["antigravity-cli"]
+    expect(definition?.workspaceArg).toBe("--add-dir")
+
+    const cmd = buildCliCommand(
+      {
+        providerID: "antigravity-cli",
+        modelID: "antigravity-cli",
+        binary: "agy",
+        args: definition?.args ?? [],
+        parser: antigravityCliParser,
+        promptMode: definition?.promptMode ?? "arg",
+        promptFlag: definition?.promptFlag,
+        workspaceArg: definition?.workspaceArg,
+      },
+      "what's this project",
+      "/workspace/ax-code",
+    )
+
+    expect(cmd).toEqual(["agy", "--add-dir", "/workspace/ax-code", "-p", "what's this project"])
   })
 })

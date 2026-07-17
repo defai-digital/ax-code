@@ -403,6 +403,7 @@ interface CliLoaderOpts {
   parser: CliOutputParser
   promptMode: "stdin" | "arg" | "positional"
   promptFlag?: string
+  workspaceArg?: string
 }
 
 function cliLoader(opts: CliLoaderOpts): CustomLoader {
@@ -425,6 +426,7 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
           providerEnvKeys: provider.env,
           promptMode: opts.promptMode,
           promptFlag: opts.promptFlag,
+          workspaceArg: opts.workspaceArg,
         })
       },
       async discoverModels() {
@@ -506,5 +508,6 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     parser: antigravityCli.parser,
     promptMode: antigravityCli.promptMode,
     promptFlag: antigravityCli.promptFlag,
+    workspaceArg: antigravityCli.workspaceArg,
   }),
 }
