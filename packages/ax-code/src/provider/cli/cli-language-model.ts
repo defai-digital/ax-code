@@ -8,7 +8,7 @@ import { Process } from "../../util/process"
 import { Env } from "../../util/env"
 import { promptToText } from "./prompt"
 import { materializeCliAttachments } from "./attachments"
-import type { CliOutputParser } from "./parser"
+import { stdoutHasCliJsonEvents, type CliOutputParser } from "./parser"
 import { buffer } from "node:stream/consumers"
 import { StringDecoder } from "node:string_decoder"
 import { toErrorMessage } from "@/util/error-message"
@@ -42,6 +42,13 @@ function formatCliDetail(stdout: Buffer, stderr: Buffer) {
 function formatCliFailure(code: number, stdout: Buffer, stderr: Buffer) {
   const detail = formatCliDetail(stdout, stderr)
   return detail ? `CLI exited with code ${code}: ${detail.slice(0, 500)}` : `CLI exited with code ${code}`
+}
+
+function formatCliNoOutput(stdout: Buffer, stderr: Buffer) {
+  const detail = formatCliDetail(stdout, stderr)
+  return detail
+    ? `CLI exited successfully without producing assistant output: ${detail.slice(0, 1000)}`
+    : "CLI exited successfully without producing assistant output"
 }
 
 function formatCliTimeout(stdout: Buffer, stderr: Buffer) {
@@ -255,6 +262,9 @@ export class CliLanguageModel implements LanguageModelV3 {
     }
 
     const parsed = this.config.parser.parseComplete(stdout.toString())
+    if (!parsed.text.trim()) {
+      throw new Error(formatCliNoOutput(stdout, stderr))
+    }
 
     return {
       content: [{ type: "text" as const, text: parsed.text }],
@@ -435,18 +445,27 @@ export class CliLanguageModel implements LanguageModelV3 {
             }
           }
           // Stream parsers intentionally ignore control and error events. Let
-          // the complete parser surface structured errors first, then retain
+          // the complete parser surface structured text first, then retain
           // non-empty plain stdout when that parser has no text to return.
+          // Do not raw-fallback over structured JSONL (e.g. kimi meta/tool-only
+          // lines) or we re-leak control payloads the complete parser dropped.
           const rawOutput = raw.join("")
           const complete = parser.parseComplete(rawOutput)
-          const fallback = complete.text || rawFallbackText(rawOutput)
+          const fallback =
+            complete.text ||
+            (stdoutHasCliJsonEvents(rawOutput) ? "" : rawFallbackText(rawOutput))
           if (!emitted && fallback) {
             output.push(fallback)
             controller.enqueue({ type: "text-delta", id: textId, delta: fallback })
           }
         }
         const finishSuccess = () => {
-          if (!stdoutEnded || exitCode === undefined || exitCode !== 0 || closed()) return
+          // Wait for stderr too so empty-output failures can include stderr detail.
+          if (!stdoutEnded || !stderrEnded || exitCode === undefined || exitCode !== 0 || closed()) return
+          if (!output.join("").trim()) {
+            fail(new Error(formatCliNoOutput(Buffer.from(raw.join("")), Buffer.concat(stderrRaw))))
+            return
+          }
           endText()
           controller.enqueue({
             type: "finish",
@@ -482,6 +501,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         onStderrEnd = () => {
           if (closed()) return
           stderrEnded = true
+          finishSuccess()
           finishFailure()
         }
         onStdoutData = (chunk: Buffer) => {
