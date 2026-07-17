@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
   appendFollowUp,
+  followUpPreview,
   followUpText,
   headFollowUp,
   isQueueableStatus,
@@ -73,6 +74,12 @@ describe("follow-up-queue (pure)", () => {
     expect(followUpText(item("1", "  hello  "))).toBe("hello")
     expect(followUpText(makeFollowUp({ parts: [{ type: "file" }, { type: "text", text: " y " }] }, "1", 1))).toBe("y")
     expect(followUpText(makeFollowUp({ parts: [{ type: "file" }] }, "1", 1))).toBe("")
+  })
+
+  test("followUpPreview normalizes whitespace and stays compact", () => {
+    expect(followUpPreview(item("1", "  inspect\n  the   queue  "))).toBe("inspect the queue")
+    expect(followUpPreview(item("1", "123456789"), 6)).toBe("12345…")
+    expect(followUpPreview(makeFollowUp({ parts: [{ type: "file" }] }, "1", 1))).toBe("(empty message)")
   })
 })
 
