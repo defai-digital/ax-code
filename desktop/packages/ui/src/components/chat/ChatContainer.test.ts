@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 
-import { shouldAutoOpenChatDraft } from "./ChatContainer"
+import { shouldAutoOpenChatDraft } from "./chatDraftState"
 
 describe("shouldAutoOpenChatDraft", () => {
   test("does not replace a session while a session route is restoring", () => {

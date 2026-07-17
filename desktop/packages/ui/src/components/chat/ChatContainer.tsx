@@ -4,6 +4,7 @@ import type { PermissionRequest } from "@/types/permission"
 import type { QuestionRequest } from "@/types/question"
 
 import { ChatInput } from "./ChatInput"
+import { shouldAutoOpenChatDraft } from "./chatDraftState"
 import { DraftPresetChips } from "./DraftPresetChips"
 import { ActivityBreadcrumb } from "./ActivityBreadcrumb"
 import { useInputStore } from "@/sync/input-store"
@@ -379,14 +380,6 @@ type ChatContainerProps = {
   autoOpenDraft?: boolean
   readOnly?: boolean
 }
-
-export const shouldAutoOpenChatDraft = (input: {
-  autoOpenDraft: boolean
-  currentSessionId: string | null
-  draftOpen: boolean
-  hasSessionRoute: boolean
-}): boolean =>
-  input.autoOpenDraft && !input.currentSessionId && !input.draftOpen && !input.hasSessionRoute
 
 export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = true, readOnly = false }) => {
   const { t } = useI18n()
