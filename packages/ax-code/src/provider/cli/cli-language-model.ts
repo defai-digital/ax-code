@@ -8,7 +8,7 @@ import { Process } from "../../util/process"
 import { Env } from "../../util/env"
 import { promptToText } from "./prompt"
 import { materializeCliAttachments } from "./attachments"
-import type { CliOutputParser } from "./parser"
+import { stdoutHasCliJsonEvents, type CliOutputParser } from "./parser"
 import { buffer } from "node:stream/consumers"
 import { StringDecoder } from "node:string_decoder"
 import { toErrorMessage } from "@/util/error-message"
@@ -445,17 +445,22 @@ export class CliLanguageModel implements LanguageModelV3 {
             }
           }
           // Stream parsers intentionally ignore control and error events. Let
-          // the complete parser surface structured errors first, then retain
+          // the complete parser surface structured text first, then retain
           // non-empty plain stdout when that parser has no text to return.
+          // Do not raw-fallback over structured JSONL (e.g. kimi meta/tool-only
+          // lines) or we re-leak control payloads the complete parser dropped.
           const rawOutput = raw.join("")
           const complete = parser.parseComplete(rawOutput)
-          const fallback = complete.text || rawFallbackText(rawOutput)
+          const fallback =
+            complete.text ||
+            (stdoutHasCliJsonEvents(rawOutput) ? "" : rawFallbackText(rawOutput))
           if (!emitted && fallback) {
             output.push(fallback)
             controller.enqueue({ type: "text-delta", id: textId, delta: fallback })
           }
         }
         const finishSuccess = () => {
+          // Wait for stderr too so empty-output failures can include stderr detail.
           if (!stdoutEnded || !stderrEnded || exitCode === undefined || exitCode !== 0 || closed()) return
           if (!output.join("").trim()) {
             fail(new Error(formatCliNoOutput(Buffer.from(raw.join("")), Buffer.concat(stderrRaw))))

@@ -21,6 +21,14 @@ export function parseCliJsonEventLine(line: string): CliJsonObject | undefined {
   return parseCliJsonObject(trimmed)
 }
 
+/** True when stdout contains at least one structured CLI JSONL event object. */
+export function stdoutHasCliJsonEvents(output: string): boolean {
+  for (const line of output.split("\n")) {
+    if (parseCliJsonEventLine(line)) return true
+  }
+  return false
+}
+
 // Note: NO_COLOR=1 is set in CLI_ENV, so ANSI codes are not expected in output.
 // parseCliJsonEventLine already handles non-JSON lines via fast-path check.
 
