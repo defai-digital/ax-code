@@ -933,7 +933,7 @@ describe("CliLanguageModel", () => {
     expect(cmd).toEqual(["agy", "-p", "write file"])
   })
 
-  test("passes Kimi Code CLI prompt through stream-json -p mode", () => {
+  test("passes Kimi Code CLI prompt through stream-json print mode", () => {
     process.env.AX_CODE_AUTONOMOUS = "false"
     try {
       const definition = CLI_PROVIDER_DEFINITIONS["kimi-cli"]
@@ -952,7 +952,7 @@ describe("CliLanguageModel", () => {
         "write file",
       )
 
-      expect(cmd).toEqual(["kimi", "--output-format", "stream-json", "-p", "write file"])
+      expect(cmd).toEqual(["kimi", "--print", "--output-format", "stream-json", "-p", "write file"])
     } finally {
       restoreAutonomous()
     }
@@ -967,7 +967,7 @@ describe("CliLanguageModel", () => {
       const cmd = buildCliCommand(
         {
           providerID: "kimi-cli",
-          modelID: "kimi-code/kimi-for-coding",
+          modelID: "kimi-for-coding",
           binary: "kimi",
           args: definition?.args ?? [],
           parser: definition!.parser,
@@ -979,10 +979,11 @@ describe("CliLanguageModel", () => {
 
       expect(cmd).toEqual([
         "kimi",
+        "--print",
         "--output-format",
         "stream-json",
         "--model",
-        "kimi-code/kimi-for-coding",
+        "kimi-for-coding",
         "-p",
         "ping",
       ])
@@ -991,7 +992,7 @@ describe("CliLanguageModel", () => {
     }
   })
 
-  test("does not pass --yolo to Kimi Code CLI (incompatible with -p)", () => {
+  test("does not pass --yolo to Kimi Code CLI print mode", () => {
     delete process.env.AX_CODE_AUTONOMOUS
     try {
       const definition = CLI_PROVIDER_DEFINITIONS["kimi-cli"]
@@ -1008,9 +1009,10 @@ describe("CliLanguageModel", () => {
         "write file",
       )
       expect(cmd).not.toContain("--yolo")
-      expect(cmd).toEqual(["kimi", "--output-format", "stream-json", "-p", "write file"])
+      expect(cmd).toEqual(["kimi", "--print", "--output-format", "stream-json", "-p", "write file"])
     } finally {
       restoreAutonomous()
     }
   })
+
 })

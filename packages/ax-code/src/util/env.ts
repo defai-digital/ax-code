@@ -32,7 +32,6 @@ export namespace Env {
     "ANTHROPIC_API_KEY",
     "XAI_API_KEY",
     "KIMI_API_KEY",
-    "MOONSHOT_API_KEY",
   ] as const
 
   export function withCliProviderKeys(env: Record<string, string | undefined>): Record<string, string | undefined> {

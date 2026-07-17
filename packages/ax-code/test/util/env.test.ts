@@ -68,7 +68,6 @@ describe("Env.sanitize", () => {
     const originalAnthropic = process.env.ANTHROPIC_API_KEY
     const originalXai = process.env.XAI_API_KEY
     const originalKimi = process.env.KIMI_API_KEY
-    const originalMoonshot = process.env.MOONSHOT_API_KEY
 
     try {
       process.env.GEMINI_API_KEY = "gemini-key"
@@ -76,7 +75,6 @@ describe("Env.sanitize", () => {
       process.env.ANTHROPIC_API_KEY = "anthropic-key"
       process.env.XAI_API_KEY = "xai-key"
       process.env.KIMI_API_KEY = "kimi-key"
-      process.env.MOONSHOT_API_KEY = "moonshot-key"
 
       const env = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }))
 
@@ -86,7 +84,6 @@ describe("Env.sanitize", () => {
       expect(env.ANTHROPIC_API_KEY).toBe("anthropic-key")
       expect(env.XAI_API_KEY).toBe("xai-key")
       expect(env.KIMI_API_KEY).toBe("kimi-key")
-      expect(env.MOONSHOT_API_KEY).toBe("moonshot-key")
     } finally {
       if (originalGemini === undefined) delete process.env.GEMINI_API_KEY
       else process.env.GEMINI_API_KEY = originalGemini
@@ -98,8 +95,6 @@ describe("Env.sanitize", () => {
       else process.env.XAI_API_KEY = originalXai
       if (originalKimi === undefined) delete process.env.KIMI_API_KEY
       else process.env.KIMI_API_KEY = originalKimi
-      if (originalMoonshot === undefined) delete process.env.MOONSHOT_API_KEY
-      else process.env.MOONSHOT_API_KEY = originalMoonshot
     }
   })
 })

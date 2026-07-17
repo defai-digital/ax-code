@@ -49,7 +49,7 @@ CLI providers reuse a local vendor CLI and its login/session instead of storing 
 
 Run the vendor CLI login first when required, then run `ax-code providers login <provider-id>`. AX Code probes the CLI command and stores a local marker credential after the probe succeeds.
 
-For Kimi Code membership, install the local `kimi` binary, run `kimi login`, then `ax-code providers login kimi-cli`. AX Code reuses the Kimi Code CLI session (`~/.kimi-code`) rather than storing a hosted Moonshot API key.
+For Kimi Code membership, install the local `kimi` binary, run `kimi login`, then `ax-code providers login kimi-cli`. AX Code reuses the Kimi Code CLI session (`~/.kimi`) rather than storing a hosted Moonshot API key.
 
 ## AX Engine Local Provider
 

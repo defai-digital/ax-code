@@ -301,13 +301,15 @@ export const kimiCliParser: CliOutputParser = {
   parseComplete(output: string) {
     const lines = output.split("\n")
     let last: string | undefined
+    let sawJsonEvent = false
     for (const line of lines) {
       const event = parseCliJsonEventLine(line)
       if (!event) continue
+      sawJsonEvent = true
       const text = kimiAssistantText(event)
       if (text) last = text
     }
-    return { text: last ?? rawCompleteText(output) }
+    return { text: last ?? (sawJsonEvent ? "" : rawCompleteText(output)) }
   },
   parseStreamLine(line: string) {
     const event = parseCliJsonEventLine(line)

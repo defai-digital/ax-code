@@ -135,18 +135,17 @@ function resolveTomlDefaultModel(toml: string): string | undefined {
 }
 
 async function resolveKimiModel(): Promise<CliModelInfo> {
-  const envModel = process.env.KIMI_MODEL
-  if (envModel) return { model: envModel, source: "KIMI_MODEL" }
-
-  // Prefer Kimi Code CLI config (~/.kimi-code), fall back to legacy kimi-cli (~/.kimi).
-  for (const [relativePath, sourceLabel] of [
-    [".kimi-code/config.toml", "~/.kimi-code/config.toml"],
-    [".kimi/config.toml", "~/.kimi/config.toml"],
-  ] as const) {
-    const toml = await readText(join(homeDir(), relativePath))
-    if (!toml) continue
+  const shareDir = process.env.KIMI_SHARE_DIR?.trim()
+  const configPath = shareDir ? join(shareDir, "config.toml") : join(homeDir(), ".kimi", "config.toml")
+  const toml = await readText(configPath)
+  if (toml) {
     const model = resolveTomlDefaultModel(toml)
-    if (model) return { model, source: sourceLabel }
+    if (model) {
+      return {
+        model,
+        source: shareDir ? "$KIMI_SHARE_DIR/config.toml" : "~/.kimi/config.toml",
+      }
+    }
   }
 
   return { model: DEFAULTS["kimi-cli"]!, source: "default" }

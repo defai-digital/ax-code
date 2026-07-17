@@ -129,4 +129,13 @@ describe("kimiCliParser", () => {
       ),
     ).toBe("Hello world")
   })
+
+  test("does not surface structured tool or metadata messages as assistant output", () => {
+    const output = [
+      '{"role":"tool","tool_call_id":"tc_1","content":"stdout"}',
+      '{"role":"meta","type":"session.resume_hint","content":"resume details"}',
+    ].join("\n")
+
+    expect(kimiCliParser.parseComplete(output)).toEqual({ text: "" })
+  })
 })
