@@ -380,6 +380,14 @@ type ChatContainerProps = {
   readOnly?: boolean
 }
 
+export const shouldAutoOpenChatDraft = (input: {
+  autoOpenDraft: boolean
+  currentSessionId: string | null
+  draftOpen: boolean
+  hasSessionRoute: boolean
+}): boolean =>
+  input.autoOpenDraft && !input.currentSessionId && !input.draftOpen && !input.hasSessionRoute
+
 export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = true, readOnly = false }) => {
   const { t } = useI18n()
   // Session UI state
@@ -623,7 +631,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
   const promptReadOnly = readOnly || Boolean(parentSession)
 
   React.useEffect(() => {
-    if (autoOpenDraft && !currentSessionId && !draftOpen) {
+    const hasSessionRoute = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("session")
+    if (shouldAutoOpenChatDraft({ autoOpenDraft, currentSessionId, draftOpen, hasSessionRoute })) {
       openNewSessionDraft()
     }
   }, [autoOpenDraft, currentSessionId, draftOpen, openNewSessionDraft])
