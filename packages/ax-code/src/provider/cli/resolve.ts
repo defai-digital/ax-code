@@ -130,8 +130,9 @@ async function resolveAntigravityModel(): Promise<CliModelInfo> {
 }
 
 function resolveTomlDefaultModel(toml: string): string | undefined {
-  const match = toml.match(/^default_model\s*=\s*"([^"]+)"/m)
-  return match?.[1]
+  // Allow optional indentation / single- or double-quoted TOML strings.
+  const match = toml.match(/^\s*default_model\s*=\s*(?:"([^"]+)"|'([^']+)')/m)
+  return match?.[1] ?? match?.[2]
 }
 
 async function resolveKimiModel(): Promise<CliModelInfo> {
