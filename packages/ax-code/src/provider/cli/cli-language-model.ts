@@ -78,8 +78,7 @@ function autonomousCliArgs(providerID: string): string[] {
   if (providerID === "claude-code") return ["--dangerously-skip-permissions"]
   if (providerID === "gemini-cli") return ["--approval-mode", "yolo"]
   if (providerID === "qoder-cli") return ["--permission-mode", "auto"]
-  // Kimi Code CLI: -p is already non-interactive; --yolo auto-approves tools.
-  if (providerID === "kimi-cli") return ["--yolo"]
+  // Kimi Code CLI: -p is already non-interactive and rejects --yolo.
   return []
 }
 

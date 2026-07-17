@@ -991,7 +991,7 @@ describe("CliLanguageModel", () => {
     }
   })
 
-  test("adds Kimi Code CLI yolo approval in autonomous mode", () => {
+  test("does not pass --yolo to Kimi Code CLI (incompatible with -p)", () => {
     delete process.env.AX_CODE_AUTONOMOUS
     try {
       const definition = CLI_PROVIDER_DEFINITIONS["kimi-cli"]
@@ -1007,7 +1007,8 @@ describe("CliLanguageModel", () => {
         },
         "write file",
       )
-      expect(cmd).toContain("--yolo")
+      expect(cmd).not.toContain("--yolo")
+      expect(cmd).toEqual(["kimi", "--output-format", "stream-json", "-p", "write file"])
     } finally {
       restoreAutonomous()
     }
