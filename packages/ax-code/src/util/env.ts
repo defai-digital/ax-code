@@ -26,7 +26,13 @@ export namespace Env {
   // forwarded. Kept out of SAFE_ALLOWLIST so pty user env and untrusted
   // {env:} config substitution still strip them — only the CLI provider
   // spawn path opts into forwarding via `withCliProviderKeys`.
-  const CLI_PROVIDER_KEYS = ["OPENAI_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "XAI_API_KEY"] as const
+  const CLI_PROVIDER_KEYS = [
+    "OPENAI_API_KEY",
+    "GEMINI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "XAI_API_KEY",
+    "KIMI_API_KEY",
+  ] as const
 
   export function withCliProviderKeys(env: Record<string, string | undefined>): Record<string, string | undefined> {
     const out = { ...env }

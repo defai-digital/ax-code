@@ -320,6 +320,7 @@ const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
   "grok-build-cli": "Grok Build CLI default",
   "qoder-cli": "Qoder CLI default",
   "antigravity-cli": "Antigravity CLI default",
+  "kimi-cli": "Kimi Code CLI default",
 }
 
 // A stale standalone `codex` launcher can shadow the newer executable bundled
@@ -447,6 +448,7 @@ const codexCli = getCliProviderDefinition("codex-cli")!
 const grokBuildCli = getCliProviderDefinition("grok-build-cli")!
 const qoderCli = getCliProviderDefinition("qoder-cli")!
 const antigravityCli = getCliProviderDefinition("antigravity-cli")!
+const kimiCli = getCliProviderDefinition("kimi-cli")!
 
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   xai: async () => {
@@ -509,5 +511,13 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     promptMode: antigravityCli.promptMode,
     promptFlag: antigravityCli.promptFlag,
     workspaceArg: antigravityCli.workspaceArg,
+  }),
+  "kimi-cli": cliLoader({
+    providerID: "kimi-cli",
+    binary: kimiCli.binary,
+    args: kimiCli.args,
+    parser: kimiCli.parser,
+    promptMode: kimiCli.promptMode,
+    promptFlag: kimiCli.promptFlag,
   }),
 }

@@ -12,6 +12,7 @@ const CLI_PROVIDER_IDS = new Set([
   "grok-build-cli",
   "qoder-cli",
   "antigravity-cli",
+  "kimi-cli",
 ])
 
 // Providers whose CUSTOM_LOADERS entry (packages/ax-code/src/provider/loaders.ts) talks to a

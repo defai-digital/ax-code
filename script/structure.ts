@@ -67,6 +67,7 @@ const keep = [
   "node_modules",
   "packages",
   "patches",
+  "reports",
   "script",
   "tools",
 ]

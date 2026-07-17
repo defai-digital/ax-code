@@ -24,6 +24,7 @@ describe("promptToText", () => {
     expect(promptToText(prompt, { providerID: "gemini-cli" })).toContain("built-in web search")
     expect(promptToText(prompt, { providerID: "grok-build-cli" })).toContain("built-in web search")
     expect(promptToText(prompt, { providerID: "qoder-cli" })).toContain("built-in web search")
+    expect(promptToText(prompt, { providerID: "kimi-cli" })).toContain("built-in web search")
   })
 
   test("lists attachments so the CLI agent reads them", () => {

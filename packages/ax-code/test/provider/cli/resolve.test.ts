@@ -178,6 +178,89 @@ describe("resolveCliModel", () => {
     }
   })
 
+  test("returns default for kimi-cli when no config", async () => {
+    await using tmp = await tmpdir()
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    const originalShareDir = process.env.KIMI_SHARE_DIR
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    delete process.env.KIMI_SHARE_DIR
+    try {
+      const info = await resolveCliModel("kimi-cli")
+      expect(info).toEqual({ model: "kimi-cli", source: "default" })
+    } finally {
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
+      if (originalShareDir !== undefined) process.env.KIMI_SHARE_DIR = originalShareDir
+      else delete process.env.KIMI_SHARE_DIR
+    }
+  })
+
+  test("kimi-cli reads default_model from ~/.kimi/config.toml", async () => {
+    await using tmp = await tmpdir()
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    const originalShareDir = process.env.KIMI_SHARE_DIR
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    delete process.env.KIMI_SHARE_DIR
+    try {
+      const configDir = path.join(tmp.path, ".kimi")
+      await fs.mkdir(configDir, { recursive: true })
+      await fs.writeFile(path.join(configDir, "config.toml"), 'default_model = "kimi-for-coding"\n')
+
+      const info = await resolveCliModel("kimi-cli")
+      expect(info).toEqual({
+        model: "kimi-for-coding",
+        source: "~/.kimi/config.toml",
+      })
+    } finally {
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
+      if (originalShareDir !== undefined) process.env.KIMI_SHARE_DIR = originalShareDir
+      else delete process.env.KIMI_SHARE_DIR
+    }
+  })
+
+  test("kimi-cli respects a custom KIMI_SHARE_DIR", async () => {
+    await using tmp = await tmpdir()
+    const originalShareDir = process.env.KIMI_SHARE_DIR
+    process.env.KIMI_SHARE_DIR = tmp.path
+    try {
+      await fs.writeFile(path.join(tmp.path, "config.toml"), 'default_model = "kimi-for-coding"\n')
+
+      const info = await resolveCliModel("kimi-cli")
+      expect(info).toEqual({
+        model: "kimi-for-coding",
+        source: "$KIMI_SHARE_DIR/config.toml",
+      })
+    } finally {
+      if (originalShareDir !== undefined) process.env.KIMI_SHARE_DIR = originalShareDir
+      else delete process.env.KIMI_SHARE_DIR
+    }
+  })
+
+  test("kimi-cli accepts indented and single-quoted default_model", async () => {
+    await using tmp = await tmpdir()
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    const originalShareDir = process.env.KIMI_SHARE_DIR
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    delete process.env.KIMI_SHARE_DIR
+    try {
+      const configDir = path.join(tmp.path, ".kimi")
+      await fs.mkdir(configDir, { recursive: true })
+      await fs.writeFile(path.join(configDir, "config.toml"), "  default_model = 'kimi-code/k3'\n")
+
+      const info = await resolveCliModel("kimi-cli")
+      expect(info).toEqual({
+        model: "kimi-code/k3",
+        source: "~/.kimi/config.toml",
+      })
+    } finally {
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
+      if (originalShareDir !== undefined) process.env.KIMI_SHARE_DIR = originalShareDir
+      else delete process.env.KIMI_SHARE_DIR
+    }
+  })
+
   test("returns unknown for unrecognized provider", async () => {
     const info = await resolveCliModel("nonexistent")
     expect(info.model).toBe("unknown")

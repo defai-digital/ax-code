@@ -628,9 +628,9 @@ describe("ax-engine server lifecycle", () => {
     // Substring matching used to treat any argv containing "ax-engine" as the
     // server (e.g. tailing the server log) and SIGKILL it on stop/reclaim.
     // Rename sleep's argv0 so `ps` shows a log-tailer path under ax-engine.
-    const decoy = spawn("sh", ["-c", `exec -a "tail -f ${tmp.path}/ax-engine/server.log" sleep 60`])
+    const decoy = spawn("sleep", ["60"], { argv0: `tail -f ${tmp.path}/ax-engine/server.log` })
     try {
-      // Give the shell time to exec into the renamed sleep process.
+      // Give the renamed sleep process time to appear in `ps`.
       await new Promise((resolve) => setTimeout(resolve, 100))
       expect(alive(decoy.pid!)).toBe(true)
       await withServerPaths(tmp.path, async () => {

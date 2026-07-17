@@ -21,6 +21,14 @@ export function parseCliJsonEventLine(line: string): CliJsonObject | undefined {
   return parseCliJsonObject(trimmed)
 }
 
+/** True when stdout contains at least one structured CLI JSONL event object. */
+export function stdoutHasCliJsonEvents(output: string): boolean {
+  for (const line of output.split("\n")) {
+    if (parseCliJsonEventLine(line)) return true
+  }
+  return false
+}
+
 // Note: NO_COLOR=1 is set in CLI_ENV, so ANSI codes are not expected in output.
 // parseCliJsonEventLine already handles non-JSON lines via fast-path check.
 
@@ -271,5 +279,53 @@ export const antigravityCliParser: CliOutputParser = {
     if (typeof event.content === "string") return event.content
     if (typeof event.text === "string") return event.text
     return null
+  },
+}
+
+function kimiMessageContentText(content: unknown): string | undefined {
+  if (typeof content === "string") {
+    const text = content.trim().length > 0 ? content : undefined
+    return text
+  }
+  if (!Array.isArray(content)) return undefined
+  const text = content
+    .filter((block) => isRecord(block) && block.type === "text" && typeof block.text === "string")
+    .map((block) => (block as { text: string }).text)
+    .join("")
+  return text.trim().length > 0 ? text : undefined
+}
+
+function kimiAssistantText(event: CliJsonObject): string | undefined {
+  if (event.role !== "assistant") return undefined
+  return kimiMessageContentText(event.content) ?? (typeof event.text === "string" ? event.text : undefined)
+}
+
+// Kimi Code CLI stream-json emits Message-format JSONL:
+//   {"role":"assistant","content":"..."}
+//   {"role":"tool",...}
+//   {"role":"meta","type":"session.resume_hint",...}
+// Prefer the last non-empty assistant message and ignore tool/meta noise.
+// When JSONL events were present but no assistant text arrived, return empty
+// instead of falling back to raw JSON (which would leak meta/tool payloads).
+export const kimiCliParser: CliOutputParser = {
+  parseComplete(output: string) {
+    const lines = output.split("\n")
+    let last: string | undefined
+    let sawJsonEvent = false
+    for (const line of lines) {
+      const event = parseCliJsonEventLine(line)
+      if (!event) continue
+      sawJsonEvent = true
+      const text = kimiAssistantText(event)
+      if (text) last = text
+    }
+    if (last !== undefined) return { text: last }
+    if (sawJsonEvent) return { text: "" }
+    return { text: rawCompleteText(output) }
+  },
+  parseStreamLine(line: string) {
+    const event = parseCliJsonEventLine(line)
+    if (!event) return rawTextLine(line)
+    return kimiAssistantText(event) ?? null
   },
 }

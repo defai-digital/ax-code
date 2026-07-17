@@ -69,6 +69,7 @@ describe("provider routes", () => {
         expect(ids).toContain("grok-build-cli")
         expect(ids).toContain("qoder-cli")
         expect(ids).toContain("antigravity-cli")
+        expect(ids).toContain("kimi-cli")
       },
     })
   })

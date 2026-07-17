@@ -45,8 +45,11 @@ CLI providers reuse a local vendor CLI and its login/session instead of storing 
 | `grok-build-cli`  | Grok Build CLI           | `grok`                 | `grok-build-cli`   |
 | `qoder-cli`       | Qoder CLI                | `qodercli`             | `qoder-cli`        |
 | `antigravity-cli` | Google (Antigravity CLI) | `agy`                  | `antigravity-cli`  |
+| `kimi-cli`        | Kimi Code CLI            | `kimi`                 | `kimi-cli`         |
 
 Run the vendor CLI login first when required, then run `ax-code providers login <provider-id>`. AX Code probes the CLI command and stores a local marker credential after the probe succeeds.
+
+For Kimi Code membership, install the local `kimi` binary, run `kimi login`, then `ax-code providers login kimi-cli`. AX Code reuses the Kimi Code CLI session (`~/.kimi`) rather than storing a hosted Moonshot API key.
 
 ## AX Engine Local Provider
 

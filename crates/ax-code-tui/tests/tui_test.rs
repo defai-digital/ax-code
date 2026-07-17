@@ -4,6 +4,12 @@ use ax_code_tui::events::{MessagePartDeltaProps, MessageRole, RuntimeEvent};
 use ax_code_tui::tui::{App, AppMode, InputAction};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
+fn app_with_session(session_id: &str) -> App {
+    let mut app = App::new();
+    app.session_id = Some(session_id.to_string());
+    app
+}
+
 fn make_key_event(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
 }
@@ -42,7 +48,7 @@ fn test_app_handle_session_created() {
 
 #[test]
 fn test_app_handle_message_updated() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess_123");
     let event = RuntimeEvent::MessageUpdated {
         properties: ax_code_tui::events::MessageInfo {
             info: Some(ax_code_tui::events::MessageData {
@@ -62,7 +68,7 @@ fn test_app_handle_message_updated() {
 
 #[test]
 fn test_app_handle_message_part_delta() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess_123");
 
     // First add a message
     app.handle_event(RuntimeEvent::MessageUpdated {
@@ -78,7 +84,7 @@ fn test_app_handle_message_part_delta() {
     // Then add delta
     app.handle_event(RuntimeEvent::MessagePartDelta {
         properties: MessagePartDeltaProps {
-            session_id: "s".to_string(),
+            session_id: "sess_123".to_string(),
             message_id: "msg_001".to_string(),
             part_id: "part_001".to_string(),
             field: "content".to_string(),
@@ -88,7 +94,7 @@ fn test_app_handle_message_part_delta() {
 
     app.handle_event(RuntimeEvent::MessagePartDelta {
         properties: MessagePartDeltaProps {
-            session_id: "s".to_string(),
+            session_id: "sess_123".to_string(),
             message_id: "msg_001".to_string(),
             part_id: "part_001".to_string(),
             field: "content".to_string(),
@@ -101,7 +107,7 @@ fn test_app_handle_message_part_delta() {
 
 #[test]
 fn test_app_handle_permission_asked() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess_123");
     let event = RuntimeEvent::PermissionAsked {
         properties: ax_code_tui::events::PermissionRequestProps {
             session_id: "sess_123".to_string(),
@@ -120,7 +126,7 @@ fn test_app_handle_permission_asked() {
 
 #[test]
 fn test_app_handle_question_asked() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess_123");
     let event = RuntimeEvent::QuestionAsked {
         properties: ax_code_tui::events::QuestionRequestProps {
             session_id: "sess_123".to_string(),
@@ -241,7 +247,7 @@ fn test_input_quit_ctrl_c() {
 
 #[test]
 fn test_input_permission_accept() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess_123");
 
     // Add a permission request
     app.handle_event(RuntimeEvent::PermissionAsked {
@@ -271,7 +277,7 @@ fn test_input_permission_accept() {
 
 #[test]
 fn test_input_permission_reject() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess_123");
 
     app.handle_event(RuntimeEvent::PermissionAsked {
         properties: ax_code_tui::events::PermissionRequestProps {
@@ -298,7 +304,7 @@ fn test_input_permission_reject() {
 
 #[test]
 fn test_input_question_navigate_and_select() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess_123");
 
     app.handle_event(RuntimeEvent::QuestionAsked {
         properties: ax_code_tui::events::QuestionRequestProps {
@@ -337,7 +343,7 @@ fn test_input_question_navigate_and_select() {
 
 #[test]
 fn test_input_question_escape() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess_123");
 
     app.handle_event(RuntimeEvent::QuestionAsked {
         properties: ax_code_tui::events::QuestionRequestProps {

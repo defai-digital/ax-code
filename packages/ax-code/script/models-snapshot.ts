@@ -3,6 +3,9 @@ export const LOCAL_PROVIDER_IDS = [
   "gemini-cli",
   "codex-cli",
   "grok-build-cli",
+  "qoder-cli",
+  "antigravity-cli",
+  "kimi-cli",
   "ollama",
   "ax-studio",
 ] as const

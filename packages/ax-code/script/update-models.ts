@@ -50,6 +50,7 @@ const cliImageProviderIDs = [
   "grok-build-cli",
   "qoder-cli",
   "antigravity-cli",
+  "kimi-cli",
 ] as const
 const localProviderIDs = ["ax-studio", ...cliImageProviderIDs, "ollama"]
 for (const id of localProviderIDs) {
@@ -232,6 +233,61 @@ if (!fetched["antigravity-cli"].models?.["antigravity-cli"]) {
       },
       limit: {
         context: 200000,
+        output: 16384,
+      },
+      options: {},
+      status: "active",
+    },
+  }
+}
+if (!fetched["kimi-cli"]) {
+  fetched["kimi-cli"] = {
+    id: "kimi-cli",
+    name: "Kimi Code CLI",
+    env: [],
+    npm: "cli",
+    models: {
+      "kimi-cli": {
+        id: "kimi-cli",
+        name: "Kimi Code CLI",
+        family: "kimi",
+        attachment: true,
+        reasoning: false,
+        tool_call: false,
+        temperature: false,
+        release_date: "2026-07-01",
+        modalities: {
+          input: ["text", "image"],
+          output: ["text"],
+        },
+        limit: {
+          context: 262144,
+          output: 16384,
+        },
+        options: {},
+        status: "active",
+      },
+    },
+  }
+}
+if (!fetched["kimi-cli"].models?.["kimi-cli"]) {
+  fetched["kimi-cli"].models = {
+    ...(fetched["kimi-cli"].models ?? {}),
+    "kimi-cli": {
+      id: "kimi-cli",
+      name: "Kimi Code CLI",
+      family: "kimi",
+      attachment: true,
+      reasoning: false,
+      tool_call: false,
+      temperature: false,
+      release_date: "2026-07-01",
+      modalities: {
+        input: ["text", "image"],
+        output: ["text"],
+      },
+      limit: {
+        context: 262144,
         output: 16384,
       },
       options: {},
@@ -700,6 +756,31 @@ if (!fetched["antigravity-cli"].models?.["antigravity-cli"]) {
       },
       limit: {
         context: 200000,
+        output: 16384,
+      },
+      options: {},
+      status: "active",
+    },
+  }
+}
+if (!fetched["kimi-cli"].models?.["kimi-cli"]) {
+  fetched["kimi-cli"].models = {
+    ...(fetched["kimi-cli"].models ?? {}),
+    "kimi-cli": {
+      id: "kimi-cli",
+      name: "Kimi Code CLI",
+      family: "kimi",
+      attachment: true,
+      reasoning: false,
+      tool_call: false,
+      temperature: false,
+      release_date: "2026-07-01",
+      modalities: {
+        input: ["text", "image"],
+        output: ["text"],
+      },
+      limit: {
+        context: 262144,
         output: 16384,
       },
       options: {},

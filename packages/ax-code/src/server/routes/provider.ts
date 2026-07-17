@@ -54,6 +54,7 @@ const NATIVE_PROVIDERS = new Set([
   "grok-build-cli",
   "qoder-cli",
   "antigravity-cli",
+  "kimi-cli",
 ])
 
 export function shouldShowProviderInList(input: {

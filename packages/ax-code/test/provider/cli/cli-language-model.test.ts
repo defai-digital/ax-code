@@ -192,6 +192,10 @@ describe("CliLanguageModel", () => {
     const model = makeModel({
       binary: process.execPath,
       args: ["-e", "process.stderr.write('command permission denied')", "--"],
+      parser: {
+        parseComplete: () => ({ text: "" }),
+        parseStreamLine: () => null,
+      },
       promptMode: "arg",
     })
 
@@ -200,6 +204,25 @@ describe("CliLanguageModel", () => {
         prompt: [{ role: "user", content: [{ type: "text", text: "what's this project" }] }],
       }),
     ).rejects.toThrow(/without producing assistant output.*command permission denied/)
+  })
+
+  test("doGenerate rejects successful structured JSONL with no assistant text", async () => {
+    const model = makeModel({
+      binary: process.execPath,
+      args: [
+        "-e",
+        "process.stdout.write('{\"role\":\"meta\",\"content\":\"To resume this session\"}\\n')",
+        "--",
+      ],
+      promptMode: "arg",
+      parser: CLI_PROVIDER_DEFINITIONS["kimi-cli"]!.parser,
+    })
+
+    await expect(
+      model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+      }),
+    ).rejects.toThrow(/without producing assistant output/)
   })
 
   test("doGenerate throws on non-zero exit even when stdout is present", async () => {
@@ -450,6 +473,10 @@ describe("CliLanguageModel", () => {
     const model = makeModel({
       binary: process.execPath,
       args: ["-e", "process.stderr.write('command permission denied')", "--"],
+      parser: {
+        parseComplete: () => ({ text: "" }),
+        parseStreamLine: () => null,
+      },
       promptMode: "stdin",
     })
 
@@ -470,6 +497,41 @@ describe("CliLanguageModel", () => {
     expect(error).toBeDefined()
     expect(String(error.error)).toContain("without producing assistant output")
     expect(String(error.error)).toContain("command permission denied")
+  })
+
+  test("doStream does not leak kimi meta JSONL as assistant text", async () => {
+    const model = makeModel({
+      binary: process.execPath,
+      args: [
+        "-e",
+        "process.stdout.write('{\"role\":\"meta\",\"content\":\"To resume this session: kimi -r x\"}\\n')",
+        "--",
+      ],
+      promptMode: "stdin",
+      parser: CLI_PROVIDER_DEFINITIONS["kimi-cli"]!.parser,
+    })
+
+    const { stream } = await model.doStream({
+      prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+    })
+
+    const parts: any[] = []
+    const reader = stream.getReader()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      parts.push(value)
+    }
+
+    const text = parts
+      .filter((part) => part.type === "text-delta")
+      .map((part) => part.delta)
+      .join("")
+    expect(text).not.toContain("resume")
+    expect(parts.find((part) => part.type === "finish")).toBeUndefined()
+    const error = parts.find((part) => part.type === "error")
+    expect(error).toBeDefined()
+    expect(String(error.error)).toContain("without producing assistant output")
   })
 
   test("doStream includes stdout and stderr that drain after process exit", async () => {
@@ -971,6 +1033,88 @@ describe("CliLanguageModel", () => {
     )
 
     expect(cmd).toEqual(["agy", "-p", "write file"])
+  })
+
+  test("passes Kimi Code CLI prompt through stream-json print mode", () => {
+    process.env.AX_CODE_AUTONOMOUS = "false"
+    try {
+      const definition = CLI_PROVIDER_DEFINITIONS["kimi-cli"]
+      expect(definition).toBeDefined()
+
+      const cmd = buildCliCommand(
+        {
+          providerID: "kimi-cli",
+          modelID: "kimi-cli",
+          binary: "kimi",
+          args: definition?.args ?? [],
+          parser: definition!.parser,
+          promptMode: definition?.promptMode ?? "arg",
+          promptFlag: definition?.promptFlag,
+        },
+        "write file",
+      )
+
+      expect(cmd).toEqual(["kimi", "--print", "--output-format", "stream-json", "-p", "write file"])
+    } finally {
+      restoreAutonomous()
+    }
+  })
+
+  test("passes resolved Kimi model via --model", () => {
+    process.env.AX_CODE_AUTONOMOUS = "false"
+    try {
+      const definition = CLI_PROVIDER_DEFINITIONS["kimi-cli"]
+      expect(definition).toBeDefined()
+
+      const cmd = buildCliCommand(
+        {
+          providerID: "kimi-cli",
+          modelID: "kimi-for-coding",
+          binary: "kimi",
+          args: definition?.args ?? [],
+          parser: definition!.parser,
+          promptMode: definition?.promptMode ?? "arg",
+          promptFlag: definition?.promptFlag,
+        },
+        "ping",
+      )
+
+      expect(cmd).toEqual([
+        "kimi",
+        "--print",
+        "--output-format",
+        "stream-json",
+        "--model",
+        "kimi-for-coding",
+        "-p",
+        "ping",
+      ])
+    } finally {
+      restoreAutonomous()
+    }
+  })
+
+  test("does not pass --yolo to Kimi Code CLI print mode", () => {
+    delete process.env.AX_CODE_AUTONOMOUS
+    try {
+      const definition = CLI_PROVIDER_DEFINITIONS["kimi-cli"]
+      const cmd = buildCliCommand(
+        {
+          providerID: "kimi-cli",
+          modelID: "kimi-cli",
+          binary: "kimi",
+          args: definition?.args ?? [],
+          parser: definition!.parser,
+          promptMode: definition?.promptMode ?? "arg",
+          promptFlag: definition?.promptFlag,
+        },
+        "write file",
+      )
+      expect(cmd).not.toContain("--yolo")
+      expect(cmd).toEqual(["kimi", "--print", "--output-format", "stream-json", "-p", "write file"])
+    } finally {
+      restoreAutonomous()
+    }
   })
 
   test("passes Antigravity CLI the active workspace for headless prompts", () => {

@@ -6,6 +6,7 @@ import {
   codexCliParser,
   geminiCliParser,
   grokBuildCliParser,
+  kimiCliParser,
   parseCliJsonEventLine,
   qoderCliParser,
 } from "../../../src/provider/cli/parser"
@@ -85,6 +86,7 @@ describe("provider CLI raw stream text", () => {
     expect(qoderCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
     expect(grokBuildCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
     expect(antigravityCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
+    expect(kimiCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
   })
 
   test("raw complete fallback preserves model whitespace", () => {
@@ -94,5 +96,52 @@ describe("provider CLI raw stream text", () => {
     expect(qoderCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(grokBuildCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(antigravityCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
+    expect(kimiCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
+  })
+})
+
+describe("kimiCliParser", () => {
+  test("keeps only assistant messages and ignores tool/meta noise", () => {
+    const output = [
+      '{"role":"assistant","content":"Let me check.","tool_calls":[{"type":"function","id":"tc_1"}]}',
+      '{"role":"tool","tool_call_id":"tc_1","content":"file1.py"}',
+      '{"role":"assistant","content":"There is one Python file."}',
+      '{"role":"meta","type":"session.resume_hint","content":"To resume this session: kimi -r session_x"}',
+    ].join("\n")
+
+    expect(kimiCliParser.parseComplete(output)).toEqual({ text: "There is one Python file." })
+  })
+
+  test("streams assistant content and skips meta lines", () => {
+    expect(kimiCliParser.parseStreamLine('{"role":"assistant","content":"OK."}')).toBe("OK.")
+    expect(
+      kimiCliParser.parseStreamLine(
+        '{"role":"meta","type":"session.resume_hint","content":"To resume this session: kimi -r session_x"}',
+      ),
+    ).toBeNull()
+    expect(kimiCliParser.parseStreamLine('{"role":"tool","tool_call_id":"tc_1","content":"stdout"}')).toBeNull()
+  })
+
+  test("supports array-form assistant content blocks", () => {
+    expect(
+      kimiCliParser.parseStreamLine(
+        '{"role":"assistant","content":[{"type":"text","text":"Hello "},{"type":"text","text":"world"}]}',
+      ),
+    ).toBe("Hello world")
+  })
+
+  test("does not leak meta or tool JSON when no assistant text is present", () => {
+    expect(
+      kimiCliParser.parseComplete(
+        '{"role":"meta","type":"session.resume_hint","content":"To resume this session: kimi -r session_x"}',
+      ),
+    ).toEqual({ text: "" })
+
+    const toolOnly = [
+      '{"role":"assistant","content":"","tool_calls":[{"type":"function","id":"tc_1"}]}',
+      '{"role":"tool","tool_call_id":"tc_1","content":"file1.py"}',
+      '{"role":"meta","content":"To resume this session: kimi -r session_x"}',
+    ].join("\n")
+    expect(kimiCliParser.parseComplete(toolOnly)).toEqual({ text: "" })
   })
 })
