@@ -267,7 +267,7 @@ describe("dependency resolution picks up the managed binary", () => {
     expect(status.available).toBe(false)
     expect(status.version).toContain("6.6.0")
     expect(status.blockers.join(" ")).toContain("AX_ENGINE_VERSION_UNSUPPORTED")
-    expect(status.installable).toBe(true)
+    expect(status.installable).toBe(isAxEngineInstallable())
   })
 })
 
