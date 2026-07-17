@@ -129,4 +129,19 @@ describe("kimiCliParser", () => {
       ),
     ).toBe("Hello world")
   })
+
+  test("does not leak meta or tool JSON when no assistant text is present", () => {
+    expect(
+      kimiCliParser.parseComplete(
+        '{"role":"meta","type":"session.resume_hint","content":"To resume this session: kimi -r session_x"}',
+      ),
+    ).toEqual({ text: "" })
+
+    const toolOnly = [
+      '{"role":"assistant","content":"","tool_calls":[{"type":"function","id":"tc_1"}]}',
+      '{"role":"tool","tool_call_id":"tc_1","content":"file1.py"}',
+      '{"role":"meta","content":"To resume this session: kimi -r session_x"}',
+    ].join("\n")
+    expect(kimiCliParser.parseComplete(toolOnly)).toEqual({ text: "" })
+  })
 })

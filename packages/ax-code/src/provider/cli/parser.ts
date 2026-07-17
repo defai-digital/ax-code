@@ -297,17 +297,23 @@ function kimiAssistantText(event: CliJsonObject): string | undefined {
 //   {"role":"tool",...}
 //   {"role":"meta","type":"session.resume_hint",...}
 // Prefer the last non-empty assistant message and ignore tool/meta noise.
+// When JSONL events were present but no assistant text arrived, return empty
+// instead of falling back to raw JSON (which would leak meta/tool payloads).
 export const kimiCliParser: CliOutputParser = {
   parseComplete(output: string) {
     const lines = output.split("\n")
     let last: string | undefined
+    let sawJsonEvent = false
     for (const line of lines) {
       const event = parseCliJsonEventLine(line)
       if (!event) continue
+      sawJsonEvent = true
       const text = kimiAssistantText(event)
       if (text) last = text
     }
-    return { text: last ?? rawCompleteText(output) }
+    if (last !== undefined) return { text: last }
+    if (sawJsonEvent) return { text: "" }
+    return { text: rawCompleteText(output) }
   },
   parseStreamLine(line: string) {
     const event = parseCliJsonEventLine(line)
