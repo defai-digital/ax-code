@@ -15,6 +15,7 @@ use ax_code_tui::tui::app::{App, AppMode, Message};
 #[test]
 fn test_empty_message_content() {
     let mut app = App::new();
+    app.session_id = Some("sess-1".to_string());
 
     let event = RuntimeEvent::MessageUpdated {
         properties: MessageInfo {
@@ -104,6 +105,7 @@ fn test_unicode_message_truncation() {
 #[test]
 fn test_rapid_message_deltas() {
     let mut app = App::new();
+    app.session_id = Some("sess-1".to_string());
 
     // Create initial message
     let create_event = RuntimeEvent::MessageUpdated {
@@ -121,7 +123,7 @@ fn test_rapid_message_deltas() {
     for i in 0..100 {
         let delta_event = RuntimeEvent::MessagePartDelta {
             properties: MessagePartDeltaProps {
-                session_id: "s".to_string(),
+                session_id: "sess-1".to_string(),
                 message_id: "msg-rapid".to_string(),
                 part_id: format!("part-{}", i),
                 field: "content".to_string(),
@@ -138,6 +140,7 @@ fn test_rapid_message_deltas() {
 #[test]
 fn test_multiple_messages_simultaneously() {
     let mut app = App::new();
+    app.session_id = Some("sess-1".to_string());
 
     // Create multiple messages at once
     for i in 0..10 {

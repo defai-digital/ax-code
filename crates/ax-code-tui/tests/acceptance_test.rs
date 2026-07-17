@@ -247,6 +247,7 @@ fn acceptance_functional_parity_permission_flow() {
     use ax_code_tui::events::{PermissionRequestProps, RuntimeEvent};
 
     let mut app = App::new();
+    app.session_id = Some("sess-1".to_string());
 
     app.handle_event(RuntimeEvent::PermissionAsked {
         properties: PermissionRequestProps {
@@ -269,6 +270,7 @@ fn acceptance_functional_parity_question_flow() {
     use ax_code_tui::events::{QuestionRequestProps, RuntimeEvent};
 
     let mut app = App::new();
+    app.session_id = Some("sess-1".to_string());
 
     app.handle_event(RuntimeEvent::QuestionAsked {
         properties: QuestionRequestProps {

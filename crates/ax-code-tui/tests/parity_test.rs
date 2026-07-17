@@ -14,6 +14,12 @@ use ax_code_tui::tui::input::{InputAction, handle_input};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use support::mock_server::MockServer;
 
+fn app_with_session(session_id: &str) -> App {
+    let mut app = App::new();
+    app.session_id = Some(session_id.to_string());
+    app
+}
+
 // =============================================================================
 // No Dashboard Endpoint Dependency Tests
 // =============================================================================
@@ -83,7 +89,7 @@ fn test_session_creation() {
 
 #[test]
 fn test_message_display() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess-1");
     let event = RuntimeEvent::MessageUpdated {
         properties: MessageInfo {
             info: Some(MessageData {
@@ -100,7 +106,7 @@ fn test_message_display() {
 
 #[test]
 fn test_message_streaming() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess-1");
     let create_event = RuntimeEvent::MessageUpdated {
         properties: MessageInfo {
             info: Some(MessageData {
@@ -113,7 +119,7 @@ fn test_message_streaming() {
     app.handle_event(create_event);
     let delta_event = RuntimeEvent::MessagePartDelta {
         properties: MessagePartDeltaProps {
-            session_id: "s".to_string(),
+            session_id: "sess-1".to_string(),
             message_id: "msg-stream".to_string(),
             part_id: "part-1".to_string(),
             field: "content".to_string(),
@@ -126,7 +132,7 @@ fn test_message_streaming() {
 
 #[test]
 fn test_permission_prompt_accept() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess-1");
     let event = RuntimeEvent::PermissionAsked {
         properties: PermissionRequestProps {
             session_id: "sess-1".to_string(),
@@ -145,7 +151,7 @@ fn test_permission_prompt_accept() {
 
 #[test]
 fn test_permission_prompt_reject() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess-1");
     let event = RuntimeEvent::PermissionAsked {
         properties: PermissionRequestProps {
             session_id: "sess-1".to_string(),
@@ -163,7 +169,7 @@ fn test_permission_prompt_reject() {
 
 #[test]
 fn test_question_prompt_navigate_and_select() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess-1");
     let event = RuntimeEvent::QuestionAsked {
         properties: QuestionRequestProps {
             session_id: "sess-1".to_string(),
@@ -321,7 +327,7 @@ fn test_input_backspace() {
 
 #[test]
 fn test_mode_transition_input_to_permission() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess-1");
     assert_eq!(app.mode, AppMode::Input);
     let event = RuntimeEvent::PermissionAsked {
         properties: PermissionRequestProps {
@@ -337,7 +343,7 @@ fn test_mode_transition_input_to_permission() {
 
 #[test]
 fn test_mode_transition_permission_to_input() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess-1");
     let event = RuntimeEvent::PermissionAsked {
         properties: PermissionRequestProps {
             session_id: "sess-1".to_string(),
@@ -354,7 +360,7 @@ fn test_mode_transition_permission_to_input() {
 
 #[test]
 fn test_mode_transition_input_to_question() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess-1");
     assert_eq!(app.mode, AppMode::Input);
     let event = RuntimeEvent::QuestionAsked {
         properties: QuestionRequestProps {
@@ -371,7 +377,7 @@ fn test_mode_transition_input_to_question() {
 
 #[test]
 fn test_message_accumulation() {
-    let mut app = App::new();
+    let mut app = app_with_session("sess-1");
     for i in 0..5 {
         let event = RuntimeEvent::MessageUpdated {
             properties: MessageInfo {

@@ -24,7 +24,8 @@ impl App {
         match event {
             RuntimeEvent::SessionCreated { properties } => {
                 if let Some(info) = properties.info {
-                    if !self.event_targets_current_session(&info.id) {
+                    // May bind an idle client; must not steal a different active session.
+                    if !self.can_bind_or_match_session(&info.id) {
                         return;
                     }
                     self.session_id = Some(info.id);
@@ -34,7 +35,7 @@ impl App {
             }
             RuntimeEvent::SessionUpdated { properties } => {
                 if let Some(info) = properties.info {
-                    if !self.event_targets_current_session(&info.id) {
+                    if !self.can_bind_or_match_session(&info.id) {
                         return;
                     }
                     self.session_id = Some(info.id);
@@ -92,15 +93,19 @@ impl App {
                         if let Some(role) = info.role {
                             msg.role = role;
                         }
-                        // Message update means streaming is complete
+                        // A later message.updated marks the stream complete.
                         msg.is_streaming = false;
                     } else {
-                        // New message from update event - already complete
+                        // First message.updated often arrives before text deltas.
+                        // Treat new assistant rows as streaming until a later
+                        // terminal update (or ensure_message/delta will keep it).
+                        let role = info.role.unwrap_or(MessageRole::Assistant);
+                        let is_streaming = matches!(role, MessageRole::Assistant);
                         self.messages.push(Message {
                             id: info.id,
-                            role: info.role.unwrap_or(MessageRole::Assistant),
+                            role,
                             content: String::new(),
-                            is_streaming: false,
+                            is_streaming,
                         });
                     }
                 }
@@ -320,13 +325,28 @@ impl App {
         }
     }
 
-    pub(crate) fn event_targets_current_session(&self, event_session_id: &str) -> bool {
+    /// Session create/update may bind an idle client, but must never replace an
+    /// already-selected different session.
+    pub(crate) fn can_bind_or_match_session(&self, event_session_id: &str) -> bool {
         if event_session_id.is_empty() {
-            return self.session_id.is_none();
+            return false;
         }
         match self.session_id.as_deref() {
             Some(current) => current == event_session_id,
             None => true,
+        }
+    }
+
+    /// Session-scoped bus events only apply to the actively selected session.
+    /// While idle (`session_id == None`) they are ignored so global SSE traffic
+    /// cannot hijack transcript/permission state before attach/create.
+    pub(crate) fn event_targets_current_session(&self, event_session_id: &str) -> bool {
+        if event_session_id.is_empty() {
+            return false;
+        }
+        match self.session_id.as_deref() {
+            Some(current) => current == event_session_id,
+            None => false,
         }
     }
 
@@ -336,11 +356,12 @@ impl App {
     ) -> bool {
         event_session_id
             .map(|session_id| self.event_targets_current_session(session_id))
-            .unwrap_or_else(|| self.session_id.is_none())
+            .unwrap_or(false)
     }
 
     pub(crate) fn message_targets_current_session(&self, message_id: &str) -> bool {
-        self.session_id.is_none() || self.messages.iter().any(|m| m.id == message_id)
+        // Legacy payloads without sessionID: only continue rows we already own.
+        self.messages.iter().any(|m| m.id == message_id)
     }
 
     pub(crate) fn message_event_targets_current_session(
@@ -355,7 +376,8 @@ impl App {
     }
 
     pub(crate) fn ensure_message(&mut self, message_id: &str) {
-        if self.messages.iter().any(|m| m.id == message_id) {
+        if let Some(msg) = self.messages.iter_mut().find(|m| m.id == message_id) {
+            msg.is_streaming = true;
             return;
         }
         self.messages.push(Message {

@@ -665,6 +665,12 @@ mod tests {
         SessionErrorProps, SessionStatusProps, ToolPartState,
     };
 
+    fn app_with_session(session_id: &str) -> App {
+        let mut app = App::new();
+        app.session_id = Some(session_id.to_string());
+        app
+    }
+
     // === HIGH 1: multi-byte prompt editing must not panic ===
 
     #[test]
@@ -739,7 +745,7 @@ mod tests {
 
     #[test]
     fn test_permission_replied_event_clears_pending() {
-        let mut app = App::new();
+        let mut app = app_with_session("s1");
         app.handle_event(RuntimeEvent::PermissionAsked {
             properties: crate::events::PermissionRequestProps {
                 session_id: "s1".to_string(),
@@ -764,7 +770,7 @@ mod tests {
 
     #[test]
     fn test_permission_asked_uses_metadata_description() {
-        let mut app = App::new();
+        let mut app = app_with_session("s1");
         let event: RuntimeEvent = serde_json::from_str(
             r#"{"type":"permission.asked","properties":{"sessionID":"s1","id":"p1","permission":"file_write","patterns":["/tmp/file"],"metadata":{"description":"Write /tmp/file"},"always":[]}}"#,
         )
@@ -782,7 +788,7 @@ mod tests {
 
     #[test]
     fn test_question_replied_event_clears_pending() {
-        let mut app = App::new();
+        let mut app = app_with_session("s1");
         app.handle_event(RuntimeEvent::QuestionAsked {
             properties: crate::events::QuestionRequestProps {
                 session_id: "s1".to_string(),
@@ -806,7 +812,7 @@ mod tests {
 
     #[test]
     fn test_multi_question_request_collects_answers_before_reply() {
-        let mut app = App::new();
+        let mut app = app_with_session("s1");
         let event: RuntimeEvent = serde_json::from_str(
             r#"{"type":"question.asked","properties":{"sessionID":"s1","id":"q1","questions":[{"question":"Which fix?","header":"Fix","options":[{"label":"Quick","description":""},{"label":"Full","description":""}]},{"question":"Run tests?","header":"Tests","options":[{"label":"Yes","description":""},{"label":"No","description":""}]}]}}"#,
         )
@@ -837,7 +843,7 @@ mod tests {
     #[test]
     fn test_permission_replied_for_other_id_keeps_oldest() {
         // Only the matching request should be cleared; others stay.
-        let mut app = App::new();
+        let mut app = app_with_session("s1");
         app.handle_event(RuntimeEvent::PermissionAsked {
             properties: crate::events::PermissionRequestProps {
                 session_id: "s1".to_string(),
@@ -869,7 +875,7 @@ mod tests {
 
     #[test]
     fn test_permissions_are_fifo_not_lifo() {
-        let mut app = App::new();
+        let mut app = app_with_session("s");
         for id in ["p1", "p2", "p3"] {
             app.handle_event(RuntimeEvent::PermissionAsked {
                 properties: crate::events::PermissionRequestProps {
@@ -892,7 +898,7 @@ mod tests {
 
     #[test]
     fn test_questions_are_fifo_not_lifo() {
-        let mut app = App::new();
+        let mut app = app_with_session("s");
         for id in ["q1", "q2"] {
             app.handle_event(RuntimeEvent::QuestionAsked {
                 properties: crate::events::QuestionRequestProps {
@@ -914,7 +920,7 @@ mod tests {
     fn test_accept_permission_advances_to_next_then_input() {
         // With multiple pending, resolving one should NOT drop to Input while
         // others remain; mode stays Permission until the queue drains.
-        let mut app = App::new();
+        let mut app = app_with_session("s");
         for id in ["p1", "p2"] {
             app.handle_event(RuntimeEvent::PermissionAsked {
                 properties: crate::events::PermissionRequestProps {
@@ -935,7 +941,7 @@ mod tests {
 
     #[test]
     fn test_scroll_down_returns_to_live_bottom() {
-        let mut app = App::new();
+        let mut app = app_with_session("s");
         for i in 0..3 {
             app.handle_event(RuntimeEvent::MessageUpdated {
                 properties: MessageInfo {
@@ -961,7 +967,7 @@ mod tests {
 
     #[test]
     fn test_message_part_delta_accepts_headless_text_field() {
-        let mut app = App::new();
+        let mut app = app_with_session("s");
         app.handle_event(RuntimeEvent::MessageUpdated {
             properties: MessageInfo {
                 info: Some(MessageData {
@@ -983,6 +989,69 @@ mod tests {
         });
 
         assert_eq!(app.messages[0].content, "streamed text");
+    }
+
+    #[test]
+    fn test_idle_client_ignores_foreign_session_bus_events() {
+        let mut app = App::new();
+        app.handle_event(RuntimeEvent::MessageUpdated {
+            properties: MessageInfo {
+                info: Some(MessageData {
+                    id: "m_foreign".to_string(),
+                    session_id: "other".to_string(),
+                    role: Some(crate::events::MessageRole::Assistant),
+                }),
+            },
+        });
+        app.handle_event(RuntimeEvent::PermissionAsked {
+            properties: crate::events::PermissionRequestProps {
+                session_id: "other".to_string(),
+                id: "p_foreign".to_string(),
+                description: "should not appear".to_string(),
+                permission_type: None,
+            },
+        });
+        assert!(app.messages.is_empty());
+        assert!(app.pending_permissions.is_empty());
+        assert!(app.session_id.is_none());
+    }
+
+    #[test]
+    fn test_message_updated_then_delta_marks_streaming_until_final_update() {
+        let mut app = app_with_session("s");
+        app.handle_event(RuntimeEvent::MessageUpdated {
+            properties: MessageInfo {
+                info: Some(MessageData {
+                    id: "m1".to_string(),
+                    session_id: "s".to_string(),
+                    role: Some(crate::events::MessageRole::Assistant),
+                }),
+            },
+        });
+        assert!(app.messages[0].is_streaming);
+
+        app.handle_event(RuntimeEvent::MessagePartDelta {
+            properties: MessagePartDeltaProps {
+                session_id: "s".to_string(),
+                message_id: "m1".to_string(),
+                part_id: "p1".to_string(),
+                field: "text".to_string(),
+                delta: "chunk".to_string(),
+            },
+        });
+        assert!(app.messages[0].is_streaming);
+        assert_eq!(app.messages[0].content, "chunk");
+
+        app.handle_event(RuntimeEvent::MessageUpdated {
+            properties: MessageInfo {
+                info: Some(MessageData {
+                    id: "m1".to_string(),
+                    session_id: "s".to_string(),
+                    role: Some(crate::events::MessageRole::Assistant),
+                }),
+            },
+        });
+        assert!(!app.messages[0].is_streaming);
     }
 
     #[test]
@@ -1015,11 +1084,12 @@ mod tests {
         assert_eq!(app.messages.len(), 1);
         assert_eq!(app.messages[0].id, "m_current");
         assert_eq!(app.messages[0].content, "first chunk");
+        assert!(app.messages[0].is_streaming);
     }
 
     #[test]
     fn test_message_part_updated_sets_text_content() {
-        let mut app = App::new();
+        let mut app = app_with_session("s");
         app.handle_event(RuntimeEvent::MessageUpdated {
             properties: MessageInfo {
                 info: Some(MessageData {
@@ -1050,7 +1120,7 @@ mod tests {
 
     #[test]
     fn test_message_part_updated_replaces_delta_content() {
-        let mut app = App::new();
+        let mut app = app_with_session("s");
         app.handle_event(RuntimeEvent::MessagePartDelta {
             properties: MessagePartDeltaProps {
                 session_id: "s".to_string(),
@@ -1081,7 +1151,7 @@ mod tests {
 
     #[test]
     fn test_message_removed_clears_message_and_parts() {
-        let mut app = App::new();
+        let mut app = app_with_session("s");
         app.handle_event(RuntimeEvent::MessagePartDelta {
             properties: MessagePartDeltaProps {
                 session_id: "s".to_string(),
@@ -1107,7 +1177,7 @@ mod tests {
 
     #[test]
     fn test_message_part_removed_rebuilds_content() {
-        let mut app = App::new();
+        let mut app = app_with_session("s");
         for (part_id, delta) in [("p1", "hello "), ("p2", "world")] {
             app.handle_event(RuntimeEvent::MessagePartDelta {
                 properties: MessagePartDeltaProps {
@@ -1517,7 +1587,7 @@ mod tests {
 
     #[test]
     fn test_tool_message_part_updates_tool_state() {
-        let mut app = App::new();
+        let mut app = app_with_session("s");
         app.handle_event(RuntimeEvent::MessagePartUpdated {
             properties: MessagePartInfo {
                 part: Some(MessagePartData {
