@@ -161,6 +161,32 @@ fn test_app_backspace() {
 }
 
 #[test]
+fn test_paste_and_grapheme_safe_backspace() {
+    let mut app = App::new();
+    let action =
+        ax_code_tui::tui::handle_input(&mut app, Event::Paste("第一行\r\n👩‍💻 e\u{301}".to_string()));
+
+    assert!(matches!(action, InputAction::None));
+    assert_eq!(app.prompt, "第一行\n👩‍💻 e\u{301}");
+    assert_eq!(app.cursor_position, 7);
+    app.backspace();
+    assert_eq!(app.prompt, "第一行\n👩‍💻 ");
+}
+
+#[test]
+fn test_shift_enter_inserts_newline_without_submitting() {
+    let mut app = App::new();
+    app.insert_text("review");
+    let action = ax_code_tui::tui::handle_input(
+        &mut app,
+        make_key_event_with_mods(KeyCode::Enter, KeyModifiers::SHIFT),
+    );
+
+    assert!(matches!(action, InputAction::None));
+    assert_eq!(app.prompt, "review\n");
+}
+
+#[test]
 fn test_app_cursor_movement() {
     let mut app = App::new();
     app.insert_char('H');
@@ -356,27 +382,23 @@ fn test_scroll() {
         });
     }
 
-    app.scroll_down();
-    assert_eq!(app.scroll_offset, 1);
-
-    app.scroll_down();
-    assert_eq!(app.scroll_offset, 2);
+    app.scroll_up();
+    assert_eq!(app.scroll_offset, 3);
 
     app.scroll_up();
-    assert_eq!(app.scroll_offset, 1);
+    assert_eq!(app.scroll_offset, 6);
 
-    app.scroll_up();
+    app.scroll_down();
+    assert_eq!(app.scroll_offset, 3);
+
+    app.scroll_down();
     assert_eq!(app.scroll_offset, 0);
 
-    // Can't scroll below 0
-    app.scroll_up();
-    assert_eq!(app.scroll_offset, 0);
-
-    // Can't scroll past the last message (clamped to messages.len()).
+    // Can't scroll below the live bottom.
     for _ in 0..20 {
         app.scroll_down();
     }
-    assert_eq!(app.scroll_offset, app.messages.len());
+    assert_eq!(app.scroll_offset, 0);
 }
 
 #[test]

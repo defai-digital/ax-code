@@ -213,9 +213,9 @@ fn test_app_scroll_beyond_messages() {
         app.handle_event(event);
     }
 
-    // Scroll way beyond message count
+    // Scroll well above the live bottom.
     for _ in 0..100 {
-        app.scroll_down();
+        app.scroll_up();
     }
 
     // Should not panic, just have high scroll offset
@@ -223,7 +223,7 @@ fn test_app_scroll_beyond_messages() {
 }
 
 #[test]
-fn test_app_scroll_up_at_zero() {
+fn test_app_scroll_up_moves_away_from_live_bottom() {
     let mut app = App::new();
 
     // Start at scroll offset 0
@@ -232,8 +232,7 @@ fn test_app_scroll_up_at_zero() {
     // Try to scroll up
     app.scroll_up();
 
-    // Should stay at 0
-    assert_eq!(app.scroll_offset, 0);
+    assert_eq!(app.scroll_offset, 3);
 }
 
 #[test]

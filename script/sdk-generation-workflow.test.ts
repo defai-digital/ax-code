@@ -7,7 +7,7 @@ describe("SDK generation workflow policy", () => {
   test("the deterministic job runs the full SDK generator", () => {
     const deterministicJob = workflow.slice(
       workflow.indexOf("  deterministic:"),
-      workflow.indexOf("  native-render-parity:"),
+      workflow.indexOf("  native-tui:"),
     )
     expect(deterministicJob).toContain("pnpm --dir packages/sdk/js run build")
     expect(deterministicJob).not.toContain("working-directory: packages/sdk/js\n        run: pnpm exec tsc")

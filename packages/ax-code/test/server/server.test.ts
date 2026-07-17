@@ -5,6 +5,7 @@ import path from "path"
 import { Instance } from "../../src/project/instance"
 import { Project } from "../../src/project/project"
 import { Server } from "../../src/server/server"
+import { ServerRuntimeAuth } from "../../src/server/runtime-auth"
 import { Worktree } from "../../src/worktree"
 import { tmpdir } from "../fixture/fixture"
 
@@ -44,6 +45,20 @@ test("/doc is available on loopback app instances", async () => {
 
   expect(response.status).toBe(200)
   expect(response.headers.get("content-type")).toContain("application/json")
+})
+
+test("runtime-authenticated app rejects missing tokens and accepts the process token", async () => {
+  const app = Server.createApp({ hostname: "127.0.0.1", port: 4096, runtimeAuth: true })
+
+  const rejected = await app.fetch(new Request("http://127.0.0.1:4096/global/health"))
+  expect(rejected.status).toBe(403)
+
+  const accepted = await app.fetch(
+    new Request("http://127.0.0.1:4096/global/health", {
+      headers: ServerRuntimeAuth.headers(),
+    }),
+  )
+  expect(accepted.status).toBe(200)
 })
 
 test("/doc is disabled for non-loopback app instances by default", async () => {

@@ -72,8 +72,7 @@
     "typescript": "catalog:",
     "vitest": "^4.1.9",
     "vscode-languageserver-types": "3.17.5",
-    "why-is-node-running": "3.2.2",
-    "@ax-code/render": "workspace:*"
+    "why-is-node-running": "3.2.2"
   },
   "dependencies": {
     "@actions/core": "catalog:",

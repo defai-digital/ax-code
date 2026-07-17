@@ -42,58 +42,30 @@ The regression test for this guard is:
 pnpm --dir packages/ax-code exec vitest run test/cli/tui/opentui-ffi-coordinate-guard.test.ts
 ```
 
-The vendored core must also preserve the ADR-046 native-render overlay
-(`applyNativeRenderOverlay` in the main bundle, applied at the end of
-`getOpenTUILib`). **Supported production backend is Zig. The Rust overlay is
-OFF BY DEFAULT and experimental** (opt in with `AX_CODE_NATIVE_RENDER=1`):
-after the v6.9.x field reports of CLI hangs/crash-to-quit with long-output
-models were traced to the Rust core, the battle-tested Zig library is the
-only supported shipping path (ADR-047 blessed matrix). Product investment
-stays on Zig stability; Rust is a lab successor, not a user-facing mode.
+OpenTUI has one renderer path: the upstream Zig native library. The ADR-046
+`@ax-code/render` N-API overlay and its `yoga` routing scope are retired. The
+layout engine used internally by OpenTUI is still Yoga, but it is an
+implementation detail rather than a selectable AX Code mode.
 
-When opted in, the ENTIRE render pipeline — the renderer, buffer,
-text-buffer/view, edit-buffer, editor-view, native-span-feed and terminal
-families, plus yoga and audio — routes to the `@ax-code/render` napi addon
-(Rust; yoga is vendored facebook/yoga v3.2.1, the same tag the upstream Zig
-build pins). If the addon can't be loaded (JS-only install, unbuilt dev
-checkout) it falls back to the bundled Zig library (with a warning, since
-`=1` was explicit). `@ax-code/render` is declared as a workspace
-optionalDependency of this package and is built + shipped per platform by
-the release workflow.
+The hidden engine switch is now `--tui-mode={zig,native}`. `zig` starts this
+OpenTUI/Solid application and remains the default. `native` starts the separate
+`crates/ax-code-tui` Rust/Ratatui executable while the Node parent hosts the AX
+runtime over an authenticated loopback connection. The native UI intentionally
+has its own Grok-inspired presentation; it does not attempt OpenTUI frame
+parity. Legacy `AX_CODE_NATIVE_RENDER*` values are forced off and ignored.
 
-Switches (case-insensitive; **maintainer / CI only**):
-- `AX_CODE_NATIVE_RENDER=1` (or `on`/`true`) — opt into the experimental Rust
-  render core.
-- `AX_CODE_NATIVE_RENDER_SCOPE=yoga` — with `=1`, route only yoga/audio to
-  Rust; the render pipeline stays on Zig (legacy Phase-1 migration scaffold).
-
-The TUI keeps a **hidden** `--tui-mode={zig,native,yoga}` escape hatch mapped
-onto those env switches in
-`packages/ax-code/src/cli/cmd/tui/render-backend.ts` before the renderer
-library is resolved. The thread awaits `ensureShellEnv()` first so a
-shell-profile `AX_CODE_NATIVE_RENDER*` cannot race past the CLI override
-(and so `zig`/`native` blank `SCOPE` rather than delete it, blocking a late
-shell fill). The flag does not appear in normal `--help`. Do not document
-native/yoga as product choices until ADR-047 graduation criteria are met.
-
-The render families share a backend-specific handle registry, so they flip
-atomically (a Zig renderer handle can't be used by a Rust buffer call). The
-overlay bridge narrows BigInt pointer args to Number and null/undefined pointer
-args to 0, matching node:ffi's coercion for the Zig library. FFI boolean
-parameters use the numeric node:ffi convention (1/0), so the addon's few
-bool-argument symbols take f64.
-
-Parity gate (all must byte-match the committed goldens):
+The OpenTUI golden-frame gate validates only the Zig application path:
 
 ```sh
-pnpm --dir packages/ax-code run check:golden-frames                            # bundled Zig (default)
-AX_CODE_NATIVE_RENDER=1 pnpm --dir packages/ax-code run check:golden-frames    # Rust FULL pipeline (opt-in)
-AX_CODE_NATIVE_RENDER=1 AX_CODE_NATIVE_RENDER_SCOPE=yoga pnpm --dir packages/ax-code run check:golden-frames  # Rust yoga/audio only
+pnpm --dir packages/ax-code run check:golden-frames
 ```
 
-The differential `script/native-render-*-parity.mjs` harnesses set
-`AX_CODE_NATIVE_RENDER=0` themselves so their `resolveRenderLib()` reference side
-is the real Zig backend (they compare it against `require("@ax-code/render")`).
+Native UI checks live with the Rust crate:
+
+```sh
+cargo test --manifest-path crates/Cargo.toml -p ax-code-tui
+cargo clippy --manifest-path crates/Cargo.toml -p ax-code-tui --all-targets -- -D warnings
+```
 
 ## Update Workflow
 

@@ -56,6 +56,7 @@ import { toErrorMessage } from "../util/error-message"
 import { requestDirectory } from "./request-directory"
 import { createRateLimitMiddleware, createRequestLoggingMiddleware } from "./middleware"
 import { DEFAULT_SERVER_PORT } from "./constants"
+import { ServerRuntimeAuth } from "./runtime-auth"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -99,7 +100,13 @@ export namespace Server {
     return port
   }
 
-  export const createApp = (opts: { port?: number; hostname?: string; cors?: string[] }): Hono => {
+  export const createApp = (opts: {
+    port?: number
+    hostname?: string
+    cors?: string[]
+    /** Require the process-local runtime token on every non-preflight route. */
+    runtimeAuth?: boolean
+  }): Hono => {
     const app = new Hono()
     const allowedCors = (opts.cors ?? [])
       .map(normalizeLoopbackHttpOrigin)
@@ -126,10 +133,18 @@ export namespace Server {
         })
         return c.json(envelope, { status: envelope.status as ContentfulStatusCode })
       })
+      .use(async (c, next) => {
+        if (!opts.runtimeAuth || c.req.method === "OPTIONS") return next()
+        return ServerRuntimeAuth.require(c) ?? next()
+      })
       .use((c, next) => {
         // Allow CORS preflight requests to succeed without auth.
         // Browser clients sending Authorization headers will preflight with OPTIONS.
         if (c.req.method === "OPTIONS") return next()
+        // The process-local bridge already passed the stronger unguessable
+        // runtime-token middleware above. Do not also require a user-configured
+        // server password that the private sidecar does not need to know.
+        if (opts.runtimeAuth) return next()
         const password = Flag.AX_CODE_SERVER_PASSWORD
         if (!password) return next()
         const username = Flag.AX_CODE_SERVER_USERNAME ?? "ax-code"

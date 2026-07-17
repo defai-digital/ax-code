@@ -9,7 +9,6 @@ members = [
   "ax-code-terminal",
   "ax-code-tui",
   "ax-code-bench",
-  "ax-code-render",
 ]
 
 [workspace.package]
@@ -47,9 +46,6 @@ unicode-normalization = "0.1"
 # Phase 4: parser
 tree-sitter = "0.24"
 rayon = "1"
-
-# ADR-046: render core (vendored yoga C++ build)
-cc = "1"
 
 [profile.release]
 lto = true

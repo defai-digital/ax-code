@@ -979,9 +979,6 @@ importers:
         specifier: 'catalog:'
         version: 3.24.5(zod@4.3.6)
     devDependencies:
-      '@ax-code/render':
-        specifier: workspace:*
-        version: link:../ax-code-render-native
       '@octokit/webhooks-types':
         specifier: 'catalog:'
         version: 7.6.1
@@ -1094,12 +1091,6 @@ importers:
         specifier: 'catalog:'
         version: 3.0.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@26.0.0)(emnapi@1.9.2(node-addon-api@8.7.0))
 
-  packages/ax-code-render-native:
-    devDependencies:
-      '@napi-rs/cli':
-        specifier: 'catalog:'
-        version: 3.0.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@26.0.0)(emnapi@1.9.2(node-addon-api@8.7.0))
-
   packages/ax-code-terminal-native:
     devDependencies:
       '@napi-rs/cli':
@@ -1192,9 +1183,6 @@ importers:
         specifier: 0.25.10
         version: 0.25.10
     optionalDependencies:
-      '@ax-code/render':
-        specifier: workspace:*
-        version: link:../ax-code-render-native
       '@opentui/core-darwin-arm64':
         specifier: 0.4.1
         version: 0.4.1

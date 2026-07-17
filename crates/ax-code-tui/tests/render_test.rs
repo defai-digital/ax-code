@@ -98,6 +98,32 @@ fn test_render_session_list_unicode_ids_no_panic() {
     terminal.draw(|frame| render(frame, &app)).expect("render");
 }
 
+#[test]
+fn test_render_transcript_does_not_truncate_long_messages() {
+    use ax_code_tui::events::MessageRole;
+    use ax_code_tui::tui::app::Message;
+
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    let mut app = App::new();
+    app.messages.push(Message {
+        id: "long".to_string(),
+        role: MessageRole::Assistant,
+        content: format!("{}TAIL_MARKER", "a".repeat(600)),
+        is_streaming: false,
+    });
+
+    terminal.draw(|frame| render(frame, &app)).expect("render");
+    let rendered: String = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect();
+    assert!(rendered.contains("TAIL_MARKER"));
+}
+
 // =============================================================================
 // Message Truncation Tests
 // =============================================================================

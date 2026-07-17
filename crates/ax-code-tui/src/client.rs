@@ -8,7 +8,10 @@
 
 use anyhow::{Context, Result};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64_STANDARD};
-use reqwest::{Client, RequestBuilder, Response, StatusCode};
+use reqwest::{
+    Client, RequestBuilder, Response, StatusCode,
+    header::{AUTHORIZATION, HeaderMap, HeaderName, HeaderValue},
+};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
@@ -22,6 +25,8 @@ const MAX_SSE_RETRIES: u32 = 20;
 
 /// Default server URL for the headless runtime.
 pub const DEFAULT_SERVER_URL: &str = "http://127.0.0.1:4096";
+pub const RUNTIME_TOKEN_ENV: &str = "AX_CODE_RUNTIME_TOKEN";
+pub const RUNTIME_TOKEN_HEADER: &str = "x-ax-code-runtime-token";
 
 /// Configuration for connecting to the headless server.
 #[derive(Debug, Clone)]
@@ -55,6 +60,7 @@ pub type EventStream = std::pin::Pin<Box<dyn futures_util::Stream<Item = Runtime
 pub struct HeadlessClient {
     config: ClientConfig,
     http: Client,
+    event_http: Client,
 }
 
 #[derive(Debug, Deserialize)]
@@ -62,26 +68,73 @@ struct SessionListItem {
     id: String,
 }
 
+/// Explicit provider/model selection for a prompt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ModelSelection {
+    #[serde(rename = "providerID")]
+    pub provider_id: String,
+    #[serde(rename = "modelID")]
+    pub model_id: String,
+}
+
+/// Optional per-prompt routing choices forwarded to the existing AX runtime.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PromptOptions {
+    pub model: Option<ModelSelection>,
+    pub agent: Option<String>,
+}
+
+/// Parse the CLI's `provider/model` syntax without losing model IDs that also
+/// contain slashes.
+pub fn parse_model_selection(value: &str) -> Result<ModelSelection> {
+    let (provider_id, model_id) = value
+        .split_once('/')
+        .ok_or_else(|| anyhow::anyhow!("model must use provider/model format"))?;
+    if provider_id.trim().is_empty() || model_id.trim().is_empty() {
+        anyhow::bail!("model must use provider/model format");
+    }
+    Ok(ModelSelection {
+        provider_id: provider_id.to_string(),
+        model_id: model_id.to_string(),
+    })
+}
+
 impl HeadlessClient {
     /// Create a new client with the given configuration.
     pub fn new(config: ClientConfig) -> Result<Self> {
-        let mut builder = Client::builder().timeout(std::time::Duration::from_secs(30));
+        let mut headers = HeaderMap::new();
 
         if let Some(ref token) = config.auth_token {
-            // Basic auth with empty username and token as password
-            let header_value = format!("Basic {}", BASE64_STANDARD.encode(format!(":{}", token)));
-            builder = builder.default_headers(
-                [(
-                    reqwest::header::AUTHORIZATION,
-                    reqwest::header::HeaderValue::from_str(&header_value)?,
-                )]
-                .into_iter()
-                .collect(),
+            let username =
+                std::env::var("AX_CODE_SERVER_USERNAME").unwrap_or_else(|_| "ax-code".to_string());
+            let header_value = format!(
+                "Basic {}",
+                BASE64_STANDARD.encode(format!("{username}:{token}"))
             );
+            headers.insert(AUTHORIZATION, HeaderValue::from_str(&header_value)?);
         }
 
-        let http = builder.build()?;
-        Ok(Self { config, http })
+        if let Ok(token) = std::env::var(RUNTIME_TOKEN_ENV) {
+            if !token.trim().is_empty() {
+                headers.insert(
+                    HeaderName::from_static(RUNTIME_TOKEN_HEADER),
+                    HeaderValue::from_str(&token)?,
+                );
+            }
+        }
+        let http = Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .default_headers(headers.clone())
+            .build()?;
+        // SSE is intentionally long-lived. A client-wide 30-second timeout
+        // made healthy sessions reconnect forever, so the event transport has
+        // no total request timeout while ordinary API calls remain bounded.
+        let event_http = Client::builder().default_headers(headers).build()?;
+        Ok(Self {
+            config,
+            http,
+            event_http,
+        })
     }
 
     /// Get the base URL of the headless server.
@@ -176,7 +229,7 @@ impl HeadlessClient {
     async fn open_event_stream(&self) -> Result<Response> {
         let url = format!("{}/global/event", self.config.base_url);
         let request = self
-            .with_directory_query(self.http.get(&url))
+            .with_directory_query(self.event_http.get(&url))
             .header(reqwest::header::ACCEPT, "text/event-stream")
             .header("X-Accel-Buffering", "no");
         let response = request
@@ -279,8 +332,48 @@ impl HeadlessClient {
             .collect())
     }
 
-    /// Send a prompt to the current session.
+    /// Fork an existing session and return the new session ID.
+    pub async fn fork_session(&self, session_id: &str) -> Result<String> {
+        let url = format!(
+            "{}/session/{}/fork",
+            self.config.base_url,
+            urlencoding::encode(session_id)
+        );
+        let response = self
+            .with_directory_query(self.http.post(&url))
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .context("Failed to fork session")?;
+
+        if !response.status().is_success() {
+            let text = response.text().await.unwrap_or_default();
+            anyhow::bail!("Session fork failed: {text}");
+        }
+
+        let body: serde_json::Value = response
+            .json()
+            .await
+            .context("Failed to parse session fork response")?;
+        body["id"]
+            .as_str()
+            .map(str::to_string)
+            .ok_or_else(|| anyhow::anyhow!("Session fork response missing 'id'"))
+    }
+
+    /// Send a prompt to the current session using the runtime's structured
+    /// prompt schema.
     pub async fn send_prompt(&self, session_id: &str, prompt: &str) -> Result<()> {
+        self.send_prompt_with_options(session_id, prompt, &PromptOptions::default())
+            .await
+    }
+
+    pub async fn send_prompt_with_options(
+        &self,
+        session_id: &str,
+        prompt: &str,
+        options: &PromptOptions,
+    ) -> Result<()> {
         let url = format!(
             "{}/session/{}/prompt_async",
             self.config.base_url,
@@ -288,14 +381,30 @@ impl HeadlessClient {
         );
 
         #[derive(Serialize)]
-        struct PromptBody {
-            prompt: String,
+        struct PromptPart<'a> {
+            #[serde(rename = "type")]
+            part_type: &'static str,
+            text: &'a str,
+        }
+
+        #[derive(Serialize)]
+        struct PromptBody<'a> {
+            parts: Vec<PromptPart<'a>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            model: Option<&'a ModelSelection>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            agent: Option<&'a str>,
         }
 
         let response = self
             .with_directory_query(self.http.post(&url))
             .json(&PromptBody {
-                prompt: prompt.to_string(),
+                parts: vec![PromptPart {
+                    part_type: "text",
+                    text: prompt,
+                }],
+                model: options.model.as_ref(),
+                agent: options.agent.as_deref(),
             })
             .send()
             .await

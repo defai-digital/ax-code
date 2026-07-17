@@ -203,16 +203,13 @@ jobs:
             echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
           } >> "$GITHUB_ENV"
 
-      # ADR-046: build the Rust render addon per platform so build-node-tui can
-      # ship its .node. Without this the dist has no @ax-code/render binding and
-      # the native-render overlay silently falls back to the bundled Zig library.
-      # The addon's build.rs compiles the vendored yoga C++ (C++20 via cc), so
-      # each runner needs a working C/C++ toolchain (present on the GitHub images).
+      # Build the real Rust/Ratatui TUI sidecar for the host release target.
+      # Zig/OpenTUI remains the default; --tui-mode=native launches this binary.
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
 
-      - name: Build @ax-code/render native addon (napi, host platform)
-        run: pnpm run build:native render
+      - name: Build native Rust TUI
+        run: cargo build --manifest-path crates/Cargo.toml -p ax-code-tui --release
 
       - name: Build
         working-directory: packages/ax-code
@@ -222,18 +219,16 @@ jobs:
           AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
           AX_CODE_RELEASE: "true"
 
-      # Fail loudly if the render .node was not shipped into the dist — otherwise
-      # the native-render overlay would silently fall back to Zig in production.
-      - name: Verify render addon shipped
+      - name: Verify native Rust TUI shipped
         shell: bash
         run: |
-          node_files=$(ls packages/ax-code/dist/ax-code-*/node_modules/@ax-code/render/*.node 2>/dev/null || true)
-          if [ -z "$node_files" ]; then
-            echo "FAIL: @ax-code/render .node was not shipped into the dist (native-render would fall back to Zig)"
+          tui_files=$(ls packages/ax-code/dist/ax-code-*/libexec/ax-code-tui* 2>/dev/null || true)
+          if [ -z "$tui_files" ]; then
+            echo "FAIL: native Rust TUI was not shipped into the dist"
             exit 1
           fi
-          echo "OK: render addon shipped:"
-          echo "$node_files"
+          echo "OK: native Rust TUI shipped:"
+          echo "$tui_files"
 
       - name: Smoke — release runtime
         working-directory: packages/ax-code

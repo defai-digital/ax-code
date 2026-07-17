@@ -21,6 +21,8 @@ pub struct MockServer {
     healthy: Arc<Mutex<bool>>,
     /// Request lines received by the mock server
     requests: Arc<Mutex<Vec<String>>>,
+    /// Complete HTTP requests, including headers and JSON bodies.
+    raw_requests: Arc<Mutex<Vec<String>>>,
     /// Shutdown signal sender
     shutdown_tx: Option<mpsc::Sender<()>>,
 }
@@ -33,6 +35,7 @@ impl MockServer {
             events: Arc::new(Mutex::new(VecDeque::new())),
             healthy: Arc::new(Mutex::new(true)),
             requests: Arc::new(Mutex::new(Vec::new())),
+            raw_requests: Arc::new(Mutex::new(Vec::new())),
             shutdown_tx: None,
         }
     }
@@ -42,10 +45,12 @@ impl MockServer {
         let events: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::new()));
         let healthy: Arc<Mutex<bool>> = Arc::new(Mutex::new(true));
         let requests: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let raw_requests: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
 
         let events_clone = events.clone();
         let healthy_clone = healthy.clone();
         let requests_clone = requests.clone();
+        let raw_requests_clone = raw_requests.clone();
 
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
 
@@ -64,8 +69,16 @@ impl MockServer {
                             let events = events_clone.clone();
                             let healthy = healthy_clone.clone();
                             let requests = requests_clone.clone();
+                            let raw_requests = raw_requests_clone.clone();
                             tokio::spawn(async move {
-                                handle_connection(&mut stream, &events, &healthy, &requests).await;
+                                handle_connection(
+                                    &mut stream,
+                                    &events,
+                                    &healthy,
+                                    &requests,
+                                    &raw_requests,
+                                )
+                                .await;
                             });
                         }
                     }
@@ -81,6 +94,7 @@ impl MockServer {
             events,
             healthy,
             requests,
+            raw_requests,
             shutdown_tx: Some(shutdown_tx),
         }
     }
@@ -114,6 +128,10 @@ impl MockServer {
         self.requests.lock().unwrap().clone()
     }
 
+    pub fn raw_requests(&self) -> Vec<String> {
+        self.raw_requests.lock().unwrap().clone()
+    }
+
     /// Shutdown the server.
     pub async fn shutdown(mut self) {
         if let Some(tx) = self.shutdown_tx.take() {
@@ -136,6 +154,7 @@ async fn handle_connection(
     events: &Arc<Mutex<VecDeque<String>>>,
     healthy: &Arc<Mutex<bool>>,
     requests: &Arc<Mutex<Vec<String>>>,
+    raw_requests: &Arc<Mutex<Vec<String>>>,
 ) {
     use tokio::io::AsyncWriteExt;
 
@@ -146,6 +165,7 @@ async fn handle_connection(
     if let Some(line) = request.lines().next() {
         requests.lock().unwrap().push(line.to_string());
     }
+    raw_requests.lock().unwrap().push(request.clone());
 
     let response = if request.starts_with("GET /global/health") {
         let is_healthy = *healthy.lock().unwrap();
@@ -175,6 +195,8 @@ async fn handle_connection(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 58\r\n\r\n[{\"id\":\"recent-session\"},{\"id\":\"\"},{\"id\":\"older-session\"}]".to_string()
     } else if request.starts_with("POST /session ") || request.starts_with("POST /session?") {
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 21\r\n\r\n{\"id\":\"mock-session\"}".to_string()
+    } else if request.starts_with("POST /session/") && request.contains("/fork") {
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 23\r\n\r\n{\"id\":\"forked-session\"}".to_string()
     } else if request.starts_with("POST /session/") {
         "HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\n\r\n".to_string()
     } else if is_permission_reply_request(&request)

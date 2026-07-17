@@ -3,23 +3,19 @@
 //! Provides the main event loop that connects the headless client to the
 //! Ratatui application state and renders the UI.
 
-use std::io::{self, stdout};
-use std::time::Duration;
-
 use clap::Parser;
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture},
-    execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
-};
-use ratatui::{Terminal, backend::CrosstermBackend};
+use crossterm::event::EventStream;
+use futures_util::StreamExt;
 use tokio::sync::mpsc;
 
-use crate::client::{ClientConfig, DEFAULT_SERVER_URL, HeadlessClient};
+use crate::client::{
+    ClientConfig, DEFAULT_SERVER_URL, HeadlessClient, PromptOptions, parse_model_selection,
+};
 use crate::diagnostics::{self, DiagnosticEvent};
 use crate::events::RuntimeEvent;
 use crate::launch_policy::{self, LaunchInput, LaunchRoute};
-use crate::tui::app::App;
+use crate::terminal::NativeTerminal;
+use crate::tui::app::{App, SessionSummary};
 use crate::tui::input::{InputAction, handle_input};
 use crate::tui::render::render;
 
@@ -51,6 +47,22 @@ pub struct CliArgs {
     /// Session ID to connect to (optional, will use most recent if not specified).
     #[arg(long)]
     pub session: Option<String>,
+
+    /// Continue the most recent session.
+    #[arg(long = "continue")]
+    pub continue_session: bool,
+
+    /// Fork the selected session before attaching.
+    #[arg(long)]
+    pub fork: bool,
+
+    /// Model to use in provider/model format.
+    #[arg(long)]
+    pub model: Option<String>,
+
+    /// Agent to use for submitted prompts.
+    #[arg(long)]
+    pub agent: Option<String>,
 }
 
 impl CliArgs {
@@ -64,58 +76,50 @@ impl CliArgs {
             prompt: self.prompt,
         }
     }
+
+    pub fn into_runner(self) -> Runner {
+        let launch = LaunchOptions {
+            continue_session: self.continue_session,
+            fork: self.fork,
+            model: self.model.clone(),
+            agent: self.agent.clone(),
+        };
+        Runner::new(self.into_config()).with_launch_options(launch)
+    }
 }
 
-/// Initialize the terminal for TUI rendering.
-pub fn init_terminal() -> io::Result<Terminal<CrosstermBackend<io::Stdout>>> {
-    enable_raw_mode()?;
-    let mut stdout = stdout();
-    if let Err(error) = execute!(stdout, EnterAlternateScreen, EnableMouseCapture) {
-        let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
-        let _ = disable_raw_mode();
-        return Err(error);
-    }
-    let backend = CrosstermBackend::new(stdout);
-    Terminal::new(backend).inspect_err(|_| {
-        let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
-        let _ = disable_raw_mode();
-    })
-}
-
-/// Restore the terminal to its original state.
-pub fn restore_terminal() -> io::Result<()> {
-    let raw_result = disable_raw_mode();
-    let screen_result = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
-
-    match (raw_result, screen_result) {
-        (Ok(()), Ok(())) => Ok(()),
-        (Err(raw_error), Ok(())) => Err(raw_error),
-        (Ok(()), Err(screen_error)) => Err(screen_error),
-        (Err(raw_error), Err(screen_error)) => Err(io::Error::new(
-            raw_error.kind(),
-            format!(
-                "failed to disable raw mode: {}; failed to restore screen/mouse: {}",
-                raw_error, screen_error
-            ),
-        )),
-    }
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LaunchOptions {
+    pub continue_session: bool,
+    pub fork: bool,
+    pub model: Option<String>,
+    pub agent: Option<String>,
 }
 
 /// The main TUI runner that manages the event loop.
 pub struct Runner {
     config: ClientConfig,
+    launch: LaunchOptions,
 }
 
 impl Runner {
     /// Create a new runner with the given configuration.
     pub fn new(config: ClientConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            launch: LaunchOptions::default(),
+        }
+    }
+
+    pub fn with_launch_options(mut self, launch: LaunchOptions) -> Self {
+        self.launch = launch;
+        self
     }
 
     /// Run the TUI event loop.
     pub async fn run(
         &self,
-        mut terminal: Terminal<CrosstermBackend<io::Stdout>>,
+        mut terminal: NativeTerminal,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Create the app state
         let mut app = App::new();
@@ -134,9 +138,18 @@ impl Runner {
         }
         .emit();
 
-        // Create the SSE event channel. We drain into a local mpsc so the
-        // poll-style render loop can consume events with try_recv().
-        let (event_tx, mut event_rx) = mpsc::channel::<RuntimeEvent>(100);
+        let prompt_options = PromptOptions {
+            model: self
+                .launch
+                .model
+                .as_deref()
+                .map(parse_model_selection)
+                .transpose()?,
+            agent: self.launch.agent.clone(),
+        };
+
+        // Bridge the server stream into the event-driven UI loop.
+        let (event_tx, mut event_rx) = mpsc::channel::<RuntimeEvent>(256);
 
         // Try to create the client
         let client = match HeadlessClient::new(self.config.clone()) {
@@ -173,6 +186,7 @@ impl Runner {
                 }
             }
         }
+        drop(event_tx);
 
         let recent_session_ids = if legacy_home_requested {
             Vec::new()
@@ -188,13 +202,33 @@ impl Runner {
             Vec::new()
         };
 
-        // Resolve launch route via launch policy (ADR-035).
-        // The route is consumed after the client and SSE subscription
-        // are ready so we can create/attach sessions and send prompts.
+        app.load_sessions(
+            recent_session_ids
+                .iter()
+                .map(|id| SessionSummary {
+                    id: id.clone(),
+                    title: None,
+                    message_count: 0,
+                })
+                .collect(),
+        );
+
+        // `--continue --prompt` attaches to the most recent session and sends
+        // there. Without --continue, a standalone prompt starts a new session.
+        let explicit_session_id = self.config.session.clone().or_else(|| {
+            self.launch
+                .continue_session
+                .then(|| recent_session_ids.first().cloned())
+                .flatten()
+        });
         let launch_input = LaunchInput {
-            explicit_session_id: self.config.session.clone(),
-            explicit_prompt: self.config.prompt.clone(),
-            recent_session_ids,
+            explicit_prompt: if explicit_session_id.is_some() {
+                None
+            } else {
+                self.config.prompt.clone()
+            },
+            explicit_session_id,
+            recent_session_ids: recent_session_ids.clone(),
             has_project_context: false,
         };
         let route = resolve_runner_launch_route(&launch_input, legacy_home_requested);
@@ -206,9 +240,14 @@ impl Runner {
         if let (Some(client), Some(route)) = (&client, &route) {
             match route {
                 LaunchRoute::Session { session_id } => {
-                    app.session_id = Some(session_id.clone());
+                    let attached_session_id = if self.launch.fork {
+                        client.fork_session(session_id).await?
+                    } else {
+                        session_id.clone()
+                    };
+                    app.session_id = Some(attached_session_id.clone());
                     let mut transcript_loaded = true;
-                    match client.session_transcript_events(session_id).await {
+                    match client.session_transcript_events(&attached_session_id).await {
                         Ok(events) => {
                             for event in events {
                                 app.handle_event(event);
@@ -220,16 +259,42 @@ impl Runner {
                         }
                     }
                     if transcript_loaded {
-                        app.set_status(format!("Attached to session: {}", session_id));
+                        app.set_status(format!("Attached to session: {attached_session_id}"));
+                    }
+                    if let Some(initial_prompt) = self
+                        .config
+                        .prompt
+                        .as_deref()
+                        .filter(|prompt| !prompt.is_empty())
+                    {
+                        if let Err(e) = client
+                            .send_prompt_with_options(
+                                &attached_session_id,
+                                initial_prompt,
+                                &prompt_options,
+                            )
+                            .await
+                        {
+                            app.set_status(format!("Failed to send initial prompt: {e}"));
+                        }
                     }
                 }
                 LaunchRoute::NewSession { prompt } => match client.create_session().await {
                     Ok(session_id) => {
                         app.session_id = Some(session_id.clone());
                         if let Some(initial_prompt) = prompt {
-                            if let Err(e) = client.send_prompt(&session_id, initial_prompt).await {
-                                app.set_status(format!("Failed to send initial prompt: {}", e));
+                            if let Err(e) = client
+                                .send_prompt_with_options(
+                                    &session_id,
+                                    initial_prompt,
+                                    &prompt_options,
+                                )
+                                .await
+                            {
+                                app.set_status(format!("Failed to send initial prompt: {e}"));
                             }
+                        } else {
+                            app.set_status(format!("Created session: {session_id}"));
                         }
                     }
                     Err(e) => {
@@ -239,111 +304,55 @@ impl Runner {
             }
         }
 
-        // Main event loop
+        // Event-driven main loop. The old implementation woke and redrew every
+        // 50ms even when idle; native mode now repaints only for terminal or
+        // runtime events.
+        let mut terminal_events = EventStream::new();
+        let mut runtime_events_open = true;
+        let shutdown = shutdown_signal();
+        tokio::pin!(shutdown);
+        terminal.draw(|frame| render(frame, &app))?;
         loop {
-            // Render
-            terminal.draw(|f| render(f, &app))?;
-
-            // Check for SSE events (non-blocking)
-            while let Ok(event) = event_rx.try_recv() {
-                app.handle_event(event);
-            }
-
-            // Check for terminal resize
-            if event::poll(Duration::from_millis(50))? {
-                let event = event::read()?;
-                let action = handle_input(&mut app, event);
-
-                match action {
-                    InputAction::None => {}
-                    InputAction::SubmitPrompt(prompt) => {
-                        if let Some(ref client) = client {
-                            if let Some(session_id) = app.current_session_id() {
-                                if let Err(e) = client.send_prompt(session_id, &prompt).await {
-                                    app.set_status(format!("Failed to send prompt: {}", e));
-                                }
+            tokio::select! {
+                () = &mut shutdown => {
+                    app.quit();
+                }
+                maybe_terminal_event = terminal_events.next() => {
+                    match maybe_terminal_event {
+                        Some(Ok(event)) => {
+                            let action = handle_input(&mut app, event);
+                            apply_input_action(
+                                &mut app,
+                                client.as_ref(),
+                                action,
+                                &prompt_options,
+                            ).await;
+                        }
+                        Some(Err(error)) => return Err(Box::new(error)),
+                        None => break,
+                    }
+                }
+                maybe_runtime_event = event_rx.recv(), if runtime_events_open => {
+                    match maybe_runtime_event {
+                        Some(event) => {
+                            app.handle_event(event);
+                            // Coalesce event bursts into one paint while preserving order.
+                            while let Ok(event) = event_rx.try_recv() {
+                                app.handle_event(event);
                             }
                         }
-                    }
-                    InputAction::AcceptPermission {
-                        session_id,
-                        request_id,
-                    } => {
-                        if let Some(ref client) = client {
-                            if let Err(e) = client
-                                .reply_permission(&session_id, &request_id, true)
-                                .await
-                            {
-                                app.set_status(format!("Permission reply failed: {}", e));
-                            }
-                        }
-                    }
-                    InputAction::RejectPermission {
-                        session_id,
-                        request_id,
-                    } => {
-                        if let Some(ref client) = client {
-                            if let Err(e) = client
-                                .reply_permission(&session_id, &request_id, false)
-                                .await
-                            {
-                                app.set_status(format!("Permission reply failed: {}", e));
-                            }
-                        }
-                    }
-                    InputAction::AnswerQuestion {
-                        session_id,
-                        request_id,
-                        answers,
-                    } => {
-                        if let Some(ref client) = client {
-                            if let Err(e) = client
-                                .reply_question(&session_id, &request_id, answers)
-                                .await
-                            {
-                                app.set_status(format!("Question reply failed: {}", e));
-                            }
-                        }
-                    }
-                    InputAction::RejectQuestion {
-                        session_id,
-                        request_id,
-                    } => {
-                        if let Some(ref client) = client {
-                            if let Err(e) = client.reject_question(&session_id, &request_id).await {
-                                app.set_status(format!("Question reject failed: {}", e));
-                            }
-                        }
-                    }
-                    InputAction::AbortSession { session_id } => {
-                        if let Some(ref client) = client {
-                            if let Err(e) = client.abort_session(&session_id).await {
-                                app.set_status(format!("Abort failed: {}", e));
-                            }
-                        }
-                    }
-                    InputAction::SwitchSession { session_id } => {
-                        if let Some(ref client) = client {
-                            match client.session_transcript_events(&session_id).await {
-                                Ok(events) => {
-                                    for event in events {
-                                        app.handle_event(event);
-                                    }
-                                    app.set_status(format!("Switched to session: {}", session_id));
-                                }
-                                Err(e) => {
-                                    app.set_status(format!("Session switch failed: {}", e));
-                                }
-                            }
+                        None => {
+                            runtime_events_open = false;
+                            app.set_status("Runtime event stream closed".to_string());
                         }
                     }
                 }
             }
 
-            // Check if app should quit
             if app.should_quit {
                 break;
             }
+            terminal.draw(|frame| render(frame, &app))?;
         }
 
         // Clean up the event bridge task. subscribe()'s own SSE task exits
@@ -354,6 +363,126 @@ impl Runner {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(unix)]
+async fn shutdown_signal() {
+    use tokio::signal::unix::{SignalKind, signal};
+
+    let mut interrupt = signal(SignalKind::interrupt()).expect("install SIGINT handler");
+    let mut terminate = signal(SignalKind::terminate()).expect("install SIGTERM handler");
+    let mut hangup = signal(SignalKind::hangup()).expect("install SIGHUP handler");
+    tokio::select! {
+        _ = interrupt.recv() => {}
+        _ = terminate.recv() => {}
+        _ = hangup.recv() => {}
+    }
+}
+
+#[cfg(not(unix))]
+async fn shutdown_signal() {
+    let _ = tokio::signal::ctrl_c().await;
+}
+
+async fn apply_input_action(
+    app: &mut App,
+    client: Option<&HeadlessClient>,
+    action: InputAction,
+    prompt_options: &PromptOptions,
+) {
+    let Some(client) = client else {
+        if !matches!(action, InputAction::None) {
+            app.set_status("Native runtime is unavailable".to_string());
+        }
+        return;
+    };
+
+    match action {
+        InputAction::None => {}
+        InputAction::SubmitPrompt(prompt) => {
+            let session_id = match app.current_session_id().map(str::to_string) {
+                Some(session_id) => session_id,
+                None => match client.create_session().await {
+                    Ok(session_id) => {
+                        app.session_id = Some(session_id.clone());
+                        session_id
+                    }
+                    Err(error) => {
+                        app.set_status(format!("Failed to create session: {error}"));
+                        return;
+                    }
+                },
+            };
+            app.scroll_offset = 0;
+            if let Err(error) = client
+                .send_prompt_with_options(&session_id, &prompt, prompt_options)
+                .await
+            {
+                app.set_status(format!("Failed to send prompt: {error}"));
+            }
+        }
+        InputAction::AcceptPermission {
+            session_id,
+            request_id,
+        } => {
+            if let Err(error) = client
+                .reply_permission(&session_id, &request_id, true)
+                .await
+            {
+                app.set_status(format!("Permission reply failed: {error}"));
+            }
+        }
+        InputAction::RejectPermission {
+            session_id,
+            request_id,
+        } => {
+            if let Err(error) = client
+                .reply_permission(&session_id, &request_id, false)
+                .await
+            {
+                app.set_status(format!("Permission reply failed: {error}"));
+            }
+        }
+        InputAction::AnswerQuestion {
+            session_id,
+            request_id,
+            answers,
+        } => {
+            if let Err(error) = client
+                .reply_question(&session_id, &request_id, answers)
+                .await
+            {
+                app.set_status(format!("Question reply failed: {error}"));
+            }
+        }
+        InputAction::RejectQuestion {
+            session_id,
+            request_id,
+        } => {
+            if let Err(error) = client.reject_question(&session_id, &request_id).await {
+                app.set_status(format!("Question reject failed: {error}"));
+            }
+        }
+        InputAction::AbortSession { session_id } => {
+            if let Err(error) = client.abort_session(&session_id).await {
+                app.set_status(format!("Abort failed: {error}"));
+            }
+        }
+        InputAction::SwitchSession { session_id } => {
+            match client.session_transcript_events(&session_id).await {
+                Ok(events) => {
+                    for event in events {
+                        app.handle_event(event);
+                    }
+                    app.scroll_offset = 0;
+                    app.set_status(format!("Switched to session: {session_id}"));
+                }
+                Err(error) => {
+                    app.set_status(format!("Session switch failed: {error}"));
+                }
+            }
+        }
     }
 }
 
@@ -383,6 +512,10 @@ mod tests {
         assert!(args.auth_token.is_none());
         assert!(args.prompt.is_none());
         assert!(args.session.is_none());
+        assert!(!args.continue_session);
+        assert!(!args.fork);
+        assert!(args.model.is_none());
+        assert!(args.agent.is_none());
     }
 
     #[test]
@@ -399,12 +532,22 @@ mod tests {
             "Hello world",
             "--session",
             "abc123",
+            "--continue",
+            "--fork",
+            "--model",
+            "xai/grok-code-fast-1",
+            "--agent",
+            "build",
         ]);
         assert_eq!(args.server_url, "http://example.com:8080");
         assert_eq!(args.auth_token, Some("secret123".to_string()));
         assert_eq!(args.directory, "/home/user/project");
         assert_eq!(args.prompt, Some("Hello world".to_string()));
         assert_eq!(args.session, Some("abc123".to_string()));
+        assert!(args.continue_session);
+        assert!(args.fork);
+        assert_eq!(args.model.as_deref(), Some("xai/grok-code-fast-1"));
+        assert_eq!(args.agent.as_deref(), Some("build"));
     }
 
     #[test]

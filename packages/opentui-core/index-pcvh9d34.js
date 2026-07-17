@@ -11880,69 +11880,6 @@ function ffiCellOrigin(x, y) {
   if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) return null;
   return { x, y };
 }
-// ax-code local fix (ADR-046): route the render pipeline (renderer/buffer/text/
-// edit/editor/feed/terminal families) plus yoga/audio to the @ax-code/render
-// napi addon (Rust, vendored facebook/yoga v3.2.1 — the same tag the upstream
-// Zig library pins). This is OFF BY DEFAULT (opt in with
-// AX_CODE_NATIVE_RENDER=1): after the v6.9.x field reports of CLI hangs and
-// crash-to-quit with long-output models traced to the Rust core, the
-// battle-tested Zig library is the default again until the Rust core has more
-// production mileage. AX_CODE_NATIVE_RENDER_SCOPE=yoga routes only yoga/audio.
-// If the addon can't be loaded (JS-only install, unbuilt dev checkout) it
-// falls back to Zig silently. BigInt args (backend ptr()/callback pointers)
-// are narrowed to numbers — addresses stay below 2^53 so this is exact —
-// because the napi addon takes f64 parameters.
-var nativeRenderAddon;
-var nativeRenderAddonFailed = false;
-function applyNativeRenderOverlay(symbols) {
-  const flag = (process.env.AX_CODE_NATIVE_RENDER || "").toLowerCase();
-  const explicitlyOn = flag === "1" || flag === "true" || flag === "on";
-  if (!explicitlyOn || nativeRenderAddonFailed) {
-    return symbols;
-  }
-  if (!nativeRenderAddon) {
-    try {
-      nativeRenderAddon = requireModule("@ax-code/render");
-    } catch (error) {
-      nativeRenderAddonFailed = true;
-      // A missing addon is a valid state (JS-only install / unbuilt dev
-      // checkout) — fall back to Zig silently. Only warn when the user
-      // explicitly asked for the Rust core.
-      if (explicitlyOn) {
-        console.warn(
-          "AX_CODE_NATIVE_RENDER requested but @ax-code/render failed to load; falling back to the bundled native library:",
-          error instanceof Error ? error.message : error
-        );
-      }
-      return symbols;
-    }
-  }
-  const addon = nativeRenderAddon;
-  // Narrow FFI args to what the napi addon accepts: BigInt pointers -> Number
-  // (addresses stay < 2^53), and null/undefined pointer args -> 0 (a null
-  // pointer). node:ffi coerces null to a null ptr for the Zig library, so the
-  // Rust addon must see the same 0 rather than reject Null as a non-f64.
-  const bridge = (fn) => (...args) =>
-    fn(...args.map((arg) => (typeof arg === "bigint" ? Number(arg) : arg == null ? 0 : arg)));
-  const overlaid = { ...symbols };
-  // ADR-046: with AX_CODE_NATIVE_RENDER=1 the ENTIRE render pipeline
-  // (renderer/buffer/text/edit/editor/feed/terminal families) routes to the Rust
-  // addon by default, not just yoga/audio. The render families share a
-  // backend-specific handle registry, so they flip atomically — a Zig renderer
-  // handle can't be used by a Rust buffer call. AX_CODE_NATIVE_RENDER_SCOPE=yoga
-  // is the escape hatch back to the Phase-1 yoga/audio-only routing. The
-  // full-pipeline parity is gated by check:golden-frames (Zig baseline vs Rust).
-  const scope = (process.env.AX_CODE_NATIVE_RENDER_SCOPE || "").toLowerCase();
-  const routeAll = scope !== "yoga";
-  for (const key of Object.keys(overlaid)) {
-    const isOverlayFamily =
-      routeAll || key.startsWith("yoga") || key.startsWith("audio") || key === "createAudioEngine" || key === "destroyAudioEngine";
-    if (isOverlayFamily && typeof addon[key] === "function") {
-      overlaid[key] = bridge(addon[key]);
-    }
-  }
-  return overlaid;
-}
 function getOpenTUILib(libPath) {
   const resolvedLibPath = libPath || targetLibPath;
   const rawSymbols = dlopen(resolvedLibPath, {
@@ -13255,17 +13192,12 @@ function getOpenTUILib(libPath) {
       returns: "void"
     }
   });
-  const overlaidSymbols = applyNativeRenderOverlay(rawSymbols.symbols);
+  // Zig is the sole OpenTUI renderer. Rust now runs as a separate Ratatui
+  // application selected by the outer ax-code launcher.
   if (env.OTUI_DEBUG_FFI || env.OTUI_TRACE_FFI) {
     return {
       ...rawSymbols,
-      symbols: convertToDebugSymbols(overlaidSymbols)
-    };
-  }
-  if (overlaidSymbols !== rawSymbols.symbols) {
-    return {
-      ...rawSymbols,
-      symbols: overlaidSymbols
+      symbols: convertToDebugSymbols(rawSymbols.symbols)
     };
   }
   return rawSymbols;

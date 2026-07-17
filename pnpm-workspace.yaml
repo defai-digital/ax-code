@@ -1,5 +1,7 @@
 packages:
   - packages/*
+  # ADR-046 OpenTUI N-API overlay — retired; not a workspace package.
+  - "!packages/ax-code-render-native"
   - packages/sdk/js
   - desktop/packages/*
 

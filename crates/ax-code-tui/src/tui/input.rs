@@ -1,6 +1,6 @@
 //! Input handling for keyboard and mouse events.
 
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::app::{App, AppMode};
 
@@ -42,6 +42,10 @@ pub enum InputAction {
 pub fn handle_input(app: &mut App, event: Event) -> InputAction {
     match event {
         Event::Key(key_event) => handle_key(app, key_event),
+        Event::Paste(text) => {
+            app.insert_text(&text);
+            InputAction::None
+        }
         Event::Mouse(mouse_event) => handle_mouse(app, mouse_event),
         Event::Resize(_, _) => {
             // Terminal will re-render automatically
@@ -53,6 +57,9 @@ pub fn handle_input(app: &mut App, event: Event) -> InputAction {
 
 /// Handle a key event.
 fn handle_key(app: &mut App, event: KeyEvent) -> InputAction {
+    if event.kind == KeyEventKind::Release {
+        return InputAction::None;
+    }
     match app.mode {
         AppMode::Input => handle_input_mode_key(app, event),
         AppMode::Permission => handle_permission_mode_key(app, event),
@@ -112,7 +119,21 @@ fn handle_input_mode_key(app: &mut App, event: KeyEvent) -> InputAction {
             app.toggle_tool_panel();
             InputAction::None
         }
-        // Enter submits prompt
+        // Shift/Alt+Enter adds a line without sending. Ctrl+J is a portable
+        // fallback for terminals that do not preserve Enter modifiers.
+        KeyCode::Enter
+            if event
+                .modifiers
+                .intersects(KeyModifiers::SHIFT | KeyModifiers::ALT) =>
+        {
+            app.insert_char('\n');
+            InputAction::None
+        }
+        KeyCode::Char('j') if event.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.insert_char('\n');
+            InputAction::None
+        }
+        // Enter submits prompt.
         KeyCode::Enter => {
             let prompt = app.take_prompt();
             if !prompt.is_empty() {
@@ -149,11 +170,15 @@ fn handle_input_mode_key(app: &mut App, event: KeyEvent) -> InputAction {
             InputAction::None
         }
         KeyCode::End => {
-            app.cursor_position = app.prompt.chars().count();
+            app.move_cursor_end();
             InputAction::None
         }
         // Regular character input
-        KeyCode::Char(c) => {
+        KeyCode::Char(c)
+            if !event
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::SUPER) =>
+        {
             app.insert_char(c);
             InputAction::None
         }

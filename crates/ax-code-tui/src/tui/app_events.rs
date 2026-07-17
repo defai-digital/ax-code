@@ -112,7 +112,9 @@ impl App {
                 self.messages.retain(|m| m.id != properties.message_id);
                 self.message_text_parts
                     .retain(|part| part.message_id != properties.message_id);
-                self.scroll_offset = self.scroll_offset.min(self.messages.len());
+                if self.messages.is_empty() {
+                    self.scroll_offset = 0;
+                }
             }
             RuntimeEvent::MessagePartDelta { properties } => {
                 if !self.message_event_targets_current_session(

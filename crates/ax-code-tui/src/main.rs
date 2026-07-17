@@ -3,7 +3,8 @@
 //! Launches the Ratatui-based TUI that connects to the headless ax-code server
 //! via HTTP/SSE. This is the experimental native Rust TUI client for ADR-035.
 
-use ax_code_tui::runner::{CliArgs, Runner, init_terminal, restore_terminal};
+use ax_code_tui::runner::CliArgs;
+use ax_code_tui::terminal::{init_terminal, restore_terminal};
 use clap::Parser;
 use std::panic;
 use std::process::ExitCode;
@@ -33,7 +34,7 @@ async fn main() -> ExitCode {
     };
 
     // Create and run the TUI
-    let result = Runner::new(args.into_config()).run(terminal).await;
+    let result = args.into_runner().run(terminal).await;
 
     // Restore terminal
     if let Err(e) = restore_terminal() {

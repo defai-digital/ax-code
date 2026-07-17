@@ -10,7 +10,6 @@ on:
       - "turbo.json"
       - "packages/ax-code/**"
       - "packages/opentui-core/**"
-      - "packages/ax-code-render-native/**"
       - "crates/**"
       - "packages/sdk/**"
       - "packages/util/**"
@@ -27,7 +26,6 @@ on:
       - "turbo.json"
       - "packages/ax-code/**"
       - "packages/opentui-core/**"
-      - "packages/ax-code-render-native/**"
       - "crates/**"
       - "packages/sdk/**"
       - "packages/util/**"
@@ -212,10 +210,9 @@ jobs:
           path: packages/ax-code/.tmp/coverage-summary.json
           if-no-files-found: ignore
 
-  # ADR-046: the Rust render core must stay byte-equivalent to the bundled Zig
-  # library. Runs on Node 26 (node:ffi) with the repo rust-toolchain; the
-  # deterministic job stays on Node 24 and skips these paths.
-  native-render-parity:
+  # The native engine is a standalone Rust/Ratatui client. It intentionally has
+  # its own Grok-inspired presentation rather than OpenTUI pixel parity.
+  native-tui:
     runs-on: ubuntu-latest
     env:
       AX_CODE_DISABLE_SHARE: "true"
@@ -226,54 +223,33 @@ jobs:
         uses: ./.github/actions/setup-ax-code-toolchain
         with:
           checkout: "false"
-          node-version: "26"
+          node-version: "24"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+        with:
+          components: rustfmt, clippy
 
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Build @ax-code/render native addon
-        run: pnpm run build:native render
+      - name: Native TUI format
+        run: cargo fmt --manifest-path crates/Cargo.toml -p ax-code-tui -- --check
 
-      - name: Golden frames (Zig — default, must byte-match)
-        # The bundled Zig library is the DEFAULT (no env) after the v6.9.x
-        # Rust-core field reports; this pins the committed goldens to the path
-        # real users get.
-        run: pnpm --dir packages/ax-code run check:golden-frames
+      - name: Native TUI tests
+        run: cargo test --manifest-path crates/Cargo.toml -p ax-code-tui
 
-      - name: Golden frames (Rust FULL render pipeline — =1 opt-in, must byte-match)
-        # ADR-046 render-core gate: AX_CODE_NATIVE_RENDER=1 opts into the Rust
-        # addon. Both runs must match the same goldens => Rust == Zig.
-        env:
-          AX_CODE_NATIVE_RENDER: "1"
-        run: pnpm --dir packages/ax-code run check:golden-frames
+      - name: Native TUI clippy
+        run: cargo clippy --manifest-path crates/Cargo.toml -p ax-code-tui --all-targets -- -D warnings
 
-      - name: Golden frames (Rust yoga/audio escape hatch, must byte-match)
-        env:
-          AX_CODE_NATIVE_RENDER: "1"
-          AX_CODE_NATIVE_RENDER_SCOPE: "yoga"
-        run: pnpm --dir packages/ax-code run check:golden-frames
+      - name: Launcher and authenticated bridge tests
+        run: pnpm --dir packages/ax-code exec vitest run test/cli/tui/engine.test.ts test/cli/tui/native-supervisor.test.ts test/server/server.test.ts
 
-      - name: Yoga + unicode parity regression
-        run: pnpm --dir packages/ax-code exec vitest run test/cli/tui/native-render-yoga-parity.test.ts
+      - name: Native TUI release build
+        run: cargo build --manifest-path crates/Cargo.toml -p ax-code-tui --release
 
-      - name: Unicode parity sweep (deep fuzz)
-        run: node --experimental-ffi --disable-warning=ExperimentalWarning packages/ax-code/script/native-render-unicode-parity.mjs --fuzz=20000
-
-      - name: Buffer parity sweep (deep op fuzz)
-        run: node --experimental-ffi --disable-warning=ExperimentalWarning packages/ax-code/script/native-render-buffer-parity.mjs --seqs=2000
-
-      - name: Text-buffer parity sweep
-        run: node --experimental-ffi --disable-warning=ExperimentalWarning packages/ax-code/script/native-render-text-parity.mjs --seqs=2000
-
-      - name: TextBufferView draw parity sweep
-        run: node --experimental-ffi --disable-warning=ExperimentalWarning packages/ax-code/script/native-render-textview-draw-parity.mjs --seqs=2000
-
-  # ADR-046: the release ships @ax-code/render built per platform. The Windows
-  # MSVC C++ build of the vendored yoga (build.rs -> cc, C++20) can only be
-  # validated on a Windows runner, so gate it on every push — this catches a
-  # broken cross-platform build before it reaches a release tag. Matches the
-  # release Windows targets (x64 + arm64).
-  native-render-build-windows:
+  # Gate the packaged Rust TUI on both Windows release architectures.
+  native-tui-build-windows:
     strategy:
       fail-fast: false
       matrix:
@@ -284,23 +260,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Setup Ax-code JS toolchain
-        uses: ./.github/actions/setup-ax-code-toolchain
-        with:
-          checkout: "false"
-          node-version: "26"
-
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
 
-      - name: Install deps
-        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build native Rust TUI
+        run: cargo build --manifest-path crates/Cargo.toml -p ax-code-tui --release
 
-      - name: Build @ax-code/render native addon (MSVC + vendored yoga C++)
-        run: pnpm run build:native render
-
-      - name: Render crate unit tests
-        run: cargo test --manifest-path crates/Cargo.toml -p ax-code-render
+      - name: Native TUI unit tests
+        run: cargo test --manifest-path crates/Cargo.toml -p ax-code-tui
 
   live:
     if: github.event_name == 'workflow_dispatch' && inputs.live

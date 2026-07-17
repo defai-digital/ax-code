@@ -48,6 +48,12 @@ fn test_runner_cli_args_all_options() {
         "Hello",
         "--session",
         "sess-abc",
+        "--continue",
+        "--fork",
+        "--model",
+        "xai/grok-code-fast-1",
+        "--agent",
+        "build",
     ]);
 
     assert_eq!(args.server_url, "http://server:8080");
@@ -55,6 +61,10 @@ fn test_runner_cli_args_all_options() {
     assert_eq!(args.directory, "/home/user/code");
     assert_eq!(args.prompt, Some("Hello".to_string()));
     assert_eq!(args.session, Some("sess-abc".to_string()));
+    assert!(args.continue_session);
+    assert!(args.fork);
+    assert_eq!(args.model.as_deref(), Some("xai/grok-code-fast-1"));
+    assert_eq!(args.agent.as_deref(), Some("build"));
 }
 
 #[test]

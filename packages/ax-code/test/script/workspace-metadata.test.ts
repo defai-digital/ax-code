@@ -3,7 +3,7 @@ import { readFile } from "fs/promises"
 import path from "path"
 
 function extractWorkspaceGlobs(pnpmWorkspaceYaml: string) {
-  return [...pnpmWorkspaceYaml.matchAll(/^  - (.+)$/gm)].map((match) => match[1])
+  return [...pnpmWorkspaceYaml.matchAll(/^  - (.+)$/gm)].map((match) => match[1].replace(/^(["'])(.*)\1$/, "$2"))
 }
 
 describe("script.workspace-metadata", () => {
@@ -31,11 +31,14 @@ describe("script.workspace-metadata", () => {
     const packageJson = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/package.json"), "utf8"))
     const tsconfig = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/tsconfig.json"), "utf8"))
     const dependencies = packageJson.dependencies ?? {}
+    const devDependencies = packageJson.devDependencies ?? {}
 
     expect(dependencies["@ax-code/opentui-core"]).toBe("workspace:*")
     expect(dependencies["@ax-code/opentui-solid"]).toBe("workspace:*")
     expect(dependencies["@ax-code/opentui-keymap"]).toBeUndefined()
     expect(dependencies["@ax-code/opentui-spinner"]).toBe("workspace:*")
+    expect(dependencies["@ax-code/render"]).toBeUndefined()
+    expect(devDependencies["@ax-code/render"]).toBeUndefined()
     expect(tsconfig.compilerOptions?.jsxImportSource).toBe("@ax-code/opentui-solid")
   })
 
@@ -55,9 +58,6 @@ describe("script.workspace-metadata", () => {
       import: "./scripts/solid-transform.js",
     })
     expect(Object.keys(corePackage.optionalDependencies ?? {}).sort()).toEqual([
-      // ADR-046: the Rust native render addon; the overlay require()s it and
-      // falls back to the bundled Zig library if it is absent.
-      "@ax-code/render",
       "@opentui/core-darwin-arm64",
       "@opentui/core-darwin-x64",
       "@opentui/core-linux-arm64",

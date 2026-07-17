@@ -14,12 +14,8 @@ import { Filesystem } from "@/util/filesystem"
 import type { Event } from "@ax-code/sdk/v2"
 import type { EventSource } from "./context/sdk"
 import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "./win32"
-import {
-  TUI_MODE_CHOICES,
-  applyTuiRenderBackendMode,
-  isExperimentalTuiRenderBackend,
-  resolveEffectiveTuiRenderBackend,
-} from "./render-backend"
+import { TUI_MODE_CHOICES, applyTuiEngineMode, isExperimentalTuiEngine, resolveEffectiveTuiEngine } from "./engine"
+import { runNativeTui } from "./native-supervisor"
 import { ensureShellEnv } from "@/runtime/shell-env"
 import { TuiConfig } from "@/config/tui"
 import { Instance } from "@/project/instance"
@@ -638,12 +634,10 @@ export const TuiThreadCommand = cmd({
       .option("tui-mode", {
         type: "string",
         choices: TUI_MODE_CHOICES as unknown as string[],
-        // Hidden: Zig is the only supported production backend (ADR-047).
-        // native/yoga remain for maintainer dogfood via this flag or
-        // AX_CODE_NATIVE_RENDER; do not re-surface in help until graduated.
+        // Hidden: Zig/OpenTUI is the supported production engine. Native is a
+        // separate Rust/Ratatui UI kept behind a dogfood escape hatch.
         hidden: true,
-        describe:
-          "[experimental] TUI render backend override (supported: zig). native/yoga are lab-only; prefer AX_CODE_NATIVE_RENDER",
+        describe: "[experimental] TUI engine override (supported: zig; native is Rust/Ratatui)",
       }),
   handler: async (args) => {
     // Keep ENABLE_PROCESSED_INPUT cleared even if other code flips it.
@@ -659,21 +653,20 @@ export const TuiThreadCommand = cmd({
         process.exitCode = 1
         return
       }
-      // Shell env fills missing keys only. Await it before applying the
-      // render-backend override so a profile export of AX_CODE_NATIVE_RENDER*
-      // cannot win the race after we clear/set the flag (and so diagnostics
-      // reflect the same env the renderer will see).
+      // Shell env fills missing keys only. Await it before selecting the UI so
+      // AX_CODE_TUI_ENGINE from a shell profile is visible. Selection also
+      // disables the retired OpenTUI Rust/yoga overlay before any UI import.
       await ensureShellEnv()
-      // Must run before the renderer library is resolved (app import below)
-      // and before the backend child inherits our env.
+      // Must run before the OpenTUI renderer is resolved and before any child
+      // inherits the environment.
       const tuiModeFlag = args["tui-mode"] as string | undefined
-      const tuiMode = applyTuiRenderBackendMode(tuiModeFlag)
+      const tuiMode = applyTuiEngineMode(tuiModeFlag)
       DiagnosticLog.recordProcess("tui.threadStarted", {
         args: process.argv.slice(2),
         tuiMode,
         tuiModeFlag: tuiModeFlag ?? null,
-        tuiModeExperimental: isExperimentalTuiRenderBackend(tuiMode),
-        tuiModeResolved: resolveEffectiveTuiRenderBackend(),
+        tuiModeExperimental: isExperimentalTuiEngine(tuiMode),
+        tuiModeResolved: resolveEffectiveTuiEngine(),
       })
 
       // Resolve relative --project paths from the caller's original cwd, then
@@ -683,6 +676,41 @@ export const TuiThreadCommand = cmd({
       const next = args.project
         ? Filesystem.resolve(path.isAbsolute(args.project) ? args.project : path.join(root, args.project))
         : root
+      try {
+        process.chdir(next)
+      } catch {
+        UI.error("Failed to change directory to " + next)
+        // Match the sibling failure paths (readiness handshake, thread error,
+        // app-import failure): a chdir failure is a hard startup error, so the
+        // process must exit non-zero rather than reporting success.
+        process.exitCode = 1
+        return
+      }
+      const cwd = Filesystem.resolve(process.cwd())
+
+      if (tuiMode === "native") {
+        const prompt = await input(args.prompt)
+        DiagnosticLog.recordProcess("tui.nativeStarted", { directory: cwd })
+        try {
+          const result = await runNativeTui({
+            cwd,
+            prompt,
+            session: args.session,
+            continue: args.continue,
+            fork: args.fork,
+            model: args.model,
+            agent: args.agent,
+          })
+          DiagnosticLog.recordProcess("tui.nativeExited", result)
+          process.exitCode = result.code
+        } catch (error) {
+          DiagnosticLog.recordProcess("tui.nativeFailed", { error })
+          UI.error(`Native Rust TUI failed to start: ${toErrorMessage(error)}`)
+          process.exitCode = 1
+        }
+        return
+      }
+
       const backendTransport = tuiBackendTransport()
       const file = backendTransport === "worker" ? await target() : undefined
       const processCommand = backendTransport === "process" ? backendProcessCommand() : undefined
@@ -701,17 +729,6 @@ export const TuiThreadCommand = cmd({
         target: file ? String(file) : processCommand?.label,
         runtimeMode: runtimeMode(),
       })
-      try {
-        process.chdir(next)
-      } catch {
-        UI.error("Failed to change directory to " + next)
-        // Match the sibling failure paths (readiness handshake, thread error,
-        // app-import failure): a chdir failure is a hard startup error, so the
-        // process must exit non-zero rather than reporting success.
-        process.exitCode = 1
-        return
-      }
-      const cwd = Filesystem.resolve(process.cwd())
 
       // TRUST BOUNDARY: the TUI backend (worker/process) is a trusted peer that
       // runs the same ax-code code as this thread — not model-controlled input —

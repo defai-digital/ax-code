@@ -22,6 +22,7 @@ pub mod diagnostics;
 pub mod events;
 pub mod launch_policy;
 pub mod runner;
+pub mod terminal;
 pub mod tui;
 
 // Re-export main types for convenience
@@ -29,4 +30,5 @@ pub use client::HeadlessClient;
 pub use events::RuntimeEvent;
 pub use launch_policy::{LaunchInput, LaunchRoute};
 pub use runner::{CliArgs, Runner};
+pub use terminal::{init_terminal, restore_terminal};
 pub use tui::app::App;

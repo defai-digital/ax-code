@@ -1,6 +1,7 @@
 //! Application state for the TUI.
 
 use crate::events::MessageRole;
+use unicode_segmentation::UnicodeSegmentation;
 
 /// Session status.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -189,23 +190,29 @@ impl App {
 
     /// Insert a character at the cursor position.
     pub fn insert_char(&mut self, c: char) {
-        if self.mode == AppMode::Input {
-            // cursor_position is a char index; String::insert takes a byte
-            // index that must lie on a UTF-8 code-point boundary. Convert via
-            // char_indices() so multi-byte input (CJK, emoji) does not panic.
-            let byte_idx = byte_index_at_char(&self.prompt, self.cursor_position);
-            self.prompt.insert(byte_idx, c);
-            self.cursor_position += 1;
+        let mut encoded = [0_u8; 4];
+        self.insert_text(c.encode_utf8(&mut encoded));
+    }
+
+    /// Insert pasted or programmatic text. CRLF is normalized so pasted blocks
+    /// behave consistently on Unix and Windows terminals.
+    pub fn insert_text(&mut self, text: &str) {
+        if self.mode != AppMode::Input || text.is_empty() {
+            return;
         }
+        let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
+        let byte_idx = byte_index_at_grapheme(&self.prompt, self.cursor_position);
+        self.prompt.insert_str(byte_idx, &normalized);
+        self.cursor_position += normalized.graphemes(true).count();
     }
 
     /// Delete the character before the cursor.
     pub fn backspace(&mut self) {
         if self.mode == AppMode::Input && self.cursor_position > 0 {
+            let start = byte_index_at_grapheme(&self.prompt, self.cursor_position - 1);
+            let end = byte_index_at_grapheme(&self.prompt, self.cursor_position);
+            self.prompt.replace_range(start..end, "");
             self.cursor_position -= 1;
-            // Remove the char now sitting at the (decremented) char cursor.
-            let byte_idx = byte_index_at_char(&self.prompt, self.cursor_position);
-            self.prompt.remove(byte_idx);
         }
     }
 
@@ -218,9 +225,27 @@ impl App {
 
     /// Move cursor right.
     pub fn move_cursor_right(&mut self) {
-        if self.mode == AppMode::Input && self.cursor_position < self.prompt.chars().count() {
+        if self.mode == AppMode::Input && self.cursor_position < self.prompt_grapheme_count() {
             self.cursor_position += 1;
         }
+    }
+
+    /// Move the cursor to the end of the prompt.
+    pub fn move_cursor_end(&mut self) {
+        if self.mode == AppMode::Input {
+            self.cursor_position = self.prompt_grapheme_count();
+        }
+    }
+
+    /// Number of user-perceived characters in the prompt.
+    pub fn prompt_grapheme_count(&self) -> usize {
+        self.prompt.graphemes(true).count()
+    }
+
+    /// Prompt content before the cursor, used to calculate display position.
+    pub fn prompt_before_cursor(&self) -> &str {
+        let byte_idx = byte_index_at_grapheme(&self.prompt, self.cursor_position);
+        &self.prompt[..byte_idx]
     }
 
     /// Clear the prompt.
@@ -238,23 +263,17 @@ impl App {
 
     /// Scroll transcript up.
     pub fn scroll_up(&mut self) {
-        if self.scroll_offset > 0 {
-            self.scroll_offset -= 1;
-        }
+        // Offset is measured in visual lines from the live bottom. This keeps
+        // streaming output pinned to the newest content until the user scrolls
+        // back, matching chat-oriented native TUIs.
+        self.scroll_offset = self.scroll_offset.saturating_add(3).min(100_000);
     }
 
     /// Scroll transcript down.
     ///
-    /// Clamped so the user cannot scroll past the last message. The visible
-    /// window size is not known here (it depends on terminal height and is
-    /// computed in render.rs), so we clamp to `messages.len()` — render's
-    /// `skip(scroll_offset)` will simply produce an empty list once the offset
-    /// reaches the end, never an underflow.
+    /// Move three visual lines toward the live bottom.
     pub fn scroll_down(&mut self) {
-        let max_offset = self.messages.len();
-        if self.scroll_offset < max_offset {
-            self.scroll_offset += 1;
-        }
+        self.scroll_offset = self.scroll_offset.saturating_sub(3);
     }
 
     /// Accept the current (front) permission request.
@@ -628,19 +647,13 @@ impl Default for App {
     }
 }
 
-/// Convert a char index into a byte index that lies on a UTF-8 code-point
-/// boundary of `s`.
-///
-/// `String::insert` / `String::remove` take byte indices and panic if the
-/// index is not on a boundary. The TUI tracks the cursor as a char index
-/// (which matches column-based rendering), so every insert/remove site must
-/// round-trip through this helper. If `char_idx` is at or past the last char,
-/// returns `s.len()` (the valid "end of string" boundary).
-fn byte_index_at_char(s: &str, char_idx: usize) -> usize {
-    s.char_indices()
-        .nth(char_idx)
+/// Convert a grapheme index into a UTF-8 byte boundary. Grapheme indexing keeps
+/// combining marks, emoji modifiers, and ZWJ emoji together during editing.
+fn byte_index_at_grapheme(s: &str, grapheme_idx: usize) -> usize {
+    s.grapheme_indices(true)
+        .nth(grapheme_idx)
         .map(|(byte_idx, _)| byte_idx)
-        .unwrap_or_else(|| s.len())
+        .unwrap_or(s.len())
 }
 
 #[cfg(test)]
@@ -918,10 +931,10 @@ mod tests {
         assert!(matches!(app.mode, AppMode::Input)); // drained
     }
 
-    // === LOW 1: scroll_down is bounded ===
+    // === LOW 1: scroll offset is measured from live bottom ===
 
     #[test]
-    fn test_scroll_down_bounded_by_message_count() {
+    fn test_scroll_down_returns_to_live_bottom() {
         let mut app = App::new();
         for i in 0..3 {
             app.handle_event(RuntimeEvent::MessageUpdated {
@@ -936,11 +949,14 @@ mod tests {
         }
         assert_eq!(app.messages.len(), 3);
 
-        // scroll_down past the end must clamp at messages.len() (3), not grow.
+        app.scroll_up();
+        app.scroll_up();
+        assert_eq!(app.scroll_offset, 6);
+        // scroll_down past the live bottom clamps at zero.
         for _ in 0..10 {
             app.scroll_down();
         }
-        assert_eq!(app.scroll_offset, 3);
+        assert_eq!(app.scroll_offset, 0);
     }
 
     #[test]
@@ -1615,12 +1631,13 @@ mod tests {
     }
 
     #[test]
-    fn test_byte_index_at_char_helper() {
-        // 'a' = 1 byte, '日' = 3 bytes. char idx 2 -> byte idx 4.
-        assert_eq!(byte_index_at_char("a日b", 0), 0);
-        assert_eq!(byte_index_at_char("a日b", 1), 1);
-        assert_eq!(byte_index_at_char("a日b", 2), 4);
-        assert_eq!(byte_index_at_char("a日b", 3), 5); // end of string
-        assert_eq!(byte_index_at_char("a日b", 99), 5); // past end -> len
+    fn test_byte_index_at_grapheme_helper() {
+        // 'a' = 1 byte, '日' = 3 bytes. grapheme idx 2 -> byte idx 4.
+        assert_eq!(byte_index_at_grapheme("a日b", 0), 0);
+        assert_eq!(byte_index_at_grapheme("a日b", 1), 1);
+        assert_eq!(byte_index_at_grapheme("a日b", 2), 4);
+        assert_eq!(byte_index_at_grapheme("a日b", 3), 5); // end of string
+        assert_eq!(byte_index_at_grapheme("a日b", 99), 5); // past end -> len
+        assert_eq!(byte_index_at_grapheme("e\u{301}x", 1), 3);
     }
 }

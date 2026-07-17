@@ -4,7 +4,7 @@
 
 mod support;
 
-use ax_code_tui::client::{ClientConfig, HeadlessClient};
+use ax_code_tui::client::{ClientConfig, HeadlessClient, PromptOptions, parse_model_selection};
 use support::mock_server::MockServer;
 
 // =============================================================================
@@ -199,6 +199,54 @@ async fn test_session_actions_use_configured_directory() {
         }),
         "abort_session should scope the request to the configured directory"
     );
+    let prompt_request = server
+        .raw_requests()
+        .into_iter()
+        .find(|request| request.starts_with("POST /session/sess_123/prompt_async"))
+        .expect("prompt request");
+    assert!(prompt_request.contains(r#""parts":[{"type":"text","text":"hello"}]"#));
+    assert!(!prompt_request.contains(r#""prompt":"#));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_prompt_options_and_session_fork_use_runtime_schema() {
+    let server = MockServer::start().await;
+    let client = HeadlessClient::new(ClientConfig {
+        base_url: server.url(),
+        auth_token: None,
+        directory: Some("/workspace/project".to_string()),
+        session: None,
+        prompt: None,
+    })
+    .expect("client");
+
+    let forked = client.fork_session("sess_123").await.expect("fork session");
+    assert_eq!(forked, "forked-session");
+
+    client
+        .send_prompt_with_options(
+            &forked,
+            "review this",
+            &PromptOptions {
+                model: Some(parse_model_selection("xai/grok-code-fast-1").expect("model")),
+                agent: Some("build".to_string()),
+            },
+        )
+        .await
+        .expect("send prompt");
+
+    let requests = server.raw_requests();
+    assert!(requests.iter().any(|request| {
+        request.starts_with("POST /session/sess_123/fork?directory=%2Fworkspace%2Fproject")
+            && request.ends_with("{}")
+    }));
+    assert!(requests.iter().any(|request| {
+        request.starts_with("POST /session/forked-session/prompt_async")
+            && request.contains(r#""model":{"providerID":"xai","modelID":"grok-code-fast-1"}"#)
+            && request.contains(r#""agent":"build""#)
+    }));
 
     server.shutdown().await;
 }

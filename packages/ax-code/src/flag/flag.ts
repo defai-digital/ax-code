@@ -176,10 +176,6 @@ export namespace Flag {
   export const AX_CODE_EXPERIMENTAL_OXFMT = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_OXFMT")
   export const AX_CODE_EXPERIMENTAL_LSP_TY = truthy("AX_CODE_EXPERIMENTAL_LSP_TY")
   export const AX_CODE_EXPERIMENTAL_LSP_TOOL = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_LSP_TOOL")
-  // Ratatui TUI (ADR-035): Experimental native Rust TUI client that connects
-  // to the headless ax-code server via HTTP/SSE. Enable with =1 to access the
-  // lean terminal UI for testing and development.
-  export const AX_CODE_EXPERIMENTAL_RATATUI_TUI = truthy("AX_CODE_EXPERIMENTAL_RATATUI_TUI")
   export declare const AX_CODE_EXPERIMENTAL_QUALITY_SHADOW: boolean
   export declare const AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_MODEL: string | undefined
   export declare const AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_PREDICTIONS: string | undefined

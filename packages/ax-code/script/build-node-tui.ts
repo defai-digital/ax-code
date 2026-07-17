@@ -42,7 +42,9 @@ const legacyName = `${pkg.name}-${platform}-${arch}`
 const outRoot = path.join(dir, "dist", legacyName)
 const outBin = path.join(outRoot, "bin")
 const outLib = path.join(outRoot, "lib")
+const outLibexec = path.join(outRoot, "libexec")
 const bundledNodeName = process.platform === "win32" ? "node.exe" : "node"
+const nativeTuiName = process.platform === "win32" ? "ax-code-tui.exe" : "ax-code-tui"
 
 type FfiNodeRuntime = {
   path: string
@@ -176,6 +178,28 @@ console.log(`Loaded ${builtinSkills.length} built-in skills`)
 await fs.promises.rm(outRoot, { recursive: true, force: true })
 await fs.promises.mkdir(outBin, { recursive: true })
 await fs.promises.mkdir(outLib, { recursive: true })
+await fs.promises.mkdir(outLibexec, { recursive: true })
+
+// The `native` UI engine is a real Rust/Ratatui sidecar. Release builds require
+// it; local builds copy a previously built debug/release binary when present.
+const nativeTuiCandidates = [
+  process.env.AX_CODE_NATIVE_TUI_BIN,
+  path.resolve(dir, "..", "..", "crates", "target", "release", nativeTuiName),
+  path.resolve(dir, "..", "..", "crates", "target", "debug", nativeTuiName),
+].filter((candidate): candidate is string => Boolean(candidate))
+const nativeTuiSource = nativeTuiCandidates.find((candidate) => fs.existsSync(candidate))
+const nativeTuiDestination = path.join(outLibexec, nativeTuiName)
+if (nativeTuiSource) {
+  await fs.promises.copyFile(nativeTuiSource, nativeTuiDestination)
+  if (process.platform !== "win32") await fs.promises.chmod(nativeTuiDestination, 0o755)
+  console.log(`Bundled native Rust TUI: ${nativeTuiSource}`)
+} else if (release) {
+  throw new Error(
+    `Release build requires ${nativeTuiName}; run cargo build --manifest-path ../../crates/Cargo.toml -p ax-code-tui --release`,
+  )
+} else {
+  console.warn("Native Rust TUI binary not found; --tui-mode=native will be unavailable in this local dist")
+}
 
 const result = await esbuild.build({
   entryPoints: [path.join(dir, "src/index-node-tui.ts")],
@@ -432,7 +456,6 @@ const nativePkgs: Array<[string, string]> = [
   ["diff", path.join(dir, "..", "ax-code-diff-native")],
   ["parser", path.join(dir, "..", "ax-code-parser-native")],
   ["index-core", path.join(dir, "..", "ax-code-index-core")],
-  ["render", path.join(dir, "..", "ax-code-render-native")],
 ]
 const axScope = path.join(outRoot, "node_modules", "@ax-code")
 fs.mkdirSync(axScope, { recursive: true })
@@ -465,6 +488,7 @@ if (process.platform === "darwin") {
     }
   }
   walk(path.join(outRoot, "node_modules"))
+  if (fs.existsSync(nativeTuiDestination)) nativeLibs.push(nativeTuiDestination)
   for (const lib of nativeLibs) {
     const signArgs = appleCodesignIdentity
       ? ["--force", "--timestamp", "--options", "runtime", "--sign", appleCodesignIdentity, lib]

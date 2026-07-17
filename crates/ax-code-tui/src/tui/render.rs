@@ -8,6 +8,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
+use unicode_width::UnicodeWidthStr;
 
 use super::app::{App, AppMode, SessionStatus};
 use crate::events::MessageRole;
@@ -32,7 +33,7 @@ fn bordered_block() -> Block<'static> {
     if use_ascii_borders() {
         block.border_set(ASCII_BORDER)
     } else {
-        block
+        block.border_set(symbols::border::ROUNDED)
     }
 }
 
@@ -89,13 +90,14 @@ fn render_main_content(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Render the main vertical layout.
 fn render_main_vertical(frame: &mut Frame, app: &App, area: Rect) {
+    let prompt_height = prompt_height(app, area.width);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // Header
-            Constraint::Min(10),   // Transcript
-            Constraint::Length(3), // Footer (prompt)
-            Constraint::Length(1), // Status bar
+            Constraint::Length(2),             // Header
+            Constraint::Min(4),                // Transcript
+            Constraint::Length(prompt_height), // Multi-line composer
+            Constraint::Length(1),             // Status bar
         ])
         .split(area);
 
@@ -107,7 +109,7 @@ fn render_main_vertical(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Render the header with session info.
 fn render_header(frame: &mut Frame, app: &App, area: Rect) {
-    let title = app.session_title.as_deref().unwrap_or("AX Code TUI");
+    let title = app.session_title.as_deref().unwrap_or("AX Code");
 
     let session_info = app
         .session_id
@@ -138,75 +140,93 @@ fn render_header(frame: &mut Frame, app: &App, area: Rect) {
 
     let header_line = Line::from(vec![
         Span::styled(
-            format!("{}{}", title, session_info),
+            " AX CODE ",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(Color::Black)
+                .bg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("  {title}{session_info}"),
+            Style::default().fg(Color::White),
         ),
         Span::styled(status_indicator, Style::default().fg(status_color)),
         Span::styled(tool_info, Style::default().fg(Color::Yellow)),
     ]);
 
-    let header = Paragraph::new(header_line).block(bordered_block().title(" Session "));
+    let header = Paragraph::new(header_line);
 
     frame.render_widget(header, area);
 }
 
 /// Render the message transcript.
 fn render_transcript(frame: &mut Frame, app: &App, area: Rect) {
-    // Maximum content length for message display
-    const MAX_MESSAGE_LEN: usize = 500;
+    let mut lines = Vec::new();
+    if app.messages.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "Start a task below. Native mode uses the same AX runtime with a Rust terminal UI.",
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
 
-    let messages: Vec<ListItem> = app
-        .messages
-        .iter()
-        .skip(app.scroll_offset)
-        .map(|msg| {
-            let role_style = match msg.role {
-                MessageRole::User => Style::default()
+    for msg in &app.messages {
+        let (label, role_style) = match msg.role {
+            MessageRole::User => (
+                "you",
+                Style::default()
                     .fg(Color::Green)
                     .add_modifier(Modifier::BOLD),
-                MessageRole::Assistant => Style::default().fg(Color::Blue),
-                MessageRole::System => Style::default()
+            ),
+            MessageRole::Assistant => (
+                "assistant",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            MessageRole::System => (
+                "system",
+                Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::ITALIC),
-            };
+            ),
+        };
+        let streaming = if msg.is_streaming {
+            glyph("  ●", "  *")
+        } else {
+            ""
+        };
+        lines.push(Line::from(vec![
+            Span::styled(label, role_style),
+            Span::styled(streaming, Style::default().fg(Color::Yellow)),
+        ]));
+        if msg.content.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "…",
+                Style::default().fg(Color::DarkGray),
+            )));
+        } else {
+            // Preserve the complete response. Paragraph wrapping and scrolling
+            // replace the old 500-character truncation.
+            lines.extend(msg.content.lines().map(|line| Line::from(line.to_string())));
+        }
+        lines.push(Line::default());
+    }
 
-            let role_prefix = match msg.role {
-                MessageRole::User => "You: ",
-                MessageRole::Assistant => "Assistant: ",
-                MessageRole::System => "System: ",
-            };
+    let wrap_width = area.width.max(1) as usize;
+    let line_count: usize = lines
+        .iter()
+        .map(|line| line.width().max(1).div_ceil(wrap_width))
+        .sum();
+    let transcript = Paragraph::new(lines)
+        .style(Style::default().fg(Color::White))
+        .wrap(Wrap { trim: false });
+    let visible_height = area.height as usize;
+    let bottom = line_count.saturating_sub(visible_height);
+    let scroll = bottom
+        .saturating_sub(app.scroll_offset)
+        .min(u16::MAX as usize) as u16;
 
-            // Truncate long messages
-            let content = if msg.content.is_empty() {
-                "...".to_string()
-            } else {
-                App::truncate_message(&msg.content, MAX_MESSAGE_LEN)
-            };
-
-            // Show streaming indicator for partial messages
-            let streaming_indicator = if msg.is_streaming {
-                glyph(" ●", " *")
-            } else {
-                ""
-            };
-
-            let line = Line::from(vec![
-                Span::styled(role_prefix, role_style),
-                Span::raw(content),
-                Span::styled(streaming_indicator, Style::default().fg(Color::Yellow)),
-            ]);
-
-            ListItem::new(line)
-        })
-        .collect();
-
-    let transcript = List::new(messages)
-        .block(bordered_block().title(" Transcript "))
-        .style(Style::default().fg(Color::White));
-
-    frame.render_widget(transcript, area);
+    frame.render_widget(transcript.scroll((scroll, 0)), area);
 }
 
 /// Render the prompt input area.
@@ -217,19 +237,25 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
         Style::default().fg(Color::DarkGray)
     };
 
+    let inner_width = area.width.saturating_sub(2).max(1);
+    let inner_height = area.height.saturating_sub(2).max(1);
+    let (cursor_row, cursor_column) = prompt_cursor(app.prompt_before_cursor(), inner_width);
+    let vertical_scroll = cursor_row.saturating_sub(inner_height.saturating_sub(1));
     let prompt = Paragraph::new(app.prompt.as_str())
         .style(input_style)
-        .block(bordered_block().title(" Prompt "));
+        .wrap(Wrap { trim: false })
+        .scroll((vertical_scroll, 0))
+        .block(bordered_block().title(" Message · Enter send · Shift+Enter newline "));
 
     frame.render_widget(prompt, area);
 
     // Show cursor if in input mode
     if app.mode == AppMode::Input && area.width > 1 && area.height > 1 {
-        let inner_width = area.width.saturating_sub(2);
-        let cursor_offset = app
-            .cursor_position
-            .min(inner_width.saturating_sub(1) as usize) as u16;
-        frame.set_cursor_position((area.x + cursor_offset + 1, area.y + 1));
+        let visible_row = cursor_row.saturating_sub(vertical_scroll);
+        frame.set_cursor_position((
+            area.x + 1 + cursor_column.min(inner_width.saturating_sub(1)),
+            area.y + 1 + visible_row.min(inner_height.saturating_sub(1)),
+        ));
     }
 }
 
@@ -239,7 +265,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let status_text = App::format_status_bar(app.mode, app.status_message.as_deref(), width);
 
     let status_bar =
-        Paragraph::new(status_text).style(Style::default().fg(Color::Black).bg(Color::Gray));
+        Paragraph::new(status_text).style(Style::default().fg(Color::Gray).bg(Color::Reset));
 
     frame.render_widget(status_bar, area);
 }
@@ -502,6 +528,33 @@ fn render_tool_panel(frame: &mut Frame, app: &App, area: Rect) {
             frame.render_widget(hint, hint_area);
         }
     }
+}
+
+/// Height of the composer, including its border. It grows with pasted or
+/// manually-entered lines and caps at eight terminal rows so the transcript
+/// always retains useful space.
+fn prompt_height(app: &App, area_width: u16) -> u16 {
+    let inner_width = area_width.saturating_sub(2).max(1);
+    let (last_row, _) = prompt_cursor(&app.prompt, inner_width);
+    last_row.saturating_add(1).clamp(1, 6).saturating_add(2)
+}
+
+/// Return the wrapped display row/column for the end of `text`.
+fn prompt_cursor(text: &str, inner_width: u16) -> (u16, u16) {
+    let inner_width = inner_width.max(1);
+    let mut row = 0_u16;
+    let mut column = 0_u16;
+
+    for (index, line) in text.split('\n').enumerate() {
+        if index > 0 {
+            row = row.saturating_add(1);
+        }
+        let width = UnicodeWidthStr::width(line).min(u16::MAX as usize) as u16;
+        row = row.saturating_add(width / inner_width);
+        column = width % inner_width;
+    }
+
+    (row, column)
 }
 
 /// Helper to create a centered rectangle.

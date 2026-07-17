@@ -25,7 +25,8 @@ See [TUI stability status](../.internal/tui-stability/STATUS.md) (internal) and 
 - Runtime: Node bundled
 - UI: OpenTUI + Solid
 - Render: Zig (production)
-- Advanced/native/Ratatui: experimental only
+- Native: separate Rust/Ratatui UI, experimental (`--tui-mode=native`)
+- Yoga is not a selectable mode; Zig/OpenTUI remains the default
 
 ## Cancellations vs crashes
 
