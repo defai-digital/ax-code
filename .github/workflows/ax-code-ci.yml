@@ -242,6 +242,9 @@ jobs:
       - name: Native TUI clippy
         run: cargo clippy --manifest-path crates/Cargo.toml -p ax-code-tui --all-targets -- -D warnings
 
+      - name: Build SDK
+        run: pnpm --dir packages/sdk/js run build
+
       - name: Launcher and authenticated bridge tests
         run: pnpm --dir packages/ax-code exec vitest run test/cli/tui/engine.test.ts test/cli/tui/native-supervisor.test.ts test/server/server.test.ts
 
