@@ -91,6 +91,7 @@ fn smoke_startup_with_prompt() {
 #[test]
 fn smoke_resize_during_streaming_no_crash() {
     let mut app = App::new();
+    app.session_id = Some("sess-1".to_string());
 
     // Simulate receiving a streaming message
     app.handle_event(RuntimeEvent::MessageUpdated {
@@ -107,7 +108,7 @@ fn smoke_resize_during_streaming_no_crash() {
     for i in 0..100 {
         app.handle_event(RuntimeEvent::MessagePartDelta {
             properties: MessagePartDeltaProps {
-                session_id: "s".to_string(),
+                session_id: "sess-1".to_string(),
                 message_id: "msg-resize".to_string(),
                 part_id: format!("part-{}", i),
                 field: "content".to_string(),
@@ -129,6 +130,7 @@ fn smoke_resize_during_streaming_no_crash() {
 #[test]
 fn smoke_permission_prompt_accept_flow() {
     let mut app = App::new();
+    app.session_id = Some("sess-1".to_string());
 
     // 1. Permission arrives
     app.handle_event(RuntimeEvent::PermissionAsked {
@@ -154,6 +156,7 @@ fn smoke_permission_prompt_accept_flow() {
 #[test]
 fn smoke_permission_prompt_reject_flow() {
     let mut app = App::new();
+    app.session_id = Some("sess-1".to_string());
 
     app.handle_event(RuntimeEvent::PermissionAsked {
         properties: PermissionRequestProps {
@@ -178,6 +181,7 @@ fn smoke_permission_prompt_reject_flow() {
 #[test]
 fn smoke_question_navigate_select_flow() {
     let mut app = App::new();
+    app.session_id = Some("sess-1".to_string());
 
     // 1. Question arrives
     app.handle_event(RuntimeEvent::QuestionAsked {
@@ -215,6 +219,7 @@ fn smoke_question_navigate_select_flow() {
 #[test]
 fn smoke_question_cancel_flow() {
     let mut app = App::new();
+    app.session_id = Some("sess-1".to_string());
 
     app.handle_event(RuntimeEvent::QuestionAsked {
         properties: QuestionRequestProps {

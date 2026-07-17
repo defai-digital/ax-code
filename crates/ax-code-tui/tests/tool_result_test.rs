@@ -30,6 +30,8 @@ fn test_completed_tool_calls_empty() {
 #[test]
 fn test_completed_tool_calls_filters() {
     let mut app = App::new();
+    app.session_id = Some("sess_123".to_string());
+    app.session_id = Some("sess_123".to_string());
 
     // Add running tool
     app.handle_event(RuntimeEvent::ToolCallStart {
@@ -61,6 +63,8 @@ fn test_completed_tool_calls_filters() {
 #[test]
 fn test_tool_navigation() {
     let mut app = App::new();
+    app.session_id = Some("sess_123".to_string());
+    app.session_id = Some("sess_123".to_string());
 
     // Add multiple completed tools
     for i in 1..=3 {
@@ -121,6 +125,7 @@ fn test_tool_expanded_toggle() {
 #[test]
 fn test_selected_completed_tool() {
     let mut app = App::new();
+    app.session_id = Some("sess_123".to_string());
 
     // No tools initially
     assert!(app.selected_completed_tool().is_none());
@@ -151,6 +156,7 @@ fn test_selected_completed_tool() {
 #[test]
 fn test_selected_completed_tool_clamps_stale_index() {
     let mut app = App::new();
+    app.session_id = Some("sess_123".to_string());
     app.selected_tool_index = 5;
 
     app.handle_event(RuntimeEvent::ToolCallStart {
@@ -296,6 +302,8 @@ fn test_input_toggle_tool_panel() {
 #[test]
 fn test_input_tool_panel_navigation() {
     let mut app = App::new();
+    app.session_id = Some("sess_123".to_string());
+    app.session_id = Some("sess_123".to_string());
 
     // Add some completed tools
     for i in 1..=3 {
@@ -340,6 +348,8 @@ fn test_input_tool_panel_navigation() {
 #[test]
 fn test_input_tool_panel_expand() {
     let mut app = App::new();
+    app.session_id = Some("sess_123".to_string());
+    app.session_id = Some("sess_123".to_string());
 
     // Add a completed tool
     app.handle_event(RuntimeEvent::ToolCallStart {
@@ -372,6 +382,7 @@ fn test_input_tool_panel_expand() {
 #[test]
 fn test_input_tool_panel_close() {
     let mut app = App::new();
+    app.session_id = Some("sess_123".to_string());
     app.show_tool_panel = true;
 
     // 't' should close tool panel

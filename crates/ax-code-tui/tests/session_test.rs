@@ -15,9 +15,15 @@ fn make_key_event_with_mods(code: KeyCode, mods: KeyModifiers) -> Event {
     Event::Key(KeyEvent::new(code, mods))
 }
 
+fn app_with_session() -> App {
+    let mut app = App::new();
+    app.session_id = Some("sess_123".to_string());
+    app
+}
+
 #[test]
 fn test_tool_call_start() {
-    let mut app = App::new();
+    let mut app = app_with_session();
 
     app.handle_event(RuntimeEvent::ToolCallStart {
         properties: ToolCallStartProps {
@@ -36,7 +42,7 @@ fn test_tool_call_start() {
 
 #[test]
 fn test_tool_call_complete() {
-    let mut app = App::new();
+    let mut app = app_with_session();
 
     // Start a tool call
     app.handle_event(RuntimeEvent::ToolCallStart {
@@ -65,7 +71,7 @@ fn test_tool_call_complete() {
 
 #[test]
 fn test_tool_call_failed() {
-    let mut app = App::new();
+    let mut app = app_with_session();
 
     app.handle_event(RuntimeEvent::ToolCallStart {
         properties: ToolCallStartProps {
@@ -91,7 +97,7 @@ fn test_tool_call_failed() {
 
 #[test]
 fn test_multiple_tool_calls() {
-    let mut app = App::new();
+    let mut app = app_with_session();
 
     // Start two tool calls
     app.handle_event(RuntimeEvent::ToolCallStart {
@@ -144,7 +150,7 @@ fn test_multiple_tool_calls() {
 
 #[test]
 fn test_active_tool_calls() {
-    let mut app = App::new();
+    let mut app = app_with_session();
 
     app.handle_event(RuntimeEvent::ToolCallStart {
         properties: ToolCallStartProps {
@@ -468,7 +474,7 @@ fn test_is_running() {
 
 #[test]
 fn test_clear_completed_tools() {
-    let mut app = App::new();
+    let mut app = app_with_session();
 
     // Add some tool calls
     app.handle_event(RuntimeEvent::ToolCallStart {

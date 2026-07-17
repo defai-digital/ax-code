@@ -209,10 +209,8 @@ fn test_app_with_streaming_message() {
     use ax_code_tui::events::{MessageData, MessageInfo, RuntimeEvent};
 
     let mut app = App::new();
+    app.session_id = Some("sess-1".to_string());
 
-    // Simulate a message update - creates new message if not found
-    // When message doesn't exist, it's created as streaming=true
-    // Then immediately marked as streaming=false by the update handler
     let event = RuntimeEvent::MessageUpdated {
         properties: MessageInfo {
             info: Some(MessageData {
@@ -222,12 +220,9 @@ fn test_app_with_streaming_message() {
             }),
         },
     };
-
     app.handle_event(event);
-
-    // Message should exist and streaming should be false (marked complete by update)
     assert_eq!(app.messages.len(), 1);
-    assert!(!app.messages[0].is_streaming);
+    assert!(app.messages[0].is_streaming);
 }
 
 #[test]
@@ -235,9 +230,9 @@ fn test_app_message_delta_keeps_streaming() {
     use ax_code_tui::events::{MessageData, MessageInfo, MessagePartDeltaProps, RuntimeEvent};
 
     let mut app = App::new();
+    app.session_id = Some("sess-1".to_string());
 
-    // First create a message via update
-    let create_event = RuntimeEvent::MessageUpdated {
+    app.handle_event(RuntimeEvent::MessageUpdated {
         properties: MessageInfo {
             info: Some(MessageData {
                 id: "msg-1".to_string(),
@@ -245,23 +240,17 @@ fn test_app_message_delta_keeps_streaming() {
                 role: Some(ax_code_tui::events::MessageRole::Assistant),
             }),
         },
-    };
-    app.handle_event(create_event);
-
-    // Now simulate a delta (but first we need to mark it streaming again for this test)
-    // Actually, the message is already marked as not streaming from the update.
-    // This tests that delta doesn't change the streaming status.
-    let delta_event = RuntimeEvent::MessagePartDelta {
+    });
+    app.handle_event(RuntimeEvent::MessagePartDelta {
         properties: MessagePartDeltaProps {
-            session_id: "s".to_string(),
+            session_id: "sess-1".to_string(),
             message_id: "msg-1".to_string(),
             part_id: "part-1".to_string(),
             field: "content".to_string(),
             delta: "Hello".to_string(),
         },
-    };
-    app.handle_event(delta_event);
-
-    // Content should be updated
+    });
     assert_eq!(app.messages[0].content, "Hello");
+    assert!(app.messages[0].is_streaming);
 }
+
