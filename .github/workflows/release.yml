@@ -203,14 +203,6 @@ jobs:
             echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
           } >> "$GITHUB_ENV"
 
-      # Build the real Rust/Ratatui TUI sidecar for the host release target.
-      # Zig/OpenTUI remains the default; --tui-mode=native launches this binary.
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
-
-      - name: Build native Rust TUI
-        run: cargo build --manifest-path crates/Cargo.toml -p ax-code-tui --release
-
       - name: Build
         working-directory: packages/ax-code
         run: pnpm exec tsx ${{ matrix.build-script }} ${{ matrix.build-args }}
@@ -218,17 +210,6 @@ jobs:
           AX_CODE_VERSION: ${{ github.ref_name }}
           AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
           AX_CODE_RELEASE: "true"
-
-      - name: Verify native Rust TUI shipped
-        shell: bash
-        run: |
-          tui_files=$(ls packages/ax-code/dist/ax-code-*/libexec/ax-code-tui* 2>/dev/null || true)
-          if [ -z "$tui_files" ]; then
-            echo "FAIL: native Rust TUI was not shipped into the dist"
-            exit 1
-          fi
-          echo "OK: native Rust TUI shipped:"
-          echo "$tui_files"
 
       - name: Smoke — release runtime
         working-directory: packages/ax-code

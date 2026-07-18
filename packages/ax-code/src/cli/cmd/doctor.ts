@@ -499,28 +499,18 @@ export const DoctorCommand: CommandModule = {
       // Best-effort
     }
 
-    // 13. TUI engine (Zig/OpenTUI is supported; Rust/Ratatui is experimental)
+    // 13. TUI renderer
     {
-      const { resolveEffectiveTuiEngine, isExperimentalTuiEngine } = await import("./tui/engine")
-      const engine = resolveEffectiveTuiEngine()
-      if (isExperimentalTuiEngine(engine)) {
-        checks.push({
-          name: "TUI engine",
-          status: "warn",
-          detail: `Experimental \`${engine}\` Rust/Ratatui UI active via AX_CODE_TUI_ENGINE (supported production engine is zig).`,
-        })
-      } else {
-        checks.push({
-          name: "TUI engine",
-          status: "ok",
-          detail: "zig/OpenTUI (supported)",
-        })
-      }
+      checks.push({
+        name: "TUI renderer",
+        status: "ok",
+        detail: "zig/OpenTUI",
+      })
       if (process.env.AX_CODE_NATIVE_RENDER === "1" || process.env.AX_CODE_NATIVE_RENDER_SCOPE) {
         checks.push({
           name: "Legacy native renderer flags",
           status: "warn",
-          detail: "AX_CODE_NATIVE_RENDER* is retired and ignored; use AX_CODE_TUI_ENGINE=native for Rust/Ratatui.",
+          detail: "AX_CODE_NATIVE_RENDER* is retired and ignored; Zig/OpenTUI is the sole renderer.",
         })
       }
     }

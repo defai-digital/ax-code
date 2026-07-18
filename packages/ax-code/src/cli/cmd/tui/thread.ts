@@ -14,8 +14,6 @@ import { Filesystem } from "@/util/filesystem"
 import type { Event } from "@ax-code/sdk/v2"
 import type { EventSource } from "./context/sdk"
 import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "./win32"
-import { TUI_MODE_CHOICES, applyTuiEngineMode, isExperimentalTuiEngine, resolveEffectiveTuiEngine } from "./engine"
-import { runNativeTui } from "./native-supervisor"
 import { ensureShellEnv } from "@/runtime/shell-env"
 import { TuiConfig } from "@/config/tui"
 import { Instance } from "@/project/instance"
@@ -630,14 +628,6 @@ export const TuiThreadCommand = cmd({
       .option("agent", {
         type: "string",
         describe: "agent to use",
-      })
-      .option("tui-mode", {
-        type: "string",
-        choices: TUI_MODE_CHOICES as unknown as string[],
-        // Hidden: Zig/OpenTUI is the supported production engine. Native is a
-        // separate Rust/Ratatui UI kept behind a dogfood escape hatch.
-        hidden: true,
-        describe: "[experimental] TUI engine override (supported: zig; native is Rust/Ratatui)",
       }),
   handler: async (args) => {
     // Keep ENABLE_PROCESSED_INPUT cleared even if other code flips it.
@@ -653,20 +643,11 @@ export const TuiThreadCommand = cmd({
         process.exitCode = 1
         return
       }
-      // Shell env fills missing keys only. Await it before selecting the UI so
-      // AX_CODE_TUI_ENGINE from a shell profile is visible. Selection also
-      // disables the retired OpenTUI Rust/yoga overlay before any UI import.
+      // Shell env fills missing keys only. Hydrate it before starting the
+      // backend so provider credentials and runtime settings are available.
       await ensureShellEnv()
-      // Must run before the OpenTUI renderer is resolved and before any child
-      // inherits the environment.
-      const tuiModeFlag = args["tui-mode"] as string | undefined
-      const tuiMode = applyTuiEngineMode(tuiModeFlag)
       DiagnosticLog.recordProcess("tui.threadStarted", {
         args: process.argv.slice(2),
-        tuiMode,
-        tuiModeFlag: tuiModeFlag ?? null,
-        tuiModeExperimental: isExperimentalTuiEngine(tuiMode),
-        tuiModeResolved: resolveEffectiveTuiEngine(),
       })
 
       // Resolve relative --project paths from the caller's original cwd, then
@@ -687,29 +668,6 @@ export const TuiThreadCommand = cmd({
         return
       }
       const cwd = Filesystem.resolve(process.cwd())
-
-      if (tuiMode === "native") {
-        const prompt = await input(args.prompt)
-        DiagnosticLog.recordProcess("tui.nativeStarted", { directory: cwd })
-        try {
-          const result = await runNativeTui({
-            cwd,
-            prompt,
-            session: args.session,
-            continue: args.continue,
-            fork: args.fork,
-            model: args.model,
-            agent: args.agent,
-          })
-          DiagnosticLog.recordProcess("tui.nativeExited", result)
-          process.exitCode = result.code
-        } catch (error) {
-          DiagnosticLog.recordProcess("tui.nativeFailed", { error })
-          UI.error(`Native Rust TUI failed to start: ${toErrorMessage(error)}`)
-          process.exitCode = 1
-        }
-        return
-      }
 
       const backendTransport = tuiBackendTransport()
       const file = backendTransport === "worker" ? await target() : undefined
