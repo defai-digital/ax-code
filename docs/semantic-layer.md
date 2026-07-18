@@ -96,16 +96,16 @@ The graph surface includes:
 
 This is the right surface when repeatability and lower latency matter more than immediate editor-state freshness.
 
-## Related: Repo Wiki (OpenWiki)
+## Related: AX Wiki
 
-A third, **optional** knowledge surface is the semantic repo wiki under `openwiki/`, managed via `ax-code wiki` and LangChain OpenWiki. It is **not** part of the structural graph/LSP envelope contract above.
+A third, **optional** knowledge surface is the native semantic repo wiki under `ax-wiki/`, compiled by `ax-code wiki`. It is **not** part of the structural graph/LSP envelope contract above.
 
-| Surface | Role |
-|---------|------|
-| `lsp` / `code_intelligence` | Structural precision (this document) |
-| `openwiki/` | Compiled architecture narrative for agents |
+| Surface                     | Role                                            |
+| --------------------------- | ----------------------------------------------- |
+| `lsp` / `code_intelligence` | Structural precision (this document)            |
+| `ax-wiki/`                  | Source-backed architecture narrative for agents |
 
-See [Repo Wiki (OpenWiki)](wiki.md) for CLI, routing, and non-goals. Wiki synthesis must not be treated as a substitute for callers/callees/refs.
+See [AX Wiki](wiki.md) for CLI, routing, and non-goals. Wiki synthesis must not be treated as a substitute for callers/callees/refs.
 
 ## Important Non-Goals
 
@@ -115,7 +115,7 @@ The current semantic layer does not do these things:
 - no claim that graph freshness equals live LSP freshness
 - no claim that every internal semantic helper is exposed through HTTP or SDK
 - no Rust semantic runtime split in the current implementation
-- no claim that OpenWiki markdown is a structural source of truth (see [wiki.md](wiki.md))
+- no claim that AX Wiki markdown is a structural source of truth (see [wiki.md](wiki.md))
 
 ## Integration Guidance
 
@@ -125,4 +125,4 @@ When writing docs, SDK bindings, or higher-level workflows:
 2. distinguish public tool operations from internal helper functions
 3. only describe audit/replay guarantees that are actually preserved in current schemas
 4. mention flags when a semantic surface is not always enabled
-5. when mentioning OpenWiki, keep wiki vs graph responsibilities explicit
+5. when mentioning AX Wiki, keep wiki vs graph responsibilities explicit

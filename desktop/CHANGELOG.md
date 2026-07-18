@@ -27,7 +27,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Wiki: adds the OpenWiki semantic repository layer with generation, status, lint, path-safety, cards, and related-link support.
+- Wiki: adds the semantic repository layer with generation, status, lint, path-safety, cards, and related-link support.
 
 ### Changed
 

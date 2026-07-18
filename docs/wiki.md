@@ -1,218 +1,118 @@
-# Repo Wiki (OpenWiki)
+# AX Wiki
 
 Status: Active  
 Scope: current-state  
-Last reviewed: 2026-07-14  
-Owner: ax-code runtime
+Last reviewed: 2026-07-18
 
-AX Code integrates [LangChain OpenWiki](https://github.com/langchain-ai/openwiki) as an optional **semantic repository wiki**. The wiki is a multi-page markdown knowledge base under `openwiki/` that agents read for architecture and design intent.
+AX Wiki is AX Code's native repository-wiki compiler. It turns tracked source, configuration, tests, workflows, and existing documentation into a small source-backed Markdown knowledge base under `ax-wiki/`. It uses the same provider configuration and model routing as AX Code; there is no separate executable or credential store.
 
-It is **not** a replacement for structural code intelligence (`ax-code index` / `code_intelligence` / `lsp`). See also [Semantic Layer](semantic-layer.md).
+## Where it fits
 
-## Why a wiki?
+| Need                                                            | Source                                        |
+| --------------------------------------------------------------- | --------------------------------------------- |
+| Architecture, module responsibilities, workflows, design intent | `ax-wiki/`, starting at `quickstart.md`       |
+| Exact symbols, callers, callees, references, refactor impact    | `ax-code index`, `code_intelligence`, and LSP |
+| Repository rules, commands, and safety constraints              | `AGENTS.md`                                   |
+| Personal preferences and durable decisions                      | `.ax-code/memory.json`                        |
 
-Instruction files like `AGENTS.md` should stay **thin**: build commands, safety rules, style. They should not hold hundreds of pages of architecture notes.
+Wiki prose is a compiled navigation layer, not structural proof. If the wiki disagrees with code, trust the code and run `ax-code wiki update`.
 
-OpenWiki follows the LLM Wiki pattern: compile repo understanding into interlinked markdown once, keep it updated, and let agents drill from an index instead of rediscovering structure every session.
+## Quick start
 
-## Knowledge routing
+Connect an AX Code provider, then run:
 
-| Need | Prefer |
-|------|--------|
-| Build / test / safety / style | `AGENTS.md` |
-| Architecture, module intent, design narrative | `openwiki/` (start at `quickstart.md` or `index.md`) |
-| Precise symbols, callers, callees, references | `code_intelligence` / `lsp` (`ax-code index`) |
-| Preferences and past decisions | Project memory (`.ax-code/memory.json`) |
+```bash
+ax-code wiki plan
+ax-code wiki generate
+ax-code wiki doctor
+```
 
-If wiki content and code disagree, **trust the code** (and graph/LSP), then refresh the wiki.
-
-## Prerequisites
-
-1. Install the OpenWiki CLI (external tool):
-
-   ```bash
-   npm install -g openwiki
-   ```
-
-2. Configure a model provider and API key for OpenWiki (typically `~/.openwiki/.env`). See the [OpenWiki README](https://github.com/langchain-ai/openwiki).
-
-3. AX Code does **not** vendor OpenWiki or its model keys. Generation runs as a host process outside the AX Code sandbox.
+`ax-code init --wiki` generates `AGENTS.md`, inserts the AX Wiki pointer block, and compiles the wiki in one workflow. Use `--wiki-only-agents` to add pointers without model calls.
 
 ## Commands
 
-| Command | Purpose |
-|---------|---------|
-| `ax-code wiki status` | Show wiki directory + OpenWiki binary status |
-| `ax-code wiki doctor` | Health checks and remediation hints |
-| `ax-code wiki lint` | Stale-vs-HEAD, missing index, symbol-link coverage |
-| `ax-code wiki cards` | Build Knowledge Cards-lite → `.ax-code/wiki-cards.md` |
-| `ax-code wiki related <symbol>` | Find wiki pages for a symbol (frontmatter or mention) |
-| `ax-code wiki ensure-agents` | Inject/update `<!-- OPENWIKI:… -->` markers in `AGENTS.md` (and `CLAUDE.md` if present) |
-| `ax-code wiki generate` | Create or refresh the wiki via OpenWiki |
-| `ax-code wiki update` | Incremental update via OpenWiki |
-| `ax-code init --wiki` | Thin `AGENTS.md` + markers + generate when CLI is available |
-| `ax-code init --wiki --wiki-only-agents` | Markers only (skip generate) |
+| Command                         | Purpose                                                                      |
+| ------------------------------- | ---------------------------------------------------------------------------- |
+| `ax-code wiki plan`             | Preview the deterministic page plan; no model call                           |
+| `ax-code wiki generate`         | Compile every planned page                                                   |
+| `ax-code wiki update`           | Regenerate only pages affected by source or plan changes                     |
+| `ax-code wiki status`           | Show directory, quickstart, manifest, and freshness status                   |
+| `ax-code wiki doctor`           | Run status, validation, and knowledge-routing checks                         |
+| `ax-code wiki lint`             | Validate metadata, citations, links, protected markers, and source freshness |
+| `ax-code wiki ensure-agents`    | Add or update the `AX-WIKI` block in `AGENTS.md` and an existing `CLAUDE.md` |
+| `ax-code wiki cards`            | Write the compact `.ax-code/wiki-cards.md` index                             |
+| `ax-code wiki related <symbol>` | Find pages by exact frontmatter symbol or body mention                       |
 
-Useful flags:
+Generation options include `--model provider/model`, `--dir <relative>`, `--quiet`, `--skip-agents`, and `--force`. `--force` is intentionally required to replace generated content manually edited outside protected sections.
 
-- `--directory <path>` — project root (default: cwd)
-- `--dir <rel>` — wiki directory relative to root (default: `openwiki` or config `wiki.dir`)
-- `--command <bin>` — OpenWiki executable (default: `openwiki`, or `OPENWIKI_COMMAND` / config `wiki.command`)
-- `--skip-agents` — do not rewrite AGENTS markers after generate/update
-- `--quiet` — buffer OpenWiki output until completion (disables live stream and 15s heartbeats)
-- `--json` — machine-readable output for `status` / `doctor` / `lint` / `related` / `cards`
-- `--dry-run` — preview `ensure-agents` without writing
-- `--force` — with `ensure-agents`, override `wiki.autoInjectAgents: false`
+## Generated contract
 
-Generate/update stream OpenWiki stdout/stderr live and print a heartbeat every 15s while the process is quiet (long LLM jobs).
+AX Wiki writes Markdown pages and `ax-wiki/.manifest.json`. Each page has frontmatter containing:
 
-In the interactive TUI, `/wiki` guides the same flows.
+- `generated_by: ax-wiki`
+- a concise `summary`
+- exact `symbols` returned from evidence-backed generation
+- the repository-relative `sources` used to compile the page
 
-## Typical workflow
+The manifest stores the deterministic plan hash, repository source hashes, page hashes, generation model, git revision, and generation time. Pages are written atomically; the manifest is written last and only after the complete in-memory candidate passes validation.
 
-```bash
-# 1. Thin project instructions
-ax-code init
+Source discovery prefers Git's tracked and unignored file list, excludes generated/build/vendor directories and the wiki itself, skips binary or oversized files, and refuses paths or symlinks outside the repository.
 
-# 2. Bootstrap semantic wiki (or: ax-code init --wiki)
-ax-code wiki generate
+## Incremental updates and manual content
 
-# 3. Structural graph for precise navigation (independent)
-ax-code index
+`wiki update` compares current source hashes with the manifest and maps changes through each page's selectors. A plan change regenerates all planned pages; otherwise unrelated pages remain untouched.
 
-# 4. After substantial code changes
-ax-code wiki update
+Generated prose is compiler-owned. Put durable maintainer text inside a protected block:
+
+```markdown
+<!-- AX-WIKI:PROTECTED:START deployment-warning -->
+
+Production migrations require an operator-approved maintenance window.
+
+<!-- AX-WIKI:PROTECTED:END -->
 ```
 
-When `openwiki/` already exists, a plain `ax-code init` (without `--wiki`) will still soft-inject the OpenWiki marker block into `AGENTS.md` if it is missing, so agents keep the wiki pointer without regenerating docs.
-
-## What gets written
-
-| Path | Role |
-|------|------|
-| `openwiki/**/*.md` | Wiki pages (OpenWiki owns content) |
-| `openwiki/.last-update.json` | Optional metadata (if OpenWiki writes it) |
-| `AGENTS.md` / `CLAUDE.md` | Only the `<!-- OPENWIKI:START -->` … `<!-- OPENWIKI:END -->` span is managed by `ensure-agents` |
-
-User content **outside** those markers is never clobbered.
-
-## Session behavior
-
-When `openwiki/` is present and `wiki.enabled` is not `false`, AX Code injects a `<repo_wiki>` system block that tells the agent to:
-
-1. Start from the wiki index for architecture questions
-2. Use `code_intelligence` / `lsp` for precise symbols
-3. Prefer code when wiki and source disagree
+Protected bodies survive regeneration. AX Wiki refuses to overwrite other manual edits unless `--force` is supplied. Obsolete generated pages are removed only when their managed content is unchanged and they contain no protected section.
 
 ## Configuration
 
-In `ax-code.json` (or project config):
+Configure the integration in project `ax-code.json`:
 
 ```json
 {
   "wiki": {
     "enabled": true,
-    "command": "openwiki",
-    "dir": "openwiki",
+    "dir": "ax-wiki",
+    "model": "openai/gpt-5-mini",
     "autoInjectAgents": true,
-    "touchClaudeMd": true
+    "touchClaudeMd": true,
+    "maxPages": 12,
+    "maxSourcesPerPage": 80,
+    "exclude": ["fixtures/**"]
   }
 }
 ```
 
-| Key | Default | Meaning |
-|-----|---------|---------|
-| `enabled` | true (effective) | Inject `<repo_wiki>` when the wiki directory exists |
-| `command` | `openwiki` | Executable name or path (`OPENWIKI_COMMAND` overrides when unset) |
-| `dir` | `openwiki` | Wiki directory relative to project root |
-| `autoInjectAgents` | true | Allow ensure-agents / init paths to rewrite markers |
-| `touchClaudeMd` | true | Also update `CLAUDE.md` when it already exists |
+`include`, `exclude`, `maxSourceBytes`, and `maxPageSourceBytes` control evidence discovery and budgets. `instructions` adds project-specific compiler guidance. For a fully curated plan, configure `pages` entries with `path`, `title`, `purpose`, and `selectors`; an explicit plan must include `quickstart.md`.
 
-## Relationship to indexing
+You can also place compiler guidance in `ax-wiki.instructions.md` and core engine configuration in `ax-wiki.config.json`. Explicit AX Code runtime settings override the core config where both are supplied.
 
-| | `ax-code wiki` | `ax-code index` |
-|--|----------------|-----------------|
-| Artifact | Markdown under `openwiki/` | SQLite code graph |
-| Strength | Synthesized architecture narrative | Structural precision |
-| Cost | LLM generate/update (OpenWiki) | Local LSP/graph indexing |
-| Freshness | Explicit `wiki update` | Watcher + re-index |
+## Agent routing
 
-Do not use the wiki alone for rename impact, call-graph proof, or refactor blast radius. Use `code_intelligence` / `lsp`.
+When a healthy wiki exists and `wiki.enabled` is not `false`, session prompts receive a compact `<repo_wiki>` protocol. It tells agents to start at quickstart, load only relevant pages, verify important claims through cited files, and use graph/LSP tools for structural questions.
+
+The managed `<!-- AX-WIKI:START -->` block in `AGENTS.md` carries the same routing policy without copying wiki content into repository instructions.
+
+## CI
+
+Run `ax-code wiki update` followed by `ax-code wiki lint` in a provider-authenticated job, then open a documentation PR. See [`examples/ax-wiki-update.yml`](examples/ax-wiki-update.yml). Treat generated wiki changes like other documentation: review source citations and avoid auto-merging model output.
 
 ## Troubleshooting
 
-| Symptom | What to try |
-|---------|-------------|
-| `OpenWiki CLI not found` | `npm install -g openwiki`; or set `wiki.command` / `OPENWIKI_COMMAND` |
-| Generate fails with auth errors | Configure OpenWiki provider keys in `~/.openwiki/.env` |
-| Wiki present but agents ignore it | Run `ax-code wiki ensure-agents`; check `wiki.enabled` |
-| AGENTS.md got too large | Keep architecture in `openwiki/`; leave only rules/commands in AGENTS |
-| Stale wiki after big refactors | `ax-code wiki update` |
-
-```bash
-ax-code wiki doctor
-```
-
-## Cards-lite and symbol links
-
-### Knowledge Cards-lite
-
-```bash
-ax-code wiki cards
-# → writes .ax-code/wiki-cards.md (agent-friendly dense index)
-ax-code wiki cards --json
-ax-code wiki cards --stdout
-```
-
-Cards are derived **from** `openwiki/` pages (titles, summaries, frontmatter symbols). They live under `.ax-code/` so OpenWiki regenerations do not wipe them.
-
-### Wiki ↔ graph cross-links
-
-Optionally declare symbols on wiki pages via frontmatter:
-
-```markdown
----
-title: Auth flow
-symbols:
-  - AuthService
-  - login
----
-
-# Auth flow
-...
-```
-
-Then:
-
-```bash
-ax-code wiki related AuthService
-ax-code wiki related AuthService --exact   # frontmatter only
-```
-
-Use `code_intelligence` for structural truth; use `related` to jump to narrative pages. TUI/Desktop UI is **not** required — agents and CLI consume these paths.
-
-### Lint
-
-```bash
-ax-code wiki lint
-ax-code wiki lint --json
-```
-
-Checks include: missing wiki/index, empty pages, **stale cursor** (`openwiki/.last-update.json` commit vs `git HEAD`), and lack of `symbols:` frontmatter. Exit code is non-zero when unhealthy or stale (useful in CI).
-
-## CI (optional)
-
-OpenWiki can run on a schedule and open a documentation PR.
-
-1. Copy the example workflow: [`docs/examples/openwiki-update.yml`](examples/openwiki-update.yml) → `.github/workflows/openwiki-update.yml`
-2. Add repository secrets for your OpenWiki provider (for example `OPENROUTER_API_KEY`, `OPENWIKI_MODEL_ID`)
-3. Optionally install `ax-code` in the job for `wiki ensure-agents` / `wiki cards`
-
-Upstream OpenWiki also ships CI templates: [langchain-ai/openwiki](https://github.com/langchain-ai/openwiki). AX Code does not require CI wiki updates for local use.
-
-## Non-goals
-
-- Replacing `ax-code index` or DRE/impact tools with markdown search
-- Shipping OpenWiki inside the AX Code binary
-- Guaranteeing every wiki claim is factually perfect (synthesis can drift)
-- Auto-running OpenWiki on every session start (too expensive)
+| Symptom                                    | Action                                                                       |
+| ------------------------------------------ | ---------------------------------------------------------------------------- |
+| No model or authentication error           | Connect/configure an AX Code provider or pass `--model provider/model`       |
+| `manually modified generated pages`        | Move durable text into protected markers, or review and rerun with `--force` |
+| Wiki is stale                              | Run `ax-code wiki update`, then `ax-code wiki lint`                          |
+| Missing/broken page or citation            | Run `ax-code wiki generate`; inspect custom page selectors if configured     |
+| Architecture answer needs exact references | Use `code_intelligence` or LSP; the wiki is conceptual navigation            |

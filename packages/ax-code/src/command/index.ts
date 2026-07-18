@@ -232,7 +232,7 @@ export namespace Command {
     }
     commands[Default.WIKI] = {
       name: Default.WIKI,
-      description: "OpenWiki repo wiki status / generate / update (semantic wiki, not code index)",
+      description: "Native AX Wiki status / generate / update (semantic wiki, not code index)",
       source: "command",
       sourceTool: "builtin",
       scope: "builtin",

@@ -915,10 +915,7 @@ export const Info = z
           .describe("Hybrid local/cloud placement policy"),
         council: z
           .object({
-            enabled: z
-              .boolean()
-              .optional()
-              .describe("Allow the council multi-provider advisory tool. Default: true."),
+            enabled: z.boolean().optional().describe("Allow the council multi-provider advisory tool. Default: true."),
             maxMembers: PositiveInteger.optional().describe(
               "Maximum council members per invocation (default: 3, hard max: 6).",
             ),
@@ -937,9 +934,7 @@ export const Info = z
               .boolean()
               .optional()
               .describe("Enable arena multi-contestant mode tools. Default: false until Phase 2."),
-            maxContestants: PositiveInteger.optional().describe(
-              "Maximum arena contestants (default: 3, hard max: 5).",
-            ),
+            maxContestants: PositiveInteger.optional().describe("Maximum arena contestants (default: 3, hard max: 5)."),
             strategy: z
               .enum(["verify_first", "diversity", "hybrid_score"])
               .optional()
@@ -960,9 +955,7 @@ export const Info = z
               .number()
               .nonnegative()
               .optional()
-              .describe(
-                "Rough USD cost per council/arena member call used with maxEstimatedUsd to cap fan-out size.",
-              ),
+              .describe("Rough USD cost per council/arena member call used with maxEstimatedUsd to cap fan-out size."),
           })
           .optional()
           .describe("Ensemble cost budget controls"),
@@ -979,26 +972,55 @@ export const Info = z
           .describe(
             "When true (default), inject <repo_wiki> system protocol if the wiki directory exists. Set false to suppress.",
           ),
-        command: z
+        dir: z.string().optional().describe("AX Wiki directory relative to project root. Default: ax-wiki."),
+        model: z
           .string()
           .optional()
-          .describe("OpenWiki executable name or path. Default: openwiki (or OPENWIKI_COMMAND env)."),
-        dir: z
-          .string()
-          .optional()
-          .describe("Wiki directory relative to project root. Default: openwiki (OpenWiki code-mode default)."),
+          .describe("Model used for wiki compilation as provider/model. Defaults to the AX Code model."),
         autoInjectAgents: z
           .boolean()
           .optional()
-          .describe("Allow wiki ensure-agents / init --wiki to rewrite OPENWIKI marker blocks. Default: true."),
+          .describe("Allow wiki ensure-agents / init --wiki to rewrite AX-WIKI marker blocks. Default: true."),
         touchClaudeMd: z
           .boolean()
           .optional()
           .describe("When ensuring markers, also update CLAUDE.md if it already exists. Default: true."),
+        include: z.array(z.string()).optional().describe("Optional source glob allowlist for AX Wiki discovery."),
+        exclude: z.array(z.string()).optional().describe("Additional source globs excluded from AX Wiki discovery."),
+        maxPages: z.number().int().min(3).max(40).optional().describe("Maximum generated page count. Default: 12."),
+        maxSourcesPerPage: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe("Maximum evidence files selected per page."),
+        maxSourceBytes: z.number().int().min(1024).optional().describe("Maximum bytes read from one source file."),
+        maxPageSourceBytes: z
+          .number()
+          .int()
+          .min(4096)
+          .optional()
+          .describe("Maximum combined source evidence bytes per page."),
+        instructions: z
+          .string()
+          .optional()
+          .describe("Additional maintainer instructions applied during wiki compilation."),
+        pages: z
+          .array(
+            z.object({
+              path: z.string(),
+              title: z.string(),
+              purpose: z.string(),
+              selectors: z.array(z.string()).min(1),
+            }),
+          )
+          .optional()
+          .describe("Optional explicit wiki page plan; must include quickstart.md."),
       })
       .optional()
       .describe(
-        "OpenWiki repo semantic wiki (ADR-050). Complements structural ax-code index; does not replace code_intelligence.",
+        "Native source-backed AX Wiki. Complements structural ax-code index; does not replace code_intelligence.",
       ),
   })
   .strict()

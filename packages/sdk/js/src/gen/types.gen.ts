@@ -2519,7 +2519,7 @@ export type Config = {
     }
   }
   /**
-   * OpenWiki repo semantic wiki (ADR-050). Complements structural ax-code index; does not replace code_intelligence.
+   * Native source-backed AX Wiki. Complements structural ax-code index; does not replace code_intelligence.
    */
   wiki?: {
     /**
@@ -2527,21 +2527,58 @@ export type Config = {
      */
     enabled?: boolean
     /**
-     * OpenWiki executable name or path. Default: openwiki (or OPENWIKI_COMMAND env).
-     */
-    command?: string
-    /**
-     * Wiki directory relative to project root. Default: openwiki (OpenWiki code-mode default).
+     * AX Wiki directory relative to project root. Default: ax-wiki.
      */
     dir?: string
     /**
-     * Allow wiki ensure-agents / init --wiki to rewrite OPENWIKI marker blocks. Default: true.
+     * Model used for wiki compilation as provider/model. Defaults to the AX Code model.
+     */
+    model?: string
+    /**
+     * Allow wiki ensure-agents / init --wiki to rewrite AX-WIKI marker blocks. Default: true.
      */
     autoInjectAgents?: boolean
     /**
      * When ensuring markers, also update CLAUDE.md if it already exists. Default: true.
      */
     touchClaudeMd?: boolean
+    /**
+     * Optional source glob allowlist for AX Wiki discovery.
+     */
+    include?: Array<string>
+    /**
+     * Additional source globs excluded from AX Wiki discovery.
+     */
+    exclude?: Array<string>
+    /**
+     * Maximum generated page count. Default: 12.
+     */
+    maxPages?: number
+    /**
+     * Maximum evidence files selected per page.
+     */
+    maxSourcesPerPage?: number
+    /**
+     * Maximum bytes read from one source file.
+     */
+    maxSourceBytes?: number
+    /**
+     * Maximum combined source evidence bytes per page.
+     */
+    maxPageSourceBytes?: number
+    /**
+     * Additional maintainer instructions applied during wiki compilation.
+     */
+    instructions?: string
+    /**
+     * Optional explicit wiki page plan; must include quickstart.md.
+     */
+    pages?: Array<{
+      path: string
+      title: string
+      purpose: string
+      selectors: Array<string>
+    }>
   }
 }
 

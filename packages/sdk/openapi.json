@@ -41831,28 +41831,101 @@
             }
           },
           "wiki": {
-            "description": "OpenWiki repo semantic wiki (ADR-050). Complements structural ax-code index; does not replace code_intelligence.",
+            "description": "Native source-backed AX Wiki. Complements structural ax-code index; does not replace code_intelligence.",
             "type": "object",
             "properties": {
               "enabled": {
                 "description": "When true (default), inject <repo_wiki> system protocol if the wiki directory exists. Set false to suppress.",
                 "type": "boolean"
               },
-              "command": {
-                "description": "OpenWiki executable name or path. Default: openwiki (or OPENWIKI_COMMAND env).",
+              "dir": {
+                "description": "AX Wiki directory relative to project root. Default: ax-wiki.",
                 "type": "string"
               },
-              "dir": {
-                "description": "Wiki directory relative to project root. Default: openwiki (OpenWiki code-mode default).",
+              "model": {
+                "description": "Model used for wiki compilation as provider/model. Defaults to the AX Code model.",
                 "type": "string"
               },
               "autoInjectAgents": {
-                "description": "Allow wiki ensure-agents / init --wiki to rewrite OPENWIKI marker blocks. Default: true.",
+                "description": "Allow wiki ensure-agents / init --wiki to rewrite AX-WIKI marker blocks. Default: true.",
                 "type": "boolean"
               },
               "touchClaudeMd": {
                 "description": "When ensuring markers, also update CLAUDE.md if it already exists. Default: true.",
                 "type": "boolean"
+              },
+              "include": {
+                "description": "Optional source glob allowlist for AX Wiki discovery.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "exclude": {
+                "description": "Additional source globs excluded from AX Wiki discovery.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "maxPages": {
+                "description": "Maximum generated page count. Default: 12.",
+                "type": "integer",
+                "minimum": 3,
+                "maximum": 40
+              },
+              "maxSourcesPerPage": {
+                "description": "Maximum evidence files selected per page.",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200
+              },
+              "maxSourceBytes": {
+                "description": "Maximum bytes read from one source file.",
+                "type": "integer",
+                "minimum": 1024,
+                "maximum": 9007199254740991
+              },
+              "maxPageSourceBytes": {
+                "description": "Maximum combined source evidence bytes per page.",
+                "type": "integer",
+                "minimum": 4096,
+                "maximum": 9007199254740991
+              },
+              "instructions": {
+                "description": "Additional maintainer instructions applied during wiki compilation.",
+                "type": "string"
+              },
+              "pages": {
+                "description": "Optional explicit wiki page plan; must include quickstart.md.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "purpose": {
+                      "type": "string"
+                    },
+                    "selectors": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "title",
+                    "purpose",
+                    "selectors"
+                  ]
+                }
               }
             }
           }

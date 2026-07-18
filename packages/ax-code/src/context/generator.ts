@@ -114,7 +114,7 @@ Keep this file **thin**. Do not dump full architecture into AGENTS.md.
 | Need | Prefer |
 |------|--------|
 | Build / test / safety / style rules | This file (\`AGENTS.md\`) |
-| Architecture, module intent, design narrative | \`openwiki/\` (OpenWiki) — start at \`openwiki/quickstart.md\` or \`openwiki/index.md\` |
+| Architecture, module intent, design narrative | \`ax-wiki/\` — start at \`ax-wiki/quickstart.md\` |
 | Precise symbols, callers, callees, references | \`code_intelligence\` / \`lsp\` (\`ax-code index\`) |
 | Personal prefs / past decisions | Project memory (\`.ax-code/memory.json\`) |
 

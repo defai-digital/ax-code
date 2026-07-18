@@ -1,20 +1,9 @@
-/**
- * /init command — generates AGENTS.md project context
- */
-
 import type { CommandModule } from "yargs"
+import path from "node:path"
 import { Context, type DepthLevel } from "../../context"
 import { Filesystem } from "../../util/filesystem"
-import {
-  detectWiki,
-  ensureAgentsWikiPointers,
-  runOpenWiki,
-  formatElapsed,
-  startQuietHeartbeat,
-  OPENWIKI_INSTALL_HINT,
-  resolveBinary,
-  resolveWikiRuntimeConfig,
-} from "../../wiki"
+import { ensureAgentsWikiPointers, getWikiStatus, resolveWikiRuntimeConfig, runNativeWiki } from "../../wiki"
+import { bootstrap } from "../bootstrap"
 
 export const InitCommand: CommandModule<
   {},
@@ -53,26 +42,21 @@ export const InitCommand: CommandModule<
       })
       .option("wiki", {
         type: "boolean",
-        describe: "Bootstrap OpenWiki: ensure AGENTS markers and run wiki generate when OpenWiki CLI is available",
+        describe: "Bootstrap native AX Wiki pointers and generate source-backed pages",
         default: false,
       })
       .option("wiki-only-agents", {
         type: "boolean",
-        describe: "With --wiki: only inject AGENTS/CLAUDE markers; skip OpenWiki generate",
+        describe: "With --wiki: only inject AX Wiki pointers; skip model generation",
         default: false,
       }),
   handler: async (args) => {
-    const root = args.directory || Filesystem.callerCwd()
+    const caller = Filesystem.callerCwd()
+    const root = Filesystem.resolve(args.directory ? path.resolve(caller, args.directory) : caller)
     const depth = args.depth as DepthLevel
 
     console.log(`Analyzing project at ${root} (depth: ${depth})...`)
-
-    const result = await Context.init({
-      root,
-      depth,
-      force: args.force,
-      dryRun: args["dry-run"],
-    })
+    const result = await Context.init({ root, depth, force: args.force, dryRun: args["dry-run"] })
 
     if (args["dry-run"]) {
       console.log("\n--- AGENTS.md Preview ---\n")
@@ -81,112 +65,68 @@ export const InitCommand: CommandModule<
       return
     }
 
-    if (!result.created) {
-      console.log("AGENTS.md already exists. Use --force to regenerate.")
-    } else {
-      const c = result.info.complexity
-      console.log(`\nAGENTS.md generated successfully!`)
+    if (!result.created) console.log("AGENTS.md already exists. Use --force to regenerate.")
+    else {
+      const complexity = result.info.complexity
+      console.log("\nAGENTS.md generated successfully!")
       console.log(`  File: ${result.path}`)
       console.log(`  Project: ${result.info.name} (${result.info.primaryLanguage})`)
       console.log(`  Stack: ${result.info.techStack.join(", ")}`)
-      if (c) {
-        console.log(`  Complexity: ${c.level} (${c.fileCount} files, ~${c.linesOfCode} LOC)`)
-      }
+      if (complexity)
+        console.log(`  Complexity: ${complexity.level} (${complexity.fileCount} files, ~${complexity.linesOfCode} LOC)`)
     }
 
-    const wikiCfg = await resolveWikiRuntimeConfig().catch(() => null)
-
-    // Soft path: if a wiki already exists, keep AGENTS.md pointer fresh without --wiki.
-    if (!args.wiki) {
-      try {
-        const existing = await detectWiki({
-          root,
-          dir: wikiCfg?.dir,
-          command: wikiCfg?.command,
-        })
-        if (existing.wikiExists && wikiCfg?.autoInjectAgents !== false) {
-          const soft = await ensureAgentsWikiPointers(root, {
-            wikiRel: existing.wikiDirRelative,
-            touchClaudeMd: wikiCfg?.touchClaudeMd !== false,
-          })
-          if (soft.updated.length) {
-            console.log(
-              `\nOpenWiki: wiki present at ${existing.wikiDirRelative}/; updated markers: ${soft.updated.join(", ")}`,
-            )
+    await bootstrap(root, async () => {
+      const config = await resolveWikiRuntimeConfig()
+      if (!args.wiki) {
+        try {
+          const status = await getWikiStatus({ root, wikiDir: config.dir })
+          if (status.exists && config.autoInjectAgents) {
+            const pointers = await ensureAgentsWikiPointers(root, {
+              wikiDir: config.dir,
+              touchClaudeMd: config.touchClaudeMd,
+            })
+            if (pointers.updated.length) console.log(`\nAX Wiki: updated pointers in ${pointers.updated.join(", ")}`)
           }
+        } catch {
+          // A soft pointer refresh must never fail init.
         }
-      } catch {
-        // never fail init on soft wiki inject
-      }
-      return
-    }
-
-    console.log("\nOpenWiki bootstrap (--wiki)…")
-    const dir = wikiCfg?.dir ?? "openwiki"
-    const command = wikiCfg?.command ?? "openwiki"
-    const ensured = await ensureAgentsWikiPointers(root, {
-      wikiRel: dir,
-      touchClaudeMd: wikiCfg?.touchClaudeMd !== false,
-    })
-    if (ensured.updated.length) {
-      console.log(`  Markers: updated ${ensured.updated.join(", ")}`)
-    } else {
-      console.log("  Markers: already present")
-    }
-
-    if (args["wiki-only-agents"]) {
-      console.log("  Skipping OpenWiki generate (--wiki-only-agents).")
-      console.log("  Run `ax-code wiki generate` when ready.")
-      return
-    }
-
-    const binary = await resolveBinary(command)
-    if (!binary) {
-      console.log(`  OpenWiki CLI not found ("${command}").`)
-      console.log(`  ${OPENWIKI_INSTALL_HINT}`)
-      console.log("  AGENTS markers are in place; generate the wiki later with `ax-code wiki generate`.")
-      return
-    }
-
-    console.log("  Running OpenWiki generate (may take several minutes; live stream + 15s heartbeats)…")
-    const started = Date.now()
-    let lastActivity = started
-    const stopHeartbeat = startQuietHeartbeat({
-      intervalMs: 15_000,
-      getLastActivityMs: () => lastActivity,
-      getStartedMs: () => started,
-      onTick: (elapsedMs) => {
-        process.stderr.write(`  [ax-code init --wiki] still running… elapsed ${formatElapsed(elapsedMs)}\n`)
-      },
-    })
-    try {
-      const run = await runOpenWiki({
-        root,
-        action: "generate",
-        binaryPath: binary,
-        command,
-        onProgress: (ev) => {
-          lastActivity = Date.now()
-          const out = ev.stream === "stdout" ? process.stdout : process.stderr
-          out.write(ev.chunk)
-        },
-      })
-      if (run.stdout.length && !run.stdout.endsWith("\n")) process.stdout.write("\n")
-      if (run.stderr.length && !run.stderr.endsWith("\n")) process.stderr.write("\n")
-      if (!run.ok) {
-        console.log(`  OpenWiki generate failed: ${run.error ?? "unknown error"}`)
-        if (run.installHint) console.log(`  ${run.installHint}`)
-        process.exitCode = 1
         return
       }
-      // Re-ensure markers after OpenWiki may have rewritten AGENTS.md
-      await ensureAgentsWikiPointers(root, {
-        wikiRel: dir,
-        touchClaudeMd: wikiCfg?.touchClaudeMd !== false,
+
+      console.log("\nAX Wiki bootstrap (--wiki)…")
+      const pointers = await ensureAgentsWikiPointers(root, {
+        wikiDir: config.dir,
+        touchClaudeMd: config.touchClaudeMd,
       })
-      console.log(`  Wiki generate completed in ${formatElapsed(run.durationMs)}`)
-    } finally {
-      stopHeartbeat()
-    }
+      console.log(
+        pointers.updated.length ? `  Pointers: updated ${pointers.updated.join(", ")}` : "  Pointers: already present",
+      )
+
+      if (args["wiki-only-agents"]) {
+        console.log("  Skipping generation (--wiki-only-agents). Run `ax-code wiki generate` when ready.")
+        return
+      }
+
+      console.log("  Compiling native AX Wiki with the configured AX Code model…")
+      const started = Date.now()
+      try {
+        const wiki = await runNativeWiki({
+          root,
+          action: "generate",
+          dir: config.dir,
+          model: config.model,
+          onProgress: (progress) => {
+            if (progress.type === "page_start") console.log(`  [${progress.index}/${progress.total}] ${progress.path}`)
+          },
+        })
+        console.log(
+          `  Generated ${wiki.generatedPages.length} page(s) in ${((Date.now() - started) / 1000).toFixed(1)}s`,
+        )
+      } catch (error) {
+        console.error(`  AX Wiki generation failed: ${error instanceof Error ? error.message : String(error)}`)
+        process.exitCode = 1
+      }
+    })
   },
 }

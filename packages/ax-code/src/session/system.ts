@@ -29,7 +29,7 @@ import { ModeProtocol } from "../mode/protocol"
 import { Config } from "../config/config"
 import type { ModePolicy } from "../mode/policy"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
-import { maybeRenderRepoWikiProtocol } from "../wiki/protocol"
+import { maybeRenderAxWikiProtocol } from "@ax-code/ax-wiki"
 
 export namespace SystemPrompt {
   const log = Log.create({ service: "session.system-prompt" })
@@ -188,21 +188,20 @@ export namespace SystemPrompt {
       ]
       const wikiCfg = (
         cfg as {
-          wiki?: { enabled?: boolean; dir?: string; command?: string }
+          wiki?: { enabled?: boolean; dir?: string }
         }
       ).wiki
       // enabled defaults to true when unset; only explicit false suppresses.
-      const wikiBlock = await maybeRenderRepoWikiProtocol(Instance.directory, {
+      const wikiBlock = await maybeRenderAxWikiProtocol(Instance.directory, {
         enabled: wikiCfg?.enabled !== false,
-        dir: wikiCfg?.dir,
-        command: wikiCfg?.command,
+        wikiDir: wikiCfg?.dir,
       })
       if (wikiBlock) wikiProtocol = [wikiBlock]
     } catch (error) {
       log.warn("execution modes protocol resolve failed", { error })
       executionModesProtocol = [ModeProtocol.renderExecutionModes()]
       try {
-        const wikiBlock = await maybeRenderRepoWikiProtocol(Instance.directory)
+        const wikiBlock = await maybeRenderAxWikiProtocol(Instance.directory)
         if (wikiBlock) wikiProtocol = [wikiBlock]
       } catch (wikiError) {
         log.warn("repo wiki protocol resolve failed", { error: wikiError })

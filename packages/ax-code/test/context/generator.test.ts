@@ -54,10 +54,10 @@ describe("context generator", () => {
     expect(content).toContain("Verify with the narrowest relevant test")
   })
 
-  test("includes knowledge routing for OpenWiki vs index", () => {
+  test("includes knowledge routing for AX Wiki vs index", () => {
     const content = generate(baseInfo, { depth: "standard" })
     expect(content).toContain("## Knowledge routing")
-    expect(content).toContain("openwiki/")
+    expect(content).toContain("ax-wiki/")
     expect(content).toContain("code_intelligence")
     expect(content).toContain("ax-code wiki")
   })

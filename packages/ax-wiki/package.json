@@ -1,0 +1,19 @@
+{
+  "name": "@ax-code/ax-wiki",
+  "version": "0.1.0",
+  "description": "Deterministic, source-backed repository wiki engine for AX Code",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "^4.1.9"
+  }
+}

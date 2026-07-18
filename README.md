@@ -189,7 +189,7 @@ AX Code is designed for agent work that touches real files, shells, sessions, an
 - **Terminal command center**: prompt editing, provider/model picker, agent picker, session list, MCP status, skill dialog, sandbox/autonomous toggles, and live tool progress.
 - **Controlled execution**: tools such as read, edit, write, grep, glob, bash, web fetch/search, todo, task, and skill execution all pass through permission and isolation boundaries.
 - **Durable sessions**: resume, fork, compact, export/import, replay, compare, rollback, and inspect session risk instead of losing work when a chat closes.
-- **Repository intelligence**: `ax-code init` writes a thin `AGENTS.md`; `ax-code wiki` integrates OpenWiki for multi-page semantic docs; `ax-code index`, `graph`, semantic diff, LSP-backed context, and risk/DRE views provide structural precision on larger codebases.
+- **Repository intelligence**: `ax-code init` writes a thin `AGENTS.md`; the native `ax-code wiki` compiler creates source-backed semantic docs; `ax-code index`, `graph`, semantic diff, LSP-backed context, and risk/DRE views provide structural precision on larger codebases.
 - **Provider flexibility**: connect hosted or local providers from `/connect` or `ax-code providers login`; list available models with `ax-code models`.
 - **Extensibility**: add MCP servers, create custom agents, validate Agent Skills, and embed custom SDK tools without rebuilding the orchestration layer.
 
@@ -208,7 +208,7 @@ See [Sandbox Mode](docs/sandbox.md), [Autonomous Mode](docs/autonomous.md), [MCP
 
 1. Open a repository and run `ax-code`.
 2. Use `/connect` to add a provider or switch models. For automation, use `ax-code providers login` or provider environment variables.
-3. Run `ax-code init` so `AGENTS.md` captures local conventions, safety rules, and project context. Use `ax-code init --wiki` (or `ax-code wiki generate`) when you want an OpenWiki semantic wiki under `openwiki/`.
+3. Run `ax-code init` so `AGENTS.md` captures local conventions, safety rules, and project context. Use `ax-code init --wiki` (or `ax-code wiki generate`) when you want a native semantic wiki under `ax-wiki/`.
 4. Keep the default sandbox for broad edits; change it only when the task needs a different boundary.
 5. Run `ax-code index` on larger repos when structural code-intelligence (symbols, callers, refs) matters; use the wiki for architecture narrative.
 6. Use `ax-code run`, `ax-code serve`, or `@ax-code/sdk` when the same agent workflow needs to move into scripts, CI, bots, or applications.
@@ -245,28 +245,28 @@ ranking, GLM-4.7-Flash placement, and memory-based recommendations.
 - [Supported Providers and Models](docs/supported-providers.md): Cloud API providers, CLI providers, and AX Engine model ids
 - [AX Engine Model Selection](docs/ax-engine-model-selection.md): local AX Engine model ranking and memory guidance
 - [Semantic Layer](docs/semantic-layer.md): provenance and replay boundaries for graph and LSP-backed answers
-- [Repo Wiki (OpenWiki)](docs/wiki.md): semantic multi-page wiki via OpenWiki; complements `ax-code index`
+- [AX Wiki](docs/wiki.md): native source-backed semantic wiki; complements `ax-code index`
 - [Stability](docs/stability.md): crash hygiene, aborts vs faults, TUI lifecycle, timeouts
 
 ## Common Commands
 
-| Command                                        | Purpose                                            |
-| ---------------------------------------------- | -------------------------------------------------- |
-| `ax-code`                                      | Open the interactive terminal UI                   |
-| `ax-code run "debug why the build is failing"` | Run a one-shot headless task                       |
-| `ax-code providers login`                      | Configure provider credentials                     |
-| `ax-code models`                               | List available provider/model IDs                  |
-| `ax-code init`                                 | Create or update repository `AGENTS.md`            |
-| `ax-code init --wiki`                          | AGENTS.md + OpenWiki bootstrap                     |
-| `ax-code wiki`                                 | OpenWiki status / generate / update / lint / cards |
-| `ax-code index`                                | Build code-intelligence indexes                    |
-| `ax-code graph`                                | Inspect the repository graph                       |
-| `ax-code mcp list --tools`                     | Review MCP servers, exposed tools, and rules       |
-| `ax-code mcp add`                              | Add a local or remote MCP server                   |
-| `ax-code agent create`                         | Generate a custom project or global agent          |
-| `ax-code skill list`                           | List discovered Agent Skills                       |
-| `ax-code serve`                                | Start the local HTTP/OpenAPI server                |
-| `ax-code doctor`                               | Diagnose install, runtime, storage, and auth       |
+| Command                                        | Purpose                                         |
+| ---------------------------------------------- | ----------------------------------------------- |
+| `ax-code`                                      | Open the interactive terminal UI                |
+| `ax-code run "debug why the build is failing"` | Run a one-shot headless task                    |
+| `ax-code providers login`                      | Configure provider credentials                  |
+| `ax-code models`                               | List available provider/model IDs               |
+| `ax-code init`                                 | Create or update repository `AGENTS.md`         |
+| `ax-code init --wiki`                          | AGENTS.md + native AX Wiki bootstrap            |
+| `ax-code wiki`                                 | AX Wiki plan / generate / update / lint / cards |
+| `ax-code index`                                | Build code-intelligence indexes                 |
+| `ax-code graph`                                | Inspect the repository graph                    |
+| `ax-code mcp list --tools`                     | Review MCP servers, exposed tools, and rules    |
+| `ax-code mcp add`                              | Add a local or remote MCP server                |
+| `ax-code agent create`                         | Generate a custom project or global agent       |
+| `ax-code skill list`                           | List discovered Agent Skills                    |
+| `ax-code serve`                                | Start the local HTTP/OpenAPI server             |
+| `ax-code doctor`                               | Diagnose install, runtime, storage, and auth    |
 
 ## Community
 
