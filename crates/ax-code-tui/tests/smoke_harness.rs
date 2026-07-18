@@ -153,7 +153,9 @@ fn smoke_permission_prompt_accept_flow() {
     let result = app.accept_permission();
     assert!(result.is_some());
 
-    // 4. TUI returns to input mode
+    // 4. The modal stays retryable until the server confirms the reply.
+    assert!(matches!(app.mode, AppMode::Permission));
+    app.resolve_permission("perm-smoke-1");
     assert!(matches!(app.mode, AppMode::Input));
 }
 
@@ -174,6 +176,8 @@ fn smoke_permission_prompt_reject_flow() {
 
     let result = app.reject_permission();
     assert!(result.is_some());
+    assert!(matches!(app.mode, AppMode::Permission));
+    app.resolve_permission("perm-smoke-2");
     assert!(matches!(app.mode, AppMode::Input));
 }
 
@@ -214,7 +218,9 @@ fn smoke_question_navigate_select_flow() {
     let (_, _, answers) = result.unwrap();
     assert_eq!(answers, vec![vec!["Quick fix".to_string()]]);
 
-    // 5. TUI returns to input mode
+    // 5. The final question remains visible until the reply succeeds.
+    assert!(matches!(app.mode, AppMode::Question));
+    app.resolve_question("q-smoke-1");
     assert!(matches!(app.mode, AppMode::Input));
 }
 
@@ -237,6 +243,8 @@ fn smoke_question_cancel_flow() {
     let action = handle_input(&mut app, event);
 
     assert!(matches!(action, InputAction::RejectQuestion { .. }));
+    assert!(matches!(app.mode, AppMode::Question));
+    app.resolve_question("q-smoke-2");
     assert!(matches!(app.mode, AppMode::Input));
 }
 

@@ -262,6 +262,8 @@ fn acceptance_functional_parity_permission_flow() {
 
     let result = app.accept_permission();
     assert!(result.is_some());
+    assert!(matches!(app.mode, AppMode::Permission));
+    app.resolve_permission("perm-1");
     assert!(matches!(app.mode, AppMode::Input));
 }
 
@@ -286,6 +288,8 @@ fn acceptance_functional_parity_question_flow() {
 
     let result = app.select_question();
     assert!(result.is_some());
+    assert!(matches!(app.mode, AppMode::Question));
+    app.resolve_question("q-1");
     assert!(matches!(app.mode, AppMode::Input));
 }
 

@@ -146,6 +146,8 @@ fn test_permission_prompt_accept() {
     assert_eq!(app.pending_permissions.len(), 1);
     let result = app.accept_permission();
     assert!(result.is_some());
+    assert_eq!(app.mode, AppMode::Permission);
+    app.resolve_permission("perm-1");
     assert_eq!(app.mode, AppMode::Input);
 }
 
@@ -164,6 +166,8 @@ fn test_permission_prompt_reject() {
     assert_eq!(app.mode, AppMode::Permission);
     let result = app.reject_permission();
     assert!(result.is_some());
+    assert_eq!(app.mode, AppMode::Permission);
+    app.resolve_permission("perm-1");
     assert_eq!(app.mode, AppMode::Input);
 }
 
@@ -354,7 +358,9 @@ fn test_mode_transition_permission_to_input() {
     };
     app.handle_event(event);
     assert_eq!(app.mode, AppMode::Permission);
-    app.accept_permission();
+    let (_, request_id) = app.accept_permission().expect("permission action");
+    assert_eq!(app.mode, AppMode::Permission);
+    app.resolve_permission(&request_id);
     assert_eq!(app.mode, AppMode::Input);
 }
 

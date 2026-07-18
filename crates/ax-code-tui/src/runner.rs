@@ -435,22 +435,24 @@ async fn apply_input_action(
             session_id,
             request_id,
         } => {
-            if let Err(error) = client
+            match client
                 .reply_permission(&session_id, &request_id, true)
                 .await
             {
-                app.set_status(format!("Permission reply failed: {error}"));
+                Ok(()) => app.resolve_permission(&request_id),
+                Err(error) => app.set_status(format!("Permission reply failed: {error}")),
             }
         }
         InputAction::RejectPermission {
             session_id,
             request_id,
         } => {
-            if let Err(error) = client
+            match client
                 .reply_permission(&session_id, &request_id, false)
                 .await
             {
-                app.set_status(format!("Permission reply failed: {error}"));
+                Ok(()) => app.resolve_permission(&request_id),
+                Err(error) => app.set_status(format!("Permission reply failed: {error}")),
             }
         }
         InputAction::AnswerQuestion {
@@ -458,21 +460,21 @@ async fn apply_input_action(
             request_id,
             answers,
         } => {
-            if let Err(error) = client
+            match client
                 .reply_question(&session_id, &request_id, answers)
                 .await
             {
-                app.set_status(format!("Question reply failed: {error}"));
+                Ok(()) => app.resolve_question(&request_id),
+                Err(error) => app.set_status(format!("Question reply failed: {error}")),
             }
         }
         InputAction::RejectQuestion {
             session_id,
             request_id,
-        } => {
-            if let Err(error) = client.reject_question(&session_id, &request_id).await {
-                app.set_status(format!("Question reject failed: {error}"));
-            }
-        }
+        } => match client.reject_question(&session_id, &request_id).await {
+            Ok(()) => app.resolve_question(&request_id),
+            Err(error) => app.set_status(format!("Question reject failed: {error}")),
+        },
         InputAction::AbortSession { session_id } => {
             if let Err(error) = client.abort_session(&session_id).await {
                 app.set_status(format!("Abort failed: {error}"));

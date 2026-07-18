@@ -272,6 +272,11 @@ fn test_input_permission_accept() {
         _ => panic!("Expected AcceptPermission"),
     }
 
+    // Input only prepares the reply; a failed request must leave the modal
+    // available so the user can retry.
+    assert_eq!(app.mode, AppMode::Permission);
+    assert_eq!(app.pending_permissions.len(), 1);
+    app.resolve_permission("perm_001");
     assert_eq!(app.mode, AppMode::Input);
 }
 
@@ -300,6 +305,9 @@ fn test_input_permission_reject() {
         }
         _ => panic!("Expected RejectPermission"),
     }
+
+    assert_eq!(app.mode, AppMode::Permission);
+    assert_eq!(app.pending_permissions.len(), 1);
 }
 
 #[test]
@@ -339,6 +347,9 @@ fn test_input_question_navigate_and_select() {
         }
         _ => panic!("Expected AnswerQuestion"),
     }
+
+    assert_eq!(app.mode, AppMode::Question);
+    assert_eq!(app.pending_questions.len(), 1);
 }
 
 #[test]
@@ -367,6 +378,9 @@ fn test_input_question_escape() {
         }
         _ => panic!("Expected RejectQuestion"),
     }
+
+    assert_eq!(app.mode, AppMode::Question);
+    assert_eq!(app.pending_questions.len(), 1);
 }
 
 #[test]

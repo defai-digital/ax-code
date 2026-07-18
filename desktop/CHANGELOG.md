@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.1.0] - 2026-07-18
+
+### Added
+
+- Providers: adds the Kimi Code CLI membership bridge.
+- Desktop: adds a searchable project switcher in the composer.
+- TUI: adds the standalone Rust native engine.
+
+### Changed
+
+- AX Engine: exposes the shared local-engine lifecycle in status and doctor output.
+
+### Fixed
+
+- Desktop: preserves session routes during hydration and keeps draft decision state isolated.
+- Providers: hardens Kimi CLI stream parsing, configuration resolution, and empty-response handling.
+- TUI: hardens native runtime state, provider workflows, model selection, streaming, and terminal rendering.
+- Release: refreshes CI and release checks for portable native builds and tracked reports.
+
 ## [7.0.1] - 2026-07-14
 
 ### Added

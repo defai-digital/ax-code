@@ -203,9 +203,7 @@ impl App {
                 // out-of-band desktop reply, or a server-side timeout). Remove
                 // the matching request by id so we don't keep showing a stale
                 // modal for an already-resolved request.
-                self.pending_permissions
-                    .retain(|p| p.request_id != properties.request_id);
-                self.reset_mode_if_idle();
+                self.resolve_permission(&properties.request_id);
             }
             RuntimeEvent::QuestionAsked { properties } => {
                 if !self.event_targets_current_session(&properties.session_id) {
@@ -248,21 +246,13 @@ impl App {
                 if !self.event_targets_current_session(&properties.session_id) {
                     return;
                 }
-                self.pending_questions
-                    .retain(|q| q.request_id != properties.request_id);
-                self.question_answer_progress
-                    .retain(|progress| progress.request_id != properties.request_id);
-                self.reset_mode_if_idle();
+                self.resolve_question(&properties.request_id);
             }
             RuntimeEvent::QuestionRejected { properties } => {
                 if !self.event_targets_current_session(&properties.session_id) {
                     return;
                 }
-                self.pending_questions
-                    .retain(|q| q.request_id != properties.request_id);
-                self.question_answer_progress
-                    .retain(|progress| progress.request_id != properties.request_id);
-                self.reset_mode_if_idle();
+                self.resolve_question(&properties.request_id);
             }
             RuntimeEvent::TodoUpdated { .. } => {
                 // TODO: Update todo display

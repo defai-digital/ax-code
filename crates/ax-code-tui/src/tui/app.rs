@@ -117,7 +117,6 @@ pub struct QuestionRequest {
 pub(crate) struct QuestionAnswerProgress {
     pub(crate) request_id: String,
     pub(crate) answers: Vec<Vec<String>>,
-    pub(crate) total: usize,
 }
 
 /// A tool call in progress.
@@ -277,28 +276,26 @@ impl App {
         self.scroll_offset = self.scroll_offset.saturating_sub(3);
     }
 
-    /// Accept the current (front) permission request.
+    /// Prepare an acceptance for the current (front) permission request.
     ///
-    /// Permissions are FIFO: the front of `pending_permissions` is the request
-    /// currently rendered in the modal. Removing from the front ensures we
-    /// answer requests in the order the server asked them, not LIFO.
-    pub fn accept_permission(&mut self) -> Option<(String, String)> {
-        if self.pending_permissions.is_empty() {
-            return None;
-        }
-        let req = self.pending_permissions.remove(0);
-        self.reset_mode_if_idle();
-        Some((req.session_id, req.request_id))
+    /// The request stays pending until [`Self::resolve_permission`] is called.
+    /// This lets the modal remain available for retry when the HTTP reply
+    /// fails. Permissions are FIFO, so the front request is always returned.
+    pub fn accept_permission(&self) -> Option<(String, String)> {
+        let req = self.pending_permissions.first()?;
+        Some((req.session_id.clone(), req.request_id.clone()))
     }
 
-    /// Reject the current (front) permission request.
-    pub fn reject_permission(&mut self) -> Option<(String, String)> {
-        if self.pending_permissions.is_empty() {
-            return None;
-        }
-        let req = self.pending_permissions.remove(0);
+    /// Prepare a rejection for the current (front) permission request.
+    pub fn reject_permission(&self) -> Option<(String, String)> {
+        self.accept_permission()
+    }
+
+    /// Remove a permission request after the server confirms its reply.
+    pub fn resolve_permission(&mut self, request_id: &str) {
+        self.pending_permissions
+            .retain(|request| request.request_id != request_id);
         self.reset_mode_if_idle();
-        Some((req.session_id, req.request_id))
     }
 
     /// Move question selection up.
@@ -320,58 +317,61 @@ impl App {
     }
 
     /// Select the current (front) question option.
+    ///
+    /// Intermediate questions are consumed locally while their answers are
+    /// collected. The final question remains pending until
+    /// [`Self::resolve_question`] is called, allowing a failed HTTP reply to be
+    /// retried without losing the request or the previously collected answers.
     pub fn select_question(&mut self) -> Option<(String, String, Vec<Vec<String>>)> {
-        if self.pending_questions.is_empty() {
-            return None;
-        }
-        let req = self.pending_questions.remove(0);
+        let req = self.pending_questions.first()?.clone();
         let answer = req.options.get(req.selected).cloned().unwrap_or_default();
-        let answers = {
-            let progress = self
-                .question_answer_progress
-                .iter_mut()
-                .find(|progress| progress.request_id == req.request_id);
-            let progress = if let Some(progress) = progress {
-                progress
-            } else {
-                self.question_answer_progress.push(QuestionAnswerProgress {
-                    request_id: req.request_id.clone(),
-                    answers: Vec::with_capacity(req.total),
-                    total: req.total,
-                });
-                self.question_answer_progress
-                    .last_mut()
-                    .expect("just inserted question progress")
-            };
-            progress.answers.push(vec![answer]);
-            if progress.answers.len() >= progress.total {
-                Some(progress.answers.clone())
-            } else {
-                None
-            }
-        };
-        self.reset_mode_if_idle();
-        if let Some(answers) = answers {
-            self.question_answer_progress
-                .retain(|progress| progress.request_id != req.request_id);
-            Some((req.session_id, req.request_id, answers))
-        } else {
-            None
+        let previous_answers = self
+            .question_answer_progress
+            .iter()
+            .find(|progress| progress.request_id == req.request_id)
+            .map(|progress| progress.answers.clone())
+            .unwrap_or_default();
+
+        if previous_answers.len().saturating_add(1) >= req.total {
+            let mut answers = previous_answers;
+            answers.push(vec![answer]);
+            return Some((req.session_id, req.request_id, answers));
         }
+
+        self.pending_questions.remove(0);
+        let progress = if let Some(progress) = self
+            .question_answer_progress
+            .iter_mut()
+            .find(|progress| progress.request_id == req.request_id)
+        {
+            progress
+        } else {
+            self.question_answer_progress.push(QuestionAnswerProgress {
+                request_id: req.request_id,
+                answers: Vec::with_capacity(req.total),
+            });
+            self.question_answer_progress
+                .last_mut()
+                .expect("just inserted question progress")
+        };
+        progress.answers.push(vec![answer]);
+        self.reset_mode_if_idle();
+        None
     }
 
-    /// Reject the current (front) question.
-    pub fn reject_question(&mut self) -> Option<(String, String)> {
-        if self.pending_questions.is_empty() {
-            return None;
-        }
-        let req = self.pending_questions.remove(0);
+    /// Prepare a rejection for the current (front) question request.
+    pub fn reject_question(&self) -> Option<(String, String)> {
+        let req = self.pending_questions.first()?;
+        Some((req.session_id.clone(), req.request_id.clone()))
+    }
+
+    /// Remove a question request after the server confirms its reply.
+    pub fn resolve_question(&mut self, request_id: &str) {
         self.pending_questions
-            .retain(|question| question.request_id != req.request_id);
+            .retain(|question| question.request_id != request_id);
         self.question_answer_progress
-            .retain(|progress| progress.request_id != req.request_id);
+            .retain(|progress| progress.request_id != request_id);
         self.reset_mode_if_idle();
-        Some((req.session_id, req.request_id))
     }
 
     // === Session switching ===
@@ -911,6 +911,13 @@ mod tests {
             second.2,
             vec![vec!["Full".to_string()], vec!["Yes".to_string()]]
         );
+        // Keep the final prompt visible until the HTTP reply is confirmed.
+        assert_eq!(app.pending_questions.len(), 1);
+        assert!(matches!(app.mode, AppMode::Question));
+        let retry = app.select_question().expect("retry complete answers");
+        assert_eq!(retry, second);
+        assert_eq!(app.pending_questions.len(), 1);
+        app.resolve_question("q1");
         assert!(app.pending_questions.is_empty());
         assert!(matches!(app.mode, AppMode::Input));
     }
@@ -964,10 +971,13 @@ mod tests {
         // Accept must resolve p1 first (front), not p3 (back).
         let first = app.accept_permission().expect("first accept");
         assert_eq!(first.1, "p1");
+        app.resolve_permission(&first.1);
         let second = app.accept_permission().expect("second accept");
         assert_eq!(second.1, "p2");
+        app.resolve_permission(&second.1);
         let third = app.accept_permission().expect("third accept");
         assert_eq!(third.1, "p3");
+        app.resolve_permission(&third.1);
         assert!(app.accept_permission().is_none());
     }
 
@@ -987,8 +997,10 @@ mod tests {
         }
         let first = app.select_question().expect("first select");
         assert_eq!(first.1, "q1");
+        app.resolve_question(&first.1);
         let second = app.select_question().expect("second select");
         assert_eq!(second.1, "q2");
+        app.resolve_question(&second.1);
     }
 
     #[test]
@@ -1006,9 +1018,11 @@ mod tests {
                 },
             });
         }
-        app.accept_permission();
+        let first = app.accept_permission().expect("first accept");
+        app.resolve_permission(&first.1);
         assert!(matches!(app.mode, AppMode::Permission)); // still one left
-        app.accept_permission();
+        let second = app.accept_permission().expect("second accept");
+        app.resolve_permission(&second.1);
         assert!(matches!(app.mode, AppMode::Input)); // drained
     }
 
