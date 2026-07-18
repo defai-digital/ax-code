@@ -44,27 +44,10 @@ const getToastCopyText = (message: string | React.ReactNode, data?: ExternalToas
   return reactNodeToText(message)
 }
 
-// Wrapper to automatically add OK button to success and info toasts, Copy button to error and warning toasts
+// Wrapper to automatically add a Copy button to error and warning toasts.
+// Success/info toasts auto-dismiss, so they get no redundant action button.
 export const toast = {
   ...sonnerToast,
-  success: (message: string | React.ReactNode, data?: ExternalToast) => {
-    return sonnerToast.success(message, {
-      ...data,
-      action: data?.action || {
-        label: "OK",
-        onClick: () => {},
-      },
-    })
-  },
-  info: (message: string | React.ReactNode, data?: ExternalToast) => {
-    return sonnerToast.info(message, {
-      ...data,
-      action: data?.action || {
-        label: "OK",
-        onClick: () => {},
-      },
-    })
-  },
   error: (message: string | React.ReactNode, data?: ExternalToast) => {
     return sonnerToast.error(message, {
       ...data,

@@ -23,12 +23,12 @@ const NotificationEntry: React.FC<{
   const timeLabel = React.useMemo(() => {
     const diff = Date.now() - item.timestamp
     const minutes = Math.floor(diff / 60000)
-    if (minutes < 1) return "just now"
-    if (minutes < 60) return `${minutes}m ago`
+    if (minutes < 1) return t("notificationCenter.time.justNow")
+    if (minutes < 60) return t("notificationCenter.time.minutesAgo", { count: minutes })
     const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}h ago`
-    return `${Math.floor(hours / 24)}d ago`
-  }, [item.timestamp])
+    if (hours < 24) return t("notificationCenter.time.hoursAgo", { count: hours })
+    return t("notificationCenter.time.daysAgo", { count: Math.floor(hours / 24) })
+  }, [item.timestamp, t])
 
   return (
     <div

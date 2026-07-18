@@ -4,6 +4,7 @@ import { useGlobalSyncStore } from "@/sync/global-sync-store"
 import { useI18n } from "@/lib/i18n"
 import { useUIStore } from "@/stores/useUIStore"
 import { Icon } from "@/components/icon/Icon"
+import { sessionEvents } from "@/lib/sessionEvents"
 
 /**
  * Empty chat surface — intentionally sparse (Ma / negative space).
@@ -14,8 +15,8 @@ const ChatEmptyState: React.FC = () => {
   const { t } = useI18n()
   const initError = useGlobalSyncStore((s) => s.error)
 
-  const handleOpenCommandPalette = React.useCallback(() => {
-    useUIStore.getState().setCommandPaletteOpen(true)
+  const handleOpenFolder = React.useCallback(() => {
+    sessionEvents.requestDirectoryDialog()
   }, [])
 
   const handleShowShortcuts = React.useCallback(() => {
@@ -46,7 +47,7 @@ const ChatEmptyState: React.FC = () => {
             <div className="flex flex-wrap items-center justify-center gap-2">
               <button
                 type="button"
-                onClick={handleOpenCommandPalette}
+                onClick={handleOpenFolder}
                 className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-[var(--surface-elevated)] px-3.5 py-2 typography-meta font-medium text-foreground transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
               >
                 <Icon name="folder-add" className="h-3.5 w-3.5" />

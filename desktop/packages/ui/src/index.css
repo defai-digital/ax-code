@@ -1468,6 +1468,18 @@ input[aria-label="Terminal input"] {
   .animate-busy-pulse {
     animation: none;
   }
+
+  /* Tailwind motion utilities and app-level pulsing animations: honor the
+     user's reduced-motion preference globally. Loading state stays visible —
+     only the motion is removed. */
+  .animate-spin,
+  .animate-pulse,
+  .animate-ping,
+  .animate-bounce,
+  .animate-navrail-dot-wave,
+  .animate-border-glow-pulse {
+    animation: none;
+  }
 }
 
 /* Settings dialog: hide the overlay scrollbar; wheel/keyboard scroll still works. */

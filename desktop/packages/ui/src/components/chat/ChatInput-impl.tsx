@@ -331,6 +331,16 @@ const RevertedMessageDock: React.FC<RevertedMessageDockProps> = React.memo(({ se
     [handleSlashRedo, revertToMessage, restoringId, sessionId, userMessages],
   )
 
+  const handleRedoAll = React.useCallback(async () => {
+    if (!sessionId || restoringId) return
+    setRestoringId("all")
+    try {
+      await handleSlashRedo(sessionId, { fullUnrevert: true })
+    } finally {
+      setRestoringId(null)
+    }
+  }, [handleSlashRedo, restoringId, sessionId])
+
   const handleFork = React.useCallback(
     async (messageId: string) => {
       if (!sessionId || forkingId) return
@@ -339,14 +349,14 @@ const RevertedMessageDock: React.FC<RevertedMessageDockProps> = React.memo(({ se
         await forkFromMessage(sessionId, messageId)
       } catch (error) {
         console.error("[ChatInput] Fork failed:", error)
-        toast.error("Fork failed", {
-          description: error instanceof Error ? error.message : "Please try again",
+        toast.error(t("chat.revertPopover.forkFailed.title"), {
+          description: error instanceof Error ? error.message : t("chat.revertPopover.forkFailed.retry"),
         })
       } finally {
         setForkingId(null)
       }
     },
-    [forkFromMessage, forkingId, sessionId],
+    [forkFromMessage, forkingId, sessionId, t],
   )
 
   if (!sessionId || items.length === 0) return null
@@ -354,21 +364,40 @@ const RevertedMessageDock: React.FC<RevertedMessageDockProps> = React.memo(({ se
   return (
     <div className="pb-2 w-full px-1">
       <div className="rounded-xl border border-border/60 bg-[var(--surface-elevated)] text-[var(--surface-elevated-foreground)] shadow-sm overflow-hidden">
-        <button
-          type="button"
-          className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[var(--interactive-hover)] transition-colors"
-          onClick={() => setCollapsed((value) => !value)}
-          aria-expanded={!collapsed}
-        >
-          <span className="typography-ui-label font-medium text-foreground flex-shrink-0">
-            {t("chat.revertPopover.title")} messages {items.length}
-          </span>
-          <Icon
-            name="arrow-down-s"
-            className={cn("ml-auto h-4 w-4 text-muted-foreground transition-transform", !collapsed && "rotate-180")}
-            aria-hidden="true"
-          />
-        </button>
+        <div className="flex w-full items-center gap-2 px-3 py-2">
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-2 text-left hover:bg-[var(--interactive-hover)] transition-colors rounded-md"
+            onClick={() => setCollapsed((value) => !value)}
+            aria-expanded={!collapsed}
+          >
+            <span className="typography-ui-label font-medium text-foreground flex-shrink-0">
+              {t("chat.revertPopover.titleWithCount", { count: items.length })}
+            </span>
+            <Icon
+              name="arrow-down-s"
+              className={cn("ml-auto h-4 w-4 text-muted-foreground transition-transform", !collapsed && "rotate-180")}
+              aria-hidden="true"
+            />
+          </button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            aria-label={t("chat.revertIndicator.redoAria")}
+            disabled={Boolean(restoringId || forkingId)}
+            onClick={() => {
+              void handleRedoAll()
+            }}
+          >
+            {restoringId === "all" ? (
+              <Icon name="loader-4" className="h-3 w-3 animate-spin" aria-hidden="true" />
+            ) : (
+              <Icon name="arrow-go-forward" className="h-3 w-3" aria-hidden="true" />
+            )}
+            {t("chat.revertIndicator.redo")}
+          </Button>
+        </div>
         {!collapsed && (
           <div className="px-3 pb-3 flex flex-col gap-1.5 max-h-[10.5rem] overflow-y-auto">
             {items.map((item) => (

@@ -1,10 +1,12 @@
 import React from "react"
 import { finishConfigUpdate, getConfigUpdateSnapshot, subscribeConfigUpdate } from "@/lib/configUpdate"
+import { useI18n } from "@/lib/i18n"
 import { AxCodeIcon } from "./AxCodeIcon"
 
 const RESTART_OVERLAY_TIMEOUT_MS = 120_000
 
 export const ConfigUpdateOverlay: React.FC = () => {
+  const { t } = useI18n()
   const [{ isUpdating, message }, setState] = React.useState(() => getConfigUpdateSnapshot())
   const [timedOut, setTimedOut] = React.useState(false)
 
@@ -35,33 +37,29 @@ export const ConfigUpdateOverlay: React.FC = () => {
       <div className="flex w-full max-w-sm flex-col items-center gap-4 text-center">
         <AxCodeIcon width={80} height={80} />
         <div className="space-y-1.5">
-          <div className="text-sm font-semibold text-foreground">AX Code is restarting</div>
-          <div className="text-sm text-muted-foreground">{message}</div>
+          <div className="typography-ui-label font-semibold text-foreground">{t("configUpdate.restarting")}</div>
+          <div className="typography-ui-label text-muted-foreground">{message}</div>
           {timedOut ? (
-            <div className="text-xs text-[var(--status-error)]">
-              AX Code is taking longer than expected. Reload the app or dismiss this message and retry.
-            </div>
+            <div className="typography-meta text-[var(--status-error)]">{t("configUpdate.timeoutHint")}</div>
           ) : (
-            <div className="text-xs text-muted-foreground">
-              This can take a few minutes. AX Code will resume automatically.
-            </div>
+            <div className="typography-meta text-muted-foreground">{t("configUpdate.waitHint")}</div>
           )}
         </div>
         {timedOut ? (
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+              className="rounded-md bg-primary px-3 py-1.5 typography-ui-label font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
               onClick={() => window.location.reload()}
             >
-              Reload app
+              {t("configUpdate.reloadApp")}
             </button>
             <button
               type="button"
-              className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground"
+              className="rounded-md border border-border px-3 py-1.5 typography-ui-label font-medium text-foreground transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
               onClick={() => finishConfigUpdate()}
             >
-              Dismiss
+              {t("configUpdate.dismiss")}
             </button>
           </div>
         ) : null}
