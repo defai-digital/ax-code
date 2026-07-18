@@ -65,6 +65,35 @@ export const SplitPaneLayout: React.FC<SplitPaneLayoutProps> = ({ children, righ
     [],
   )
 
+  // ArrowLeft narrows the left pane, ArrowRight widens it. Step is a ratio.
+  const handleResizeKeyDown = React.useCallback(
+    (event: React.KeyboardEvent) => {
+      const step = event.shiftKey ? 0.08 : 0.02
+      let nextRatio: number
+
+      switch (event.key) {
+        case "ArrowLeft":
+          nextRatio = splitRatio - step
+          break
+        case "ArrowRight":
+          nextRatio = splitRatio + step
+          break
+        case "Home":
+          nextRatio = 0.2
+          break
+        case "End":
+          nextRatio = 0.8
+          break
+        default:
+          return
+      }
+
+      event.preventDefault()
+      setSplitRatio(nextRatio)
+    },
+    [setSplitRatio, splitRatio],
+  )
+
   if (!splitEnabled) {
     return <>{children}</>
   }
@@ -88,15 +117,21 @@ export const SplitPaneLayout: React.FC<SplitPaneLayoutProps> = ({ children, righ
         className={cn(
           "relative flex-shrink-0 cursor-col-resize bg-border/40 transition-colors",
           "hover:bg-[var(--interactive-border)]",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]",
           isDragging && "bg-[var(--interactive-border)]",
         )}
         style={{ width: HANDLE_WIDTH }}
+        tabIndex={0}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onKeyDown={handleResizeKeyDown}
         role="separator"
         aria-orientation="vertical"
+        aria-valuemin={20}
+        aria-valuemax={80}
+        aria-valuenow={Math.round(splitRatio * 100)}
         aria-label={t("splitPane.resizeAria")}
       />
 

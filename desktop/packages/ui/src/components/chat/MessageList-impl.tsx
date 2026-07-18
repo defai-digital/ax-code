@@ -15,6 +15,7 @@ import type { ChatMessageEntry, TurnRecord, TurnGroupingContext } from "./lib/tu
 import { useTurnRecords } from "./hooks/useTurnRecords"
 import { applyRetryOverlay } from "./lib/turns/applyRetryOverlay"
 import { useUIStore } from "@/stores/useUIStore"
+import { useI18n } from "@/lib/i18n"
 import { FadeInDisabledProvider } from "./message/FadeInOnReveal"
 import { hasPendingUserSendAnimation, consumePendingUserSendAnimation } from "@/lib/userSendAnimation"
 import { streamPerfCount, streamPerfMeasure } from "@/stores/utils/streamDebug"
@@ -1186,6 +1187,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(
     ref,
   ) => {
     streamPerfCount("ui.message_list.render")
+    const { t } = useI18n()
     const stickyUserHeader = useUIStore((state) => state.stickyUserHeader)
     const chatRenderMode = useUIStore((state) => state.chatRenderMode)
     const activityRenderMode = useUIStore((state) => state.activityRenderMode)
@@ -1786,14 +1788,14 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(
         {(turnStart > 0 || hasMoreAbove) && (
           <div className="flex justify-center py-3">
             {isLoadingOlder ? (
-              <span className="text-xs uppercase tracking-wide text-muted-foreground/80">Loading…</span>
+              <span className="text-xs uppercase tracking-wide text-muted-foreground/80">{t("chat.loadOlder.loading")}</span>
             ) : (
               <button
                 type="button"
                 onClick={stableOnLoadOlder}
                 className="text-xs uppercase tracking-wide text-muted-foreground/80 hover:text-foreground"
               >
-                Load older messages
+                {t("chat.loadOlder.action")}
               </button>
             )}
           </div>

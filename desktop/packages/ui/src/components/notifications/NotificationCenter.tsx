@@ -8,16 +8,9 @@ import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
 
 const NotificationEntry: React.FC<{
   item: NotificationItem
-  onMarkRead: (id: string) => void
   onRemove: (id: string) => void
-}> = React.memo(function NotificationEntry({ item, onMarkRead, onRemove }) {
+}> = React.memo(function NotificationEntry({ item, onRemove }) {
   const { t } = useI18n()
-
-  React.useEffect(() => {
-    if (!item.read) {
-      onMarkRead(item.id)
-    }
-  }, [item.id, item.read, onMarkRead])
 
   const typeIcon = item.type === "permission" ? "shield" : item.type === "session" ? "chat-1" : "alert"
   const typeColor =
@@ -91,11 +84,43 @@ export const NotificationCenter: React.FC = React.memo(function NotificationCent
   const setOpen = useNotificationStore((s) => s.setOpen)
   const markAllAsRead = useNotificationStore((s) => s.markAllAsRead)
   const clearAll = useNotificationStore((s) => s.clearAll)
-  const markAsRead = useNotificationStore((s) => s.markAsRead)
   const removeNotification = useNotificationStore((s) => s.removeNotification)
+  const panelRef = React.useRef<HTMLDivElement>(null)
+  const wasOpenRef = React.useRef(false)
 
   const hasNotifications = notifications.length > 0
   const unreadCount = notifications.filter((n) => !n.read).length
+
+  // Mark everything read when the panel closes (from anywhere), not when it
+  // opens — the unread badge shouldn't vanish the moment the panel appears.
+  React.useEffect(() => {
+    if (wasOpenRef.current && !isOpen) {
+      markAllAsRead()
+    }
+    wasOpenRef.current = isOpen
+  }, [isOpen, markAllAsRead])
+
+  // Focus the panel on open, restore focus on close, and close on Escape.
+  React.useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    panelRef.current?.focus()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown)
+      previouslyFocused?.focus()
+    }
+  }, [isOpen, setOpen])
 
   if (!isOpen) return null
 
@@ -105,7 +130,13 @@ export const NotificationCenter: React.FC = React.memo(function NotificationCent
       <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
 
       {/* Panel */}
-      <div className="absolute right-0 top-12 z-50 flex w-80 flex-col overflow-hidden rounded-lg border border-border bg-background shadow-lg">
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-label={t("notificationCenter.title")}
+        className="absolute right-0 top-12 z-50 flex w-80 flex-col overflow-hidden rounded-lg border border-border bg-background shadow-lg outline-none"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <div className="flex items-center gap-2">
@@ -143,12 +174,7 @@ export const NotificationCenter: React.FC = React.memo(function NotificationCent
           <div className="flex flex-col gap-0.5 p-2">
             {hasNotifications ? (
               notifications.map((item) => (
-                <NotificationEntry
-                  key={item.id}
-                  item={item}
-                  onMarkRead={markAsRead}
-                  onRemove={removeNotification}
-                />
+                <NotificationEntry key={item.id} item={item} onRemove={removeNotification} />
               ))
             ) : (
               <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">

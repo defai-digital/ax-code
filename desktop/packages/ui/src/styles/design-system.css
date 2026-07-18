@@ -270,38 +270,17 @@
   --color-border-hover: var(--interactive-border-hover);
   --color-border-focus: var(--interactive-border-focus);
 
-  /* Markdown typography variables */
+  /* Markdown typography variables (line-heights and colors are injected at
+     runtime by the theme generator — see lib/theme/cssGenerator.ts) */
   --markdown-body-font-size: var(--text-markdown);
-  --markdown-body-line-height: var(--markdown-body-line-height);
   --markdown-h1-font-size: var(--text-markdown);
-  --markdown-h1-line-height: var(--markdown-h1-line-height);
   --markdown-h2-font-size: var(--text-markdown);
-  --markdown-h2-line-height: var(--markdown-h2-line-height);
   --markdown-h3-font-size: var(--text-markdown);
-  --markdown-h3-line-height: var(--markdown-h3-line-height);
   --markdown-h4-font-size: var(--text-markdown);
-  --markdown-h4-line-height: var(--markdown-h4-line-height);
   --markdown-h5-font-size: var(--text-markdown);
-  --markdown-h5-line-height: var(--markdown-h5-line-height);
   --markdown-h6-font-size: var(--text-markdown);
-  --markdown-h6-line-height: var(--markdown-h6-line-height);
   --markdown-list-font-size: var(--text-markdown);
-  --markdown-list-line-height: var(--markdown-list-line-height);
   --markdown-code-block-font-size: var(--text-code);
-  --markdown-code-block-line-height: var(--markdown-code-block-line-height);
-
-  /* Markdown color variables */
-  --markdown-heading1: var(--markdown-heading1);
-  --markdown-heading2: var(--markdown-heading2);
-  --markdown-heading3: var(--markdown-heading3);
-  --markdown-heading4: var(--markdown-heading4);
-  --markdown-link: var(--markdown-link);
-  --markdown-link-hover: var(--markdown-link-hover);
-  --markdown-list-marker: var(--markdown-list-marker);
-  --markdown-inline-code: var(--markdown-inline-code);
-  --markdown-inline-code-bg: var(--markdown-inline-code-bg);
-  --markdown-blockquote: var(--markdown-blockquote);
-  --markdown-blockquote-border: var(--markdown-blockquote-border);
 
   /* Markdown spacing defaults */
   --markdown-paragraph-spacing: 0.35rem;

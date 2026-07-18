@@ -2035,6 +2035,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
       }
     }
 
+    // Preserve the user's original text so a failed send can restore it
+    // (snippet expansion below may rewrite primaryText).
+    const originalPrimaryText = primaryText
+
     try {
       const expandText = useSnippetsStore.getState().expandText
       primaryText = await expandText(primaryText)
@@ -2088,6 +2092,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         const normalized = rawMessage.toLowerCase()
 
         console.error("Message send failed:", rawMessage || error)
+
+        // Restore the composed text so a failed send doesn't destroy user input.
+        // Skip when the composer already has content — queued-only submits keep
+        // the text, and the user may have typed something new while in flight.
+        if (originalPrimaryText && messageRef.current.trim().length === 0) {
+          setMessage(originalPrimaryText)
+          saveStoredDraft(currentSessionId, originalPrimaryText)
+        }
 
         const isSoftNetworkError =
           normalized.includes("timeout") ||
@@ -4333,6 +4345,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                   simple
                   ref={textareaRef}
                   data-chat-input="true"
+                  aria-label={t("chat.chatInput.composerAria")}
                   value={message}
                   onChange={handleTextChange}
                   onKeyDown={handleKeyDown}

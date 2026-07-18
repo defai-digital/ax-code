@@ -73,9 +73,11 @@ export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, 
 
     const handlePointerMove = (event: PointerEvent) => {
       const delta = startYRef.current - event.clientY
+      // Allow dragging below MIN_HEIGHT down to the collapse threshold so the
+      // pointerup handler can actually trigger drag-to-collapse.
       const nextHeight = Math.min(
         BOTTOM_DOCK_MAX_HEIGHT,
-        Math.max(BOTTOM_DOCK_MIN_HEIGHT, startHeightRef.current + delta),
+        Math.max(BOTTOM_DOCK_COLLAPSE_THRESHOLD, startHeightRef.current + delta),
       )
       setBottomTerminalHeight(nextHeight)
     }
@@ -85,6 +87,9 @@ export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, 
       const latestState = useUIStore.getState()
       if (latestState.bottomTerminalHeight <= BOTTOM_DOCK_COLLAPSE_THRESHOLD) {
         setBottomTerminalOpen(false)
+      } else if (latestState.bottomTerminalHeight < BOTTOM_DOCK_MIN_HEIGHT) {
+        // Snap heights in the collapse dead-zone back to the minimum.
+        setBottomTerminalHeight(BOTTOM_DOCK_MIN_HEIGHT)
       }
     }
 
@@ -110,6 +115,32 @@ export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, 
     startYRef.current = event.clientY
     startHeightRef.current = appliedHeight
     event.preventDefault()
+  }
+
+  // ArrowUp grows the dock, ArrowDown shrinks it.
+  const handleResizeKeyDown = (event: React.KeyboardEvent) => {
+    const step = event.shiftKey ? 64 : 16
+    let nextHeight: number
+
+    switch (event.key) {
+      case "ArrowUp":
+        nextHeight = standardHeight + step
+        break
+      case "ArrowDown":
+        nextHeight = standardHeight - step
+        break
+      case "Home":
+        nextHeight = BOTTOM_DOCK_MIN_HEIGHT
+        break
+      case "End":
+        nextHeight = BOTTOM_DOCK_MAX_HEIGHT
+        break
+      default:
+        return
+    }
+
+    event.preventDefault()
+    setBottomTerminalHeight(Math.min(BOTTOM_DOCK_MAX_HEIGHT, Math.max(BOTTOM_DOCK_MIN_HEIGHT, nextHeight)))
   }
 
   return (
@@ -138,11 +169,17 @@ export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, 
         <div
           className={cn(
             "absolute left-0 top-0 z-20 h-[3px] w-full cursor-row-resize hover:bg-[var(--interactive-border)]/80 transition-colors",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]",
             isResizing && "bg-[var(--interactive-border)]",
           )}
+          tabIndex={0}
           onPointerDown={handlePointerDown}
+          onKeyDown={handleResizeKeyDown}
           role="separator"
           aria-orientation="horizontal"
+          aria-valuemin={BOTTOM_DOCK_MIN_HEIGHT}
+          aria-valuemax={BOTTOM_DOCK_MAX_HEIGHT}
+          aria-valuenow={standardHeight}
           aria-label={t("terminalView.bottomDock.resizeAria")}
         />
       )}

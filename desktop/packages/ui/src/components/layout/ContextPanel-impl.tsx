@@ -51,6 +51,8 @@ const DashboardPanel = lazyWithChunkRecovery(() =>
 const CONTEXT_PANEL_MIN_WIDTH = 380
 const CONTEXT_PANEL_MAX_WIDTH = 1400
 const CONTEXT_PANEL_DEFAULT_WIDTH = 600
+// The primary chat region must never be squeezed below this width by the panel.
+const CHAT_MIN_WIDTH = 320
 const CONTEXT_TAB_LABEL_MAX_CHARS = 24
 type TranslateFn = ReturnType<typeof useI18n>["t"]
 
@@ -136,7 +138,8 @@ const clampWidthToAvailableSpace = (width: number, panel: HTMLElement | null): n
     return clampedWidth
   }
 
-  return Math.min(clampedWidth, Math.max(1, availableWidth))
+  // Reserve room for the primary chat region so the panel can't consume it.
+  return Math.min(clampedWidth, Math.max(0, availableWidth - CHAT_MIN_WIDTH))
 }
 
 const getModeLabel = (mode: ContextPanelMode, t: TranslateFn): string => {
@@ -2679,9 +2682,11 @@ export const ContextPanel: React.FC = () => {
           maxWidth: "100%",
         }
       : {
-          width: "min(var(--oc-context-panel-width), 100%)",
-          minWidth: `min(${CONTEXT_PANEL_MIN_WIDTH}px, 100%)`,
-          maxWidth: "100%",
+          // calc() reserves CHAT_MIN_WIDTH for the primary chat region so the
+          // persisted panel width can't squeeze it to zero on narrow windows.
+          width: `min(var(--oc-context-panel-width), calc(100% - ${CHAT_MIN_WIDTH}px))`,
+          minWidth: `min(${CONTEXT_PANEL_MIN_WIDTH}px, calc(100% - ${CHAT_MIN_WIDTH}px))`,
+          maxWidth: `calc(100% - ${CHAT_MIN_WIDTH}px)`,
           ["--oc-context-panel-width" as string]: `${isResizing ? (resizingWidthRef.current ?? width) : width}px`,
         }
 

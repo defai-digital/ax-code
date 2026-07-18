@@ -117,6 +117,31 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
 
   const currentWidth = isResizing ? (resizingWidthRef.current ?? appliedWidth) : appliedWidth
 
+  const handleResizeKeyDown = (event: React.KeyboardEvent) => {
+    const step = event.shiftKey ? 64 : 16
+    let nextWidth: number
+
+    switch (event.key) {
+      case "ArrowLeft":
+        nextWidth = openWidth - step
+        break
+      case "ArrowRight":
+        nextWidth = openWidth + step
+        break
+      case "Home":
+        nextWidth = SIDEBAR_MIN_WIDTH
+        break
+      case "End":
+        nextWidth = SIDEBAR_MAX_WIDTH
+        break
+      default:
+        return
+    }
+
+    event.preventDefault()
+    setSidebarWidth(clampSidebarWidth(nextWidth))
+  }
+
   return (
     <aside
       ref={sidebarRef}
@@ -143,14 +168,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
         <div
           className={cn(
             "absolute right-0 top-0 z-20 h-full w-[3px] cursor-col-resize hover:bg-[var(--interactive-border)]/80 transition-colors",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]",
             isResizing && "bg-[var(--interactive-border)]",
           )}
+          tabIndex={0}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerEnd}
           onPointerCancel={handlePointerEnd}
+          onKeyDown={handleResizeKeyDown}
           role="separator"
           aria-orientation="vertical"
+          aria-valuemin={SIDEBAR_MIN_WIDTH}
+          aria-valuemax={SIDEBAR_MAX_WIDTH}
+          aria-valuenow={openWidth}
           aria-label={t("sidebar.resize.leftPanelAria")}
         />
       )}
@@ -162,6 +193,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
         )}
         style={{ width: "var(--oc-left-sidebar-width)", overflowX: "hidden" }}
         aria-hidden={!isOpen}
+        inert={!isOpen || undefined}
       >
         <div className="flex-1 overflow-y-auto">
           <ErrorBoundary>{children}</ErrorBoundary>

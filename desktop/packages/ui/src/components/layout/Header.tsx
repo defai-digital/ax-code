@@ -1858,8 +1858,8 @@ export const Header: React.FC = () => {
         Icon={"global"}
       />
       <HeaderIconActionButton
-        title="Open Dashboard"
-        ariaLabel="Open Dashboard"
+        title={t("header.actions.openDashboard")}
+        ariaLabel={t("header.actions.openDashboard")}
         onClick={handleOpenContextDashboard}
         pressed={isContextDashboardActive}
         Icon={"bar-chart-box"}
@@ -2005,7 +2005,7 @@ export const Header: React.FC = () => {
     </div>
   )
 
-  const headerClassName = cn("header-safe-area relative z-10 bg-sidebar")
+  const headerClassName = cn("relative z-10 bg-sidebar")
 
   return (
     <header

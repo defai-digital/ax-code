@@ -304,6 +304,44 @@ export const SortableTabsStrip: React.FC<SortableTabsStripProps> = ({
     [onReorder],
   )
 
+  // WAI-ARIA tabs pattern: arrow keys / Home / End move between tabs with
+  // automatic activation (roving tabindex is applied per-tab below).
+  const handleTabListKeyDown = React.useCallback(
+    (event: React.KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
+        return
+      }
+      const { key } = event
+      if (key !== "ArrowLeft" && key !== "ArrowRight" && key !== "Home" && key !== "End") {
+        return
+      }
+      if (itemIDs.length === 0) {
+        return
+      }
+
+      const currentIndex = activeId ? Math.max(0, itemIDs.indexOf(activeId)) : 0
+      let nextIndex = currentIndex
+      if (key === "ArrowLeft") {
+        nextIndex = (currentIndex - 1 + itemIDs.length) % itemIDs.length
+      } else if (key === "ArrowRight") {
+        nextIndex = (currentIndex + 1) % itemIDs.length
+      } else if (key === "Home") {
+        nextIndex = 0
+      } else {
+        nextIndex = itemIDs.length - 1
+      }
+
+      event.preventDefault()
+      const nextId = itemIDs[nextIndex]
+      if (nextId !== activeId) {
+        onSelect(nextId)
+      }
+      // All tabs stay mounted, so the target button is already in the DOM.
+      tabRefs.current.get(nextId)?.querySelector<HTMLElement>('[role="tab"]')?.focus()
+    },
+    [activeId, itemIDs, onSelect],
+  )
+
   const list = (
     <div className={cn("relative flex h-full min-w-0 flex-1", className)}>
       {isScrollable && overflow.left ? (
@@ -338,6 +376,7 @@ export const SortableTabsStrip: React.FC<SortableTabsStripProps> = ({
         style={isScrollable ? { scrollbarWidth: "none", msOverflowStyle: "none" } : undefined}
         role="tablist"
         aria-label={t("sortableTabsStrip.aria.tabs")}
+        onKeyDown={handleTabListKeyDown}
       >
         {usesActivePillIndicator && pillRect ? (
           <div
@@ -428,6 +467,7 @@ export const SortableTabsStrip: React.FC<SortableTabsStripProps> = ({
                   type="button"
                   role="tab"
                   aria-selected={isActive}
+                  tabIndex={isActive ? 0 : -1}
                   aria-label={showInactiveIconOnly ? (item.title ?? item.label) : undefined}
                   onClick={() => onSelect(item.id)}
                   className={cn(

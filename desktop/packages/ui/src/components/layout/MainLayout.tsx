@@ -342,7 +342,7 @@ export const MainLayout: React.FC = () => {
 
   return (
     <DiffWorkerProvider>
-      <div data-page-scroll-lock="true" className={cn("main-content-safe-area", "flex h-[100dvh]", "bg-background")}>
+      <div data-page-scroll-lock="true" className={cn("flex h-[100dvh]", "bg-background")}>
         <CommandPalette />
         <HelpDialog />
         <AxCodeStatusDialog />

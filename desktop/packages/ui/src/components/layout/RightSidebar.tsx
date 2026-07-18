@@ -108,6 +108,32 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, cl
 
   const currentWidth = isResizing ? (resizingWidthRef.current ?? appliedWidth) : appliedWidth
 
+  // ArrowLeft widens the panel (it grows leftward), ArrowRight narrows it.
+  const handleResizeKeyDown = (event: React.KeyboardEvent) => {
+    const step = event.shiftKey ? 64 : 16
+    let nextWidth: number
+
+    switch (event.key) {
+      case "ArrowLeft":
+        nextWidth = openWidth + step
+        break
+      case "ArrowRight":
+        nextWidth = openWidth - step
+        break
+      case "Home":
+        nextWidth = RIGHT_SIDEBAR_MIN_WIDTH
+        break
+      case "End":
+        nextWidth = RIGHT_SIDEBAR_MAX_WIDTH
+        break
+      default:
+        return
+    }
+
+    event.preventDefault()
+    setRightSidebarWidth(clampRightSidebarWidth(nextWidth))
+  }
+
   return (
     <aside
       ref={sidebarRef}
@@ -133,14 +159,20 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, cl
         <div
           className={cn(
             "absolute left-0 top-0 z-20 h-full w-[3px] cursor-col-resize hover:bg-[var(--interactive-border)]/80 transition-colors",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]",
             isResizing && "bg-[var(--interactive-border)]",
           )}
+          tabIndex={0}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerEnd}
           onPointerCancel={handlePointerEnd}
+          onKeyDown={handleResizeKeyDown}
           role="separator"
           aria-orientation="vertical"
+          aria-valuemin={RIGHT_SIDEBAR_MIN_WIDTH}
+          aria-valuemax={RIGHT_SIDEBAR_MAX_WIDTH}
+          aria-valuenow={openWidth}
           aria-label={t("sidebar.resize.rightPanelAria")}
         />
       )}
