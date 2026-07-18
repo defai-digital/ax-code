@@ -108,6 +108,73 @@ describe("resolveCliModel", () => {
     }
   })
 
+  test("claude-code ignores empty or whitespace ANTHROPIC_MODEL env", async () => {
+    await using tmp = await tmpdir()
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    const originalModel = process.env.ANTHROPIC_MODEL
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    try {
+      for (const blank of ["", "   ", "\t"]) {
+        process.env.ANTHROPIC_MODEL = blank
+        const info = await resolveCliModel("claude-code")
+        expect(info).toEqual({ model: "claude-code", source: "default" })
+      }
+    } finally {
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
+      if (originalModel !== undefined) process.env.ANTHROPIC_MODEL = originalModel
+      else delete process.env.ANTHROPIC_MODEL
+    }
+  })
+
+  test("claude-code ignores empty/whitespace settings model and uses default", async () => {
+    await using tmp = await tmpdir()
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    const originalModel = process.env.ANTHROPIC_MODEL
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    delete process.env.ANTHROPIC_MODEL
+    try {
+      const settingsDir = path.join(tmp.path, ".claude")
+      await fs.mkdir(settingsDir, { recursive: true })
+      await fs.writeFile(path.join(settingsDir, "settings.json"), JSON.stringify({ model: "   " }))
+
+      const info = await resolveCliModel("claude-code")
+      expect(info).toEqual({ model: "claude-code", source: "default" })
+    } finally {
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
+      if (originalModel !== undefined) process.env.ANTHROPIC_MODEL = originalModel
+      else delete process.env.ANTHROPIC_MODEL
+    }
+  })
+
+  test("claude-code trims settings model and nested model.name", async () => {
+    await using tmp = await tmpdir()
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    const originalModel = process.env.ANTHROPIC_MODEL
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    delete process.env.ANTHROPIC_MODEL
+    try {
+      const settingsDir = path.join(tmp.path, ".claude")
+      await fs.mkdir(settingsDir, { recursive: true })
+      await fs.writeFile(
+        path.join(settingsDir, "settings.json"),
+        JSON.stringify({ model: { name: "  claude-sonnet-4-6  " } }),
+      )
+
+      const info = await resolveCliModel("claude-code")
+      expect(info).toEqual({
+        model: "claude-sonnet-4-6",
+        source: "~/.claude/settings.json",
+      })
+    } finally {
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
+      if (originalModel !== undefined) process.env.ANTHROPIC_MODEL = originalModel
+      else delete process.env.ANTHROPIC_MODEL
+    }
+  })
+
   test("gemini-cli respects GEMINI_MODEL env var", async () => {
     const original = process.env.GEMINI_MODEL
     process.env.GEMINI_MODEL = "gemini-3-flash-preview"

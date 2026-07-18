@@ -225,19 +225,15 @@ export class CliLanguageModel implements LanguageModelV3 {
     }
     if (!proc.stdout || !proc.stderr) throw new Error("CLI process output not available")
 
-    let timeoutTimer: ReturnType<typeof setTimeout>
+    let timeoutTimer: ReturnType<typeof setTimeout> | undefined
     proc.exited.catch((err) => {
       log.debug("cli process exited with error", {
         error: toErrorMessage(err),
       })
     })
-    const timeout = new Promise<never>(
-      (_, reject) =>
-        (timeoutTimer = setTimeout(() => {
-          abort.kill()
-          reject(new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`))
-        }, CLI_TIMEOUT_MS)),
-    )
+    // Collect exit + full stdout/stderr. On timeout we still await this (after
+    // kill) so the error can include partial CLI diagnostics — same idea as
+    // doStream's formatCliTimeout path.
     const result = Promise.all([proc.exited, buffer(proc.stdout), buffer(proc.stderr)])
     result.catch((err) => {
       log.warn("cli language model result collection failed", {
@@ -245,17 +241,47 @@ export class CliLanguageModel implements LanguageModelV3 {
         stack: err instanceof Error ? err.stack : undefined,
       })
     })
-    let code: number, stdout: Buffer, stderr: Buffer
+    type GenerateOutcome =
+      | { kind: "result"; value: [number, Buffer, Buffer] }
+      | { kind: "timeout" }
+    const timeout = new Promise<GenerateOutcome>((resolve) => {
+      // Keep the main CLI timeout ref'd — it is the intentional ceiling for a
+      // hung provider process and must keep the event loop alive until it fires.
+      timeoutTimer = setTimeout(() => resolve({ kind: "timeout" }), CLI_TIMEOUT_MS)
+    })
+    let code: number
+    let stdout: Buffer
+    let stderr: Buffer
     try {
-      ;[code, stdout, stderr] = await Promise.race([
-        result,
-        timeout.catch(async (error) => {
-          await abort.kill()
-          throw error
-        }),
+      const outcome = await Promise.race([
+        result.then((value): GenerateOutcome => ({ kind: "result", value })),
+        timeout,
       ])
+      if (outcome.kind === "timeout") {
+        await abort.kill()
+        let out = Buffer.alloc(0)
+        let err = Buffer.alloc(0)
+        try {
+          // After kill, buffers usually drain quickly; bound the wait so a
+          // stuck pipe cannot hang the timeout path forever.
+          const drained = await Promise.race([
+            result.then((value) => value),
+            new Promise<null>((resolve) => {
+              const drainTimer = setTimeout(() => resolve(null), 1_000)
+              drainTimer.unref?.()
+            }),
+          ])
+          if (drained) {
+            ;[, out, err] = drained
+          }
+        } catch (error) {
+          log.debug("cli generate timeout drain failed", { error: toErrorMessage(error) })
+        }
+        throw new Error(formatCliTimeout(out, err))
+      }
+      ;[code, stdout, stderr] = outcome.value
     } finally {
-      clearTimeout(timeoutTimer!)
+      if (timeoutTimer) clearTimeout(timeoutTimer)
       await abort.killPromise
     }
     if (abort.isAborted) throw abort.abortError

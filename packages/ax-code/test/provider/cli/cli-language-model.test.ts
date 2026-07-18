@@ -283,15 +283,21 @@ describe("CliLanguageModel", () => {
       if (timeout === 300_000) {
         return originalSetTimeout(handler, 1, ...args)
       }
+      // Speed up the post-kill buffer drain wait used by the timeout path.
+      if (timeout === 1_000) {
+        return originalSetTimeout(handler, 5, ...args)
+      }
       return originalSetTimeout(handler, timeout, ...args)
     }
     globalThis.setTimeout = setTimeoutSpy as typeof globalThis.setTimeout
 
     let killStarted = false
     let killCompleted = false
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
     const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
-      stdout: new PassThrough(),
-      stderr: new PassThrough(),
+      stdout,
+      stderr,
       exited: new Promise<number>(() => {}),
       exitCode: null,
       signalCode: null,
@@ -301,6 +307,8 @@ describe("CliLanguageModel", () => {
     } as any)
     const shellKill = vi.spyOn(Shell, "killTree").mockImplementation(async () => {
       killStarted = true
+      // Emit diagnostic output that should appear in the timeout error.
+      stderr.write("rate limited by upstream\n")
       await new Promise<void>((resolve) => {
         originalSetTimeout(() => {
           killCompleted = true
@@ -318,13 +326,65 @@ describe("CliLanguageModel", () => {
         model.doGenerate({
           prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
         }),
-      ).rejects.toThrow("CLI process timed out after 300s")
+      ).rejects.toThrow(/CLI process timed out after 300s/)
       expect(killStarted).toBe(true)
       expect(killCompleted).toBe(true)
     } finally {
       globalThis.setTimeout = originalSetTimeout
       spawn.mockRestore()
       shellKill.mockRestore()
+      stdout.destroy()
+      stderr.destroy()
+    }
+  })
+
+  test("doGenerate timeout includes partial CLI stderr when buffers drain", async () => {
+    const originalSetTimeout = globalThis.setTimeout
+    globalThis.setTimeout = ((
+      handler: (...args: any[]) => void,
+      timeout?: number,
+      ...args: any[]
+    ): ReturnType<typeof setTimeout> => {
+      if (timeout === 300_000) return originalSetTimeout(handler, 1, ...args)
+      if (timeout === 1_000) return originalSetTimeout(handler, 50, ...args)
+      return originalSetTimeout(handler, timeout, ...args)
+    }) as typeof globalThis.setTimeout
+
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    let resolveExit!: (code: number) => void
+    const exited = new Promise<number>((resolve) => {
+      resolveExit = resolve
+    })
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
+      stdout,
+      stderr,
+      exited,
+      exitCode: null,
+      signalCode: null,
+      kill: () => true,
+      pid: 1001,
+      stdin: null,
+    } as any)
+    const shellKill = vi.spyOn(Shell, "killTree").mockImplementation(async () => {
+      stderr.end("auth token expired\n")
+      stdout.end()
+      resolveExit(1)
+    })
+
+    try {
+      const model = makeModel({ binary: "sleep", args: ["60"] })
+      await expect(
+        model.doGenerate({
+          prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+        }),
+      ).rejects.toThrow(/CLI process timed out after 300s:[\s\S]*auth token expired/)
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+      spawn.mockRestore()
+      shellKill.mockRestore()
+      stdout.destroy()
+      stderr.destroy()
     }
   })
 

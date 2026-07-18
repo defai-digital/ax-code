@@ -57,25 +57,30 @@ type ResolveCliModelOptions = {
 }
 
 async function resolveModelFromJsonSettings(options: ResolveCliModelOptions): Promise<CliModelInfo> {
-  const envModel = process.env[options.envVar]
+  // Trim and reject empty/whitespace so blank env or settings never override the default.
+  const envModel = process.env[options.envVar]?.trim()
   if (envModel) return { model: envModel, source: options.envVar }
 
   const settings = await readJson(join(homeDir(), options.settingsPath))
   const model = settings ? options.read(settings) : undefined
-  if (model !== undefined) return { model, source: options.sourceLabel }
+  if (model) return { model, source: options.sourceLabel }
 
   return { model: options.defaultModel, source: "default" }
 }
 
 function resolveJsonModelString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined
+  if (typeof value !== "string") return undefined
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
 }
 
 function resolveModelFromObject(settings: JsonLike): string | undefined {
   const directModel = resolveJsonModelString(settings.model)
   if (directModel !== undefined) return directModel
-  const model = (settings as JsonLike).model
-  if (model && typeof model === "object" && "name" in model) return resolveJsonModelString((model as JsonLike).name)
+  const model = settings.model
+  if (model && typeof model === "object" && !Array.isArray(model) && "name" in model) {
+    return resolveJsonModelString((model as JsonLike).name)
+  }
   return undefined
 }
 
