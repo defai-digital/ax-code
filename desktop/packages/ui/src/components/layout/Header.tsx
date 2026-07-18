@@ -1906,7 +1906,7 @@ export const Header: React.FC = () => {
         macosHeaderSizeClass,
       )}
       style={webWindowControlsOverlayStyle}
-      role="tablist"
+      role="toolbar"
       aria-label={t("header.navigation.mainAria")}
     >
       {isWindowsElectronDesktop ? (

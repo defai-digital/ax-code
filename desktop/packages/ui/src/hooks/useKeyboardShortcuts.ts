@@ -208,6 +208,12 @@ export const useKeyboardShortcuts = () => {
         return
       }
 
+      if (eventMatchesShortcut(e, combo("focus_chat"))) {
+        e.preventDefault()
+        setActiveMainTab("chat")
+        return
+      }
+
       if (eventMatchesShortcut(e, combo("focus_input"))) {
         e.preventDefault()
         const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]')

@@ -18,6 +18,8 @@ import { useUIStore } from "@/stores/useUIStore"
 import { useUpdateStore } from "@/stores/useUpdateStore"
 import { useDeviceInfo } from "@/lib/device"
 import { isDesktopLocalOriginActive } from "@/lib/desktop"
+import { useI18n } from "@/lib/i18n"
+import { Icon } from "@/components/icon/Icon"
 import { cn } from "@/lib/utils"
 import { lazyWithChunkRecovery } from "@/lib/chunkLoadRecovery"
 
@@ -53,16 +55,21 @@ const sidebarCornerBackground = (position: string) =>
   `radial-gradient(circle at ${position}, transparent calc(${SIDEBAR_CORNER_SIZE}px - 1px), var(--sidebar) ${SIDEBAR_CORNER_SIZE}px)`
 
 export const MainLayout: React.FC = () => {
+  const { t } = useI18n()
   const RIGHT_SIDEBAR_AUTO_CLOSE_WIDTH = 1140
   const RIGHT_SIDEBAR_AUTO_OPEN_WIDTH = 1220
   const BOTTOM_TERMINAL_AUTO_CLOSE_HEIGHT = 640
   const BOTTOM_TERMINAL_AUTO_OPEN_HEIGHT = 700
+  const LEFT_SIDEBAR_AUTO_CLOSE_WIDTH = 900
+  const LEFT_SIDEBAR_AUTO_OPEN_WIDTH = 980
   const isSidebarOpen = useUIStore((state) => state.isSidebarOpen)
   const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen)
   const isBottomTerminalOpen = useUIStore((state) => state.isBottomTerminalOpen)
+  const setSidebarOpen = useUIStore((state) => state.setSidebarOpen)
   const setRightSidebarOpen = useUIStore((state) => state.setRightSidebarOpen)
   const setBottomTerminalOpen = useUIStore((state) => state.setBottomTerminalOpen)
   const activeMainTab = useUIStore((state) => state.activeMainTab)
+  const setActiveMainTab = useUIStore((state) => state.setActiveMainTab)
   const splitPaneEnabled = useUIStore((state) => state.splitPaneEnabled)
   const splitPaneRightTab = useUIStore((state) => state.splitPaneRightTab)
   const setIsMobile = useUIStore((state) => state.setIsMobile)
@@ -76,6 +83,7 @@ export const MainLayout: React.FC = () => {
   const rightSidebarWidth = useUIStore((state) => state.rightSidebarWidth)
   const rightSidebarAutoClosedRef = React.useRef(false)
   const bottomTerminalAutoClosedRef = React.useRef(false)
+  const leftSidebarAutoClosedRef = React.useRef(false)
 
   // Trigger native desktop update checks shortly after mount, then repeat periodically.
   const checkForUpdates = useUpdateStore((state) => state.checkForUpdates)
@@ -168,6 +176,19 @@ export const MainLayout: React.FC = () => {
       // Treat panel auto-collapse/restore as desktop-only so keyboard
       // viewport changes do not churn drawer or terminal layout state.
       if (!isMobile && !isTablet) {
+        const shouldCloseLeftSidebar = width < LEFT_SIDEBAR_AUTO_CLOSE_WIDTH
+        const canAutoOpenLeftSidebar = width >= LEFT_SIDEBAR_AUTO_OPEN_WIDTH
+
+        if (shouldCloseLeftSidebar) {
+          if (state.isSidebarOpen) {
+            setSidebarOpen(false)
+            leftSidebarAutoClosedRef.current = true
+          }
+        } else if (canAutoOpenLeftSidebar && leftSidebarAutoClosedRef.current) {
+          setSidebarOpen(true)
+          leftSidebarAutoClosedRef.current = false
+        }
+
         const shouldCloseRightSidebar = width < RIGHT_SIDEBAR_AUTO_CLOSE_WIDTH
         const canAutoOpenRightSidebar = width >= RIGHT_SIDEBAR_AUTO_OPEN_WIDTH
 
@@ -215,7 +236,7 @@ export const MainLayout: React.FC = () => {
         window.clearTimeout(timeoutId)
       }
     }
-  }, [isMobile, isTablet, setBottomTerminalOpen, setRightSidebarOpen])
+  }, [isMobile, isTablet, setBottomTerminalOpen, setRightSidebarOpen, setSidebarOpen])
 
   React.useEffect(() => {
     if (typeof window === "undefined") {
@@ -226,8 +247,13 @@ export const MainLayout: React.FC = () => {
       const width = window.innerWidth
       const height = window.innerHeight
 
+      const leftCanAutoOpen = width >= LEFT_SIDEBAR_AUTO_OPEN_WIDTH
       const rightCanAutoOpen = width >= RIGHT_SIDEBAR_AUTO_OPEN_WIDTH
       const bottomCanAutoOpen = height >= BOTTOM_TERMINAL_AUTO_OPEN_HEIGHT
+
+      if (state.isSidebarOpen !== prevState.isSidebarOpen && leftCanAutoOpen) {
+        leftSidebarAutoClosedRef.current = false
+      }
 
       if (state.isRightSidebarOpen !== prevState.isRightSidebarOpen && rightCanAutoOpen) {
         rightSidebarAutoClosedRef.current = false
@@ -241,7 +267,7 @@ export const MainLayout: React.FC = () => {
     return () => {
       unsubscribe()
     }
-  }, [isMobile, isTablet, setBottomTerminalOpen, setRightSidebarOpen])
+  }, [isMobile, isTablet, setBottomTerminalOpen, setRightSidebarOpen, setSidebarOpen])
 
   const splitRightContent = React.useMemo(() => {
     if (!splitPaneEnabled) return null
@@ -419,8 +445,21 @@ export const MainLayout: React.FC = () => {
                         </ErrorBoundary>
                       </div>
                       {secondaryView && (
-                        <div className="absolute inset-0">
-                          <ErrorBoundary>{secondaryView}</ErrorBoundary>
+                        <div className="absolute inset-0 flex flex-col">
+                          <div className="flex h-8 flex-shrink-0 items-center border-b border-border/40 bg-sidebar px-2">
+                            <button
+                              type="button"
+                              onClick={() => setActiveMainTab("chat")}
+                              aria-label={t("layout.backToChat")}
+                              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 typography-meta text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
+                            >
+                              <Icon name="arrow-left" className="h-3.5 w-3.5" aria-hidden="true" />
+                              {t("layout.backToChat")}
+                            </button>
+                          </div>
+                          <div className="relative min-h-0 flex-1">
+                            <ErrorBoundary>{secondaryView}</ErrorBoundary>
+                          </div>
                         </div>
                       )}
                     </main>

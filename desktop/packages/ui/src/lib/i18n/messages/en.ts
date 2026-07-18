@@ -17,6 +17,7 @@ export const dict = {
   "common.revealPath.fileExplorer": "Open in File Explorer",
   "common.revealPath.fileManager": "Open in File Manager",
   "layout.mainTab.chat": "Chat",
+  "layout.backToChat": "Back to chat",
   "layout.mainTab.plan": "Plan",
   "layout.mainTab.diff": "Diff",
   "layout.mainTab.files": "Files",

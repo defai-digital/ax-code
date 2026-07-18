@@ -392,6 +392,13 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
     label: "Switch to tab 9",
     description: "Switch to the ninth tab or project",
   },
+  {
+    id: "focus_chat",
+    defaultCombo: "mod+shift+c",
+    label: "Back to chat",
+    description: "Switch the main view back to chat",
+    customizable: true,
+  },
 ] as const
 
 export function normalizeCombo(combo: ShortcutCombo): ShortcutCombo {
