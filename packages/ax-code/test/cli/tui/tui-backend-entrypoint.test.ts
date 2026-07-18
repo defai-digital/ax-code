@@ -1,7 +1,11 @@
 import { describe, expect, test } from "vitest"
 import { readFileSync } from "node:fs"
 import path from "node:path"
-import { tsxLoaderImportSpecifier, tuiBackendTransport } from "../../../src/cli/cmd/tui/thread"
+import {
+  resolveBackendImportSpecifier,
+  tsxLoaderImportSpecifier,
+  tuiBackendTransport,
+} from "../../../src/cli/cmd/tui/thread"
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, "../../..")
 const WORKER_SRC = readFileSync(path.join(PACKAGE_ROOT, "src/cli/cmd/tui/worker.ts"), "utf8")
@@ -39,5 +43,19 @@ describe("tui backend entrypoint guardrails", () => {
     expect(specifier).toMatch(/^file:\/\//)
     expect(specifier).toContain("/tsx/")
     expect(specifier).not.toBe("tsx")
+  })
+
+  test("resolves relative backend imports from the parent process startup directory", () => {
+    const startupCwd = path.join(path.parse(PACKAGE_ROOT).root, "repo", "packages", "ax-code")
+
+    expect(resolveBackendImportSpecifier("../../script/solid-loader.mjs", startupCwd)).toBe(
+      path.join(path.parse(PACKAGE_ROOT).root, "repo", "script", "solid-loader.mjs"),
+    )
+  })
+
+  test("preserves file URL backend imports", () => {
+    const specifier = "file:///repo/script/solid-loader.mjs"
+
+    expect(resolveBackendImportSpecifier(specifier, "/different/cwd")).toBe(specifier)
   })
 })

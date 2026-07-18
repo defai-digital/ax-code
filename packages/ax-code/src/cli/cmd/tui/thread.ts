@@ -49,6 +49,10 @@ declare global {
 type RpcClient = ReturnType<typeof Rpc.client<typeof rpc>>
 const log = Log.create({ service: "tui.thread" })
 const require = createRequire(import.meta.url)
+// Node resolves relative `--import` specifiers against the cwd it starts in.
+// The TUI command later changes cwd to the selected project before it creates
+// the backend subprocess, so preserve the original base while it is available.
+const processStartupCwd = process.cwd()
 
 export const DEFAULT_TUI_WORKER_READY_TIMEOUT_MS = 10_000
 export const DEFAULT_TUI_UPGRADE_CHECK_DELAY_MS = 30_000
@@ -125,6 +129,11 @@ export function tsxLoaderImportSpecifier() {
   return pathToFileURL(require.resolve("tsx")).href
 }
 
+export function resolveBackendImportSpecifier(specifier: string, startupCwd = processStartupCwd) {
+  if (specifier.startsWith("file:")) return specifier
+  return path.isAbsolute(specifier) ? specifier : path.resolve(startupCwd, specifier)
+}
+
 function tuiUpgradeCheckStatePath() {
   return path.join(Global.Path.state, "upgrade-check.json")
 }
@@ -191,14 +200,12 @@ function backendProcessCommand() {
       const arg = process.execArgv[i]
       if (arg === "--import" && process.execArgv[i + 1]?.includes("solid-loader")) {
         const loaderPath = process.execArgv[i + 1]
-        const absLoader = path.isAbsolute(loaderPath) ? loaderPath : path.resolve(process.cwd(), loaderPath)
-        loaderArgs.push("--import", absLoader)
+        loaderArgs.push("--import", resolveBackendImportSpecifier(loaderPath))
         break
       }
       if (arg.startsWith("--import=") && arg.includes("solid-loader")) {
         const loaderPath = arg.slice("--import=".length)
-        const absLoader = path.isAbsolute(loaderPath) ? loaderPath : path.resolve(process.cwd(), loaderPath)
-        loaderArgs.push("--import", absLoader)
+        loaderArgs.push("--import", resolveBackendImportSpecifier(loaderPath))
         break
       }
     }
