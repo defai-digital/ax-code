@@ -2023,7 +2023,6 @@ export const Header: React.FC = () => {
   return (
     <header
       ref={headerRef}
-      data-tour-target="command-palette"
       className={headerClassName}
       style={{ ["--padding-scale" as string]: "1" } as React.CSSProperties}
     >

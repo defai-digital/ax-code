@@ -664,8 +664,6 @@ interface UIStore {
   showSplitAssistantMessageActions: boolean
   isExpandedInput: boolean
   shortcutOverrides: Record<string, ShortcutCombo>
-  hasCompletedTour: boolean
-  tourStep: number
 
   setTheme: (theme: "light" | "dark" | "system") => void
   toggleSidebar: () => void
@@ -945,8 +943,6 @@ export const useUIStore = create<UIStore>()(
         showSplitAssistantMessageActions: false,
         isExpandedInput: false,
         shortcutOverrides: {},
-        hasCompletedTour: true,
-        tourStep: 0,
 
         setTheme: (theme) => {
           set({ theme })
@@ -2416,8 +2412,6 @@ export const useUIStore = create<UIStore>()(
           stickyUserHeader: state.stickyUserHeader,
           showSplitAssistantMessageActions: state.showSplitAssistantMessageActions,
           shortcutOverrides: state.shortcutOverrides,
-          hasCompletedTour: state.hasCompletedTour,
-          tourStep: state.tourStep,
           splitPaneEnabled: state.splitPaneEnabled,
           splitPaneRatio: state.splitPaneRatio,
           splitPaneRightTab: state.splitPaneRightTab,

@@ -2564,24 +2564,6 @@ export const dict = {
   "notificationCenter.time.hoursAgo": "{count}h ago",
   "notificationCenter.time.daysAgo": "{count}d ago",
 
-  // Onboarding tour
-  "featureTour.step1.title": "Your Sessions",
-  "featureTour.step1.description":
-    "Manage all your AI sessions here. Create, organize, and switch between conversations.",
-  "featureTour.step2.title": "Content Tabs",
-  "featureTour.step2.description": "Switch between Chat, Git, Diff, Files, Terminal, and Plan views.",
-  "featureTour.step3.title": "Chat Input",
-  "featureTour.step3.description": "Type your prompts here. Use @ to mention files and / for commands.",
-  "featureTour.step4.title": "Context Panel",
-  "featureTour.step4.description": "View file previews, diffs, and project context side-by-side with chat.",
-  "featureTour.step5.title": "Command Palette",
-  "featureTour.step5.description": "Press Cmd+K to quickly navigate, run commands, and search everything.",
-  "featureTour.next": "Next",
-  "featureTour.back": "Back",
-  "featureTour.skip": "Skip tour",
-  "featureTour.finish": "Get started",
-  "featureTour.step": "Step {current} of {total}",
-
   // Unified search
   "search.commands": "Commands",
   "search.sessions": "Sessions",

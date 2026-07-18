@@ -70,9 +70,6 @@ import {
 const OnboardingScreen = lazyWithChunkRecovery(() =>
   import("@/components/onboarding/OnboardingScreen").then((m) => ({ default: m.OnboardingScreen })),
 )
-const FeatureTour = lazyWithChunkRecovery(() =>
-  import("@/components/onboarding/FeatureTour").then((m) => ({ default: m.FeatureTour })),
-)
 
 const AboutDialogWrapper: React.FC = () => {
   const isAboutDialogOpen = useUIStore((s) => s.isAboutDialogOpen)
@@ -966,9 +963,6 @@ function App({ apis }: AppProps) {
               <PermissionNotifications />
               <AxCodeUpdateToast />
               <MainLayout />
-              <React.Suspense fallback={null}>
-                <FeatureTour />
-              </React.Suspense>
               <Toaster />
               {!isBootShell && (
                 <>
