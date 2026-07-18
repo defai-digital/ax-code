@@ -288,7 +288,7 @@ export const LocalModelsPage: React.FC = () => {
           )}
 
           <div className="overflow-hidden rounded-lg border border-border bg-[var(--surface-elevated)]">
-            <div className="hidden grid-cols-[minmax(220px,1.4fr)_minmax(140px,0.7fr)_minmax(180px,0.9fr)_auto] gap-3 border-b border-border px-4 py-2 text-[11px] font-medium text-muted-foreground md:grid">
+            <div className="hidden grid-cols-[minmax(220px,1.4fr)_minmax(140px,0.7fr)_minmax(180px,0.9fr)_auto] gap-3 border-b border-border px-4 py-2 typography-micro font-medium text-muted-foreground md:grid">
               <span>Model</span>
               <span>Status</span>
               <span>Requirements</span>
@@ -344,9 +344,9 @@ const StatusBox: React.FC<{ title: string; value: string; blocked?: boolean; act
       blocked ? "border-[var(--status-warning)]/35 bg-[var(--status-warning)]/5" : "border-border bg-background",
     )}
   >
-    <div className="text-[11px] leading-4 text-muted-foreground">{title}</div>
+    <div className="typography-micro leading-4 text-muted-foreground">{title}</div>
     <div className="flex items-center justify-between gap-2">
-      <div className="truncate text-[12px] leading-5 text-foreground" title={value}>
+      <div className="truncate typography-micro leading-5 text-foreground" title={value}>
         {value}
       </div>
       {action}
@@ -368,22 +368,22 @@ const ModelRow: React.FC<{
   return (
     <div
       className={cn(
-        "grid grid-cols-1 gap-3 border-b border-border/70 px-4 py-2.5 text-[12px] leading-4 last:border-b-0 md:grid-cols-[minmax(220px,1.4fr)_minmax(140px,0.7fr)_minmax(180px,0.9fr)_auto]",
+        "grid grid-cols-1 gap-3 border-b border-border/70 px-4 py-2.5 typography-micro leading-4 last:border-b-0 md:grid-cols-[minmax(220px,1.4fr)_minmax(140px,0.7fr)_minmax(180px,0.9fr)_auto]",
         dimmed && "opacity-60",
       )}
     >
       <div className="min-w-0 space-y-0.5">
-        <div className="truncate text-[13px] font-medium leading-5 text-foreground" title={model.name}>
+        <div className="truncate typography-meta font-medium leading-5 text-foreground" title={model.name}>
           {model.name}
         </div>
-        <div className="truncate text-[11px] leading-4 text-muted-foreground" title={`${model.id} · ${model.hfRepo}`}>
+        <div className="truncate typography-micro leading-4 text-muted-foreground" title={`${model.id} · ${model.hfRepo}`}>
           {model.id}
         </div>
       </div>
       <div className="min-w-0 space-y-1">
         {job ? (
           <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 text-[12px] font-medium leading-4 text-foreground">
+            <div className="flex items-center gap-1.5 typography-micro font-medium leading-4 text-foreground">
               <Icon name="loader" className="h-3 w-3 animate-spin text-muted-foreground" />
               {job.status === "queued" ? "Queued…" : "Downloading…"}
             </div>
@@ -394,21 +394,21 @@ const ModelRow: React.FC<{
             >
               <div className="oc-indeterminate-progress-bar absolute inset-y-0 left-0 w-1/4 rounded-full bg-primary" />
             </div>
-            <div className="text-[11px] leading-4 text-muted-foreground">
+            <div className="typography-micro leading-4 text-muted-foreground">
               {`≈${formatBytes(model.minDiskBytes)}`}
               {job.status === "running" && job.startedAt ? ` · ${formatElapsed(now - job.startedAt)} elapsed` : ""}
             </div>
           </div>
         ) : (
           <span
-            className="inline-flex rounded-full border border-border bg-background px-2 py-0.5 text-[11px] leading-4 text-foreground"
+            className="inline-flex rounded-full border border-border bg-background px-2 py-0.5 typography-micro leading-4 text-foreground"
             title={model.local.present ? model.local.path : reason}
           >
             {statusLabel(model)}
           </span>
         )}
       </div>
-      <div className="min-w-0 space-y-0.5 text-[11px] leading-4 text-muted-foreground" title={model.mtpSource}>
+      <div className="min-w-0 space-y-0.5 typography-micro leading-4 text-muted-foreground" title={model.mtpSource}>
         <div>{model.quantization} · MTP</div>
         <div>
           Disk {formatBytes(model.minDiskBytes)} · Memory{" "}

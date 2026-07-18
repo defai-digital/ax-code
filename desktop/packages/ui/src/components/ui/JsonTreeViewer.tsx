@@ -118,7 +118,7 @@ const JsonRow = React.memo(
 
     return (
       <div
-        className="flex items-center py-0.5 px-2 hover:bg-[var(--surface-hover)] rounded-sm cursor-default font-mono text-xs leading-5 whitespace-nowrap"
+        className="flex items-center py-0.5 px-2 hover:bg-[var(--surface-hover)] rounded-sm cursor-default font-mono typography-micro leading-5 whitespace-nowrap"
         style={{ paddingLeft: `${indent + 8}px` }}
         onContextMenu={handleContextMenu}
       >

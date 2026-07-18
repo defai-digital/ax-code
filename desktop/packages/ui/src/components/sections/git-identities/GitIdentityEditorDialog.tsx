@@ -305,7 +305,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                   <label className="typography-ui-label text-foreground">
                     {t("settings.gitIdentities.editor.field.userName")}
                   </label>
-                  {!isGlobalProfile && <span className="text-[var(--status-error)] text-xs">*</span>}
+                  {!isGlobalProfile && <span className="text-[var(--status-error)] typography-micro">*</span>}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
@@ -331,7 +331,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                   <label className="typography-ui-label text-foreground">
                     {t("settings.gitIdentities.editor.field.emailAddress")}
                   </label>
-                  {!isGlobalProfile && <span className="text-[var(--status-error)] text-xs">*</span>}
+                  {!isGlobalProfile && <span className="text-[var(--status-error)] typography-micro">*</span>}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
@@ -405,7 +405,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                         value={sshKey}
                         onChange={(e) => setSshKey(e.target.value)}
                         placeholder={t("settings.gitIdentities.editor.field.sshKeyPathPlaceholder")}
-                        className="h-8 font-mono text-xs"
+                        className="h-8 font-mono typography-micro"
                       />
                     </div>
                   )}
@@ -416,7 +416,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                         <label className="typography-ui-label text-foreground">
                           {t("settings.gitIdentities.editor.field.host")}
                         </label>
-                        <span className="text-[var(--status-error)] text-xs">*</span>
+                        <span className="text-[var(--status-error)] typography-micro">*</span>
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
@@ -431,7 +431,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                         onChange={(e) => setHost(e.target.value)}
                         placeholder={t("settings.gitIdentities.editor.field.hostPlaceholder")}
                         required
-                        className="h-8 font-mono text-xs"
+                        className="h-8 font-mono typography-micro"
                       />
                     </div>
                   )}

@@ -91,7 +91,7 @@ export function SidebarActivitySections({ sections, renderSessionNode }: Props):
                   <Icon name="arrow-down-s" className="h-3.5 w-3.5" />
                 )}
               </span>
-              <span className="text-[14px] font-normal text-foreground/95">{section.title}</span>
+              <span className="typography-ui-label font-normal text-foreground/95">{section.title}</span>
             </button>
             {!isCollapsed ? (
               <div className={cn("space-y-0.5 pl-7")}>
@@ -110,7 +110,7 @@ export function SidebarActivitySections({ sections, renderSessionNode }: Props):
                   <button
                     type="button"
                     onClick={() => toggleSectionLimit(section.key)}
-                    className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground leading-tight hover:text-foreground hover:underline"
+                    className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left typography-micro text-muted-foreground leading-tight hover:text-foreground hover:underline"
                   >
                     {remainingCount === 1
                       ? t("sessions.sidebar.group.showMoreSingle", { count: remainingCount })
@@ -121,7 +121,7 @@ export function SidebarActivitySections({ sections, renderSessionNode }: Props):
                   <button
                     type="button"
                     onClick={() => toggleSectionLimit(section.key)}
-                    className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground leading-tight hover:text-foreground hover:underline"
+                    className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left typography-micro text-muted-foreground leading-tight hover:text-foreground hover:underline"
                   >
                     {t("sessions.sidebar.group.showFewer")}
                   </button>

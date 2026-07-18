@@ -181,7 +181,7 @@ const FileRow: React.FC<SidebarFileRowProps> = ({
         </span>
         {!isDir && status && <FileStatusDot status={status} />}
         {isDir && badge && (
-          <span className="text-xs flex items-center gap-1 ml-auto mr-1">
+          <span className="typography-micro flex items-center gap-1 ml-auto mr-1">
             {badge.modified > 0 && <span className="text-[var(--status-warning)]">M{badge.modified}</span>}
             {badge.added > 0 && <span className="text-[var(--status-success)]">+{badge.added}</span>}
           </span>

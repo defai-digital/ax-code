@@ -670,7 +670,7 @@ export function SessionGroupSection(props: Props): React.ReactNode {
         <button
           type="button"
           onClick={() => toggleGroupSessionLimit(groupKey)}
-          className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground leading-tight hover:text-foreground hover:underline"
+          className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left typography-micro text-muted-foreground leading-tight hover:text-foreground hover:underline"
         >
           {remainingCount === 1
             ? t("sessions.sidebar.group.showMoreSingle", { count: remainingCount })
@@ -681,7 +681,7 @@ export function SessionGroupSection(props: Props): React.ReactNode {
         <button
           type="button"
           onClick={() => toggleGroupSessionLimit(groupKey)}
-          className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground leading-tight hover:text-foreground hover:underline"
+          className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left typography-micro text-muted-foreground leading-tight hover:text-foreground hover:underline"
         >
           {t("sessions.sidebar.group.showFewer")}
         </button>
@@ -731,7 +731,7 @@ export function SessionGroupSection(props: Props): React.ReactNode {
           {...(dragHandleProps?.listeners ?? {})}
         >
           <div className="min-w-0 flex flex-1 flex-col justify-center gap-0.5 overflow-hidden">
-            <p className="text-[14px] font-normal truncate text-foreground/92">
+            <p className="typography-ui-label font-normal truncate text-foreground/92">
               {showInlinePrTitle && prIndicator ? (
                 <span className="inline-flex min-w-0 max-w-full items-center">
                   <Tooltip>
@@ -774,7 +774,7 @@ export function SessionGroupSection(props: Props): React.ReactNode {
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="top" sideOffset={6} align="start" className="max-w-sm">
-                      <div className="space-y-1 text-xs">
+                      <div className="space-y-1 typography-micro">
                         {baseBranchLabel || headBranchLabel ? (
                           <div className="text-muted-foreground truncate">
                             {baseBranchLabel && headBranchLabel ? (
@@ -880,7 +880,7 @@ export function SessionGroupSection(props: Props): React.ReactNode {
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="top" sideOffset={6} align="start" className="max-w-sm">
-                        <div className="space-y-1 text-xs">
+                        <div className="space-y-1 typography-micro">
                           {baseBranchLabel || headBranchLabel ? (
                             <div className="text-muted-foreground truncate">
                               {baseBranchLabel && headBranchLabel ? (
@@ -918,7 +918,7 @@ export function SessionGroupSection(props: Props): React.ReactNode {
                 ) : null}
                 <span
                   className={cn(
-                    "min-w-0 truncate text-[11px] font-medium",
+                    "min-w-0 truncate typography-micro font-medium",
                     !statusLine.color && "text-muted-foreground",
                   )}
                   style={statusLine.color ? { color: statusLine.color } : undefined}

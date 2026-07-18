@@ -149,7 +149,7 @@ function CommandShortcut({ className, ...props }: React.ComponentProps<"span">) 
     const normalized = keyLabel.trim().toLowerCase()
 
     if (normalized === "ctrl" || normalized === "control") {
-      return <span className="text-xs font-medium">ctrl</span>
+      return <span className="typography-micro font-medium">ctrl</span>
     }
 
     if (normalized === "cmd" || normalized === "⌘" || normalized === "command" || normalized === "meta") {
@@ -160,7 +160,7 @@ function CommandShortcut({ className, ...props }: React.ComponentProps<"span">) 
       return <Icon name="arrow-up" className="size-3.5" />
     }
 
-    return <span className="text-xs font-medium">{keyLabel}</span>
+    return <span className="typography-micro font-medium">{keyLabel}</span>
   }
 
   const shortcutText = typeof props.children === "string" ? props.children : ""
@@ -181,7 +181,7 @@ function CommandShortcut({ className, ...props }: React.ComponentProps<"span">) 
       {tokens.length > 0
         ? tokens.map((token, index) => (
             <React.Fragment key={`${token}-${index}`}>
-              {index > 0 && <span className="opacity-60 text-xs">+</span>}
+              {index > 0 && <span className="opacity-60 typography-micro">+</span>}
               {renderKey(token)}
             </React.Fragment>
           ))

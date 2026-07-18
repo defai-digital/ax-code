@@ -69,7 +69,7 @@ const SortableChip: React.FC<{
         {...attributes}
         {...listeners}
         onClick={() => onSubmit(item.submitText)}
-        className="group inline-flex touch-none select-none items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-[var(--interactive-hover)] hover:text-foreground"
+        className="group inline-flex touch-none select-none items-center gap-1.5 rounded-full border px-3 py-1.5 typography-ui-label text-muted-foreground transition-colors hover:bg-[var(--interactive-hover)] hover:text-foreground"
         style={chipStyle}
       >
         <Icon name={item.icon} className="h-3.5 w-3.5 shrink-0 opacity-70 transition-opacity group-hover:opacity-100" />
@@ -236,7 +236,7 @@ export const DraftPresetChips: React.FC<DraftPresetChipsProps> = ({ onSubmit, cl
         />
       ) : null}
       {!hasChips && (
-        <span className="text-xs text-muted-foreground select-none">{t("chat.draftStarters.pinHint")}</span>
+        <span className="typography-micro text-muted-foreground select-none">{t("chat.draftStarters.pinHint")}</span>
       )}
       <AddStarterPicker pinnable={pinnable} onOpen={ensureLoaded} onAdd={addStarter} />
     </div>

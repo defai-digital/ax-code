@@ -1003,11 +1003,11 @@ export const TerminalView: React.FC = () => {
 
   if (!effectiveDirectory) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground">
+      <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center typography-ui-label text-muted-foreground">
         <p>{t("terminalView.empty.noWorkingDirectoryForSession")}</p>
         <button
           onClick={handleRestart}
-          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+          className="rounded-lg bg-primary px-3 py-1.5 typography-micro font-medium text-primary-foreground hover:bg-primary/90"
         >
           {t("terminalView.actions.retry")}
         </button>
@@ -1023,7 +1023,7 @@ export const TerminalView: React.FC = () => {
         type="button"
         size="sm"
         variant="outline"
-        className="h-6 px-2 text-xs"
+        className="h-6 px-2 typography-micro"
         onClick={() => handleMobileKeyPress("esc")}
         disabled={quickKeysDisabled}
       >
@@ -1049,7 +1049,7 @@ export const TerminalView: React.FC = () => {
         onClick={() => handleModifierToggle("ctrl")}
         disabled={quickKeysDisabled}
       >
-        <span className="text-xs font-medium">{t("terminalView.quickKeys.controlLabel")}</span>
+        <span className="typography-micro font-medium">{t("terminalView.quickKeys.controlLabel")}</span>
         <span className="sr-only">{t("terminalView.quickKeys.controlModifierAria")}</span>
       </Button>
       <Button
@@ -1126,7 +1126,7 @@ export const TerminalView: React.FC = () => {
     <div className="flex h-full flex-col overflow-hidden bg-[var(--surface-background)]">
       <div
         className={cn(
-          "app-region-no-drag sticky top-0 z-20 shrink-0 bg-[var(--surface-background)] text-xs",
+          "app-region-no-drag sticky top-0 z-20 shrink-0 bg-[var(--surface-background)] typography-micro",
           isTouchTerminal ? "px-3 py-1.5" : "pl-3 pr-1.5 py-1",
         )}
       >
@@ -1256,13 +1256,13 @@ export const TerminalView: React.FC = () => {
           </div>
         ) : null}
         {!isReconnectPending && connectionError && (
-          <div className="absolute inset-x-0 bottom-0 bg-[var(--status-error-background)] px-3 py-2 text-xs text-[var(--status-error)] flex items-center justify-between gap-2">
+          <div className="absolute inset-x-0 bottom-0 bg-[var(--status-error-background)] px-3 py-2 typography-micro text-[var(--status-error)] flex items-center justify-between gap-2">
             <span>{connectionError}</span>
             {isFatalError && isMobile && (
               <Button
                 size="sm"
                 variant="secondary"
-                className="h-6 px-2 py-0 text-xs"
+                className="h-6 px-2 py-0 typography-micro"
                 onClick={handleHardRestart}
                 disabled={isRestarting}
                 title={t("terminalView.actions.hardRestartTitle")}

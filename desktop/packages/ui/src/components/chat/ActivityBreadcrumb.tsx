@@ -93,7 +93,7 @@ export const ActivityBreadcrumb: React.FC<ActivityBreadcrumbProps> = ({ sessionI
   return (
     <div
       className={cn(
-        "flex items-center gap-1.5 px-4 py-1 text-xs text-muted-foreground",
+        "flex items-center gap-1.5 px-4 py-1 typography-micro text-muted-foreground",
         "border-t border-border/40 bg-background/60 backdrop-blur-sm",
         className,
       )}

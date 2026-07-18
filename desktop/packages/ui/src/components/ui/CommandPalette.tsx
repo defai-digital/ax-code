@@ -520,7 +520,7 @@ export const CommandPalette: React.FC = () => {
       <DialogContent className="overflow-hidden p-0" showCloseButton>
         {isSearchMode ? (
           <div className="flex items-center gap-2 border-b border-border/40 px-3 py-1.5">
-            <span className="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+            <span className="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 typography-micro font-medium text-primary">
               {t("commandPalette.searchMode.badge")}
             </span>
             <span className="typography-meta text-muted-foreground">

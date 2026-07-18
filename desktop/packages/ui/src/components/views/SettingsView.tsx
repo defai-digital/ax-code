@@ -693,7 +693,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, isWindowed 
                   type="button"
                   className={cn(
                     "flex h-7 w-full items-center gap-2 rounded-md px-2 overflow-hidden whitespace-nowrap",
-                    "text-sm font-semibold text-sidebar-foreground/90",
+                    "typography-ui-label font-semibold text-sidebar-foreground/90",
                     "hover:text-sidebar-foreground hover:bg-interactive-hover",
                   )}
                   onClick={() =>

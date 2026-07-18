@@ -108,17 +108,17 @@ const UserSubtaskPart: React.FC<{ part: SubtaskPartLike }> = ({ part }) => {
       <div className="flex items-center gap-2 flex-wrap">
         <span className="typography-meta font-semibold text-foreground">{t("chat.messageBody.subtask.title")}</span>
         {command ? (
-          <span className="inline-flex h-5 items-center rounded px-1.5 text-[11px] leading-none bg-foreground/5 text-muted-foreground">
+          <span className="inline-flex h-5 items-center rounded px-1.5 typography-micro leading-none bg-foreground/5 text-muted-foreground">
             /{command}
           </span>
         ) : null}
         {agent ? (
-          <span className="inline-flex h-5 items-center rounded px-1.5 text-[11px] leading-none bg-foreground/5 text-muted-foreground">
+          <span className="inline-flex h-5 items-center rounded px-1.5 typography-micro leading-none bg-foreground/5 text-muted-foreground">
             @{agent}
           </span>
         ) : null}
         {model ? (
-          <span className="inline-flex h-5 items-center rounded px-1.5 text-[11px] leading-none bg-foreground/5 text-muted-foreground">
+          <span className="inline-flex h-5 items-center rounded px-1.5 typography-micro leading-none bg-foreground/5 text-muted-foreground">
             {model}
           </span>
         ) : null}
@@ -220,7 +220,7 @@ const UserShellActionPart: React.FC<{ part: ShellActionPartLike }> = ({ part }) 
         {status ? (
           <span
             className={cn(
-              "inline-flex h-5 items-center rounded px-1.5 text-[11px] leading-none",
+              "inline-flex h-5 items-center rounded px-1.5 typography-micro leading-none",
               status === "error"
                 ? "bg-[var(--status-error-background)] text-[var(--status-error)]"
                 : "bg-foreground/5 text-muted-foreground",
@@ -487,7 +487,7 @@ const UserMessageBody = React.memo(
           {showTimestampInActionsRow && (
             <span
               className={cn(
-                "text-xs text-muted-foreground tabular-nums select-none",
+                "typography-micro text-muted-foreground tabular-nums select-none",
                 alwaysShowActions
                   ? "opacity-100"
                   : "opacity-0 transition-opacity duration-150 group-hover/message:opacity-100 group-hover/user-actions:opacity-100 group-hover/user-shell:opacity-100",
@@ -1755,7 +1755,7 @@ const AssistantMessageBody = React.memo(
       return formatted.length > 0 ? formatted : null
     }, [messageCompletedAt, messageCreatedAt, timeFormatPreference])
 
-    const footerTimestampClassName = "text-sm text-muted-foreground tabular-nums flex items-center gap-1"
+    const footerTimestampClassName = "typography-ui-label text-muted-foreground tabular-nums flex items-center gap-1"
     const canOpenMessagePreview = !isMiniChatSurface && !isMobile
 
     const finalTurnActionButtons = (
@@ -1916,7 +1916,7 @@ const AssistantMessageBody = React.memo(
                 {turnDurationText ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className="text-sm text-muted-foreground tabular-nums flex items-center gap-1">
+                      <span className="typography-ui-label text-muted-foreground tabular-nums flex items-center gap-1">
                         <Icon name="hourglass" className="h-3.5 w-3.5" />
                         <span className="message-footer__label">{turnDurationText}</span>
                       </span>

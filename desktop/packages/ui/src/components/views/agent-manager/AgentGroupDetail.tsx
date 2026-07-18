@@ -319,7 +319,7 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({ group, class
                   <ProviderLogo providerId={selectedSession.providerId} className="h-4 w-4" />
                   <span className="font-medium text-foreground">{selectedSession.displayLabel}</span>
                   <span>·</span>
-                  <span className="font-mono text-xs truncate">{selectedSession.path}</span>
+                  <span className="font-mono typography-micro truncate">{selectedSession.path}</span>
                 </div>
               </div>
               <div className="flex-1 flex items-center justify-center">

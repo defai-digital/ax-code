@@ -67,13 +67,13 @@ export const DoneNotCommittedNudge: React.FC = React.memo(() => {
             : "h-3.5 w-3.5 flex-shrink-0 text-[var(--status-success)]"
         }
       />
-      <span className="min-w-0 flex-1 text-xs text-foreground">{message}</span>
+      <span className="min-w-0 flex-1 typography-micro text-foreground">{message}</span>
       {isDirty && fileCount > 0 ? (
         <>
-          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={openGitPanel}>
+          <Button variant="ghost" size="sm" className="h-6 px-2 typography-micro" onClick={openGitPanel}>
             {t("chat.turnNextSteps.review")}
           </Button>
-          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={openGitPanel}>
+          <Button variant="ghost" size="sm" className="h-6 px-2 typography-micro" onClick={openGitPanel}>
             {t("chat.turnNextSteps.commit")}
           </Button>
         </>
@@ -81,7 +81,7 @@ export const DoneNotCommittedNudge: React.FC = React.memo(() => {
       <Button
         variant="ghost"
         size="sm"
-        className="h-6 px-2 text-xs"
+        className="h-6 px-2 typography-micro"
         onClick={() => setTimelineDialogOpen(true)}
       >
         {t("chat.turnNextSteps.search")}

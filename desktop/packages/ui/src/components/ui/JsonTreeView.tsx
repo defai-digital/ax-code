@@ -53,7 +53,7 @@ const JsonTreeView = React.memo(function JsonTreeView({
           <div className="mb-1 font-medium text-[var(--surface-foreground)]">
             {t("jsonTreeView.error.invalidJsonTitle")}
           </div>
-          <div className="font-mono text-xs text-[var(--surface-mutedForeground)]">{parseError}</div>
+          <div className="font-mono typography-micro text-[var(--surface-mutedForeground)]">{parseError}</div>
         </div>
       </div>
     )
@@ -66,11 +66,11 @@ const JsonTreeView = React.memo(function JsonTreeView({
   return (
     <div className={className}>
       <div className="flex items-center gap-1 border-b border-[var(--interactive-border)] px-2 py-1">
-        <Button variant="ghost" size="xs" onClick={handleExpandAll} className="gap-1 text-xs text-muted-foreground">
+        <Button variant="ghost" size="xs" onClick={handleExpandAll} className="gap-1 typography-micro text-muted-foreground">
           <Icon name="arrow-down-s" className="h-3 w-3" />
           {t("jsonTreeView.actions.expandAll")}
         </Button>
-        <Button variant="ghost" size="xs" onClick={handleCollapseAll} className="gap-1 text-xs text-muted-foreground">
+        <Button variant="ghost" size="xs" onClick={handleCollapseAll} className="gap-1 typography-micro text-muted-foreground">
           <Icon name="arrow-up-s" className="h-3 w-3" />
           {t("jsonTreeView.actions.collapseAll")}
         </Button>

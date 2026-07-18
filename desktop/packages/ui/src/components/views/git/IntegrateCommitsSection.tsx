@@ -367,7 +367,7 @@ export const IntegrateCommitsSection: React.FC<{
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1.5">
                 {t("gitView.integrate.target")}
-                <span className="max-w-[160px] truncate font-mono text-xs text-muted-foreground">{targetBranch}</span>
+                <span className="max-w-[160px] truncate font-mono typography-micro text-muted-foreground">{targetBranch}</span>
                 <Icon name="arrow-down-s" className="size-4 opacity-60" />
               </Button>
             </DropdownMenuTrigger>
@@ -447,7 +447,7 @@ export const IntegrateCommitsSection: React.FC<{
             <div className="space-y-1">
               {(showAllCommits ? commitSummaries : commitSummaries.slice(0, 5)).map((c) => (
                 <div key={c.sha} className="flex items-baseline gap-2 min-w-0">
-                  <span className="font-mono text-xs text-muted-foreground flex-shrink-0">{c.short}</span>
+                  <span className="font-mono typography-micro text-muted-foreground flex-shrink-0">{c.short}</span>
                   <span className="typography-meta text-muted-foreground truncate">{c.subject || c.sha}</span>
                 </div>
               ))}
@@ -474,12 +474,12 @@ export const IntegrateCommitsSection: React.FC<{
             </div>
             <div className="flex flex-wrap gap-1.5">
               {ui.details.unmergedFiles.slice(0, 6).map((file) => (
-                <span key={file} className="font-mono text-xs px-2 py-0.5 rounded bg-muted/40 text-muted-foreground">
+                <span key={file} className="font-mono typography-micro px-2 py-0.5 rounded bg-muted/40 text-muted-foreground">
                   {file}
                 </span>
               ))}
               {ui.details.unmergedFiles.length > 6 && (
-                <span className="text-xs text-muted-foreground">
+                <span className="typography-micro text-muted-foreground">
                   {t("gitView.integrate.moreFiles", { count: ui.details.unmergedFiles.length - 6 })}
                 </span>
               )}

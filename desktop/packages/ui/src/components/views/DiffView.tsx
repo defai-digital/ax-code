@@ -150,7 +150,7 @@ const formatDiffTotals = (insertions?: number, deletions?: number) => {
   const removed = deletions ?? 0
   if (!added && !removed) return null
   return (
-    <span className="typography-meta flex flex-shrink-0 items-center gap-1 text-xs whitespace-nowrap">
+    <span className="flex flex-shrink-0 items-center gap-1 typography-micro whitespace-nowrap">
       {added ? <span style={{ color: "var(--status-success)" }}>+{added}</span> : null}
       {removed ? <span style={{ color: "var(--status-error)" }}>-{removed}</span> : null}
     </span>
@@ -855,7 +855,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(
         {isExpanded && (
           <div className="relative border border-t-0 border-border/60 bg-background rounded-b-xl overflow-hidden">
             {diffLoadError ? (
-              <div className="flex flex-col items-center gap-2 px-4 py-8 text-sm text-muted-foreground">
+              <div className="flex flex-col items-center gap-2 px-4 py-8 typography-ui-label text-muted-foreground">
                 <div className="typography-ui-label font-semibold text-foreground">Failed to load diff</div>
                 <div className="typography-meta text-muted-foreground max-w-[32rem] text-center">{diffLoadError}</div>
                 <button
@@ -868,13 +868,13 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(
               </div>
             ) : null}
             {isLoading && !diffData && !diffLoadError ? (
-              <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">
+              <div className="flex items-center justify-center gap-2 px-4 py-8 typography-ui-label text-muted-foreground">
                 <Icon name="loader-4" className="size-4 animate-spin" />
                 Loading diff…
               </div>
             ) : null}
             {diffData && !forceRenderLarge && file.insertions + file.deletions > LARGE_DIFF_CHANGED_LINES ? (
-              <div className="flex flex-col items-center gap-2 px-4 py-8 text-sm text-muted-foreground">
+              <div className="flex flex-col items-center gap-2 px-4 py-8 typography-ui-label text-muted-foreground">
                 <div className="typography-ui-label font-semibold text-foreground">
                   Large diff ({file.insertions + file.deletions} changed lines)
                 </div>
@@ -1709,7 +1709,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
   const renderContent = () => {
     if (!effectiveDirectory) {
       return (
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+        <div className="flex flex-1 items-center justify-center typography-ui-label text-muted-foreground">
           {t("diffView.state.selectSessionDirectory")}
         </div>
       )
@@ -1751,7 +1751,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
       >
         {renderSelectedDiffViewer()}
         {isCurrentFileLoading && !hasCurrentDiff && (
-          <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <div className="absolute inset-0 flex items-center justify-center gap-2 typography-ui-label text-muted-foreground">
             {diffLoadError ? (
               <div className="flex flex-col items-center gap-2">
                 <div className="typography-ui-label font-semibold text-foreground">

@@ -111,7 +111,7 @@ export const AxCodeCliSettings: React.FC = () => {
               <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
             </TooltipTrigger>
             <TooltipContent sideOffset={8} className="max-w-xs">
-              {t("settings.openchamber.axCodeCli.tooltipPrefix")} <code className="font-mono text-xs">ax-code</code>
+              {t("settings.openchamber.axCodeCli.tooltipPrefix")} <code className="font-mono typography-micro">ax-code</code>
               {t("settings.openchamber.axCodeCli.tooltipSuffix")}
             </TooltipContent>
           </Tooltip>
@@ -131,7 +131,7 @@ export const AxCodeCliSettings: React.FC = () => {
               onChange={(e) => setValue(e.target.value)}
               placeholder={t("settings.openchamber.axCodeCli.field.binaryPathPlaceholder")}
               disabled={isLoading || isSaving}
-              className="h-7 min-w-0 flex-1 font-mono text-xs"
+              className="h-7 min-w-0 flex-1 font-mono typography-micro"
             />
             <Button
               type="button"

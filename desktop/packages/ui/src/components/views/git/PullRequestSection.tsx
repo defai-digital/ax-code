@@ -1967,7 +1967,7 @@ export const PullRequestSection: React.FC<{
                 </div>
                 {additionalContext.trim() && (
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center rounded-full bg-[var(--interactive-selection)] px-2 py-0.5 text-xs text-[var(--interactive-selection-foreground)]">
+                    <span className="inline-flex items-center rounded-full bg-[var(--interactive-selection)] px-2 py-0.5 typography-micro text-[var(--interactive-selection-foreground)]">
                       {t("gitView.pr.additionalContext.added")}
                     </span>
                   </div>
@@ -2134,7 +2134,7 @@ export const PullRequestSection: React.FC<{
                             {!isLast ? (
                               <div className="absolute left-4 top-[2.375rem] bottom-[0.375rem] w-px bg-border/60" />
                             ) : null}
-                            <div className="absolute left-0 top-0 z-10 flex size-8 items-center justify-center overflow-hidden rounded-full border border-border/60 bg-surface-elevated text-xs text-muted-foreground">
+                            <div className="absolute left-0 top-0 z-10 flex size-8 items-center justify-center overflow-hidden rounded-full border border-border/60 bg-surface-elevated typography-micro text-muted-foreground">
                               {comment.avatarUrl ? (
                                 <img
                                   src={comment.avatarUrl}

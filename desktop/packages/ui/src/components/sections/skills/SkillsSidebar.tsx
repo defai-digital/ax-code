@@ -294,7 +294,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
           <>
             {projectSkills.length > 0 && (
               <>
-                <div className="px-2 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="px-2 pb-1.5 pt-2 typography-micro font-semibold uppercase tracking-wide text-muted-foreground">
                   {t("settings.skills.sidebar.section.project")}
                 </div>
                 {groupedProjectSkills.sortedGroups.map(({ name: groupName, skills: groupSkills }) => (
@@ -343,7 +343,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
 
             {userSkills.length > 0 && (
               <>
-                <div className="px-2 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="px-2 pb-1.5 pt-3 typography-micro font-semibold uppercase tracking-wide text-muted-foreground">
                   {t("settings.skills.sidebar.section.user")}
                 </div>
                 {groupedUserSkills.sortedGroups.map(({ name: groupName, skills: groupSkills }) => (

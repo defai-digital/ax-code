@@ -129,7 +129,7 @@ const OpenInAppListIcon = ({ label, iconDataUrl }: { label: string; iconDataUrl?
     <span
       className={cn(
         "size-4 rounded-sm flex items-center justify-center",
-        "bg-[var(--surface-muted)] text-[9px] font-medium text-muted-foreground",
+        "bg-[var(--surface-muted)] typography-micro font-medium text-muted-foreground",
       )}
     >
       {initial}
@@ -385,7 +385,7 @@ const FileRow: React.FC<FilesViewFileRowProps> = ({
         </span>
         {!isDir && status && <FileStatusDot status={status} />}
         {isDir && badge && (
-          <span className="text-xs flex items-center gap-1 ml-auto mr-1">
+          <span className="typography-micro flex items-center gap-1 ml-auto mr-1">
             {badge.modified > 0 && <span className="text-[var(--status-warning)]">M{badge.modified}</span>}
             {badge.added > 0 && <span className="text-[var(--status-success)]">+{badge.added}</span>}
           </span>
@@ -3389,7 +3389,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
               fallback={
                 <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
                   <div className="mb-1 font-medium text-destructive">{t("filesView.error.jsonViewerUnavailable")}</div>
-                  <div className="text-sm text-muted-foreground">{t("filesView.error.switchToTextMode")}</div>
+                  <div className="typography-ui-label text-muted-foreground">{t("filesView.error.switchToTextMode")}</div>
                 </div>
               }
             >
@@ -3400,7 +3400,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
           ) : selectedFile && isMarkdown && getMdViewMode() === "preview" ? (
             <div className="h-full overflow-auto p-3">
               {fileContent.length > 500 * 1024 && (
-                <div className="mb-3 rounded-md border border-status-warning/20 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
+                <div className="mb-3 rounded-md border border-status-warning/20 bg-status-warning/10 px-3 py-2 typography-ui-label text-status-warning">
                   {t("filesView.warning.largeFilePreviewLimited", { sizeKb: Math.round(fileContent.length / 1024) })}
                 </div>
               )}
@@ -3408,7 +3408,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
                 fallback={
                   <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
                     <div className="mb-1 font-medium text-destructive">{t("filesView.error.previewUnavailable")}</div>
-                    <div className="text-sm text-muted-foreground">{t("filesView.error.switchToEditMode")}</div>
+                    <div className="typography-ui-label text-muted-foreground">{t("filesView.error.switchToEditMode")}</div>
                   </div>
                 }
               >
@@ -3715,7 +3715,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
           ) : isMarkdown && getMdViewMode() === "preview" ? (
             <div className="h-full overflow-auto p-4">
               {fileContent.length > 500 * 1024 && (
-                <div className="mb-3 rounded-md border border-status-warning/20 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
+                <div className="mb-3 rounded-md border border-status-warning/20 bg-status-warning/10 px-3 py-2 typography-ui-label text-status-warning">
                   {t("filesView.warning.largeFilePreviewLimited", { sizeKb: Math.round(fileContent.length / 1024) })}
                 </div>
               )}
@@ -3723,7 +3723,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
                 fallback={
                   <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
                     <div className="mb-1 font-medium text-destructive">{t("filesView.error.previewUnavailable")}</div>
-                    <div className="text-sm text-muted-foreground">{t("filesView.error.switchToEditMode")}</div>
+                    <div className="typography-ui-label text-muted-foreground">{t("filesView.error.switchToEditMode")}</div>
                   </div>
                 }
               >

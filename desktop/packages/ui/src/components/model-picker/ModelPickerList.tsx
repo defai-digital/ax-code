@@ -120,7 +120,7 @@ const ModelPickerRowTooltip: React.FC<{
           sideOffset={8}
           className="max-w-xs text-left transition-none data-[starting-style]:opacity-100 data-[starting-style]:scale-100 data-[ending-style]:opacity-100 data-[ending-style]:scale-100"
         >
-          <div className="flex flex-col gap-2 text-left text-xs">
+          <div className="flex flex-col gap-2 text-left typography-micro">
             {capabilities.length > 0 ? (
               <div className="flex items-center justify-between gap-3 text-muted-foreground">
                 <span className="typography-meta font-medium">{labels.capabilities}</span>
@@ -637,7 +637,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
                 <span className="font-medium truncate">{getModelDisplayName(entry.model)}</span>
                 {isLocalProvider(entry.providerID) ? (
                   <span
-                    className="inline-flex flex-shrink-0 rounded-full border border-border bg-background px-1.5 py-0 text-[10px] leading-4 text-muted-foreground"
+                    className="inline-flex flex-shrink-0 rounded-full border border-border bg-background px-1.5 py-0 typography-micro leading-4 text-muted-foreground"
                     title={labels.localTooltip}
                   >
                     {labels.local}

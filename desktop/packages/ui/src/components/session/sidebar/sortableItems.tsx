@@ -236,7 +236,7 @@ export const SortableProjectItem: React.FC<SidebarSortableProjectItemProps> = ({
                     </span>
                     <span
                       className={cn(
-                        "text-[14px] font-normal truncate",
+                        "typography-ui-label font-normal truncate",
                         isActiveProject ? "text-foreground" : "text-foreground group-hover/project:text-foreground",
                       )}
                     >

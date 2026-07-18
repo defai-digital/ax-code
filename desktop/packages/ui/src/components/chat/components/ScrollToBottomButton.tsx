@@ -35,7 +35,7 @@ const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({ visible, on
       >
         <Icon name="arrow-down" className="h-4 w-4 shrink-0" />
         {hasUnseen && (
-          <span className="text-xs tabular-nums font-medium text-muted-foreground">
+          <span className="typography-micro tabular-nums font-medium text-muted-foreground">
             {t("chat.scrollToBottom.newMessages", { count: unseenCount })}
           </span>
         )}

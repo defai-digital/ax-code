@@ -393,7 +393,7 @@ export const MagicPromptsPage: React.FC = () => {
               <Textarea
                 value={draft}
                 onChange={(event) => setDraft(block.id, event.target.value)}
-                className="min-h-[220px] font-mono text-sm"
+                className="min-h-[220px] font-mono typography-ui-label"
               />
               {isInvalidEmptyVisiblePrompt && (
                 <div className="typography-micro text-[var(--status-error)]">

@@ -3910,7 +3910,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             {!projectKnowledge.isLoading && (
               <div className="mt-3 flex items-center justify-center gap-2">
                 {projectKnowledge.exists ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-600 dark:text-emerald-400">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 typography-micro text-emerald-600 dark:text-emerald-400">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                     {t("chat.projectKnowledge.loaded", { file: projectKnowledgeFileLabel(projectKnowledge) })}
                   </span>
@@ -3920,7 +3920,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     onClick={() =>
                       useInputStore.getState().requestPresetSubmit(t("chat.projectKnowledge.createPrompt"))
                     }
-                    className="inline-flex items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 typography-micro text-muted-foreground transition-colors hover:border-border hover:text-foreground"
                   >
                     <Icon name="file-add" className="h-3 w-3" />
                     {t("chat.projectKnowledge.create")}
@@ -3949,10 +3949,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     borderColor: currentTheme?.colors?.interactive?.border,
                   }}
                 >
-                  <span className="text-xs font-medium text-muted-foreground">
+                  <span className="typography-micro font-medium text-muted-foreground">
                     {t("chat.chatInput.reviewComments")}
                   </span>
-                  <span className="text-xs font-semibold" style={{ color: currentTheme?.colors?.status?.info }}>
+                  <span className="typography-micro font-semibold" style={{ color: currentTheme?.colors?.status?.info }}>
                     {reviewCount}
                   </span>
                 </div>
@@ -3965,8 +3965,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     borderColor: currentTheme?.colors?.interactive?.border,
                   }}
                 >
-                  <span className="text-xs font-medium text-muted-foreground">{t("chat.chatInput.devServerLogs")}</span>
-                  <span className="text-xs font-semibold" style={{ color: currentTheme?.colors?.status?.info }}>
+                  <span className="typography-micro font-medium text-muted-foreground">{t("chat.chatInput.devServerLogs")}</span>
+                  <span className="typography-micro font-semibold" style={{ color: currentTheme?.colors?.status?.info }}>
                     {previewConsoleCount}
                   </span>
                   <button
@@ -3988,10 +3988,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     borderColor: currentTheme?.colors?.interactive?.border,
                   }}
                 >
-                  <span className="text-xs font-medium text-muted-foreground">
+                  <span className="typography-micro font-medium text-muted-foreground">
                     {t("chat.chatInput.previewAnnotations")}
                   </span>
-                  <span className="text-xs font-semibold" style={{ color: currentTheme?.colors?.status?.info }}>
+                  <span className="typography-micro font-semibold" style={{ color: currentTheme?.colors?.status?.info }}>
                     {previewAnnotationCount}
                   </span>
                   <button
@@ -4011,7 +4011,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
           {/* Linked Issue row */}
           {linkedIssue && (
             <div className="pb-2 w-full px-1">
-              <div className="flex w-full items-center gap-1.5 text-sm h-5 px-1">
+              <div className="flex w-full items-center gap-1.5 typography-ui-label h-5 px-1">
                 <button
                   type="button"
                   onClick={() => setIssuePickerOpen(true)}
@@ -4062,7 +4062,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
           )}
           {linkedPr && (
             <div className="pb-2 w-full px-1">
-              <div className="flex w-full items-center gap-1.5 text-sm h-5 px-1">
+              <div className="flex w-full items-center gap-1.5 typography-ui-label h-5 px-1">
                 <button
                   type="button"
                   onClick={() => setPrPickerOpen(true)}

@@ -291,13 +291,13 @@ const TableCopyButton: React.FC<{ tableRef: React.RefObject<HTMLDivElement | nul
       {showMenu && (
         <div className="absolute top-full right-0 z-10 mt-1 min-w-[100px] overflow-hidden rounded-md border border-border bg-background shadow-none">
           <button
-            className="w-full px-3 py-1.5 text-left text-sm transition-colors hover:bg-interactive-hover/40"
+            className="w-full px-3 py-1.5 text-left typography-ui-label transition-colors hover:bg-interactive-hover/40"
             onClick={() => handleCopy("csv")}
           >
             CSV
           </button>
           <button
-            className="w-full px-3 py-1.5 text-left text-sm transition-colors hover:bg-interactive-hover/40"
+            className="w-full px-3 py-1.5 text-left typography-ui-label transition-colors hover:bg-interactive-hover/40"
             onClick={() => handleCopy("tsv")}
           >
             TSV
@@ -349,13 +349,13 @@ const TableDownloadButton: React.FC<{ tableRef: React.RefObject<HTMLDivElement |
       {showMenu && (
         <div className="absolute top-full right-0 z-10 mt-1 min-w-[100px] overflow-hidden rounded-md border border-border bg-background shadow-none">
           <button
-            className="w-full px-3 py-1.5 text-left text-sm transition-colors hover:bg-interactive-hover/40"
+            className="w-full px-3 py-1.5 text-left typography-ui-label transition-colors hover:bg-interactive-hover/40"
             onClick={() => handleDownload("csv")}
           >
             CSV
           </button>
           <button
-            className="w-full px-3 py-1.5 text-left text-sm transition-colors hover:bg-interactive-hover/40"
+            className="w-full px-3 py-1.5 text-left typography-ui-label transition-colors hover:bg-interactive-hover/40"
             onClick={() => handleDownload("markdown")}
           >
             Markdown
@@ -384,7 +384,7 @@ const TableWrapper: React.FC<{ children?: React.ReactNode; className?: string }>
         <TableDownloadButton tableRef={tableRef} />
       </div>
       <div className="overflow-x-auto rounded-lg border border-border/80 bg-[var(--surface-elevated)]">
-        <table className={cn("w-full border-collapse text-sm", className)} data-markdown="table">
+        <table className={cn("w-full border-collapse typography-ui-label", className)} data-markdown="table">
           {children}
         </table>
       </div>
@@ -806,7 +806,7 @@ const MarkdownCodeBlock: React.FC<{
       className="my-4 group overflow-hidden rounded-2xl border border-border/80 bg-[var(--surface-elevated)]"
     >
       <div className="flex items-center justify-between border-b border-border/70 px-3 py-1.5">
-        <span className="font-mono text-[13px] text-muted-foreground">{language}</span>
+        <span className="font-mono typography-meta text-muted-foreground">{language}</span>
         <div
           className={cn(
             "flex items-center gap-1 transition-opacity",
@@ -1129,7 +1129,7 @@ const buildMarkdownComponents = ({
               event.stopPropagation()
               onPreviewLoopback(previewHref)
             }}
-            className="ml-1 inline-flex h-5 items-center gap-0.5 rounded border border-[var(--border)] bg-[var(--surface-background)] px-1.5 align-middle text-[11px] leading-none text-[var(--muted-foreground)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
+            className="ml-1 inline-flex h-5 items-center gap-0.5 rounded border border-[var(--border)] bg-[var(--surface-background)] px-1.5 align-middle typography-micro leading-none text-[var(--muted-foreground)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
             aria-label={previewTitle ?? previewLabel ?? "Open preview pane"}
             title={previewTitle ?? previewLabel ?? "Open preview pane"}
             data-loopback-preview-trigger="true"

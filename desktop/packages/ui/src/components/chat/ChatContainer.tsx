@@ -855,7 +855,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
             {!projectKnowledge.isLoading && (
               <div className="mt-3 flex items-center gap-2">
                 {projectKnowledge.exists ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-600 dark:text-emerald-400">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 typography-micro text-emerald-600 dark:text-emerald-400">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                     {t("chat.projectKnowledge.loaded", { file: projectKnowledgeFileLabel(projectKnowledge) })}
                   </span>
@@ -865,7 +865,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
                     onClick={() =>
                       useInputStore.getState().requestPresetSubmit(t("chat.projectKnowledge.createPrompt"))
                     }
-                    className="inline-flex items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 typography-micro text-muted-foreground transition-colors hover:border-border hover:text-foreground"
                   >
                     <Icon name="file-add" className="h-3 w-3" />
                     {t("chat.projectKnowledge.create")}

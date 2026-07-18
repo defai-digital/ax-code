@@ -96,7 +96,7 @@ function SwitcherContent({ onSelect, variant, scopeProjectId }: SwitcherContentP
           )}
         >
           <Icon name="chat-new" className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-          <span className="truncate text-[14px] font-normal leading-tight text-foreground">
+          <span className="truncate typography-ui-label font-normal leading-tight text-foreground">
             {t("sessions.sidebar.header.actions.newSession")}
           </span>
         </BaseMenu.Item>
@@ -293,7 +293,7 @@ function SwitcherRow({
           ) : null}
           <span
             className={cn(
-              "truncate text-[14px] font-normal leading-tight",
+              "truncate typography-ui-label font-normal leading-tight",
               isActive ? "text-primary" : "text-foreground",
             )}
           >

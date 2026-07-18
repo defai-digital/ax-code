@@ -810,7 +810,7 @@ export function DesktopHostSwitcherDialog({
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="space-y-1">
           {isLoading ? (
-            <div className="px-2 py-2 text-muted-foreground text-sm">{t("desktopHostSwitcher.state.loading")}</div>
+            <div className="px-2 py-2 text-muted-foreground typography-ui-label">{t("desktopHostSwitcher.state.loading")}</div>
           ) : (
             allHosts.map((host) => {
               const isLocal = host.id === LOCAL_HOST_ID

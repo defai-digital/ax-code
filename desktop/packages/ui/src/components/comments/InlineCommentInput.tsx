@@ -130,7 +130,7 @@ export function InlineCommentInput({
     >
       <div className="p-3">
         {(fileLabel || lineRange) && (
-          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
+          <div className="flex items-center gap-2 typography-micro font-medium text-muted-foreground mb-2">
             {fileLabel && <span className="truncate max-w-[200px]">{fileLabel}</span>}
             {fileLabel && lineRange && <span>•</span>}
             {displayRange && (
@@ -147,7 +147,7 @@ export function InlineCommentInput({
           onKeyDown={handleKeyDown}
           placeholder={t("inlineComment.input.placeholder")}
           outerClassName="rounded-[var(--radius-xl)] bg-[var(--surface-subtle)] ring-1 ring-inset ring-border/60 focus-within:ring-2 focus-within:ring-[var(--interactive-focus-ring)]"
-          className="min-h-[80px] px-3 py-2.5 text-sm resize-y"
+          className="min-h-[80px] px-3 py-2.5 typography-ui-label resize-y"
         />
 
         <div className="flex items-center justify-end gap-2 mt-3">

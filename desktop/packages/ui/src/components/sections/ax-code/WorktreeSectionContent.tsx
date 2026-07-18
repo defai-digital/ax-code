@@ -285,7 +285,7 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({
               </TooltipTrigger>
               <TooltipContent sideOffset={8} className="max-w-xs">
                 {t("settings.openchamber.worktrees.setup.tooltipPrefix")}{" "}
-                <code className="font-mono text-xs bg-sidebar-accent/50 px-1 rounded">$ROOT_PROJECT_PATH</code>{" "}
+                <code className="font-mono typography-micro bg-sidebar-accent/50 px-1 rounded">$ROOT_PROJECT_PATH</code>{" "}
                 {t("settings.openchamber.worktrees.setup.tooltipSuffix")}
               </TooltipContent>
             </Tooltip>
@@ -305,7 +305,7 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({
                   onChange={(e) => handleSetupCommandChange(index, e.target.value)}
                   onBlur={handleCommandBlur}
                   placeholder={t("settings.openchamber.worktrees.setup.commandPlaceholder")}
-                  className="h-7 w-[30rem] max-w-full font-mono text-xs"
+                  className="h-7 w-[30rem] max-w-full font-mono typography-micro"
                 />
                 <button
                   type="button"

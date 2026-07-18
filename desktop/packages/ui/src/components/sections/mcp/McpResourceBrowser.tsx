@@ -224,7 +224,7 @@ export const McpResourceBrowser: React.FC<McpResourceBrowserProps> = ({ serverNa
                     </div>
                   ) : preview ? (
                     <div className="min-h-0 flex-1">
-                      <pre className="max-h-[240px] overflow-auto rounded-md bg-[var(--surface-background)] p-3 font-mono text-xs leading-5 text-foreground whitespace-pre-wrap">
+                      <pre className="max-h-[240px] overflow-auto rounded-md bg-[var(--surface-background)] p-3 font-mono typography-micro leading-5 text-foreground whitespace-pre-wrap">
                         {preview.text || t("settings.mcp.page.resources.preview.empty")}
                       </pre>
                       {preview.truncated && (

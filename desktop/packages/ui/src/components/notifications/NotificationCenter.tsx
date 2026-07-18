@@ -42,16 +42,16 @@ const NotificationEntry: React.FC<{
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-xs font-medium text-foreground">{item.title}</span>
-          <span className="flex-shrink-0 text-[10px] text-muted-foreground">{timeLabel}</span>
+          <span className="truncate typography-micro font-medium text-foreground">{item.title}</span>
+          <span className="flex-shrink-0 typography-micro text-muted-foreground">{timeLabel}</span>
         </div>
-        <p className="line-clamp-2 text-xs text-muted-foreground">{item.message}</p>
+        <p className="line-clamp-2 typography-micro text-muted-foreground">{item.message}</p>
         {item.type === "permission" && item.onAllow && item.onDeny && (
           <div className="mt-1.5 flex gap-2">
             <Button
               size="sm"
               variant="default"
-              className="h-6 px-2 text-[10px]"
+              className="h-6 px-2 typography-micro"
               onClick={() => {
                 item.onAllow?.()
                 onRemove(item.id)
@@ -62,7 +62,7 @@ const NotificationEntry: React.FC<{
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 px-2 text-[10px]"
+              className="h-6 px-2 typography-micro"
               onClick={() => {
                 item.onDeny?.()
                 onRemove(item.id)
@@ -140,9 +140,9 @@ export const NotificationCenter: React.FC = React.memo(function NotificationCent
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">{t("notificationCenter.title")}</span>
+            <span className="typography-ui-label font-semibold text-foreground">{t("notificationCenter.title")}</span>
             {unreadCount > 0 && (
-              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 typography-micro font-medium text-primary-foreground">
                 {unreadCount}
               </span>
             )}
@@ -153,14 +153,14 @@ export const NotificationCenter: React.FC = React.memo(function NotificationCent
                 <button
                   type="button"
                   onClick={markAllAsRead}
-                  className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-interactive-hover hover:text-foreground transition-colors"
+                  className="rounded px-1.5 py-0.5 typography-micro text-muted-foreground hover:bg-interactive-hover hover:text-foreground transition-colors"
                 >
                   {t("notificationCenter.markAllRead")}
                 </button>
                 <button
                   type="button"
                   onClick={clearAll}
-                  className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-interactive-hover hover:text-foreground transition-colors"
+                  className="rounded px-1.5 py-0.5 typography-micro text-muted-foreground hover:bg-interactive-hover hover:text-foreground transition-colors"
                 >
                   {t("notificationCenter.clearAll")}
                 </button>
@@ -179,8 +179,8 @@ export const NotificationCenter: React.FC = React.memo(function NotificationCent
             ) : (
               <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
                 <Icon name="checkbox-circle" className="h-8 w-8 text-muted-foreground" />
-                <p className="text-xs font-medium text-muted-foreground">{t("notificationCenter.empty")}</p>
-                <p className="text-[10px] text-muted-foreground">{t("notificationCenter.emptyDescription")}</p>
+                <p className="typography-micro font-medium text-muted-foreground">{t("notificationCenter.empty")}</p>
+                <p className="typography-micro text-muted-foreground">{t("notificationCenter.emptyDescription")}</p>
               </div>
             )}
           </div>

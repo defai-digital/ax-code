@@ -609,7 +609,7 @@ export const SessionDialogs: React.FC = () => {
                 key={session.id}
                 className={cn(
                   isWorktreeDelete
-                    ? "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground"
+                    ? "flex items-center gap-2 rounded-md px-2.5 py-1.5 typography-ui-label text-muted-foreground"
                     : "typography-micro text-muted-foreground",
                 )}
               >
@@ -621,7 +621,7 @@ export const SessionDialogs: React.FC = () => {
               <li
                 className={cn(
                   isWorktreeDelete
-                    ? "px-2.5 py-1 text-xs text-muted-foreground"
+                    ? "px-2.5 py-1 typography-micro text-muted-foreground"
                     : "typography-micro text-muted-foreground",
                 )}
               >
@@ -674,7 +674,7 @@ export const SessionDialogs: React.FC = () => {
         }}
         disabled={removeRemoteOptionDisabled}
         className={cn(
-          "flex items-center gap-2 rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors",
+          "flex items-center gap-2 rounded-md px-2 py-1 typography-ui-label text-muted-foreground transition-colors",
           removeRemoteOptionDisabled
             ? "cursor-not-allowed opacity-60"
             : "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
@@ -688,7 +688,7 @@ export const SessionDialogs: React.FC = () => {
         {t("sessions.sidebar.sessionDialogs.actions.deleteRemoteBranch")}
       </button>
     ) : (
-      <span className="text-xs text-muted-foreground">
+      <span className="typography-micro text-muted-foreground">
         {t("sessions.sidebar.sessionDialogs.actions.remoteBranchInfoUnavailable")}
       </span>
     )
@@ -705,7 +705,7 @@ export const SessionDialogs: React.FC = () => {
       }}
       disabled={deleteLocalOptionDisabled}
       className={cn(
-        "flex items-center gap-2 rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors",
+        "flex items-center gap-2 rounded-md px-2 py-1 typography-ui-label text-muted-foreground transition-colors",
         deleteLocalOptionDisabled
           ? "cursor-not-allowed opacity-60"
           : "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",

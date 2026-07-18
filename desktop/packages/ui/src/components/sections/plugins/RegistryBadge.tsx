@@ -17,7 +17,7 @@ export const RegistryBadge: React.FC<RegistryBadgeProps> = ({ spec }) => {
   const wrap = (trigger: React.ReactNode, tooltipText: string): React.ReactElement => (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="inline-flex shrink-0 items-center gap-0.5 text-xs">{trigger}</span>
+        <span className="inline-flex shrink-0 items-center gap-0.5 typography-micro">{trigger}</span>
       </TooltipTrigger>
       <TooltipContent>{tooltipText}</TooltipContent>
     </Tooltip>

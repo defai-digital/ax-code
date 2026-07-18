@@ -209,7 +209,7 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
           <>
             {projectServers.length > 0 && (
               <>
-                <div className="px-2 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="px-2 pb-1.5 pt-2 typography-micro font-semibold uppercase tracking-wide text-muted-foreground">
                   {t("settings.mcp.sidebar.group.projectServers")}
                 </div>
                 {projectServers.map((server) => {
@@ -302,7 +302,7 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
 
             {userServers.length > 0 && (
               <>
-                <div className="px-2 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="px-2 pb-1.5 pt-2 typography-micro font-semibold uppercase tracking-wide text-muted-foreground">
                   {t("settings.mcp.sidebar.group.userServers")}
                 </div>
                 {userServers.map((server) => {

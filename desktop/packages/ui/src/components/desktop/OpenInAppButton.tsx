@@ -56,7 +56,7 @@ const AppIcon = ({
     <span
       className={cn(
         "h-4 w-4 rounded-sm flex items-center justify-center",
-        "bg-[var(--surface-muted)] text-[9px] font-medium text-muted-foreground",
+        "bg-[var(--surface-muted)] typography-micro font-medium text-muted-foreground",
       )}
     >
       {initial}

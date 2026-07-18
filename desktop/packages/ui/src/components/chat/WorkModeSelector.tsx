@@ -82,7 +82,7 @@ export const WorkModeSelector: React.FC<WorkModeSelectorProps> = ({
           aria-label={tooltipLabel}
           onClick={() => setMode(currentDirectory, cycleWorkMode(mode))}
           className={cn(
-            "inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold transition-colors",
+            "inline-flex items-center gap-1 rounded-md px-1.5 py-1 typography-micro font-semibold transition-colors",
             "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
             activeMeta.buttonClass,
             className,
@@ -92,7 +92,7 @@ export const WorkModeSelector: React.FC<WorkModeSelectorProps> = ({
           <span className="hidden sm:inline max-w-[5rem] truncate">{activeMeta.label}</span>
         </button>
       </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-[16rem] text-xs">
+      <TooltipContent side="top" className="max-w-[16rem] typography-micro">
         <p className="font-medium">{activeMeta.label}</p>
         <p className="text-muted-foreground">{activeMeta.hint}</p>
       </TooltipContent>

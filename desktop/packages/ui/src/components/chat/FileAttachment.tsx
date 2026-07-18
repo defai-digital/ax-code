@@ -133,7 +133,7 @@ const ImagePreview = memo(({ file, onRemove, onShowPopup, gallery, index = 0 }: 
     return (
       <button
         type="button"
-        className="flex items-center gap-1.5 text-sm hover:opacity-80 transition-opacity text-left h-5"
+        className="flex items-center gap-1.5 typography-ui-label hover:opacity-80 transition-opacity text-left h-5"
       >
         <FileTypeIcon filePath={file.filename} extension={extension} className="h-4 w-4" />
         <span className="text-foreground truncate max-w-[200px]">{displayName}</span>
@@ -232,7 +232,7 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
           return
         }
       }}
-      className="flex items-center gap-1.5 text-sm hover:opacity-80 transition-opacity text-left h-5"
+      className="flex items-center gap-1.5 typography-ui-label hover:opacity-80 transition-opacity text-left h-5"
     >
       <FileTypeIcon filePath={file.filename} extension={extension} className="h-4 w-4" />
       <span className="text-foreground truncate max-w-[200px]">
@@ -549,8 +549,8 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
               <img src={file.url} alt={fileName} className="h-full w-full object-cover" loading="lazy" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               <div className="absolute bottom-0 left-0 right-0 p-2 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                <p className="text-xs font-medium truncate">{fileName}</p>
-                {sizeText && <p className="text-xs opacity-80">{sizeText}</p>}
+                <p className="typography-micro font-medium truncate">{fileName}</p>
+                {sizeText && <p className="typography-micro opacity-80">{sizeText}</p>}
               </div>
             </div>
           )
@@ -567,7 +567,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
                   }}
                   className={cn(
                     "flex items-center gap-2 p-2 rounded-lg border border-border/40 bg-muted/10 hover:bg-muted/20 transition-colors text-left",
-                    "text-sm",
+                    "typography-ui-label",
                   )}
                 >
                   <div className="flex-shrink-0">
@@ -579,7 +579,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">{fileName}</p>
-                    {sizeText && <p className="text-xs text-muted-foreground">{sizeText}</p>}
+                    {sizeText && <p className="typography-micro text-muted-foreground">{sizeText}</p>}
                   </div>
                 </button>
               </TooltipTrigger>
@@ -614,7 +614,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
                 }}
                 className={cn(
                   "flex items-center gap-2 p-2 rounded-lg border border-border/40 bg-muted/10 hover:bg-muted/20 transition-colors text-left",
-                  "text-sm",
+                  "typography-ui-label",
                 )}
               >
                 <div className="flex-shrink-0">
@@ -628,7 +628,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">{fileName}</p>
-                  {sizeText && <p className="text-xs text-muted-foreground">{sizeText}</p>}
+                  {sizeText && <p className="typography-micro text-muted-foreground">{sizeText}</p>}
                 </div>
               </button>
             </TooltipTrigger>
@@ -694,7 +694,7 @@ export const ImageGallery = memo(({ urls, caption, onShowPopup }: ImageGalleryPr
           </button>
         ))}
       </div>
-      {caption && <p className="text-sm text-muted-foreground italic">{caption}</p>}
+      {caption && <p className="typography-ui-label text-muted-foreground italic">{caption}</p>}
     </div>
   )
 })

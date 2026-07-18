@@ -472,7 +472,7 @@ export const SortableTabsStrip: React.FC<SortableTabsStripProps> = ({
                   onClick={() => onSelect(item.id)}
                   className={cn(
                     usesActivePillIndicator
-                      ? "animated-tabs__button pill-tabs__button relative z-10 flex flex-1 min-w-0 flex-nowrap items-center justify-center rounded-[9px] [corner-shape:squircle] supports-[corner-shape:squircle]:rounded-[50px] text-sm font-medium transition-colors duration-150 !min-h-0"
+                      ? "animated-tabs__button pill-tabs__button relative z-10 flex flex-1 min-w-0 flex-nowrap items-center justify-center rounded-[9px] [corner-shape:squircle] supports-[corner-shape:squircle]:rounded-[50px] typography-ui-label font-medium transition-colors duration-150 !min-h-0"
                       : "flex h-full min-w-0 flex-nowrap items-center typography-micro",
                     usesActivePillIndicator && activePillLowercase ? "lowercase" : null,
                     usesActivePillIndicator && (showInactiveIconOnly ? "gap-0" : "gap-1.5"),

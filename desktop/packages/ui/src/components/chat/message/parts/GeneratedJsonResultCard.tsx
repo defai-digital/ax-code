@@ -46,7 +46,7 @@ export const GeneratedJsonResultCard: React.FC<{ result: GeneratedResult }> = ({
       className="my-4 group overflow-hidden rounded-2xl border border-border/80 bg-[var(--surface-elevated)]"
     >
       <div className="flex items-center justify-between border-b border-border/70 px-3 py-1.5">
-        <span className="font-mono text-[13px] text-muted-foreground">
+        <span className="font-mono typography-meta text-muted-foreground">
           {result.kind === "commit"
             ? t("chat.generatedResult.commit.title")
             : t("chat.generatedResult.pullRequest.title")}
@@ -70,7 +70,7 @@ export const GeneratedJsonResultCard: React.FC<{ result: GeneratedResult }> = ({
           <>
             <div className="typography-ui-label text-foreground">{result.subject}</div>
             {result.highlights.length > 0 ? (
-              <ul className="space-y-1 text-sm text-muted-foreground">
+              <ul className="space-y-1 typography-ui-label text-muted-foreground">
                 {result.highlights.map((highlight, index) => (
                   <li key={`${index}-${highlight}`} className="flex gap-2">
                     <span className="text-muted-foreground">-</span>
@@ -95,7 +95,7 @@ export const GeneratedJsonResultCard: React.FC<{ result: GeneratedResult }> = ({
                 <div className="typography-micro uppercase tracking-[0.12em] text-muted-foreground">
                   {t("chat.generatedResult.pullRequest.bodyLabel")}
                 </div>
-                <pre className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground font-sans">
+                <pre className="mt-1 whitespace-pre-wrap break-words typography-ui-label leading-relaxed text-muted-foreground font-sans">
                   {result.body}
                 </pre>
               </div>

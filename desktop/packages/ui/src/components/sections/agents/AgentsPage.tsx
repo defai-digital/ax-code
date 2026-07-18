@@ -1172,7 +1172,7 @@ export const AgentsPage: React.FC = () => {
                     value={pendingRulePattern}
                     onChange={(e) => setPendingRulePattern(e.target.value)}
                     placeholder={t("settings.agents.page.permissions.patternPlaceholder")}
-                    className="h-7 flex-1 font-mono text-xs"
+                    className="h-7 flex-1 font-mono typography-micro"
                   />
 
                   <div className="flex gap-1">

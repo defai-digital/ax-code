@@ -178,12 +178,12 @@ export function RemoteConnectionForm({
           <h1 className="typography-ui-header text-xl font-semibold text-foreground">
             {isRecoveryMode ? t("onboarding.remoteConnection.titleRecovery") : t("onboarding.remoteConnection.title")}
           </h1>
-          <p className="text-muted-foreground text-sm">{t("onboarding.remoteConnection.description")}</p>
+          <p className="text-muted-foreground typography-ui-label">{t("onboarding.remoteConnection.description")}</p>
         </div>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <label htmlFor="remote-url" className="text-sm text-foreground">
+            <label htmlFor="remote-url" className="typography-ui-label text-foreground">
               {t("onboarding.remoteConnection.field.serverAddress")}
             </label>
             <Input
@@ -197,7 +197,7 @@ export function RemoteConnectionForm({
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="remote-label" className="text-sm text-foreground">
+            <label htmlFor="remote-label" className="typography-ui-label text-foreground">
               {t("onboarding.remoteConnection.field.nameOptional")}
             </label>
             <Input
@@ -214,7 +214,7 @@ export function RemoteConnectionForm({
         {/* Success message */}
         {probeResult && isSuccess && (
           <div
-            className="rounded-lg border p-3 text-sm"
+            className="rounded-lg border p-3 typography-ui-label"
             style={{
               borderColor: "var(--status-success)",
               color: "var(--status-success)",
@@ -227,7 +227,7 @@ export function RemoteConnectionForm({
         {/* Auth warning (non-blocking) */}
         {probeResult && isAuth && (
           <div
-            className="rounded-lg border p-3 text-sm"
+            className="rounded-lg border p-3 typography-ui-label"
             style={{
               borderColor: "var(--status-warning)",
               color: "var(--status-warning)",
@@ -240,7 +240,7 @@ export function RemoteConnectionForm({
         {/* Blocking errors */}
         {probeResult && isBlocking && (
           <div
-            className="rounded-lg border p-3 text-sm space-y-3"
+            className="rounded-lg border p-3 typography-ui-label space-y-3"
             style={{
               borderColor: "var(--status-error)",
               color: "var(--status-error)",
@@ -250,7 +250,7 @@ export function RemoteConnectionForm({
               <div className="font-semibold mb-1">{t("onboarding.remoteConnection.status.connectionFailed")}</div>
               <div className="opacity-90">{probeMessageKey ? t(probeMessageKey as Parameters<typeof t>[0]) : null}</div>
             </div>
-            <div className="text-xs opacity-80">
+            <div className="typography-micro opacity-80">
               {probeResult.status === "unreachable"
                 ? t("onboarding.remoteConnection.status.suggestionsUnreachable")
                 : probeResult.status === "wrong-service"
@@ -263,7 +263,7 @@ export function RemoteConnectionForm({
         {/* Generic error */}
         {error && (
           <div
-            className="rounded-lg border p-3 text-sm"
+            className="rounded-lg border p-3 typography-ui-label"
             style={{
               borderColor: "var(--status-error)",
               color: "var(--status-error)",
@@ -287,7 +287,7 @@ export function RemoteConnectionForm({
         {/* Suggested actions when connection is blocked */}
         {isBlocking && (
           <div className="flex flex-col gap-2 pt-2 border-t border-border">
-            <div className="text-xs text-muted-foreground text-center">
+            <div className="typography-micro text-muted-foreground text-center">
               {t("onboarding.remoteConnection.actions.whatToDo")}
             </div>
             <div className="flex gap-2">

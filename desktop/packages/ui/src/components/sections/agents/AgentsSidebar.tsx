@@ -318,7 +318,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
           <>
             {builtInAgents.length > 0 && (
               <>
-                <div className="px-2 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="px-2 pb-1.5 pt-2 typography-micro font-semibold uppercase tracking-wide text-muted-foreground">
                   {t("settings.agents.sidebar.section.builtIn")}
                 </div>
                 {builtInAgents.map((agent) => (
@@ -342,7 +342,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
 
             {customAgents.length > 0 && (
               <>
-                <div className="px-2 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="px-2 pb-1.5 pt-3 typography-micro font-semibold uppercase tracking-wide text-muted-foreground">
                   {t("settings.agents.sidebar.section.custom")}
                 </div>
 

@@ -1842,7 +1842,7 @@ export const Header: React.FC = () => {
         {unreadNotificationCount > 0 && (
           <span
             aria-hidden
-            className="pointer-events-none absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-medium leading-none text-primary-foreground"
+            className="pointer-events-none absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 typography-micro font-medium leading-none text-primary-foreground"
           >
             {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
           </span>
@@ -1940,7 +1940,7 @@ export const Header: React.FC = () => {
             aria-label={t("sessions.switcher.openAria")}
             className="app-region-no-drag mr-3 flex min-w-0 flex-col items-start rounded-md px-1 py-0.5 -my-0.5 text-left transition-colors hover:bg-interactive-hover/60 focus-visible:outline-none focus-visible:bg-interactive-hover/60"
           >
-            <span className="truncate typography-ui-label text-[14px] font-normal leading-tight text-foreground max-w-full">
+            <span className="truncate typography-ui-label font-normal leading-tight text-foreground max-w-full">
               {isNewSessionDraftOpen ? t("sessions.switcher.draftTitle") : currentSessionTitle}
             </span>
             {activeProjectLabel ||

@@ -720,7 +720,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
                           <div className="mb-1 font-medium text-destructive">
                             {t("planView.error.previewUnavailable")}
                           </div>
-                          <div className="text-sm text-muted-foreground">{t("planView.error.switchToEditMode")}</div>
+                          <div className="typography-ui-label text-muted-foreground">{t("planView.error.switchToEditMode")}</div>
                         </div>
                       }
                     >

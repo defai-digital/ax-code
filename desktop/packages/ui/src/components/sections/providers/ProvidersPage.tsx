@@ -698,7 +698,7 @@ export const ProvidersPage: React.FC = () => {
                             }))
                           }
                           placeholder={t("settings.providers.page.auth.apiKeyPlaceholder")}
-                          className="flex-1 font-mono text-xs"
+                          className="flex-1 font-mono typography-micro"
                         />
                         <Button
                           size="xs"
@@ -786,7 +786,7 @@ export const ProvidersPage: React.FC = () => {
                                   <Input
                                     value={oauthDetails[codeKey]?.url}
                                     readOnly
-                                    className="text-xs text-muted-foreground"
+                                    className="typography-micro text-muted-foreground"
                                   />
                                   <div className="flex gap-1 shrink-0">
                                     <Button
@@ -820,7 +820,7 @@ export const ProvidersPage: React.FC = () => {
                                       }))
                                     }
                                     placeholder={t("settings.providers.page.auth.pasteAuthorizationCodePlaceholder")}
-                                    className="font-mono text-xs"
+                                    className="font-mono typography-micro"
                                   />
                                   <Button
                                     size="xs"
@@ -976,7 +976,7 @@ export const ProvidersPage: React.FC = () => {
                           }))
                         }
                         placeholder={t("settings.providers.page.auth.apiKeyPlaceholder")}
-                        className="flex-1 font-mono text-xs"
+                        className="flex-1 font-mono typography-micro"
                       />
                       <Button
                         size="xs"
@@ -1054,7 +1054,7 @@ export const ProvidersPage: React.FC = () => {
                               <Input
                                 value={oauthDetails[codeKey]?.url}
                                 readOnly
-                                className="text-xs text-muted-foreground"
+                                className="typography-micro text-muted-foreground"
                               />
                               <div className="flex gap-1 shrink-0">
                                 <Button
@@ -1088,7 +1088,7 @@ export const ProvidersPage: React.FC = () => {
                                   }))
                                 }
                                 placeholder={t("settings.providers.page.auth.pasteAuthorizationCodePlaceholder")}
-                                className="font-mono text-xs"
+                                className="font-mono typography-micro"
                               />
                               <Button
                                 size="xs"

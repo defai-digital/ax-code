@@ -407,7 +407,7 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
           <div className="mb-2 flex items-center gap-2">
             <button
               type="button"
-              className="text-[11px] uppercase tracking-wide text-muted-foreground/90 hover:text-foreground"
+              className="typography-micro uppercase tracking-wide text-muted-foreground/90 hover:text-foreground"
               onClick={() => {
                 void onScrollByTurnOffset?.(-1)
                 onOpenChange(false)
@@ -418,7 +418,7 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
             <span className="text-muted-foreground">/</span>
             <button
               type="button"
-              className="text-[11px] uppercase tracking-wide text-muted-foreground/90 hover:text-foreground"
+              className="typography-micro uppercase tracking-wide text-muted-foreground/90 hover:text-foreground"
               onClick={() => {
                 onResumeToLatest?.()
                 onOpenChange(false)

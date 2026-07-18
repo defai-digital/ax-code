@@ -135,7 +135,7 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
           <>
             {userProviders.length > 0 && (
               <>
-                <div className="px-2 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="px-2 pb-1.5 pt-2 typography-micro font-semibold uppercase tracking-wide text-muted-foreground">
                   {t("settings.providers.sidebar.section.userProviders")}
                 </div>
                 {userProviders.map((provider) => (
@@ -156,7 +156,7 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
               <>
                 <div
                   className={cn(
-                    "px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground",
+                    "px-2 pb-1.5 typography-micro font-semibold uppercase tracking-wide text-muted-foreground",
                     userProviders.length > 0 ? "pt-3" : "pt-2",
                   )}
                 >

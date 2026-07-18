@@ -465,7 +465,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
                           setSetupCommands(newCommands)
                         }}
                         placeholder={t("agentManager.empty.setupCommands.commandPlaceholder")}
-                        className="h-8 flex-1 font-mono text-xs"
+                        className="h-8 flex-1 font-mono typography-micro"
                       />
                       <button
                         type="button"

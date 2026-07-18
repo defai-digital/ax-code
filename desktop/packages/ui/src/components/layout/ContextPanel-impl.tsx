@@ -1066,14 +1066,14 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
       </div>
       <div className="relative min-h-0 flex-1 bg-background">
         {showUpstreamStarting ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center typography-ui-label text-muted-foreground">
             <div>{t("contextPanel.preview.startingServer")}</div>
-            <div className="text-xs opacity-70">{t("contextPanel.preview.startingServerHint")}</div>
+            <div className="typography-micro opacity-70">{t("contextPanel.preview.startingServerHint")}</div>
           </div>
         ) : showUpstreamUnreachable ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center typography-ui-label text-muted-foreground">
             <div>{t("contextPanel.preview.upstreamUnreachable")}</div>
-            <div className="text-xs opacity-70">{t("contextPanel.preview.upstreamUnreachableHint")}</div>
+            <div className="typography-micro opacity-70">{t("contextPanel.preview.upstreamUnreachableHint")}</div>
             <Button type="button" size="sm" variant="outline" onClick={() => bumpReload()}>
               {t("contextPanel.preview.actions.retry")}
             </Button>
@@ -1095,9 +1095,9 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
               }
             />
             {previewFrameState === "timeout" ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/95 px-6 text-center text-sm text-muted-foreground">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/95 px-6 text-center typography-ui-label text-muted-foreground">
                 <div>{t("contextPanel.preview.frameTimeout")}</div>
-                <div className="text-xs opacity-70">{t("contextPanel.preview.frameTimeoutHint")}</div>
+                <div className="typography-micro opacity-70">{t("contextPanel.preview.frameTimeoutHint")}</div>
                 <div className="flex items-center gap-2">
                   <Button type="button" size="sm" variant="outline" onClick={() => bumpReload()}>
                     {t("contextPanel.preview.actions.retry")}
@@ -1134,18 +1134,18 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
             ) : null}
           </div>
         ) : showLoading ? (
-          <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
+          <div className="flex h-full items-center justify-center px-6 typography-ui-label text-muted-foreground">
             {t("contextPanel.preview.loading")}
           </div>
         ) : showError ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-sm text-muted-foreground">
+          <div className="flex h-full flex-col items-center justify-center gap-2 px-6 typography-ui-label text-muted-foreground">
             <div>{t("contextPanel.preview.proxyError")}</div>
             {proxyState.status === "error" ? (
-              <div className="text-center text-xs opacity-70">{proxyState.message}</div>
+              <div className="text-center typography-micro opacity-70">{proxyState.message}</div>
             ) : null}
           </div>
         ) : (
-          <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
+          <div className="flex h-full items-center justify-center px-6 typography-ui-label text-muted-foreground">
             {t("contextPanel.preview.invalidUrl")}
           </div>
         )}
@@ -1202,7 +1202,7 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
                 </Button>
               ))}
             </div>
-            <div className="max-h-64 overflow-auto p-2 typography-code text-xs">
+            <div className="max-h-64 overflow-auto p-2 typography-micro">
               {consoleEvents.length === 0 ? (
                 <div className="px-2 py-3 text-muted-foreground">{t("contextPanel.preview.console.empty")}</div>
               ) : filteredConsoleEvents.length === 0 ? (

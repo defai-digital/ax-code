@@ -1085,7 +1085,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8} className="max-w-xs text-left">
-                  <div className="flex flex-col gap-1 text-left text-xs">
+                  <div className="flex flex-col gap-1 text-left typography-micro">
                     <div
                       className={cn(
                         "flex items-center gap-3 text-left text-muted-foreground",

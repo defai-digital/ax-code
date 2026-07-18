@@ -165,7 +165,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
 
           {/* Version Diff */}
           {(info?.currentVersion || info?.version) && (
-            <div className="flex items-center gap-2 font-mono text-sm ml-3">
+            <div className="flex items-center gap-2 font-mono typography-ui-label ml-3">
               {info?.currentVersion && <span className="text-muted-foreground">{info.currentVersion}</span>}
               {info?.currentVersion && info?.version && <span className="text-muted-foreground">→</span>}
               {info?.version && <span className="text-[var(--primary-base)] font-medium">{info.version}</span>}
@@ -202,7 +202,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
                           <span className="typography-ui-label font-mono text-[var(--primary-base)] bg-[var(--primary-base)]/10 px-1.5 py-0.5 rounded">
                             v{section.version}
                           </span>
-                          <span className="text-sm font-medium text-muted-foreground">{section.dateLabel}</span>
+                          <span className="typography-ui-label font-medium text-muted-foreground">{section.dateLabel}</span>
                         </div>
                         <div
                           className="typography-markdown-body text-foreground leading-relaxed break-words [&_a]:!text-[var(--primary-base)] [&_a]:!no-underline [&_a:hover]:!underline"
@@ -229,7 +229,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
           {/* Desktop progress bar */}
           {downloading && (
             <div className="space-y-2 mt-4">
-              <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center justify-between typography-ui-label">
                 <span className="text-muted-foreground">{t("updateDialog.status.downloadingPayload")}</span>
                 <span className="font-mono text-foreground">{progressPercent}%</span>
               </div>
@@ -245,7 +245,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
           {/* Error display */}
           {error && (
             <div className="p-3 mt-4 bg-[var(--status-error-background)] border border-[var(--status-error-border)] rounded-lg">
-              <p className="text-sm text-[var(--status-error)]">{error}</p>
+              <p className="typography-ui-label text-[var(--status-error)]">{error}</p>
             </div>
           )}
         </div>
@@ -256,7 +256,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
             href={releaseUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            className="flex items-center gap-1.5 typography-ui-label text-muted-foreground hover:text-foreground transition-colors shrink-0"
           >
             <Icon name="external-link" className="h-4 w-4" />
             GitHub
@@ -266,7 +266,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
             {!downloaded && !downloading && (
               <button
                 onClick={onDownload}
-                className="flex items-center justify-center gap-2 px-5 py-2 rounded-md text-sm font-medium bg-[var(--primary-base)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity"
+                className="flex items-center justify-center gap-2 px-5 py-2 rounded-md typography-ui-label font-medium bg-[var(--primary-base)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity"
               >
                 <Icon name="download" className="h-4 w-4" />
                 {t("updateDialog.actions.downloadUpdate")}
@@ -276,7 +276,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
             {downloading && (
               <button
                 disabled
-                className="flex items-center justify-center gap-2 px-5 py-2 rounded-md text-sm font-medium bg-[var(--primary-base)]/50 text-[var(--primary-foreground)] cursor-not-allowed"
+                className="flex items-center justify-center gap-2 px-5 py-2 rounded-md typography-ui-label font-medium bg-[var(--primary-base)]/50 text-[var(--primary-foreground)] cursor-not-allowed"
               >
                 <Icon name="loader" className="h-4 w-4 animate-spin" />
                 {t("updateDialog.status.downloading")}
@@ -286,7 +286,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
             {downloaded && (
               <button
                 onClick={onRestart}
-                className="flex items-center justify-center gap-2 px-5 py-2 rounded-md text-sm font-medium bg-[var(--status-success)] text-white hover:opacity-90 transition-opacity"
+                className="flex items-center justify-center gap-2 px-5 py-2 rounded-md typography-ui-label font-medium bg-[var(--status-success)] text-white hover:opacity-90 transition-opacity"
               >
                 <Icon name="restart" className="h-4 w-4" />
                 {t("updateDialog.actions.restartToUpdate")}

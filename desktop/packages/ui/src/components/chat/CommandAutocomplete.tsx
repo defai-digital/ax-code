@@ -29,7 +29,7 @@ export interface CommandAutocompleteHandle {
 }
 
 const BASE_BADGE_CLASS =
-  "text-[10px] leading-none uppercase font-bold tracking-tight px-1.5 py-1 rounded border flex-shrink-0"
+  "typography-micro leading-none uppercase font-bold tracking-tight px-1.5 py-1 rounded border flex-shrink-0"
 const TYPE_BADGE_CLASS = cn(
   BASE_BADGE_CLASS,
   "bg-[color-mix(in_srgb,var(--primary-base)_12%,transparent)] text-[color-mix(in_srgb,var(--primary-base)_70%,transparent)] border-[color-mix(in_srgb,var(--primary-base)_24%,transparent)]",

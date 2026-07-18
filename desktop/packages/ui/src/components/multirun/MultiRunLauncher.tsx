@@ -591,7 +591,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
                               setSetupCommands(newCommands)
                             }}
                             placeholder={t("multirun.launcher.setupCommands.commandPlaceholder")}
-                            className="h-8 flex-1 font-mono text-xs"
+                            className="h-8 flex-1 font-mono typography-micro"
                           />
                           <button
                             type="button"

@@ -145,7 +145,7 @@ export const SplitPaneLayout: React.FC<SplitPaneLayoutProps> = ({ children, righ
               type="button"
               onClick={() => setSplitRightTab(tab.value)}
               className={cn(
-                "inline-flex h-6 items-center gap-1 rounded px-2 text-[11px] transition-colors",
+                "inline-flex h-6 items-center gap-1 rounded px-2 typography-micro transition-colors",
                 splitRightTab === tab.value
                   ? "bg-[var(--interactive-hover)] text-foreground font-medium"
                   : "text-muted-foreground hover:text-foreground hover:bg-[var(--interactive-hover)]/50",

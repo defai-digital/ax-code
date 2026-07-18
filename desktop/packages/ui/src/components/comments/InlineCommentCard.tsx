@@ -42,7 +42,7 @@ export function InlineCommentCard({ draft, onEdit, onDelete, className, maxWidth
     >
       <div className="flex items-start justify-between gap-2 p-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-1.5">
+          <div className="flex items-center gap-2 typography-micro font-medium text-muted-foreground mb-1.5">
             <span className="truncate max-w-[200px]" title={draft.fileLabel}>
               {draft.fileLabel}
             </span>
@@ -54,7 +54,7 @@ export function InlineCommentCard({ draft, onEdit, onDelete, className, maxWidth
           <Collapsible open={isOpen || !isLongContent} onOpenChange={setIsOpen}>
             <div
               className={cn(
-                "text-sm whitespace-pre-wrap break-words leading-relaxed",
+                "typography-ui-label whitespace-pre-wrap break-words leading-relaxed",
                 !isOpen && isLongContent && "line-clamp-3",
               )}
             >
@@ -66,7 +66,7 @@ export function InlineCommentCard({ draft, onEdit, onDelete, className, maxWidth
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 px-0 mt-1 text-xs text-muted-foreground hover:text-foreground w-full justify-start"
+                  className="h-6 px-0 mt-1 typography-micro text-muted-foreground hover:text-foreground w-full justify-start"
                 >
                   {isOpen ? (
                     <>

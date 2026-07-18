@@ -209,7 +209,7 @@ export const PluginsSidebar: React.FC<PluginsSidebarProps> = ({ onItemSelect, on
 
   const renderGroup = (label: string, children: React.ReactNode, updateCount = 0) => (
     <>
-      <div className="px-2 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="px-2 pb-1.5 pt-2 typography-micro font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
         {updateCount > 0 && (
           <span className="ml-2 normal-case font-normal text-[var(--status-success)]">

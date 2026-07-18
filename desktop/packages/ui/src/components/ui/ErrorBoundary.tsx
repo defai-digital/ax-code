@@ -97,10 +97,10 @@ class InnerErrorBoundary extends React.Component<InnerErrorBoundaryProps, ErrorB
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground text-center">{strings.description}</p>
+              <p className="typography-ui-label text-muted-foreground text-center">{strings.description}</p>
 
               {this.state.error && (
-                <details className="text-xs font-mono bg-muted p-3 rounded">
+                <details className="typography-micro font-mono bg-muted p-3 rounded">
                   <summary className="cursor-pointer hover:bg-interactive-hover/80">{strings.detailsSummary}</summary>
                   <pre className="mt-2 max-h-48 overflow-auto">
                     {this.state.error.toString()}

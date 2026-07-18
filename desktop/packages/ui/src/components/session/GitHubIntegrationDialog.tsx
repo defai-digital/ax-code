@@ -433,7 +433,7 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
 
                   {hasMore && !loadingMore && (
                     <div className="flex justify-center pt-2">
-                      <Button variant="ghost" size="sm" onClick={() => void loadMore()} className="h-7 text-xs">
+                      <Button variant="ghost" size="sm" onClick={() => void loadMore()} className="h-7 typography-micro">
                         {t("session.githubIntegration.actions.loadMore")}
                       </Button>
                     </div>
@@ -498,7 +498,7 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
 
                   {hasMore && !loadingMore && (
                     <div className="flex justify-center pt-2">
-                      <Button variant="ghost" size="sm" onClick={() => void loadMore()} className="h-7 text-xs">
+                      <Button variant="ghost" size="sm" onClick={() => void loadMore()} className="h-7 typography-micro">
                         {t("session.githubIntegration.actions.loadMore")}
                       </Button>
                     </div>

@@ -518,7 +518,7 @@ export const HistoryCommitRow = React.memo(
                         }
                       }}
                       placeholder={t("gitView.history.actions.createBranchPlaceholder")}
-                      className="h-6 text-xs px-2 rounded border border-border/60 bg-background min-w-0 w-32"
+                      className="h-6 typography-micro px-2 rounded border border-border/60 bg-background min-w-0 w-32"
                     />
                     <Button
                       variant="outline"
@@ -686,11 +686,11 @@ export const HistoryCommitRow = React.memo(
                         data-diff-virtual-content
                       >
                         {file.changeType === "R" ? (
-                          <div className="px-3 py-2 text-sm text-muted-foreground">
+                          <div className="px-3 py-2 typography-ui-label text-muted-foreground">
                             {t("gitView.history.renamedNoDiff")}
                           </div>
                         ) : file.isBinary ? (
-                          <div className="px-3 py-2 text-sm text-muted-foreground">
+                          <div className="px-3 py-2 typography-ui-label text-muted-foreground">
                             {t("gitView.history.binaryNoDiff")}
                           </div>
                         ) : (
@@ -701,7 +701,7 @@ export const HistoryCommitRow = React.memo(
                               changedLines > HISTORY_DIFF_LARGE_CHANGED_LINES
                             ) {
                               return (
-                                <div className="flex flex-col items-start gap-1 px-3 py-2 text-sm text-muted-foreground">
+                                <div className="flex flex-col items-start gap-1 px-3 py-2 typography-ui-label text-muted-foreground">
                                   <div className="typography-ui-label font-semibold text-foreground">
                                     {t("gitView.history.largeDiffTitle", { count: changedLines })}
                                   </div>
@@ -727,7 +727,7 @@ export const HistoryCommitRow = React.memo(
                             const cached = diffCache.get(file.path)
                             if (cached === "loading" || cached === undefined) {
                               return (
-                                <div className="px-3 py-2 text-sm text-muted-foreground">
+                                <div className="px-3 py-2 typography-ui-label text-muted-foreground">
                                   {t("gitView.history.loadingDiff")}
                                 </div>
                               )
@@ -737,7 +737,7 @@ export const HistoryCommitRow = React.memo(
                                 <button
                                   type="button"
                                   onClick={() => toggleFileDiff(file)}
-                                  className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:bg-[var(--interactive-hover)] transition-colors"
+                                  className="w-full text-left px-3 py-2 typography-ui-label text-muted-foreground hover:bg-[var(--interactive-hover)] transition-colors"
                                 >
                                   {t("gitView.history.diffError")}
                                 </button>

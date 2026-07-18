@@ -608,7 +608,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
             onClick={handleAddToChat}
             className={cn(
               "flex min-w-0 items-center gap-2 rounded-xl px-3 py-2.5 text-left",
-              "text-sm font-medium leading-tight",
+              "typography-ui-label font-medium leading-tight",
               "bg-[var(--primary-base)] text-[var(--primary-foreground)]",
               "active:opacity-80",
               "transition-opacity duration-150",
@@ -624,7 +624,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
             onClick={handleCreateNewSession}
             className={cn(
               "flex min-w-0 items-center gap-2 rounded-xl px-3 py-2.5 text-left",
-              "text-sm font-medium leading-tight",
+              "typography-ui-label font-medium leading-tight",
               "bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]",
               "active:opacity-80",
               "transition-opacity duration-150",
@@ -640,7 +640,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
             onClick={handleCopy}
             className={cn(
               "flex min-w-0 items-center gap-2 rounded-xl px-3 py-2.5 text-left",
-              "text-sm font-medium leading-tight",
+              "typography-ui-label font-medium leading-tight",
               "bg-[var(--surface-muted)] text-[var(--surface-foreground)]",
               "active:opacity-80",
               "transition-opacity duration-150",
@@ -657,7 +657,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
             disabled={isAddingToNotes}
             className={cn(
               "flex min-w-0 items-center gap-2 rounded-xl px-3 py-2.5 text-left",
-              "text-sm font-medium leading-tight",
+              "typography-ui-label font-medium leading-tight",
               "bg-[var(--surface-muted)] text-[var(--surface-foreground)]",
               "active:opacity-80 disabled:opacity-60 disabled:cursor-not-allowed",
               "transition-opacity duration-150",
@@ -703,7 +703,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
           onClick={handleAddToChat}
           className={cn(
             "flex items-center gap-1.5 px-2 py-1 rounded-md",
-            "text-sm font-medium",
+            "typography-ui-label font-medium",
             "text-[var(--surface-foreground)]",
             "hover:bg-[var(--interactive-hover)]",
             "transition-colors duration-150",
@@ -721,7 +721,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
           onClick={handleCreateNewSession}
           className={cn(
             "flex items-center gap-1.5 px-2 py-1 rounded-md",
-            "text-sm font-medium",
+            "typography-ui-label font-medium",
             "text-[var(--surface-foreground)]",
             "hover:bg-[var(--interactive-hover)]",
             "transition-colors duration-150",
@@ -740,7 +740,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
           disabled={isAddingToNotes}
           className={cn(
             "flex items-center gap-1.5 px-2 py-1 rounded-md",
-            "text-sm font-medium",
+            "typography-ui-label font-medium",
             "text-[var(--surface-foreground)]",
             "hover:bg-[var(--interactive-hover)] disabled:opacity-60 disabled:cursor-not-allowed",
             "transition-colors duration-150",

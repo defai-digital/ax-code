@@ -418,9 +418,9 @@ const TimePill: React.FC<TimePillProps> = ({
         onBlur={commitHour}
         maxLength={2}
         aria-label={hourAriaLabel}
-        className="h-7 w-7 shrink-0 rounded-sm bg-transparent text-center font-mono text-sm tabular-nums text-foreground outline-none caret-transparent focus:bg-interactive-hover"
+        className="h-7 w-7 shrink-0 rounded-sm bg-transparent text-center font-mono typography-ui-label tabular-nums text-foreground outline-none caret-transparent focus:bg-interactive-hover"
       />
-      <span className="font-mono text-sm text-muted-foreground">:</span>
+      <span className="font-mono typography-ui-label text-muted-foreground">:</span>
       <input
         ref={minuteRef}
         inputMode="numeric"
@@ -431,7 +431,7 @@ const TimePill: React.FC<TimePillProps> = ({
         onBlur={commitMinute}
         maxLength={2}
         aria-label={minuteAriaLabel}
-        className="h-7 w-7 shrink-0 rounded-sm bg-transparent text-center font-mono text-sm tabular-nums text-foreground outline-none caret-transparent focus:bg-interactive-hover"
+        className="h-7 w-7 shrink-0 rounded-sm bg-transparent text-center font-mono typography-ui-label tabular-nums text-foreground outline-none caret-transparent focus:bg-interactive-hover"
       />
       {!use24Hour ? (
         <Select value={parts.meridiem} onValueChange={(next) => setPeriod(next as "AM" | "PM")}>

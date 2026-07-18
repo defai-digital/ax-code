@@ -272,7 +272,7 @@ export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ pr
                             updateAction(action.id, (current) => ({ ...current, command: event.target.value }))
                           }
                           placeholder={t("settings.projects.actions.field.commandPlaceholder")}
-                          className="min-h-[88px] max-w-[30rem] font-mono text-xs"
+                          className="min-h-[88px] max-w-[30rem] font-mono typography-micro"
                         />
                       </div>
 
