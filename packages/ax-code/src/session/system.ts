@@ -66,7 +66,7 @@ export namespace SystemPrompt {
     const project = Instance.project
     // Web search hint per provider. ax-code's default system prompt frames
     // the assistant as a software-engineering tool, which leads some models
-    // (notably grok-4.3) to refuse real-world current-state questions
+    // (notably grok-4.x) to refuse real-world current-state questions
     // outright. Tell the model what search mechanism is wired so it stops
     // declining "I cannot check the weather" when the capability is right
     // there. Three cases:

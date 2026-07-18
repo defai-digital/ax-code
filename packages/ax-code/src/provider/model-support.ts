@@ -2,6 +2,10 @@ const GLM_MAJOR_VERSION = /glm-(\d+)/
 const GLM_HIDDEN_FINAL_SEGMENTS = new Set<string>(["glm-5.1", "glm-5-1", "glm-5.1[1m]", "glm-5.1-1m", "glm-5-turbo"])
 const GLM_HIDDEN_FINAL_PATTERN = /(?:^|[^a-z0-9])glm-5[.-]1(?:$|[^0-9])/
 const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>([
+  "grok-4.5",
+  "grok-4-5",
+  "grok-4.5-latest",
+  "grok-build-latest",
   "grok-4.3",
   "grok-4-3",
   "grok-code-fast-1",
@@ -70,8 +74,8 @@ export function supportsOpenAIGptModels(probes: readonly string[]) {
 
 // Grok allow-list: only explicitly validated Grok coding/chat models are kept.
 // Everything else (4.2/4.1/4.0, betas, unversioned aliases) is dropped.
-// Final-segment match so reseller-prefixed ids like "x-ai/grok-4.3" still
-// resolve.
+// Final-segment match so reseller-prefixed ids like "x-ai/grok-4.5" still
+// resolve. Flagship is Grok 4.5 (aliases: grok-4.5-latest, grok-build-latest).
 export function supportsGrok41OrAllowedCodingModel(probes: readonly string[]) {
   if (!probes.some((probe) => probe.includes("grok"))) return true
   return probes.some((probe) => GROK_ALLOWED_FINAL_SEGMENTS.has(probe.split("/").pop() ?? ""))

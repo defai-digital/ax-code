@@ -1136,7 +1136,7 @@ export namespace Provider {
         priority = ["glm-5.2", "glm-5"]
       }
       if (providerID === ProviderID.xai) {
-        priority = ["grok-4.3", "grok-code-fast-1", "grok-build-0.1"]
+        priority = ["grok-4.5", "grok-4.3", "grok-code-fast-1", "grok-build-0.1"]
       }
       if (providerID.startsWith("alibaba")) {
         priority = ["qwen3.6-flash", "deepseek-v4-flash", "deepseek-v4-pro", "qwen3.6-plus"]

@@ -326,7 +326,7 @@ for (const id of [
 // models.dev tags inconsistently across providers.
 //
 //   - Kimi (Moonshot): only the current Kimi coding SKU via Alibaba/Kimi plans.
-//   - Grok: only grok-4.3 plus the Grok Build coding model aliases.
+//   - Grok: grok-4.5 (flagship) and grok-4.3, plus Grok Build coding aliases.
 //     All other Grok variants (4.2/4.1, 4.0, beta aliases, 2/3) drop.
 //   - GLM (Z.AI): only non-vision selected v5+ SKUs (glm-5.1, glm-5.1[1m],
 //     glm-5-turbo, glm-5v, and every glm-4.x / glm-3.x drop).
@@ -356,8 +356,12 @@ function isGrokProbe(probe: string): boolean {
 // Grok allow-list. Only these exact final-segment ids survive the unsupported
 // filter — every other grok variant (older versions, beta aliases, vision-only,
 // etc.) is dropped. Match on the final segment so account-prefixed reseller ids
-// (e.g. "x-ai/grok-4.3") still resolve correctly.
+// (e.g. "x-ai/grok-4.5") still resolve correctly.
 const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>([
+  "grok-4.5",
+  "grok-4-5",
+  "grok-4.5-latest",
+  "grok-build-latest",
   "grok-4.3",
   "grok-4-3",
   "grok-code-fast-1",
@@ -661,6 +665,18 @@ fetched["openrouter"] = {
       output: 32_768,
       releaseDate: "2026-05-20",
       inputModalities: ["text", "image"],
+    }),
+    "x-ai/grok-4.5": openRouterModel({
+      id: "x-ai/grok-4.5",
+      name: "OpenRouter: Grok 4.5",
+      family: "grok",
+      attachment: true,
+      reasoning: true,
+      temperature: true,
+      context: 500_000,
+      output: 500_000,
+      releaseDate: "2026-07-08",
+      inputModalities: ["text", "image", "pdf"],
     }),
     "x-ai/grok-4.3": openRouterModel({
       id: "x-ai/grok-4.3",
@@ -1209,8 +1225,8 @@ function supportsTextOutput(model: { modalities?: { output?: unknown } } | undef
   const output = model?.modalities?.output
   return !Array.isArray(output) || output.includes("text")
 }
-// xAI: only Grok 4.3 has Live Search wired via providerOptions.searchParameters.
-const xaiSearchModelIds = ["grok-4.3", "grok-4-3"]
+// xAI: Grok 4.x chat models have Live Search wired via providerOptions.searchParameters.
+const xaiSearchModelIds = ["grok-4.5", "grok-4-5", "grok-4.5-latest", "grok-4.3", "grok-4-3"]
 const xaiModels = fetched["xai"]?.models as Record<string, { name?: string }> | undefined
 if (xaiModels) {
   for (const model of Object.values(xaiModels)) unmarkSearch(model)

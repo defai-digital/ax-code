@@ -20,6 +20,10 @@ describe("supportsGrok41OrAllowedCodingModel", () => {
   // Grok is restricted to an explicit allow-list.
   // Anything else with "grok" in its probes is dropped, regardless of version.
   test.each([
+    ["grok-4.5", true],
+    ["grok-4-5", true],
+    ["grok-4.5-latest", true],
+    ["grok-build-latest", true],
     ["grok-4.3", true],
     ["grok-4-3", true],
     ["grok-code-fast-1", true],
@@ -77,6 +81,7 @@ describe("isModelSupportedForProvider", () => {
   test("applies OpenAI, xAI, and GLM provider filters from model probes", () => {
     expect(isModelSupportedForProvider("openai", "gpt-4.1")).toBe(true)
     expect(isModelSupportedForProvider("openai", "gpt-3.5")).toBe(false)
+    expect(isModelSupportedForProvider("xai", "grok-4.5")).toBe(true)
     expect(isModelSupportedForProvider("xai", "grok-4.3")).toBe(true)
     expect(isModelSupportedForProvider("xai", "grok-build-0.1")).toBe(true)
     expect(isModelSupportedForProvider("xai", "grok-4.2")).toBe(false)
@@ -98,8 +103,10 @@ describe("isModelSupportedForProvider", () => {
   })
 })
 
-describe("xai Live Search gates for Grok 4.3", () => {
-  test("grok-4.3 supports server-side Live Search", () => {
+describe("xai Live Search gates for Grok 4.x", () => {
+  test("grok-4.5 and grok-4.3 support server-side Live Search", () => {
+    expect(supportsLiveSearch("grok-4.5")).toBe(true)
+    expect(supportsLiveSearch("grok-4.5-latest")).toBe(true)
     expect(supportsLiveSearch("grok-4.3")).toBe(true)
     expect(supportsLiveSearch("grok-4-3")).toBe(true)
   })
