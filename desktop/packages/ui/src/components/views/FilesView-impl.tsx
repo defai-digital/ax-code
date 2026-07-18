@@ -63,6 +63,7 @@ import { openDesktopFileInApp, openDesktopPath } from "@/lib/desktop"
 import { useOpenInAppsStore } from "@/stores/useOpenInAppsStore"
 import { eventMatchesShortcut, getEffectiveShortcutCombo } from "@/lib/shortcuts"
 import { useI18n } from "@/lib/i18n"
+import { startSingleFlightInterval } from "@/lib/singleFlightInterval"
 import { FileStatusDot } from "@/components/files/FileStatusDot"
 import { getFileStatusForPath, getFolderBadgeForPath } from "@/components/files/fileStatus"
 import { API_ENDPOINTS } from "@/lib/http"
@@ -1210,14 +1211,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
     if (!files.listDirectory) return
     if (!root) return
 
-    const interval = setInterval(() => {
+    return startSingleFlightInterval(async () => {
       if (document.hidden) return
-      for (const dir of getBackgroundRefreshDirectories()) {
-        void refreshDirectory(dir)
-      }
+      await Promise.all(getBackgroundRefreshDirectories().map((dir) => refreshDirectory(dir)))
     }, 30000)
-
-    return () => clearInterval(interval)
   }, [files.listDirectory, getBackgroundRefreshDirectories, refreshDirectory, root])
 
   const handleDialogSubmit = React.useCallback(
@@ -1907,49 +1904,31 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
       return
     }
 
-    let cancelled = false
-    const interval = window.setInterval(() => {
-      if (document.hidden) {
+    return startSingleFlightInterval(async (isCancelled) => {
+      if (document.hidden) return
+      const latestStat = await readFileStat(selectedFile.path, selectedFileReadOptions).catch(() => undefined)
+      if (isCancelled() || !latestStat) return
+
+      const previousStat = lastLoadedFileStatRef.current
+      if (!previousStat || previousStat.path !== selectedFile.path) {
+        lastLoadedFileStatRef.current = latestStat
         return
       }
 
-      void readFileStat(selectedFile.path, selectedFileReadOptions)
-        .then((latestStat) => {
-          if (cancelled || !latestStat) {
-            return
-          }
+      const changedByMtime =
+        latestStat.mtimeMs !== undefined &&
+        previousStat.mtimeMs !== undefined &&
+        latestStat.mtimeMs !== previousStat.mtimeMs
+      const changedBySize = latestStat.size !== previousStat.size
 
-          const previousStat = lastLoadedFileStatRef.current
-          if (!previousStat || previousStat.path !== selectedFile.path) {
-            lastLoadedFileStatRef.current = latestStat
-            return
-          }
+      if (!changedByMtime && !changedBySize) return
 
-          const changedByMtime =
-            latestStat.mtimeMs !== undefined &&
-            previousStat.mtimeMs !== undefined &&
-            latestStat.mtimeMs !== previousStat.mtimeMs
-          const changedBySize = latestStat.size !== previousStat.size
+      if (isDirtyRef.current) return
 
-          if (!changedByMtime && !changedBySize) {
-            return
-          }
-
-          if (isDirtyRef.current) {
-            return
-          }
-
-          lastLoadedFileStatRef.current = latestStat
-          // Reset loadedFilePath so the effect above triggers a single reload.
-          setLoadedFilePath(null)
-        })
-        .catch(() => {})
+      lastLoadedFileStatRef.current = latestStat
+      // Reset loadedFilePath so the effect above triggers a single reload.
+      setLoadedFilePath(null)
     }, 2000)
-
-    return () => {
-      cancelled = true
-      window.clearInterval(interval)
-    }
   }, [loadedFilePath, readFileStat, selectedFile?.path, selectedFileReadOptions])
 
   const discardAndContinue = React.useCallback(() => {
@@ -3364,7 +3343,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
         )}
         <ScrollableOverlay outerClassName="h-full min-w-0" className="h-full min-w-0">
           {!selectedFile ? (
-            <div className="p-3 typography-ui-label text-muted-foreground">{t("filesView.editor.pickFileFromTree")}</div>
+            <div className="p-3 typography-ui-label text-muted-foreground">
+              {t("filesView.editor.pickFileFromTree")}
+            </div>
           ) : fileLoading ? (
             suppressFileLoadingIndicator ? (
               <div className="p-3" />
@@ -3389,7 +3370,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
               fallback={
                 <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
                   <div className="mb-1 font-medium text-destructive">{t("filesView.error.jsonViewerUnavailable")}</div>
-                  <div className="typography-ui-label text-muted-foreground">{t("filesView.error.switchToTextMode")}</div>
+                  <div className="typography-ui-label text-muted-foreground">
+                    {t("filesView.error.switchToTextMode")}
+                  </div>
                 </div>
               }
             >
@@ -3408,7 +3391,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
                 fallback={
                   <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
                     <div className="mb-1 font-medium text-destructive">{t("filesView.error.previewUnavailable")}</div>
-                    <div className="typography-ui-label text-muted-foreground">{t("filesView.error.switchToEditMode")}</div>
+                    <div className="typography-ui-label text-muted-foreground">
+                      {t("filesView.error.switchToEditMode")}
+                    </div>
                   </div>
                 }
               >
@@ -3723,7 +3708,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
                 fallback={
                   <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
                     <div className="mb-1 font-medium text-destructive">{t("filesView.error.previewUnavailable")}</div>
-                    <div className="typography-ui-label text-muted-foreground">{t("filesView.error.switchToEditMode")}</div>
+                    <div className="typography-ui-label text-muted-foreground">
+                      {t("filesView.error.switchToEditMode")}
+                    </div>
                   </div>
                 }
               >

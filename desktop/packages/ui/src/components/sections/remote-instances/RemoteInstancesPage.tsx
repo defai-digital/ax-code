@@ -1,4 +1,5 @@
 import React from "react"
+import { startSingleFlightInterval } from "@/lib/singleFlightInterval"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NumberInput } from "@/components/ui/number-input"
@@ -261,6 +262,7 @@ export const RemoteInstancesPage: React.FC = () => {
   const [logDialogLoading, setLogDialogLoading] = React.useState(false)
   const [logDialogError, setLogDialogError] = React.useState<string | null>(null)
   const [logDialogLines, setLogDialogLines] = React.useState<string[]>([])
+  const logRevisionRef = React.useRef(0)
   const [patternHost, setPatternHost] = React.useState<string | null>(null)
   const [patternDestination, setPatternDestination] = React.useState("")
   const [patternCreating, setPatternCreating] = React.useState(false)
@@ -283,16 +285,11 @@ export const RemoteInstancesPage: React.FC = () => {
     if (!selectedId) {
       return
     }
-    const interval = window.setInterval(() => {
+    return startSingleFlightInterval(async () => {
       // Skip polling when tab is hidden to reduce background work
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
-        return
-      }
-      void refreshStatuses()
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return
+      await refreshStatuses()
     }, 2_000)
-    return () => {
-      window.clearInterval(interval)
-    }
   }, [refreshStatuses, selectedId])
 
   React.useEffect(() => {
@@ -498,55 +495,42 @@ export const RemoteInstancesPage: React.FC = () => {
     return lines.map((line) => formatLogLine(line))
   }, [])
 
-  const handleOpenLogs = React.useCallback(async () => {
+  const handleOpenLogs = React.useCallback(() => {
     if (!draft) return
     setLogDialogOpen(true)
     setLogDialogLoading(true)
     setLogDialogError(null)
-    try {
-      const lines = await readLogsForInstance(draft.id)
-      setLogDialogLines(lines)
-    } catch (error) {
-      setLogDialogLines([])
-      setLogDialogError(error instanceof Error ? error.message : String(error))
-    } finally {
-      setLogDialogLoading(false)
-    }
-  }, [draft, readLogsForInstance])
+    setLogDialogLines([])
+  }, [draft])
 
   React.useEffect(() => {
     if (!logDialogOpen || !draft) {
       return
     }
 
-    let disposed = false
-    const run = async () => {
-      try {
-        const lines = await readLogsForInstance(draft.id)
-        if (!disposed) {
-          setLogDialogLines(lines)
-          setLogDialogError(null)
+    return startSingleFlightInterval(
+      async (isCancelled) => {
+        if (typeof document !== "undefined" && document.visibilityState !== "visible") return
+        const revision = logRevisionRef.current
+        try {
+          const lines = await readLogsForInstance(draft.id)
+          if (!isCancelled() && revision === logRevisionRef.current) {
+            setLogDialogLines(lines)
+            setLogDialogError(null)
+          }
+        } catch (error) {
+          if (!isCancelled() && revision === logRevisionRef.current) {
+            setLogDialogError(error instanceof Error ? error.message : String(error))
+          }
+        } finally {
+          if (!isCancelled() && revision === logRevisionRef.current) {
+            setLogDialogLoading(false)
+          }
         }
-      } catch (error) {
-        if (!disposed) {
-          setLogDialogError(error instanceof Error ? error.message : String(error))
-        }
-      }
-    }
-
-    void run()
-    const interval = window.setInterval(() => {
-      // Skip polling when tab is hidden
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
-        return
-      }
-      void run()
-    }, 1_000)
-
-    return () => {
-      disposed = true
-      window.clearInterval(interval)
-    }
+      },
+      1_000,
+      { immediate: true },
+    )
   }, [draft, logDialogOpen, readLogsForInstance])
 
   const logLinesText = React.useMemo(() => logDialogLines.join("\n"), [logDialogLines])
@@ -567,6 +551,7 @@ export const RemoteInstancesPage: React.FC = () => {
     if (!draft) {
       return
     }
+    logRevisionRef.current += 1
     try {
       await desktopSshLogsClear(draft.id)
       setLogDialogLines([])

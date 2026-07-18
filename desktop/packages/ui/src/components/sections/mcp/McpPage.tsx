@@ -32,6 +32,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
+import { startSingleFlightInterval } from "@/lib/singleFlightInterval"
 import { runSettingsDeleteMutation } from "../settingsDeleteMutation"
 
 // ─────────────────────────────────────────────────────────────
@@ -1328,10 +1329,12 @@ export const McpPage: React.FC = () => {
       return
     }
 
-    const intervalId = window.setInterval(() => {
-      void (async () => {
+    return startSingleFlightInterval(
+      async (isCancelled) => {
         authPollAttemptsRef.current += 1
         await refreshStatus({ directory: currentDirectory, silent: true })
+        if (isCancelled()) return
+
         const nextStatus = useMcpStore.getState().getStatusForDirectory(currentDirectory ?? null)[selectedMcpName]
 
         if (!nextStatus) {
@@ -1368,12 +1371,14 @@ export const McpPage: React.FC = () => {
           authPollStartsFromNeedsAuthRef.current = false
           toast.message(t("settings.mcp.page.toast.authorizationStillInProgress"))
         }
-      })()
-    }, 2000)
-
-    return () => {
-      window.clearInterval(intervalId)
-    }
+      },
+      2000,
+      {
+        onError: (error) => {
+          console.error("[McpPage] Authorization status poll failed:", error)
+        },
+      },
+    )
   }, [currentDirectory, isAuthPolling, refreshStatus, selectedMcpName, t])
 
   // ── Empty state ──

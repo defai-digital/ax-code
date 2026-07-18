@@ -1,4 +1,5 @@
 import React from "react"
+import { startSingleFlightInterval } from "@/lib/singleFlightInterval"
 import { create } from "zustand"
 import { devtools } from "zustand/middleware"
 import type { ProviderResult, QuotaProviderId } from "@/types"
@@ -310,10 +311,6 @@ export const useQuotaAutoRefresh = () => {
       return
     }
 
-    const interval = window.setInterval(() => {
-      fetchAllQuotas()
-    }, refreshIntervalMs)
-
-    return () => window.clearInterval(interval)
+    return startSingleFlightInterval(() => fetchAllQuotas(), refreshIntervalMs)
   }, [autoRefresh, refreshIntervalMs, fetchAllQuotas])
 }

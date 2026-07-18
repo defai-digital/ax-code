@@ -10,6 +10,7 @@ import { Icon } from "@/components/icon/Icon"
 import { isTauriShell, isDesktopShell } from "@/lib/desktop"
 import { useUIStore } from "@/stores/useUIStore"
 import { useI18n } from "@/lib/i18n"
+import { startSingleFlightInterval } from "@/lib/singleFlightInterval"
 import {
   desktopHostProbe,
   desktopHostsGet,
@@ -288,6 +289,7 @@ export function DesktopHostSwitcherDialog({
   const [newUrl, setNewUrl] = React.useState("")
   const [isAddFormOpen, setIsAddFormOpen] = React.useState(!embedded)
   const sshSwitchTokenRef = React.useRef(0)
+  const probeRequestRef = React.useRef(0)
 
   const allHosts = React.useMemo(() => {
     const local = buildLocalHost()
@@ -360,6 +362,8 @@ export function DesktopHostSwitcherDialog({
 
   const probeAll = React.useCallback(async (hosts: DesktopHost[]) => {
     if (!isTauriShell()) return
+    const requestId = probeRequestRef.current + 1
+    probeRequestRef.current = requestId
     setIsProbing(true)
     try {
       const results = await Promise.all(
@@ -378,9 +382,12 @@ export function DesktopHostSwitcherDialog({
       for (const [id, val] of results) {
         next[id] = val
       }
+      if (probeRequestRef.current !== requestId) return
       setStatusById(next)
     } finally {
-      setIsProbing(false)
+      if (probeRequestRef.current === requestId) {
+        setIsProbing(false)
+      }
     }
   }, [])
 
@@ -409,26 +416,17 @@ export function DesktopHostSwitcherDialog({
     if (!open || !isTauriShell()) {
       return
     }
-    let cancelled = false
-    const run = async () => {
-      const statuses = await getSshStatusById()
-      if (!cancelled) {
-        setSshStatusesById(statuses)
-      }
-    }
-    void run()
-    const interval = window.setInterval(() => {
-      // Skip polling when tab is hidden to reduce background work
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
-        return
-      }
-      void run()
-    }, 1_500)
-
-    return () => {
-      cancelled = true
-      window.clearInterval(interval)
-    }
+    return startSingleFlightInterval(
+      async (isCancelled) => {
+        if (typeof document !== "undefined" && document.visibilityState !== "visible") return
+        const statuses = await getSshStatusById()
+        if (!isCancelled()) {
+          setSshStatusesById(statuses)
+        }
+      },
+      1_500,
+      { immediate: true },
+    )
   }, [open])
 
   const handleSwitch = React.useCallback(
@@ -810,7 +808,9 @@ export function DesktopHostSwitcherDialog({
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="space-y-1">
           {isLoading ? (
-            <div className="px-2 py-2 text-muted-foreground typography-ui-label">{t("desktopHostSwitcher.state.loading")}</div>
+            <div className="px-2 py-2 text-muted-foreground typography-ui-label">
+              {t("desktopHostSwitcher.state.loading")}
+            </div>
           ) : (
             allHosts.map((host) => {
               const isLocal = host.id === LOCAL_HOST_ID
@@ -1267,66 +1267,56 @@ export function DesktopHostSwitcherButton({ headerIconButtonClass }: DesktopHost
   React.useEffect(() => {
     if (!isTauriShell()) return
 
-    let cancelled = false
-    const run = async () => {
-      try {
-        const cfg = await desktopHostsGet()
-        const local = buildLocalHost()
-        const all = [local, ...(cfg.hosts || [])]
-        const current = resolveCurrentHost(all)
+    return startSingleFlightInterval(
+      async (isCancelled) => {
+        try {
+          const cfg = await desktopHostsGet()
+          const local = buildLocalHost()
+          const all = [local, ...(cfg.hosts || [])]
+          const current = resolveCurrentHost(all)
 
-        if (
-          !attemptedDefaultSshConnectRef.current &&
-          current.id === LOCAL_HOST_ID &&
-          cfg.defaultHostId &&
-          cfg.defaultHostId !== LOCAL_HOST_ID
-        ) {
-          const sshCfg = await desktopSshInstancesGet().catch(() => ({ instances: [] }))
-          const defaultSsh = sshCfg.instances.find((instance) => instance.id === cfg.defaultHostId)
-          if (defaultSsh) {
-            attemptedDefaultSshConnectRef.current = true
-            const hostLabel = redactSensitiveUrl(
-              defaultSsh.nickname?.trim() || defaultSsh.sshParsed?.destination || defaultSsh.id,
-            )
-            const connected = await connectDefaultSshInstance(cfg.defaultHostId, hostLabel)
-            if (connected || cancelled) {
-              return
+          if (
+            !attemptedDefaultSshConnectRef.current &&
+            current.id === LOCAL_HOST_ID &&
+            cfg.defaultHostId &&
+            cfg.defaultHostId !== LOCAL_HOST_ID
+          ) {
+            const sshCfg = await desktopSshInstancesGet().catch(() => ({ instances: [] }))
+            const defaultSsh = sshCfg.instances.find((instance) => instance.id === cfg.defaultHostId)
+            if (defaultSsh) {
+              attemptedDefaultSshConnectRef.current = true
+              const hostLabel = redactSensitiveUrl(
+                defaultSsh.nickname?.trim() || defaultSsh.sshParsed?.destination || defaultSsh.id,
+              )
+              const connected = await connectDefaultSshInstance(cfg.defaultHostId, hostLabel)
+              if (connected || isCancelled()) {
+                return
+              }
             }
           }
-        }
 
-        if (cancelled) return
-        setLabel(redactSensitiveUrl(current.label || t("desktopHostSwitcher.instance.fallback")))
-        const normalized = normalizeHostUrl(current.url)
-        if (!normalized) {
-          setStatus(null)
-          return
+          if (isCancelled()) return
+          setLabel(redactSensitiveUrl(current.label || t("desktopHostSwitcher.instance.fallback")))
+          const normalized = normalizeHostUrl(current.url)
+          if (!normalized) {
+            setStatus(null)
+            return
+          }
+          const res = await desktopHostProbe(normalized).catch(
+            (): HostProbeResult => ({ status: "unreachable", latencyMs: 0 }),
+          )
+          if (isCancelled()) return
+          setStatus(res.status)
+        } catch {
+          if (!isCancelled()) {
+            setLabel(t("desktopHostSwitcher.instance.fallback"))
+            setStatus(null)
+          }
         }
-        const res = await desktopHostProbe(normalized).catch(
-          (): HostProbeResult => ({ status: "unreachable", latencyMs: 0 }),
-        )
-        if (cancelled) return
-        setStatus(res.status)
-      } catch {
-        if (!cancelled) {
-          setLabel(t("desktopHostSwitcher.instance.fallback"))
-          setStatus(null)
-        }
-      }
-    }
-
-    void run()
-    const interval = window.setInterval(() => {
-      // Skip polling when tab is hidden to reduce background work
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
-        return
-      }
-      void run()
-    }, 10_000)
-    return () => {
-      cancelled = true
-      window.clearInterval(interval)
-    }
+      },
+      10_000,
+      { immediate: true },
+    )
   }, [connectDefaultSshInstance, t])
 
   if (!isDesktopShell()) {

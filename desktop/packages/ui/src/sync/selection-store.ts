@@ -22,6 +22,9 @@ type LegacyContextPersistedState = {
   sessionAgentModelSelections?: AgentModelSelectionEntries
 }
 
+// Maximum number of sessions to retain in memory and persist to local storage.
+const MAX_PERSISTED_SESSIONS = 150
+
 export type SelectionState = {
   sessionModelSelections: Map<string, SessionModelSelection>
   sessionAgentSelections: Map<string, string>
@@ -80,9 +83,12 @@ const mergeEntries = <T>(primary: [string, T][] | undefined, legacy: [string, T]
     legacy.forEach(([key, value]) => merged.set(key, value))
   }
   if (Array.isArray(primary)) {
-    primary.forEach(([key, value]) => merged.set(key, value))
+    primary.forEach(([key, value]) => {
+      merged.delete(key)
+      merged.set(key, value)
+    })
   }
-  return Array.from(merged.entries())
+  return Array.from(merged.entries()).slice(-MAX_PERSISTED_SESSIONS)
 }
 
 const mergeAgentModelEntries = (
@@ -99,10 +105,13 @@ const mergeAgentModelEntries = (
     primary.forEach(([sessionId, agentArray]) => {
       const agentMap = new Map(merged.get(sessionId) ?? new Map<string, SessionModelSelection>())
       agentArray.forEach(([agentName, selection]) => agentMap.set(agentName, selection))
+      merged.delete(sessionId)
       merged.set(sessionId, agentMap)
     })
   }
-  return Array.from(merged.entries()).map(([sessionId, agentMap]) => [sessionId, Array.from(agentMap.entries())])
+  return Array.from(merged.entries())
+    .slice(-MAX_PERSISTED_SESSIONS)
+    .map(([sessionId, agentMap]) => [sessionId, Array.from(agentMap.entries())])
 }
 
 const deriveLastUsedProvider = (
@@ -138,8 +147,16 @@ export const mergePersistedSelectionState = (persistedState: unknown, legacyStat
 // In-memory variant storage (not persisted)
 const agentModelVariantSelections = new Map<string, Map<string, Map<string, string>>>()
 
-// Maximum number of sessions to persist to local storage to prevent unbounded growth
-const MAX_PERSISTED_SESSIONS = 150
+export const touchCappedMruEntry = <K, V>(map: Map<K, V>, key: K, value: V, limit: number): void => {
+  map.delete(key)
+  map.set(key, value)
+  while (map.size > limit) {
+    const oldest = map.keys().next()
+    if (oldest.done) break
+    map.delete(oldest.value)
+  }
+}
+
 export const useSelectionStore = create<SelectionState>()(
   persist(
     (set, get) => ({
@@ -152,8 +169,7 @@ export const useSelectionStore = create<SelectionState>()(
       saveSessionModelSelection: (sessionId, providerId, modelId) =>
         set((s) => {
           const map = new Map(s.sessionModelSelections)
-          map.delete(sessionId) // Delete first to ensure it moves to the end of insertion order (MRU)
-          map.set(sessionId, { providerId, modelId })
+          touchCappedMruEntry(map, sessionId, { providerId, modelId }, MAX_PERSISTED_SESSIONS)
           return { sessionModelSelections: map, lastUsedProvider: { providerID: providerId, modelID: modelId } }
         }),
 
@@ -161,10 +177,8 @@ export const useSelectionStore = create<SelectionState>()(
 
       saveSessionAgentSelection: (sessionId, agentName) =>
         set((s) => {
-          if (s.sessionAgentSelections.get(sessionId) === agentName) return s
           const map = new Map(s.sessionAgentSelections)
-          map.delete(sessionId) // Delete first to ensure it moves to the end of insertion order (MRU)
-          map.set(sessionId, agentName)
+          touchCappedMruEntry(map, sessionId, agentName, MAX_PERSISTED_SESSIONS)
           return { sessionAgentSelections: map }
         }),
 
@@ -172,14 +186,11 @@ export const useSelectionStore = create<SelectionState>()(
 
       saveAgentModelForSession: (sessionId, agentName, providerId, modelId) =>
         set((s) => {
-          const existing = s.sessionAgentModelSelections.get(sessionId)?.get(agentName)
-          if (existing?.providerId === providerId && existing?.modelId === modelId) return s
           const outer = new Map(s.sessionAgentModelSelections)
           const inner = new Map(outer.get(sessionId) ?? new Map())
 
-          outer.delete(sessionId) // Delete first to ensure it moves to the end of insertion order (MRU)
           inner.set(agentName, { providerId, modelId })
-          outer.set(sessionId, inner)
+          touchCappedMruEntry(outer, sessionId, inner, MAX_PERSISTED_SESSIONS)
 
           return { sessionAgentModelSelections: outer }
         }),
@@ -214,6 +225,7 @@ export const useSelectionStore = create<SelectionState>()(
         }
 
         modelMap.set(key, variant)
+        touchCappedMruEntry(agentModelVariantSelections, sessionId, agentMap, MAX_PERSISTED_SESSIONS)
       },
 
       getAgentModelVariantForSession: (sessionId, agentName, providerId, modelId) => {

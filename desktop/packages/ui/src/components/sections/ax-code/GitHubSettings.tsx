@@ -11,6 +11,7 @@ import { useI18n } from "@/lib/i18n"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Icon } from "@/components/icon/Icon"
 import { API_ENDPOINTS } from "@/lib/http"
+import { startSingleFlightInterval } from "@/lib/singleFlightInterval"
 import { pollCurrentGitHubDeviceFlow, type DeviceFlowCompleteResponse } from "./githubDeviceFlowPoll"
 
 type DeviceFlowStartResponse = {
@@ -40,13 +41,11 @@ export const GitHubSettings: React.FC = () => {
   const [isBusy, setIsBusy] = React.useState(false)
   const [flow, setFlow] = React.useState<DeviceFlowStartResponse | null>(null)
   const [pollIntervalMs, setPollIntervalMs] = React.useState<number | null>(null)
-  const pollTimerRef = React.useRef<number | null>(null)
+  const stopPollRef = React.useRef<(() => void) | null>(null)
 
   const stopPolling = React.useCallback(() => {
-    if (pollTimerRef.current != null) {
-      window.clearInterval(pollTimerRef.current)
-      pollTimerRef.current = null
-    }
+    stopPollRef.current?.()
+    stopPollRef.current = null
     setPollIntervalMs(null)
   }, [])
 
@@ -133,51 +132,48 @@ export const GitHubSettings: React.FC = () => {
     if (!flow?.deviceCode || !pollIntervalMs) {
       return
     }
-    if (pollTimerRef.current != null) {
+    if (stopPollRef.current) {
       return
     }
 
-    let active = true
-    pollTimerRef.current = window.setInterval(() => {
-      void (async () => {
-        const result = await pollCurrentGitHubDeviceFlow({
-          deviceCode: flow.deviceCode,
-          pollOnce,
-          isCurrent: () => active,
-        })
-        if (!active || result.status === "stale" || result.status === "pending") {
-          return
-        }
+    const stop = startSingleFlightInterval(async (isCancelled) => {
+      const result = await pollCurrentGitHubDeviceFlow({
+        deviceCode: flow.deviceCode,
+        pollOnce,
+        isCurrent: () => !isCancelled(),
+      })
+      if (isCancelled() || result.status === "stale" || result.status === "pending") {
+        return
+      }
 
-        if (result.status === "connected") {
-          toast.success(t("settings.github.page.toast.connected"))
-          setFlow(null)
-          stopPolling()
-          await refreshStatus(runtimeGitHub, { force: true })
-          return
-        }
+      if (result.status === "connected") {
+        toast.success(t("settings.github.page.toast.connected"))
+        setFlow(null)
+        stopPolling()
+        await refreshStatus(runtimeGitHub, { force: true })
+        return
+      }
 
-        if (result.status === "slow-down") {
-          setPollIntervalMs((prev) => (prev ? prev + 5000 : 5000))
-          return
-        }
+      if (result.status === "slow-down") {
+        setPollIntervalMs((prev) => (prev ? prev + 5000 : 5000))
+        return
+      }
 
-        if (result.status === "authorization-failed") {
-          toast.error(result.error || t("settings.github.page.toast.authorizationFailed"))
-          setFlow(null)
-          stopPolling()
-          return
-        }
+      if (result.status === "authorization-failed") {
+        toast.error(result.error || t("settings.github.page.toast.authorizationFailed"))
+        setFlow(null)
+        stopPolling()
+        return
+      }
 
-        console.warn("GitHub polling failed:", result.error)
-      })()
+      console.warn("GitHub polling failed:", result.error)
     }, pollIntervalMs)
+    stopPollRef.current = stop
 
     return () => {
-      active = false
-      if (pollTimerRef.current != null) {
-        window.clearInterval(pollTimerRef.current)
-        pollTimerRef.current = null
+      stop()
+      if (stopPollRef.current === stop) {
+        stopPollRef.current = null
       }
     }
   }, [flow, pollIntervalMs, pollOnce, refreshStatus, runtimeGitHub, stopPolling, t])

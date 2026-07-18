@@ -8,6 +8,7 @@ import { SkillLint } from "./check-skills"
 import { collectPackageRuntimeDependencies } from "./build-deps"
 import { solidEsbuildPlugin } from "./esbuild-solid-plugin"
 import { readText, writeText } from "./fs-compat"
+import { resolveLegacyNodeGypPython } from "./node-gyp-python"
 import { WINDOWS_UTF8_WARNING } from "./source-launcher"
 import pkg from "../package.json"
 
@@ -358,8 +359,8 @@ await writeText(
   JSON.stringify({ name: "ax-code-dist", private: true, type: "module", dependencies: distDeps }, null, 2) + "\n",
 )
 console.log("Installing runtime dependencies (node-pty, tree-sitter) into the distribution...")
-const runNpm = (args: string[]) =>
-  spawnSync("npm", args, { cwd: outRoot, stdio: "inherit", shell: process.platform === "win32" })
+const runNpm = (args: string[], env: NodeJS.ProcessEnv = process.env) =>
+  spawnSync("npm", args, { cwd: outRoot, stdio: "inherit", shell: process.platform === "win32", env })
 const install = runNpm(["install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"])
 if (install.status !== 0) {
   console.error("npm install for the distribution failed")
@@ -422,8 +423,34 @@ for (const [pkgName, srcDir] of vendoredOpentuiPackages) {
 const ptyDir = path.join(outRoot, "node_modules", "node-pty-prebuilt-multiarch")
 if (fs.existsSync(ptyDir) && !fs.existsSync(path.join(ptyDir, "build", "Release", "pty.node"))) {
   console.log("Building node-pty native addon...")
-  const gyp = runNpm(["rebuild", "node-pty-prebuilt-multiarch"])
-  if (gyp.status !== 0) console.warn("node-pty build failed — terminal feature will be unavailable")
+  const hasExplicitPython = [process.env.PYTHON, process.env.NODE_GYP_FORCE_PYTHON, process.env.npm_config_python].some(
+    (value) => value?.trim(),
+  )
+  const python = hasExplicitPython ? undefined : resolveLegacyNodeGypPython()
+  if (python) console.log(`Using ${python} for node-pty's legacy node-gyp build`)
+  const ptyAddon = path.join(ptyDir, "build", "Release", "pty.node")
+  const gypEnv = { ...process.env }
+  if (python) gypEnv.PYTHON = python
+  if (bundledNodeRuntime && bundledNodeRuntime.version !== process.version) {
+    gypEnv.npm_config_target = bundledNodeRuntime.version.replace(/^v/, "")
+    gypEnv.npm_config_arch = arch
+    console.log(`Targeting bundled Node ${bundledNodeRuntime.version} (${arch}) for node-pty`)
+  }
+  const gyp = runNpm(["rebuild", "node-pty-prebuilt-multiarch"], gypEnv)
+  let ptyReady = gyp.status === 0 && fs.existsSync(ptyAddon)
+  if (ptyReady && bundledNodeRuntime) {
+    const distributionNode = path.join(bundledNodeDir, "bin", bundledNodeName)
+    const loadCheck = spawnSync(distributionNode, ["-e", "require(process.argv[1])", ptyDir], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 10_000,
+    })
+    ptyReady = loadCheck.status === 0
+    if (!ptyReady && loadCheck.stderr) console.warn(String(loadCheck.stderr).trim())
+  }
+  if (!ptyReady) {
+    console.warn("node-pty build failed — terminal feature will be unavailable")
+  }
 }
 
 // Ship the @ax-code napi addons (workspace packages, not on npm) + their .node.
@@ -515,6 +542,6 @@ if (release) {
 }
 
 console.log(
-  `Full Node TUI distribution complete: ${path.relative(dir, outRoot)} (${shippedNative}/${nativePkgs.length} native addons, bundled node: ${bundledNode ? process.version : "none"})`,
+  `Full Node TUI distribution complete: ${path.relative(dir, outRoot)} (${shippedNative}/${nativePkgs.length} native addons, bundled node: ${bundledNode ? bundledNodeRuntime?.version : "none"})`,
 )
 console.log(`Run: ${path.relative(dir, path.join(outBin, "ax-code"))}`)
