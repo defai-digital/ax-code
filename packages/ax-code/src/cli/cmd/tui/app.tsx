@@ -281,7 +281,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         await DialogAlert.show(
           dialog,
           "Effort",
-          `${model ?? "This model"} does not expose effort levels.\n\nEffort is available on Anthropic Claude, OpenAI GPT, Google Gemini, and OpenAI-compatible providers. Other providers can define custom levels under provider.<id>.models.<model>.variants in ax-code.json.`,
+          `${model ?? "This model"} does not expose effort levels.\n\nEffort is available on Anthropic Claude, OpenAI GPT/Codex CLI, xAI Grok/Grok Build CLI, Google Gemini, Claude Code, and OpenAI-compatible providers. Other providers can define custom levels under provider.<id>.models.<model>.variants in ax-code.json.`,
         )
         return
       }

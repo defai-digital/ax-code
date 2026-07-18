@@ -1077,7 +1077,7 @@ describe("ProviderTransform.variants", () => {
   })
 
   describe("@ai-sdk/xai", () => {
-    test("grok-4.5 does not auto-generate reasoningEffort variants", () => {
+    test("grok-4.5 exposes Responses API reasoningEffort variants", () => {
       const model = createMockModel({
         id: "xai/grok-4.5",
         providerID: "xai",
@@ -1088,10 +1088,14 @@ describe("ProviderTransform.variants", () => {
         },
       })
       const result = ProviderTransform.variants(model)
-      expect(result).toEqual({})
+      expect(result).toEqual({
+        low: { reasoningEffort: "low" },
+        medium: { reasoningEffort: "medium" },
+        high: { reasoningEffort: "high" },
+      })
     })
 
-    test("sanitizes unsupported reasoningEffort request options", () => {
+    test("preserves Responses API reasoningEffort request options", () => {
       const model = createMockModel({
         id: "xai/grok-4.5",
         providerID: "xai",
@@ -1103,10 +1107,22 @@ describe("ProviderTransform.variants", () => {
       })
       const result = ProviderTransform.sanitizeOptions(model, {
         reasoningEffort: "high",
-        reasoning_effort: "high",
         temperature: 0.2,
       })
-      expect(result).toEqual({ temperature: 0.2 })
+      expect(result).toEqual({ reasoningEffort: "high", temperature: 0.2 })
+    })
+
+    test("does not expose effort on xAI models without documented support", () => {
+      const model = createMockModel({
+        id: "xai/grok-code-fast-1",
+        providerID: "xai",
+        api: {
+          id: "grok-code-fast-1",
+          url: "https://api.x.ai",
+          npm: "@ai-sdk/xai",
+        },
+      })
+      expect(ProviderTransform.variants(model)).toEqual({})
     })
 
     test("options() injects default Live Search searchParameters for grok-4.5", () => {
@@ -1475,7 +1491,7 @@ describe("ProviderTransform.variants", () => {
   })
 
   describe("@ai-sdk/anthropic", () => {
-    test("first-party anthropic returns low/medium/high thinking budgets", () => {
+    test("current Anthropic models use effort with adaptive thinking", () => {
       const model = createMockModel({
         id: "anthropic/claude-sonnet-4-6",
         providerID: "anthropic",
@@ -1486,10 +1502,42 @@ describe("ProviderTransform.variants", () => {
         },
       })
       const result = ProviderTransform.variants(model)
+      expect(Object.keys(result)).toEqual(["low", "medium", "high", "max"])
+      expect(result.low).toEqual({ effort: "low", thinking: { type: "adaptive" } })
+      expect(result.max).toEqual({ effort: "max", thinking: { type: "adaptive" } })
+    })
+
+    test("Anthropic Opus 4.5 combines effort with supported manual thinking", () => {
+      const model = createMockModel({
+        id: "anthropic/claude-opus-4-5",
+        providerID: "anthropic",
+        api: {
+          id: "claude-opus-4-5",
+          url: "https://api.anthropic.com",
+          npm: "@ai-sdk/anthropic",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+      expect(Object.keys(result)).toEqual(["low", "medium", "high"])
+      expect(result.high).toEqual({
+        effort: "high",
+        thinking: { type: "enabled", budgetTokens: 16_384 },
+      })
+    })
+
+    test("legacy Anthropic reasoning models retain thinking budget variants", () => {
+      const model = createMockModel({
+        id: "anthropic/claude-haiku-4-5",
+        providerID: "anthropic",
+        api: {
+          id: "claude-haiku-4-5",
+          url: "https://api.anthropic.com",
+          npm: "@ai-sdk/anthropic",
+        },
+      })
+      const result = ProviderTransform.variants(model)
       expect(Object.keys(result)).toEqual(["low", "medium", "high"])
       expect(result.low).toEqual({ thinking: { type: "enabled", budgetTokens: 2_048 } })
-      expect(result.medium).toEqual({ thinking: { type: "enabled", budgetTokens: 8_192 } })
-      expect(result.high).toEqual({ thinking: { type: "enabled", budgetTokens: 16_384 } })
     })
 
     test("third-party anthropic-compatible providers stay empty", () => {
@@ -1537,6 +1585,38 @@ describe("ProviderTransform.variants", () => {
       })
       const result = ProviderTransform.variants(model)
       expect(result).toEqual({})
+    })
+  })
+
+  describe("CLI effort variants", () => {
+    test.each([
+      ["claude-code", ["low", "medium", "high", "max"]],
+      ["codex-cli", ["minimal", "low", "medium", "high", "xhigh"]],
+      ["grok-build-cli", ["low", "medium", "high"]],
+    ])("%s exposes documented levels despite opaque reasoning output", (providerID, levels) => {
+      const model = createMockModel({
+        id: `${providerID}/${providerID}`,
+        providerID,
+        api: {
+          id: providerID,
+          url: "cli://local",
+          npm: "cli",
+        },
+        capabilities: {
+          ...createMockModel().capabilities,
+          reasoning: false,
+        },
+      })
+      expect(Object.keys(ProviderTransform.variants(model))).toEqual(levels)
+    })
+
+    test("unsupported CLI providers do not advertise inert variants", () => {
+      const model = createMockModel({
+        id: "gemini-cli/gemini-cli",
+        providerID: "gemini-cli",
+        api: { id: "gemini-cli", url: "cli://local", npm: "cli" },
+      })
+      expect(ProviderTransform.variants(model)).toEqual({})
     })
   })
 

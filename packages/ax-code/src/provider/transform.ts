@@ -8,6 +8,7 @@ import { isRecord } from "@/util/record"
 import { buildSearchParameters, type LiveSearchConfig } from "./xai/server-tools"
 import { isQwen37MaxOrPlusModel } from "./model-capabilities"
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
+import { cliEffortVariants } from "./cli/effort"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -256,6 +257,7 @@ export namespace ProviderTransform {
   }
 
   const WIDELY_SUPPORTED_EFFORTS = ["low", "medium", "high"]
+  const ANTHROPIC_EFFORTS = ["low", "medium", "high", "max"]
 
   // Anthropic thinking budget per effort tier. budgetTokens must stay below
   // the request's max_tokens, which maxOutputTokens caps at OUTPUT_TOKEN_MAX
@@ -313,6 +315,31 @@ export namespace ProviderTransform {
     return model.providerID.startsWith("alibaba-")
   }
 
+  function supportsAnthropicEffort(model: Provider.Model) {
+    const id = `${model.id} ${model.api.id}`.toLowerCase().replaceAll(".", "-")
+    return (
+      /claude-opus-?4-[5-8](?:$|[^0-9])/.test(id) ||
+      /claude-sonnet-?4-6(?:$|[^0-9])/.test(id) ||
+      /claude-(?:fable|mythos|sonnet)-?5(?:$|[^0-9])/.test(id) ||
+      id.includes("claude-mythos-preview")
+    )
+  }
+
+  function isAnthropicOpus45(model: Provider.Model) {
+    const id = `${model.id} ${model.api.id}`.toLowerCase().replaceAll(".", "-")
+    return /claude-opus-?4-5(?:$|[^0-9])/.test(id)
+  }
+
+  function usesAnthropicAdaptiveThinking(model: Provider.Model) {
+    const id = `${model.id} ${model.api.id}`.toLowerCase().replaceAll(".", "-")
+    return /claude-(?:opus-?4-[6-8]|sonnet-?4-6)(?:$|[^0-9])/.test(id)
+  }
+
+  function supportsXaiEffort(model: Provider.Model) {
+    const id = model.api.id.toLowerCase()
+    return /^grok-4\.5(?:$|-)/.test(id) || /^grok-4\.20-multi-agent(?:$|-)/.test(id)
+  }
+
   function alibabaThinkingBudget(model: Provider.Model, requested?: unknown) {
     const max = maxOutputTokens(model)
     const value = typeof requested === "number" && Number.isFinite(requested) && requested > 0 ? requested : max
@@ -323,6 +350,12 @@ export namespace ProviderTransform {
   }
 
   export function variants(model: Provider.Model): Record<string, Record<string, any>> {
+    // CLI providers report reasoning=false because their output is opaque to
+    // the AI SDK, but several CLIs expose a documented effort flag. Publish
+    // those variants before the capability gate and translate them when the
+    // subprocess command is built.
+    if (model.api.npm === "cli") return cliEffortVariants(model.providerID)
+
     if (!model.capabilities.reasoning) return {}
 
     const id = model.id.toLowerCase()
@@ -334,16 +367,6 @@ export namespace ProviderTransform {
       hasFamily(model, "mistral")
     )
       return {}
-
-    // XAI rejects the AI SDK's top-level reasoningEffort parameter for Grok
-    // chat completions (for example grok-4-1-fast). Keep Grok reasoning
-    // capability metadata for output parsing and model selection, but do not
-    // auto-generate client-side reasoning-effort variants. Users can still
-    // provide explicit per-model variants in config if x.ai adds a supported
-    // option shape later.
-    if (model.api.npm === "@ai-sdk/xai") {
-      return {}
-    }
 
     // Groq's API only accepts `reasoning_effort` values `none` or `default`
     // for reasoning-capable models (Qwen3.6-27B, GPT-OSS-120B). The generic
@@ -364,6 +387,12 @@ export namespace ProviderTransform {
     }
 
     switch (model.api.npm) {
+      case "@ai-sdk/xai":
+        // The xAI loader uses the Responses API, where Grok reasoning models
+        // accept low/medium/high reasoningEffort through the AI SDK.
+        if (model.providerID !== "xai" || !supportsXaiEffort(model)) return {}
+        return Object.fromEntries(WIDELY_SUPPORTED_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]))
+
       case "venice-ai-sdk-provider":
       // https://docs.venice.ai/overview/guides/reasoning-models#reasoning-effort
       case "@ai-sdk/openai-compatible":
@@ -392,6 +421,22 @@ export namespace ProviderTransform {
         // endpoints (minimax, freemodel, ...) are not verified to accept
         // `thinking` blocks; they can opt in via config variants.
         if (model.providerID !== "anthropic") return {}
+        if (supportsAnthropicEffort(model)) {
+          const levels = isAnthropicOpus45(model) ? WIDELY_SUPPORTED_EFFORTS : ANTHROPIC_EFFORTS
+          return Object.fromEntries(
+            levels.map((effort) => [
+              effort,
+              {
+                effort,
+                ...(isAnthropicOpus45(model)
+                  ? { thinking: { type: "enabled", budgetTokens: ANTHROPIC_THINKING_BUDGETS[effort] } }
+                  : usesAnthropicAdaptiveThinking(model)
+                    ? { thinking: { type: "adaptive" } }
+                    : {}),
+              },
+            ]),
+          )
+        }
         return Object.fromEntries(
           WIDELY_SUPPORTED_EFFORTS.map((effort) => [
             effort,
@@ -558,7 +603,7 @@ export namespace ProviderTransform {
       return rest
     }
 
-    if (model.api.npm === "@ai-sdk/xai" || model.providerID === "groq" || model.providerID === "openrouter") {
+    if (model.providerID === "groq" || model.providerID === "openrouter") {
       const { reasoningEffort: _reasoningEffort, reasoning_effort: _reasoning_effort, ...rest } = result
       return rest
     }

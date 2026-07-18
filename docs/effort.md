@@ -34,17 +34,21 @@ Available keys are **per model**. Models with no variants hide the effort contro
 
 ## Provider support
 
-Effort levels are generated automatically for reasoning-capable models on these providers:
+Effort levels are generated automatically for supported models on these providers:
 
 | Provider | Mechanism | Levels |
 | -------- | --------- | ------ |
-| Anthropic (Claude) | `thinking` budget tokens | Fast, Balanced, Deep |
+| Anthropic (Claude) | `effort` on current models; thinking budgets on legacy models | Fast, Balanced, Deep, Max (model-dependent) |
 | OpenAI (GPT-5.x) | `reasoningEffort` | Fast, Balanced, Deep |
+| xAI (Grok) | Responses API `reasoningEffort` | Fast, Balanced, Deep |
 | Google (Gemini 3.x) | `thinkingConfig.thinkingLevel` | Fast, Deep (3.1 adds Balanced) |
 | OpenAI-compatible endpoints | `reasoningEffort` | Fast, Balanced, Deep |
 | Venice | `reasoningEffort` | Fast, Balanced, Deep |
+| Claude Code CLI | `--effort` | Fast, Balanced, Deep, Max |
+| Codex CLI | `model_reasoning_effort` config override | Minimal, Fast, Balanced, Deep, Max |
+| Grok Build CLI | `--reasoning-effort` | Fast, Balanced, Deep |
 
-Providers whose effort API is unverified or incompatible (xAI, Groq, OpenRouter, DeepSeek/Alibaba/MiniMax/GLM/Mistral families, third-party gateways) expose **no** built-in levels; `/effort` explains this instead of failing silently. Define custom levels under `provider.<id>.models.<model>.variants` in `ax-code.json` when a provider documents a supported option shape.
+Providers whose effort API is unverified or incompatible (Groq's hosted API, OpenRouter, DeepSeek/Alibaba/MiniMax/GLM/Mistral families, unsupported CLI providers, and third-party gateways) expose **no** built-in levels; `/effort` explains this instead of failing silently. Define custom levels under `provider.<id>.models.<model>.variants` in `ax-code.json` when a provider documents a supported option shape.
 
 ## How to set effort
 

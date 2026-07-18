@@ -1075,6 +1075,96 @@ describe("CliLanguageModel", () => {
     expect(cmd).toEqual(["grok", "-p", "write file"])
   })
 
+  test("maps effort to each supported CLI's native arguments", () => {
+    const claude = buildCliCommand(
+      {
+        providerID: "claude-code",
+        modelID: "claude-code",
+        binary: "claude",
+        args: ["--print"],
+        parser: claudeCodeParser,
+        promptMode: "positional",
+      },
+      "write file",
+      undefined,
+      "max",
+    )
+    expect(claude).toContain("--effort")
+    expect(claude[claude.indexOf("--effort") + 1]).toBe("max")
+
+    const codex = buildCliCommand(
+      {
+        providerID: "codex-cli",
+        modelID: "codex-cli",
+        binary: "codex",
+        args: ["exec", "--json"],
+        parser: claudeCodeParser,
+        promptMode: "stdin",
+      },
+      "write file",
+      undefined,
+      "xhigh",
+    )
+    expect(codex).toContain("-c")
+    expect(codex[codex.indexOf("-c") + 1]).toBe('model_reasoning_effort="xhigh"')
+
+    const grok = buildCliCommand(
+      {
+        providerID: "grok-build-cli",
+        modelID: "grok-build-cli",
+        binary: "grok",
+        args: [],
+        parser: grokBuildCliParser,
+        promptMode: "arg",
+        promptFlag: "-p",
+      },
+      "write file",
+      undefined,
+      "medium",
+    )
+    expect(grok).toEqual(["grok", "--reasoning-effort", "medium", "-p", "write file"])
+  })
+
+  test("ignores unsupported CLI effort values", () => {
+    const cmd = buildCliCommand(
+      {
+        providerID: "grok-build-cli",
+        modelID: "grok-build-cli",
+        binary: "grok",
+        args: [],
+        parser: grokBuildCliParser,
+        promptMode: "arg",
+        promptFlag: "-p",
+      },
+      "write file",
+      undefined,
+      "$(unsafe)",
+    )
+    expect(cmd).toEqual(["grok", "-p", "write file"])
+  })
+
+  test("forwards selected provider effort into the spawned CLI command", async () => {
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => successfulChild())
+    try {
+      const model = makeModel({
+        providerID: "claude-code",
+        modelID: "claude-code",
+        binary: "claude",
+        args: ["--print"],
+        promptMode: "positional",
+      })
+      await model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "write file" }] }],
+        providerOptions: { "claude-code": { effort: "max" } },
+      })
+      const command = spawn.mock.calls[0]?.[0]
+      expect(command).toContain("--effort")
+      expect(command[command.indexOf("--effort") + 1]).toBe("max")
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
   test("passes Antigravity CLI prompt through plain print mode", () => {
     const definition = CLI_PROVIDER_DEFINITIONS["antigravity-cli"]
     expect(definition).toBeDefined()

@@ -18,6 +18,7 @@ import { Token } from "@/util/token"
 import { markEstimatedUsage } from "../usage"
 import { Shell } from "@/shell/shell"
 import { Instance } from "@/project/instance"
+import { cliEffortArgs, cliEffortFromProviderOptions } from "./effort"
 
 const log = Log.create({ service: "provider.cli-language-model" })
 
@@ -90,8 +91,18 @@ function autonomousCliArgs(providerID: string): string[] {
   return []
 }
 
-export function buildCliCommand(config: CliLanguageModelConfig, prompt: string, workspaceDirectory?: string) {
-  const cmd = [config.binary, ...config.args, ...autonomousCliArgs(config.providerID)]
+export function buildCliCommand(
+  config: CliLanguageModelConfig,
+  prompt: string,
+  workspaceDirectory?: string,
+  effort?: string,
+) {
+  const cmd = [
+    config.binary,
+    ...config.args,
+    ...autonomousCliArgs(config.providerID),
+    ...cliEffortArgs(config.providerID, effort),
+  ]
   if (config.workspaceArg && workspaceDirectory) cmd.push(config.workspaceArg, workspaceDirectory)
   if (config.modelID !== config.providerID) cmd.push("--model", config.modelID)
   if (config.promptMode === "arg") cmd.push(config.promptFlag ?? "-p", prompt)
@@ -134,8 +145,9 @@ export class CliLanguageModel implements LanguageModelV3 {
     this.modelId = config.modelID
   }
 
-  private buildCmd(prompt: string) {
-    return buildCliCommand(this.config, prompt, currentInstanceDirectory())
+  private buildCmd(prompt: string, providerOptions?: LanguageModelV3CallOptions["providerOptions"]) {
+    const effort = cliEffortFromProviderOptions(this.config.providerID, providerOptions)
+    return buildCliCommand(this.config, prompt, currentInstanceDirectory(), effort)
   }
 
   private useStdin() {
@@ -192,7 +204,7 @@ export class CliLanguageModel implements LanguageModelV3 {
       providerID: this.config.providerID,
       attachments: attachments.refs,
     })
-    const proc = Process.spawn(this.buildCmd(text), {
+    const proc = Process.spawn(this.buildCmd(text, options.providerOptions), {
       cwd: currentInstanceDirectory(),
       stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
@@ -308,7 +320,7 @@ export class CliLanguageModel implements LanguageModelV3 {
       providerID: this.config.providerID,
       attachments: attachments.refs,
     })
-    const proc = Process.spawn(this.buildCmd(text), {
+    const proc = Process.spawn(this.buildCmd(text, options.providerOptions), {
       cwd: currentInstanceDirectory(),
       stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
