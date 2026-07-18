@@ -1,6 +1,6 @@
 import path from "path"
 import { stat } from "node:fs/promises"
-import { describeDurableStoragePolicy, DurableStoragePolicy } from "../../storage/policy"
+import { describeDurableStoragePolicy, DurableStoragePolicy, formatStorageBytes } from "../../storage/policy"
 import { toErrorMessage } from "@/util/error-message"
 
 export type DoctorCheck = {
@@ -59,13 +59,15 @@ export async function getDoctorDatabaseCheck(input: {
 
   if (wal.exists && (wal.size ?? 0) >= LARGE_WAL_BYTES) {
     markWarn()
-    details.push(`large WAL file: ${formatBytes(wal.size ?? 0)} (policy limit ${formatBytes(LARGE_WAL_BYTES)})`)
+    details.push(
+      `large WAL file: ${formatStorageBytes(wal.size ?? 0)} (policy limit ${formatStorageBytes(LARGE_WAL_BYTES)})`,
+    )
   } else if (wal.exists && wal.size !== undefined) {
-    details.push(`WAL ${formatBytes(wal.size)}`)
+    details.push(`WAL ${formatStorageBytes(wal.size)}`)
   }
 
   if (shm.exists && shm.size !== undefined) {
-    details.push(`SHM ${formatBytes(shm.size)}`)
+    details.push(`SHM ${formatStorageBytes(shm.size)}`)
   }
 
   const alternatePath =
@@ -106,10 +108,4 @@ async function inspectWithStat(target: string): Promise<DatabaseFileInfo> {
       error: toErrorMessage(error),
     }
   }
-}
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KiB`
-  return `${Math.round(bytes / 1024 / 1024)} MiB`
 }

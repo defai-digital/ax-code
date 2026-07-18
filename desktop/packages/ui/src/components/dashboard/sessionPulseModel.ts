@@ -112,8 +112,7 @@ export function buildSessionPulseModel(input: { dre?: unknown; risk?: unknown })
   const signals = asRecord(assessment?.signals) ?? asRecord(dreDetail) // soft fallback
 
   const readiness = normalizeReadiness(assessment?.readiness ?? dreDetail?.readiness)
-  const semantic =
-    asRecord(risk?.semantic) ?? asRecord(dreDetail?.semantic) ?? asRecord(assessment?.semantic) ?? null
+  const semantic = asRecord(risk?.semantic) ?? asRecord(dreDetail?.semantic) ?? asRecord(assessment?.semantic) ?? null
 
   const rawChanges = Array.isArray(semantic?.changes) ? semantic.changes : []
   const changes: SessionPulseChange[] = []
@@ -136,10 +135,8 @@ export function buildSessionPulseModel(input: { dre?: unknown; risk?: unknown })
 
   const filesChanged =
     asNumber(semantic?.files) ?? asNumber(signals?.filesChanged) ?? (changes.length > 0 ? changes.length : 0)
-  const additions =
-    asNumber(semantic?.additions) ?? changes.reduce((sum, c) => sum + c.additions, 0)
-  const deletions =
-    asNumber(semantic?.deletions) ?? changes.reduce((sum, c) => sum + c.deletions, 0)
+  const additions = asNumber(semantic?.additions) ?? changes.reduce((sum, c) => sum + c.additions, 0)
+  const deletions = asNumber(semantic?.deletions) ?? changes.reduce((sum, c) => sum + c.deletions, 0)
 
   const commands = asStringArray(signals?.validationCommands)
   const validationState = normalizeValidationState(signals?.validationState)
@@ -188,7 +185,8 @@ export function buildSessionPulseModel(input: { dre?: unknown; risk?: unknown })
 
 export function formatDurationMs(ms: number | null): string | null {
   if (ms == null || ms < 0) return null
-  if (ms < 1000) return `${Math.round(ms)}ms`
+  const totalMilliseconds = Math.round(ms)
+  if (totalMilliseconds < 1000) return `${totalMilliseconds}ms`
   // Round to whole seconds first so remainder never becomes "1m 60s".
   const totalSeconds = Math.round(ms / 1000)
   if (totalSeconds < 60) return `${(ms / 1000).toFixed(1)}s`
@@ -201,5 +199,6 @@ export function formatTokenCount(n: number | null): string | null {
   if (n == null) return null
   if (n < 1000) return String(n)
   if (n < 10_000) return `${(n / 1000).toFixed(1)}k`
+  if (n >= 999_500) return `${(n / 1_000_000).toFixed(1)}m`
   return `${Math.round(n / 1000)}k`
 }

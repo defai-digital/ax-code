@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { formatContextTokens } from "./ContextUsageDisplay"
+import { formatContextTokens } from "./contextUsageFormat"
 
 describe("formatContextTokens", () => {
   test("formats small and mid-range token counts", () => {

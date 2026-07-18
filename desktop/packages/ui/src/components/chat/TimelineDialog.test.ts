@@ -28,4 +28,17 @@ describe("formatRollbackPointMeta", () => {
     expect(formatRollbackPointMeta(rollbackPoint({ kinds: ["bash"] }))).toBe("bash")
     expect(formatRollbackPointMeta(rollbackPoint({}))).toBe("No tool calls")
   })
+
+  test("carries rounded duration and token units", () => {
+    expect(
+      formatRollbackPointMeta(
+        rollbackPoint({
+          tokens: { input: 999_500, output: 1_500_000 },
+          duration: 999.5,
+        }),
+      ),
+    ).toBe("No tool calls | 1.0m in / 1.5m out | 1.0s")
+
+    expect(formatRollbackPointMeta(rollbackPoint({ duration: 59_500 }))).toBe("No tool calls | 1m 0s")
+  })
 })

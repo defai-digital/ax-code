@@ -11,21 +11,27 @@ describe("Locale.duration", () => {
   test("renders seconds below 1m", () => {
     expect(Locale.duration(1000)).toBe("1.0s")
     expect(Locale.duration(1500)).toBe("1.5s")
-    expect(Locale.duration(59_999)).toBe("60.0s")
+    expect(Locale.duration(59_499)).toBe("59.5s")
   })
 
-  test("renders minutes below 1h", () => {
+  test("renders minutes below 1h without a 60-second remainder", () => {
+    expect(Locale.duration(59_500)).toBe("1m 0s")
+    expect(Locale.duration(59_999)).toBe("1m 0s")
     expect(Locale.duration(60_000)).toBe("1m 0s")
     expect(Locale.duration(125_000)).toBe("2m 5s")
+    expect(Locale.duration(3_599_499)).toBe("59m 59s")
   })
 
-  test("renders hours below 1d", () => {
+  test("renders hours below 1d without a 60-minute remainder", () => {
+    expect(Locale.duration(3_599_500)).toBe("1h 0m")
     expect(Locale.duration(3_600_000)).toBe("1h 0m")
     expect(Locale.duration(3_780_000)).toBe("1h 3m")
-    expect(Locale.duration(86_399_999)).toBe("23h 59m")
+    expect(Locale.duration(86_369_999)).toBe("23h 59m")
   })
 
   test("renders days and hours at >= 1d (regression: days/hours were swapped)", () => {
+    expect(Locale.duration(86_370_000)).toBe("1d 0h")
+    expect(Locale.duration(86_399_999)).toBe("1d 0h")
     expect(Locale.duration(86_400_000)).toBe("1d 0h")
     expect(Locale.duration(90_000_000)).toBe("1d 1h") // 25h
     expect(Locale.duration(97_200_000)).toBe("1d 3h") // 27h

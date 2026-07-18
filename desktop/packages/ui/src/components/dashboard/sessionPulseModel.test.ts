@@ -100,6 +100,8 @@ describe("format helpers", () => {
   test("formatDurationMs", () => {
     expect(formatDurationMs(null)).toBeNull()
     expect(formatDurationMs(500)).toBe("500ms")
+    expect(formatDurationMs(999.49)).toBe("999ms")
+    expect(formatDurationMs(999.5)).toBe("1.0s")
     expect(formatDurationMs(1500)).toBe("1.5s")
     expect(formatDurationMs(65_000)).toBe("1m 5s")
     // Regression: rounding remainder must not produce "1m 60s".
@@ -113,5 +115,8 @@ describe("format helpers", () => {
     expect(formatTokenCount(420)).toBe("420")
     expect(formatTokenCount(2400)).toBe("2.4k")
     expect(formatTokenCount(24_000)).toBe("24k")
+    expect(formatTokenCount(999_499)).toBe("999k")
+    expect(formatTokenCount(999_500)).toBe("1.0m")
+    expect(formatTokenCount(1_500_000)).toBe("1.5m")
   })
 })

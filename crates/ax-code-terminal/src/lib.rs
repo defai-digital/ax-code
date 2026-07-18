@@ -308,9 +308,7 @@ pub fn parse_ansi(input: &str) -> Vec<TextRun> {
             // instead of blindly searching for 'm'. This prevents non-SGR
             // sequences (cursor movement, erase, etc.) from consuming text
             // that belongs to a later SGR sequence.
-            let final_pos = body
-                .bytes()
-                .position(|b| (0x40..=0x7E).contains(&b));
+            let final_pos = body.bytes().position(|b| (0x40..=0x7E).contains(&b));
             match final_pos {
                 Some(pos) => {
                     let final_byte = body.as_bytes()[pos] as char;
@@ -895,7 +893,11 @@ mod tests {
 
         // Unrecognized SS3 followed by valid text: only the trailing text should appear.
         let events = parse_input("\x1bOXhello");
-        assert_eq!(events.len(), 5, "expected 5 text events for 'hello', got: {events:?}");
+        assert_eq!(
+            events.len(),
+            5,
+            "expected 5 text events for 'hello', got: {events:?}"
+        );
         assert_eq!(events[0], InputEvent::Text { text: "h".into() });
         assert_eq!(events[1], InputEvent::Text { text: "e".into() });
 

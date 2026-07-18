@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { formatAttachedFileSize } from "./FileAttachment"
+import { formatAttachedFileSize } from "./fileAttachmentFormat"
 
 describe("formatAttachedFileSize", () => {
   test("formats bytes, KB, and MB", () => {
@@ -14,7 +14,11 @@ describe("formatAttachedFileSize", () => {
   test("promotes to the next unit when 1-decimal rounding would hit 1024.0", () => {
     // Just under 1 MiB used to render as "1024.0 KB".
     expect(formatAttachedFileSize(1024 * 1024 - 1)).toBe("1.0 MB")
-    // Just under the promote threshold still shows KB.
-    expect(formatAttachedFileSize(Math.floor(999.95 * 1024) - 1)).toBe("999.9 KB")
+    // Values below the binary-unit boundary must not promote prematurely.
+    expect(formatAttachedFileSize(1000 * 1024)).toBe("1000.0 KB")
+    expect(formatAttachedFileSize(Math.ceil(1023.95 * 1024) - 1)).toBe("1023.9 KB")
+
+    expect(formatAttachedFileSize(1024 * 1024 * 1024 - 1)).toBe("1.0 GB")
+    expect(formatAttachedFileSize(1000 * 1024 * 1024)).toBe("1000.0 MB")
   })
 })

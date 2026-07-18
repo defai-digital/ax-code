@@ -212,6 +212,16 @@ export namespace Filesystem {
     return !isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${sep}`) && !rel.startsWith("/")
   }
 
+  /** Replace a containing home-directory prefix with `~` for display. */
+  export function shortenHome(p: string, home: string) {
+    if (!home) return p
+    const resolvedHome = pathResolve(home)
+    const resolvedPath = pathResolve(p)
+    if (!contains(resolvedHome, resolvedPath)) return p
+    const rel = relative(resolvedHome, resolvedPath)
+    return rel ? join("~", rel) : "~"
+  }
+
   export async function findUp(target: string, start: string, stop?: string) {
     let current = start
     const result = []

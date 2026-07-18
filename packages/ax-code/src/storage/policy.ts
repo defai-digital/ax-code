@@ -19,12 +19,18 @@ export function describeDurableStoragePolicy() {
     `synchronous ${DurableStoragePolicy.synchronous}`,
     `busy timeout ${DurableStoragePolicy.busyTimeoutMs}ms`,
     `WAL autocheckpoint ${DurableStoragePolicy.walAutoCheckpointPages} pages`,
-    `journal limit ${formatPolicyBytes(DurableStoragePolicy.journalSizeLimitBytes)}`,
+    `journal limit ${formatStorageBytes(DurableStoragePolicy.journalSizeLimitBytes)}`,
   ].join(", ")
 }
 
-function formatPolicyBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KiB`
-  return `${Math.round(bytes / 1024 / 1024)} MiB`
+/** Format storage sizes without rounded values overflowing into the next unit. */
+export function formatStorageBytes(bytes: number) {
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"] as const
+  let value = Number.isFinite(bytes) ? Math.max(0, bytes) : 0
+  let unit = 0
+  while (unit < units.length - 1 && Math.round(value) >= 1024) {
+    value /= 1024
+    unit += 1
+  }
+  return `${Math.round(value)} ${units[unit]}`
 }

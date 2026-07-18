@@ -13,30 +13,13 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
 import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
+import { formatDuration } from "./memoryDebugFormat"
 
 interface DebugPanelProps {
   onClose?: () => void
 }
 
 type DebugTab = "memory" | "streaming"
-
-/** Format a millisecond duration for debug UI. Exported for regression tests. */
-export const formatDuration = (durationMs: number): string => {
-  if (durationMs < 1000) {
-    return `${Math.round(durationMs)}ms`
-  }
-
-  // Round to whole seconds first so remainder never becomes "Nm 60s"
-  // (e.g. 119500ms → floor(minutes) + round(remainder) previously yielded "1m 60s").
-  const totalSeconds = Math.round(durationMs / 1000)
-  if (totalSeconds < 60) {
-    return `${(durationMs / 1000).toFixed(1)}s`
-  }
-
-  const minutes = Math.floor(totalSeconds / 60)
-  const remainderSeconds = totalSeconds % 60
-  return `${minutes}m ${remainderSeconds}s`
-}
 
 const MetricCard: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => {
   return (

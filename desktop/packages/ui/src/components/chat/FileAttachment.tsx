@@ -12,18 +12,7 @@ import { useI18n } from "@/lib/i18n"
 import { useDeviceInfo } from "@/lib/device"
 
 import type { ToolPopupContent } from "./message/types"
-
-/** Human-readable file size. Exported for regression tests. */
-export function formatAttachedFileSize(bytes: number | undefined): string {
-  if (bytes == null || !Number.isFinite(bytes) || bytes <= 0) return ""
-  if (bytes < 1024) return `${bytes} B`
-  const kb = bytes / 1024
-  // Promote when 1-decimal KB would round to "1024.0 KB".
-  if (kb < 999.95) return `${kb.toFixed(1)} KB`
-  const mb = bytes / (1024 * 1024)
-  if (mb < 999.95) return `${mb.toFixed(1)} MB`
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-}
+import { formatAttachedFileSize } from "./fileAttachmentFormat"
 
 export const FileAttachmentButton = memo(() => {
   const { t } = useI18n()

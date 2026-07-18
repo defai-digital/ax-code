@@ -55,6 +55,7 @@ type FooterGoalChip = {
 function formatTokenCount(n: number): string {
   if (n < 1000) return String(n)
   if (n < 10_000) return `${(n / 1000).toFixed(1)}k`
+  if (n >= 999_500) return `${(n / 1_000_000).toFixed(1)}m`
   return `${Math.round(n / 1000)}k`
 }
 

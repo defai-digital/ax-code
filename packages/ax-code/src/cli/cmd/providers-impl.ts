@@ -12,6 +12,7 @@ import type { Hooks } from "@ax-code/plugin"
 import { Ssrf } from "../../util/ssrf"
 import { toErrorMessage } from "../../util/error-message"
 import { AX_ENGINE_MODEL_IDS, AX_ENGINE_QUANTIZATION_IDS } from "@/provider/ax-engine"
+import { Filesystem } from "@/util/filesystem"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -258,9 +259,7 @@ async function printAxEngineStatus(status: any) {
   const prompts = await import("@clack/prompts")
   prompts.intro("AX Engine")
   if (status.lifecycle?.phase) {
-    prompts.log.info(
-      `Lifecycle: ${status.lifecycle.phase} [${status.lifecycle.backend ?? "sidecar_http"}]`,
-    )
+    prompts.log.info(`Lifecycle: ${status.lifecycle.phase} [${status.lifecycle.backend ?? "sidecar_http"}]`)
     for (const blocker of status.lifecycle.blockers ?? []) prompts.log.warn(blocker)
   }
   const eligibilityStatus = status.eligibility.supported ? "ok" : "blocked"
@@ -449,7 +448,7 @@ export const ProvidersListCommand = cmd({
     UI.empty()
     const authPath = path.join(Global.Path.data, "auth.json")
     const homedir = os.homedir()
-    const displayPath = authPath.startsWith(homedir) ? authPath.replace(homedir, "~") : authPath
+    const displayPath = Filesystem.contains(homedir, authPath) ? Filesystem.shortenHome(authPath, homedir) : authPath
     prompts.intro(`Credentials ${UI.Style.TEXT_DIM}${displayPath}`)
     const results = Object.entries(await Auth.all())
     const database = await ModelsDev.get()

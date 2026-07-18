@@ -33,4 +33,21 @@ describe("tui directory view model", () => {
       }),
     ).toBe("/srv/worktree:release")
   })
+
+  test("does not shorten sibling paths or paths with an empty home", () => {
+    expect(
+      directoryLabel({
+        directory: "/Users/tester-other/project",
+        fallbackDirectory: "/tmp/fallback",
+        homeDirectory: "/Users/tester",
+      }),
+    ).toBe("/Users/tester-other/project")
+    expect(
+      directoryLabel({
+        directory: "/repo/project",
+        fallbackDirectory: "/tmp/fallback",
+        homeDirectory: "",
+      }),
+    ).toBe("/repo/project")
+  })
 })

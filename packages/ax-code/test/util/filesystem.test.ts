@@ -430,6 +430,21 @@ describe("filesystem", () => {
     })
   })
 
+  describe("shortenHome()", () => {
+    test("shortens the home path and its descendants", () => {
+      expect(Filesystem.shortenHome("/Users/demo", "/Users/demo")).toBe("~")
+      expect(Filesystem.shortenHome("/Users/demo/code/project", "/Users/demo")).toBe(path.join("~", "code", "project"))
+    })
+
+    test("does not shorten siblings that merely share the home prefix", () => {
+      expect(Filesystem.shortenHome("/Users/demo-other/project", "/Users/demo")).toBe("/Users/demo-other/project")
+    })
+
+    test("leaves paths unchanged when the home value is empty", () => {
+      expect(Filesystem.shortenHome("/repo/project", "")).toBe("/repo/project")
+    })
+  })
+
   describe("writeStream()", () => {
     test("writes from Web ReadableStream", async () => {
       await using tmp = await tmpdir()

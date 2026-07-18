@@ -1,11 +1,13 @@
 import { describe, expect, test } from "vitest"
-import { formatDuration } from "./MemoryDebugPanel"
+import { formatDuration } from "./memoryDebugFormat"
 
 describe("MemoryDebugPanel formatDuration", () => {
   test("formats sub-second durations in ms", () => {
     expect(formatDuration(0)).toBe("0ms")
     expect(formatDuration(500)).toBe("500ms")
     expect(formatDuration(999)).toBe("999ms")
+    expect(formatDuration(999.49)).toBe("999ms")
+    expect(formatDuration(999.5)).toBe("1.0s")
   })
 
   test("formats sub-minute durations with one decimal second", () => {

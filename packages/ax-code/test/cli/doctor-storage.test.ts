@@ -71,6 +71,21 @@ describe("getDoctorDatabaseCheck", () => {
     expect(check.detail).toContain("large WAL file: 64 MiB (policy limit 64 MiB)")
   })
 
+  test("promotes rounded storage sizes instead of emitting 1024-unit values", async () => {
+    const check = await getDoctorDatabaseCheck({
+      databasePath: "/tmp/ax-code/ax-code.db",
+      inspect: async (target) => ({
+        exists: target === "/tmp/ax-code/ax-code.db" || target.endsWith("-wal") || target.endsWith("-shm"),
+        size: target.endsWith("-wal") ? 1024 * 1024 - 1 : target.endsWith("-shm") ? 1024 * 1024 * 1024 - 1 : 8192,
+      }),
+    })
+
+    expect(check.detail).toContain("WAL 1 MiB")
+    expect(check.detail).toContain("SHM 1 GiB")
+    expect(check.detail).not.toContain("1024 KiB")
+    expect(check.detail).not.toContain("1024 MiB")
+  })
+
   test("fails when database file inspection returns an access error", async () => {
     const check = await getDoctorDatabaseCheck({
       databasePath: "/tmp/ax-code/ax-code.db",

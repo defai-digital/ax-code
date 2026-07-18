@@ -20,19 +20,7 @@ import {
 } from "@/lib/ax-code/axEngineModelsApi"
 import { downloadToastTracker } from "@/lib/ax-code/axEngineDownloadToasts"
 import { getCurrentDirectory } from "@/lib/ax-code/providerApi"
-
-const formatBytes = (value?: number) => {
-  if (typeof value !== "number" || Number.isNaN(value)) return "Unknown"
-  if (value <= 0) return "0 B"
-  const units = ["B", "KiB", "MiB", "GiB", "TiB"]
-  let next = value
-  let unit = 0
-  while (next >= 1024 && unit < units.length - 1) {
-    next /= 1024
-    unit += 1
-  }
-  return `${next >= 10 ? next.toFixed(0) : next.toFixed(1)} ${units[unit]}`
-}
+import { formatLocalModelBytes } from "./localModelFormat"
 
 const formatElapsed = (ms: number) => {
   if (!Number.isFinite(ms) || ms <= 0) return "0:00"
@@ -172,7 +160,7 @@ export const LocalModelsPage: React.FC = () => {
 
   const hostSummary = data
     ? data.eligibility.supported
-      ? `${data.eligibility.chip ?? data.eligibility.platform} · ${formatBytes(data.eligibility.memoryBytes)} memory`
+      ? `${data.eligibility.chip ?? data.eligibility.platform} · ${formatLocalModelBytes(data.eligibility.memoryBytes)} memory`
       : (data.eligibility.blockers[0] ?? "AX Engine is not supported on this host")
     : "Loading host readiness"
   const serverModel = data?.server.state
@@ -276,7 +264,9 @@ export const LocalModelsPage: React.FC = () => {
             />
             <StatusBox
               title="Download Cache"
-              value={data ? `${data.diskRoot.path} · ${formatBytes(data.diskRoot.freeBytes)} free` : "Checking"}
+              value={
+                data ? `${data.diskRoot.path} · ${formatLocalModelBytes(data.diskRoot.freeBytes)} free` : "Checking"
+              }
               blocked={Boolean(data?.diskRoot.blockers.length)}
             />
           </div>
@@ -376,7 +366,10 @@ const ModelRow: React.FC<{
         <div className="truncate typography-meta font-medium leading-5 text-foreground" title={model.name}>
           {model.name}
         </div>
-        <div className="truncate typography-micro leading-4 text-muted-foreground" title={`${model.id} · ${model.hfRepo}`}>
+        <div
+          className="truncate typography-micro leading-4 text-muted-foreground"
+          title={`${model.id} · ${model.hfRepo}`}
+        >
           {model.id}
         </div>
       </div>
@@ -395,7 +388,7 @@ const ModelRow: React.FC<{
               <div className="oc-indeterminate-progress-bar absolute inset-y-0 left-0 w-1/4 rounded-full bg-primary" />
             </div>
             <div className="typography-micro leading-4 text-muted-foreground">
-              {`≈${formatBytes(model.minDiskBytes)}`}
+              {`≈${formatLocalModelBytes(model.minDiskBytes)}`}
               {job.status === "running" && job.startedAt ? ` · ${formatElapsed(now - job.startedAt)} elapsed` : ""}
             </div>
           </div>
@@ -411,8 +404,8 @@ const ModelRow: React.FC<{
       <div className="min-w-0 space-y-0.5 typography-micro leading-4 text-muted-foreground" title={model.mtpSource}>
         <div>{model.quantization} · MTP</div>
         <div>
-          Disk {formatBytes(model.minDiskBytes)} · Memory{" "}
-          {model.minMemoryBytes > 0 ? formatBytes(model.minMemoryBytes) : "standard"}
+          Disk {formatLocalModelBytes(model.minDiskBytes)} · Memory{" "}
+          {model.minMemoryBytes > 0 ? formatLocalModelBytes(model.minMemoryBytes) : "standard"}
         </div>
       </div>
       <div className="flex items-start justify-start gap-2 md:justify-end">

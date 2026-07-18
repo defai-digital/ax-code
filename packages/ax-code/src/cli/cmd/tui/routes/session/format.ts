@@ -17,10 +17,7 @@ export const normalize = (input?: string, home?: string) => {
 
   if (!relative) return "."
   if (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) return relative
-  if (home && (absolute === home || absolute.startsWith(home + path.sep))) {
-    return absolute.replace(home, "~")
-  }
-  return absolute
+  return home ? Filesystem.shortenHome(absolute, home) : absolute
 }
 
 export const detail = (input: Record<string, any>, omit?: string[]) => {
@@ -47,8 +44,7 @@ export const workdir = (base: string | undefined, home: string | undefined, inpu
   if (absolute === base) return
   if (!home) return absolute
 
-  const match = absolute === home || absolute.startsWith(home + path.sep)
-  return match ? absolute.replace(home, "~") : absolute
+  return Filesystem.contains(home, absolute) ? Filesystem.shortenHome(absolute, home) : absolute
 }
 
 // Parse a unified-diff string and return hunk/added/removed counts.

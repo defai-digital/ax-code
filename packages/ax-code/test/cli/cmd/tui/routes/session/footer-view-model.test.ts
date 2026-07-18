@@ -23,6 +23,17 @@ describe("footerTokenChip", () => {
     expect(footerTokenChip({ tokens: { input: 12_500, output: 31_900 } })).toEqual({ input: "13k", output: "32k" })
   })
 
+  test("promotes rounded 1000k values to millions", () => {
+    expect(footerTokenChip({ tokens: { input: 999_499, output: 999_500 } })).toEqual({
+      input: "999k",
+      output: "1.0m",
+    })
+    expect(footerTokenChip({ tokens: { input: 1_500_000, output: 0 } })).toEqual({
+      input: "1.5m",
+      output: "0",
+    })
+  })
+
   test("renders even when only one side is non-zero", () => {
     expect(footerTokenChip({ tokens: { input: 0, output: 100 } })).toEqual({ input: "0", output: "100" })
   })

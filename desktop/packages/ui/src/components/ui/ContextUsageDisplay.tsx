@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
+import { formatContextTokens } from "./contextUsageFormat"
 
 interface ContextUsageDisplayProps {
   totalTokens: number
@@ -18,18 +19,6 @@ interface ContextUsageDisplayProps {
   percentIconClassName?: string
   onClick?: () => void
   pressed?: boolean
-}
-
-/** Compact token count for tooltips. Exported for regression tests. */
-export function formatContextTokens(tokens: number): string {
-  // Promote at 999_950 so 1-decimal K rounding never yields "1000.0K".
-  if (tokens >= 999_950) {
-    return `${(tokens / 1_000_000).toFixed(1)}M`
-  }
-  if (tokens >= 1_000) {
-    return `${(tokens / 1_000).toFixed(1)}K`
-  }
-  return tokens.toFixed(1).replace(/\.0$/, "")
 }
 
 export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({

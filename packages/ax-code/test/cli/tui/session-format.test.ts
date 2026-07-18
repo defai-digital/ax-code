@@ -50,5 +50,6 @@ describe("tui session format", () => {
     expect(workdir("/repo", "/Users/demo", ".")).toBeUndefined()
     expect(workdir("/repo", "/Users/demo", "apps/web")).toBe("/repo/apps/web")
     expect(workdir("/Users/demo/project", "/Users/demo", "docs")).toBe("~/project/docs")
+    expect(workdir("/Users/demo-other", "/Users/demo", "project")).toBe("/Users/demo-other/project")
   })
 })

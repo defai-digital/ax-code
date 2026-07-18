@@ -1,3 +1,5 @@
+import { Filesystem } from "@/util/filesystem"
+
 export function directoryLabel(input: {
   directory?: string
   fallbackDirectory: string
@@ -5,9 +7,6 @@ export function directoryLabel(input: {
   branch?: string
 }) {
   const directory = input.directory || input.fallbackDirectory
-  const display =
-    directory === input.homeDirectory || directory.startsWith(input.homeDirectory + "/")
-      ? directory.replace(input.homeDirectory, "~")
-      : directory
+  const display = Filesystem.shortenHome(directory, input.homeDirectory)
   return input.branch ? `${display}:${input.branch}` : display
 }

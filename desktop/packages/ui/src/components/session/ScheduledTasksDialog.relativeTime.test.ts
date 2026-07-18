@@ -1,10 +1,19 @@
 import { describe, expect, test } from "vitest"
-import { relativeTimeParts } from "./ScheduledTasksDialog"
+import { relativeTimeParts } from "./scheduledTaskRelativeTime"
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
 const DAY = 24 * HOUR
 const NOW = 1_700_000_000_000
+
+const durationBody = (value: number): string => {
+  const parts = relativeTimeParts(value, NOW)
+  expect(parts.kind).toBe("duration")
+  if (parts.kind !== "duration") {
+    throw new Error(`Expected duration parts, received ${parts.kind}`)
+  }
+  return parts.body
+}
 
 describe("relativeTimeParts", () => {
   test("returns empty for missing or non-finite values", () => {
@@ -15,6 +24,7 @@ describe("relativeTimeParts", () => {
 
   test("uses second-scale labels under one minute", () => {
     expect(relativeTimeParts(NOW + 30_000, NOW)).toEqual({ kind: "seconds", future: true })
+    expect(relativeTimeParts(NOW, NOW)).toEqual({ kind: "seconds", future: false })
     expect(relativeTimeParts(NOW - 30_000, NOW)).toEqual({ kind: "seconds", future: false })
   })
 
@@ -38,7 +48,7 @@ describe("relativeTimeParts", () => {
       future: true,
       body: "1h",
     })
-    expect(relativeTimeParts(NOW + 3_570_000, NOW).body).toBe("1h")
+    expect(durationBody(NOW + 3_570_000)).toBe("1h")
   })
 
   test("never emits 60m remainder after an hour", () => {
@@ -48,9 +58,9 @@ describe("relativeTimeParts", () => {
       future: true,
       body: "2h",
     })
-    expect(relativeTimeParts(NOW + 7_199_999, NOW).body).toBe("2h")
-    expect(relativeTimeParts(NOW + 2 * HOUR, NOW).body).toBe("2h")
-    expect(relativeTimeParts(NOW + HOUR + 30 * MINUTE, NOW).body).toBe("1h 30m")
+    expect(durationBody(NOW + 7_199_999)).toBe("2h")
+    expect(durationBody(NOW + 2 * HOUR)).toBe("2h")
+    expect(durationBody(NOW + HOUR + 30 * MINUTE)).toBe("1h 30m")
   })
 
   test("never emits 24h remainder after a day", () => {
@@ -60,9 +70,9 @@ describe("relativeTimeParts", () => {
       future: true,
       body: "2d",
     })
-    expect(relativeTimeParts(NOW + 172_799_999, NOW).body).toBe("2d")
-    expect(relativeTimeParts(NOW + 2 * DAY, NOW).body).toBe("2d")
-    expect(relativeTimeParts(NOW + DAY + 5 * HOUR, NOW).body).toBe("1d 5h")
+    expect(durationBody(NOW + 172_799_999)).toBe("2d")
+    expect(durationBody(NOW + 2 * DAY)).toBe("2d")
+    expect(durationBody(NOW + DAY + 5 * HOUR)).toBe("1d 5h")
   })
 
   test("marks past timestamps as not future", () => {

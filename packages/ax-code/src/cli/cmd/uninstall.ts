@@ -117,15 +117,17 @@ async function showRemovalSummary(targets: RemovalTargets, method: Installation.
     const status = dir.keep ? UI.Style.TEXT_DIM + "(keeping)" : ""
     const prefix = dir.keep ? "○" : "✓"
 
-    prompts.log.info(`  ${prefix} ${dir.label}: ${shortenPath(dir.path)} ${UI.Style.TEXT_DIM}(${sizeStr})${status}`)
+    prompts.log.info(
+      `  ${prefix} ${dir.label}: ${Filesystem.shortenHome(dir.path, os.homedir())} ${UI.Style.TEXT_DIM}(${sizeStr})${status}`,
+    )
   }
 
   if (targets.binary) {
-    prompts.log.info(`  ✓ Binary: ${shortenPath(targets.binary)}`)
+    prompts.log.info(`  ✓ Binary: ${Filesystem.shortenHome(targets.binary, os.homedir())}`)
   }
 
   if (targets.shellConfig) {
-    prompts.log.info(`  ✓ Shell PATH in ${shortenPath(targets.shellConfig)}`)
+    prompts.log.info(`  ✓ Shell PATH in ${Filesystem.shortenHome(targets.shellConfig, os.homedir())}`)
   }
 
   if (method !== "curl" && method !== "unknown") {
@@ -324,16 +326,8 @@ export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   const kb = bytes / 1024
   // Promote when 1-decimal rounding would yield "1024.0 KB" (or MB).
-  if (kb < 999.95) return `${kb.toFixed(1)} KB`
+  if (kb < 1023.95) return `${kb.toFixed(1)} KB`
   const mb = bytes / (1024 * 1024)
-  if (mb < 999.95) return `${mb.toFixed(1)} MB`
+  if (mb < 1023.95) return `${mb.toFixed(1)} MB`
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-}
-
-function shortenPath(p: string): string {
-  const home = os.homedir()
-  if (p.startsWith(home)) {
-    return p.replace(home, "~")
-  }
-  return p
 }
