@@ -40,8 +40,15 @@ describe("Locale.number", () => {
     expect(Locale.number(999)).toBe("999")
     expect(Locale.number(1000)).toBe("1.0K")
     expect(Locale.number(1500)).toBe("1.5K")
+    expect(Locale.number(999_949)).toBe("999.9K")
     expect(Locale.number(1_000_000)).toBe("1.0M")
     expect(Locale.number(2_500_000)).toBe("2.5M")
+  })
+
+  test("promotes to M when 1-decimal K rounding would yield 1000.0K", () => {
+    // Regression: 999_950…999_999 previously rendered as "1000.0K".
+    expect(Locale.number(999_950)).toBe("1.0M")
+    expect(Locale.number(999_999)).toBe("1.0M")
   })
 })
 

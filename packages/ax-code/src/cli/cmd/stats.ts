@@ -9,6 +9,7 @@ import { Project } from "../../project/project"
 import { Instance } from "../../project/instance"
 import { isNonEmptyRecord } from "../../util/record"
 import { toErrorMessage } from "../../util/error-message"
+import { Locale } from "../../util/locale"
 
 interface SessionStats {
   totalSessions: number
@@ -423,11 +424,5 @@ function formatCount(num: number): string {
 }
 
 function formatNumber(num: number): string {
-  num = finiteNumber(num)
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(1) + "M"
-  } else if (num >= 1000) {
-    return (num / 1000).toFixed(1) + "K"
-  }
-  return num.toString()
+  return Locale.number(finiteNumber(num))
 }

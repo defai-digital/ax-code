@@ -13,6 +13,18 @@ import { useDeviceInfo } from "@/lib/device"
 
 import type { ToolPopupContent } from "./message/types"
 
+/** Human-readable file size. Exported for regression tests. */
+export function formatAttachedFileSize(bytes: number | undefined): string {
+  if (bytes == null || !Number.isFinite(bytes) || bytes <= 0) return ""
+  if (bytes < 1024) return `${bytes} B`
+  const kb = bytes / 1024
+  // Promote when 1-decimal KB would round to "1024.0 KB".
+  if (kb < 999.95) return `${kb.toFixed(1)} KB`
+  const mb = bytes / (1024 * 1024)
+  if (mb < 999.95) return `${mb.toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+}
+
 export const FileAttachmentButton = memo(() => {
   const { t } = useI18n()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -193,13 +205,6 @@ const useFileDetails = (file: AttachedFile) => {
     return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : ""
   }
 
-  const formatFileSize = (bytes: number) => {
-    if (!Number.isFinite(bytes) || bytes <= 0) return ""
-    if (bytes < 1024) return bytes + " B"
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
-    return (bytes / (1024 * 1024)).toFixed(1) + " MB"
-  }
-
   const extractFilename = (path: string): string => {
     const normalized = path.replace(/\\/g, "/")
     const parts = normalized.split("/")
@@ -209,7 +214,7 @@ const useFileDetails = (file: AttachedFile) => {
 
   return {
     displayName: extractFilename(file.filename),
-    fileSize: formatFileSize(file.size),
+    fileSize: formatAttachedFileSize(file.size),
     extension: getFileExtension(file.filename),
   }
 }
@@ -359,13 +364,6 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
     return extractFilename(file.filename || file.url)
   }, [])
 
-  const formatFileSize = (bytes?: number) => {
-    if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return ""
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-
   const imageFiles = fileItems.filter((f) => f.mime?.startsWith("image/") && f.url)
   const otherFiles = fileItems.filter((f) => !f.mime?.startsWith("image/"))
 
@@ -430,7 +428,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
             {otherFiles.map((file, index) => {
               const fileName = resolveDisplayName(file)
               const ext = fileName.split(".").pop() || ""
-              const sizeText = formatFileSize(file.size)
+              const sizeText = formatAttachedFileSize(file.size)
               const githubLinkKind = getGitHubLinkKind(file)
               return (
                 <Tooltip key={`file-${file.url || file.filename || index}`}>
@@ -537,7 +535,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
       {fileItems.map((file, index) => {
         const fileName = resolveDisplayName(file)
         const isImage = file.mime?.startsWith("image/")
-        const sizeText = formatFileSize(file.size)
+        const sizeText = formatAttachedFileSize(file.size)
         const githubLinkKind = getGitHubLinkKind(file)
 
         if (isImage && file.url) {

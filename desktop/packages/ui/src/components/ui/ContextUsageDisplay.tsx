@@ -20,6 +20,18 @@ interface ContextUsageDisplayProps {
   pressed?: boolean
 }
 
+/** Compact token count for tooltips. Exported for regression tests. */
+export function formatContextTokens(tokens: number): string {
+  // Promote at 999_950 so 1-decimal K rounding never yields "1000.0K".
+  if (tokens >= 999_950) {
+    return `${(tokens / 1_000_000).toFixed(1)}M`
+  }
+  if (tokens >= 1_000) {
+    return `${(tokens / 1_000).toFixed(1)}K`
+  }
+  return tokens.toFixed(1).replace(/\.0$/, "")
+}
+
 export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   totalTokens,
   percentage,
@@ -38,16 +50,6 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   const { t } = useI18n()
   const colorPct = typeof colorPercentage === "number" ? colorPercentage : percentage
 
-  const formatTokens = (tokens: number) => {
-    if (tokens >= 1_000_000) {
-      return `${(tokens / 1_000_000).toFixed(1)}M`
-    }
-    if (tokens >= 1_000) {
-      return `${(tokens / 1_000).toFixed(1)}K`
-    }
-    return tokens.toFixed(1).replace(/\.0$/, "")
-  }
-
   const getPercentageColor = (pct: number) => {
     if (pct >= 90) return "text-status-error"
     if (pct >= 75) return "text-status-warning"
@@ -56,9 +58,9 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
 
   const safeOutputLimit = typeof outputLimit === "number" ? Math.max(outputLimit, 0) : 0
   const tooltipLines = [
-    t("contextUsage.tooltip.usedTokens", { tokens: formatTokens(totalTokens) }),
-    t("contextUsage.tooltip.contextLimit", { tokens: formatTokens(contextLimit) }),
-    t("contextUsage.tooltip.outputLimit", { tokens: formatTokens(safeOutputLimit) }),
+    t("contextUsage.tooltip.usedTokens", { tokens: formatContextTokens(totalTokens) }),
+    t("contextUsage.tooltip.contextLimit", { tokens: formatContextTokens(contextLimit) }),
+    t("contextUsage.tooltip.outputLimit", { tokens: formatContextTokens(safeOutputLimit) }),
   ]
 
   const isInteractive = typeof onClick === "function"

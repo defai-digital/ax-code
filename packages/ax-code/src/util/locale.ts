@@ -29,9 +29,11 @@ export namespace Locale {
   }
 
   export function number(num: number): string {
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(1) + "M"
-    } else if (num >= 1000) {
+    // Promote at 999_950: (n/1000).toFixed(1) would otherwise emit "1000.0K".
+    if (num >= 999_950) {
+      return (num / 1_000_000).toFixed(1) + "M"
+    }
+    if (num >= 1000) {
       return (num / 1000).toFixed(1) + "K"
     }
     return num.toString()

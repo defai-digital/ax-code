@@ -319,10 +319,14 @@ async function getDirectorySize(dir: string): Promise<number> {
   return total
 }
 
-function formatSize(bytes: number): string {
+/** Human-readable byte size for uninstall summaries. Exported for regression tests. */
+export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  const kb = bytes / 1024
+  // Promote when 1-decimal rounding would yield "1024.0 KB" (or MB).
+  if (kb < 999.95) return `${kb.toFixed(1)} KB`
+  const mb = bytes / (1024 * 1024)
+  if (mb < 999.95) return `${mb.toFixed(1)} MB`
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
 }
 
