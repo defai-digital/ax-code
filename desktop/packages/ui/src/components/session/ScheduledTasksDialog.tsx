@@ -101,41 +101,74 @@ const formatClockTime = (value?: number): string => {
   return new Date(value).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
 }
 
-const formatRelativeTime = (value: number | undefined, t: ReturnType<typeof useI18n>["t"]): string => {
+const MINUTE_MS = 60_000
+const HOUR_MS = 60 * MINUTE_MS
+const DAY_MS = 24 * HOUR_MS
+
+/**
+ * Pure relative-duration parts for a timestamp delta.
+ * Rounds smaller units first so remainders never become "1h 60m" / "1d 24h",
+ * and promotes at the round boundary (e.g. 59.5m → 1h, not "60 minutes").
+ * Exported for regression tests.
+ */
+export type RelativeTimeParts =
+  | { kind: "empty" }
+  | { kind: "seconds"; future: boolean }
+  | { kind: "minutes"; future: boolean; count: number }
+  | { kind: "duration"; future: boolean; body: string }
+
+export function relativeTimeParts(value: number | undefined, now: number = Date.now()): RelativeTimeParts {
   if (!value || !Number.isFinite(value)) {
-    return ""
+    return { kind: "empty" }
   }
-  const diff = value - Date.now()
+  const diff = value - now
   const abs = Math.abs(diff)
-  const minute = 60_000
-  const hour = 60 * minute
-  const day = 24 * hour
   const future = diff >= 0
-  if (abs < minute) {
-    return future
-      ? t("sessions.scheduledTasks.dialog.relativeTime.inLessThanOneMinute")
-      : t("sessions.scheduledTasks.dialog.relativeTime.justNow")
+
+  if (abs < MINUTE_MS) {
+    return { kind: "seconds", future }
   }
-  if (abs < hour) {
-    const m = Math.round(abs / minute)
-    return future
-      ? t("sessions.scheduledTasks.dialog.relativeTime.inMinutes", { count: m })
-      : t("sessions.scheduledTasks.dialog.relativeTime.minutesAgo", { count: m })
+
+  // Round to whole minutes first so hour/minute split cannot emit "Nm 60m".
+  const totalMinutes = Math.round(abs / MINUTE_MS)
+  if (totalMinutes < 60) {
+    return { kind: "minutes", future, count: Math.max(1, totalMinutes) }
   }
-  if (abs < day) {
-    const h = Math.floor(abs / hour)
-    const m = Math.round((abs % hour) / minute)
+
+  // Sub-day: split rounded minutes (also covers promote from 59.5m → 60m → 1h).
+  if (totalMinutes < 24 * 60) {
+    const h = Math.floor(totalMinutes / 60)
+    const m = totalMinutes % 60
     const body = m > 0 ? `${h}h ${m}m` : `${h}h`
-    return future
-      ? t("sessions.scheduledTasks.dialog.relativeTime.inDuration", { duration: body })
-      : t("sessions.scheduledTasks.dialog.relativeTime.durationAgo", { duration: body })
+    return { kind: "duration", future, body }
   }
-  const d = Math.floor(abs / day)
-  const h = Math.round((abs % day) / hour)
+
+  // Day+: round to whole hours first so day/hour split cannot emit "Nd 24h".
+  const totalHours = Math.round(abs / HOUR_MS)
+  const d = Math.max(1, Math.floor(totalHours / 24))
+  const h = totalHours % 24
   const body = h > 0 ? `${d}d ${h}h` : `${d}d`
-  return future
-    ? t("sessions.scheduledTasks.dialog.relativeTime.inDuration", { duration: body })
-    : t("sessions.scheduledTasks.dialog.relativeTime.durationAgo", { duration: body })
+  return { kind: "duration", future, body }
+}
+
+const formatRelativeTime = (value: number | undefined, t: ReturnType<typeof useI18n>["t"]): string => {
+  const parts = relativeTimeParts(value)
+  switch (parts.kind) {
+    case "empty":
+      return ""
+    case "seconds":
+      return parts.future
+        ? t("sessions.scheduledTasks.dialog.relativeTime.inLessThanOneMinute")
+        : t("sessions.scheduledTasks.dialog.relativeTime.justNow")
+    case "minutes":
+      return parts.future
+        ? t("sessions.scheduledTasks.dialog.relativeTime.inMinutes", { count: parts.count })
+        : t("sessions.scheduledTasks.dialog.relativeTime.minutesAgo", { count: parts.count })
+    case "duration":
+      return parts.future
+        ? t("sessions.scheduledTasks.dialog.relativeTime.inDuration", { duration: parts.body })
+        : t("sessions.scheduledTasks.dialog.relativeTime.durationAgo", { duration: parts.body })
+  }
 }
 
 type ScheduledTaskStatusTone = "success" | "error" | "warning" | "muted"
