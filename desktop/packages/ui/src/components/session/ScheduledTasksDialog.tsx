@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { MobileOverlayPanel } from "@/components/ui/MobileOverlayPanel"
 import { toast } from "@/components/ui"
+import { useConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { Icon } from "@/components/icon/Icon"
 import type { IconName } from "@/components/icon/icons"
 import { useUIStore } from "@/stores/useUIStore"
@@ -182,6 +183,7 @@ export function ScheduledTasksDialog() {
   const [editorOpen, setEditorOpen] = React.useState(false)
   const [editorTask, setEditorTask] = React.useState<ScheduledTask | null>(null)
   const [mutatingTaskID, setMutatingTaskID] = React.useState<string | null>(null)
+  const { requestConfirm, confirmDialog } = useConfirmDialog()
   const taskListRequestRef = React.useRef(0)
   const selectedProjectIDRef = React.useRef("")
   const openRef = React.useRef(false)
@@ -372,7 +374,10 @@ export function ScheduledTasksDialog() {
       if (!selectedProjectID) {
         return
       }
-      const confirmed = window.confirm(t("sessions.scheduledTasks.dialog.confirm.deleteTask", { taskName: task.name }))
+      const confirmed = await requestConfirm(
+        t("sessions.scheduledTasks.dialog.confirm.deleteTask", { taskName: task.name }),
+        { destructive: true },
+      )
       if (!confirmed) {
         return
       }
@@ -388,7 +393,7 @@ export function ScheduledTasksDialog() {
         setMutatingTaskID(null)
       }
     },
-    [selectedProjectID, reloadTasks, t],
+    [selectedProjectID, reloadTasks, t, requestConfirm],
   )
 
   const handleRunNow = React.useCallback(
@@ -665,6 +670,7 @@ export function ScheduledTasksDialog() {
         onOpenChange={setEditorOpen}
         onSave={handleSaveTask}
       />
+      {confirmDialog}
     </>
   )
 }

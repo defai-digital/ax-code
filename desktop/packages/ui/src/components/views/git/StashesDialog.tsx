@@ -262,6 +262,7 @@ export const StashesDialog: React.FC<StashesDialogProps> = ({
             ))
           )}
         </div>
+        {confirmDialog}
       </DialogContent>
     </Dialog>
   )
