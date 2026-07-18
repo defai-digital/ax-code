@@ -30,6 +30,7 @@ The root [README](../README.md) is the shortest path to install and launch AX Co
 | [MCP Integrations](mcp.md)                                | MCP trust, permissions, prompt/resource handling, and server-route security                              |
 | [Auto-Route](auto-route.md)                               | Keyword-based specialist routing (active by default) and optional fast-model complexity routing          |
 | [Execution Modes](modes.md)                               | Local, cloud, hybrid placement; multi-provider council consensus and arena best-of-N                     |
+| [Model Effort](effort.md)                                 | Reasoning / thinking levels (Auto, Fast, Balanced, Deep, Max) as model variants                          |
 | [Repo Wiki (OpenWiki)](wiki.md)                           | Semantic multi-page wiki via OpenWiki; complements structural `ax-code index`                            |
 | [Supported Providers and Models](supported-providers.md)  | Default Cloud API providers, CLI providers, and AX Engine local models                                   |
 | [Custom and Gateway Providers](custom-provider.md)        | Connect any OpenAI- or Anthropic-compatible endpoint or self-hosted gateway via custom provider config   |

@@ -22,6 +22,7 @@ import {
   type ModelPickerProvider,
 } from "@/components/model-picker/ModelPickerList"
 import { isDesktopShell } from "@/lib/desktop"
+import { effortLabel } from "@/lib/effort-label"
 import { getAgentColor } from "@/lib/agentColors"
 import { mergeModelMetadataWithLiveModel } from "@/lib/modelMetadata"
 import { getEditModeColors } from "@/lib/permissions/editModeColors"
@@ -1428,9 +1429,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
       const hasPendingVariant = pendingThinkingVariants.has(mapKey)
       const pendingVariant = pendingThinkingVariants.get(mapKey)
       const effectiveVariant = hasPendingVariant ? pendingVariant : isSelected ? currentVariant : undefined
-      const displayLabel = effectiveVariant
-        ? effectiveVariant.charAt(0).toUpperCase() + effectiveVariant.slice(1)
-        : "Default"
+      const displayLabel = effortLabel(effectiveVariant ?? undefined, "Default")
 
       return (
         <span
@@ -1706,9 +1705,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
       return null
     }
 
-    const displayVariant = currentVariant ?? t("chat.modelControls.default")
+    const defaultLabel = t("chat.modelControls.default")
+    const displayVariant = effortLabel(currentVariant, defaultLabel)
     const isDefault = !currentVariant
     const colorClass = isDefault ? "text-muted-foreground" : "text-[color:var(--status-info)]"
+    const tooltipDetail =
+      currentVariant && effortLabel(currentVariant) !== currentVariant
+        ? `${displayVariant} (${currentVariant})`
+        : displayVariant
 
     return (
       <Tooltip delayDuration={600}>
@@ -1744,7 +1748,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             <DropdownMenuItem className="typography-meta" onSelect={() => handleVariantSelect(undefined)}>
               <div className="flex items-center justify-between gap-2 w-full min-w-0">
                 <span className="typography-meta font-medium text-foreground truncate min-w-0">
-                  {t("chat.modelControls.default")}
+                  {defaultLabel}
                 </span>
                 {isDefault && <Icon name="check" className="size-4 text-primary flex-shrink-0" />}
               </div>
@@ -1752,7 +1756,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             {availableVariants.length > 0 && <DropdownMenuSeparator />}
             {availableVariants.map((variant) => {
               const selected = currentVariant === variant
-              const label = variant.charAt(0).toUpperCase() + variant.slice(1)
+              const label = effortLabel(variant)
               return (
                 <DropdownMenuItem
                   key={variant}
@@ -1769,7 +1773,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
           </DropdownMenuContent>
         </DropdownMenu>
         <TooltipContent side="top">
-          <p className="typography-meta">Thinking: {displayVariant}</p>
+          <p className="typography-meta">Thinking: {tooltipDetail}</p>
         </TooltipContent>
       </Tooltip>
     )

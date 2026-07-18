@@ -106,9 +106,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({
                 }
               >
                 <Icon name="brain-ai-3" className="h-3 w-3 flex-shrink-0" />
-                <span className="font-medium">
-                  {variant.length > 0 ? variant[0].toLowerCase() + variant.slice(1) : variant}
-                </span>
+                <span className="font-medium">{variant}</span>
               </div>
             )}
           </div>

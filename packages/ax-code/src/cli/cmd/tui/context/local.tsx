@@ -492,20 +492,23 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             setModelStore("variant", key, value)
             save()
           },
-          cycle() {
+          cycle(): string | undefined {
             const variants = this.list()
-            if (variants.length === 0) return
+            if (variants.length === 0) return this.current()
             const current = this.current()
             if (!current) {
-              this.set(variants[0])
-              return
+              const next = variants[0]
+              this.set(next)
+              return next
             }
             const index = variants.indexOf(current)
             if (index === -1 || index === variants.length - 1) {
               this.set(undefined)
-              return
+              return undefined
             }
-            this.set(variants[index + 1])
+            const next = variants[index + 1]
+            this.set(next)
+            return next
           },
         },
       }

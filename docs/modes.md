@@ -46,6 +46,8 @@ TUI and Desktop expose a **work mode** control (Qoder-style). Default is **Agent
 
 Keyword specialist routing and complexity tiering (see [Auto-Route](auto-route.md)) are **orthogonal** to hybrid placement and ensemble modes.
 
+Model **effort** / thinking level (Fast, Balanced, Deep, Max) is also orthogonal — it is a per-model reasoning budget, not a work mode. See [Model Effort](effort.md).
+
 ## Configuration
 
 In `ax-code.json`:

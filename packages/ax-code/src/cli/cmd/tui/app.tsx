@@ -21,6 +21,7 @@ import { win32DisableProcessedInput, win32FlushInputBuffer, win32InstallCtrlCGua
 import { Flag } from "@/flag/flag"
 import { WorkMode } from "@/mode/work-mode"
 import { providerModelKey } from "@/provider/model-key"
+import { effortChangeMessage } from "@/provider/effort-label"
 import { DialogProvider, useDialog } from "@tui/ui/dialog"
 import { SDKProvider, useSDK } from "@tui/context/sdk"
 import { SyncProvider, useSync } from "@tui/context/sync"
@@ -269,6 +270,26 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     } catch (error) {
       Log.Default.warn("failed to load model dialog", { error })
       toast.show({ message: "Failed to open model dialog", variant: "error" })
+    }
+  }
+
+  async function showEffortDialog() {
+    const marker = dialog.stack.at(-1)
+    try {
+      if (local.model.variant.list().length === 0) {
+        toast.show({
+          message: "This model has no effort levels to choose from",
+          variant: "info",
+          duration: 2000,
+        })
+        return
+      }
+      const { DialogEffort: EffortDialog } = await import("@tui/component/dialog-effort")
+      if (dialog.stack.at(-1) !== marker) return
+      dialog.replace(() => <EffortDialog />)
+    } catch (error) {
+      Log.Default.warn("failed to load effort dialog", { error })
+      toast.show({ message: "Failed to open effort dialog", variant: "error" })
     }
   }
 
@@ -941,13 +962,39 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
     },
     {
-      title: "Variant cycle",
+      title: "Set effort",
+      value: "effort.list",
+      category: "Agent",
+      slash: {
+        name: "effort",
+        aliases: ["variant", "thinking"],
+      },
+      onSelect: () => {
+        void showEffortDialog()
+      },
+    },
+    {
+      title: "Effort cycle",
       value: "variant.cycle",
       keybind: "variant_cycle",
       category: "Agent",
       hidden: true,
       onSelect: () => {
-        local.model.variant.cycle()
+        const variants = local.model.variant.list()
+        if (variants.length === 0) {
+          toast.show({
+            message: "This model has no effort levels to cycle",
+            variant: "info",
+            duration: 1500,
+          })
+          return
+        }
+        const next = local.model.variant.cycle()
+        toast.show({
+          message: effortChangeMessage(next),
+          variant: "info",
+          duration: 1500,
+        })
       },
     },
     {

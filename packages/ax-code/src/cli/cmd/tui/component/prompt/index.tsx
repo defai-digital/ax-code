@@ -24,6 +24,7 @@ import {
 import path from "path"
 import { Filesystem } from "@/util/filesystem"
 import { providerModelKey } from "@/provider/model-key"
+import { effortDisplay } from "@/provider/effort-label"
 import { useLocal } from "@tui/context/local"
 import { useTheme } from "@tui/context/theme"
 import { EmptyBorder } from "@tui/component/border"
@@ -1608,12 +1609,11 @@ export function Prompt(props: PromptProps) {
     return local.agent.color(local.agent.current().name)
   })
 
-  const showVariant = createMemo(() => {
-    const variants = local.model.variant.list()
-    if (variants.length === 0) return false
-    const current = local.model.variant.current()
-    return !!current
-  })
+  // Show effort when the model exposes variants. Auto (no override) is still
+  // visible so users know the knob exists and can cycle/open /effort.
+  const showVariant = createMemo(() => local.model.variant.list().length > 0)
+
+  const effortChipLabel = createMemo(() => effortDisplay(local.model.variant.current()))
 
   const placeholderText = createMemo(() => {
     if (props.sessionID) return undefined
@@ -1923,7 +1923,14 @@ export function Prompt(props: PromptProps) {
                   <Show when={showVariant()}>
                     <text fg={theme.textMuted}>·</text>
                     <text>
-                      <span style={{ fg: theme.warning, bold: true }}>{local.model.variant.current()}</span>
+                      <span
+                        style={{
+                          fg: local.model.variant.current() ? theme.warning : theme.textMuted,
+                          bold: !!local.model.variant.current(),
+                        }}
+                      >
+                        {effortChipLabel()}
+                      </span>
                     </text>
                   </Show>
                 </box>
@@ -2179,7 +2186,7 @@ export function Prompt(props: PromptProps) {
                         <KeyHint keys={footerClearHint().keys} label={footerClearHint().label} />
                       </Show>
                       <Show when={footerLayout().showVariants}>
-                        <KeyHint keys={keybind.print("variant_cycle")} label="variants" />
+                        <KeyHint keys={keybind.print("variant_cycle")} label="effort" />
                       </Show>
                     </Match>
                     <Match when={store.mode === "shell"}>

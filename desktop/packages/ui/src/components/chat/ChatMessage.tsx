@@ -13,6 +13,7 @@ import { useDeviceInfo } from "@/lib/device"
 import { useThemeSystem } from "@/contexts/useThemeSystem"
 import { generateSyntaxTheme } from "@/lib/theme/syntaxThemeGenerator"
 import { cn } from "@/lib/utils"
+import { effortLabel } from "@/lib/effort-label"
 
 import type { AnimationHandlers, ContentChangeReason } from "@/hooks/useChatAutoFollow"
 import MessageHeader from "./message/MessageHeader"
@@ -654,7 +655,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     ? (turnGroupingContext?.userMessageVariant ?? previousUserMetadata?.variant)
     : undefined
 
-  const headerVariant = !isUser && modelHasVariants ? (headerVariantRaw ?? "Default") : undefined
+  const headerVariant =
+    !isUser && modelHasVariants
+      ? headerVariantRaw
+        ? effortLabel(headerVariantRaw)
+        : "Default"
+      : undefined
 
   const assistantError = React.useMemo(() => {
     return getAssistantErrorPresentation({

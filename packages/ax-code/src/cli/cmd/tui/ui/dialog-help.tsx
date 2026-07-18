@@ -39,7 +39,7 @@ const GROUPS = [
       { label: "Cycle model", key: "model_cycle_recent" },
       { label: "Switch agent", key: "agent_list" },
       { label: "Cycle agent", key: "agent_cycle" },
-      { label: "Cycle variant", key: "variant_cycle" },
+      { label: "Cycle effort", key: "variant_cycle" },
     ],
   },
   {
