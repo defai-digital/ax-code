@@ -51,6 +51,7 @@ export type WorkflowDryRunChild = {
   prompt?: string
   modelRole: "planner" | "worker" | "verifier" | "synthesizer"
   model?: string
+  effort?: WorkflowSpec["modelPolicy"]["effort"]
   budgetSlice: {
     maxTotalTokens: number
     maxInputTokensPerChild: number
@@ -107,6 +108,7 @@ export function planWorkflowDryRun(input: WorkflowDryRunInput): WorkflowDryRunPl
         prompt: phase.prompt,
         modelRole: route.role,
         model: route.model,
+        effort: route.effort,
         budgetSlice: {
           maxTotalTokens: tokenSlice,
           maxInputTokensPerChild: effectiveChildInputTokenLimit(phase, parsed.spec.budget),
@@ -275,6 +277,7 @@ function modelRouteForPhase(phase: WorkflowPhase, spec: WorkflowSpec) {
   return {
     role,
     model,
+    effort: policy.effort,
   }
 }
 

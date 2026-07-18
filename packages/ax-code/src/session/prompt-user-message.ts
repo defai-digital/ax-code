@@ -29,6 +29,7 @@ export type CreateUserMessageInput = {
   format?: MessageV2.OutputFormat
   system?: string
   variant?: string
+  requestedDepth?: "fast" | "standard" | "deep" | "xdeep"
   parts: PromptPartInput[]
 }
 
@@ -101,6 +102,7 @@ export async function createUserMessage(input: CreateUserMessageInput) {
     format: input.format,
     isolation: input.isolation,
     variant,
+    requestedDepth: input.requestedDepth,
   }
   using _ = defer(() => InstructionPrompt.clear(info.id))
 

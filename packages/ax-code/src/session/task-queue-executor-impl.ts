@@ -63,6 +63,20 @@ export namespace TaskQueueExecutor {
     ensureSessionBlockObservers()
   }
 
+  /**
+   * Maps workflow model-policy effort values to ReasoningPolicy depth.
+   *
+   * - `"normal"` — no override; the full auto-policy decides per turn.
+   * - `"workflow"` — pins standard depth (predictable, no auto-upgrade).
+   * - `"deep"` — forces deep reasoning variant.
+   * - `"max-workflow"` — forces maximum depth (xdeep).
+   */
+  export function workflowEffortToRequestedDepth(
+    effort: string,
+  ): "fast" | "standard" | "deep" | "xdeep" | undefined {
+    return mapEffortToDepth(effort)
+  }
+
   export async function sendNow(id: TaskQueueID): Promise<TaskQueue.Info> {
     const item = await TaskQueue.sendNow(id)
     return start(item)
@@ -602,17 +616,20 @@ function messageToolCallArtifact(result: unknown, usage: WorkflowSubagentBudgetU
 
 function promptBodyFromQueueItem(item: TaskQueue.Info) {
   const direct = readPayloadBody(item)
-  if (direct) return QueuePromptBody().parse(applyWorkflowPromptPolicy(direct, item))
+  if (direct) return QueuePromptBody().parse(applyWorkflowPromptPolicy(applyWorkflowEffortPolicy(direct, item), item))
   const text = readPayloadText(item) ?? readPayloadPrompt(item)
   if (!text) return undefined
   return QueuePromptBody().parse(
     applyWorkflowPromptPolicy(
-      {
-        parts: [{ type: "text", text }],
-        agent: item.agent,
-        agentRouting: "preserve",
-        model: modelObject(item.model),
-      },
+      applyWorkflowEffortPolicy(
+        {
+          parts: [{ type: "text", text }],
+          agent: item.agent,
+          agentRouting: "preserve",
+          model: modelObject(item.model),
+        },
+        item,
+      ),
       item,
     ),
   )
@@ -981,6 +998,47 @@ function nonNegativeNumber(value: unknown) {
 
 function positiveInteger(value: unknown) {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined
+}
+
+function applyWorkflowEffortPolicy(body: Record<string, unknown>, item: TaskQueue.Info): Record<string, unknown> {
+  // Workflow effort (normal/deep/workflow/max-workflow) maps to
+  // ReasoningPolicy.Depth so child sessions honour the declared
+  // effort instead of always relying on the automatic policy.
+  const effort = readWorkflowEffort(item.payload)
+  if (!effort) return body
+  const depth = mapEffortToDepth(effort)
+  if (!depth) return body
+  return { ...body, requestedDepth: depth }
+}
+
+function readWorkflowEffort(payload: TaskQueue.Payload): string | undefined {
+  const effort = payload["effort"]
+  return typeof effort === "string" && effort.trim().length > 0 ? effort.trim() : undefined
+}
+
+/**
+ * Maps workflow model-policy effort values to ReasoningPolicy depth.
+ *
+ * - `"normal"` — no override; the full auto-policy decides per turn.
+ * - `"workflow"` — pins standard depth (predictable, no auto-upgrade).
+ * - `"deep"` — forces deep reasoning variant.
+ * - `"max-workflow"` — forces maximum depth (xdeep).
+ */
+function mapEffortToDepth(
+  effort: string,
+): "fast" | "standard" | "deep" | "xdeep" | undefined {
+  switch (effort) {
+    case "normal":
+      return undefined
+    case "workflow":
+      return "standard"
+    case "deep":
+      return "deep"
+    case "max-workflow":
+      return "xdeep"
+    default:
+      return undefined
+  }
 }
 
 function modelObject(value: unknown) {

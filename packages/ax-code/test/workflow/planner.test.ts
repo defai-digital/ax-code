@@ -486,4 +486,64 @@ describe("workflow dry-run planner", () => {
     expect(() => planWorkflowDryRun({ spec })).toThrow(/phase fanout maxRequestsPerMinute 20 exceeds safe default/)
     expect(planWorkflowDryRun({ spec, allowScaleBeyondDefaults: true }).phases[0]?.pacing.maxRequestsPerMinute).toBe(20)
   })
+
+  test("threads model policy effort through to child plans", () => {
+    const plan = planWorkflowDryRun({
+      spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage),
+      allowScaleBeyondDefaults: true,
+    })
+
+    // issueTriage fixture sets effort: "workflow" at the spec model policy level
+    for (const phase of plan.phases) {
+      for (const child of phase.children) {
+        expect(child.effort).toBe("workflow")
+      }
+    }
+  })
+
+  test("phase-level model policy effort overrides spec-level effort", () => {
+    const spec = parseWorkflowSpecV1({
+      schemaVersion: 1,
+      id: "effort-override",
+      name: "Effort Override",
+      description: "Phase-level effort should override spec-level.",
+      modelPolicy: {
+        defaultModel: "openai/gpt-5-mini",
+        effort: "deep",
+      },
+      phases: [
+        {
+          id: "shallow-phase",
+          name: "Shallow Phase",
+          kind: "sequential",
+          modelPolicy: {
+            effort: "normal",
+          },
+        },
+      ],
+    })
+
+    const plan = planWorkflowDryRun({ spec })
+    // Phase modelPolicy overrides spec modelPolicy effort
+    expect(plan.phases[0]?.children[0]?.effort).toBe("normal")
+  })
+
+  test("default effort is normal when not specified", () => {
+    const spec = parseWorkflowSpecV1({
+      schemaVersion: 1,
+      id: "no-effort",
+      name: "No Effort",
+      description: "Default effort should be normal.",
+      phases: [
+        {
+          id: "basic",
+          name: "Basic",
+          kind: "sequential",
+        },
+      ],
+    })
+
+    const plan = planWorkflowDryRun({ spec })
+    expect(plan.phases[0]?.children[0]?.effort).toBe("normal")
+  })
 })

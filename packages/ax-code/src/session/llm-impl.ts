@@ -136,6 +136,7 @@ export namespace LLM {
     const reasoningPolicyDecision = ReasoningPolicy.decide({
       small: input.small,
       autonomous: ScopedFlag.autonomous(),
+      requestedDepth: input.user.requestedDepth,
       userVariant: input.user.variant,
       model: input.model,
       agent: input.agent,

@@ -143,6 +143,7 @@ export namespace WorkflowScheduler {
                   writePolicy: childPlan.writePolicy,
                   networkPolicy: childPlan.networkPolicy,
                   escalationPolicy: childPlan.escalationPolicy,
+                  effort: childPlan.effort,
                 },
               })
               return { child, task }

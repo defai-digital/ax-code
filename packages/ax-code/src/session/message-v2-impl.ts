@@ -376,6 +376,7 @@ export namespace MessageV2 {
     tools: z.record(z.string(), z.boolean()).optional(),
     isolation: PromptIsolationPolicy.optional(),
     variant: z.string().optional(),
+    requestedDepth: z.enum(["fast", "standard", "deep", "xdeep"]).optional(),
   }).meta({
     ref: "UserMessage",
   })

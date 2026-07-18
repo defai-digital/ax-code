@@ -33,6 +33,7 @@ export const PromptInput = z.object({
   format: MessageV2.Format.optional(),
   system: z.string().optional(),
   variant: z.string().optional(),
+  requestedDepth: z.enum(["fast", "standard", "deep", "xdeep"]).optional(),
   parts: z.array(PromptPartInput),
 })
 export type PromptInput = z.infer<typeof PromptInput>
