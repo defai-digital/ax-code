@@ -1474,6 +1474,72 @@ describe("ProviderTransform.variants", () => {
     })
   })
 
+  describe("@ai-sdk/anthropic", () => {
+    test("first-party anthropic returns low/medium/high thinking budgets", () => {
+      const model = createMockModel({
+        id: "anthropic/claude-sonnet-4-6",
+        providerID: "anthropic",
+        api: {
+          id: "claude-sonnet-4-6",
+          url: "https://api.anthropic.com",
+          npm: "@ai-sdk/anthropic",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+      expect(Object.keys(result)).toEqual(["low", "medium", "high"])
+      expect(result.low).toEqual({ thinking: { type: "enabled", budgetTokens: 2_048 } })
+      expect(result.medium).toEqual({ thinking: { type: "enabled", budgetTokens: 8_192 } })
+      expect(result.high).toEqual({ thinking: { type: "enabled", budgetTokens: 16_384 } })
+    })
+
+    test("third-party anthropic-compatible providers stay empty", () => {
+      const model = createMockModel({
+        id: "minimax/MiniMax-M2.7",
+        providerID: "minimax",
+        api: {
+          id: "MiniMax-M2.7",
+          url: "https://api.minimax.io/anthropic",
+          npm: "@ai-sdk/anthropic",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+      expect(result).toEqual({})
+    })
+  })
+
+  describe("@ai-sdk/openai", () => {
+    test("first-party openai returns low/medium/high reasoningEffort", () => {
+      const model = createMockModel({
+        id: "openai/gpt-5.4",
+        providerID: "openai",
+        api: {
+          id: "gpt-5.4",
+          url: "https://api.openai.com",
+          npm: "@ai-sdk/openai",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+      expect(Object.keys(result)).toEqual(["low", "medium", "high"])
+      expect(result.low).toEqual({ reasoningEffort: "low" })
+      expect(result.medium).toEqual({ reasoningEffort: "medium" })
+      expect(result.high).toEqual({ reasoningEffort: "high" })
+    })
+
+    test("third-party openai-compatible gateways stay empty", () => {
+      const model = createMockModel({
+        id: "vivgrid/gpt-5.4",
+        providerID: "vivgrid",
+        api: {
+          id: "gpt-5.4",
+          url: "https://api.vivgrid.com",
+          npm: "@ai-sdk/openai",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+      expect(result).toEqual({})
+    })
+  })
+
   // @ai-sdk/groq provider was removed in v2.23.3
 })
 

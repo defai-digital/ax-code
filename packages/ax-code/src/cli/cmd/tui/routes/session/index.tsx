@@ -30,6 +30,7 @@ import { Prompt, type PromptRef } from "@tui/component/prompt"
 import type { AssistantMessage, Part, ToolPart, UserMessage, TextPart, ReasoningPart } from "@ax-code/sdk/v2"
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util/locale"
+import { effortLabel } from "@/provider/effort-label"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/opentui-solid"
 import { useSDK } from "@tui/context/sdk"
 import { useCommandDialog } from "@tui/component/dialog-command"
@@ -1446,6 +1447,7 @@ function UserMessage(props: {
   const queuedFg = createMemo(() => selectedForeground(theme, color()))
   const route = createMemo(() => userRoute(props.message, props.parts, sync.data.agent))
   const showPrimary = createMemo(() => props.message.agent !== "build" || route().delegated.length > 0)
+  const effort = createMemo(() => (props.message.variant ? effortLabel(props.message.variant) : undefined))
   const metadataDensity = createMemo(() =>
     userMessageMetadataDensity({
       width: ctx.width,
@@ -1454,7 +1456,7 @@ function UserMessage(props: {
   )
   const compactDelegated = createMemo(() => compactDelegatedLabel(route().delegated.length))
   const metadataVisible = createMemo(
-    () => queued() || ctx.showTimestamps() || showPrimary() || route().delegated.length > 0,
+    () => queued() || ctx.showTimestamps() || showPrimary() || route().delegated.length > 0 || !!effort(),
   )
 
   const compaction = createMemo(() => props.parts.find((x) => x.type === "compaction"))
@@ -1516,6 +1518,9 @@ function UserMessage(props: {
                         <span style={{ fg: color() }}>●</span> {route().primary.label}
                       </text>
                     </Show>
+                    <Show when={effort()}>
+                      <text fg={theme.textMuted}>effort {effort()}</text>
+                    </Show>
                     <Show when={compactDelegated()}>
                       <text fg={theme.textMuted}>↳ {compactDelegated()}</text>
                     </Show>
@@ -1537,6 +1542,9 @@ function UserMessage(props: {
                       <text fg={theme.textMuted}>
                         <span style={{ bg: color(), fg: queuedFg(), bold: true }}> {route().primary.label} </span>
                       </text>
+                    </Show>
+                    <Show when={effort()}>
+                      <text fg={theme.textMuted}>effort {effort()}</text>
                     </Show>
                     <For each={route().delegated}>
                       {(item) => {

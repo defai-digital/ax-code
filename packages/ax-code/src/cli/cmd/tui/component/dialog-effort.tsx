@@ -12,21 +12,25 @@ export function DialogEffort() {
 
   const options = createMemo(() => {
     const keys = local.model.variant.list()
-    return effortOptions(keys).map((option) => ({
-      value: option.value ?? "",
-      title: option.label,
-      description: option.detail ? `${option.description} · ${option.detail}` : option.description,
-      onSelect() {
-        const next = option.value
-        local.model.variant.set(next)
-        dialog.clear()
-        toast.show({
-          message: effortChangeMessage(next),
-          variant: "info",
-          duration: 1500,
-        })
-      },
-    }))
+    const active = local.model.variant.current() ?? ""
+    return effortOptions(keys).map((option) => {
+      const value = option.value ?? ""
+      return {
+        value,
+        title: value === active ? `${option.label} ✓` : option.label,
+        description: option.description,
+        onSelect() {
+          const next = option.value
+          local.model.variant.set(next)
+          dialog.clear()
+          toast.show({
+            message: effortChangeMessage(next),
+            variant: "info",
+            duration: 1500,
+          })
+        },
+      }
+    })
   })
 
   const current = createMemo(() => local.model.variant.current() ?? "")

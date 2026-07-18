@@ -92,7 +92,9 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     on(
       () => props.current,
       (current) => {
-        if (current) {
+        // Null check only: falsy-but-valid values such as "" (DialogEffort's
+        // Auto option) must still position the cursor on the current entry.
+        if (current !== undefined && current !== null) {
           const currentIndex = flat().findIndex((opt) => isDeepEqual(opt.value, current))
           if (currentIndex >= 0) {
             setStore("selected", currentIndex)

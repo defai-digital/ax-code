@@ -1923,6 +1923,7 @@ export function Prompt(props: PromptProps) {
                   <Show when={showVariant()}>
                     <text fg={theme.textMuted}>·</text>
                     <text>
+                      <span style={{ fg: theme.textMuted }}>effort: </span>
                       <span
                         style={{
                           fg: local.model.variant.current() ? theme.warning : theme.textMuted,

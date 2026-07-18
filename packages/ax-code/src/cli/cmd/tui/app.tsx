@@ -277,11 +277,12 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     const marker = dialog.stack.at(-1)
     try {
       if (local.model.variant.list().length === 0) {
-        toast.show({
-          message: "This model has no effort levels to choose from",
-          variant: "info",
-          duration: 2000,
-        })
+        const model = local.model.parsed().model
+        await DialogAlert.show(
+          dialog,
+          "Effort",
+          `${model ?? "This model"} does not expose effort levels.\n\nEffort is available on Anthropic Claude, OpenAI GPT, Google Gemini, and OpenAI-compatible providers. Other providers can define custom levels under provider.<id>.models.<model>.variants in ax-code.json.`,
+        )
         return
       }
       const { DialogEffort: EffortDialog } = await import("@tui/component/dialog-effort")
@@ -983,7 +984,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         const variants = local.model.variant.list()
         if (variants.length === 0) {
           toast.show({
-            message: "This model has no effort levels to cycle",
+            message: `${local.model.parsed().model ?? "This model"} has no effort levels to cycle`,
             variant: "info",
             duration: 1500,
           })

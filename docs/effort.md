@@ -32,13 +32,27 @@ The runtime still stores and sends OpenCode-compatible **variant** keys from the
 
 Available keys are **per model**. Models with no variants hide the effort control.
 
+## Provider support
+
+Effort levels are generated automatically for reasoning-capable models on these providers:
+
+| Provider | Mechanism | Levels |
+| -------- | --------- | ------ |
+| Anthropic (Claude) | `thinking` budget tokens | Fast, Balanced, Deep |
+| OpenAI (GPT-5.x) | `reasoningEffort` | Fast, Balanced, Deep |
+| Google (Gemini 3.x) | `thinkingConfig.thinkingLevel` | Fast, Deep (3.1 adds Balanced) |
+| OpenAI-compatible endpoints | `reasoningEffort` | Fast, Balanced, Deep |
+| Venice | `reasoningEffort` | Fast, Balanced, Deep |
+
+Providers whose effort API is unverified or incompatible (xAI, Groq, OpenRouter, DeepSeek/Alibaba/MiniMax/GLM/Mistral families, third-party gateways) expose **no** built-in levels; `/effort` explains this instead of failing silently. Define custom levels under `provider.<id>.models.<model>.variants` in `ax-code.json` when a provider documents a supported option shape.
+
 ## How to set effort
 
 ### TUI
 
 - **Cycle:** `ctrl+t` (keybind `variant_cycle`) — walks Auto → each available level → Auto
-- **Picker:** `/effort` (aliases `/variant`, `/thinking`)
-- **Status:** prompt footer shows the current effort chip when the model supports levels
+- **Picker:** `/effort` (aliases `/variant`, `/thinking`); on models without levels it opens an explanation dialog
+- **Status:** prompt footer shows the current effort chip when the model supports levels; sent messages show their effort label in the metadata row
 - **CLI:** `ax-code run --variant high`
 
 ### Desktop

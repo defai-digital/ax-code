@@ -257,6 +257,15 @@ export namespace ProviderTransform {
 
   const WIDELY_SUPPORTED_EFFORTS = ["low", "medium", "high"]
 
+  // Anthropic thinking budget per effort tier. budgetTokens must stay below
+  // the request's max_tokens, which maxOutputTokens caps at OUTPUT_TOKEN_MAX
+  // (32k), so 16k always leaves room for actual output.
+  const ANTHROPIC_THINKING_BUDGETS: Record<string, number> = {
+    low: 2_048,
+    medium: 8_192,
+    high: 16_384,
+  }
+
   // Match against the declared family when available, otherwise only the
   // final model-id segment. This avoids substring matches from provider or
   // account prefixes such as `accounts/qwen-tools/...` while still matching
@@ -376,6 +385,25 @@ export namespace ProviderTransform {
             },
           ]),
         )
+      }
+
+      case "@ai-sdk/anthropic": {
+        // First-party Anthropic only. Third-party Anthropic-compatible
+        // endpoints (minimax, freemodel, ...) are not verified to accept
+        // `thinking` blocks; they can opt in via config variants.
+        if (model.providerID !== "anthropic") return {}
+        return Object.fromEntries(
+          WIDELY_SUPPORTED_EFFORTS.map((effort) => [
+            effort,
+            { thinking: { type: "enabled", budgetTokens: ANTHROPIC_THINKING_BUDGETS[effort] } },
+          ]),
+        )
+      }
+
+      case "@ai-sdk/openai": {
+        // First-party OpenAI only, same rationale as Anthropic above.
+        if (model.providerID !== "openai") return {}
+        return Object.fromEntries(WIDELY_SUPPORTED_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]))
       }
     }
     return {}
