@@ -2,6 +2,7 @@
 import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
+import { prepareNodeArgs } from "./node-ffi-runner-args.mjs"
 
 const nodeName = process.platform === "win32" ? "node.exe" : "node"
 const ffiArgs = ["--experimental-ffi", "--disable-warning=ExperimentalWarning"]
@@ -92,7 +93,7 @@ try {
   process.exit(1)
 }
 
-const result = spawnSync(runtime.path, [...ffiArgs, ...process.argv.slice(2)], {
+const result = spawnSync(runtime.path, [...ffiArgs, ...prepareNodeArgs(process.argv.slice(2))], {
   stdio: "inherit",
   env: process.env,
 })
