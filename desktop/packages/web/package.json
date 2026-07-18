@@ -32,7 +32,7 @@
     "@clack/prompts": "^1.1.0",
     "@octokit/rest": "^22.0.1",
     "@simplewebauthn/server": "13.3.0",
-    "adm-zip": "^0.5.16",
+    "adm-zip": "^0.6.0",
     "compression": "^1.8.1",
     "cron-parser": "^4.9.0",
     "express": "^5.1.0",
