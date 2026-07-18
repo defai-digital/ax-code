@@ -24,6 +24,7 @@ const DEFAULT_THEME = "axcode"
 // those to the current id so existing installs keep their theme.
 const THEME_ALIASES: Record<string, string> = {
   automatosx: "axcode",
+  opencode: "classic",
 }
 
 function resolveThemeAlias(name: string) {
