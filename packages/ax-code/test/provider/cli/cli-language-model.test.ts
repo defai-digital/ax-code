@@ -1035,7 +1035,7 @@ describe("CliLanguageModel", () => {
     expect(cmd).toEqual(["agy", "-p", "write file"])
   })
 
-  test("passes Kimi Code CLI prompt through stream-json print mode", () => {
+  test("passes Kimi Code CLI prompt through stream-json prompt mode", () => {
     process.env.AX_CODE_AUTONOMOUS = "false"
     try {
       const definition = CLI_PROVIDER_DEFINITIONS["kimi-cli"]
@@ -1054,7 +1054,8 @@ describe("CliLanguageModel", () => {
         "write file",
       )
 
-      expect(cmd).toEqual(["kimi", "--print", "--output-format", "stream-json", "-p", "write file"])
+      expect(cmd).toEqual(["kimi", "--output-format", "stream-json", "-p", "write file"])
+      expect(cmd).not.toContain("--print")
     } finally {
       restoreAutonomous()
     }
@@ -1081,7 +1082,6 @@ describe("CliLanguageModel", () => {
 
       expect(cmd).toEqual([
         "kimi",
-        "--print",
         "--output-format",
         "stream-json",
         "--model",
@@ -1094,7 +1094,7 @@ describe("CliLanguageModel", () => {
     }
   })
 
-  test("does not pass --yolo to Kimi Code CLI print mode", () => {
+  test("does not pass --yolo to Kimi Code CLI prompt mode", () => {
     delete process.env.AX_CODE_AUTONOMOUS
     try {
       const definition = CLI_PROVIDER_DEFINITIONS["kimi-cli"]
@@ -1111,7 +1111,8 @@ describe("CliLanguageModel", () => {
         "write file",
       )
       expect(cmd).not.toContain("--yolo")
-      expect(cmd).toEqual(["kimi", "--print", "--output-format", "stream-json", "-p", "write file"])
+      expect(cmd).toEqual(["kimi", "--output-format", "stream-json", "-p", "write file"])
+      expect(cmd).not.toContain("--print")
     } finally {
       restoreAutonomous()
     }

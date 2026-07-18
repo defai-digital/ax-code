@@ -60,10 +60,11 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     promptFlag: "-p",
     workspaceArg: "--add-dir",
   },
-  // Kimi Code CLI (membership): non-interactive print mode with Message-format JSONL.
+  // Kimi Code CLI (membership): non-interactive -p/--prompt mode with stream-json JSONL.
+  // Note: Kimi does not accept Claude's --print flag; -p itself enables headless mode.
   "kimi-cli": {
     binary: "kimi",
-    args: ["--print", "--output-format", "stream-json"],
+    args: ["--output-format", "stream-json"],
     parser: kimiCliParser,
     promptMode: "arg",
     promptFlag: "-p",
