@@ -135,18 +135,37 @@ function resolveTomlDefaultModel(toml: string): string | undefined {
   return match?.[1] ?? match?.[2]
 }
 
-async function resolveKimiModel(): Promise<CliModelInfo> {
-  const shareDir = process.env.KIMI_SHARE_DIR?.trim()
-  const configPath = shareDir ? join(shareDir, "config.toml") : join(homeDir(), ".kimi", "config.toml")
+async function resolveKimiModelFromConfig(configPath: string, source: string): Promise<CliModelInfo | undefined> {
   const toml = await readText(configPath)
-  if (toml) {
-    const model = resolveTomlDefaultModel(toml)
-    if (model) {
-      return {
-        model,
-        source: shareDir ? "$KIMI_SHARE_DIR/config.toml" : "~/.kimi/config.toml",
-      }
-    }
+  if (!toml) return
+  const model = resolveTomlDefaultModel(toml)
+  if (!model) return
+  return { model, source }
+}
+
+async function resolveKimiModel(): Promise<CliModelInfo> {
+  const envModel = process.env.KIMI_MODEL?.trim()
+  if (envModel) return { model: envModel, source: "KIMI_MODEL" }
+
+  // Official Kimi Code CLI home override (current), then legacy share-dir override.
+  const codeHome = process.env.KIMI_CODE_HOME?.trim()
+  if (codeHome) {
+    const fromCodeHome = await resolveKimiModelFromConfig(join(codeHome, "config.toml"), "$KIMI_CODE_HOME/config.toml")
+    if (fromCodeHome) return fromCodeHome
+  }
+  const shareDir = process.env.KIMI_SHARE_DIR?.trim()
+  if (shareDir) {
+    const fromShareDir = await resolveKimiModelFromConfig(join(shareDir, "config.toml"), "$KIMI_SHARE_DIR/config.toml")
+    if (fromShareDir) return fromShareDir
+  }
+
+  // Prefer current Kimi Code CLI data dir (~/.kimi-code), fall back to legacy ~/.kimi.
+  for (const [relativePath, sourceLabel] of [
+    [".kimi-code/config.toml", "~/.kimi-code/config.toml"],
+    [".kimi/config.toml", "~/.kimi/config.toml"],
+  ] as const) {
+    const resolved = await resolveKimiModelFromConfig(join(homeDir(), relativePath), sourceLabel)
+    if (resolved) return resolved
   }
 
   return { model: DEFAULTS["kimi-cli"]!, source: "default" }
