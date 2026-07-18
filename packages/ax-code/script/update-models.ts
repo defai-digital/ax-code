@@ -326,8 +326,8 @@ for (const id of [
 // models.dev tags inconsistently across providers.
 //
 //   - Kimi (Moonshot): only the current Kimi coding SKU via Alibaba/Kimi plans.
-//   - Grok: grok-4.5 (flagship) and grok-4.3, plus Grok Build coding aliases.
-//     All other Grok variants (4.2/4.1, 4.0, beta aliases, 2/3) drop.
+//   - Grok: only grok-4.5 (plus official aliases grok-4.5-latest / grok-build-latest).
+//     All other Grok variants (4.3, Build 0.1, code-fast, 4.2/4.1, betas) drop.
 //   - GLM (Z.AI): only non-vision selected v5+ SKUs (glm-5.1, glm-5.1[1m],
 //     glm-5-turbo, glm-5v, and every glm-4.x / glm-3.x drop).
 //   - Gemini: only v3+ (Gemini 1.x/2.x drops from ax-code's model picker).
@@ -353,21 +353,15 @@ function probesOf(m: RawModel): string[] {
 function isGrokProbe(probe: string): boolean {
   return /(^|[^a-z0-9])grok([^a-z0-9]|$)/.test(probe) || probe.includes("grok-")
 }
-// Grok allow-list. Only these exact final-segment ids survive the unsupported
-// filter — every other grok variant (older versions, beta aliases, vision-only,
-// etc.) is dropped. Match on the final segment so account-prefixed reseller ids
-// (e.g. "x-ai/grok-4.5") still resolve correctly.
+// Grok allow-list. Only Grok 4.5 + official aliases survive; every other grok
+// variant is dropped. Match on the final segment so account-prefixed reseller
+// ids (e.g. "x-ai/grok-4.5") still resolve. `grok-build-cli` is the local CLI
+// bridge model id, not a hosted xAI SKU.
 const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>([
   "grok-4.5",
   "grok-4-5",
   "grok-4.5-latest",
   "grok-build-latest",
-  "grok-4.3",
-  "grok-4-3",
-  "grok-code-fast-1",
-  "grok-code-fast",
-  "grok-code-fast-1-0825",
-  "grok-build-0.1",
   "grok-build-cli",
 ])
 function isAllowedGrokProbe(probe: string): boolean {
@@ -654,18 +648,6 @@ fetched["openrouter"] = {
       releaseDate: "2026-06-03",
       inputModalities: ["text", "image"],
     }),
-    "x-ai/grok-build-0.1": openRouterModel({
-      id: "x-ai/grok-build-0.1",
-      name: "OpenRouter: Grok Build 0.1",
-      family: "grok",
-      attachment: true,
-      reasoning: true,
-      temperature: true,
-      context: 256_000,
-      output: 32_768,
-      releaseDate: "2026-05-20",
-      inputModalities: ["text", "image"],
-    }),
     "x-ai/grok-4.5": openRouterModel({
       id: "x-ai/grok-4.5",
       name: "OpenRouter: Grok 4.5",
@@ -676,18 +658,6 @@ fetched["openrouter"] = {
       context: 500_000,
       output: 500_000,
       releaseDate: "2026-07-08",
-      inputModalities: ["text", "image", "pdf"],
-    }),
-    "x-ai/grok-4.3": openRouterModel({
-      id: "x-ai/grok-4.3",
-      name: "OpenRouter: Grok 4.3",
-      family: "grok",
-      attachment: true,
-      reasoning: true,
-      temperature: true,
-      context: 1_000_000,
-      output: 32_768,
-      releaseDate: "2026-04-30",
       inputModalities: ["text", "image", "pdf"],
     }),
     "z-ai/glm-5.2": openRouterModel({
@@ -1020,41 +990,15 @@ if (Object.keys(kimiCloudPlanKept).length > 0) {
   }
 }
 
-// xAI ships Grok Build as the canonical coding model name, with the older
-// grok-code-fast ids as aliases. models.dev can lag or publish only reseller
-// copies, so re-inject both the legacy alias and the canonical model into the
-// xai provider block on every regeneration.
-const XAI_LEGACY_CODING_MODEL_ID = "grok-code-fast-1"
-const XAI_GROK_BUILD_MODEL_ID = "grok-build-0.1"
-const xaiInjectedModels = [XAI_LEGACY_CODING_MODEL_ID]
-const xaiInjectFallbackProviders = ["helicone", "github-copilot"]
+// xAI: only Grok 4.5 is curated. models.dev usually publishes it; if not,
+// re-inject from the previous snapshot so regeneration never blanks the block.
+const XAI_FLAGSHIP_MODEL_ID = "grok-4.5"
 if (fetched["xai"]?.models) {
   const xaiModels = fetched["xai"].models as Record<string, RawModel>
-  for (const mid of xaiInjectedModels) {
-    if (xaiModels[mid]) continue
-    const fromExisting = existing["xai"]?.models?.[mid]
+  if (!xaiModels[XAI_FLAGSHIP_MODEL_ID]) {
+    const fromExisting = existing["xai"]?.models?.[XAI_FLAGSHIP_MODEL_ID]
     if (fromExisting) {
-      xaiModels[mid] = cloneJsonValue(fromExisting)
-      continue
-    }
-    for (const fbID of xaiInjectFallbackProviders) {
-      const fb = fetched[fbID]?.models?.[mid] ?? existing[fbID]?.models?.[mid]
-      if (!fb) continue
-      xaiModels[mid] = cloneJsonValue(fb)
-      break
-    }
-  }
-  if (!xaiModels[XAI_GROK_BUILD_MODEL_ID]) {
-    const source =
-      existing["xai"]?.models?.[XAI_GROK_BUILD_MODEL_ID] ??
-      xaiModels[XAI_LEGACY_CODING_MODEL_ID] ??
-      existing["xai"]?.models?.[XAI_LEGACY_CODING_MODEL_ID]
-    if (source) {
-      xaiModels[XAI_GROK_BUILD_MODEL_ID] = {
-        ...cloneJsonValue(source),
-        id: XAI_GROK_BUILD_MODEL_ID,
-        name: "xAI Grok Build 0.1",
-      }
+      xaiModels[XAI_FLAGSHIP_MODEL_ID] = cloneJsonValue(fromExisting)
     }
   }
 }
@@ -1225,8 +1169,8 @@ function supportsTextOutput(model: { modalities?: { output?: unknown } } | undef
   const output = model?.modalities?.output
   return !Array.isArray(output) || output.includes("text")
 }
-// xAI: Grok 4.x chat models have Live Search wired via providerOptions.searchParameters.
-const xaiSearchModelIds = ["grok-4.5", "grok-4-5", "grok-4.5-latest", "grok-4.3", "grok-4-3"]
+// xAI: Grok 4.5 has Live Search wired via providerOptions.searchParameters.
+const xaiSearchModelIds = ["grok-4.5", "grok-4-5", "grok-4.5-latest", "grok-build-latest"]
 const xaiModels = fetched["xai"]?.models as Record<string, { name?: string }> | undefined
 if (xaiModels) {
   for (const model of Object.values(xaiModels)) unmarkSearch(model)

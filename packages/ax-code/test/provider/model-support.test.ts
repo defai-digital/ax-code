@@ -24,17 +24,17 @@ describe("supportsGrok41OrAllowedCodingModel", () => {
     ["grok-4-5", true],
     ["grok-4.5-latest", true],
     ["grok-build-latest", true],
-    ["grok-4.3", true],
-    ["grok-4-3", true],
-    ["grok-code-fast-1", true],
-    ["grok-code-fast", true],
-    ["grok-code-fast-1-0825", true],
-    ["grok-build-0.1", true],
   ])("accepts %s", (id, expected) => {
     expect(supportsGrok41OrAllowedCodingModel(probes(id))).toBe(expected)
   })
 
   test.each([
+    ["grok-4.3", false],
+    ["grok-4-3", false],
+    ["grok-code-fast-1", false],
+    ["grok-code-fast", false],
+    ["grok-code-fast-1-0825", false],
+    ["grok-build-0.1", false],
     ["grok-4.2", false],
     ["grok-4.1", false],
     ["grok-4-1", false],
@@ -82,8 +82,8 @@ describe("isModelSupportedForProvider", () => {
     expect(isModelSupportedForProvider("openai", "gpt-4.1")).toBe(true)
     expect(isModelSupportedForProvider("openai", "gpt-3.5")).toBe(false)
     expect(isModelSupportedForProvider("xai", "grok-4.5")).toBe(true)
-    expect(isModelSupportedForProvider("xai", "grok-4.3")).toBe(true)
-    expect(isModelSupportedForProvider("xai", "grok-build-0.1")).toBe(true)
+    expect(isModelSupportedForProvider("xai", "grok-4.3")).toBe(false)
+    expect(isModelSupportedForProvider("xai", "grok-build-0.1")).toBe(false)
     expect(isModelSupportedForProvider("xai", "grok-4.2")).toBe(false)
     expect(isModelSupportedForProvider("zai", "glm-5.2")).toBe(true)
     expect(isModelSupportedForProvider("zai", "glm-5")).toBe(true)
@@ -103,19 +103,17 @@ describe("isModelSupportedForProvider", () => {
   })
 })
 
-describe("xai Live Search gates for Grok 4.x", () => {
-  test("grok-4.5 and grok-4.3 support server-side Live Search", () => {
+describe("xai Live Search gates for Grok 4.5", () => {
+  test("grok-4.5 supports server-side Live Search", () => {
     expect(supportsLiveSearch("grok-4.5")).toBe(true)
     expect(supportsLiveSearch("grok-4.5-latest")).toBe(true)
-    expect(supportsLiveSearch("grok-4.3")).toBe(true)
-    expect(supportsLiveSearch("grok-4-3")).toBe(true)
   })
 
   test("multi-agent grok-4 variants still opt out of Live Search", () => {
     expect(supportsLiveSearch("grok-4.20-multi-agent-0309")).toBe(false)
   })
 
-  test("grok-build does not auto-enable Live Search", () => {
+  test("retired coding SKUs do not auto-enable Live Search", () => {
     expect(supportsLiveSearch("grok-build-0.1")).toBe(false)
   })
 })

@@ -1077,12 +1077,12 @@ describe("ProviderTransform.variants", () => {
   })
 
   describe("@ai-sdk/xai", () => {
-    test("grok-4.3 does not auto-generate reasoningEffort variants", () => {
+    test("grok-4.5 does not auto-generate reasoningEffort variants", () => {
       const model = createMockModel({
-        id: "xai/grok-4.3",
+        id: "xai/grok-4.5",
         providerID: "xai",
         api: {
-          id: "grok-4.3",
+          id: "grok-4.5",
           url: "https://api.x.ai",
           npm: "@ai-sdk/xai",
         },
@@ -1093,10 +1093,10 @@ describe("ProviderTransform.variants", () => {
 
     test("sanitizes unsupported reasoningEffort request options", () => {
       const model = createMockModel({
-        id: "xai/grok-4.3",
+        id: "xai/grok-4.5",
         providerID: "xai",
         api: {
-          id: "grok-4.3",
+          id: "grok-4.5",
           url: "https://api.x.ai",
           npm: "@ai-sdk/xai",
         },
@@ -1109,11 +1109,11 @@ describe("ProviderTransform.variants", () => {
       expect(result).toEqual({ temperature: 0.2 })
     })
 
-    test("options() injects default Live Search searchParameters for grok-4.3", () => {
+    test("options() injects default Live Search searchParameters for grok-4.5", () => {
       const model = createMockModel({
-        id: "xai/grok-4.3",
+        id: "xai/grok-4.5",
         providerID: "xai",
-        api: { id: "grok-4.3", url: "https://api.x.ai", npm: "@ai-sdk/xai" },
+        api: { id: "grok-4.5", url: "https://api.x.ai", npm: "@ai-sdk/xai" },
       })
       const result = ProviderTransform.options({ model, sessionID: "s1", providerOptions: {} })
       expect(result.searchParameters).toBeDefined()
@@ -1154,9 +1154,9 @@ describe("ProviderTransform.variants", () => {
 
     test("options() honours explicit { mode: 'off' } override and omits the key", () => {
       const model = createMockModel({
-        id: "xai/grok-4.3",
+        id: "xai/grok-4.5",
         providerID: "xai",
-        api: { id: "grok-4.3", url: "https://api.x.ai", npm: "@ai-sdk/xai" },
+        api: { id: "grok-4.5", url: "https://api.x.ai", npm: "@ai-sdk/xai" },
       })
       const result = ProviderTransform.options({
         model,
@@ -1168,9 +1168,9 @@ describe("ProviderTransform.variants", () => {
 
     test("options() shallow-merges user searchParameters overrides over defaults", () => {
       const model = createMockModel({
-        id: "xai/grok-4.3",
+        id: "xai/grok-4.5",
         providerID: "xai",
-        api: { id: "grok-4.3", url: "https://api.x.ai", npm: "@ai-sdk/xai" },
+        api: { id: "grok-4.5", url: "https://api.x.ai", npm: "@ai-sdk/xai" },
       })
       const result = ProviderTransform.options({
         model,

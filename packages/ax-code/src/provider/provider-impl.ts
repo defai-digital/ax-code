@@ -84,8 +84,19 @@ export namespace Provider {
   }
 
   function canonicalXaiApiModelID(modelID: string) {
-    if (modelID === "grok-code-fast" || modelID === "grok-code-fast-1" || modelID === "grok-code-fast-1-0825") {
-      return "grok-build-0.1"
+    // Official aliases and retired coding SKUs all route to Grok 4.5 on the wire.
+    if (
+      modelID === "grok-4-5" ||
+      modelID === "grok-4.5-latest" ||
+      modelID === "grok-build-latest" ||
+      modelID === "grok-4.3" ||
+      modelID === "grok-4-3" ||
+      modelID === "grok-code-fast" ||
+      modelID === "grok-code-fast-1" ||
+      modelID === "grok-code-fast-1-0825" ||
+      modelID === "grok-build-0.1"
+    ) {
+      return "grok-4.5"
     }
     return modelID
   }
@@ -189,10 +200,8 @@ export namespace Provider {
     }
 
     addLegacyAlias("grok-4-1-fast")
-    // grok-code-fast-1 is now a first-class entry in the xai snapshot block
-    // (update-models.ts re-injects it from a reseller fallback if upstream
-    // drops it). An alias here would silently route to grok-4.20-0309-reasoning
-    // on the wire, which is a different model — deceptive UX.
+    // Only Grok 4.5 is curated for xAI. Do not surface retired coding SKUs
+    // (grok-code-fast-*, grok-build-0.1, grok-4.3) as selectable aliases.
   }
   type Lang = Exclude<LanguageModel, string>
   type SDK = {
@@ -1136,7 +1145,7 @@ export namespace Provider {
         priority = ["glm-5.2", "glm-5"]
       }
       if (providerID === ProviderID.xai) {
-        priority = ["grok-4.5", "grok-4.3", "grok-code-fast-1", "grok-build-0.1"]
+        priority = ["grok-4.5"]
       }
       if (providerID.startsWith("alibaba")) {
         priority = ["qwen3.6-flash", "deepseek-v4-flash", "deepseek-v4-pro", "qwen3.6-plus"]

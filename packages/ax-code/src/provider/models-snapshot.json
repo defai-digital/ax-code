@@ -652,74 +652,6 @@
     "name": "Grok Cloud API",
     "doc": "https://docs.x.ai/docs/models",
     "models": {
-      "grok-build-0.1": {
-        "id": "grok-build-0.1",
-        "name": "Grok Build 0.1",
-        "description": "Fast Grok coding model tuned for agentic engineering and iterative edits",
-        "family": "grok-build",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-16",
-        "last_updated": "2026-04-16",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 256000
-        }
-      },
-      "grok-4.3": {
-        "id": "grok-4.3",
-        "name": "Grok 4.3 🌐",
-        "description": "xAI's Grok for chat, coding, agentic tools, and lower hallucination risk",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-17",
-        "last_updated": "2026-04-17",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 30000
-        }
-      },
       "grok-4.5": {
         "id": "grok-4.5",
         "name": "Grok 4.5 🌐",
@@ -756,31 +688,6 @@
         "limit": {
           "context": 500000,
           "output": 500000
-        }
-      },
-      "grok-code-fast-1": {
-        "id": "grok-code-fast-1",
-        "name": "Grok Code Fast 1 (alias)",
-        "family": "grok",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2025-08",
-        "release_date": "2025-08-25",
-        "last_updated": "2025-08-25",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 10000
         }
       }
     }
@@ -947,45 +854,6 @@
         "open_weights": false,
         "limit": {
           "context": 400000,
-          "output": 128000
-        }
-      },
-      "grok-4-3": {
-        "id": "grok-4-3",
-        "name": "Grok 4.3",
-        "description": "Grok model for agentic tool use, reasoning, coding, and live assistance",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "knowledge": "2024-11",
-        "release_date": "2026-04-30",
-        "last_updated": "2026-04-30",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
           "output": 128000
         }
       },
@@ -1388,33 +1256,6 @@
         "open_weights": false,
         "limit": {
           "context": 200000,
-          "output": 128000
-        }
-      },
-      "grok-code-fast-1": {
-        "id": "grok-code-fast-1",
-        "name": "Grok 4.1 Fast (Reasoning)",
-        "description": "Fast Grok model for responsive chat, reasoning, and tool-assisted work",
-        "family": "grok",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2023-10",
-        "release_date": "2025-08-28",
-        "last_updated": "2025-08-28",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
           "output": 128000
         }
       }
@@ -4052,35 +3893,6 @@
     "name": "AnyAPI",
     "doc": "https://docs.anyapi.ai",
     "models": {
-      "xai/grok-4.3": {
-        "id": "xai/grok-4.3",
-        "name": "Grok 4.3",
-        "description": "xAI's default Grok for chat, coding, agentic tools, and lower hallucination risk",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-17",
-        "last_updated": "2026-04-17",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 30000
-        }
-      },
       "cohere/command-r-plus-08-2024": {
         "id": "cohere/command-r-plus-08-2024",
         "name": "Command R+",
@@ -5795,34 +5607,6 @@
           "output": 16384
         }
       },
-      "grok-4.3": {
-        "id": "grok-4.3",
-        "name": "Grok 4.3",
-        "description": "xAI's default Grok for chat, coding, agentic tools, and lower hallucination risk",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-17",
-        "last_updated": "2026-04-17",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 32768
-        }
-      },
       "gemini-3-pro-image-preview": {
         "id": "gemini-3-pro-image-preview",
         "name": "Nano Banana Pro",
@@ -6613,32 +6397,6 @@
         "limit": {
           "context": 1000000,
           "output": 128000
-        }
-      },
-      "grok-code-fast-1": {
-        "id": "grok-code-fast-1",
-        "name": "Grok Code Fast 1",
-        "description": "Fast Grok model for responsive chat, reasoning, and tool-assisted work",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-09-01",
-        "last_updated": "2025-09-01",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 16384
         }
       },
       "gpt-5.6-sol": {
@@ -18079,78 +17837,6 @@
           "output": 32768
         }
       },
-      "x-ai/grok-build-0.1": {
-        "id": "x-ai/grok-build-0.1",
-        "name": "Grok Build 0.1",
-        "description": "Grok coding model for agentic engineering, edits, and codebase workflows",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "release_date": "2026-05-20",
-        "last_updated": "2026-05-20",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "input": 256000,
-          "output": 256000
-        }
-      },
-      "x-ai/grok-4.3": {
-        "id": "x-ai/grok-4.3",
-        "name": "Grok 4.3",
-        "description": "Grok model for agentic tool use, reasoning, coding, and live assistance",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "release_date": "2026-04-30",
-        "last_updated": "2026-04-30",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "input": 1000000,
-          "output": 1000000
-        }
-      },
       "inclusionai/ling-2.6-1t": {
         "id": "inclusionai/ling-2.6-1t",
         "name": "Ling 2.6 1T",
@@ -25529,72 +25215,6 @@
           "output": 128000
         }
       },
-      "x-ai/grok-build-0.1": {
-        "id": "x-ai/grok-build-0.1",
-        "name": "Grok Build 0.1",
-        "description": "Fast Grok coding model tuned for agentic engineering and iterative edits",
-        "family": "grok-build",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-16",
-        "last_updated": "2026-04-16",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 256000
-        }
-      },
-      "x-ai/grok-4.3": {
-        "id": "x-ai/grok-4.3",
-        "name": "Grok 4.3",
-        "description": "xAI's default Grok for chat, coding, agentic tools, and lower hallucination risk",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-17",
-        "last_updated": "2026-04-17",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 1000000
-        }
-      },
       "x-ai/grok-4.5": {
         "id": "x-ai/grok-4.5",
         "name": "Grok 4.5",
@@ -31589,34 +31209,6 @@
           "output": 128000
         }
       },
-      "grok-build-0.1": {
-        "id": "grok-build-0.1",
-        "name": "Grok Build 0.1",
-        "description": "Fast Grok coding model tuned for agentic engineering and iterative edits",
-        "family": "grok-build",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-16",
-        "last_updated": "2026-04-16",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 256000
-        }
-      },
       "qwen3.6-max-preview": {
         "id": "qwen3.6-max-preview",
         "name": "Qwen3.6 Max Preview",
@@ -31650,44 +31242,6 @@
         "limit": {
           "context": 240000,
           "output": 64000
-        }
-      },
-      "grok-4.3": {
-        "id": "grok-4.3",
-        "name": "Grok 4.3",
-        "description": "Grok model for agentic tool use, reasoning, coding, and live assistance",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-05-01",
-        "last_updated": "2026-05-01",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 1000000
         }
       },
       "coding-minimax-m2.7-highspeed": {
@@ -36519,49 +36073,6 @@
           "output": 128000
         }
       },
-      "xai.grok-4.3": {
-        "id": "xai.grok-4.3",
-        "name": "Grok 4.3",
-        "description": "xAI's default Grok for chat, coding, agentic tools, and lower hallucination risk",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-17",
-        "last_updated": "2026-06-28",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 131072
-        },
-        "provider": {
-          "npm": "@ai-sdk/amazon-bedrock/mantle",
-          "api": "https://bedrock-mantle.${AWS_REGION}.api.aws/openai/v1",
-          "shape": "responses"
-        }
-      },
       "openai.gpt-oss-120b-1:0": {
         "id": "openai.gpt-oss-120b-1:0",
         "name": "gpt-oss-120b",
@@ -40839,44 +40350,6 @@
           "output": 4096
         }
       },
-      "grok-4-3": {
-        "id": "grok-4-3",
-        "name": "Grok 4.3",
-        "description": "xAI's default Grok for chat, coding, agentic tools, and lower hallucination risk",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-17",
-        "last_updated": "2026-04-17",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 30000
-        }
-      },
       "qwen3-coder-plus": {
         "id": "qwen3-coder-plus",
         "name": "Qwen3 Coder Plus",
@@ -41448,44 +40921,6 @@
         "limit": {
           "context": 128000,
           "output": 16384
-        }
-      },
-      "grok-build-0-1": {
-        "id": "grok-build-0-1",
-        "name": "Grok Build 0.1",
-        "description": "Fast Grok coding model tuned for agentic engineering and iterative edits",
-        "family": "grok-build",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-16",
-        "last_updated": "2026-04-16",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 256000
         }
       },
       "claude-sonnet-4-5-20250929": {
@@ -52726,82 +52161,6 @@
           "output": 32000
         }
       },
-      "x-ai/grok-build-0.1": {
-        "id": "x-ai/grok-build-0.1",
-        "name": "Grok Build 0.1",
-        "description": "Fast Grok coding model tuned for agentic engineering and iterative edits",
-        "family": "grok-build",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-16",
-        "last_updated": "2026-04-16",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 256000
-        }
-      },
-      "x-ai/grok-4.3": {
-        "id": "x-ai/grok-4.3",
-        "name": "Grok 4.3",
-        "description": "xAI's default Grok for chat, coding, agentic tools, and lower hallucination risk",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-17",
-        "last_updated": "2026-04-17",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 30000
-        }
-      },
       "minimax/minimax-m2.7-highspeed": {
         "id": "minimax/minimax-m2.7-highspeed",
         "name": "MiniMax-M2.7-highspeed",
@@ -54548,44 +53907,6 @@
           "output": 32768
         }
       },
-      "grok-4-3": {
-        "id": "grok-4-3",
-        "name": "Grok 4.3",
-        "description": "xAI's default Grok for chat, coding, agentic tools, and lower hallucination risk",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-18",
-        "last_updated": "2026-06-11",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 32000
-        }
-      },
       "venice-uncensored-role-play": {
         "id": "venice-uncensored-role-play",
         "name": "Venice Role Play Uncensored",
@@ -54958,34 +54279,6 @@
         "open_weights": false,
         "limit": {
           "context": 1000000,
-          "output": 65536
-        }
-      },
-      "grok-build-0-1": {
-        "id": "grok-build-0-1",
-        "name": "Grok Build 0.1",
-        "description": "Fast Grok coding model tuned for agentic engineering and iterative edits",
-        "family": "grok-build",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-05-21",
-        "last_updated": "2026-06-11",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
           "output": 65536
         }
       },
@@ -57588,35 +56881,6 @@
     "name": "Merge Gateway",
     "doc": "https://docs.merge.dev/merge-gateway",
     "models": {
-      "xai/grok-4.3": {
-        "id": "xai/grok-4.3",
-        "name": "Grok 4.3",
-        "description": "xAI's default Grok for chat, coding, agentic tools, and lower hallucination risk",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-17",
-        "last_updated": "2026-04-17",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 30000
-        }
-      },
       "mistral/devstral-small-2507": {
         "id": "mistral/devstral-small-2507",
         "name": "Devstral Small",
@@ -61026,45 +60290,6 @@
           "output": 128000
         }
       },
-      "grok-4-3": {
-        "id": "grok-4-3",
-        "name": "Grok 4.3",
-        "description": "xAI's default Grok for chat, coding, agentic tools, and lower hallucination risk",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-17",
-        "last_updated": "2026-04-17",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 30000
-        }
-      },
       "deepseek-v4-flash": {
         "id": "deepseek-v4-flash",
         "name": "DeepSeek V4 Flash",
@@ -61135,35 +60360,6 @@
         "limit": {
           "context": 131072,
           "output": 32768
-        }
-      },
-      "grok-build-0-1": {
-        "id": "grok-build-0-1",
-        "name": "Grok Build 0.1",
-        "description": "Fast Grok coding model tuned for agentic engineering and iterative edits",
-        "family": "grok-build",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-16",
-        "last_updated": "2026-04-16",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 256000
         }
       },
       "deepseek-v4-pro:free": {
@@ -61659,47 +60855,6 @@
         "limit": {
           "context": 1000000,
           "output": 64000
-        }
-      },
-      "grok-4.3": {
-        "id": "grok-4.3",
-        "name": "Grok 4.3",
-        "description": "xAI's default Grok for chat, coding, agentic tools, and lower hallucination risk",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          },
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-17",
-        "last_updated": "2026-04-17",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 30000
         }
       },
       "deepseek-v4-flash": {
@@ -67907,34 +67062,6 @@
           "npm": "@ai-sdk/openai"
         }
       },
-      "grok-build-0.1": {
-        "id": "grok-build-0.1",
-        "name": "Grok Build 0.1",
-        "description": "Grok coding model for agentic engineering, edits, and codebase workflows",
-        "family": "grok-build",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-05-20",
-        "last_updated": "2026-05-20",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 256000
-        }
-      },
       "mimo-v2-flash-free": {
         "id": "mimo-v2-flash-free",
         "name": "MiMo V2 Flash Free",
@@ -69292,33 +68419,6 @@
         "limit": {
           "context": 204800,
           "output": 128000
-        },
-        "status": "deprecated"
-      },
-      "grok-code": {
-        "id": "grok-code",
-        "name": "Grok Code Fast 1",
-        "description": "Legacy model retained for compatibility with older integrations",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-08-20",
-        "last_updated": "2025-08-20",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 256000
         },
         "status": "deprecated"
       },
@@ -71540,32 +70640,6 @@
         "limit": {
           "context": 128000,
           "output": 8192
-        }
-      },
-      "grok-code-fast-1": {
-        "id": "grok-code-fast-1",
-        "name": "xAI Grok Code Fast 1",
-        "description": "Fast Grok model for responsive chat, reasoning, and tool-assisted work",
-        "family": "grok",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2024-08",
-        "release_date": "2024-08-25",
-        "last_updated": "2024-08-25",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 10000
         }
       },
       "o3-pro": {
@@ -81281,32 +80355,6 @@
         "limit": {
           "context": 131072,
           "output": 131072
-        }
-      },
-      "x-ai/grok-code-fast-1": {
-        "id": "x-ai/grok-code-fast-1",
-        "name": "x-AI/Grok-Code-Fast 1",
-        "description": "Fast Grok model for responsive chat, reasoning, and tool-assisted work",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2025-09-02",
-        "last_updated": "2025-09-02",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 10000
         }
       },
       "minimax/minimax-m2": {
@@ -93896,69 +92944,6 @@
           "output": 26215
         }
       },
-      "x-ai/grok-build-0.1": {
-        "id": "x-ai/grok-build-0.1",
-        "name": "xAI: Grok Build 0.1",
-        "description": "Grok coding model for agentic engineering, edits, and codebase workflows",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-05-20",
-        "last_updated": "2026-05-27",
-        "modalities": {
-          "input": [
-            "image",
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 256000
-        }
-      },
-      "x-ai/grok-4.3": {
-        "id": "x-ai/grok-4.3",
-        "name": "xAI: Grok 4.3",
-        "description": "Grok model for agentic tool use, reasoning, coding, and live assistance",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-05-01",
-        "last_updated": "2026-05-01",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 4096
-        }
-      },
       "stealth/claude-opus-4.6": {
         "id": "stealth/claude-opus-4.6",
         "name": "Stealth: Claude Opus 4.6 (20% off)",
@@ -102687,33 +101672,6 @@
           "output": 128000
         }
       },
-      "grok-code-fast-1": {
-        "id": "grok-code-fast-1",
-        "name": "grok-code-fast-1",
-        "description": "Fast Grok model for responsive chat, reasoning, and tool-assisted work",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-01",
-        "last_updated": "2026-01",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 256000
-        }
-      },
       "minimaxai/minimax-m1-80k": {
         "id": "minimaxai/minimax-m1-80k",
         "name": "MiniMax M1",
@@ -106679,44 +105637,6 @@
           "output": 64000
         }
       },
-      "grok-4.3": {
-        "id": "grok-4.3",
-        "name": "Grok 4.3",
-        "description": "xAI's default Grok for chat, coding, agentic tools, and lower hallucination risk",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-17",
-        "last_updated": "2026-04-17",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 30000
-        }
-      },
       "grok-4.5": {
         "id": "grok-4.5",
         "name": "Grok 4.5",
@@ -107462,35 +106382,6 @@
         "limit": {
           "context": 204800,
           "output": 131072
-        }
-      },
-      "grok/grok-4.3": {
-        "id": "grok/grok-4.3",
-        "name": "Grok 4.3",
-        "description": "xAI's default Grok for chat, coding, agentic tools, and lower hallucination risk",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-17",
-        "last_updated": "2026-04-17",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 30000
         }
       },
       "anthropic/claude-opus-4.6": {
@@ -110540,73 +109431,6 @@
     "name": "Vercel AI Gateway",
     "doc": "https://github.com/vercel/ai/tree/5eb85cc45a259553501f535b8ac79a77d0e79223/packages/gateway",
     "models": {
-      "xai/grok-build-0.1": {
-        "id": "xai/grok-build-0.1",
-        "name": "Grok Build 0.1",
-        "description": "Fast Grok coding model tuned for agentic engineering and iterative edits",
-        "family": "grok-build",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-05-20",
-        "last_updated": "2026-04-16",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 256000
-        }
-      },
-      "xai/grok-4.3": {
-        "id": "xai/grok-4.3",
-        "name": "Grok 4.3",
-        "description": "xAI's default Grok for chat, coding, agentic tools, and lower hallucination risk",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-30",
-        "last_updated": "2026-04-17",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 1000000
-        }
-      },
       "xai/grok-4.5": {
         "id": "xai/grok-4.5",
         "name": "Grok 4.5",
@@ -124922,32 +123746,6 @@
     "name": "Poe",
     "doc": "https://creator.poe.com/docs/external-applications/openai-compatible-api",
     "models": {
-      "xai/grok-code-fast-1": {
-        "id": "xai/grok-code-fast-1",
-        "name": "Grok Code Fast 1",
-        "description": "Fast Grok model for responsive chat, reasoning, and tool-assisted work",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "temperature": false,
-        "release_date": "2025-08-22",
-        "last_updated": "2025-08-22",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 128000
-        }
-      },
       "topazlabs-co/topazlabs": {
         "id": "topazlabs-co/topazlabs",
         "name": "TopazLabs",
@@ -133128,74 +131926,6 @@
           "api": "https://zenmux.ai/api/anthropic/v1"
         }
       },
-      "x-ai/grok-build-0.1": {
-        "id": "x-ai/grok-build-0.1",
-        "name": "Grok Build 0.1",
-        "description": "Fast Grok coding model tuned for agentic engineering and iterative edits",
-        "family": "grok-build",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-16",
-        "last_updated": "2026-04-16",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 256000
-        }
-      },
-      "x-ai/grok-4.3": {
-        "id": "x-ai/grok-4.3",
-        "name": "Grok 4.3",
-        "description": "xAI's default Grok for chat, coding, agentic tools, and lower hallucination risk",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-17",
-        "last_updated": "2026-04-17",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 1000000
-        }
-      },
       "x-ai/grok-4.5": {
         "id": "x-ai/grok-4.5",
         "name": "Grok 4.5",
@@ -133232,32 +131962,6 @@
         "limit": {
           "context": 500000,
           "output": 500000
-        }
-      },
-      "x-ai/grok-code-fast-1": {
-        "id": "x-ai/grok-code-fast-1",
-        "name": "Grok Code Fast 1",
-        "description": "Fast Grok model for responsive chat, reasoning, and tool-assisted work",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2025-01-01",
-        "release_date": "2025-08-26",
-        "last_updated": "2025-08-26",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 64000
         }
       },
       "inclusionai/ring-2.6-1t": {
@@ -135840,41 +134544,6 @@
         },
         "status": "active"
       },
-      "x-ai/grok-build-0.1": {
-        "id": "x-ai/grok-build-0.1",
-        "name": "OpenRouter: Grok Build 0.1",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "default"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-05-20",
-        "last_updated": "2026-05-20",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 32768
-        },
-        "status": "active"
-      },
       "x-ai/grok-4.5": {
         "id": "x-ai/grok-4.5",
         "name": "OpenRouter: Grok 4.5",
@@ -135908,42 +134577,6 @@
         "limit": {
           "context": 500000,
           "output": 500000
-        },
-        "status": "active"
-      },
-      "x-ai/grok-4.3": {
-        "id": "x-ai/grok-4.3",
-        "name": "OpenRouter: Grok 4.3",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "default"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-30",
-        "last_updated": "2026-04-30",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 32768
         },
         "status": "active"
       },

@@ -102,7 +102,7 @@ describe("CLI provider loaders", () => {
       providerID: "grok-build-cli",
       binary: "grok",
       baseModelID: "grok-build-cli",
-      discoveredModelIDs: ["grok-build-0.1", "grok-code-fast-1"],
+      discoveredModelIDs: ["grok-4.5"],
     })
   })
 
