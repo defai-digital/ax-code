@@ -55,14 +55,16 @@ export function nativeTuiBinaryCandidates(
 
   if (env.CARGO_TARGET_DIR) {
     const targetRoot = path.resolve(env.CARGO_TARGET_DIR)
-    candidates.push(path.join(targetRoot, "release", name), path.join(targetRoot, "debug", name))
+    candidates.push(path.join(targetRoot, "debug", name), path.join(targetRoot, "release", name))
   }
 
   // Walk upward looking for a Rust workspace target dir (source checkouts).
   let dir = moduleDir
   for (let i = 0; i < 12; i++) {
     const cratesTarget = path.join(dir, "crates", "target")
-    candidates.push(path.join(cratesTarget, "release", name), path.join(cratesTarget, "debug", name))
+    // Source instructions build the debug profile by default. Prefer it over
+    // a potentially stale release binary left by an earlier packaging run.
+    candidates.push(path.join(cratesTarget, "debug", name), path.join(cratesTarget, "release", name))
     const parent = path.dirname(dir)
     if (parent === dir) break
     dir = parent

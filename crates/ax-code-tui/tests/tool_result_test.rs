@@ -8,6 +8,16 @@ fn make_key_event(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
 }
 
+fn make_ctrl_key_event(code: KeyCode) -> Event {
+    Event::Key(KeyEvent::new(code, KeyModifiers::CONTROL))
+}
+
+fn app_with_session() -> App {
+    let mut app = App::new();
+    app.session_id = Some("sess_123".to_string());
+    app
+}
+
 #[test]
 fn test_tool_panel_toggle() {
     let mut app = App::new();
@@ -29,8 +39,7 @@ fn test_completed_tool_calls_empty() {
 
 #[test]
 fn test_completed_tool_calls_filters() {
-    let mut app = App::new();
-    app.session_id = Some("sess_123".to_string());
+    let mut app = app_with_session();
 
     // Add running tool
     app.handle_event(RuntimeEvent::ToolCallStart {
@@ -61,8 +70,7 @@ fn test_completed_tool_calls_filters() {
 
 #[test]
 fn test_tool_navigation() {
-    let mut app = App::new();
-    app.session_id = Some("sess_123".to_string());
+    let mut app = app_with_session();
 
     // Add multiple completed tools
     for i in 1..=3 {
@@ -122,8 +130,7 @@ fn test_tool_expanded_toggle() {
 
 #[test]
 fn test_selected_completed_tool() {
-    let mut app = App::new();
-    app.session_id = Some("sess_123".to_string());
+    let mut app = app_with_session();
 
     // No tools initially
     assert!(app.selected_completed_tool().is_none());
@@ -153,8 +160,7 @@ fn test_selected_completed_tool() {
 
 #[test]
 fn test_selected_completed_tool_clamps_stale_index() {
-    let mut app = App::new();
-    app.session_id = Some("sess_123".to_string());
+    let mut app = app_with_session();
     app.selected_tool_index = 5;
 
     app.handle_event(RuntimeEvent::ToolCallStart {
@@ -291,16 +297,14 @@ fn test_format_tool_preview_truncated() {
 fn test_input_toggle_tool_panel() {
     let mut app = App::new();
 
-    // 't' should toggle tool panel when prompt is empty
-    ax_code_tui::tui::handle_input(&mut app, make_key_event(KeyCode::Char('t')));
+    ax_code_tui::tui::handle_input(&mut app, make_ctrl_key_event(KeyCode::Char('t')));
 
     assert!(app.show_tool_panel);
 }
 
 #[test]
 fn test_input_tool_panel_navigation() {
-    let mut app = App::new();
-    app.session_id = Some("sess_123".to_string());
+    let mut app = app_with_session();
 
     // Add some completed tools
     for i in 1..=3 {
@@ -344,8 +348,7 @@ fn test_input_tool_panel_navigation() {
 
 #[test]
 fn test_input_tool_panel_expand() {
-    let mut app = App::new();
-    app.session_id = Some("sess_123".to_string());
+    let mut app = app_with_session();
 
     // Add a completed tool
     app.handle_event(RuntimeEvent::ToolCallStart {
@@ -381,8 +384,8 @@ fn test_input_tool_panel_close() {
     app.session_id = Some("sess_123".to_string());
     app.show_tool_panel = true;
 
-    // 't' should close tool panel
-    ax_code_tui::tui::handle_input(&mut app, make_key_event(KeyCode::Char('t')));
+    // Ctrl+T should close tool panel
+    ax_code_tui::tui::handle_input(&mut app, make_ctrl_key_event(KeyCode::Char('t')));
     assert!(!app.show_tool_panel);
 
     // Reopen and close with Esc

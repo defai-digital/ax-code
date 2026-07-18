@@ -33,6 +33,12 @@ use ax_code_tui::tui::app::{App, AppMode, SessionStatus};
 use ax_code_tui::tui::input::{InputAction, handle_input};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
+fn app_with_session() -> App {
+    let mut app = App::new();
+    app.session_id = Some("sess-1".to_string());
+    app
+}
+
 // =============================================================================
 // Startup Smoke Tests
 // =============================================================================
@@ -90,8 +96,7 @@ fn smoke_startup_with_prompt() {
 
 #[test]
 fn smoke_resize_during_streaming_no_crash() {
-    let mut app = App::new();
-    app.session_id = Some("sess-1".to_string());
+    let mut app = app_with_session();
 
     // Simulate receiving a streaming message
     app.handle_event(RuntimeEvent::MessageUpdated {
@@ -129,8 +134,7 @@ fn smoke_resize_during_streaming_no_crash() {
 
 #[test]
 fn smoke_permission_prompt_accept_flow() {
-    let mut app = App::new();
-    app.session_id = Some("sess-1".to_string());
+    let mut app = app_with_session();
 
     // 1. Permission arrives
     app.handle_event(RuntimeEvent::PermissionAsked {
@@ -155,8 +159,7 @@ fn smoke_permission_prompt_accept_flow() {
 
 #[test]
 fn smoke_permission_prompt_reject_flow() {
-    let mut app = App::new();
-    app.session_id = Some("sess-1".to_string());
+    let mut app = app_with_session();
 
     app.handle_event(RuntimeEvent::PermissionAsked {
         properties: PermissionRequestProps {
@@ -180,8 +183,7 @@ fn smoke_permission_prompt_reject_flow() {
 
 #[test]
 fn smoke_question_navigate_select_flow() {
-    let mut app = App::new();
-    app.session_id = Some("sess-1".to_string());
+    let mut app = app_with_session();
 
     // 1. Question arrives
     app.handle_event(RuntimeEvent::QuestionAsked {
@@ -218,8 +220,7 @@ fn smoke_question_navigate_select_flow() {
 
 #[test]
 fn smoke_question_cancel_flow() {
-    let mut app = App::new();
-    app.session_id = Some("sess-1".to_string());
+    let mut app = app_with_session();
 
     app.handle_event(RuntimeEvent::QuestionAsked {
         properties: QuestionRequestProps {

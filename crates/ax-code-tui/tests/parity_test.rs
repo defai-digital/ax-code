@@ -282,10 +282,10 @@ fn test_input_tab_toggle_session_list() {
 }
 
 #[test]
-fn test_input_t_toggle_tool_panel() {
+fn test_input_ctrl_t_toggle_tool_panel() {
     let mut app = App::new();
     assert!(!app.show_tool_panel);
-    let event = Event::Key(key_event(KeyCode::Char('t')));
+    let event = Event::Key(ctrl_key_event(KeyCode::Char('t')));
     handle_input(&mut app, event);
     assert!(app.show_tool_panel);
 }

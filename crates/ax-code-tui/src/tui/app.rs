@@ -2,6 +2,7 @@
 
 use crate::events::MessageRole;
 use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 /// Session status.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -419,14 +420,33 @@ impl App {
     }
 
     /// Select the currently highlighted session.
+    ///
+    /// Selection only returns the requested ID. The runner activates it after
+    /// the transcript request succeeds, so a network error cannot destroy the
+    /// currently visible session state.
     pub fn select_session(&mut self) -> Option<String> {
         self.clamp_session_selection();
-        let summary = self.sessions.get(self.selected_session_index).cloned();
-        summary.map(|s| {
-            self.show_session_list = false;
-            self.switch_to_session(&s);
-            s.id.clone()
-        })
+        self.sessions
+            .get(self.selected_session_index)
+            .map(|summary| {
+                self.show_session_list = false;
+                summary.id.clone()
+            })
+    }
+
+    /// Commit a session switch after its transcript has loaded.
+    pub fn activate_session(&mut self, session_id: &str) {
+        let summary = self
+            .sessions
+            .iter()
+            .find(|summary| summary.id == session_id)
+            .cloned()
+            .unwrap_or_else(|| SessionSummary {
+                id: session_id.to_string(),
+                title: None,
+                message_count: 0,
+            });
+        self.switch_to_session(&summary);
     }
 
     fn switch_to_session(&mut self, summary: &SessionSummary) {
@@ -604,15 +624,25 @@ impl App {
 
         let max_status_len = width.saturating_sub(overhead);
 
-        // Truncate status (by char count) if needed.
-        let status_len = status_text.chars().count();
-        let display_status = if status_len > max_status_len {
+        // Truncate by terminal display width, not Unicode scalar count. CJK
+        // and emoji can occupy two columns each.
+        let status_width = UnicodeWidthStr::width(status_text);
+        let display_status = if status_width > max_status_len {
             if max_status_len <= 3 {
                 ".".repeat(max_status_len)
             } else {
+                let content_width = max_status_len.saturating_sub(3);
+                let mut used_width = 0;
                 let truncated: String = status_text
-                    .chars()
-                    .take(max_status_len.saturating_sub(3))
+                    .graphemes(true)
+                    .take_while(|grapheme| {
+                        let width = UnicodeWidthStr::width(*grapheme);
+                        if used_width + width > content_width {
+                            return false;
+                        }
+                        used_width += width;
+                        true
+                    })
                     .collect();
                 format!("{}...", truncated)
             }
@@ -741,6 +771,15 @@ mod tests {
         assert_eq!(formatted.chars().count(), 5);
     }
 
+    #[test]
+    fn test_format_status_bar_respects_cjk_display_width() {
+        let formatted =
+            App::format_status_bar(AppMode::Input, Some("這是一段很長的中文狀態訊息"), 24);
+
+        assert!(UnicodeWidthStr::width(formatted.as_str()) <= 24);
+        assert!(formatted.ends_with(' '));
+    }
+
     // === MEDIUM 1: out-of-band replies clear stale modals ===
 
     #[test]
@@ -784,6 +823,42 @@ mod tests {
             app.pending_permissions[0].permission_type,
             "file_write".to_string()
         );
+    }
+
+    #[test]
+    fn test_replayed_permission_request_is_updated_without_duplication() {
+        let mut app = app_with_session("s1");
+        for description in ["first", "updated"] {
+            app.handle_event(RuntimeEvent::PermissionAsked {
+                properties: crate::events::PermissionRequestProps {
+                    session_id: "s1".to_string(),
+                    id: "p1".to_string(),
+                    description: description.to_string(),
+                    permission_type: Some("bash".to_string()),
+                },
+            });
+        }
+
+        assert_eq!(app.pending_permissions.len(), 1);
+        assert_eq!(app.pending_permissions[0].description, "updated");
+    }
+
+    #[test]
+    fn test_replayed_multi_question_request_preserves_progress() {
+        let mut app = app_with_session("s1");
+        let event: RuntimeEvent = serde_json::from_str(
+            r#"{"type":"question.asked","properties":{"sessionID":"s1","id":"q1","questions":[{"question":"One?","options":[{"label":"A"}]},{"question":"Two?","options":[{"label":"B"}]}]}}"#,
+        )
+        .expect("question event");
+
+        app.handle_event(event.clone());
+        assert!(app.select_question().is_none());
+        assert_eq!(app.pending_questions.len(), 1);
+
+        app.handle_event(event);
+
+        assert_eq!(app.pending_questions.len(), 1);
+        assert_eq!(app.question_answer_progress.len(), 1);
     }
 
     #[test]
@@ -989,6 +1064,7 @@ mod tests {
         });
 
         assert_eq!(app.messages[0].content, "streamed text");
+        assert!(app.messages[0].is_streaming);
     }
 
     #[test]
@@ -1011,6 +1087,7 @@ mod tests {
                 permission_type: None,
             },
         });
+
         assert!(app.messages.is_empty());
         assert!(app.pending_permissions.is_empty());
         assert!(app.session_id.is_none());

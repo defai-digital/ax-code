@@ -212,10 +212,9 @@ fn render_transcript(frame: &mut Frame, app: &App, area: Rect) {
         lines.push(Line::default());
     }
 
-    let wrap_width = area.width.max(1) as usize;
     let line_count: usize = lines
         .iter()
-        .map(|line| line.width().max(1).div_ceil(wrap_width))
+        .map(|line| wrapped_line_count(line, area.width.max(1)))
         .sum();
     let transcript = Paragraph::new(lines)
         .style(Style::default().fg(Color::White))
@@ -520,7 +519,7 @@ fn render_tool_panel(frame: &mut Frame, app: &App, area: Rect) {
                 height: 1,
             };
             let hint = Paragraph::new(format!(
-                " [{}] Navigate{}[t] Close ",
+                " [{}] Navigate{}[Ctrl+T] Close ",
                 glyph("↑↓", "Up/Down"),
                 expand_hint
             ))
@@ -557,6 +556,52 @@ fn prompt_cursor(text: &str, inner_width: u16) -> (u16, u16) {
     (row, column)
 }
 
+/// Conservative line count for Ratatui's word-wrapped paragraph. Raw display
+/// width alone under-counts text such as `"123456 123456 123456"` at width 10:
+/// greedy word wrapping needs three rows even though ceil(total_width/10) is
+/// two. Taking the greater of raw and word-aware counts keeps live output
+/// pinned to the actual bottom without relying on Ratatui's unstable API.
+fn wrapped_line_count(line: &Line<'_>, width: u16) -> usize {
+    let width = usize::from(width.max(1));
+    let text: String = line
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect();
+    let raw_width = UnicodeWidthStr::width(text.as_str()).max(1);
+    let raw_rows = raw_width.div_ceil(width);
+
+    let mut word_rows = 1_usize;
+    let mut column = 0_usize;
+    for word in text.split_whitespace() {
+        let word_width = UnicodeWidthStr::width(word);
+        if word_width == 0 {
+            continue;
+        }
+
+        if column > 0 {
+            if column.saturating_add(1).saturating_add(word_width) > width {
+                word_rows = word_rows.saturating_add(1);
+                column = 0;
+            } else {
+                column += 1;
+            }
+        }
+
+        if word_width > width {
+            if column > 0 {
+                word_rows = word_rows.saturating_add(1);
+            }
+            word_rows = word_rows.saturating_add((word_width - 1) / width);
+            column = ((word_width - 1) % width) + 1;
+        } else {
+            column += word_width;
+        }
+    }
+
+    raw_rows.max(word_rows)
+}
+
 /// Helper to create a centered rectangle.
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
@@ -580,4 +625,21 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 
 fn short_id(id: &str) -> String {
     id.chars().take(8).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrapped_line_count_accounts_for_word_boundaries() {
+        let line = Line::from("123456 123456 123456");
+        assert_eq!(wrapped_line_count(&line, 10), 3);
+    }
+
+    #[test]
+    fn wrapped_line_count_handles_wide_unbroken_text() {
+        let line = Line::from("你好世界你好");
+        assert_eq!(wrapped_line_count(&line, 4), 3);
+    }
 }

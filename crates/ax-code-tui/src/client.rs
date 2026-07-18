@@ -534,13 +534,16 @@ impl HeadlessClient {
 async fn drain_sse_response(response: Response, tx: &mpsc::Sender<RuntimeEvent>) -> bool {
     use futures_util::StreamExt;
     let mut stream = response.bytes_stream();
-    let mut buffer = String::new();
+    // Keep raw bytes until a complete SSE line is available. Network chunks
+    // may split a multi-byte UTF-8 code point; decoding each chunk separately
+    // would replace both halves with U+FFFD and corrupt streamed CJK/emoji.
+    let mut buffer = Vec::new();
 
     while let Some(chunk_result) = stream.next().await {
         match chunk_result {
             Ok(chunk) => {
-                buffer.push_str(&String::from_utf8_lossy(&chunk));
-                let events = drain_complete_sse_lines(&mut buffer);
+                buffer.extend_from_slice(&chunk);
+                let events = drain_complete_sse_bytes(&mut buffer);
                 for event in events {
                     if tx.send(event).await.is_err() {
                         return false;
@@ -554,6 +557,28 @@ async fn drain_sse_response(response: Response, tx: &mpsc::Sender<RuntimeEvent>)
         }
     }
     true
+}
+
+/// Drain newline-terminated SSE frames from a byte buffer without decoding
+/// incomplete UTF-8 sequences. A complete JSON line must itself be valid
+/// UTF-8; malformed lines are skipped without poisoning subsequent frames.
+pub(crate) fn drain_complete_sse_bytes(buffer: &mut Vec<u8>) -> Vec<RuntimeEvent> {
+    let mut events = Vec::new();
+
+    while let Some(newline_pos) = buffer.iter().position(|byte| *byte == b'\n') {
+        let mut line: Vec<u8> = buffer.drain(..=newline_pos).collect();
+        line.pop();
+        if line.last() == Some(&b'\r') {
+            line.pop();
+        }
+
+        match std::str::from_utf8(&line) {
+            Ok(line) => parse_sse_line(line, &mut events),
+            Err(error) => tracing::debug!("Skipping invalid UTF-8 SSE line: {}", error),
+        }
+    }
+
+    events
 }
 
 fn transcript_events_from_messages(messages: Vec<serde_json::Value>) -> Vec<RuntimeEvent> {
@@ -627,6 +652,7 @@ fn transcript_events_from_messages(messages: Vec<serde_json::Value>) -> Vec<Runt
 /// Lines that do not start with `data: ` (comments, `event:`, `id:`, blank
 /// keep-alive lines) are ignored. Unparseable `data:` payloads are logged at
 /// debug level and skipped so one bad event can't kill the whole stream.
+#[cfg(test)]
 pub(crate) fn drain_complete_sse_lines(buffer: &mut String) -> Vec<RuntimeEvent> {
     let mut events = Vec::new();
 
@@ -635,19 +661,25 @@ pub(crate) fn drain_complete_sse_lines(buffer: &mut String) -> Vec<RuntimeEvent>
         // Advance the buffer past the consumed line + its newline.
         buffer.drain(..newline_pos + 1);
 
-        if let Some(data) = line
-            .strip_prefix("data:")
-            .map(str::trim_start)
-            .filter(|data| !data.is_empty())
-        {
-            match parse_sse_runtime_event(data) {
-                Some(event) => events.push(event),
-                None => tracing::debug!("Failed to parse SSE event: {}", data),
-            }
-        }
+        parse_sse_line(&line, &mut events);
     }
 
     events
+}
+
+fn parse_sse_line(line: &str, events: &mut Vec<RuntimeEvent>) {
+    let Some(data) = line
+        .strip_prefix("data:")
+        .map(str::trim_start)
+        .filter(|data| !data.is_empty())
+    else {
+        return;
+    };
+
+    match parse_sse_runtime_event(data) {
+        Some(event) => events.push(event),
+        None => tracing::debug!("Failed to parse SSE event: {}", data),
+    }
 }
 
 fn parse_sse_runtime_event(data: &str) -> Option<RuntimeEvent> {
@@ -696,6 +728,31 @@ mod tests {
         assert_eq!(second.len(), 1);
         assert!(matches!(second[0], RuntimeEvent::ServerHeartbeat));
         assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn test_sse_preserves_utf8_codepoint_split_across_byte_chunks() {
+        let line = concat!(
+            "data: {\"type\":\"message.part.delta\",\"properties\":{",
+            "\"sessionID\":\"s1\",\"messageID\":\"m1\",\"partID\":\"p1\",",
+            "\"field\":\"text\",\"delta\":\"你好🚀\"}}\n"
+        );
+        let bytes = line.as_bytes();
+        let split = line.find('你').expect("CJK marker") + 1;
+        let mut buffer = bytes[..split].to_vec();
+
+        assert!(drain_complete_sse_bytes(&mut buffer).is_empty());
+        buffer.extend_from_slice(&bytes[split..]);
+
+        let events = drain_complete_sse_bytes(&mut buffer);
+        assert!(buffer.is_empty());
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            RuntimeEvent::MessagePartDelta { properties } => {
+                assert_eq!(properties.delta, "你好🚀");
+            }
+            event => panic!("unexpected event: {event:?}"),
+        }
     }
 
     #[test]

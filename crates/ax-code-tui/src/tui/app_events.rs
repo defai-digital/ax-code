@@ -177,12 +177,22 @@ impl App {
                 } else {
                     properties.description
                 };
-                self.pending_permissions.push(PermissionRequest {
-                    session_id: properties.session_id,
-                    request_id: properties.id,
-                    permission_type,
-                    description,
-                });
+                if let Some(existing) = self
+                    .pending_permissions
+                    .iter_mut()
+                    .find(|request| request.request_id == properties.id)
+                {
+                    existing.session_id = properties.session_id;
+                    existing.permission_type = permission_type;
+                    existing.description = description;
+                } else {
+                    self.pending_permissions.push(PermissionRequest {
+                        session_id: properties.session_id,
+                        request_id: properties.id,
+                        permission_type,
+                        description,
+                    });
+                }
                 self.mode = AppMode::Permission;
             }
             RuntimeEvent::PermissionReplied { properties } => {
@@ -199,6 +209,17 @@ impl App {
             }
             RuntimeEvent::QuestionAsked { properties } => {
                 if !self.event_targets_current_session(&properties.session_id) {
+                    return;
+                }
+                if self
+                    .pending_questions
+                    .iter()
+                    .any(|question| question.request_id == properties.id)
+                    || self
+                        .question_answer_progress
+                        .iter()
+                        .any(|progress| progress.request_id == properties.id)
+                {
                     return;
                 }
                 let items = if properties.items.is_empty() {
@@ -344,10 +365,7 @@ impl App {
         if event_session_id.is_empty() {
             return false;
         }
-        match self.session_id.as_deref() {
-            Some(current) => current == event_session_id,
-            None => false,
-        }
+        self.session_id.as_deref() == Some(event_session_id)
     }
 
     pub(crate) fn event_targets_current_session_option(
@@ -375,21 +393,23 @@ impl App {
         self.message_targets_current_session(message_id)
     }
 
-    pub(crate) fn ensure_message(&mut self, message_id: &str) {
-        if let Some(msg) = self.messages.iter_mut().find(|m| m.id == message_id) {
-            msg.is_streaming = true;
+    pub(crate) fn ensure_message(&mut self, message_id: &str, streaming: bool) {
+        if let Some(message) = self.messages.iter_mut().find(|m| m.id == message_id) {
+            if streaming {
+                message.is_streaming = true;
+            }
             return;
         }
         self.messages.push(Message {
             id: message_id.to_string(),
             role: MessageRole::Assistant,
             content: String::new(),
-            is_streaming: true,
+            is_streaming: streaming,
         });
     }
 
     pub(crate) fn upsert_message_text_part(&mut self, message_id: &str, part_id: &str, text: &str) {
-        self.ensure_message(message_id);
+        self.ensure_message(message_id, false);
         if let Some(part) = self
             .message_text_parts
             .iter_mut()
@@ -404,6 +424,9 @@ impl App {
             });
         }
         self.rebuild_message_content(message_id);
+        if let Some(message) = self.messages.iter_mut().find(|m| m.id == message_id) {
+            message.is_streaming = false;
+        }
     }
 
     pub(crate) fn append_message_text_delta(
@@ -412,7 +435,7 @@ impl App {
         part_id: &str,
         delta: &str,
     ) {
-        self.ensure_message(message_id);
+        self.ensure_message(message_id, true);
         if let Some(part) = self
             .message_text_parts
             .iter_mut()

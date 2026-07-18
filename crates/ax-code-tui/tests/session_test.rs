@@ -451,6 +451,13 @@ fn test_select_session_updates_active_session_and_clears_stale_state() {
     let selected = app.select_session();
 
     assert_eq!(selected.as_deref(), Some("sess_002"));
+    assert_eq!(app.session_id.as_deref(), Some("sess_001"));
+    assert!(!app.messages.is_empty());
+    assert!(!app.message_text_parts.is_empty());
+    assert!(!app.tool_calls.is_empty());
+
+    app.activate_session("sess_002");
+
     assert_eq!(app.session_id.as_deref(), Some("sess_002"));
     assert_eq!(app.session_title.as_deref(), Some("New"));
     assert!(app.messages.is_empty());

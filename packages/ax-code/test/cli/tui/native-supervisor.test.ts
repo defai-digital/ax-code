@@ -109,4 +109,33 @@ describe("native TUI supervisor", () => {
       }),
     ).toBe(binary)
   })
+
+  test("prefers a fresh debug sidecar over a stale source release build", async () => {
+    await using tmp = await tmpdir()
+    const moduleDir = path.join(tmp.path, "packages", "ax-code", "src", "cli", "cmd", "tui")
+    const debugDir = path.join(tmp.path, "crates", "target", "debug")
+    const releaseDir = path.join(tmp.path, "crates", "target", "release")
+    await mkdir(moduleDir, { recursive: true })
+    await mkdir(debugDir, { recursive: true })
+    await mkdir(releaseDir, { recursive: true })
+
+    const moduleFile = path.join(moduleDir, "native-supervisor.ts")
+    const debugBinary = path.join(debugDir, nativeTuiBinaryName())
+    const releaseBinary = path.join(releaseDir, nativeTuiBinaryName())
+    await writeFile(moduleFile, "export {}\n")
+    await writeFile(debugBinary, "#!/bin/sh\nexit 0\n")
+    await writeFile(releaseBinary, "#!/bin/sh\nexit 0\n")
+    if (process.platform !== "win32") {
+      await chmod(debugBinary, 0o755)
+      await chmod(releaseBinary, 0o755)
+    }
+
+    expect(
+      resolveNativeTuiBinary({
+        env: {},
+        moduleUrl: pathToFileURL(moduleFile).href,
+        pathValue: "",
+      }),
+    ).toBe(debugBinary)
+  })
 })

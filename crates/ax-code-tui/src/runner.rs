@@ -392,8 +392,15 @@ async fn apply_input_action(
     prompt_options: &PromptOptions,
 ) {
     let Some(client) = client else {
-        if !matches!(action, InputAction::None) {
-            app.set_status("Native runtime is unavailable".to_string());
+        match action {
+            InputAction::None => {}
+            InputAction::SubmitPrompt(prompt) => {
+                app.insert_text(&prompt);
+                app.set_status("Native runtime is unavailable; prompt restored".to_string());
+            }
+            _ => {
+                app.set_status("Native runtime is unavailable".to_string());
+            }
         }
         return;
     };
@@ -409,6 +416,7 @@ async fn apply_input_action(
                         session_id
                     }
                     Err(error) => {
+                        app.insert_text(&prompt);
                         app.set_status(format!("Failed to create session: {error}"));
                         return;
                     }
@@ -419,6 +427,7 @@ async fn apply_input_action(
                 .send_prompt_with_options(&session_id, &prompt, prompt_options)
                 .await
             {
+                app.insert_text(&prompt);
                 app.set_status(format!("Failed to send prompt: {error}"));
             }
         }
@@ -472,6 +481,7 @@ async fn apply_input_action(
         InputAction::SwitchSession { session_id } => {
             match client.session_transcript_events(&session_id).await {
                 Ok(events) => {
+                    app.activate_session(&session_id);
                     for event in events {
                         app.handle_event(event);
                     }
@@ -583,5 +593,26 @@ mod tests {
         let args = CliArgs::parse_from(["ax-code-tui"]);
         // auth_token should be None when not provided via CLI
         assert!(args.auth_token.is_none());
+    }
+
+    #[tokio::test]
+    async fn unavailable_runtime_restores_submitted_prompt() {
+        let mut app = App::new();
+        let options = PromptOptions::default();
+
+        apply_input_action(
+            &mut app,
+            None,
+            InputAction::SubmitPrompt("keep this task".to_string()),
+            &options,
+        )
+        .await;
+
+        assert_eq!(app.prompt, "keep this task");
+        assert_eq!(app.cursor_position, app.prompt_grapheme_count());
+        assert_eq!(
+            app.status_message.as_deref(),
+            Some("Native runtime is unavailable; prompt restored")
+        );
     }
 }

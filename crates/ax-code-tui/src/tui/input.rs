@@ -81,6 +81,12 @@ fn handle_quit_shortcut(app: &mut App, event: KeyEvent) -> Option<InputAction> {
 
 /// Handle key in input mode.
 fn handle_input_mode_key(app: &mut App, event: KeyEvent) -> InputAction {
+    // Global quit shortcuts must keep working while a sidebar/panel owns the
+    // rest of the keyboard input.
+    if let Some(action) = handle_quit_shortcut(app, event) {
+        return action;
+    }
+
     // If session list is shown, handle session navigation
     if app.show_session_list {
         return handle_session_list_key(app, event);
@@ -92,15 +98,6 @@ fn handle_input_mode_key(app: &mut App, event: KeyEvent) -> InputAction {
     }
 
     match event.code {
-        // Quit on Ctrl+C or Ctrl+Q
-        KeyCode::Char('c') if event.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.quit();
-            InputAction::None
-        }
-        KeyCode::Char('q') if event.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.quit();
-            InputAction::None
-        }
         // Abort session on Ctrl+X
         KeyCode::Char('x') if event.modifiers.contains(KeyModifiers::CONTROL) => {
             if let Some(session_id) = app.request_abort() {
@@ -114,8 +111,9 @@ fn handle_input_mode_key(app: &mut App, event: KeyEvent) -> InputAction {
             app.toggle_session_list();
             InputAction::None
         }
-        // 't' toggles tool panel (only when not in prompt)
-        KeyCode::Char('t') if app.prompt.is_empty() => {
+        // Ctrl+T toggles the tool panel. A plain `t` must remain typeable as
+        // the first character of a prompt.
+        KeyCode::Char('t') if event.modifiers.contains(KeyModifiers::CONTROL) => {
             app.toggle_tool_panel();
             InputAction::None
         }
@@ -204,7 +202,11 @@ fn handle_tool_panel_key(app: &mut App, event: KeyEvent) -> InputAction {
             InputAction::None
         }
         // Close tool panel
-        KeyCode::Esc | KeyCode::Char('t') => {
+        KeyCode::Esc => {
+            app.show_tool_panel = false;
+            InputAction::None
+        }
+        KeyCode::Char('t') if event.modifiers.contains(KeyModifiers::CONTROL) => {
             app.show_tool_panel = false;
             InputAction::None
         }
@@ -400,6 +402,31 @@ mod tests {
         let action = handle_input(&mut app, ctrl_key('q'));
 
         assert!(matches!(action, InputAction::None));
+        assert!(app.should_quit);
+    }
+
+    #[test]
+    fn plain_t_starts_a_prompt_instead_of_opening_tools() {
+        let mut app = App::new();
+
+        let action = handle_input(
+            &mut app,
+            Event::Key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE)),
+        );
+
+        assert!(matches!(action, InputAction::None));
+        assert_eq!(app.prompt, "t");
+        assert!(!app.show_tool_panel);
+    }
+
+    #[test]
+    fn ctrl_t_toggles_tools_and_ctrl_c_quits_while_open() {
+        let mut app = App::new();
+
+        handle_input(&mut app, ctrl_key('t'));
+        assert!(app.show_tool_panel);
+
+        handle_input(&mut app, ctrl_key('c'));
         assert!(app.should_quit);
     }
 }

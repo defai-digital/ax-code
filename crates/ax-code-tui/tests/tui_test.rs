@@ -371,7 +371,7 @@ fn test_input_question_escape() {
 
 #[test]
 fn test_scroll() {
-    let mut app = App::new();
+    let mut app = app_with_session("s");
 
     // Seed a transcript so scroll_down has somewhere to go. Without messages
     // the new bounded scroll_down stays at 0 (you cannot scroll past nothing).
