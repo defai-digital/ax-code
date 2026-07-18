@@ -867,23 +867,24 @@ html:not(.dark) .chat-scroll {
   font-size: inherit !important;
 }
 
-/* Streamdown headers: keep proportional but not oversized */
+/* Streamdown headers: modest ramp so long answers stay scannable without
+   oversized headings inside chat bubbles (~half of GitHub's scale). */
 .markdown-content h1 {
-  font-size: 1.125em;
+  font-size: 1.375em;
   font-weight: 600;
   margin-top: 1em;
   margin-bottom: 0.5em;
 }
 
 .markdown-content h2 {
-  font-size: 1.0625em;
+  font-size: 1.2em;
   font-weight: 600;
   margin-top: 0.875em;
   margin-bottom: 0.375em;
 }
 
 .markdown-content h3 {
-  font-size: 1em;
+  font-size: 1.1em;
   font-weight: 600;
   margin-top: 0.75em;
   margin-bottom: 0.25em;
