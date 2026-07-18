@@ -117,7 +117,8 @@ describe("update-models script", () => {
     const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
 
     expect(data.xai?.name).toBe("Grok Cloud API")
-    expect(data.xai?.models?.["grok-build-0.1"]?.id).toBe("grok-build-0.1")
+    expect(Object.keys(data.xai?.models ?? {})).toEqual(["grok-4.5"])
+    expect(data.xai?.models?.["grok-4.5"]?.id).toBe("grok-4.5")
     expect(data.groq?.name).toBe("GroqCloud")
     expect(data.groq?.env).toEqual(["GROQ_API_KEY"])
     expect(data.groq?.api).toBe("https://api.groq.com/openai/v1")
@@ -144,8 +145,7 @@ describe("update-models script", () => {
       "qwen/qwen3-coder-flash",
       "google/gemini-3.5-flash",
       "qwen/qwen3.7-plus",
-      "x-ai/grok-build-0.1",
-      "x-ai/grok-4.3",
+      "x-ai/grok-4.5",
       "z-ai/glm-5.2",
     ])
     expect(data.openrouter?.models?.["openai/gpt-5.2-codex"]?.tool_call).toBe(true)

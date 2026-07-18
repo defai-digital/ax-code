@@ -163,6 +163,7 @@ export type UserMessage = {
     network?: boolean
   }
   variant?: string
+  requestedDepth?: "fast" | "standard" | "deep" | "xdeep"
 }
 
 export type ProviderAuthError = {
@@ -11333,6 +11334,7 @@ export type SessionPromptData = {
     format?: OutputFormat
     system?: string
     variant?: string
+    requestedDepth?: "fast" | "standard" | "deep" | "xdeep"
     parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
   }
   path: {
@@ -11541,6 +11543,7 @@ export type SessionPromptAsyncData = {
     format?: OutputFormat
     system?: string
     variant?: string
+    requestedDepth?: "fast" | "standard" | "deep" | "xdeep"
     parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
   }
   path: {

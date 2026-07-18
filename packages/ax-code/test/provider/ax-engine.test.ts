@@ -1619,7 +1619,9 @@ describe("ax-engine provider integration", () => {
       name: "AX Engine",
       source: "config",
       env: [],
-      options: {},
+      // Use a known executable so this regression exercises the missing-model
+      // branch regardless of whether ax-engine is installed on the test host.
+      options: { binaryPath: process.execPath },
       models: {},
     } as any)
 

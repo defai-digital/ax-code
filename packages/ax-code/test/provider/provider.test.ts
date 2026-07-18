@@ -2882,7 +2882,7 @@ test("custom model inherits api.url from models.dev provider", async () => {
   })
 })
 
-test("xai reasoning models do not auto-generate reasoningEffort variants", async () => {
+test("xai reasoning models expose supported reasoningEffort variants", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2904,7 +2904,11 @@ test("xai reasoning models do not auto-generate reasoningEffort variants", async
       const model = providers[ProviderID.xai].models["grok-4.5"]
       expect(model.capabilities.reasoning).toBe(true)
       expect(model.variants).toBeDefined()
-      expect(model.variants).toEqual({})
+      expect(model.variants).toEqual({
+        low: { reasoningEffort: "low" },
+        medium: { reasoningEffort: "medium" },
+        high: { reasoningEffort: "high" },
+      })
     },
   })
 })
@@ -2941,7 +2945,7 @@ test("model variants can be disabled via config", async () => {
       const model = providers[ProviderID.xai].models["grok-4.5"]
       expect(model.variants).toBeDefined()
       expect(model.variants!["high"]).toBeUndefined()
-      expect(model.variants!["medium"]).toBeUndefined()
+      expect(model.variants!["medium"]).toEqual({ reasoningEffort: "medium" })
     },
   })
 })
@@ -3037,6 +3041,7 @@ test("all variants can be disabled via config", async () => {
               models: {
                 "grok-4.5": {
                   variants: {
+                    low: { disabled: true },
                     high: { disabled: true },
                     medium: { disabled: true },
                     max: { disabled: true },
@@ -3063,7 +3068,7 @@ test("all variants can be disabled via config", async () => {
   })
 })
 
-test("xai variant config stays explicit without generated reasoningEffort", async () => {
+test("xai variant config merges with generated reasoningEffort", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -3096,7 +3101,7 @@ test("xai variant config stays explicit without generated reasoningEffort", asyn
       const providers = await Provider.list()
       const model = providers[ProviderID.xai].models["grok-4.5"]
       expect(model.variants!["high"]).toBeDefined()
-      expect(model.variants!["high"].reasoningEffort).toBeUndefined()
+      expect(model.variants!["high"].reasoningEffort).toBe("high")
       expect(model.variants!["high"].extraOption).toBe("custom-value")
     },
   })
@@ -3134,7 +3139,7 @@ test("variants filtered in second pass for database models", async () => {
       const model = providers[ProviderID.xai].models["grok-4.5"]
       expect(model.variants).toBeDefined()
       expect(model.variants!["high"]).toBeUndefined()
-      expect(model.variants!["medium"]).toBeUndefined()
+      expect(model.variants!["medium"]).toEqual({ reasoningEffort: "medium" })
     },
   })
 })

@@ -27637,6 +27637,15 @@
                   "variant": {
                     "type": "string"
                   },
+                  "requestedDepth": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "deep",
+                      "xdeep"
+                    ]
+                  },
                   "parts": {
                     "type": "array",
                     "items": {
@@ -28129,6 +28138,15 @@
                   },
                   "variant": {
                     "type": "string"
+                  },
+                  "requestedDepth": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "deep",
+                      "xdeep"
+                    ]
                   },
                   "parts": {
                     "type": "array",
@@ -34264,6 +34282,15 @@
           },
           "variant": {
             "type": "string"
+          },
+          "requestedDepth": {
+            "type": "string",
+            "enum": [
+              "fast",
+              "standard",
+              "deep",
+              "xdeep"
+            ]
           }
         },
         "required": [

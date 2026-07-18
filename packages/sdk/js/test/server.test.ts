@@ -9,6 +9,7 @@ import { createAxCodeServer as createAxCodeServerV2 } from "../src/v2/server"
 import {
   type Proc,
   formatHostnameForUrl,
+  resolveSpawnCommand,
   resolveServerDefaults,
   waitForServerReady,
 } from "../src/internal/server-shared"
@@ -58,17 +59,19 @@ describe("createAxCodeServer", () => {
   test("kills the spawned server when startup is aborted", async () => {
     await using fake = await createFakeAxCode()
     const controller = new AbortController()
+    expect(resolveSpawnCommand("ax-code", process.env)).toBe(fake.bin)
     const startup = createAxCodeServer({ timeout: fixtureStartupTimeoutMs, signal: controller.signal })
-    const rejection = expect(startup).rejects.toThrow(/abort/i)
+    const rejection = captureRejection(startup)
 
     const pid = Number(await waitForFile(fake.pidFile))
     controller.abort()
-    await rejection
+    await expect(rejection).resolves.toMatchObject({ message: expect.stringMatching(/abort/i) })
     await waitForProcessExit(pid)
   })
 
   test("starts with Basic Auth credentials by default", async () => {
     await using fake = await createReadyFakeAxCode()
+    expect(resolveSpawnCommand("ax-code", process.env)).toBe(fake.bin)
 
     const server = await createAxCodeServer({ auth: { username: "app", password: "secret" } })
     try {
@@ -104,17 +107,19 @@ describe("createAxCodeServer", () => {
   test("v2 kills the spawned server when startup is aborted", async () => {
     await using fake = await createFakeAxCode()
     const controller = new AbortController()
+    expect(resolveSpawnCommand("ax-code", process.env)).toBe(fake.bin)
     const startup = createAxCodeServerV2({ timeout: fixtureStartupTimeoutMs, signal: controller.signal })
-    const rejection = expect(startup).rejects.toThrow(/abort/i)
+    const rejection = captureRejection(startup)
 
     await waitForFile(fake.pidFile)
     controller.abort()
-    await rejection
+    await expect(rejection).resolves.toMatchObject({ message: expect.stringMatching(/abort/i) })
     await expect(waitForFile(fake.termFile)).resolves.toBe("terminated")
   })
 
   test("v2 starts with Basic Auth credentials by default", async () => {
     await using fake = await createReadyFakeAxCode()
+    expect(resolveSpawnCommand("ax-code", process.env)).toBe(fake.bin)
 
     const server = await createAxCodeServerV2({ auth: { username: "app", password: "secret" } })
     try {
@@ -153,6 +158,15 @@ function setEnv(key: string, value: string | undefined) {
   else process.env[key] = value
 }
 
+async function captureRejection(promise: Promise<unknown>): Promise<Error> {
+  try {
+    await promise
+    throw new Error("Expected promise to reject")
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error))
+  }
+}
+
 async function createFakeAxCode() {
   const dir = await mkdtemp(path.join(tmpdir(), "ax-code-sdk-server-"))
   const bin = path.join(dir, "ax-code")
@@ -175,6 +189,7 @@ async function createFakeAxCode() {
   process.env.AX_CODE_FAKE_TERM_FILE = termFile
 
   return {
+    bin,
     pidFile,
     termFile,
     async [Symbol.asyncDispose]() {
@@ -212,6 +227,7 @@ async function createReadyFakeAxCode() {
   process.env.AX_CODE_FAKE_ARGS_FILE = argsFile
 
   return {
+    bin,
     pidFile,
     termFile,
     authFile,
