@@ -56,6 +56,66 @@ describe("ReasoningPolicy", () => {
     })
   })
 
+  test("auto baseline works for CLI-style models that publish effort variants without reasoning=true", () => {
+    expect(
+      ReasoningPolicy.decide({
+        model: {
+          capabilities: { reasoning: false },
+          options: {},
+          variants: {
+            low: { effort: "low" },
+            medium: { effort: "medium" },
+            high: { effort: "high" },
+            max: { effort: "max" },
+          },
+        },
+        agent: buildAgent,
+        messages: [{ role: "user", content: "rename this variable" }],
+      }),
+    ).toMatchObject({
+      depth: "standard",
+      reason: "auto_baseline",
+      options: { effort: "medium" },
+    })
+
+    expect(
+      ReasoningPolicy.options({
+        autonomous: true,
+        model: {
+          capabilities: { reasoning: false },
+          options: {},
+          variants: {
+            low: { effort: "low" },
+            medium: { effort: "medium" },
+            high: { effort: "high" },
+          },
+        },
+        agent: buildAgent,
+        messages: [{ role: "user", content: "fix this bug" }],
+      }),
+    ).toEqual({ effort: "high" })
+  })
+
+  test("treats auto/default sentinel user variants as Auto when not real model levels", () => {
+    expect(
+      ReasoningPolicy.options({
+        userVariant: "auto",
+        model: baseModel,
+        agent: planAgent,
+        messages: [{ role: "user", content: "plan a complex migration" }],
+      }),
+    ).toEqual({ reasoningEffort: "high" })
+
+    expect(
+      ReasoningPolicy.options({
+        userVariant: "default",
+        model: baseModel,
+        agent: buildAgent,
+        messages: [{ role: "user", content: "rename this variable" }],
+      }),
+    ).toEqual({ reasoningEffort: "medium" })
+  })
+
   test("auto baseline prefers medium over high and skips when medium is disabled", () => {
     expect(
       ReasoningPolicy.options({

@@ -62,9 +62,10 @@ export namespace ReasoningPolicy {
     if (input.requestedDepth === "fast") return fast("explicit_request")
     // Explicit standard depth keeps empty options (caller/user already chose depth).
     if (input.requestedDepth === "standard") return emptyStandard("explicit_request")
-    if (!input.model.capabilities?.reasoning) return emptyStandard()
+
     // User-selected effort is applied later from model.variants[userVariant].
-    if (input.userVariant) return emptyStandard()
+    // Sentinel values ("auto", bare "default") mean Auto, not a wire override.
+    if (explicitUserVariant(input)) return emptyStandard()
 
     if (
       hasExplicitReasoning(input.model.options) ||
@@ -72,6 +73,10 @@ export namespace ReasoningPolicy {
       hasExplicitReasoning(input.providerOptions)
     )
       return emptyStandard()
+
+    // Apply Auto/escalation when the model reasons natively OR publishes effort
+    // variants (CLI providers report reasoning=false but still accept --effort).
+    if (!canTuneEffort(input.model)) return emptyStandard()
 
     if (input.requestedDepth) {
       return decisionForDepth(input, input.requestedDepth, "explicit_request") ?? auto(input)
@@ -167,6 +172,26 @@ export namespace ReasoningPolicy {
     return options
   }
 
+  /**
+   * True when the user picked a real effort override (not Auto).
+   * "auto" is never a provider wire level we synthesize; bare "default" is only
+   * an override when the model actually publishes a `default` variant.
+   */
+  function explicitUserVariant(input: Input): string | undefined {
+    const variant = input.userVariant
+    if (variant === undefined || variant === "") return undefined
+    const key = variant.toLowerCase()
+    if (key === "auto") return undefined
+    if (key === "default" && !usableVariant(input.model.variants?.default)) return undefined
+    return variant
+  }
+
+  function canTuneEffort(model: ReasoningPolicyModel): boolean {
+    if (model.capabilities?.reasoning) return true
+    // CLI / gateway models may publish effort variants without reasoning=true.
+    return Boolean(selectAutoBaseline(model.variants) || selectDeepOptions(model.variants))
+  }
+
   function decisionForDepth(
     input: Input,
     depth: Depth,
@@ -187,15 +212,19 @@ export namespace ReasoningPolicy {
     }
   }
 
+  function selectDeepOptions(variants: ReasoningPolicyModel["variants"]): Record<string, unknown> | undefined {
+    return usableVariant(variants?.deep) ?? usableVariant(variants?.high) ?? usableVariant(variants?.medium)
+  }
+
   function selectVariant(
     variants: ReasoningPolicyModel["variants"],
     depth: Extract<Depth, "deep" | "xdeep">,
   ): { depth: Extract<Depth, "deep" | "xdeep">; options: Record<string, unknown> } | undefined {
     if (depth === "xdeep") {
-      const max = usableVariant(variants?.xdeep) ?? usableVariant(variants?.max)
+      const max = usableVariant(variants?.xdeep) ?? usableVariant(variants?.max) ?? usableVariant(variants?.xhigh)
       if (max) return { depth: "xdeep", options: max }
     }
-    const deep = usableVariant(variants?.deep) ?? usableVariant(variants?.high) ?? usableVariant(variants?.medium)
+    const deep = selectDeepOptions(variants)
     if (deep) return { depth: "deep", options: deep }
     return undefined
   }
@@ -204,6 +233,7 @@ export namespace ReasoningPolicy {
    * Balanced baseline for Auto (no user effort override).
    * Prefer medium/default so reasoning-capable models actually enable thinking
    * instead of shipping bare provider defaults that often disable it.
+   * CLI providers map the same keys onto native --effort flags.
    */
   function selectAutoBaseline(variants: ReasoningPolicyModel["variants"]): Record<string, unknown> | undefined {
     return usableVariant(variants?.medium) ?? usableVariant(variants?.default)
