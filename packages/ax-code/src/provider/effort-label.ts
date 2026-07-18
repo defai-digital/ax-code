@@ -64,7 +64,7 @@ const KNOWN: Record<string, { label: string; description: string }> = {
   },
   auto: {
     label: "Auto",
-    description: "Use model default; AX may still raise depth when needed",
+    description: "Balanced by default; AX raises depth for plan, autonomous, or high-risk work",
   },
 }
 
@@ -103,7 +103,7 @@ export function effortDisplay(variant: string | undefined): string {
 /** Toast / status line after the user changes effort. */
 export function effortChangeMessage(variant: string | undefined): string {
   if (variant === undefined || variant === "") {
-    return "Effort → Auto (model default)"
+    return "Effort → Auto (balanced, may raise)"
   }
   const label = effortLabel(variant)
   const key = variant.toLowerCase()

@@ -24,6 +24,7 @@ export namespace ReasoningPolicy {
   export type Reason =
     | "small_request"
     | "explicit_request"
+    | "auto_baseline"
     | "plan_mode"
     | "autonomous_mode"
     | "planning_risk_signal"
@@ -59,28 +60,30 @@ export namespace ReasoningPolicy {
   export function decide(input: Input): Decision {
     if (input.small) return fast("small_request")
     if (input.requestedDepth === "fast") return fast("explicit_request")
-    if (input.requestedDepth === "standard") return standard("explicit_request")
-    if (!input.model.capabilities?.reasoning) return standard()
-    if (input.userVariant) return standard()
+    // Explicit standard depth keeps empty options (caller/user already chose depth).
+    if (input.requestedDepth === "standard") return emptyStandard("explicit_request")
+    if (!input.model.capabilities?.reasoning) return emptyStandard()
+    // User-selected effort is applied later from model.variants[userVariant].
+    if (input.userVariant) return emptyStandard()
 
     if (
       hasExplicitReasoning(input.model.options) ||
       hasExplicitReasoning(input.agent.options) ||
       hasExplicitReasoning(input.providerOptions)
     )
-      return standard()
+      return emptyStandard()
 
     if (input.requestedDepth) {
-      return decisionForDepth(input, input.requestedDepth, "explicit_request") ?? standard()
+      return decisionForDepth(input, input.requestedDepth, "explicit_request") ?? auto(input)
     }
     if ((input.failureCount ?? 0) >= 2) {
-      return decisionForDepth(input, "deep", "repeated_failure") ?? standard()
+      return decisionForDepth(input, "deep", "repeated_failure") ?? auto(input)
     }
     if (input.uncertainty === "high") {
-      return decisionForDepth(input, "deep", "high_uncertainty") ?? standard()
+      return decisionForDepth(input, "deep", "high_uncertainty") ?? auto(input)
     }
     if (input.blastRadius === "high") {
-      return decisionForDepth(input, "deep", "high_blast_radius") ?? standard()
+      return decisionForDepth(input, "deep", "high_blast_radius") ?? auto(input)
     }
 
     const objectiveText = objective(input.messages)
@@ -94,7 +97,9 @@ export namespace ReasoningPolicy {
         taskText,
       ) || /(自主|推理|深度|複雜|審查|重構|遷移|效能|瓶頸|除錯|根因|回歸|跨檔案|最佳實務)/.test(taskText)
 
-    if (!input.autonomous && input.agent.name !== "plan" && !(planningSignal && riskSignal)) return standard()
+    if (!input.autonomous && input.agent.name !== "plan" && !(planningSignal && riskSignal)) {
+      return auto(input)
+    }
 
     return (
       decisionForDepth(
@@ -102,7 +107,7 @@ export namespace ReasoningPolicy {
         "deep",
         input.autonomous ? "autonomous_mode" : input.agent.name === "plan" ? "plan_mode" : "planning_risk_signal",
         objectiveText,
-      ) ?? standard()
+      ) ?? auto(input)
     )
   }
 
@@ -130,7 +135,11 @@ export namespace ReasoningPolicy {
       "reasoningEffort" in options ||
       "reasoning_effort" in options ||
       "thinking" in options ||
-      "thinkingConfig" in options
+      "thinkingConfig" in options ||
+      // Anthropic current models use top-level `effort`; Alibaba uses enable_thinking.
+      "effort" in options ||
+      "enable_thinking" in options ||
+      "thinking_budget" in options
     )
       return true
     return Object.values(options).some(hasExplicitReasoning)
@@ -165,7 +174,7 @@ export namespace ReasoningPolicy {
     objectiveText = objective(input.messages),
   ): Decision | undefined {
     if (depth === "fast") return fast(reason)
-    if (depth === "standard") return standard(reason)
+    if (depth === "standard") return auto(input, reason)
 
     const selected = selectVariant(input.model.variants, depth)
     if (!selected) return undefined
@@ -191,6 +200,15 @@ export namespace ReasoningPolicy {
     return undefined
   }
 
+  /**
+   * Balanced baseline for Auto (no user effort override).
+   * Prefer medium/default so reasoning-capable models actually enable thinking
+   * instead of shipping bare provider defaults that often disable it.
+   */
+  function selectAutoBaseline(variants: ReasoningPolicyModel["variants"]): Record<string, unknown> | undefined {
+    return usableVariant(variants?.medium) ?? usableVariant(variants?.default)
+  }
+
   function fast(reason?: Reason): Decision {
     return {
       depth: "fast",
@@ -200,11 +218,23 @@ export namespace ReasoningPolicy {
     }
   }
 
-  function standard(reason?: Reason): Decision {
+  /** Empty options — used when caller/user already owns the reasoning shape. */
+  function emptyStandard(reason?: Reason): Decision {
     return {
       depth: "standard",
       reason,
       options: {},
+      checkpoint: false,
+    }
+  }
+
+  /** Auto mode: apply a balanced variant when the model exposes one. */
+  function auto(input: Input, reason?: Reason): Decision {
+    const options = selectAutoBaseline(input.model.variants) ?? {}
+    return {
+      depth: "standard",
+      reason: reason ?? (isNonEmptyRecord(options) ? "auto_baseline" : undefined),
+      options,
       checkpoint: false,
     }
   }

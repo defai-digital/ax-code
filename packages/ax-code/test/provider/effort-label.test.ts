@@ -26,7 +26,7 @@ describe("effort-label", () => {
   })
 
   test("change message includes wire key when it differs from the label", () => {
-    expect(effortChangeMessage(undefined)).toBe("Effort → Auto (model default)")
+    expect(effortChangeMessage(undefined)).toBe("Effort → Auto (balanced, may raise)")
     expect(effortChangeMessage("high")).toBe("Effort → Deep (high)")
     expect(effortChangeMessage("thinking")).toBe("Effort → Thinking")
   })
@@ -43,7 +43,7 @@ describe("effort-label", () => {
   })
 
   test("descriptions cover known and unknown keys", () => {
-    expect(effortDescription(undefined)).toMatch(/default/i)
+    expect(effortDescription(undefined)).toMatch(/balanced/i)
     expect(effortDescription("low")).toMatch(/simple/i)
     expect(effortDescription("weird")).toContain("weird")
   })

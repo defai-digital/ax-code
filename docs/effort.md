@@ -68,9 +68,10 @@ Providers whose effort API is unverified or incompatible (Groq's hosted API, Ope
 ## Defaults and auto behavior
 
 1. **Auto** means no explicit user override for that model.
-2. When Auto is active, [ReasoningPolicy](../packages/ax-code/src/control-plane/reasoning-policy.ts) may still raise depth for plan/autonomous/high-risk prompts.
-3. When the user picks an explicit effort, that override wins for subsequent turns (policy does not fight it).
-4. Effort is remembered **per model** in local model preferences (`model.json` in the TUI state dir).
+2. When Auto is active, [ReasoningPolicy](../packages/ax-code/src/control-plane/reasoning-policy.ts) applies a **balanced** baseline (`medium` / provider `default` variant) so reasoning-capable models actually enable thinking instead of omitting effort params.
+3. Policy may still **raise** depth to Deep for plan mode, autonomous mode, or high-risk prompts (and for repeated failure / high uncertainty / high blast radius when those signals are supplied).
+4. When the user picks an explicit effort, that override wins for subsequent turns (policy does not fight it). Config or agent options that already set reasoning/`effort`/`thinking` are also left alone.
+5. Effort is remembered **per model** in local model preferences (`model.json` in the TUI state dir).
 
 ## Configuration
 

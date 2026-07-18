@@ -41,14 +41,51 @@ describe("ReasoningPolicy", () => {
     ).toEqual({ reasoningEffort: "high" })
   })
 
-  test("does not upgrade simple build tasks", () => {
+  test("applies balanced auto baseline for simple build tasks", () => {
     expect(
-      ReasoningPolicy.options({
+      ReasoningPolicy.decide({
         model: baseModel,
         agent: buildAgent,
         messages: [{ role: "user", content: "rename this variable" }],
       }),
+    ).toMatchObject({
+      depth: "standard",
+      reason: "auto_baseline",
+      checkpoint: false,
+      options: { reasoningEffort: "medium" },
+    })
+  })
+
+  test("auto baseline prefers medium over high and skips when medium is disabled", () => {
+    expect(
+      ReasoningPolicy.options({
+        model: {
+          capabilities: { reasoning: true },
+          options: {},
+          variants: {
+            medium: { reasoningEffort: "medium", disabled: true },
+            high: { reasoningEffort: "high" },
+          },
+        },
+        agent: buildAgent,
+        messages: [{ role: "user", content: "rename this variable" }],
+      }),
     ).toEqual({})
+
+    expect(
+      ReasoningPolicy.options({
+        model: {
+          capabilities: { reasoning: true },
+          options: {},
+          variants: {
+            default: { reasoningEffort: "default" },
+            high: { reasoningEffort: "high" },
+          },
+        },
+        agent: buildAgent,
+        messages: [{ role: "user", content: "rename this variable" }],
+      }),
+    ).toEqual({ reasoningEffort: "default" })
   })
 
   test("classifies small requests as fast without provider options", () => {
@@ -126,6 +163,23 @@ describe("ReasoningPolicy", () => {
       checkpoint: false,
       options: {},
     })
+  })
+
+  test("respects explicit Anthropic effort in agent options", () => {
+    expect(
+      ReasoningPolicy.options({
+        model: {
+          capabilities: { reasoning: true },
+          options: {},
+          variants: {
+            medium: { effort: "medium", thinking: { type: "adaptive" } },
+            high: { effort: "high", thinking: { type: "adaptive" } },
+          },
+        },
+        agent: { name: "plan", options: { effort: "low", thinking: { type: "adaptive" } } },
+        messages: [{ role: "user", content: "plan a complex migration" }],
+      }),
+    ).toEqual({})
   })
 
   test("respects nested explicit provider reasoning options", () => {
@@ -296,7 +350,9 @@ describe("ReasoningPolicy", () => {
       }),
     ).toMatchObject({
       depth: "standard",
+      reason: "auto_baseline",
       checkpoint: false,
+      options: { reasoningEffort: "medium" },
     })
   })
 
