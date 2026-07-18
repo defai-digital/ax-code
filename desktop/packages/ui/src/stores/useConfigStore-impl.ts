@@ -947,8 +947,16 @@ export const useConfigStore = create<ConfigStore>()(
 
           const firstModel = provider.models.find((model) => isProviderModelSelectable(model))
           const newModelId = firstModel?.id || ""
+          const newModelVariants = (firstModel as { variants?: Record<string, unknown> } | undefined)?.variants
 
           set((state) => {
+            // Drop a variant the new model doesn't expose so the effort
+            // control never shows a stale level for the switched model.
+            const nextVariant =
+              state.currentVariant && newModelVariants && Object.hasOwn(newModelVariants, state.currentVariant)
+                ? state.currentVariant
+                : undefined
+
             const directoryKey = state.activeDirectoryKey
             const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
               providers: state.providers,
@@ -966,12 +974,14 @@ export const useConfigStore = create<ConfigStore>()(
               ...baseSnapshot,
               currentProviderId: providerId,
               currentModelId: newModelId,
+              currentVariant: nextVariant,
               selectedProviderId: providerId,
             }
 
             return {
               currentProviderId: providerId,
               currentModelId: newModelId,
+              currentVariant: nextVariant,
               selectedProviderId: providerId,
               directoryScoped: {
                 ...state.directoryScoped,
@@ -983,13 +993,21 @@ export const useConfigStore = create<ConfigStore>()(
 
         setModel: (modelId: string) => {
           set((state) => {
-            if (modelId && state.currentProviderId) {
-              const provider = state.providers.find((item) => item.id === state.currentProviderId)
-              const model = provider?.models.find((item) => item.id === modelId)
-              if (!model || !isProviderModelSelectable(model)) {
-                return state
-              }
+            const provider = state.currentProviderId
+              ? state.providers.find((item) => item.id === state.currentProviderId)
+              : undefined
+            const model = modelId && provider ? provider.models.find((item) => item.id === modelId) : undefined
+            if (modelId && state.currentProviderId && (!model || !isProviderModelSelectable(model))) {
+              return state
             }
+
+            // Drop a variant the new model doesn't expose (or any variant
+            // when the model is cleared) so stale effort never lingers.
+            const variants = (model as { variants?: Record<string, unknown> } | undefined)?.variants
+            const nextVariant =
+              state.currentVariant && variants && Object.hasOwn(variants, state.currentVariant)
+                ? state.currentVariant
+                : undefined
 
             const directoryKey = state.activeDirectoryKey
             const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
@@ -1007,10 +1025,12 @@ export const useConfigStore = create<ConfigStore>()(
             const nextSnapshot: DirectoryScopedConfig = {
               ...baseSnapshot,
               currentModelId: modelId,
+              currentVariant: nextVariant,
             }
 
             return {
               currentModelId: modelId,
+              currentVariant: nextVariant,
               directoryScoped: {
                 ...state.directoryScoped,
                 [directoryKey]: nextSnapshot,

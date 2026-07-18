@@ -30,10 +30,3 @@ export function effortLabel(variant: string | undefined, autoLabel = "Auto"): st
   if (known) return known
   return titleCase(variant)
 }
-
-/** Compact display for menus: "Deep" or "Deep (high)" when label differs from key. */
-export function effortMenuLabel(variant: string): string {
-  const label = effortLabel(variant)
-  if (label.toLowerCase() === variant.toLowerCase()) return label
-  return `${label}`
-}

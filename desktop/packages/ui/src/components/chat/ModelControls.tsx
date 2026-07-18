@@ -1046,9 +1046,26 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
       currentModelId,
     )
 
-    const resolvedSaved = savedVariant && availableVariants.includes(savedVariant) ? savedVariant : undefined
+    if (savedVariant && availableVariants.includes(savedVariant)) {
+      setCurrentVariant(savedVariant)
+      manualVariantSelectionRef.current = false
+      return
+    }
 
-    setCurrentVariant(resolvedSaved)
+    // No per-session memory (e.g. fresh or empty session after an app
+    // restart): keep a still-valid restored selection instead of resetting
+    // to Default; otherwise seed from the settings default.
+    if (currentVariant && availableVariants.includes(currentVariant)) {
+      return
+    }
+    // An explicit in-session choice — including picking "Default" — wins
+    // over the settings fallback until the model changes.
+    if (manualVariantSelectionRef.current) {
+      return
+    }
+    const fallback =
+      settingsDefaultVariant && availableVariants.includes(settingsDefaultVariant) ? settingsDefaultVariant : undefined
+    setCurrentVariant(fallback)
     manualVariantSelectionRef.current = false
   }, [
     availableVariants,

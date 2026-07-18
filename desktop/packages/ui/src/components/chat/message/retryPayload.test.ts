@@ -90,4 +90,60 @@ describe("buildAssistantRetryPayload", () => {
       }),
     ).toBeNull()
   })
+
+  test("carries the user message variant so retry keeps the effort level", () => {
+    const payload = buildAssistantRetryPayload({
+      messages: [
+        makeMessage("u1", "user", { providerID: "openai", modelID: "gpt-5", variant: "high" }),
+        makeMessage("a1", "assistant"),
+      ],
+      partsByMessage: { u1: [textPart("fix the bug")] },
+      failedAssistantMessage: makeMessage("a1", "assistant"),
+    })
+
+    expect(payload?.variant).toBe("high")
+  })
+
+  test("reads a nested model.variant from pre-1.4.0 histories", () => {
+    const payload = buildAssistantRetryPayload({
+      messages: [
+        makeMessage("u1", "user", {
+          providerID: "openai",
+          modelID: "gpt-5",
+          model: { providerID: "openai", modelID: "gpt-5", variant: "low" },
+        }),
+        makeMessage("a1", "assistant"),
+      ],
+      partsByMessage: { u1: [textPart("fix the bug")] },
+      failedAssistantMessage: makeMessage("a1", "assistant"),
+    })
+
+    expect(payload?.variant).toBe("low")
+  })
+
+  test("falls back to the failed assistant message variant", () => {
+    const payload = buildAssistantRetryPayload({
+      messages: [
+        makeMessage("u1", "user", { providerID: "p", modelID: "m" }),
+        makeMessage("a1", "assistant", { providerID: "p", modelID: "m", variant: "medium" }),
+      ],
+      partsByMessage: { u1: [textPart("hello")] },
+      failedAssistantMessage: makeMessage("a1", "assistant", { providerID: "p", modelID: "m", variant: "medium" }),
+    })
+
+    expect(payload?.variant).toBe("medium")
+  })
+
+  test("omits variant when neither message carried one", () => {
+    const payload = buildAssistantRetryPayload({
+      messages: [
+        makeMessage("u1", "user", { providerID: "p", modelID: "m" }),
+        makeMessage("a1", "assistant"),
+      ],
+      partsByMessage: { u1: [textPart("hello")] },
+      failedAssistantMessage: makeMessage("a1", "assistant"),
+    })
+
+    expect(payload).toEqual({ text: "hello", providerID: "p", modelID: "m" })
+  })
 })

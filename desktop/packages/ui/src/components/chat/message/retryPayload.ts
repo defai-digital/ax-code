@@ -6,11 +6,21 @@ export type AssistantRetryPayload = {
   providerID: string
   modelID: string
   agent?: string
+  variant?: string
 }
 
 const readNonEmptyString = (source: unknown, key: string): string | undefined => {
   const value = (source as Record<string, unknown> | undefined)?.[key]
   return typeof value === "string" && value.trim().length > 0 ? value : undefined
+}
+
+// AX Code 1.4.0 moved the user-message variant from top-level `variant` into
+// `model.variant`; accept both so retries against older histories keep effort.
+const readVariant = (message: unknown): string | undefined => {
+  const topLevel = readNonEmptyString(message, "variant")
+  if (topLevel) return topLevel
+  const model = (message as { model?: unknown } | undefined)?.model
+  return readNonEmptyString(model, "variant")
 }
 
 const extractUserText = (parts: Part[] | undefined): string => {
@@ -60,5 +70,12 @@ export const buildAssistantRetryPayload = (input: {
   }
 
   const agent = readNonEmptyString(userMessage, "agent") ?? readNonEmptyString(input.failedAssistantMessage, "agent")
-  return { text, providerID, modelID, ...(agent ? { agent } : {}) }
+  const variant = readVariant(userMessage) ?? readVariant(input.failedAssistantMessage)
+  return {
+    text,
+    providerID,
+    modelID,
+    ...(agent ? { agent } : {}),
+    ...(variant ? { variant } : {}),
+  }
 }

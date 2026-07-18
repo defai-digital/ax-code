@@ -662,7 +662,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     : undefined
 
   const headerVariant =
-    !isUser && modelHasVariants
+    !isUser && (modelHasVariants || headerVariantRaw)
       ? headerVariantRaw
         ? effortLabel(headerVariantRaw)
         : "Default"
@@ -713,7 +713,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
           undefined,
           undefined,
           undefined,
-          undefined,
+          payload.variant,
           undefined,
           { sessionId },
         )
