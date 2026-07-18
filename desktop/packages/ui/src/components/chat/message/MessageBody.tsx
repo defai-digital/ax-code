@@ -325,6 +325,8 @@ interface MessageBodyProps {
   onFork?: () => void
   errorMessage?: string
   errorVariant?: "error" | "info"
+  onRetry?: () => void
+  retryPending?: boolean
   userActionsMode?: "inline" | "external-content" | "external-actions"
   stickyUserHeaderEnabled?: boolean
 }
@@ -868,6 +870,8 @@ const AssistantMessageBody = React.memo(
     turnGroupingContext,
     errorMessage,
     errorVariant = "error",
+    onRetry,
+    retryPending = false,
   }: Omit<MessageBodyProps, "isUser">) => {
     const { t } = useI18n()
     const chatSurfaceMode = useChatSurfaceMode()
@@ -1893,6 +1897,22 @@ const AssistantMessageBody = React.memo(
                         className="[&_.markdown-content>*:first-child]:mt-0 [&_.markdown-content>*:last-child]:mb-0"
                       />
                     </div>
+                    {errorVariant === "error" && onRetry ? (
+                      <button
+                        type="button"
+                        onClick={onRetry}
+                        disabled={retryPending}
+                        aria-label={t("chat.error.retryAria")}
+                        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--status-error-border)] px-2 py-1 typography-micro font-medium text-[var(--status-error)] transition-colors hover:bg-[var(--status-error-background)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:opacity-50"
+                      >
+                        {retryPending ? (
+                          <Icon name="loader-4" className="h-3 w-3 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <Icon name="arrow-go-forward" className="h-3 w-3" aria-hidden="true" />
+                        )}
+                        {t("chat.error.retry")}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </FadeInOnReveal>

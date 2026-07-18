@@ -7,17 +7,22 @@ import { MessageFreshnessDetector } from "@/lib/messageFreshness"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { useFeatureFlagsStore } from "@/stores/useFeatureFlagsStore"
 import { useUIStore } from "@/stores/useUIStore"
+import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useSelectionStore } from "@/sync/selection-store"
+import { useChildStoreManager } from "@/sync/sync-context"
 import { useDeviceInfo } from "@/lib/device"
 import { useThemeSystem } from "@/contexts/useThemeSystem"
 import { generateSyntaxTheme } from "@/lib/theme/syntaxThemeGenerator"
+import { useI18n } from "@/lib/i18n"
+import { toast } from "@/components/ui"
 import { cn } from "@/lib/utils"
 import { effortLabel } from "@/lib/effort-label"
 
 import type { AnimationHandlers, ContentChangeReason } from "@/hooks/useChatAutoFollow"
 import MessageHeader from "./message/MessageHeader"
 import MessageBody from "./message/MessageBody"
+import { buildAssistantRetryPayload } from "./message/retryPayload"
 import type { AgentMentionInfo } from "./message/types"
 import type { StreamPhase, ToolPopupContent } from "./message/types"
 import { deriveMessageRole } from "./message/messageRole"
@@ -136,6 +141,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   onUserAnimationConsumed,
 }) => {
   const { isMobile, isTablet, hasTouchInput } = useDeviceInfo()
+  const { t } = useI18n()
   const alwaysShowMessageActions = isMobile || isTablet
   const { currentTheme } = useThemeSystem()
   const messageContainerRef = React.useRef<HTMLDivElement | null>(null)
@@ -673,6 +679,53 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   const assistantErrorText = assistantError?.text
   const assistantErrorVariant = assistantError?.variant
 
+  const childStores = useChildStoreManager()
+  const [isRetryingTurn, setIsRetryingTurn] = React.useState(false)
+
+  // Retry a failed assistant turn: resend the user message that started it
+  // with the same model coordinates (see buildAssistantRetryPayload).
+  const handleRetryTurn = React.useCallback(async () => {
+    if (!sessionId || isRetryingTurn) return
+    const directory =
+      useSessionUIStore.getState().getDirectoryForSession(sessionId) ?? useDirectoryStore.getState().currentDirectory
+    const store = directory ? childStores.ensureChild(directory) : null
+    const state = store?.getState()
+    const payload = state
+      ? buildAssistantRetryPayload({
+          messages: state.message[sessionId] ?? [],
+          partsByMessage: state.part,
+          failedAssistantMessage: message.info,
+        })
+      : null
+    if (!payload) {
+      toast.error(t("chat.error.retryUnavailable"))
+      return
+    }
+    setIsRetryingTurn(true)
+    try {
+      await useSessionUIStore
+        .getState()
+        .sendMessage(
+          payload.text,
+          payload.providerID,
+          payload.modelID,
+          payload.agent,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { sessionId },
+        )
+    } catch (error) {
+      toast.error(t("chat.error.retryFailed"), {
+        description: error instanceof Error ? error.message : undefined,
+      })
+    } finally {
+      setIsRetryingTurn(false)
+    }
+  }, [childStores, isRetryingTurn, message.info, sessionId, t])
+
   const messageTextContent = React.useMemo(() => {
     if (isUser) {
       const shellOutputs = displayParts
@@ -1025,6 +1078,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         onFork={isUser ? handleFork : undefined}
                         errorMessage={assistantErrorText}
                         errorVariant={assistantErrorVariant}
+                        onRetry={handleRetryTurn}
+                        retryPending={isRetryingTurn}
                         userActionsMode={useExternalUserActionsRow ? "external-content" : "inline"}
                         stickyUserHeaderEnabled={stickyUserHeader}
                       />
@@ -1060,6 +1115,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         onFork={isUser ? handleFork : undefined}
                         errorMessage={assistantErrorText}
                         errorVariant={assistantErrorVariant}
+                        onRetry={handleRetryTurn}
+                        retryPending={isRetryingTurn}
                         userActionsMode="external-actions"
                         stickyUserHeaderEnabled={stickyUserHeader}
                       />
@@ -1113,6 +1170,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 turnGroupingContext={turnGroupingContext}
                 errorMessage={assistantErrorText}
                 errorVariant={assistantErrorVariant}
+                onRetry={handleRetryTurn}
+                retryPending={isRetryingTurn}
               />
             </div>
           )}
