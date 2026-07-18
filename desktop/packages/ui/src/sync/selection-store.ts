@@ -177,6 +177,10 @@ export const useSelectionStore = create<SelectionState>()(
 
       saveSessionAgentSelection: (sessionId, agentName) =>
         set((s) => {
+          if (s.sessionAgentSelections.get(sessionId) === agentName) {
+            const keys = [...s.sessionAgentSelections.keys()]
+            if (keys[keys.length - 1] === sessionId) return s
+          }
           const map = new Map(s.sessionAgentSelections)
           touchCappedMruEntry(map, sessionId, agentName, MAX_PERSISTED_SESSIONS)
           return { sessionAgentSelections: map }
@@ -186,6 +190,11 @@ export const useSelectionStore = create<SelectionState>()(
 
       saveAgentModelForSession: (sessionId, agentName, providerId, modelId) =>
         set((s) => {
+          const existing = s.sessionAgentModelSelections.get(sessionId)?.get(agentName)
+          if (existing?.providerId === providerId && existing?.modelId === modelId) {
+            const keys = [...s.sessionAgentModelSelections.keys()]
+            if (keys[keys.length - 1] === sessionId) return s
+          }
           const outer = new Map(s.sessionAgentModelSelections)
           const inner = new Map(outer.get(sessionId) ?? new Map())
 

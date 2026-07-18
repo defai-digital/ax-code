@@ -18,7 +18,9 @@ export function startSingleFlightInterval(
     running = true
     void Promise.resolve()
       .then(() => task(() => cancelled))
-      .catch((error) => options.onError?.(error))
+      .catch((error) => {
+        try { options.onError?.(error) } catch { /* swallow onError failure */ }
+      })
       .finally(() => {
         running = false
       })

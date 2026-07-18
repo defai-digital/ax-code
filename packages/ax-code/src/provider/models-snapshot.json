@@ -134199,6 +134199,39 @@
     "name": "Ollama",
     "models": {}
   },
+  "kimi-cli": {
+    "id": "kimi-cli",
+    "name": "Kimi Code CLI",
+    "env": [],
+    "npm": "cli",
+    "models": {
+      "kimi-cli": {
+        "id": "kimi-cli",
+        "name": "Kimi Code CLI",
+        "family": "kimi",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2026-07-01",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "limit": {
+          "context": 262144,
+          "output": 16384
+        },
+        "options": {},
+        "status": "active"
+      }
+    }
+  },
   "groq": {
     "id": "groq",
     "name": "GroqCloud",

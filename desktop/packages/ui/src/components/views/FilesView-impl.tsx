@@ -1213,7 +1213,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
 
     return startSingleFlightInterval(async () => {
       if (document.hidden) return
-      await Promise.all(getBackgroundRefreshDirectories().map((dir) => refreshDirectory(dir)))
+      await Promise.allSettled(getBackgroundRefreshDirectories().map((dir) => refreshDirectory(dir)))
     }, 30000)
   }, [files.listDirectory, getBackgroundRefreshDirectories, refreshDirectory, root])
 
