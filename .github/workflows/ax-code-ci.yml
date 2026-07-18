@@ -210,6 +210,68 @@ jobs:
           path: packages/ax-code/.tmp/coverage-summary.json
           if-no-files-found: ignore
 
+  # The native engine is a standalone Rust/Ratatui client. It intentionally has
+  # its own Grok-inspired presentation rather than OpenTUI pixel parity.
+  native-tui:
+    runs-on: ubuntu-latest
+    env:
+      AX_CODE_DISABLE_SHARE: "true"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "24"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Native TUI format
+        run: cargo fmt --manifest-path crates/Cargo.toml -p ax-code-tui -- --check
+
+      - name: Native TUI tests
+        run: cargo test --manifest-path crates/Cargo.toml -p ax-code-tui
+
+      - name: Native TUI clippy
+        run: cargo clippy --manifest-path crates/Cargo.toml -p ax-code-tui --all-targets -- -D warnings
+
+      - name: Build SDK
+        run: pnpm --dir packages/sdk/js run build
+
+      - name: Launcher and authenticated bridge tests
+        run: pnpm --dir packages/ax-code exec vitest run test/cli/tui/engine.test.ts test/cli/tui/native-supervisor.test.ts test/server/server.test.ts
+
+      - name: Native TUI release build
+        run: cargo build --manifest-path crates/Cargo.toml -p ax-code-tui --release
+
+  # Gate the packaged Rust TUI on both Windows release architectures.
+  native-tui-build-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    env:
+      AX_CODE_DISABLE_SHARE: "true"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+
+      - name: Build native Rust TUI
+        run: cargo build --manifest-path crates/Cargo.toml -p ax-code-tui --release
+
+      - name: Native TUI unit tests
+        run: cargo test --manifest-path crates/Cargo.toml -p ax-code-tui
+
   live:
     if: github.event_name == 'workflow_dispatch' && inputs.live
     runs-on: ubuntu-latest

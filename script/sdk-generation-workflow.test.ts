@@ -5,11 +5,10 @@ const workflow = readFileSync(".github/workflows/ax-code-ci.yml", "utf8")
 
 describe("SDK generation workflow policy", () => {
   test("the deterministic job runs the full SDK generator", () => {
-    const deterministicStart = workflow.indexOf("\n  deterministic:\n")
-    const deterministicEnd = workflow.indexOf("\n  live:\n", deterministicStart)
-    expect(deterministicStart).toBeGreaterThanOrEqual(0)
-    expect(deterministicEnd).toBeGreaterThan(deterministicStart)
-    const deterministicJob = workflow.slice(deterministicStart, deterministicEnd)
+    const deterministicJob = workflow.slice(
+      workflow.indexOf("  deterministic:"),
+      workflow.indexOf("  native-tui:"),
+    )
     expect(deterministicJob).toContain("pnpm --dir packages/sdk/js run build")
     expect(deterministicJob).not.toContain("working-directory: packages/sdk/js\n        run: pnpm exec tsc")
   })

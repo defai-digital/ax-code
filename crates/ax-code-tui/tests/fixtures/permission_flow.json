@@ -1,0 +1,40 @@
+[
+  {
+    "type": "session.created",
+    "properties": {
+      "info": {
+        "id": "session-perm",
+        "sessionID": "session-perm",
+        "role": "assistant"
+      }
+    }
+  },
+  {
+    "type": "permission.asked",
+    "properties": {
+      "sessionID": "session-perm",
+      "requestID": "perm-001",
+      "permissionType": "file_write",
+      "description": "Write to /src/main.rs"
+    }
+  },
+  {
+    "type": "message.updated",
+    "properties": {
+      "info": {
+        "id": "msg-perm-001",
+        "sessionID": "session-perm",
+        "role": "assistant"
+      }
+    }
+  },
+  {
+    "type": "message.part.delta",
+    "properties": {
+      "messageID": "msg-perm-001",
+      "partID": "part-1",
+      "field": "content",
+      "delta": "Permission granted, writing file."
+    }
+  }
+]

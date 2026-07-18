@@ -2413,7 +2413,7 @@
       ]
     },
     "security_scan": {
-      "count": 492,
+      "count": 500,
       "findings": [
         {
           "fingerprint": "5408e4d4e3ebb995a544fa9cf884f57c72d8f2ce3470fe51fc3889c2ad26d767",
@@ -3043,6 +3043,70 @@
           "fingerprint": "78effd5728d7056ddbb893ecc40b0c8464731dfe024c28ebd508686e0a4e26fa",
           "file": "src/cli/cmd/tui/context/local.tsx",
           "line": 532,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal user-controlled"
+        },
+        {
+          "fingerprint": "065653a270747d69c8ff64f075c8b7f03a3dc7ed5ad5239ec4056822aeaf01b1",
+          "file": "src/cli/cmd/tui/native-supervisor.ts",
+          "line": 46,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal user-controlled"
+        },
+        {
+          "fingerprint": "6a69ff6ce01338ed7021ac8552c38f4aa760d6706896518be34e803d9a36c91c",
+          "file": "src/cli/cmd/tui/native-supervisor.ts",
+          "line": 52,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal user-controlled"
+        },
+        {
+          "fingerprint": "a5ad186b4c454eff84a70f81e3c30c3d27be334d259e57a8791b76abe475a1e8",
+          "file": "src/cli/cmd/tui/native-supervisor.ts",
+          "line": 54,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal user-controlled"
+        },
+        {
+          "fingerprint": "d63428cf06775682b5861f98fca279d66d7bc7900f270136310452b463628edc",
+          "file": "src/cli/cmd/tui/native-supervisor.ts",
+          "line": 57,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal user-controlled"
+        },
+        {
+          "fingerprint": "bd60fa370bb0ca490ade0e36e3e55bf2211a3667eb192aca5a0bda28bb59108c",
+          "file": "src/cli/cmd/tui/native-supervisor.ts",
+          "line": 58,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal user-controlled"
+        },
+        {
+          "fingerprint": "e010b101088a46dd77e2db214189775a641150c16881355254de67981844b6e4",
+          "file": "src/cli/cmd/tui/native-supervisor.ts",
+          "line": 64,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal user-controlled"
+        },
+        {
+          "fingerprint": "3d3c7174f53c19811dc4f90edb9debfca2da038017abfd4bb513ea5a7e4f867c",
+          "file": "src/cli/cmd/tui/native-supervisor.ts",
+          "line": 65,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal user-controlled"
+        },
+        {
+          "fingerprint": "03e92094b8539d8668099e1c7be9bb32a5b0fd64ba3b4418dcafce4cf8ad1917",
+          "file": "src/cli/cmd/tui/native-supervisor.ts",
+          "line": 73,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"

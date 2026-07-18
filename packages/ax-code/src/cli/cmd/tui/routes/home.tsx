@@ -1,4 +1,12 @@
-// Home route for the Zig/OpenTUI application.
+// Home route — transitional per ADR-035 (Lean TUI / Rich Desktop Boundary).
+//
+// This route is kept as a backward-compat alias during OpenTUI deprecation.
+// After Ratatui promotion, the default startup path will always resolve to a
+// session or new-session route via the launch policy (see navigation/launch-policy.ts).
+// Dashboard/workflow supervision ownership moves to AX Code Desktop.
+//
+// TODO(ADR-035 Phase 5): Remove or archive this route after Ratatui becomes the
+// default stable CLI path and the OpenTUI fallback window expires.
 
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import { createEffect, createMemo, For, Match, on, onMount, Show, Switch } from "solid-js"

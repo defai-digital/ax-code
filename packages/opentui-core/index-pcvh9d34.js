@@ -13192,7 +13192,8 @@ function getOpenTUILib(libPath) {
       returns: "void"
     }
   });
-  // Zig is the sole OpenTUI renderer.
+  // Zig is the sole OpenTUI renderer. Rust now runs as a separate Ratatui
+  // application selected by the outer ax-code launcher.
   if (env.OTUI_DEBUG_FFI || env.OTUI_TRACE_FFI) {
     return {
       ...rawSymbols,
