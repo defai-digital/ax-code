@@ -179,7 +179,7 @@ jobs:
 
       - name: Setup Node.js runtime
         if: ${{ steps.channel.outputs.enabled == 'true' }}
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "26"
 
