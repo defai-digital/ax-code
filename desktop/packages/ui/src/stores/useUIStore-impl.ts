@@ -2348,7 +2348,9 @@ export const useUIStore = create<UIStore>()(
           notesPanelHeight: state.notesPanelHeight,
           todoPanelHeight: state.todoPanelHeight,
           isSessionSwitcherOpen: state.isSessionSwitcherOpen,
-          activeMainTab: state.activeMainTab,
+          // activeMainTab intentionally NOT persisted: the deliberate policy is
+          // that a fresh load always starts on chat (see Header's one-time
+          // reset), so a persisted non-chat value would always be discarded.
           sidebarSection: state.sidebarSection,
           settingsPage: state.settingsPage,
           settingsHasOpenedOnce: state.settingsHasOpenedOnce,
