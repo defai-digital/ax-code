@@ -1095,7 +1095,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
               <button
                 type="button"
                 onClick={onToggle}
-                className="typography-meta leading-4 px-2 py-1 text-muted-foreground/45 hover:text-muted-foreground/65 text-left"
+                className="typography-meta leading-4 px-2 py-1 text-muted-foreground hover:text-muted-foreground text-left"
               >
                 +{previewHiddenCount} more...
               </button>

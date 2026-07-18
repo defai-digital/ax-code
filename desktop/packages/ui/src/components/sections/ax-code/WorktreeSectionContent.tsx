@@ -281,7 +281,7 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({
             </h3>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
               </TooltipTrigger>
               <TooltipContent sideOffset={8} className="max-w-xs">
                 {t("settings.openchamber.worktrees.setup.tooltipPrefix")}{" "}
@@ -336,7 +336,7 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({
             </h3>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
               </TooltipTrigger>
               <TooltipContent sideOffset={8} className="max-w-xs">
                 {t("settings.openchamber.worktrees.list.tooltip")}
@@ -350,7 +350,7 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({
             {t("settings.openchamber.worktrees.list.loading")}
           </p>
         ) : availableWorktrees.length === 0 ? (
-          <p className="typography-meta text-muted-foreground/70 px-1">
+          <p className="typography-meta text-muted-foreground px-1">
             {t("settings.openchamber.worktrees.list.empty")}
           </p>
         ) : (
@@ -362,11 +362,11 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({
                     <p className="typography-meta text-foreground truncate min-w-0">
                       {worktree.label || worktree.branch || t("settings.openchamber.worktrees.list.detachedHead")}
                     </p>
-                    <span className="typography-micro text-muted-foreground/60 px-1.5 py-[1px] rounded bg-sidebar-accent/40 flex-shrink-0 self-center leading-none">
+                    <span className="typography-micro text-muted-foreground px-1.5 py-[1px] rounded bg-sidebar-accent/40 flex-shrink-0 self-center leading-none">
                       AX Code
                     </span>
                   </div>
-                  <p className="typography-micro text-muted-foreground/60 truncate">
+                  <p className="typography-micro text-muted-foreground truncate">
                     {formatPathForDisplay(worktree.path, homeDirectory)}
                   </p>
                 </div>
@@ -374,7 +374,7 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({
                   type="button"
                   onClick={() => handleDeleteWorktree(worktree)}
                   className={cn(
-                    "flex-shrink-0 flex h-7 w-7 items-center justify-center rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-opacity focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                    "flex-shrink-0 flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-opacity focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                     alwaysShowActions ? "opacity-100" : "opacity-0 group-hover:opacity-100",
                   )}
                   aria-label={t("settings.openchamber.worktrees.list.deleteWorktreeAria", {

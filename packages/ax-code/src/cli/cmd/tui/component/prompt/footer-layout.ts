@@ -5,6 +5,7 @@ export type PromptFooterLayout = {
   stacked: boolean
   showVariants: boolean
   showShellHint: boolean
+  showClearHint: boolean
 }
 
 export function footerHintWidth(key: string, label: string) {
@@ -17,9 +18,10 @@ export function promptFooterLayout(input: {
   mode: "normal" | "shell"
   variantsWidth: number
   shellWidth: number
+  clearWidth: number
 }) {
   const inlineBudget = Math.max(0, input.contentWidth - INLINE_STATUS_RESERVE)
-  const firstHintWidth = input.mode === "shell" ? input.shellWidth : input.variantsWidth
+  const firstHintWidth = input.mode === "shell" ? input.shellWidth : input.clearWidth
   const stacked = inlineBudget < input.toggleWidth + (firstHintWidth > 0 ? GROUP_GAP + firstHintWidth : 0)
 
   let remaining = Math.max(
@@ -32,12 +34,16 @@ export function promptFooterLayout(input: {
       stacked,
       showVariants: false,
       showShellHint: remaining >= input.shellWidth,
+      showClearHint: false,
     } satisfies PromptFooterLayout
   }
 
+  const showClearHint = remaining >= input.clearWidth
+  if (showClearHint) remaining -= input.clearWidth
+
   let showVariants = false
 
-  if (input.variantsWidth > 0 && remaining >= input.variantsWidth) {
+  if (input.variantsWidth > 0 && remaining >= (showClearHint ? GROUP_GAP : 0) + input.variantsWidth) {
     showVariants = true
   }
 
@@ -45,5 +51,6 @@ export function promptFooterLayout(input: {
     stacked,
     showVariants,
     showShellHint: false,
+    showClearHint,
   } satisfies PromptFooterLayout
 }

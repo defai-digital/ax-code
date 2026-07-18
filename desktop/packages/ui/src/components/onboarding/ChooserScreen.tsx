@@ -393,7 +393,7 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
                   {t("onboarding.localSetup.actions.apply")}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground/70">{t("onboarding.localSetup.helper.saveAndReload")}</p>
+              <p className="text-xs text-muted-foreground">{t("onboarding.localSetup.helper.saveAndReload")}</p>
             </div>
           </details>
 

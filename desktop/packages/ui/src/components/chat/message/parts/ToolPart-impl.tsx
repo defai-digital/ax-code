@@ -1002,7 +1002,7 @@ const TaskToolSummary: React.FC<{
   if (displayEntries.length === 0 && !hasOutput && !sessionId) {
     return (
       <div className="relative pr-2 pb-2 pt-2 space-y-2 pl-[1.4375rem]">
-        <div className="typography-meta text-muted-foreground/70">
+        <div className="typography-meta text-muted-foreground">
           {isActive ? "Waiting for subagent activity..." : "No subagent session id on task metadata."}
         </div>
       </div>
@@ -1024,7 +1024,7 @@ const TaskToolSummary: React.FC<{
         <ToolScrollableSection maxHeightClass={isExpanded ? "max-h-[40vh]" : "max-h-56"} disableHorizontal>
           <div className="w-full min-w-0 space-y-1">
             {hiddenCount > 0 ? (
-              <div className="typography-micro text-muted-foreground/70">+{hiddenCount} more…</div>
+              <div className="typography-micro text-muted-foreground">+{hiddenCount} more…</div>
             ) : null}
 
             {visibleEntries.map((entry, idx) => {
@@ -1063,7 +1063,7 @@ const TaskToolSummary: React.FC<{
                         <Text
                           variant={animateTailText ? "generate-effect" : "static"}
                           className={cn(
-                            "typography-meta flex-1 min-w-0 text-muted-foreground/70",
+                            "typography-meta flex-1 min-w-0 text-muted-foreground",
                             isMobile ? "whitespace-normal break-words" : "truncate",
                           )}
                           style={{ color: "var(--tools-description)" }}
@@ -1533,7 +1533,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(
       }
 
       return renderScrollableBlock(
-        <div className="typography-meta text-muted-foreground/70">{t("chat.toolPart.noOutputProduced")}</div>,
+        <div className="typography-meta text-muted-foreground">{t("chat.toolPart.noOutputProduced")}</div>,
         { maxHeightClass: "max-h-60" },
       )
     }
@@ -1554,7 +1554,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(
                   ) : isWriteLikeTool && writeLikeInputPatch ? (
                     <DiffPreview diff={writeLikeInputPatch} diffViewMode={diffViewMode} />
                   ) : (
-                    <blockquote className="tool-input-text whitespace-pre-wrap break-words typography-meta italic text-muted-foreground/70">
+                    <blockquote className="tool-input-text whitespace-pre-wrap break-words typography-meta italic text-muted-foreground">
                       {inputTextContent}
                     </blockquote>
                   ),
@@ -1583,7 +1583,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(
 
             {state.status === "error" && "error" in state && (
               <div>
-                <div className="typography-meta font-medium text-muted-foreground/80 mb-1">
+                <div className="typography-meta font-medium text-muted-foreground mb-1">
                   {t("chat.toolPart.error")}
                 </div>
                 <div
@@ -2443,7 +2443,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                 </MinDurationShineText>
               </div>
               {normalizedPartTool === "bash" && typeof effectiveTimeStart === "number" ? (
-                <span className={cn("flex-shrink-0 tabular-nums text-muted-foreground/80", TOOL_ROW_DESCRIPTION_CLASS)}>
+                <span className={cn("flex-shrink-0 tabular-nums text-muted-foreground", TOOL_ROW_DESCRIPTION_CLASS)}>
                   <LiveDuration
                     start={effectiveTimeStart}
                     end={typeof effectiveTimeEnd === "number" ? effectiveTimeEnd : undefined}

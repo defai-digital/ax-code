@@ -49,7 +49,7 @@ export const RecentPromptChips: React.FC<RecentPromptChipsProps> = ({
           clearRecentPrompts()
           setPrompts([])
         }}
-        className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/70 hover:bg-interactive-hover hover:text-foreground"
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:bg-interactive-hover hover:text-foreground"
         aria-label={t("chat.recentPrompts.clear")}
         title={t("chat.recentPrompts.clear")}
       >

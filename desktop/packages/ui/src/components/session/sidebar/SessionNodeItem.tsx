@@ -600,7 +600,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           </form>
           {!isMinimalMode ? (
             <div
-              className="flex items-center justify-between gap-3 text-muted-foreground/60 min-w-0 overflow-hidden leading-tight"
+              className="flex items-center justify-between gap-3 text-muted-foreground min-w-0 overflow-hidden leading-tight"
               style={{ fontSize: "calc(var(--text-ui-label) * 0.85)" }}
             >
               <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
@@ -623,7 +623,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                 {hasSecondaryProjectLabel ? <span className="truncate">{secondaryMeta?.projectLabel}</span> : null}
                 {hasSecondaryBranchLabel ? (
                   <span className="inline-flex min-w-0 items-center gap-0.5">
-                    <Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" />
+                    <Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                     <span className="truncate">{secondaryMeta?.branchLabel}</span>
                   </span>
                 ) : null}
@@ -1055,7 +1055,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                         {renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}
                       </div>
                       {alwaysShowActions ? (
-                        <span className="ml-2 flex-shrink-0 text-[0.72rem] text-muted-foreground/75">
+                        <span className="ml-2 flex-shrink-0 text-[0.72rem] text-muted-foreground">
                           {sessionCompactUpdatedLabel}
                         </span>
                       ) : null}
@@ -1063,7 +1063,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                         <div className="relative ml-1 flex h-4 min-w-4 flex-shrink-0 items-center justify-end">
                           <span
                             className={cn(
-                              "whitespace-nowrap text-right text-[0.72rem] text-muted-foreground/75 transition-opacity duration-150",
+                              "whitespace-nowrap text-right text-[0.72rem] text-muted-foreground transition-opacity duration-150",
                               isMenuOpen ? "opacity-0" : hideOnHoverClass,
                             )}
                           >
@@ -1166,7 +1166,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
 
                 {!isMinimalMode ? (
                   <div
-                    className="flex items-center justify-between gap-3 text-muted-foreground/60 min-w-0 overflow-hidden leading-tight"
+                    className="flex items-center justify-between gap-3 text-muted-foreground min-w-0 overflow-hidden leading-tight"
                     style={{ fontSize: "calc(var(--text-ui-label) * 0.85)" }}
                   >
                     <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
@@ -1174,7 +1174,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                       {sessionDiffStats ? (
                         <span className="flex flex-shrink-0 items-center gap-0 text-[0.92em]">
                           <span className="text-status-success/80">+{sessionDiffStats.additions}</span>
-                          <span className="text-muted-foreground/60">/</span>
+                          <span className="text-muted-foreground">/</span>
                           <span className="text-status-error/65">-{sessionDiffStats.deletions}</span>
                         </span>
                       ) : null}
@@ -1183,7 +1183,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                       ) : null}
                       {hasSecondaryBranchLabel ? (
                         <span className="inline-flex min-w-0 items-center gap-0.5">
-                          <Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" />
+                          <Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                           <span className="truncate">{secondaryMeta?.branchLabel}</span>
                         </span>
                       ) : null}

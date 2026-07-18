@@ -16,6 +16,7 @@ const GROUPS = [
       { label: "Rename session", key: "session_rename" },
       { label: "Export session", key: "session_export" },
       { label: "Jump to message", key: "session_timeline" },
+      { label: "Search transcript", key: "session_search" },
       { label: "Undo", key: "messages_undo" },
       { label: "Redo", key: "messages_redo" },
     ],

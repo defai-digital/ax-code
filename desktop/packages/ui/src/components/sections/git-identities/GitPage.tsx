@@ -306,7 +306,7 @@ const IdentityRow: React.FC<IdentityRowProps> = ({
               </span>
             )}
           </div>
-          <div className="typography-micro text-muted-foreground/60 truncate leading-tight">
+          <div className="typography-micro text-muted-foreground truncate leading-tight">
             {authType === "token" && profile.host ? profile.host : profile.userEmail}
           </div>
         </div>
@@ -375,7 +375,7 @@ const DiscoveredRow: React.FC<DiscoveredRowProps> = ({ credential, onImport, has
     >
       <div className="min-w-0">
         <span className="typography-ui-label text-foreground truncate block">{displayName}</span>
-        <span className="typography-micro text-muted-foreground/60 truncate block leading-tight">
+        <span className="typography-micro text-muted-foreground truncate block leading-tight">
           {isRepoSpecific ? credential.host : credential.username}
         </span>
       </div>

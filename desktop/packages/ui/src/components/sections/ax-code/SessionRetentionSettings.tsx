@@ -65,7 +65,7 @@ export const SessionRetentionSettings: React.FC = () => {
           </h3>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+              <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
             </TooltipTrigger>
             <TooltipContent sideOffset={8} className="max-w-xs">
               {t("settings.openchamber.sessionRetention.tooltip")}

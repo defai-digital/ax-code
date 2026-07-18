@@ -322,7 +322,7 @@ export const MagicPromptsPage: React.FC = () => {
           className="inline-block h-1.5 w-1.5 rounded-full bg-current animate-busy-pulse"
           aria-label={t("settings.magicPrompts.page.loading.aria")}
         />
-        <span className="typography-ui">{t("settings.magicPrompts.page.loading.text")}</span>
+        <span className="typography-ui-label">{t("settings.magicPrompts.page.loading.text")}</span>
       </div>
     )
   }
@@ -336,7 +336,7 @@ export const MagicPromptsPage: React.FC = () => {
               <h2 className="typography-ui-header font-semibold text-foreground">{tUnsafe(pageConfig.titleKey)}</h2>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                  <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                 </TooltipTrigger>
                 <TooltipContent sideOffset={8} className="max-w-xs">
                   {tUnsafe(pageConfig.descriptionKey)}
@@ -375,7 +375,7 @@ export const MagicPromptsPage: React.FC = () => {
                   <h3 className="typography-ui-label text-foreground">{tUnsafe(block.titleKey)}</h3>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                      <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                     </TooltipTrigger>
                     <TooltipContent sideOffset={8} className="max-w-xs">
                       {definition.description}

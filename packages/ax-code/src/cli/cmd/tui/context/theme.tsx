@@ -17,6 +17,19 @@ import { Log } from "@/util/log"
 
 const log = Log.create({ service: "tui.theme" })
 
+const DEFAULT_THEME = "axcode"
+
+// Built-in themes that were renamed. Persisted selections (kv.json "theme")
+// and pinned configs (tui.json "theme") may still hold the old name — resolve
+// those to the current id so existing installs keep their theme.
+const THEME_ALIASES: Record<string, string> = {
+  automatosx: "axcode",
+}
+
+function resolveThemeAlias(name: string) {
+  return THEME_ALIASES[name] ?? name
+}
+
 type Theme = ThemeColors & {
   _hasSelectedListItemText: boolean
   thinkingOpacity: number
@@ -201,13 +214,13 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       themes: DEFAULT_THEMES,
       mode: lock ?? pick(kv.get("theme_mode", props.mode)) ?? props.mode,
       lock,
-      active: (config.theme ?? kv.get("theme", "automatosx")) as string,
+      active: resolveThemeAlias((config.theme ?? kv.get("theme", DEFAULT_THEME)) as string),
       ready: false,
     })
 
     createEffect(() => {
       const theme = config.theme
-      if (theme) setStore("active", theme)
+      if (theme) setStore("active", resolveThemeAlias(theme))
     })
 
     // kv.json loads asynchronously, so the store init above almost always
@@ -229,9 +242,12 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
             if (savedMode && savedMode !== store.mode) setStore("mode", savedMode)
           }
           const savedTheme = kv.get("theme")
-          if (!userSetTheme && !config.theme && typeof savedTheme === "string" && savedTheme !== store.active) {
-            if (savedTheme !== "system" && !store.themes[savedTheme]) void ensureCustomThemesLoaded()
-            setStore("active", savedTheme)
+          if (!userSetTheme && !config.theme && typeof savedTheme === "string") {
+            const resolved = resolveThemeAlias(savedTheme)
+            if (resolved !== store.active) {
+              if (resolved !== "system" && !store.themes[resolved]) void ensureCustomThemesLoaded()
+              setStore("active", resolved)
+            }
           }
         },
       ),
@@ -252,7 +268,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
           )
         })
         .catch(() => {
-          setStore("active", "automatosx")
+          setStore("active", DEFAULT_THEME)
         })
         .finally(() => {
           customThemesPromise = undefined
@@ -306,7 +322,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
               produce((draft) => {
                 draft.mode = nextMode
                 if (draft.active === "system") {
-                  draft.active = "automatosx"
+                  draft.active = DEFAULT_THEME
                   draft.ready = true
                 }
               }),
@@ -371,7 +387,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     const values = createMemo(() => {
       const active = store.active
       try {
-        return resolveTheme(store.themes[active] ?? store.themes.automatosx, store.mode)
+        return resolveTheme(store.themes[active] ?? store.themes[DEFAULT_THEME], store.mode)
       } catch (error) {
         log.warn("failed to resolve theme; falling back to default", { theme: active, error })
         if (themeErrorWarned !== active) {
@@ -383,10 +399,10 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
               message: `Theme "${active}" is invalid — using default theme`,
               duration: 3000,
             })
-            if (kv.get("theme") === active) kv.set("theme", "automatosx")
+            if (kv.get("theme") === active) kv.set("theme", DEFAULT_THEME)
           })
         }
-        return resolveTheme(DEFAULT_THEMES.automatosx, store.mode)
+        return resolveTheme(DEFAULT_THEMES[DEFAULT_THEME], store.mode)
       }
     })
 
@@ -448,11 +464,12 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       },
       set(theme: string) {
         userSetTheme = true
-        if (theme !== "system" && !store.themes[theme]) {
+        const resolved = resolveThemeAlias(theme)
+        if (resolved !== "system" && !store.themes[resolved]) {
           void ensureCustomThemesLoaded()
         }
-        setStore("active", theme)
-        kv.set("theme", theme)
+        setStore("active", resolved)
+        kv.set("theme", resolved)
       },
       get ready() {
         return store.ready

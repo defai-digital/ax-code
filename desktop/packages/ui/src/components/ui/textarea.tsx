@@ -184,7 +184,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
                 "group-hover/textarea:placeholder:text-foreground/80",
                 "focus:placeholder:text-foreground/80",
               ],
-              disabled && "text-muted-foreground/60 placeholder:text-muted-foreground/60",
+              disabled && "text-muted-foreground placeholder:text-muted-foreground",
               className,
             )}
             spellCheck={false}
@@ -213,7 +213,7 @@ function TextareaCharCounter({ current, max, className }: { current?: number; ma
     <span
       className={cn(
         "typography-meta text-muted-foreground",
-        "group-has-[[disabled]]/textarea:text-muted-foreground/60",
+        "group-has-[[disabled]]/textarea:text-muted-foreground",
         isError && "text-[var(--status-error)]",
         className,
       )}

@@ -192,7 +192,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               <span className="typography-ui-label min-w-0 truncate font-normal text-foreground">{triggerLabel}</span>
             </>
           )}
-          <Icon name="arrow-down-s" className="h-4 w-4 flex-shrink-0 text-muted-foreground/50" />
+          <Icon name="arrow-down-s" className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
         </div>
       </DropdownMenuTrigger>
       <DropdownMenuContent

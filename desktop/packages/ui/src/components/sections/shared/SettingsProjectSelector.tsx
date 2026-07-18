@@ -79,7 +79,7 @@ export const SettingsProjectSelector: React.FC<{ className?: string }> = ({ clas
               const itemLabel = formatProjectLabel(raw)
               return (
                 <DropdownMenuRadioItem key={project.id} value={project.id}>
-                  <span className="min-w-0 truncate typography-ui">{itemLabel}</span>
+                  <span className="min-w-0 truncate typography-ui-label">{itemLabel}</span>
                 </DropdownMenuRadioItem>
               )
             })}

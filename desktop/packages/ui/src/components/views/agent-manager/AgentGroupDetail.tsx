@@ -154,7 +154,7 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({ group, class
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h1 className="typography-heading-lg text-foreground truncate">{group.name}</h1>
+              <h1 className="typography-ui-header text-foreground truncate">{group.name}</h1>
               {groupBusy && <Icon name="loader-4" className="h-4 w-4 animate-spin text-amber-500 flex-shrink-0" />}
             </div>
             <div className="flex items-center gap-2 mt-1 typography-meta text-muted-foreground">
@@ -185,7 +185,7 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({ group, class
                       {selectedSession && (
                         <>
                           <ProviderLogo providerId={selectedSession.providerId} className="h-5 w-5 flex-shrink-0" />
-                          <span className="truncate typography-body">{selectedSession.modelId}</span>
+                          <span className="truncate typography-markdown">{selectedSession.modelId}</span>
                           {selectedSession.instanceNumber > 1 && (
                             <span className="typography-meta text-muted-foreground">
                               #{selectedSession.instanceNumber}
@@ -208,14 +208,14 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({ group, class
                       <ProviderLogo providerId={session.providerId} className="h-5 w-5 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="truncate typography-body">{session.modelId}</span>
+                          <span className="truncate typography-markdown">{session.modelId}</span>
                           {session.instanceNumber > 1 && (
                             <span className="typography-meta text-muted-foreground">#{session.instanceNumber}</span>
                           )}
                           <SessionStatusDot sessionId={session.id} />
                         </div>
                         {session.branch && (
-                          <div className="flex items-center gap-1 typography-micro text-muted-foreground/60">
+                          <div className="flex items-center gap-1 typography-micro text-muted-foreground">
                             <Icon name="git-branch" className="h-3 w-3" />
                             <span className="truncate">{session.worktreeMetadata?.label || session.branch}</span>
                           </div>
@@ -324,10 +324,10 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({ group, class
               </div>
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center p-8">
-                  <p className="typography-body text-muted-foreground mb-2">
+                  <p className="typography-markdown text-muted-foreground mb-2">
                     {t("agentManager.detail.state.loadingSessionFor", { label: selectedSession.displayLabel })}
                   </p>
-                  <p className="typography-micro text-muted-foreground/60">
+                  <p className="typography-micro text-muted-foreground">
                     {t("agentManager.detail.state.sessionId", { id: selectedSession.id })}
                   </p>
                 </div>
@@ -336,7 +336,7 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({ group, class
           )
         ) : (
           <div className="h-full flex items-center justify-center">
-            <p className="typography-body text-muted-foreground">{t("agentManager.detail.state.noSessionsInGroup")}</p>
+            <p className="typography-markdown text-muted-foreground">{t("agentManager.detail.state.noSessionsInGroup")}</p>
           </div>
         )}
       </div>

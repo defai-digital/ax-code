@@ -1,5 +1,5 @@
 import { RGBA } from "@ax-code/opentui-core"
-import automatosx from "./theme/automatosx.json" with { type: "json" }
+import axcode from "./theme/axcode.json" with { type: "json" }
 import aura from "./theme/aura.json" with { type: "json" }
 import ayu from "./theme/ayu.json" with { type: "json" }
 import catppuccin from "./theme/catppuccin.json" with { type: "json" }
@@ -117,7 +117,7 @@ export type ThemeJson = {
 }
 
 export const DEFAULT_THEMES: Record<string, ThemeJson> = {
-  automatosx,
+  axcode,
   aura,
   ayu,
   catppuccin,

@@ -43,7 +43,7 @@ export const RegistryBanner: React.FC<RegistryBannerProps> = ({ entryId, spec })
       <div className="rounded-md border border-border bg-card p-3 flex items-start gap-3">
         <Icon name="arrow-up" className="h-5 w-5 text-[var(--status-success)] shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
-          <p className="typography-label text-[var(--status-success)]">
+          <p className="typography-ui-label text-[var(--status-success)]">
             {t("settings.plugins.registry.banner.updateAvailable.title")}
           </p>
           <p className="typography-micro text-muted-foreground mt-0.5">
@@ -98,7 +98,7 @@ export const RegistryBanner: React.FC<RegistryBannerProps> = ({ entryId, spec })
     <div className="rounded-md border border-border bg-card p-3 flex items-start gap-3">
       <Icon name={iconName} className="h-5 w-5 shrink-0 mt-0.5" style={{ color: colorVar }} />
       <div className="flex-1 min-w-0">
-        <p className="typography-label" style={{ color: colorVar }}>
+        <p className="typography-ui-label" style={{ color: colorVar }}>
           {t("settings.plugins.registry.banner.invalid.title")}
         </p>
         <p className="typography-micro text-muted-foreground mt-0.5">{description}</p>

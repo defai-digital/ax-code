@@ -1225,7 +1225,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             </span>
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between gap-3">
-                <span className="typography-meta font-medium text-muted-foreground/80">
+                <span className="typography-meta font-medium text-muted-foreground">
                   {t("chat.modelControls.input")}
                 </span>
                 <div className="flex items-center gap-1.5">
@@ -1239,7 +1239,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                 </div>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="typography-meta font-medium text-muted-foreground/80">
+                <span className="typography-meta font-medium text-muted-foreground">
                   {t("chat.modelControls.output")}
                 </span>
                 <div className="flex items-center gap-1.5">
@@ -1261,7 +1261,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
               </span>
               {costRows.map((row) => (
                 <div key={row.label} className="flex items-center justify-between gap-3">
-                  <span className="typography-meta font-medium text-muted-foreground/80">{row.label}</span>
+                  <span className="typography-meta font-medium text-muted-foreground">{row.label}</span>
                   <span className="typography-meta font-medium text-foreground">{row.value}</span>
                 </div>
               ))}
@@ -1273,7 +1273,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             </span>
             {limitRows.map((row) => (
               <div key={row.label} className="flex items-center justify-between gap-3">
-                <span className="typography-meta font-medium text-muted-foreground/80">{row.label}</span>
+                <span className="typography-meta font-medium text-muted-foreground">{row.label}</span>
                 <span className="typography-meta font-medium text-foreground">{row.value}</span>
               </div>
             ))}
@@ -1283,7 +1283,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
               {t("chat.modelControls.metadata")}
             </span>
             <div className="flex items-center justify-between gap-3">
-              <span className="typography-meta font-medium text-muted-foreground/80">
+              <span className="typography-meta font-medium text-muted-foreground">
                 {t("chat.modelControls.knowledge")}
               </span>
               <span className="typography-meta font-medium text-foreground">
@@ -1291,7 +1291,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
               </span>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span className="typography-meta font-medium text-muted-foreground/80">
+              <span className="typography-meta font-medium text-muted-foreground">
                 {t("chat.modelControls.release")}
               </span>
               <span className="typography-meta font-medium text-foreground">
@@ -1644,7 +1644,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                 <div className="flex flex-col gap-0.5 mt-0.5">
                   {currentAgent.temperature !== undefined && (
                     <div className="flex items-center justify-between gap-3">
-                      <span className="typography-meta text-muted-foreground/80">
+                      <span className="typography-meta text-muted-foreground">
                         {t("chat.modelControls.temperature")}
                       </span>
                       <span className="typography-meta font-medium text-foreground">{currentAgent.temperature}</span>
@@ -1652,7 +1652,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                   )}
                   {currentAgent.topP !== undefined && (
                     <div className="flex items-center justify-between gap-3">
-                      <span className="typography-meta text-muted-foreground/80">{t("chat.modelControls.topP")}</span>
+                      <span className="typography-meta text-muted-foreground">{t("chat.modelControls.topP")}</span>
                       <span className="typography-meta font-medium text-foreground">{currentAgent.topP}</span>
                     </div>
                   )}
@@ -1666,21 +1666,21 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
               {t("chat.modelControls.permissions")}
             </span>
             <div className="flex items-center gap-3">
-              <span className="typography-meta text-muted-foreground/80 w-16">{t("chat.modelControls.edit")}</span>
+              <span className="typography-meta text-muted-foreground w-16">{t("chat.modelControls.edit")}</span>
               <div className="flex items-center gap-1.5">
                 <EditModeIcon mode={editPermissionSummary.mode} className="size-3.5" />
                 <span className="typography-meta font-medium text-foreground w-12">{editPermissionSummary.label}</span>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <span className="typography-meta text-muted-foreground/80 w-16">{t("chat.modelControls.bash")}</span>
+              <span className="typography-meta text-muted-foreground w-16">{t("chat.modelControls.bash")}</span>
               <div className="flex items-center gap-1.5">
                 <EditModeIcon mode={bashPermissionSummary.mode} className="size-3.5" />
                 <span className="typography-meta font-medium text-foreground w-12">{bashPermissionSummary.label}</span>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <span className="typography-meta text-muted-foreground/80 w-16">{t("chat.modelControls.webFetch")}</span>
+              <span className="typography-meta text-muted-foreground w-16">{t("chat.modelControls.webFetch")}</span>
               <div className="flex items-center gap-1.5">
                 <EditModeIcon mode={webfetchPermissionSummary.mode} className="size-3.5" />
                 <span className="typography-meta font-medium text-foreground w-12">
@@ -1692,7 +1692,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
 
           {hasCustomPrompt && (
             <div className="flex items-center justify-between gap-3">
-              <span className="typography-meta text-muted-foreground/80">{t("chat.modelControls.customPrompt")}</span>
+              <span className="typography-meta text-muted-foreground">{t("chat.modelControls.customPrompt")}</span>
               <Icon name="checkbox-circle" className="size-4 text-foreground" />
             </div>
           )}

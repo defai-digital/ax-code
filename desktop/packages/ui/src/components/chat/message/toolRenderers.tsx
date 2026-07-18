@@ -520,16 +520,16 @@ export const renderTodoOutput = (
         {todosByStatus.cancelled.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 text-muted-foreground/50">×</span>
-              <span className="typography-meta font-semibold text-muted-foreground/50 uppercase tracking-wide">
+              <span className="w-3 h-3 text-muted-foreground">×</span>
+              <span className="typography-meta font-semibold text-muted-foreground uppercase tracking-wide">
                 {labels.cancelled}
               </span>
             </div>
             <div className="space-y-1.5 pl-4">
               {todosByStatus.cancelled.map((todo, idx) => (
                 <div key={todo.id || idx} className="flex items-start gap-2">
-                  <span className="w-3 h-3 text-muted-foreground/50 mt-0.5 flex-shrink-0">×</span>
-                  <span className="typography-code text-muted-foreground/50 line-through flex-1 leading-relaxed">
+                  <span className="w-3 h-3 text-muted-foreground mt-0.5 flex-shrink-0">×</span>
+                  <span className="typography-code text-muted-foreground line-through flex-1 leading-relaxed">
                     {todo.content}
                   </span>
                 </div>

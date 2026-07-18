@@ -1213,10 +1213,10 @@ export function ScheduledTaskEditorDialog(props: {
                       const dayClass = isSelected
                         ? "bg-interactive-selection text-interactive-selection-foreground"
                         : isPast
-                          ? "text-muted-foreground/40"
+                          ? "text-muted-foreground"
                           : inCurrentMonth
                             ? "text-foreground hover:bg-interactive-hover"
-                            : "text-muted-foreground/60 hover:bg-interactive-hover"
+                            : "text-muted-foreground hover:bg-interactive-hover"
                       return (
                         <button
                           key={isoDate}

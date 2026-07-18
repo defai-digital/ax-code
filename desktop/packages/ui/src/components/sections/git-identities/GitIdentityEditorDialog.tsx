@@ -308,7 +308,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                   {!isGlobalProfile && <span className="text-[var(--status-error)] text-xs">*</span>}
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                      <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                     </TooltipTrigger>
                     <TooltipContent sideOffset={8} className="max-w-xs">
                       {t("settings.gitIdentities.editor.field.userNameTooltip")}
@@ -334,7 +334,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                   {!isGlobalProfile && <span className="text-[var(--status-error)] text-xs">*</span>}
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                      <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                     </TooltipTrigger>
                     <TooltipContent sideOffset={8} className="max-w-xs">
                       {t("settings.gitIdentities.editor.field.emailAddressTooltip")}
@@ -394,7 +394,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                         </label>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                            <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                           </TooltipTrigger>
                           <TooltipContent sideOffset={8} className="max-w-xs">
                             {t("settings.gitIdentities.editor.field.sshKeyPathTooltip")}
@@ -419,7 +419,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                         <span className="text-[var(--status-error)] text-xs">*</span>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                            <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                           </TooltipTrigger>
                           <TooltipContent sideOffset={8} className="max-w-xs">
                             {t("settings.gitIdentities.editor.field.hostTooltip")}

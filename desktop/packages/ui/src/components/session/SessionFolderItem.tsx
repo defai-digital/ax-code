@@ -255,7 +255,7 @@ const SessionFolderItemBase = <TSessionNode,>({
               >
                 {folder.name}
               </span>
-              <span className="typography-micro text-muted-foreground/70 flex-shrink-0">• {sessions.length}</span>
+              <span className="typography-micro text-muted-foreground flex-shrink-0">• {sessions.length}</span>
               {isCollapsed && waitingApprovalCount > 0 ? (
                 <span
                   className="inline-flex flex-shrink-0 items-center gap-1 typography-micro text-[var(--status-warning)]"
@@ -360,7 +360,7 @@ const SessionFolderItemBase = <TSessionNode,>({
               renderSessionNode(node, 0, groupDirectory ?? null, projectId ?? null, archivedBucket),
             )
           ) : !subFolderItems ? (
-            <div className="py-1 pl-1.5 text-left typography-micro text-muted-foreground/70">
+            <div className="py-1 pl-1.5 text-left typography-micro text-muted-foreground">
               {t("sessions.sidebar.folderItem.emptyFolder")}
             </div>
           ) : null}

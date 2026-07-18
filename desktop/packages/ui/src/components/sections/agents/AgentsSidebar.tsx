@@ -522,7 +522,7 @@ const AgentListItem: React.FC<AgentListItemProps> = ({
           </div>
 
           {agent.description && (
-            <div className="typography-micro text-muted-foreground/60 truncate leading-tight">{agent.description}</div>
+            <div className="typography-micro text-muted-foreground truncate leading-tight">{agent.description}</div>
           )}
         </button>
 

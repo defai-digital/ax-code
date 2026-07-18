@@ -93,7 +93,7 @@ export const TurnChangedFilesDropdown: React.FC<TurnChangedFilesDropdownProps> =
               <button
                 ref={triggerButtonRef}
                 type="button"
-                className="flex items-center gap-1 text-sm text-muted-foreground/60 hover:text-muted-foreground tabular-nums"
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-muted-foreground tabular-nums"
                 aria-label={`${label} changed in this turn`}
                 onPointerDownCapture={syncPortalContainer}
                 onFocusCapture={syncPortalContainer}

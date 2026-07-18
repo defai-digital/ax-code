@@ -4,6 +4,9 @@ export const dict = {
   ...settingsDict,
   "common.loading": "Loading...",
   "common.unavailable": "Unavailable",
+  "common.confirm": "Confirm",
+  "common.cancel": "Cancel",
+  "common.confirmDialog.title": "Please confirm",
   "common.language.english": "English",
   "common.revealPath.finder": "Reveal in Finder",
   "common.revealPath.fileExplorer": "Open in File Explorer",
@@ -2548,6 +2551,7 @@ export const dict = {
   "notificationCenter.system": "System",
   "notificationCenter.allow": "Allow",
   "notificationCenter.deny": "Deny",
+  "notificationCenter.permission.requestTitle": "Approval needed: {tool}",
 
   // Onboarding tour
   "featureTour.step1.title": "Your Sessions",

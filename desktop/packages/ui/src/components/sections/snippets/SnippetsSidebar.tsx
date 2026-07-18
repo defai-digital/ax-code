@@ -109,7 +109,7 @@ export const SnippetsSidebar: React.FC<SnippetsSidebarProps> = ({ onItemSelect }
                   {t(`snippets.source.${snippet.source}`)}
                 </span>
               </div>
-              <div className="typography-micro text-muted-foreground/60 truncate leading-tight">
+              <div className="typography-micro text-muted-foreground truncate leading-tight">
                 {snippet.description || snippet.content.replace(/\s+/g, " ").substring(0, 80)}
               </div>
             </button>

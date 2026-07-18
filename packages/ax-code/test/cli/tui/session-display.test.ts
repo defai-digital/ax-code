@@ -61,12 +61,12 @@ function text(id: string, messageID: string, value: string): Part {
 
 describe("tui session display helpers", () => {
   test("computes scroll deltas for viewport actions", () => {
-    expect(scrollDelta("page-up", 100)).toBe(-50)
-    expect(scrollDelta("page-down", 100)).toBe(50)
+    expect(scrollDelta("page-up", 100)).toBe(-100)
+    expect(scrollDelta("page-down", 100)).toBe(100)
     expect(scrollDelta("line-up", 100)).toBe(-1)
     expect(scrollDelta("line-down", 100)).toBe(1)
-    expect(scrollDelta("half-page-up", 100)).toBe(-25)
-    expect(scrollDelta("half-page-down", 100)).toBe(25)
+    expect(scrollDelta("half-page-up", 100)).toBe(-50)
+    expect(scrollDelta("half-page-down", 100)).toBe(50)
   })
 
   test("computes absolute scroll targets", () => {

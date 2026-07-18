@@ -258,7 +258,7 @@ export const GitHubSettings: React.FC = () => {
           <h3 className="typography-ui-header font-semibold text-foreground">GitHub</h3>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+              <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
             </TooltipTrigger>
             <TooltipContent sideOffset={8} className="max-w-xs">
               {t("settings.github.page.tooltip.connectAccount")}
@@ -305,7 +305,7 @@ export const GitHubSettings: React.FC = () => {
                   {user?.email && <span>{user.email}</span>}
                 </div>
                 {status?.scope && (
-                  <div className="typography-micro text-muted-foreground/70 mt-0.5">
+                  <div className="typography-micro text-muted-foreground mt-0.5">
                     {t("settings.github.page.label.scopes", { value: status.scope })}
                   </div>
                 )}

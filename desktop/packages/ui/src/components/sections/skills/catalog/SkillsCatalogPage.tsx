@@ -285,7 +285,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
           <section className="px-2 pb-2 pt-0">
             {filtered.length === 0 && !isLoadingSource ? (
               <div className="py-8 text-center text-muted-foreground">
-                <p className="typography-body">{t("settings.skills.catalog.page.empty.noSkillsTitle")}</p>
+                <p className="typography-markdown">{t("settings.skills.catalog.page.empty.noSkillsTitle")}</p>
                 <p className="typography-meta mt-1 opacity-75">
                   {t("settings.skills.catalog.page.empty.noSkillsDescription")}
                 </p>
@@ -328,7 +328,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                               {item.description}
                             </div>
                           ) : (
-                            <div className="typography-meta text-muted-foreground/50 mt-0.5 italic">
+                            <div className="typography-meta text-muted-foreground mt-0.5 italic">
                               {t("settings.skills.catalog.shared.noDescription")}
                             </div>
                           )}

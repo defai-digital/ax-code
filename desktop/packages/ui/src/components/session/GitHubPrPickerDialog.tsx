@@ -349,7 +349,7 @@ export function GitHubPrPickerDialog({
               ariaLabel={t("session.githubPrPicker.includeDiffAria")}
             />
           </span>
-          <span className="typography-small text-muted-foreground whitespace-nowrap">
+          <span className="typography-meta text-muted-foreground whitespace-nowrap">
             {t("session.githubPrPicker.includeDiff")}
           </span>
         </button>
@@ -397,7 +397,7 @@ export function GitHubPrPickerDialog({
             onClick={() => void attachPr(directNumber)}
           >
             <span className="typography-meta text-muted-foreground w-5 text-right flex-shrink-0">#</span>
-            <p className="flex-1 min-w-0 typography-small text-foreground truncate ml-0.5">
+            <p className="flex-1 min-w-0 typography-meta text-foreground truncate ml-0.5">
               {t("session.githubPrPicker.actions.usePullRequest", { number: directNumber })}
             </p>
             <div className="flex-shrink-0 h-5 flex items-center mr-2">
@@ -428,7 +428,7 @@ export function GitHubPrPickerDialog({
               onClick={() => void attachPr(pr.number, pr.sourceRepo)}
             >
               <div className="flex-1 min-w-0 ml-0.5">
-                <p className="typography-small text-foreground truncate">
+                <p className="typography-meta text-foreground truncate">
                   <span className="text-muted-foreground mr-1">#{pr.number}</span>
                   {pr.title}
                 </p>
@@ -505,7 +505,7 @@ export function GitHubPrPickerDialog({
               <h2 className="typography-ui-label font-semibold text-foreground">{title}</h2>
               {closeButton}
             </div>
-            <p className="typography-small text-muted-foreground">{description}</p>
+            <p className="typography-meta text-muted-foreground">{description}</p>
           </div>
         )}
       >

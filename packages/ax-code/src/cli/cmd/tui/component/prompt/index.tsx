@@ -496,7 +496,6 @@ export function Prompt(props: PromptProps) {
     prompt: PromptInfo
     mode: "normal" | "shell"
     extmarkToPartIndex: Map<number, number>
-    interrupt: number
     placeholder: number
   }>({
     placeholder: Math.floor(Math.random() * PLACEHOLDERS.length),
@@ -506,9 +505,7 @@ export function Prompt(props: PromptProps) {
     },
     mode: "normal",
     extmarkToPartIndex: new Map(),
-    interrupt: 0,
   })
-  let cancelInterruptTimer: (() => void) | undefined
 
   createEffect(
     on(
@@ -547,6 +544,15 @@ export function Prompt(props: PromptProps) {
   // Single active mode only (click cycles Agent → Council → Arena), same pattern as run mode.
   const footerWorkMode = createMemo(() => WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)))
   const footerWorkModeLabel = createMemo(() => WorkMode.label(footerWorkMode()))
+  // ctrl+c is overloaded: it clears a non-empty draft and exits when the
+  // input is empty — the footer hint mirrors whichever action currently applies.
+  const footerClearHint = createMemo(() => {
+    const hasDraft = store.prompt.input !== ""
+    return {
+      keys: (hasDraft ? keybind.print("input_clear") : keybind.print("app_exit")) || "ctrl+c",
+      label: hasDraft ? "clear" : "exit",
+    }
+  })
   const footerLayout = createMemo(() =>
     promptFooterLayout({
       contentWidth: promptContentWidth(),
@@ -558,6 +564,7 @@ export function Prompt(props: PromptProps) {
       variantsWidth:
         local.model.variant.list().length > 0 ? footerHintWidth(keybind.print("variant_cycle"), "variants") : 0,
       shellWidth: footerHintWidth("esc", "exit shell mode"),
+      clearWidth: footerHintWidth("ctrl+c", "clear"),
     }),
   )
 
@@ -702,46 +709,23 @@ export function Prompt(props: PromptProps) {
           if (!input.focused) return
           if (!props.sessionID) return
 
-          const nextInterrupt = store.interrupt + 1
-          setStore("interrupt", nextInterrupt)
-
-          if (cancelInterruptTimer) {
-            cancelInterruptTimer()
-            cancelInterruptTimer = undefined
-          }
-
-          if (nextInterrupt >= 2) {
-            // Suppress auto-draining the follow-up queue right after a manual
-            // interrupt so we don't immediately resend on the busy -> idle edge.
-            markFollowUpAbort(props.sessionID)
-            void sdk.client.session
-              .abort({
+          // Suppress auto-draining the follow-up queue right after a manual
+          // interrupt so we don't immediately resend on the busy -> idle edge.
+          markFollowUpAbort(props.sessionID)
+          void sdk.client.session
+            .abort({
+              sessionID: props.sessionID,
+            })
+            .catch((error) => {
+              log.warn("prompt session interrupt failed", {
+                error,
                 sessionID: props.sessionID,
               })
-              .catch((error) => {
-                log.warn("prompt session interrupt failed", {
-                  error,
-                  sessionID: props.sessionID,
-                })
-                toast.show({
-                  message: error instanceof Error ? error.message : "Failed to interrupt session",
-                  variant: "error",
-                })
+              toast.show({
+                message: error instanceof Error ? error.message : "Failed to interrupt session",
+                variant: "error",
               })
-            setStore("interrupt", 0)
-          } else {
-            cancelInterruptTimer = scheduleTuiTimeout(
-              () => {
-                cancelInterruptTimer = undefined
-                setStore("interrupt", 0)
-              },
-              {
-                name: "prompt-interrupt-reset",
-                delayMs: 5000,
-                unref: true,
-              },
-            )
-          }
+            })
           dialog.clear()
         },
       },
@@ -1416,7 +1400,6 @@ export function Prompt(props: PromptProps) {
   }
   const exit = useExit()
   onCleanup(() => {
-    cancelInterruptTimer?.()
     cancelRouteHandoff?.()
     submitAbort?.abort(createSubmitAbortError())
   })
@@ -2093,8 +2076,8 @@ export function Prompt(props: PromptProps) {
                       const r = retry()
                       if (!r) return
                       if (r.message.includes("exceeded your current quota") && r.message.includes("gemini"))
-                        return "gemini is way too hot right now"
-                      if (r.message.length > 80) return r.message.slice(0, 80) + "..."
+                        return "Gemini API quota exceeded"
+                      if (r.message.length > 120) return r.message.slice(0, 120) + "..."
                       return r.message
                     })
                     const isTruncated = createMemo(() => {
@@ -2146,11 +2129,7 @@ export function Prompt(props: PromptProps) {
                   })()}
                 </box>
               </box>
-              <KeyHint
-                keys="esc"
-                label={store.interrupt > 0 ? "again to interrupt" : "interrupt"}
-                active={store.interrupt > 0}
-              />
+              <KeyHint keys="esc" label="interrupt" />
             </box>
           </Show>
           <Show when={status().type !== "retry"}>
@@ -2192,10 +2171,13 @@ export function Prompt(props: PromptProps) {
                   onMouseUp: () => command.trigger("app.toggle.sandbox"),
                 })}
               </box>
-              <Show when={footerLayout().showVariants || footerLayout().showShellHint}>
+              <Show when={footerLayout().showVariants || footerLayout().showShellHint || footerLayout().showClearHint}>
                 <box gap={2} flexDirection="row" flexShrink={0}>
                   <Switch>
                     <Match when={store.mode === "normal"}>
+                      <Show when={footerLayout().showClearHint}>
+                        <KeyHint keys={footerClearHint().keys} label={footerClearHint().label} />
+                      </Show>
                       <Show when={footerLayout().showVariants}>
                         <KeyHint keys={keybind.print("variant_cycle")} label="variants" />
                       </Show>

@@ -487,7 +487,7 @@ const UserMessageBody = React.memo(
           {showTimestampInActionsRow && (
             <span
               className={cn(
-                "text-xs text-muted-foreground/40 tabular-nums select-none",
+                "text-xs text-muted-foreground tabular-nums select-none",
                 alwaysShowActions
                   ? "opacity-100"
                   : "opacity-0 transition-opacity duration-150 group-hover/message:opacity-100 group-hover/user-actions:opacity-100 group-hover/user-shell:opacity-100",
@@ -1755,7 +1755,7 @@ const AssistantMessageBody = React.memo(
       return formatted.length > 0 ? formatted : null
     }, [messageCompletedAt, messageCreatedAt, timeFormatPreference])
 
-    const footerTimestampClassName = "text-sm text-muted-foreground/60 tabular-nums flex items-center gap-1"
+    const footerTimestampClassName = "text-sm text-muted-foreground tabular-nums flex items-center gap-1"
     const canOpenMessagePreview = !isMiniChatSurface && !isMobile
 
     const finalTurnActionButtons = (
@@ -1916,7 +1916,7 @@ const AssistantMessageBody = React.memo(
                 {turnDurationText ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className="text-sm text-muted-foreground/60 tabular-nums flex items-center gap-1">
+                      <span className="text-sm text-muted-foreground tabular-nums flex items-center gap-1">
                         <Icon name="hourglass" className="h-3.5 w-3.5" />
                         <span className="message-footer__label">{turnDurationText}</span>
                       </span>

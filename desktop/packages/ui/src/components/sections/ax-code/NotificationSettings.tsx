@@ -239,7 +239,7 @@ export const NotificationSettings: React.FC = () => {
 
         {isBrowser && (
           <div className="mt-1 px-2">
-            <p className="typography-meta text-muted-foreground/70">
+            <p className="typography-meta text-muted-foreground">
               {t("settings.notifications.page.delivery.browserPermissionHint")}
             </p>
             {notificationPermission === "denied" && (
@@ -248,7 +248,7 @@ export const NotificationSettings: React.FC = () => {
               </p>
             )}
             {notificationPermission === "granted" && !nativeNotificationsEnabled && (
-              <p className="typography-meta text-muted-foreground/70 mt-1">
+              <p className="typography-meta text-muted-foreground mt-1">
                 {t("settings.notifications.page.delivery.permissionGrantedButDisabled")}
               </p>
             )}

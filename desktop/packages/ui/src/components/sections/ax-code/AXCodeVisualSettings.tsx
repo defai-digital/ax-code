@@ -646,7 +646,7 @@ export const AXCodeVisualSettings: React.FC<AXCodeVisualSettingsProps> = ({ visi
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      className="flex items-center justify-center rounded-md p-1 text-muted-foreground/70 hover:text-foreground"
+                      className="flex items-center justify-center rounded-md p-1 text-muted-foreground hover:text-foreground"
                       aria-label={t("settings.openchamber.visual.field.themeImportInfoAria")}
                     >
                       <Icon name="information" className="h-3.5 w-3.5" />
@@ -918,7 +918,7 @@ export const AXCodeVisualSettings: React.FC<AXCodeVisualSettingsProps> = ({ visi
                       </span>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                          <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                         </TooltipTrigger>
                         <TooltipContent sideOffset={8} className="max-w-xs">
                           {t("settings.openchamber.visual.field.inputBarOffsetTooltip")}
@@ -987,7 +987,7 @@ export const AXCodeVisualSettings: React.FC<AXCodeVisualSettingsProps> = ({ visi
                   </span>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                      <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                     </TooltipTrigger>
                     <TooltipContent sideOffset={8} className="max-w-xs">
                       {t("settings.openchamber.visual.field.terminalQuickKeysTooltip")}
@@ -1596,7 +1596,7 @@ export const AXCodeVisualSettings: React.FC<AXCodeVisualSettingsProps> = ({ visi
                     </span>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Icon name="information" className="h-3.5 w-3.5 cursor-help text-muted-foreground/60" />
+                        <Icon name="information" className="h-3.5 w-3.5 cursor-help text-muted-foreground" />
                       </TooltipTrigger>
                       <TooltipContent sideOffset={8} className="max-w-xs">
                         {t("settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip")}
@@ -1681,7 +1681,7 @@ export const AXCodeVisualSettings: React.FC<AXCodeVisualSettingsProps> = ({ visi
                     </span>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                        <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                       </TooltipTrigger>
                       <TooltipContent sideOffset={8} className="max-w-xs">
                         {t("settings.openchamber.visual.field.queueMessagesByDefaultTooltip", {

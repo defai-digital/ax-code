@@ -108,7 +108,7 @@ export const AxCodeCliSettings: React.FC = () => {
           </h3>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+              <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
             </TooltipTrigger>
             <TooltipContent sideOffset={8} className="max-w-xs">
               {t("settings.openchamber.axCodeCli.tooltipPrefix")} <code className="font-mono text-xs">ax-code</code>
@@ -149,7 +149,7 @@ export const AxCodeCliSettings: React.FC = () => {
         </div>
 
         <div className="py-1.5">
-          <div className="typography-micro text-muted-foreground/70">
+          <div className="typography-micro text-muted-foreground">
             {t("settings.openchamber.axCodeCli.tipPrefix")} <span className="font-mono">AX_CODE_BINARY</span>{" "}
             {t("settings.openchamber.axCodeCli.tipMiddle")}{" "}
             <span className="font-mono">~/.config/openchamber/settings.json</span>

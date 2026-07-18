@@ -208,7 +208,7 @@ const ProviderListItem: React.FC<{
         <span className="typography-ui-label font-normal truncate flex-1 min-w-0 text-foreground">
           {provider.name || provider.id}
         </span>
-        <span className="typography-micro text-muted-foreground/60 flex-shrink-0">{modelCount}</span>
+        <span className="typography-micro text-muted-foreground flex-shrink-0">{modelCount}</span>
       </button>
     </div>
   )

@@ -346,7 +346,7 @@ export function LocalSetupScreen({ onBack, onCliAvailable }: LocalSetupScreenPro
                 {t("onboarding.localSetup.actions.apply")}
               </Button>
             </div>
-            <div className="text-xs text-muted-foreground/70">{t("onboarding.localSetup.helper.saveAndReload")}</div>
+            <div className="text-xs text-muted-foreground">{t("onboarding.localSetup.helper.saveAndReload")}</div>
           </div>
         </div>
       </div>
@@ -355,16 +355,16 @@ export function LocalSetupScreen({ onBack, onCliAvailable }: LocalSetupScreenPro
         <div className="absolute bottom-8 left-0 right-0 text-center space-y-1">
           {platform === "windows" ? (
             <>
-              <p className="text-sm text-muted-foreground/70">{t("onboarding.localSetup.windows.hintInstallInWsl")}</p>
-              <p className="text-sm text-muted-foreground/70">
+              <p className="text-sm text-muted-foreground">{t("onboarding.localSetup.windows.hintInstallInWsl")}</p>
+              <p className="text-sm text-muted-foreground">
                 {t("onboarding.localSetup.windows.hintDetectionFailed")}
               </p>
             </>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground/70">{t("onboarding.localSetup.hint.ensurePath")}</p>
-              <p className="text-sm text-muted-foreground/70">{t("onboarding.localSetup.hint.setEnv")}</p>
-              <p className="text-sm text-muted-foreground/70">{t("onboarding.localSetup.hint.missingRuntime")}</p>
+              <p className="text-sm text-muted-foreground">{t("onboarding.localSetup.hint.ensurePath")}</p>
+              <p className="text-sm text-muted-foreground">{t("onboarding.localSetup.hint.setEnv")}</p>
+              <p className="text-sm text-muted-foreground">{t("onboarding.localSetup.hint.missingRuntime")}</p>
             </>
           )}
         </div>

@@ -42,7 +42,7 @@ export const ConfigUpdateOverlay: React.FC = () => {
               AX Code is taking longer than expected. Reload the app or dismiss this message and retry.
             </div>
           ) : (
-            <div className="text-xs text-muted-foreground/80">
+            <div className="text-xs text-muted-foreground">
               This can take a few minutes. AX Code will resume automatically.
             </div>
           )}

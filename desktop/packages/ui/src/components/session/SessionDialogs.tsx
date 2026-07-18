@@ -600,7 +600,7 @@ export const SessionDialogs: React.FC = () => {
                   ? t("sessions.sidebar.sessionDialogs.linkedSessionSingle")
                   : t("sessions.sidebar.sessionDialogs.linkedSessionPlural")}
               </span>
-              <span className="typography-micro text-muted-foreground/70">{deleteDialog.sessions.length}</span>
+              <span className="typography-micro text-muted-foreground">{deleteDialog.sessions.length}</span>
             </div>
           )}
           <ul className={cn(isWorktreeDelete ? "mt-2 space-y-1" : "space-y-0.5")}>
@@ -610,7 +610,7 @@ export const SessionDialogs: React.FC = () => {
                 className={cn(
                   isWorktreeDelete
                     ? "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground"
-                    : "typography-micro text-muted-foreground/80",
+                    : "typography-micro text-muted-foreground",
                 )}
               >
                 <span className={cn(!isWorktreeDelete && "hidden")}>•</span>
@@ -621,8 +621,8 @@ export const SessionDialogs: React.FC = () => {
               <li
                 className={cn(
                   isWorktreeDelete
-                    ? "px-2.5 py-1 text-xs text-muted-foreground/70"
-                    : "typography-micro text-muted-foreground/70",
+                    ? "px-2.5 py-1 text-xs text-muted-foreground"
+                    : "typography-micro text-muted-foreground",
                 )}
               >
                 {t("sessions.sidebar.dialogs.sessionList.more", { count: deleteDialog.sessions.length - 5 })}
@@ -640,10 +640,10 @@ export const SessionDialogs: React.FC = () => {
               {t("sessions.sidebar.sessionDialogs.worktree.label")}
             </span>
             {targetWorktree?.label ? (
-              <span className="typography-micro text-muted-foreground/70">{targetWorktree.label}</span>
+              <span className="typography-micro text-muted-foreground">{targetWorktree.label}</span>
             ) : null}
           </div>
-          <p className="typography-micro text-muted-foreground/80 break-all">
+          <p className="typography-micro text-muted-foreground break-all">
             {targetWorktree
               ? formatPathForDisplay(targetWorktree.path, homeDirectory)
               : t("sessions.sidebar.sessionDialogs.worktree.pathUnavailable")}
@@ -656,7 +656,7 @@ export const SessionDialogs: React.FC = () => {
         </div>
       ) : (
         <div className="rounded-xl border border-border/40 bg-sidebar/60 p-3">
-          <p className="typography-meta text-muted-foreground/80">{t("sessions.sidebar.sessionDialogs.delete.note")}</p>
+          <p className="typography-meta text-muted-foreground">{t("sessions.sidebar.sessionDialogs.delete.note")}</p>
         </div>
       )}
     </div>
@@ -688,7 +688,7 @@ export const SessionDialogs: React.FC = () => {
         {t("sessions.sidebar.sessionDialogs.actions.deleteRemoteBranch")}
       </button>
     ) : (
-      <span className="text-xs text-muted-foreground/70">
+      <span className="text-xs text-muted-foreground">
         {t("sessions.sidebar.sessionDialogs.actions.remoteBranchInfoUnavailable")}
       </span>
     )
@@ -789,7 +789,7 @@ export const SessionDialogs: React.FC = () => {
         >
           <div className="space-y-2 pb-2">
             {deleteDialogDescription && (
-              <p className="typography-meta text-muted-foreground/80">{deleteDialogDescription}</p>
+              <p className="typography-meta text-muted-foreground">{deleteDialogDescription}</p>
             )}
             {deleteDialogBody}
           </div>

@@ -199,7 +199,7 @@ const CommandTextarea: React.FC<CommandTextareaProps> = ({
       {/* Formatted preview of what will be saved */}
       {value.length > 0 && (
         <details className="group">
-          <summary className="typography-micro text-muted-foreground/60 cursor-pointer select-none hover:text-muted-foreground">
+          <summary className="typography-micro text-muted-foreground cursor-pointer select-none hover:text-muted-foreground">
             {preview(value.length)}
           </summary>
           <div className="mt-1 rounded-md bg-[var(--surface-elevated)] px-3 py-2 overflow-x-auto">
@@ -387,7 +387,7 @@ const EnvEditor: React.FC<EnvEditorProps> = ({
               <button
                 type="button"
                 onClick={() => toggleReveal(idx)}
-                className="absolute right-2 text-muted-foreground/60 hover:text-muted-foreground"
+                className="absolute right-2 text-muted-foreground hover:text-muted-foreground"
                 title={revealedKeys.has(idx) ? hideValueTitle : showValueTitle}
               >
                 {revealedKeys.has(idx) ? (
@@ -416,7 +416,7 @@ const EnvEditor: React.FC<EnvEditorProps> = ({
         {addVariable}
       </Button>
 
-      {hasSensitiveValues && <p className="typography-micro text-muted-foreground/60">{plainTextWarning}</p>}
+      {hasSensitiveValues && <p className="typography-micro text-muted-foreground">{plainTextWarning}</p>}
     </div>
   )
 }
@@ -1382,7 +1382,7 @@ export const McpPage: React.FC = () => {
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
           <Icon name="plug" className="mx-auto mb-3 h-12 w-12 opacity-50" />
-          <p className="typography-body">{t("settings.mcp.page.empty.selectServer")}</p>
+          <p className="typography-markdown">{t("settings.mcp.page.empty.selectServer")}</p>
           <p className="typography-meta mt-1 opacity-75">{t("settings.mcp.page.empty.addNewOne")}</p>
         </div>
       </div>
@@ -1528,7 +1528,7 @@ export const McpPage: React.FC = () => {
                       />
                     </div>
                     <p className="typography-meta text-muted-foreground">{runtimeDescription}</p>
-                    <p className="typography-micro text-muted-foreground/80">
+                    <p className="typography-micro text-muted-foreground">
                       {draftScope === "project"
                         ? t("settings.mcp.page.status.projectScopedTo", {
                             directory: currentDirectory ?? t("settings.mcp.page.status.activeProject"),

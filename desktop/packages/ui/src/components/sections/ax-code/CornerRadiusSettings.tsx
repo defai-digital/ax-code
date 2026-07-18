@@ -26,7 +26,7 @@ export const CornerRadiusSettings: React.FC = () => {
             <span className="typography-ui-label text-foreground">
               {t("settings.openchamber.cornerRadius.field.radius")}
             </span>
-            <span className="typography-micro text-muted-foreground/70">
+            <span className="typography-micro text-muted-foreground">
               {t("settings.openchamber.cornerRadius.field.description")}
             </span>
           </div>

@@ -231,7 +231,7 @@ export function ScheduledTasksDialog() {
           ) : (
             <Icon
               name="folder"
-              className="h-3.5 w-3.5 shrink-0 text-muted-foreground/80"
+              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
               style={iconColor ? { color: iconColor } : undefined}
             />
           )}
@@ -511,7 +511,7 @@ export function ScheduledTasksDialog() {
                       {nextAt ? (
                         <>
                           <span className="text-foreground">{formatRelativeTime(nextAt, t)}</span>
-                          <span className="text-muted-foreground/50">·</span>
+                          <span className="text-muted-foreground">·</span>
                           <span>{formatClockTime(nextAt)}</span>
                         </>
                       ) : (
@@ -539,7 +539,7 @@ export function ScheduledTasksDialog() {
                               {statusLabel}
                             </span>
                           ) : null}
-                          <span className="text-muted-foreground/50">·</span>
+                          <span className="text-muted-foreground">·</span>
                           <span>{formatRelativeTime(lastAt, t)}</span>
                         </>
                       ) : (

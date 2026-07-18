@@ -45,6 +45,7 @@ import {
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
 import { Header } from "./header"
 import { useDialog } from "../../ui/dialog"
+import { DialogPrompt } from "../../ui/dialog-prompt"
 import { DialogMessage } from "./dialog-message"
 import { DialogActivity } from "./dialog-activity"
 import { DialogCapabilityCatalog } from "./dialog-capability-catalog"
@@ -599,6 +600,79 @@ export function Session() {
     )
   }
 
+  // Transcript search state. `searchMatches` holds matching message IDs in
+  // chronological order and `searchIndex` points at the match the user is
+  // currently looking at; re-invoking the command with the same query steps
+  // to the previous match (wrapping to the latest).
+  let searchQuery = ""
+  let searchMatches: string[] = []
+  let searchIndex = -1
+
+  function searchMessageText(messageID: string) {
+    const parts = sync.data.part[messageID] ?? []
+    return parts.reduce((agg, part) => {
+      if (part.type === "text" && !part.synthetic && !part.ignored) {
+        agg += part.text
+      }
+      return agg
+    }, "")
+  }
+
+  function searchMatchIDs(query: string) {
+    const needle = query.toLowerCase()
+    return messages()
+      .filter((message) => !hiddenIDs().has(message.id))
+      .filter((message) => searchMessageText(message.id).toLowerCase().includes(needle))
+      .map((message) => message.id)
+  }
+
+  function scrollToSearchMatch(messageID: string) {
+    if (!isRenderableAlive(scroll)) return false
+    const children = renderableChildren<ScrollChild>(scroll, { name: "session-search-message-children" })
+    // User messages render a box keyed by the message ID; assistant messages
+    // key their text part boxes as text-<partID> instead.
+    const textPart = (sync.data.part[messageID] ?? []).find(
+      (part) => part.type === "text" && !part.synthetic && !part.ignored,
+    )
+    const child =
+      messageTarget(children, messageID) ?? messageTarget(children, textPart ? `text-${textPart.id}` : undefined)
+    if (!child) return false
+    scroll.scrollBy(child.y - scroll.y - 1)
+    return true
+  }
+
+  async function runTranscriptSearch(dialog: DialogContext) {
+    const query = await DialogPrompt.show(dialog, "Search transcript", {
+      value: searchQuery,
+      placeholder: "Search messages",
+    })
+    const needle = query?.trim()
+    if (!needle) return
+    const matches = searchMatchIDs(needle)
+    if (matches.length === 0) {
+      searchQuery = needle
+      searchMatches = []
+      searchIndex = -1
+      toast.show({ message: `No matches for "${needle}"`, variant: "warning", duration: 2000 })
+      return
+    }
+    const currentID = searchMatches[searchIndex]
+    if (needle === searchQuery && currentID && matches.includes(currentID)) {
+      const position = matches.indexOf(currentID)
+      searchIndex = position <= 0 ? matches.length - 1 : position - 1
+    } else {
+      searchIndex = matches.length - 1
+    }
+    searchQuery = needle
+    searchMatches = matches
+    if (!scrollToSearchMatch(matches[searchIndex])) return
+    toast.show({
+      message: `Match ${searchIndex + 1} of ${matches.length} — ${keybind.print("session_search")} again for previous`,
+      variant: "success",
+      duration: 2000,
+    })
+  }
+
   const command = useCommandDialog()
   command.register(() => [
     ...displayCommands({
@@ -982,6 +1056,16 @@ export function Session() {
       },
     },
     {
+      title: "Search transcript",
+      value: "session.search",
+      keybind: "session_search",
+      category: "Session",
+      slash: {
+        name: "search",
+      },
+      onSelect: (dialog) => runTranscriptSearch(dialog),
+    },
+    {
       title: "Go to child session",
       value: "session.child.first",
       keybind: "session_child_first",
@@ -1057,6 +1141,18 @@ export function Session() {
 
   // snap to bottom when session changes
   createEffect(on(() => route.sessionID, toBottom))
+
+  // Transcript search matches are per-session; drop them on navigation.
+  createEffect(
+    on(
+      () => route.sessionID,
+      () => {
+        searchQuery = ""
+        searchMatches = []
+        searchIndex = -1
+      },
+    ),
+  )
 
   // Apply route.initialPrompt (fork, /new with a draft) on session→session
   // navigation. The Prompt ref callback below only runs on first mount, so

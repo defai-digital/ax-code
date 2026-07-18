@@ -236,7 +236,7 @@ export const DraftPresetChips: React.FC<DraftPresetChipsProps> = ({ onSubmit, cl
         />
       ) : null}
       {!hasChips && (
-        <span className="text-xs text-muted-foreground/40 select-none">{t("chat.draftStarters.pinHint")}</span>
+        <span className="text-xs text-muted-foreground select-none">{t("chat.draftStarters.pinHint")}</span>
       )}
       <AddStarterPicker pinnable={pinnable} onOpen={ensureLoaded} onAdd={addStarter} />
     </div>

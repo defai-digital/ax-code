@@ -182,7 +182,7 @@ export const PluginsSidebar: React.FC<PluginsSidebarProps> = ({ onItemSelect, on
         }
         selected={selectedId === entry.id}
         onSelect={() => handleSelect(entry.id)}
-        icon={<Icon name={entryIcon(entry)} className="h-4 w-4 flex-shrink-0 text-muted-foreground/70" />}
+        icon={<Icon name={entryIcon(entry)} className="h-4 w-4 flex-shrink-0 text-muted-foreground" />}
         actions={actions}
       />
     )
@@ -195,7 +195,7 @@ export const PluginsSidebar: React.FC<PluginsSidebarProps> = ({ onItemSelect, on
       metadata={t("settings.plugins.sidebar.kind.file")}
       selected={selectedId === file.id}
       onSelect={() => handleSelect(file.id)}
-      icon={<Icon name="file-text" className="h-4 w-4 flex-shrink-0 text-muted-foreground/70" />}
+      icon={<Icon name="file-text" className="h-4 w-4 flex-shrink-0 text-muted-foreground" />}
       actions={[
         {
           label: t("settings.common.actions.delete"),

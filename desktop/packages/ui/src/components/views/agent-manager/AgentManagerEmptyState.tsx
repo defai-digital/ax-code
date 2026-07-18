@@ -404,7 +404,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
             value={groupName}
             onChange={(e) => setGroupName(e.target.value)}
             placeholder={t("agentManager.empty.groupName.placeholder")}
-            className="typography-body"
+            className="typography-markdown"
           />
           <p className="typography-micro text-muted-foreground">{t("agentManager.empty.groupName.description")}</p>
         </div>
@@ -429,7 +429,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
               {(() => {
                 const trimmedCommandCount = setupCommands.filter((cmd) => cmd.trim()).length
                 return trimmedCommandCount > 0 ? (
-                  <span className="font-normal text-muted-foreground/70">
+                  <span className="font-normal text-muted-foreground">
                     {" "}
                     ({t("agentManager.empty.setupCommands.configured", { count: trimmedCommandCount })})
                   </span>
@@ -446,11 +446,11 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="pt-2 space-y-2">
-              <p className="typography-micro text-muted-foreground/70">
+              <p className="typography-micro text-muted-foreground">
                 {t("agentManager.empty.setupCommands.description")}
               </p>
               {isLoadingSetupCommands ? (
-                <p className="typography-meta text-muted-foreground/70">
+                <p className="typography-meta text-muted-foreground">
                   {t("agentManager.empty.setupCommands.loading")}
                 </p>
               ) : (

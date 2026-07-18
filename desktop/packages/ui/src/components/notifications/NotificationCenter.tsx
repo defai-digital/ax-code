@@ -43,7 +43,7 @@ const NotificationEntry: React.FC<{
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center justify-between gap-2">
           <span className="truncate text-xs font-medium text-foreground">{item.title}</span>
-          <span className="flex-shrink-0 text-[10px] text-muted-foreground/60">{timeLabel}</span>
+          <span className="flex-shrink-0 text-[10px] text-muted-foreground">{timeLabel}</span>
         </div>
         <p className="line-clamp-2 text-xs text-muted-foreground">{item.message}</p>
         {item.type === "permission" && item.onAllow && item.onDeny && (
@@ -178,9 +178,9 @@ export const NotificationCenter: React.FC = React.memo(function NotificationCent
               ))
             ) : (
               <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-                <Icon name="checkbox-circle" className="h-8 w-8 text-muted-foreground/30" />
+                <Icon name="checkbox-circle" className="h-8 w-8 text-muted-foreground" />
                 <p className="text-xs font-medium text-muted-foreground">{t("notificationCenter.empty")}</p>
-                <p className="text-[10px] text-muted-foreground/60">{t("notificationCenter.emptyDescription")}</p>
+                <p className="text-[10px] text-muted-foreground">{t("notificationCenter.emptyDescription")}</p>
               </div>
             )}
           </div>

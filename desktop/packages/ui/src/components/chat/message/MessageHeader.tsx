@@ -114,7 +114,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({
           </div>
         </div>
         {formattedTimestamp && (
-          <span className="shrink-0 typography-micro text-muted-foreground/40 tabular-nums select-none">
+          <span className="shrink-0 typography-micro text-muted-foreground tabular-nums select-none">
             {formattedTimestamp}
           </span>
         )}

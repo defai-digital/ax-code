@@ -43,28 +43,17 @@ pnpm --dir packages/ax-code exec vitest run test/cli/tui/opentui-ffi-coordinate-
 ```
 
 OpenTUI has one renderer path: the upstream Zig native library. The ADR-046
-`@ax-code/render` N-API overlay and its `yoga` routing scope are retired. The
-layout engine used internally by OpenTUI is still Yoga, but it is an
-implementation detail rather than a selectable AX Code mode.
-
-The hidden engine switch is now `--tui-mode={zig,native}`. `zig` starts this
-OpenTUI/Solid application and remains the default. `native` starts the separate
-`crates/ax-code-tui` Rust/Ratatui executable while the Node parent hosts the AX
-runtime over an authenticated loopback connection. The native UI intentionally
-has its own Grok-inspired presentation; it does not attempt OpenTUI frame
-parity. Legacy `AX_CODE_NATIVE_RENDER*` values are forced off and ignored.
+`@ax-code/render` N-API overlay and its `yoga` routing scope are retired, and
+the experimental standalone Rust/Ratatui UI (`crates/ax-code-tui`) was removed
+in 2026-07 — Zig/OpenTUI is the only UI engine. The layout engine used
+internally by OpenTUI is still Yoga, but it is an implementation detail rather
+than a selectable AX Code mode. Legacy `AX_CODE_NATIVE_RENDER*` values are
+forced off and ignored.
 
 The OpenTUI golden-frame gate validates only the Zig application path:
 
 ```sh
 pnpm --dir packages/ax-code run check:golden-frames
-```
-
-Native UI checks live with the Rust crate:
-
-```sh
-cargo test --manifest-path crates/Cargo.toml -p ax-code-tui
-cargo clippy --manifest-path crates/Cargo.toml -p ax-code-tui --all-targets -- -D warnings
 ```
 
 ## Update Workflow

@@ -142,7 +142,7 @@ const SettingsHome: React.FC<{ onOpen: (slug: SettingsPageSlug) => void }> = ({ 
       <div className="mx-auto w-full max-w-3xl px-6 py-6 space-y-6">
         <div className="space-y-1">
           <h1 className="typography-ui-header font-semibold text-foreground">{t("settings.view.home.title")}</h1>
-          <p className="typography-ui text-muted-foreground">{t("settings.view.home.description")}</p>
+          <p className="typography-ui-label text-muted-foreground">{t("settings.view.home.description")}</p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -155,7 +155,7 @@ const SettingsHome: React.FC<{ onOpen: (slug: SettingsPageSlug) => void }> = ({ 
             )}
           >
             <div className="typography-ui-label text-foreground">{t("settings.view.home.cards.providers.title")}</div>
-            <div className="typography-micro text-muted-foreground/70">
+            <div className="typography-micro text-muted-foreground">
               {t("settings.view.home.cards.providers.description")}
             </div>
           </button>
@@ -169,7 +169,7 @@ const SettingsHome: React.FC<{ onOpen: (slug: SettingsPageSlug) => void }> = ({ 
             )}
           >
             <div className="typography-ui-label text-foreground">{t("settings.view.home.cards.agents.title")}</div>
-            <div className="typography-micro text-muted-foreground/70">
+            <div className="typography-micro text-muted-foreground">
               {t("settings.view.home.cards.agents.description")}
             </div>
           </button>
@@ -185,7 +185,7 @@ const SettingsHome: React.FC<{ onOpen: (slug: SettingsPageSlug) => void }> = ({ 
             <div className="typography-ui-label text-foreground">
               {t("settings.view.home.cards.skillsCatalog.title")}
             </div>
-            <div className="typography-micro text-muted-foreground/70">
+            <div className="typography-micro text-muted-foreground">
               {t("settings.view.home.cards.skillsCatalog.description")}
             </div>
           </button>
@@ -199,7 +199,7 @@ const SettingsHome: React.FC<{ onOpen: (slug: SettingsPageSlug) => void }> = ({ 
             )}
           >
             <div className="typography-ui-label text-foreground">{t("settings.view.home.cards.mcp.title")}</div>
-            <div className="typography-micro text-muted-foreground/70">
+            <div className="typography-micro text-muted-foreground">
               {t("settings.view.home.cards.mcp.description")}
             </div>
           </button>
@@ -442,7 +442,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, isWindowed 
           <div className="typography-ui-header font-semibold text-foreground">
             {t("settings.view.unavailable.title")}
           </div>
-          <p className="typography-ui text-muted-foreground mt-1">{t("settings.view.unavailable.description")}</p>
+          <p className="typography-ui-label text-muted-foreground mt-1">{t("settings.view.unavailable.description")}</p>
         </div>
       </div>
     )

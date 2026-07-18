@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { toast } from "@/components/ui"
+import { useConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
@@ -45,6 +46,7 @@ export const StashesDialog: React.FC<StashesDialogProps> = ({
   const [message, setMessage] = React.useState("")
   const [operation, setOperation] = React.useState<StashOperation>(null)
   const [fileCounts, setFileCounts] = React.useState<Record<string, number>>({})
+  const { requestConfirm, confirmDialog } = useConfirmDialog()
 
   const load = React.useCallback(async () => {
     if (!directory) return
@@ -115,7 +117,12 @@ export const StashesDialog: React.FC<StashesDialogProps> = ({
 
   const runStashAction = async (stash: GitStashEntry, kind: "apply" | "pop" | "drop") => {
     if (!directory || operation) return
-    if (kind === "drop" && !window.confirm(t("gitView.stashes.confirm.drop", { ref: stash.ref }))) return
+    if (kind === "drop") {
+      const confirmed = await requestConfirm(t("gitView.stashes.confirm.drop", { ref: stash.ref }), {
+        destructive: true,
+      })
+      if (!confirmed) return
+    }
     setOperation(`${kind}:${stash.ref}`)
     try {
       if (kind === "apply") await applyGitStash(directory, { ref: stash.ref })
@@ -203,7 +210,7 @@ export const StashesDialog: React.FC<StashesDialogProps> = ({
                 className="group flex items-center gap-2 rounded py-1.5 transition-colors hover:bg-interactive-hover/30"
               >
                 <div className="min-w-0 flex-1 pl-2">
-                  <p className="typography-small truncate text-foreground">
+                  <p className="typography-meta truncate text-foreground">
                     {stash.message || t("gitView.stashes.untitled")}
                   </p>
                   <p className="typography-meta truncate text-muted-foreground">

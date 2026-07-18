@@ -774,6 +774,9 @@ export const Header: React.FC = () => {
   const activeMainTab = useUIStore((state) => state.activeMainTab)
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab)
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides)
+  const unreadNotificationCount = useNotificationStore((s) =>
+    s.notifications.reduce((count, item) => (item.read ? count : count + 1), 0),
+  )
 
   const getCurrentModel = useConfigStore((state) => state.getCurrentModel)
   const runtimeApis = useRuntimeAPIs()
@@ -1829,12 +1832,22 @@ export const Header: React.FC = () => {
         onDevShutdown={handleDevShutdown}
       />
       <SyncStatusIndicator />
-      <HeaderIconActionButton
-        title={t("notificationCenter.title")}
-        ariaLabel={t("notificationCenter.title")}
-        onClick={() => useNotificationStore.getState().toggleOpen()}
-        Icon={"notification-3"}
-      />
+      <span className="relative inline-flex">
+        <HeaderIconActionButton
+          title={t("notificationCenter.title")}
+          ariaLabel={t("notificationCenter.title")}
+          onClick={() => useNotificationStore.getState().toggleOpen()}
+          Icon={"notification-3"}
+        />
+        {unreadNotificationCount > 0 && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-medium leading-none text-primary-foreground"
+          >
+            {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
+          </span>
+        )}
+      </span>
       <NotificationCenter />
       <div className={HEADER_ACTION_SEPARATOR_CLASS} aria-hidden />
       <HeaderIconActionButton
@@ -1933,18 +1946,18 @@ export const Header: React.FC = () => {
             {activeProjectLabel ||
             currentBranchLabel ||
             (!isNewSessionDraftOpen && (hasNonZeroSessionChanges || worktreeBadgeKind)) ? (
-              <span className="flex min-w-0 max-w-full items-center gap-1.5 truncate typography-micro font-normal leading-tight text-muted-foreground/75">
+              <span className="flex min-w-0 max-w-full items-center gap-1.5 truncate typography-micro font-normal leading-tight text-muted-foreground">
                 {activeProjectLabel ? <span className="truncate">{activeProjectLabel}</span> : null}
                 {currentBranchLabel ? (
                   <span className="inline-flex min-w-0 items-center gap-0.5">
-                    <Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" />
+                    <Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                     <span className="truncate">{currentBranchLabel}</span>
                   </span>
                 ) : null}
                 {!isNewSessionDraftOpen && hasNonZeroSessionChanges ? (
                   <span className="inline-flex flex-shrink-0 items-center gap-0 text-[0.92em]">
                     <span className="text-status-success/80">+{currentSessionChanges.additions}</span>
-                    <span className="text-muted-foreground/60">/</span>
+                    <span className="text-muted-foreground">/</span>
                     <span className="text-status-error/65">-{currentSessionChanges.deletions}</span>
                   </span>
                 ) : null}
@@ -1956,7 +1969,7 @@ export const Header: React.FC = () => {
                         worktreeBadgeKind === "invalid" ||
                         worktreeBadgeKind === "missing"
                         ? "text-status-warning"
-                        : "text-muted-foreground/60",
+                        : "text-muted-foreground",
                     )}
                   >
                     <Icon name="alert" className="h-3 w-3 flex-shrink-0" />

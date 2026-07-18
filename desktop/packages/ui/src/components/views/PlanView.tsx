@@ -708,7 +708,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
       <div className="flex-1 min-h-0 min-w-0 relative">
         <ScrollableOverlay outerClassName="h-full min-w-0" className="h-full min-w-0">
           {loading ? (
-            <div className="p-3 typography-ui text-muted-foreground">{t("planView.state.loading")}</div>
+            <div className="p-3 typography-ui-label text-muted-foreground">{t("planView.state.loading")}</div>
           ) : (
             <div className="relative h-full">
               <div className="h-full">

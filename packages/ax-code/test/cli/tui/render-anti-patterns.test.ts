@@ -784,7 +784,6 @@ describe("tui OpenTUI stability guardrails", () => {
     for (const [text, name] of [
       [app, "app-session-fork-retry"],
       [prompt, "prompt-status-tick"],
-      [prompt, "prompt-interrupt-reset"],
       [prompt, "prompt-route-handoff"],
       [prompt, "prompt-retry-countdown"],
       [session, "session-status-tick"],

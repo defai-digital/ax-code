@@ -3364,18 +3364,18 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
         )}
         <ScrollableOverlay outerClassName="h-full min-w-0" className="h-full min-w-0">
           {!selectedFile ? (
-            <div className="p-3 typography-ui text-muted-foreground">{t("filesView.editor.pickFileFromTree")}</div>
+            <div className="p-3 typography-ui-label text-muted-foreground">{t("filesView.editor.pickFileFromTree")}</div>
           ) : fileLoading ? (
             suppressFileLoadingIndicator ? (
               <div className="p-3" />
             ) : (
-              <div className="p-3 flex items-center gap-2 typography-ui text-muted-foreground">
+              <div className="p-3 flex items-center gap-2 typography-ui-label text-muted-foreground">
                 <Icon name="loader-4" className="size-4 animate-spin" />
                 {t("filesView.state.loading")}
               </div>
             )
           ) : fileError ? (
-            <div className="p-3 typography-ui text-[color:var(--status-error)]">{fileError}</div>
+            <div className="p-3 typography-ui-label text-[color:var(--status-error)]">{fileError}</div>
           ) : isSelectedImage ? (
             <div className="flex h-full items-center justify-center p-3">
               <img
@@ -3537,7 +3537,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
               </div>
               {shouldMaskEditorForPendingNavigation && (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background">
-                  <div className="flex items-center gap-2 typography-ui text-muted-foreground">
+                  <div className="flex items-center gap-2 typography-ui-label text-muted-foreground">
                     <Icon name="loader-4" className="size-4 animate-spin" />
                     {t("filesView.state.openingFileAtChange")}
                   </div>
@@ -3697,13 +3697,13 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
             suppressFileLoadingIndicator ? (
               <div className="p-4" />
             ) : (
-              <div className="p-4 flex items-center gap-2 typography-ui text-muted-foreground">
+              <div className="p-4 flex items-center gap-2 typography-ui-label text-muted-foreground">
                 <Icon name="loader-4" className="size-4 animate-spin" />
                 Loading…
               </div>
             )
           ) : fileError ? (
-            <div className="p-4 typography-ui text-[color:var(--status-error)]">{fileError}</div>
+            <div className="p-4 typography-ui-label text-[color:var(--status-error)]">{fileError}</div>
           ) : isSelectedImage ? (
             <div className="flex h-full items-center justify-center p-4">
               <img
@@ -3756,7 +3756,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
               </div>
               {shouldMaskEditorForPendingNavigation && (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background">
-                  <div className="flex items-center gap-2 typography-ui text-muted-foreground">
+                  <div className="flex items-center gap-2 typography-ui-label text-muted-foreground">
                     <Icon name="loader-4" className="size-4 animate-spin" />
                     {t("filesView.state.openingFileAtChange")}
                   </div>

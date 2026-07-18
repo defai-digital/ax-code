@@ -352,7 +352,7 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
           <Icon name="github" className="h-12 w-12 text-muted-foreground" />
           <div className="text-center">
             <p className="typography-ui-label text-foreground">{t("session.githubIntegration.connect.title")}</p>
-            <p className="typography-small text-muted-foreground mt-1">
+            <p className="typography-meta text-muted-foreground mt-1">
               {t("session.githubIntegration.connect.description")}
             </p>
           </div>
@@ -392,7 +392,7 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
                 <div className="flex items-center justify-center h-full">
                   <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 text-destructive">
                     <Icon name="error-warning" className="h-4 w-4" />
-                    <span className="typography-small">{error}</span>
+                    <span className="typography-meta">{error}</span>
                   </div>
                 </div>
               )}
@@ -415,7 +415,7 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
                         <div className="flex items-start gap-2">
                           <span className="text-muted-foreground shrink-0 typography-micro">#{issue.number}</span>
                           <div className="min-w-0 flex-1">
-                            <span className="typography-small line-clamp-2">{issue.title}</span>
+                            <span className="typography-meta line-clamp-2">{issue.title}</span>
                             {issue.sourceRepo?.source === "upstream" ? (
                               <span className="typography-micro px-1 py-0.5 rounded bg-status-info/10 text-status-info mt-0.5 inline-block">
                                 {issue.sourceRepo.owner}/{issue.sourceRepo.repo}
@@ -426,7 +426,7 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
                       </button>
                     ))
                   ) : (
-                    <div className="flex items-center justify-center h-[300px] text-center typography-small text-muted-foreground">
+                    <div className="flex items-center justify-center h-[300px] text-center typography-meta text-muted-foreground">
                       {t("session.githubIntegration.empty.noIssuesFound")}
                     </div>
                   )}
@@ -471,7 +471,7 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
                           <div className="flex items-start gap-2">
                             <span className="text-muted-foreground shrink-0 typography-micro">#{pr.number}</span>
                             <div className="min-w-0 flex-1">
-                              <span className="typography-small line-clamp-1">{pr.title}</span>
+                              <span className="typography-meta line-clamp-1">{pr.title}</span>
                               <div className="flex items-center gap-2 mt-0.5">
                                 <span className="typography-micro text-muted-foreground">
                                   {pr.head} → {pr.base}
@@ -491,7 +491,7 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
                       )
                     })
                   ) : (
-                    <div className="flex items-center justify-center h-[300px] text-center typography-small text-muted-foreground">
+                    <div className="flex items-center justify-center h-[300px] text-center typography-meta text-muted-foreground">
                       {t("session.githubIntegration.empty.noPullRequestsFound")}
                     </div>
                   )}
@@ -526,7 +526,7 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
         {!isMobile && (selectedIssue || selectedPr) && (
           <div className="flex items-center gap-2 px-2 h-8 rounded-md bg-muted/50 border border-border/50">
             <Icon name="check" className="h-3.5 w-3.5 text-status-success shrink-0" />
-            <span className="typography-small truncate max-w-[150px]">
+            <span className="typography-meta truncate max-w-[150px]">
               {selectedIssue
                 ? t("session.githubIntegration.selected.issueNumber", { number: selectedIssue.number })
                 : t("session.githubIntegration.selected.prNumber", { number: selectedPr?.number ?? "" })}
@@ -548,7 +548,7 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
               onChange={(checked) => setIncludeDiff(checked)}
               ariaLabel={t("session.githubIntegration.includeDiffAria")}
             />
-            <span className="typography-small text-foreground">{t("session.githubIntegration.includeDiff")}</span>
+            <span className="typography-meta text-foreground">{t("session.githubIntegration.includeDiff")}</span>
           </label>
         )}
       </div>
@@ -610,7 +610,7 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
               {(selectedIssue || selectedPr) && (
                 <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-muted/50 border border-border/50">
                   <Icon name="check" className="h-3.5 w-3.5 text-status-success shrink-0" />
-                  <span className="typography-small truncate flex-1">
+                  <span className="typography-meta truncate flex-1">
                     {selectedIssue
                       ? t("session.githubIntegration.selected.issueNumber", { number: selectedIssue.number })
                       : t("session.githubIntegration.selected.prNumber", { number: selectedPr?.number ?? "" })}

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/icon/Icon"
 import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
 import { toast } from "@/components/ui"
+import { useConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { cn } from "@/lib/utils"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import {
@@ -67,6 +68,7 @@ export const LocalModelsPage: React.FC = () => {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [busyKey, setBusyKey] = React.useState<string | null>(null)
+  const { requestConfirm, confirmDialog } = useConfirmDialog()
   // Ticks once a second while a download is active so the in-row elapsed timer
   // advances smoothly between the 2s catalog polls.
   const [now, setNow] = React.useState(() => Date.now())
@@ -206,6 +208,7 @@ export const LocalModelsPage: React.FC = () => {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
+      {confirmDialog}
       <div className="border-b border-border px-6 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
@@ -279,7 +282,7 @@ export const LocalModelsPage: React.FC = () => {
           </div>
 
           {error && (
-            <div className="rounded-md border border-[var(--status-error)]/30 bg-[var(--status-error)]/5 px-3 py-2 typography-ui text-[var(--status-error)]">
+            <div className="rounded-md border border-[var(--status-error)]/30 bg-[var(--status-error)]/5 px-3 py-2 typography-ui-label text-[var(--status-error)]">
               {error}
             </div>
           )}
@@ -292,7 +295,7 @@ export const LocalModelsPage: React.FC = () => {
               <span className="text-right">Actions</span>
             </div>
             {loading && !data ? (
-              <div className="flex items-center gap-2 px-4 py-8 typography-ui text-muted-foreground">
+              <div className="flex items-center gap-2 px-4 py-8 typography-ui-label text-muted-foreground">
                 <Icon name="loader" className="h-4 w-4 animate-spin" />
                 Loading models...
               </div>
@@ -312,9 +315,11 @@ export const LocalModelsPage: React.FC = () => {
                       void handleCancel(job)
                     }}
                     onDelete={() => {
-                      const ok = window.confirm(`Delete local copy of ${model.name}?`)
-                      if (!ok) return
-                      void runAction(model.id, () => deleteAxEngineModel(model.id, directory), "Model deleted")
+                      void (async () => {
+                        const ok = await requestConfirm(`Delete local copy of ${model.name}?`, { destructive: true })
+                        if (!ok) return
+                        void runAction(model.id, () => deleteAxEngineModel(model.id, directory), "Model deleted")
+                      })()
                     }}
                   />
                 )

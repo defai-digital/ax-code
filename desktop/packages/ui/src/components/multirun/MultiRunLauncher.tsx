@@ -61,7 +61,7 @@ const InfoTip: React.FC<{ children: React.ReactNode }> = ({ children }) => (
       <button
         type="button"
         tabIndex={-1}
-        className="inline-flex items-center justify-center text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+        className="inline-flex items-center justify-center text-muted-foreground hover:text-muted-foreground transition-colors"
       >
         <Icon name="information" className="h-3.5 w-3.5" />
       </button>
@@ -175,7 +175,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
           ) : (
             <Icon
               name="folder"
-              className="h-3.5 w-3.5 shrink-0 text-muted-foreground/80"
+              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
               style={iconColor ? { color: iconColor } : undefined}
             />
           )}
@@ -548,7 +548,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
 
             <Collapsible open={isSetupCommandsOpen} onOpenChange={setIsSetupCommandsOpen}>
               <CollapsibleTrigger className="w-full flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-[var(--interactive-hover)]/50 transition-colors group">
-                <Icon name="terminal" className="h-3.5 w-3.5 text-muted-foreground/70" />
+                <Icon name="terminal" className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="typography-meta font-medium text-muted-foreground group-hover:text-foreground transition-colors">
                   {t("multirun.launcher.setupCommands.label")}
                 </span>
@@ -568,7 +568,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
                 <Icon
                   name="arrow-down-s"
                   className={cn(
-                    "h-3.5 w-3.5 text-muted-foreground/50 transition-transform duration-200 ml-auto",
+                    "h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ml-auto",
                     isSetupCommandsOpen && "rotate-180",
                   )}
                 />
@@ -576,7 +576,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
               <CollapsibleContent>
                 <div className="pt-2 space-y-1.5">
                   {isLoadingSetupCommands ? (
-                    <p className="typography-meta text-muted-foreground/70 px-2">
+                    <p className="typography-meta text-muted-foreground px-2">
                       {t("multirun.launcher.setupCommands.loading")}
                     </p>
                   ) : (

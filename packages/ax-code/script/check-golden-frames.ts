@@ -4,8 +4,7 @@
 // (node:ffi -> bundled Zig render core) with the headless test renderer, then
 // byte-compares serialized frames (character grid + styled spans + cursor)
 // against committed goldens. Today this guards Node runtime bumps and
-// upstream @opentui/core-<platform> bumps. The standalone Rust/Ratatui UI has
-// its own functional tests and intentionally does not target frame parity.
+// upstream @opentui/core-<platform> bumps.
 //
 // Scenes deliberately concentrate on the parity risk areas called out in
 // ADR-046: yoga flex layout, styled text attributes, CJK/emoji width and

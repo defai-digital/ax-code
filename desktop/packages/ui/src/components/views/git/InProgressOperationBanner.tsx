@@ -76,7 +76,7 @@ export const InProgressOperationBanner: React.FC<InProgressOperationBannerProps>
         <div className="flex items-start gap-2 min-w-0">
           <Icon name={operationIconName} className="size-4 text-[var(--status-warning)] shrink-0" />
           <div className="min-w-0">
-            <p className="typography-label text-[var(--status-warning)]">
+            <p className="typography-ui-label text-[var(--status-warning)]">
               {t("gitView.operation.inProgressTitle", { operation: operationLabel })}
             </p>
             {description && <p className="typography-micro text-muted-foreground truncate">{description}</p>}

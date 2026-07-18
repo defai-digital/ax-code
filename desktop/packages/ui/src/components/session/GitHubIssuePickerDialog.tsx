@@ -605,7 +605,7 @@ export function GitHubIssuePickerDialog({
             onClick={() => void startSession(directNumber)}
           >
             <span className="typography-meta text-muted-foreground w-5 text-right flex-shrink-0">#</span>
-            <p className="flex-1 min-w-0 typography-small text-foreground truncate ml-0.5">
+            <p className="flex-1 min-w-0 typography-meta text-foreground truncate ml-0.5">
               {t("session.githubIssuePicker.actions.useIssue", { number: directNumber })}
             </p>
             <div className="flex-shrink-0 h-5 flex items-center mr-2">
@@ -639,7 +639,7 @@ export function GitHubIssuePickerDialog({
                 #{issue.number}
               </span>
               <div className="flex-1 min-w-0 ml-0.5">
-                <p className="typography-small text-foreground truncate">{issue.title}</p>
+                <p className="typography-meta text-foreground truncate">{issue.title}</p>
                 {issue.sourceRepo?.source === "upstream" ? (
                   <span className="typography-micro px-1 py-0.5 rounded bg-status-info/10 text-status-info mt-0.5 inline-block">
                     {issue.sourceRepo.owner}/{issue.sourceRepo.repo}
@@ -734,7 +734,7 @@ export function GitHubIssuePickerDialog({
               <span className="typography-meta text-muted-foreground">
                 {t("session.githubIssuePicker.actions.createInWorktree")}
               </span>
-              <span className="typography-meta text-muted-foreground/70 hidden sm:inline">
+              <span className="typography-meta text-muted-foreground hidden sm:inline">
                 (issue-&lt;number&gt;-&lt;slug&gt;)
               </span>
             </div>
@@ -773,7 +773,7 @@ export function GitHubIssuePickerDialog({
               <h2 className="typography-ui-label font-semibold text-foreground">{title}</h2>
               {closeButton}
             </div>
-            <p className="typography-small text-muted-foreground">{description}</p>
+            <p className="typography-meta text-muted-foreground">{description}</p>
           </div>
         )}
       >

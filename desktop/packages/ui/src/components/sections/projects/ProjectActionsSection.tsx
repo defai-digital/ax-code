@@ -338,7 +338,7 @@ export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ pr
                                 <TooltipTrigger asChild>
                                   <Icon
                                     name="information"
-                                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 cursor-help"
+                                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground cursor-help"
                                   />
                                 </TooltipTrigger>
                                 <TooltipContent sideOffset={8} className="max-w-xs">

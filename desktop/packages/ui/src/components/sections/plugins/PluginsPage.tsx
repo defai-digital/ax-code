@@ -151,7 +151,7 @@ export const PluginsPage: React.FC = () => {
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
           <Icon name="plug" className="mx-auto mb-3 h-12 w-12 opacity-50" />
-          <p className="typography-body">{t("settings.plugins.page.empty.select")}</p>
+          <p className="typography-markdown">{t("settings.plugins.page.empty.select")}</p>
           <p className="typography-meta mt-1 opacity-75">{t("settings.plugins.page.empty.add")}</p>
         </div>
       </div>

@@ -15,8 +15,6 @@ interface AboutDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-export const OPENCHAMBER_UPSTREAM_URL = "https://github.com/btriapitsyn/openchamber"
-
 export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onOpenChange }) => {
   const { t } = useI18n()
   const showDiagnostics = import.meta.env.DEV
@@ -155,18 +153,6 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onOpenChange }) 
                 <p key={row.key}>{t(row.label, { version: row.version })}</p>
               ))}
             </div>
-            <p className="typography-meta text-muted-foreground/70">
-              Forked from{" "}
-              <a
-                href={OPENCHAMBER_UPSTREAM_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-2 hover:text-foreground transition-colors"
-              >
-                OpenChamber
-              </a>{" "}
-              by AX Engine.
-            </p>
           </div>
 
           {showDiagnostics && (

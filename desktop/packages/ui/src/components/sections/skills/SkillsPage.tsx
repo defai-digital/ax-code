@@ -521,7 +521,7 @@ const SkillsInstalledPage: React.FC = () => {
       <div className="flex h-full items-center justify-center px-4">
         <div className="text-center text-muted-foreground">
           <Icon name="book-open" className="mx-auto mb-3 h-10 w-10 sm:h-12 sm:w-12 opacity-50" />
-          <p className="typography-body">{t("settings.skills.page.empty.title")}</p>
+          <p className="typography-markdown">{t("settings.skills.page.empty.title")}</p>
           <p className="typography-meta mt-1 opacity-75">{t("settings.skills.page.empty.description")}</p>
         </div>
       </div>
@@ -532,7 +532,7 @@ const SkillsInstalledPage: React.FC = () => {
     return (
       <div className="flex h-full items-center justify-center px-4">
         <div className="text-center text-muted-foreground">
-          <p className="typography-body">{t("settings.skills.page.loading.details")}</p>
+          <p className="typography-markdown">{t("settings.skills.page.loading.details")}</p>
         </div>
       </div>
     )

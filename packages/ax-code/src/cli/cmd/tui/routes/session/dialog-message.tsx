@@ -1,12 +1,14 @@
 import { createMemo } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { DialogSelect } from "@tui/ui/dialog-select"
+import type { DialogContext } from "@tui/ui/dialog"
 import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { Clipboard } from "@tui/util/clipboard"
 import { EventQuery } from "@/replay/query"
 import { messageRoute } from "./route"
 import { Log } from "@/util/log"
+import { Locale } from "@/util/locale"
 import { promptState } from "./messages"
 import { useToast } from "@tui/ui/toast"
 
@@ -42,6 +44,40 @@ export function DialogMessage(props: {
     ]
   })
   const route = useRoute()
+
+  // Fenced code blocks across the message's text parts — drives the
+  // conditional "Copy code block" action below.
+  const codeBlocks = createMemo(() => {
+    const msg = message()
+    if (!msg) return []
+    const parts = sync.data.part[msg.id] ?? []
+    const text = parts.reduce((agg, part) => {
+      if (part.type === "text" && !part.synthetic && !part.ignored) {
+        agg += part.text
+      }
+      return agg
+    }, "")
+    return extractCodeBlocks(text)
+  })
+
+  function copyCodeBlock(code: string, dialog: DialogContext) {
+    return Clipboard.copy(code)
+      .then(() => {
+        toast.show({ message: "Code block copied to clipboard!", variant: "success", duration: 1500 })
+        dialog.clear()
+      })
+      .catch((error) => {
+        log.warn("dialog message copy code block failed", {
+          error,
+          sessionID: props.sessionID,
+          messageID: props.messageID,
+        })
+        toast.show({
+          message: error instanceof Error ? error.message : "Failed to copy code block",
+          variant: "error",
+        })
+      })
+  }
 
   return (
     <DialogSelect
@@ -133,6 +169,38 @@ export function DialogMessage(props: {
               })
           },
         },
+        ...(codeBlocks().length > 0
+          ? [
+              {
+                title: "Copy code block",
+                value: "message.copy_code_block",
+                description: "fenced code block to clipboard",
+                category: "Actions",
+                onSelect: async (dialog: DialogContext) => {
+                  const blocks = codeBlocks()
+                  if (blocks.length === 0) {
+                    dialog.clear()
+                    return
+                  }
+                  if (blocks.length === 1) {
+                    await copyCodeBlock(blocks[0].code, dialog)
+                    return
+                  }
+                  dialog.replace(() => (
+                    <DialogSelect
+                      title="Copy code block"
+                      options={blocks.map((block, index) => ({
+                        title: codeBlockLabel(block, index),
+                        value: block.code,
+                        description: block.language || undefined,
+                        onSelect: (select: DialogContext) => copyCodeBlock(block.code, select),
+                      }))}
+                    />
+                  ))
+                },
+              },
+            ]
+          : []),
         {
           title: "Fork",
           value: "session.fork",
@@ -182,4 +250,27 @@ export function DialogMessage(props: {
       ]}
     />
   )
+}
+
+type CodeBlock = {
+  language: string
+  code: string
+}
+
+// Pull fenced code blocks out of raw markdown text. Unclosed trailing fences
+// are ignored — there is no complete block to copy yet.
+export function extractCodeBlocks(text: string): CodeBlock[] {
+  const blocks: CodeBlock[] = []
+  for (const match of text.matchAll(/```([^\n]*)\n([\s\S]*?)```/g)) {
+    blocks.push({ language: match[1].trim(), code: match[2].replace(/\n$/, "") })
+  }
+  return blocks
+}
+
+function codeBlockLabel(block: CodeBlock, index: number) {
+  const firstLine = block.code
+    .split("\n")
+    .find((line) => line.trim().length > 0)
+    ?.trim()
+  return Locale.truncate(firstLine ?? `code block ${index + 1}`, 60)
 }

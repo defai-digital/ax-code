@@ -328,7 +328,7 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
                   ) : null}
                   <p
                     className={cn(
-                      "flex-1 min-w-0 typography-small truncate ml-0.5",
+                      "flex-1 min-w-0 typography-meta truncate ml-0.5",
                       isSelected ? "text-interactive-selection-foreground" : "text-foreground",
                     )}
                   >
@@ -415,7 +415,7 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
             >
               {t("chat.timeline.actions.previousTurn")}
             </button>
-            <span className="text-muted-foreground/50">/</span>
+            <span className="text-muted-foreground">/</span>
             <button
               type="button"
               className="text-[11px] uppercase tracking-wide text-muted-foreground/90 hover:text-foreground"

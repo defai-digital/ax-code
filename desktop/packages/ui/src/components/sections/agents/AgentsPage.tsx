@@ -624,7 +624,7 @@ export const AgentsPage: React.FC = () => {
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
           <Icon name="robot-2" className="mx-auto mb-3 h-12 w-12 opacity-50" />
-          <p className="typography-body">{t("settings.agents.page.empty.title")}</p>
+          <p className="typography-markdown">{t("settings.agents.page.empty.title")}</p>
           <p className="typography-meta mt-1 opacity-75">{t("settings.agents.page.empty.description")}</p>
         </div>
       </div>
@@ -714,7 +714,7 @@ export const AgentsPage: React.FC = () => {
                   <span className="typography-ui-label text-foreground">{t("settings.agents.page.field.mode")}</span>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                      <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                     </TooltipTrigger>
                     <TooltipContent sideOffset={8} className="max-w-xs">
                       {t("settings.agents.page.field.modeTooltip")}
@@ -793,7 +793,7 @@ export const AgentsPage: React.FC = () => {
                   </span>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                      <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                     </TooltipTrigger>
                     <TooltipContent sideOffset={8} className="max-w-xs">
                       {t("settings.agents.page.field.temperatureTooltip")}
@@ -840,7 +840,7 @@ export const AgentsPage: React.FC = () => {
                   <span className="typography-ui-label text-foreground">{t("settings.agents.page.field.topP")}</span>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                      <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                     </TooltipTrigger>
                     <TooltipContent sideOffset={8} className="max-w-xs">
                       {t("settings.agents.page.field.topPTooltip")}
@@ -937,7 +937,7 @@ export const AgentsPage: React.FC = () => {
                   >
                     <div className="flex items-center gap-2">
                       <span className="typography-ui-label text-foreground">{label}</span>
-                      <span className="typography-micro text-muted-foreground/70 font-mono hidden sm:inline-block">
+                      <span className="typography-micro text-muted-foreground font-mono hidden sm:inline-block">
                         {permissionName}
                       </span>
                     </div>
@@ -977,7 +977,7 @@ export const AgentsPage: React.FC = () => {
                   <span className="typography-ui-label text-foreground">
                     {t("settings.agents.page.permissions.globalDefault")}
                   </span>
-                  <span className="typography-micro text-muted-foreground/70 font-mono">*</span>
+                  <span className="typography-micro text-muted-foreground font-mono">*</span>
                 </div>
                 <Select
                   value={globalPermission}
@@ -1012,7 +1012,7 @@ export const AgentsPage: React.FC = () => {
                         <div className="flex items-center justify-between py-1">
                           <div className="flex items-center gap-2">
                             <span className="typography-ui-label text-foreground">{label}</span>
-                            <span className="typography-micro text-muted-foreground/70 font-mono">
+                            <span className="typography-micro text-muted-foreground font-mono">
                               {permissionName}
                             </span>
                           </div>

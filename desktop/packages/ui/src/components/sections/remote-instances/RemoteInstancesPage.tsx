@@ -5,6 +5,7 @@ import { NumberInput } from "@/components/ui/number-input"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { SettingsPageLayout } from "@/components/sections/shared/SettingsPageLayout"
@@ -132,7 +133,7 @@ const HintLabel: React.FC<{ label: string; hint: React.ReactNode }> = ({ label, 
       <span>{label}</span>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+          <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
         </TooltipTrigger>
         <TooltipContent sideOffset={8} className="max-w-xs">
           <div className="typography-meta text-foreground">{hint}</div>
@@ -267,6 +268,7 @@ export const RemoteInstancesPage: React.FC = () => {
   const [isPrimaryActionPending, setIsPrimaryActionPending] = React.useState(false)
   const [isRetryPending, setIsRetryPending] = React.useState(false)
   const [clockMs, setClockMs] = React.useState(() => Date.now())
+  const { requestConfirm, confirmDialog } = useConfirmDialog()
 
   React.useEffect(() => {
     void load()
@@ -361,7 +363,7 @@ export const RemoteInstancesPage: React.FC = () => {
     }
 
     if (normalized.localForward.bindHost === "0.0.0.0") {
-      const allow = window.confirm(t("settings.remoteInstances.page.confirm.bindAllInterfaces"))
+      const allow = await requestConfirm(t("settings.remoteInstances.page.confirm.bindAllInterfaces"))
       if (!allow) {
         return
       }
@@ -372,7 +374,7 @@ export const RemoteInstancesPage: React.FC = () => {
       normalized.auth.sshPassword.value?.trim() &&
       normalized.auth.sshPassword.store !== "settings"
     ) {
-      const store = window.confirm(t("settings.remoteInstances.page.confirm.storeSshPasswordPlaintext"))
+      const store = await requestConfirm(t("settings.remoteInstances.page.confirm.storeSshPasswordPlaintext"))
       normalized.auth.sshPassword.store = store ? "settings" : "never"
       if (!store) {
         normalized.auth.sshPassword.value = undefined
@@ -384,7 +386,7 @@ export const RemoteInstancesPage: React.FC = () => {
       normalized.auth.openchamberPassword.value?.trim() &&
       normalized.auth.openchamberPassword.store !== "settings"
     ) {
-      const store = window.confirm(t("settings.remoteInstances.page.confirm.storeUiPasswordPlaintext"))
+      const store = await requestConfirm(t("settings.remoteInstances.page.confirm.storeUiPasswordPlaintext"))
       normalized.auth.openchamberPassword.store = store ? "settings" : "never"
       if (!store) {
         normalized.auth.openchamberPassword.value = undefined
@@ -399,7 +401,7 @@ export const RemoteInstancesPage: React.FC = () => {
         description: error instanceof Error ? error.message : String(error),
       })
     }
-  }, [draft, t, upsertInstance])
+  }, [draft, t, upsertInstance, requestConfirm])
 
   const createImportedInstance = React.useCallback(
     async (host: string, destination: string): Promise<boolean> => {
@@ -472,7 +474,7 @@ export const RemoteInstancesPage: React.FC = () => {
         throw error
       }
 
-      const allow = window.confirm(t("settings.remoteInstances.sidebar.confirm.localPortInUseRetry"))
+      const allow = await requestConfirm(t("settings.remoteInstances.sidebar.confirm.localPortInUseRetry"))
       if (!allow) {
         throw error
       }
@@ -489,7 +491,7 @@ export const RemoteInstancesPage: React.FC = () => {
       await connect(nextInstance.id)
       toast.success(t("settings.remoteInstances.sidebar.toast.retriedWithRandomPort"))
     }
-  }, [connect, selectedInstance, t, upsertInstance])
+  }, [connect, selectedInstance, t, upsertInstance, requestConfirm])
 
   const readLogsForInstance = React.useCallback(async (id: string) => {
     const lines = await desktopSshLogs(id, 600)
@@ -844,18 +846,22 @@ export const RemoteInstancesPage: React.FC = () => {
               size="xs"
               className="!font-normal text-[var(--status-error)] border-[var(--status-error)]/30 hover:text-[var(--status-error)]"
               onClick={() => {
-                const ok = window.confirm(t("settings.remoteInstances.page.confirm.removeInstance"))
-                if (!ok) return
-                void removeInstance(draft.id)
-                  .then(() => {
-                    setSelectedId(null)
-                    toast.success(t("settings.remoteInstances.page.toast.instanceRemoved"))
+                void (async () => {
+                  const ok = await requestConfirm(t("settings.remoteInstances.page.confirm.removeInstance"), {
+                    destructive: true,
                   })
-                  .catch((err) => {
-                    toast.error(t("settings.remoteInstances.page.toast.removeInstanceFailed"), {
-                      description: err instanceof Error ? err.message : String(err),
+                  if (!ok) return
+                  void removeInstance(draft.id)
+                    .then(() => {
+                      setSelectedId(null)
+                      toast.success(t("settings.remoteInstances.page.toast.instanceRemoved"))
                     })
-                  })
+                    .catch((err) => {
+                      toast.error(t("settings.remoteInstances.page.toast.removeInstanceFailed"), {
+                        description: err instanceof Error ? err.message : String(err),
+                      })
+                    })
+                })()
               }}
             >
               <Icon name="delete-bin" className="h-3.5 w-3.5" />
@@ -1244,7 +1250,7 @@ export const RemoteInstancesPage: React.FC = () => {
         </div>
         <section className="px-2 pb-2 pt-0 space-y-2">
           {draft.portForwards.length === 0 ? (
-            <p className="typography-micro text-muted-foreground/80">
+            <p className="typography-micro text-muted-foreground">
               {t("settings.remoteInstances.page.empty.noExtraForwards")}
             </p>
           ) : null}
@@ -1307,7 +1313,7 @@ export const RemoteInstancesPage: React.FC = () => {
                         className={`h-4 w-4 text-muted-foreground transition-transform ${isForwardOpen ? "rotate-180" : ""}`}
                       />
                       <span className="typography-ui-label text-foreground truncate">{buildForwardLabel(forward)}</span>
-                      <span className="typography-micro text-muted-foreground/70 shrink-0">{typeLabel}</span>
+                      <span className="typography-micro text-muted-foreground shrink-0">{typeLabel}</span>
                     </CollapsibleTrigger>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1455,7 +1461,7 @@ export const RemoteInstancesPage: React.FC = () => {
                     ) : null}
 
                     <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md bg-[var(--surface-subtle)] p-2">
-                      <div className="flex flex-wrap items-center gap-1 typography-micro text-muted-foreground/80">
+                      <div className="flex flex-wrap items-center gap-1 typography-micro text-muted-foreground">
                         {forward.type === "dynamic" ? (
                           <>
                             <Icon name="computer" className="h-3.5 w-3.5" />
@@ -1722,6 +1728,7 @@ export const RemoteInstancesPage: React.FC = () => {
           </form>
         </DialogContent>
       </Dialog>
+      {confirmDialog}
     </SettingsPageLayout>
   )
 }

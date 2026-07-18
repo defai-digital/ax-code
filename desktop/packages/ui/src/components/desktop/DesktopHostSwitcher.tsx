@@ -729,7 +729,7 @@ export function DesktopHostSwitcherDialog({
             <div className="min-w-0 flex items-baseline gap-1.5 typography-ui-label">
               <span className="font-medium text-foreground">{t("desktopHostSwitcher.header.current")}</span>
               <span className="max-w-[9rem] truncate text-muted-foreground">{redactSensitiveUrl(current.label)}</span>
-              <span className="text-muted-foreground/50">•</span>
+              <span className="text-muted-foreground">•</span>
               <span className="font-medium text-foreground">{t("desktopHostSwitcher.header.default")}</span>
               <span className="max-w-[9rem] truncate text-muted-foreground">
                 {redactSensitiveUrl(currentDefaultLabel)}
@@ -955,7 +955,7 @@ export function DesktopHostSwitcherDialog({
                             "h-8 w-8 rounded-md inline-flex items-center justify-center hover:bg-interactive-hover transition-colors",
                             isDefault
                               ? "text-primary hover:text-primary/80"
-                              : "text-muted-foreground/60 hover:text-primary/80",
+                              : "text-muted-foreground hover:text-primary/80",
                           )}
                           onClick={() => void setDefault(host.id)}
                           aria-label={
@@ -987,7 +987,7 @@ export function DesktopHostSwitcherDialog({
                             "h-8 w-8 rounded-md inline-flex items-center justify-center hover:bg-interactive-hover transition-colors",
                             hostBlocked
                               ? "text-muted-foreground/30 cursor-not-allowed"
-                              : "text-muted-foreground/60 hover:text-foreground",
+                              : "text-muted-foreground hover:text-foreground",
                           )}
                           onClick={(e) => {
                             e.stopPropagation()

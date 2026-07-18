@@ -5,6 +5,7 @@ import { SettingsSidebarItem } from "@/components/sections/shared/SettingsSideba
 import { useDesktopSshStore } from "@/stores/useDesktopSshStore"
 import { useUIStore } from "@/stores/useUIStore"
 import { toast } from "@/components/ui"
+import { useConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { Icon } from "@/components/icon/Icon"
 import type { DesktopSshInstance } from "@/lib/desktopSsh"
 import { useI18n } from "@/lib/i18n"
@@ -72,6 +73,7 @@ export const RemoteInstancesSidebar: React.FC<RemoteInstancesSidebarProps> = ({ 
 
   const selectedId = useUIStore((state) => state.settingsRemoteInstancesSelectedId)
   const setSelectedId = useUIStore((state) => state.setSettingsRemoteInstancesSelectedId)
+  const { requestConfirm, confirmDialog } = useConfirmDialog()
 
   React.useEffect(() => {
     void load()
@@ -115,7 +117,7 @@ export const RemoteInstancesSidebar: React.FC<RemoteInstancesSidebarProps> = ({ 
           throw error
         }
 
-        const allow = window.confirm(t("settings.remoteInstances.sidebar.confirm.localPortInUseRetry"))
+        const allow = await requestConfirm(t("settings.remoteInstances.sidebar.confirm.localPortInUseRetry"))
         if (!allow) {
           throw error
         }
@@ -133,7 +135,7 @@ export const RemoteInstancesSidebar: React.FC<RemoteInstancesSidebarProps> = ({ 
         toast.success(t("settings.remoteInstances.sidebar.toast.retriedWithRandomPort"))
       }
     },
-    [connect, t, upsertInstance],
+    [connect, t, upsertInstance, requestConfirm],
   )
 
   return (
@@ -235,6 +237,7 @@ export const RemoteInstancesSidebar: React.FC<RemoteInstancesSidebarProps> = ({ 
           />
         )
       })}
+      {confirmDialog}
     </SettingsSidebarLayout>
   )
 }

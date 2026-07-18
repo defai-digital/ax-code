@@ -16,12 +16,12 @@ export function scrollDelta(
   mode: "page-up" | "page-down" | "line-up" | "line-down" | "half-page-up" | "half-page-down",
   height: number,
 ) {
-  if (mode === "page-up") return -Math.floor(height / 2)
-  if (mode === "page-down") return Math.floor(height / 2)
+  if (mode === "page-up") return -height
+  if (mode === "page-down") return height
   if (mode === "line-up") return -1
   if (mode === "line-down") return 1
-  if (mode === "half-page-up") return -Math.floor(height / 4)
-  return Math.floor(height / 4)
+  if (mode === "half-page-up") return -Math.floor(height / 2)
+  return Math.floor(height / 2)
 }
 
 export function scrollTo(mode: "first" | "last", height: number) {

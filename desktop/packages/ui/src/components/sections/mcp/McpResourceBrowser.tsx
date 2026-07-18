@@ -159,7 +159,7 @@ export const McpResourceBrowser: React.FC<McpResourceBrowserProps> = ({ serverNa
                             {resource.uri}
                           </div>
                           {resource.mimeType && (
-                            <div className="mt-0.5 typography-micro text-muted-foreground/80">{resource.mimeType}</div>
+                            <div className="mt-0.5 typography-micro text-muted-foreground">{resource.mimeType}</div>
                           )}
                         </div>
                       </div>

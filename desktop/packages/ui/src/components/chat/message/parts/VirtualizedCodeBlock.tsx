@@ -293,7 +293,7 @@ const Row: React.FC<RowProps> = React.memo(({ line, language, showLineNumbers, s
       )}
       <div className="flex-1 min-w-0">
         {line.isInfo ? (
-          <div className="whitespace-pre-wrap break-words text-muted-foreground/70 italic">{line.text}</div>
+          <div className="whitespace-pre-wrap break-words text-muted-foreground italic">{line.text}</div>
         ) : (
           <div className="whitespace-pre" dangerouslySetInnerHTML={{ __html: html }} />
         )}

@@ -490,7 +490,7 @@ export const ProvidersPage: React.FC = () => {
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
           <Icon name="error-warning" className="mx-auto mb-3 h-12 w-12 opacity-60" />
-          <p className="typography-body">{t("settings.providers.sidebar.error.title")}</p>
+          <p className="typography-markdown">{t("settings.providers.sidebar.error.title")}</p>
           <p className="typography-meta mt-1 opacity-75">{t("settings.providers.sidebar.error.description")}</p>
         </div>
       </div>
@@ -502,7 +502,7 @@ export const ProvidersPage: React.FC = () => {
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
           <Icon name="loader" className="mx-auto mb-3 h-12 w-12 animate-spin opacity-50" />
-          <p className="typography-body">{t("settings.providers.sidebar.loading.title")}</p>
+          <p className="typography-markdown">{t("settings.providers.sidebar.loading.title")}</p>
         </div>
       </div>
     )
@@ -513,7 +513,7 @@ export const ProvidersPage: React.FC = () => {
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
           <Icon name="stack" className="mx-auto mb-3 h-12 w-12 opacity-50" />
-          <p className="typography-body">{t("settings.providers.page.empty.noProvidersDetected")}</p>
+          <p className="typography-markdown">{t("settings.providers.page.empty.noProvidersDetected")}</p>
           <p className="typography-meta mt-1 opacity-75">
             {t("settings.providers.page.empty.checkAxCodeConfiguration")}
           </p>
@@ -583,7 +583,7 @@ export const ProvidersPage: React.FC = () => {
                               : t("settings.providers.page.connect.selectProviderPlaceholder")}
                           </span>
                         </span>
-                        <Icon name="arrow-down-s" className="h-4 w-4 flex-shrink-0 text-muted-foreground/50" />
+                        <Icon name="arrow-down-s" className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
@@ -680,7 +680,7 @@ export const ProvidersPage: React.FC = () => {
                         {t("settings.providers.page.auth.apiKeyLabel")}
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                            <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                           </TooltipTrigger>
                           <TooltipContent sideOffset={8} className="max-w-xs">
                             {t("settings.providers.page.auth.apiKeyTooltip")}
@@ -854,7 +854,7 @@ export const ProvidersPage: React.FC = () => {
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
           <Icon name="stack" className="mx-auto mb-3 h-12 w-12 opacity-50" />
-          <p className="typography-body">{t("settings.providers.page.empty.selectProviderFromSidebar")}</p>
+          <p className="typography-markdown">{t("settings.providers.page.empty.selectProviderFromSidebar")}</p>
           <p className="typography-meta mt-1 opacity-75">
             {t("settings.providers.page.empty.reviewDetailsAndConfigureAuth")}
           </p>
@@ -958,7 +958,7 @@ export const ProvidersPage: React.FC = () => {
                       {t("settings.providers.page.auth.apiKeyLabel")}
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                          <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                         </TooltipTrigger>
                         <TooltipContent sideOffset={8} className="max-w-xs">
                           {t("settings.providers.page.auth.apiKeyTooltip")}

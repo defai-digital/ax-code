@@ -2,7 +2,7 @@
 
 Status: Active  
 Scope: current-state  
-Last reviewed: 2026-07-14  
+Last reviewed: 2026-07-18  
 Owner: ax-code runtime
 
 How AX Code stays reliable for long interactive sessions and headless runs.
@@ -25,7 +25,7 @@ See [TUI stability status](../.internal/tui-stability/STATUS.md) (internal) and 
 - Runtime: Node bundled
 - UI: OpenTUI + Solid
 - Render: Zig (production)
-- Native: separate Rust/Ratatui UI, experimental (`--tui-mode=native`)
+- The experimental Rust/Ratatui UI was removed; Zig/OpenTUI is the only engine
 - Yoga is not a selectable mode; Zig/OpenTUI remains the default
 
 ## Cancellations vs crashes

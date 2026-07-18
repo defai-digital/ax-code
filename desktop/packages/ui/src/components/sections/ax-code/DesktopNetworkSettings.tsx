@@ -233,7 +233,7 @@ export const DesktopNetworkSettings: React.FC = () => {
               <div className="typography-ui-label text-foreground">
                 {t("settings.openchamber.desktopNetwork.field.launchAtLogin")}
               </div>
-              <div className="typography-micro text-muted-foreground/70">
+              <div className="typography-micro text-muted-foreground">
                 {t("settings.openchamber.desktopNetwork.field.launchAtLoginDescription")}
               </div>
             </div>
@@ -253,7 +253,7 @@ export const DesktopNetworkSettings: React.FC = () => {
             placeholder={t("settings.openchamber.desktopPassword.field.passwordPlaceholder")}
             disabled={isLoading || isSaving}
           />
-          <div className="typography-micro text-muted-foreground/70">
+          <div className="typography-micro text-muted-foreground">
             {t("settings.openchamber.desktopPassword.field.passwordDescription")}
           </div>
         </div>
@@ -280,7 +280,7 @@ export const DesktopNetworkSettings: React.FC = () => {
             <div className="typography-ui-label text-foreground">
               {t("settings.openchamber.desktopNetwork.field.allowLanAccess")}
             </div>
-            <div className="typography-micro text-muted-foreground/70">
+            <div className="typography-micro text-muted-foreground">
               {t("settings.openchamber.desktopNetwork.field.allowLanAccessDescription")}
             </div>
             <div className="typography-micro text-[var(--status-warning)]/85">
@@ -292,7 +292,7 @@ export const DesktopNetworkSettings: React.FC = () => {
         {error ? <div className="px-2 typography-micro text-[var(--status-error)]">{error}</div> : null}
 
         {lanUrl ? (
-          <div className="px-2 typography-micro text-muted-foreground/80">
+          <div className="px-2 typography-micro text-muted-foreground">
             {isDirty && !savedValue
               ? t("settings.openchamber.desktopNetwork.hint.openAfterRestart")
               : t("settings.openchamber.desktopNetwork.hint.openNow")}

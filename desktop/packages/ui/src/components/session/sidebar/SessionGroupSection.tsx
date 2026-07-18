@@ -670,7 +670,7 @@ export function SessionGroupSection(props: Props): React.ReactNode {
         <button
           type="button"
           onClick={() => toggleGroupSessionLimit(groupKey)}
-          className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
+          className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground leading-tight hover:text-foreground hover:underline"
         >
           {remainingCount === 1
             ? t("sessions.sidebar.group.showMoreSingle", { count: remainingCount })
@@ -681,7 +681,7 @@ export function SessionGroupSection(props: Props): React.ReactNode {
         <button
           type="button"
           onClick={() => toggleGroupSessionLimit(groupKey)}
-          className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
+          className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground leading-tight hover:text-foreground hover:underline"
         >
           {t("sessions.sidebar.group.showFewer")}
         </button>
@@ -919,7 +919,7 @@ export function SessionGroupSection(props: Props): React.ReactNode {
                 <span
                   className={cn(
                     "min-w-0 truncate text-[11px] font-medium",
-                    !statusLine.color && "text-muted-foreground/80",
+                    !statusLine.color && "text-muted-foreground",
                   )}
                   style={statusLine.color ? { color: statusLine.color } : undefined}
                 >

@@ -151,7 +151,7 @@ export const McpOAuthCallbackPage: React.FC = () => {
                   : "text-[var(--status-info)]"
             }
           >
-            <h1 className="typography-hero font-semibold">
+            <h1 className="typography-ui-header font-semibold">
               {status === "working"
                 ? "Completing Authorization"
                 : status === "success"
@@ -159,7 +159,7 @@ export const McpOAuthCallbackPage: React.FC = () => {
                   : "Authorization Failed"}
             </h1>
           </div>
-          <p className="typography-body text-muted-foreground">{message}</p>
+          <p className="typography-markdown text-muted-foreground">{message}</p>
         </div>
 
         {status !== "working" && (

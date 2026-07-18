@@ -91,7 +91,7 @@ const StartupInitializationRecovery: React.FC<{
       <div className="flex max-w-md flex-col items-center gap-4 text-center">
         <div className="flex flex-col gap-2">
           <h1 className="typography-title text-foreground">{t("startup.initRecovery.title")}</h1>
-          <p className="typography-body text-muted-foreground">{t("startup.initRecovery.description")}</p>
+          <p className="typography-markdown text-muted-foreground">{t("startup.initRecovery.description")}</p>
         </div>
         <Button type="button" onClick={onRetry} disabled={isRetrying}>
           {isRetrying ? t("startup.initRecovery.retrying") : t("startup.initRecovery.retry")}
@@ -113,7 +113,7 @@ const UnsupportedMobileRuntimeScreen: React.FC = () => (
   <div className="flex h-full items-center justify-center bg-background px-6 text-foreground">
     <div className="flex max-w-md flex-col gap-3 text-center">
       <h1 className="typography-title text-foreground">Desktop Required</h1>
-      <p className="typography-body text-muted-foreground">
+      <p className="typography-markdown text-muted-foreground">
         AX Code is intended for enterprise desktop workstations. Mobile and tablet browsers are not supported.
       </p>
     </div>

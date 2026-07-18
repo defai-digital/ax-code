@@ -3742,7 +3742,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
           ) : (
             <Icon
               name={isHomeProject ? "home" : "folder"}
-              className="h-3.5 w-3.5 shrink-0 text-muted-foreground/80"
+              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
               style={iconColor ? { color: iconColor } : undefined}
             />
           )}

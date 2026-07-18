@@ -2587,7 +2587,7 @@ export const ContextPanel: React.FC = () => {
       </React.Suspense>
     ) : (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-        <Icon name="global" className="h-12 w-12 text-muted-foreground/50" />
+        <Icon name="global" className="h-12 w-12 text-muted-foreground" />
         <div className="typography-ui-header text-foreground">{t("contextPanel.preview.title")}</div>
         <div className="max-w-sm typography-micro text-muted-foreground">{t("contextPanel.preview.description")}</div>
       </div>

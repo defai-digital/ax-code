@@ -1788,12 +1788,12 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(
         {(turnStart > 0 || hasMoreAbove) && (
           <div className="flex justify-center py-3">
             {isLoadingOlder ? (
-              <span className="text-xs uppercase tracking-wide text-muted-foreground/80">{t("chat.loadOlder.loading")}</span>
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("chat.loadOlder.loading")}</span>
             ) : (
               <button
                 type="button"
                 onClick={stableOnLoadOlder}
-                className="text-xs uppercase tracking-wide text-muted-foreground/80 hover:text-foreground"
+                className="text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground"
               >
                 {t("chat.loadOlder.action")}
               </button>

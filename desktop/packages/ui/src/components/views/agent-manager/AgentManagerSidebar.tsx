@@ -81,13 +81,13 @@ const AgentGroupItem: React.FC<AgentGroupItemProps> = ({ group, isSelected, isBu
               {isBusy && <Icon name="loader-4" className="h-3 w-3 animate-spin text-amber-500 flex-shrink-0" />}
             </div>
             <div className="flex items-center gap-2">
-              <span className="typography-micro text-muted-foreground/60 flex items-center gap-1">
+              <span className="typography-micro text-muted-foreground flex items-center gap-1">
                 <Icon name="git-branch" className="h-3 w-3" />
                 {group.sessionCount === 1
                   ? t("agentManager.sidebar.item.modelCountSingle", { count: group.sessionCount })
                   : t("agentManager.sidebar.item.modelCountPlural", { count: group.sessionCount })}
               </span>
-              <span className="typography-micro text-muted-foreground/60">
+              <span className="typography-micro text-muted-foreground">
                 {relativeTime.unit === "now"
                   ? t("agentManager.sidebar.relativeTime.now")
                   : relativeTime.unit === "minutes"
@@ -227,7 +227,7 @@ export const AgentManagerSidebar: React.FC<AgentManagerSidebarProps> = ({
           {t("agentManager.sidebar.section.agentGroups")}
         </span>
         {isLoading && (
-          <span className="typography-micro text-muted-foreground/50 ml-auto">
+          <span className="typography-micro text-muted-foreground ml-auto">
             {t("agentManager.sidebar.state.loading")}
           </span>
         )}
@@ -249,7 +249,7 @@ export const AgentManagerSidebar: React.FC<AgentManagerSidebarProps> = ({
           <button
             type="button"
             onClick={() => setShowAll(true)}
-            className="mt-1 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left typography-micro text-muted-foreground/70 hover:text-foreground hover:underline"
+            className="mt-1 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left typography-micro text-muted-foreground hover:text-foreground hover:underline"
           >
             {t("agentManager.sidebar.actions.more", { count: remainingCount })}
           </button>
@@ -259,7 +259,7 @@ export const AgentManagerSidebar: React.FC<AgentManagerSidebarProps> = ({
           <button
             type="button"
             onClick={() => setShowAll(false)}
-            className="mt-1 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left typography-micro text-muted-foreground/70 hover:text-foreground hover:underline"
+            className="mt-1 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left typography-micro text-muted-foreground hover:text-foreground hover:underline"
           >
             {t("agentManager.sidebar.actions.showLess")}
           </button>
@@ -273,7 +273,7 @@ export const AgentManagerSidebar: React.FC<AgentManagerSidebarProps> = ({
                 : t("agentManager.sidebar.state.noGroupsYet")}
             </p>
             {!searchQuery.trim() && (
-              <p className="typography-micro text-muted-foreground/60 mt-1">
+              <p className="typography-micro text-muted-foreground mt-1">
                 {t("agentManager.sidebar.state.createToGetStarted")}
               </p>
             )}

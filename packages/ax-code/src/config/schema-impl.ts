@@ -347,6 +347,7 @@ export const Keybinds = z
     session_new: z.string().optional().default("<leader>n").describe("Create a new session"),
     session_list: z.string().optional().default("<leader>l").describe("List all sessions"),
     session_timeline: z.string().optional().default("<leader>g").describe("Show session timeline"),
+    session_search: z.string().optional().default("<leader>f").describe("Search transcript messages"),
     session_fork: z.string().optional().default("none").describe("Fork session from message"),
     session_rename: z.string().optional().default("ctrl+r").describe("Rename session"),
     session_delete: z.string().optional().default("ctrl+d").describe("Delete session"),

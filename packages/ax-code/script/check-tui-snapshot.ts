@@ -34,7 +34,7 @@ function hex(color: RGBA): string {
 }
 
 function logoGradient(mode: "dark" | "light") {
-  const theme = resolveTheme(DEFAULT_THEMES.automatosx, mode)
+  const theme = resolveTheme(DEFAULT_THEMES.axcode, mode)
   const width = logo.reduce((max, line) => Math.max(max, line.length), 0)
   return logo.map((line, row) =>
     gradientLineRuns({
@@ -69,8 +69,8 @@ function buildSnapshot() {
     logo: {
       truecolor: { dark: logoGradient("dark"), light: logoGradient("light") },
       fallback: {
-        dark: hex(resolveTheme(DEFAULT_THEMES.automatosx, "dark").text),
-        light: hex(resolveTheme(DEFAULT_THEMES.automatosx, "light").text),
+        dark: hex(resolveTheme(DEFAULT_THEMES.axcode, "dark").text),
+        light: hex(resolveTheme(DEFAULT_THEMES.axcode, "light").text),
         lines: logo,
       },
     },

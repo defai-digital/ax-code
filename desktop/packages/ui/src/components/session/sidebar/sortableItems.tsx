@@ -225,7 +225,7 @@ export const SortableProjectItem: React.FC<SidebarSortableProjectItemProps> = ({
                         <Icon
                           name={isHomeProject ? "home" : "folder"}
                           className={cn(
-                            "h-3.5 w-3.5 text-muted-foreground/80",
+                            "h-3.5 w-3.5 text-muted-foreground",
                             alwaysShowActions
                               ? "hidden"
                               : "group-hover/project:hidden group-focus-within/project:hidden",
