@@ -27,20 +27,28 @@ export function createConcurrencyLimiter(max: number): ConcurrencyLimiter {
   const waiters: Array<() => void> = []
 
   async function acquire(): Promise<void> {
+    // Free slot: take a new permit.
     if (active < limit) {
       active += 1
       return
     }
+    // Otherwise wait. When release() hands off, the permit is transferred —
+    // the waiter must NOT increment again (that would exceed `max` if a
+    // concurrent acquire races between decrement and waiter resume).
     await new Promise<void>((resolve) => {
       waiters.push(resolve)
     })
-    active += 1
   }
 
   function release(): void {
-    active = Math.max(0, active - 1)
     const next = waiters.shift()
-    if (next) next()
+    if (next) {
+      // Transfer the held permit to the next waiter without opening a gap
+      // that a free-path acquire() could steal.
+      next()
+      return
+    }
+    active = Math.max(0, active - 1)
   }
 
   return {

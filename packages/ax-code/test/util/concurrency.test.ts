@@ -43,6 +43,57 @@ describe("createConcurrencyLimiter", () => {
     })
     expect(second).toBe(true)
   })
+
+  test("release handoff never lets a free-path acquire steal the permit", async () => {
+    // Regression for: release() decremented then woke a waiter who re-incremented;
+    // a synchronous free-path run() between those steps could also acquire → peak=2
+    // on max=1.
+    const limiter = createConcurrencyLimiter(1)
+    let inFlight = 0
+    let peak = 0
+    let activePeak = 0
+    const track = async (ms: number) => {
+      inFlight += 1
+      peak = Math.max(peak, inFlight)
+      activePeak = Math.max(activePeak, limiter.active())
+      await new Promise((r) => setTimeout(r, ms))
+      inFlight -= 1
+    }
+
+    let releaseHold!: () => void
+    const hold = new Promise<void>((resolve) => {
+      releaseHold = resolve
+    })
+
+    // Holder owns the only permit and waits for an external signal.
+    const holder = limiter.run(async () => {
+      await track(1)
+      await hold
+    })
+
+    // Waiter is queued while the permit is held.
+    const waiter = limiter.run(async () => {
+      await track(5)
+    })
+    // Ensure the waiter is parked (not free-path).
+    await new Promise((r) => setTimeout(r, 5))
+    expect(limiter.waiting()).toBe(1)
+    expect(limiter.active()).toBe(1)
+
+    // Free the holder. Its release must hand the permit to the waiter without
+    // opening a slot that a concurrent free-path run() can take.
+    releaseHold()
+    // Synchronously race a free-path acquire before the waiter microtask runs.
+    const racer = limiter.run(async () => {
+      await track(5)
+    })
+
+    await Promise.all([holder, waiter, racer])
+    expect(peak).toBeLessThanOrEqual(1)
+    expect(activePeak).toBeLessThanOrEqual(1)
+    expect(limiter.active()).toBe(0)
+    expect(limiter.waiting()).toBe(0)
+  })
 })
 
 describe("mapWithConcurrency", () => {
