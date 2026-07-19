@@ -9,7 +9,7 @@ export { sessionAssistantPath, syntheticTextPart, textPart, zeroTokenUsage } fro
 export { commandSetup } from "./prompt-command-setup"
 export { ensureTitle, titleContextMessages } from "./prompt-title"
 export { systemPrompt } from "./prompt-system"
-export { loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-loop-messages"
+export { appendNewerMessages, loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-loop-messages"
 export { createStructuredOutputTool, createStructuredOutputTurn } from "./prompt-structured-output"
 export { parseGoalArguments } from "./prompt-goal-arguments"
 export { chooseFallbackModel, findFallbackModel } from "./prompt-provider-fallback"

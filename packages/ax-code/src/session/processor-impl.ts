@@ -188,6 +188,8 @@ export namespace SessionProcessor {
     let stepToolCallCount = 0
     let stepErrorSurfaces: string[] = []
     let stepTouchedFiles: Array<{ path: string; summary: string }> = []
+    // O(1) membership for path dedup (PERF-09); was O(n) linear scan.
+    const stepTouchedFilePaths = new Set<string>()
     let stepToolObservations: AgentOptimizationTrace.ToolObservation[] = []
     const fileTouchingTools = new Set(["read", "edit", "write", "multiedit", "apply_patch"])
     // Per-session sliding-window rate limiter: max 30 tool calls per 10-second window.
@@ -454,7 +456,8 @@ export namespace SessionProcessor {
                   const toolInput = asRecord(value.input)
                   if (fileTouchingTools.has(value.toolName)) {
                     const filePath = toolInput?.file_path ?? toolInput?.path
-                    if (typeof filePath === "string" && !stepTouchedFiles.some((item) => item.path === filePath)) {
+                    if (typeof filePath === "string" && !stepTouchedFilePaths.has(filePath)) {
+                      stepTouchedFilePaths.add(filePath)
                       stepTouchedFiles.push({ path: filePath, summary: `accessed by ${value.toolName}` })
                     }
                   }
@@ -516,6 +519,8 @@ export namespace SessionProcessor {
                     // are required to repeat at least
                     // DOOM_LOOP_THRESHOLD times for k=1 and 2 times for
                     // k>=2 (a longer cycle is itself stronger evidence).
+                    // Cache the canonical form so tool-result does not
+                    // re-walk the input graph (PERF-02).
                     const inputStr = canonicalize(value.input)
                     toolInputCache[value.toolCallId] = inputStr
                     const allRecent = [...recentToolRing, { tool: value.toolName, input: inputStr }]
@@ -630,7 +635,10 @@ export namespace SessionProcessor {
                   if (match && match.state.status === "running") {
                     const toolEndTime = Date.now()
                     const storedInput = value.input === undefined ? match.state.input : jsonSafeInput(value.input)
-                    const completedInput = canonicalize(storedInput)
+                    // Reuse the form computed at tool-call time so doom-loop
+                    // comparisons stay consistent and we avoid a second full
+                    // object-graph walk on large tool inputs (PERF-02).
+                    const completedInput = toolInputCache[value.toolCallId] ?? canonicalize(storedInput)
                     const completedOutput = canonicalize(value.output.output)
                     const completedCycleLen = detectCycle(
                       [...recentToolRing, { tool: match.tool, input: completedInput, output: completedOutput }],
@@ -844,6 +852,7 @@ export namespace SessionProcessor {
                   stepToolCallCount = 0
                   stepErrorSurfaces = []
                   stepTouchedFiles = []
+                  stepTouchedFilePaths.clear()
                   stepToolObservations = []
                   await setBusyStatus({
                     step: attempt,

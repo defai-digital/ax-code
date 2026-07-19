@@ -347,12 +347,16 @@ export const GlobalRoutes = lazy(() =>
 
           // Send heartbeat every 10s to prevent stalled proxy streams.
           heartbeat = setInterval(() => {
-            pushControl({
-              payload: {
-                type: "server.heartbeat",
-                properties: {},
-              },
-            })
+            try {
+              pushControl({
+                payload: {
+                  type: "server.heartbeat",
+                  properties: {},
+                },
+              })
+            } catch (error) {
+              log.warn("global event heartbeat failed", { error })
+            }
           }, 10_000)
           heartbeat.unref?.()
 

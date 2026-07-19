@@ -210,11 +210,21 @@ async function finishIfRunning(
 }
 
 function startDetachedQueueTask(task: () => Promise<void>) {
+  // Never let a detached queue task take down the process. setTimeout(0)
+  // throws become uncaught exceptions (process.exit via the global handler),
+  // and rejected promises must also be swallowed after logging.
   setTimeout(() => {
-    void task().catch((error) => {
+    try {
+      void Promise.resolve()
+        .then(() => task())
+        .catch((error) => {
+          DiagnosticLog.recordProcess("server.taskQueueTaskUnhandledFailure", { error })
+          log.error("detached task queue execution failed", { error })
+        })
+    } catch (error) {
       DiagnosticLog.recordProcess("server.taskQueueTaskUnhandledFailure", { error })
       log.error("detached task queue execution failed", { error })
-    })
+    }
   }, 0)
 }
 

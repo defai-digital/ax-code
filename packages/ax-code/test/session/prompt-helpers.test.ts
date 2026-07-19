@@ -896,6 +896,22 @@ describe("session.prompt helpers", () => {
     expect((next[1].parts[0] as MessageV2.TextPart).text).toContain("The user sent the following message:")
   })
 
+  test("remindQueuedMessages returns the same array when no user messages are queued", () => {
+    const msgs = [
+      {
+        info: { id: "001", role: "user" },
+        parts: [{ type: "text", text: "hello" }],
+      },
+      {
+        info: { id: "002", role: "assistant", finish: "stop" },
+        parts: [],
+      },
+    ] as any as MessageV2.WithParts[]
+
+    const next = remindQueuedMessages(msgs, msgs[1].info as MessageV2.Assistant)
+    expect(next).toBe(msgs)
+  })
+
   test("loads compacted history on first loop pass and appends newer messages", async () => {
     const first = [{ info: { id: "001", role: "user" }, parts: [] }] as any as MessageV2.WithParts[]
     const second = [{ info: { id: "002", role: "assistant" }, parts: [] }] as any as MessageV2.WithParts[]

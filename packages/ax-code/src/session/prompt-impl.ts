@@ -35,7 +35,7 @@ import { handlePromptLoopEmptyTurn } from "./prompt-loop-empty-turn"
 import { handlePromptLoopTruncatedTurn } from "./prompt-loop-truncated-turn"
 import { handlePromptLoopTodoConvergence } from "./prompt-loop-todo-convergence"
 import { handlePromptLoopTodoContinuation } from "./prompt-loop-todo-continuation"
-import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
+import { appendNewerMessages, loopMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { finishPromptLoopQueue } from "./prompt-loop-queue"
 import { beginPromptLoopRecording, finishPromptLoopRecording, type PromptLoopEndReason } from "./prompt-loop-recording"
 import { resolvePromptLoopResult } from "./prompt-loop-result"
@@ -291,6 +291,9 @@ export namespace SessionPrompt {
     const failedFallbackProviderIDs = new Set<ProviderID>()
     // Cache session history — only load from DB on first step, refresh on subsequent steps
     let cachedMsgs: MessageV2.WithParts[] | undefined
+    // Hoisted so continueAutonomousLoop can reuse the latest in-memory list
+    // without a full Session.messages() reload (PERF-01).
+    let msgs: MessageV2.WithParts[] = []
 
     async function continueAutonomousLoop({
       text,
@@ -340,10 +343,12 @@ export namespace SessionPrompt {
         maxContinuations,
         ...logExtras,
       })
-      const latestMessages = await Session.messages({ sessionID })
+      // Reuse the in-loop message list: createAutonomousTextContinuation only
+      // needs the last user (agent/model). Avoid a full Session.messages()
+      // reload of the entire history on every auto-continuation.
       await createAutonomousTextContinuation({
         sessionID,
-        messages: latestMessages,
+        messages: msgs,
         text,
       })
     }
@@ -372,7 +377,6 @@ export namespace SessionPrompt {
       const effectivelyAutonomous = ScopedFlag.autonomous()
 
       // On step 0 or after compaction, load full history. Otherwise only fetch new messages.
-      let msgs: MessageV2.WithParts[]
       ;({ msgs, cached: cachedMsgs } = await loopMessages({ sessionID, cached: cachedMsgs }))
 
       let { lastUser, lastUserParts, lastAssistant, lastFinished, tasks } = scanLoopMessages(msgs)
@@ -431,15 +435,12 @@ export namespace SessionPrompt {
         continuations,
       })
       if (totalStepLimit.action === "stop") {
-        const latestMessages = await Session.messages({ sessionID })
-        const latestUser = latestMessages.findLast((m) => m.info.role === "user")
-        if (latestUser && latestUser.info.role === "user") {
-          await createSyntheticFailureAssistant({
-            sessionID,
-            lastUser: latestUser.info,
-            message: totalStepLimit.message,
-          })
-        }
+        // lastUser already scanned from the in-loop message list — no full DB reload.
+        await createSyntheticFailureAssistant({
+          sessionID,
+          lastUser,
+          message: totalStepLimit.message,
+        })
         reason = totalStepLimit.reason
         break
       }
@@ -471,15 +472,11 @@ export namespace SessionPrompt {
       if (globalStepLimit.action === "stop") {
         // Create a synthetic failure message so the transcript ends with a
         // clear explanation rather than just a Bus event / toast.
-        const latestMessages = await Session.messages({ sessionID })
-        const latestUser = latestMessages.findLast((m) => m.info.role === "user")
-        if (latestUser && latestUser.info.role === "user") {
-          await createSyntheticFailureAssistant({
-            sessionID,
-            lastUser: latestUser.info,
-            message: globalStepLimit.message,
-          })
-        }
+        await createSyntheticFailureAssistant({
+          sessionID,
+          lastUser,
+          message: globalStepLimit.message,
+        })
         reason = globalStepLimit.reason
         break
       }
@@ -606,15 +603,11 @@ export namespace SessionPrompt {
         // End the transcript with an explicit explanation, mirroring the
         // global step-limit stop — a bare break left no trace of why the
         // session ended.
-        const latestMessages = await Session.messages({ sessionID })
-        const latestUser = latestMessages.findLast((m) => m.info.role === "user")
-        if (latestUser && latestUser.info.role === "user") {
-          await createSyntheticFailureAssistant({
-            sessionID,
-            lastUser: latestUser.info,
-            message: agentStepLimit.message,
-          })
-        }
+        await createSyntheticFailureAssistant({
+          sessionID,
+          lastUser,
+          message: agentStepLimit.message,
+        })
         reason = agentStepLimit.reason
         break
       }
@@ -818,7 +811,14 @@ export namespace SessionPrompt {
       // maxTodoRetries to prevent infinite loops when the model genuinely
       // cannot finish a todo (blocked tool, missing data, etc.).
       if (effectivelyAutonomous && !processor.message.error) {
-        const latestMessages = await Session.messages({ sessionID })
+        // Append only messages written this step (the new assistant + parts)
+        // instead of re-streaming the full history via Session.messages().
+        const latestMessages = await appendNewerMessages(sessionID, msgs)
+        if (cachedMsgs && latestMessages !== msgs && latestMessages.length > msgs.length) {
+          const added = latestMessages.slice(msgs.length)
+          cachedMsgs.push(...added)
+        }
+        msgs = latestMessages
         const pendingTodos = Todo.active(sessionID)
         const completionGate = AutonomousCompletionGate.evaluate({
           messages: latestMessages,
@@ -1086,10 +1086,11 @@ export namespace SessionPrompt {
             finalNudge: toolOnlyTransition.final,
             forced: toolOnlyTransition.forced,
           })
-          const latestMessages = await Session.messages({ sessionID })
+          // msgs already holds the loop history (and any this-step appends);
+          // continuation only needs last-user agent/model metadata.
           await createAutonomousTextContinuation({
             sessionID,
-            messages: latestMessages,
+            messages: msgs,
             text: AutonomousContinuationPrompt.toolOnlyTurnNudge({
               consecutiveToolOnlyTurns,
               maxToolOnlyTurns: MAX_TOOL_ONLY_TURNS,

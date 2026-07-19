@@ -56,6 +56,30 @@ describe("util.filelock", () => {
     }
   })
 
+  test("steals a lock older than the configured stale age", async () => {
+    await using tmp = await tmpdir()
+    const filepath = path.join(tmp.path, "state.json")
+    const lockpath = filepath + ".lock"
+    await fs.writeFile(
+      lockpath,
+      JSON.stringify({
+        pid: process.pid + 1,
+        startedAt: Date.now() - 120_000,
+        host: currentLockHost(),
+      }),
+    )
+
+    // Live-looking PID but age exceeds staleMs → must steal.
+    const killSpy = vi.spyOn(process, "kill").mockImplementation(() => true as any)
+    try {
+      const lock = await FileLock.acquire(filepath, { timeoutMs: 200, staleMs: 30_000 })
+      lock[Symbol.dispose]()
+      expect(await fs.access(lockpath).then(() => true, () => false)).toBe(false)
+    } finally {
+      killSpy.mockRestore()
+    }
+  })
+
   test("unreferences polling timers while waiting for an active holder", async () => {
     await using tmp = await tmpdir()
     const filepath = path.join(tmp.path, "state.json")

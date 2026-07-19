@@ -11,6 +11,7 @@ pub use watcher::*;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::LazyLock;
 use std::time::UNIX_EPOCH;
 
 use globset::{Glob, GlobMatcher};
@@ -116,6 +117,17 @@ const IGNORE_FILE_PATTERNS: &[&str] = &[
     "**/coverage/**",
     "**/.nyc_output/**",
 ];
+
+/// Precompiled matchers for hardcoded ignore file patterns. Rebuilding these
+/// on every `is_ignored` call was a measurable CPU cost during directory walks
+/// (PERF-07 / NAT-03). Extra patterns passed by the caller are still compiled
+/// per call because they vary.
+static IGNORE_FILE_MATCHERS: LazyLock<Vec<GlobMatcher>> = LazyLock::new(|| {
+    IGNORE_FILE_PATTERNS
+        .iter()
+        .filter_map(|pat| Glob::new(pat).ok().map(|g| g.compile_matcher()))
+        .collect()
+});
 
 // ---------------------------------------------------------------------------
 // 1. walk_files
@@ -533,16 +545,17 @@ pub fn is_ignored(path: String, extra_patterns_json: String) -> napi::Result<boo
         }
     }
 
-    // Build glob matchers for file patterns (hardcoded + extra)
-    let all_patterns = IGNORE_FILE_PATTERNS
-        .iter()
-        .map(|s| s.to_string())
-        .chain(extra);
+    // Hardcoded file patterns use the process-wide compiled matchers.
+    for matcher in IGNORE_FILE_MATCHERS.iter() {
+        if matcher.is_match(&path) {
+            return Ok(true);
+        }
+    }
 
-    for pat in all_patterns {
+    // Caller-supplied patterns still compile per call (they vary).
+    for pat in extra {
         if let Ok(g) = Glob::new(&pat) {
-            let m = g.compile_matcher();
-            if m.is_match(&path) {
+            if g.compile_matcher().is_match(&path) {
                 return Ok(true);
             }
         }

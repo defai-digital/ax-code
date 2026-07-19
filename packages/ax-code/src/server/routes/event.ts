@@ -77,11 +77,17 @@ export const EventRoutes = lazy(() =>
         })
 
         // Send heartbeat every 10s to prevent stalled proxy streams.
+        // Guard the callback so a pushControl failure cannot become an
+        // uncaught exception from the timer and take down the process.
         heartbeat = setInterval(() => {
-          pushControl({
-            type: "server.heartbeat",
-            properties: {},
-          })
+          try {
+            pushControl({
+              type: "server.heartbeat",
+              properties: {},
+            })
+          } catch (error) {
+            log.warn("event heartbeat failed", { error })
+          }
         }, HEARTBEAT_INTERVAL_MS)
         heartbeat.unref?.()
 

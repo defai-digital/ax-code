@@ -183,6 +183,9 @@ export const PtyRoutes = lazy(() =>
             return typeof (value as { readyState?: unknown }).readyState === "number"
           }
 
+          // Bound pre-ready message buffering so a slow connect cannot grow
+          // without limit under a chatty client (STAB-09).
+          const PENDING_MESSAGE_LIMIT = 100
           const pending: string[] = []
           let ready = false
           let closed = false
@@ -212,6 +215,9 @@ export const PtyRoutes = lazy(() =>
             onMessage(event) {
               if (typeof event.data !== "string") return
               if (!ready) {
+                if (pending.length >= PENDING_MESSAGE_LIMIT) {
+                  pending.shift()
+                }
                 pending.push(event.data)
                 return
               }

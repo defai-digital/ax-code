@@ -23,7 +23,11 @@ import {
 
 const log = Log.create({ service: "filelock" })
 
-const DEFAULT_STALE_MS = 5 * 60 * 1000 // 5 minutes
+// Locks older than this are treated as abandoned even if a PID still responds
+// to kill(0) (PID reuse after a crash). Keep short enough that a crashed
+// holder cannot block writers for minutes, but long enough that a legitimate
+// multi-second write is never stolen mid-flight.
+const DEFAULT_STALE_MS = 60 * 1000 // 60 seconds
 const POLL_INTERVAL_MS = 50
 
 export namespace FileLock {
@@ -65,7 +69,13 @@ export namespace FileLock {
     }
     const age = Date.now() - body.startedAt
     if (age > staleMs) {
-      log.warn("stealing stale file lock", { target, age })
+      log.warn("stealing stale file lock", {
+        target,
+        age,
+        staleMs,
+        pid: body.pid,
+        host: body.host,
+      })
       await removeLockFile(target)
       return true
     }
