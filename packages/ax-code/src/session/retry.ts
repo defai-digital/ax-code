@@ -129,6 +129,8 @@ export namespace SessionRetry {
   // After NETWORK_CIRCUIT_THRESHOLD consecutive hits we open the circuit for
   // NETWORK_CIRCUIT_COOLDOWN_MS so the session fails fast instead of burning
   // the full retry budget on a dead path (STAB-14).
+  // Circuit state is tracked per-provider so one failing provider does not
+  // block retries for unrelated providers (STAB-14b).
   const NETWORK_FAILURE_PATTERNS = [
     "enotfound",
     "econnrefused",
@@ -143,8 +145,29 @@ export namespace SessionRetry {
   ]
   const NETWORK_CIRCUIT_THRESHOLD = 3
   const NETWORK_CIRCUIT_COOLDOWN_MS = 30_000
-  let networkFailureStreak = 0
-  let networkCircuitOpenUntil = 0
+  const CIRCUIT_MAX_PROVIDERS = 64
+
+  interface CircuitState {
+    failureStreak: number
+    openUntil: number
+  }
+
+  const circuits = new Map<string, CircuitState>()
+
+  function circuitFor(providerID: string | undefined): CircuitState {
+    const key = providerID ?? "__global__"
+    let state = circuits.get(key)
+    if (!state) {
+      // Evict oldest entry if at capacity (LRU by insertion order).
+      if (circuits.size >= CIRCUIT_MAX_PROVIDERS) {
+        const oldest = circuits.keys().next().value
+        if (oldest !== undefined) circuits.delete(oldest)
+      }
+      state = { failureStreak: 0, openUntil: 0 }
+      circuits.set(key, state)
+    }
+    return state
+  }
 
   function isNetworkFailure(message: string, responseBody?: string): boolean {
     const lower = `${message}\n${responseBody ?? ""}`.toLowerCase()
@@ -157,27 +180,33 @@ export namespace SessionRetry {
   }
 
   /** Test helper — reset circuit state between unit tests. */
-  export function resetNetworkCircuit() {
-    networkFailureStreak = 0
-    networkCircuitOpenUntil = 0
+  export function resetNetworkCircuit(providerID?: string) {
+    if (providerID) {
+      circuits.delete(providerID)
+    } else {
+      circuits.clear()
+    }
   }
 
-  export function networkCircuitOpen(now = Date.now()): boolean {
-    return now < networkCircuitOpenUntil
+  export function networkCircuitOpen(providerID?: string, now = Date.now()): boolean {
+    const state = circuits.get(providerID ?? "__global__")
+    if (!state) return false
+    return now < state.openUntil
   }
 
   export function parseRetryMessageJson(message: unknown): Record<string, unknown> | undefined {
     return typeof message === "string" ? parseJsonRecord(message) : undefined
   }
 
-  export function retryable(error: ReturnType<NamedError["toObject"]>) {
+  export function retryable(error: ReturnType<NamedError["toObject"]>, providerID?: string) {
     // context overflow errors should not be retried
     if (MessageV2.ContextOverflowError.isInstance(error)) return undefined
     if (MessageV2.APIError.isInstance(error)) {
       const message = typeof error.data?.message === "string" ? error.data.message : "Unknown API error"
       if (!error.data?.isRetryable) return undefined
+      const circuit = circuitFor(providerID)
       if (isAlibabaTokenPlanShortWindowQuota(error)) {
-        networkFailureStreak = 0
+        circuit.failureStreak = 0
         return message
       }
       // Billing / quota exhaustion — retrying won't change the account
@@ -187,15 +216,15 @@ export namespace SessionRetry {
       if (isPermanentError(message, error.data.responseBody)) return undefined
 
       if (isNetworkFailure(message, error.data.responseBody)) {
-        if (networkCircuitOpen()) return undefined
-        networkFailureStreak += 1
-        if (networkFailureStreak >= NETWORK_CIRCUIT_THRESHOLD) {
-          networkCircuitOpenUntil = Date.now() + NETWORK_CIRCUIT_COOLDOWN_MS
-          networkFailureStreak = 0
+        if (networkCircuitOpen(providerID)) return undefined
+        circuit.failureStreak += 1
+        if (circuit.failureStreak >= NETWORK_CIRCUIT_THRESHOLD) {
+          circuit.openUntil = Date.now() + NETWORK_CIRCUIT_COOLDOWN_MS
+          circuit.failureStreak = 0
           return undefined
         }
       } else {
-        networkFailureStreak = 0
+        circuit.failureStreak = 0
       }
 
       if (error.data.responseBody?.includes("FreeUsageLimitError"))
@@ -206,19 +235,20 @@ export namespace SessionRetry {
     const json = parseRetryMessageJson(error.data?.message)
     if (!json) return undefined
 
+    const circuit = circuitFor(providerID)
     const code = typeof json.code === "string" ? json.code : ""
     const nestedError = isRecord(json.error) ? json.error : undefined
     if (json.type === "error" && nestedError?.type === "too_many_requests") {
-      networkFailureStreak = 0
+      circuit.failureStreak = 0
       return "Too Many Requests"
     }
     if (code.includes("exhausted") || code.includes("unavailable")) {
-      networkFailureStreak = 0
+      circuit.failureStreak = 0
       return "Provider is overloaded"
     }
     const nestedCode = nestedError && typeof nestedError.code === "string" ? nestedError.code : ""
     if (json.type === "error" && nestedCode.includes("rate_limit")) {
-      networkFailureStreak = 0
+      circuit.failureStreak = 0
       return "Rate Limited"
     }
     return undefined

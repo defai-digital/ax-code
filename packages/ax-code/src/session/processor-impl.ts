@@ -91,6 +91,10 @@ export namespace SessionProcessor {
     }
     const canonicalize = (obj: unknown): string => {
       const seen = new WeakSet<object>()
+      // Cap output length to avoid O(n log n) cost on megabyte-scale tool
+      // inputs (e.g. write tool with full file content). Doom-loop detection
+      // only needs a fingerprint, not the full serialized payload (PERF-09b).
+      const MAX_CANONICAL_LENGTH = 4096
       const visit = (value: unknown, depth: number): string => {
         if (depth > 50) return safeStringify(value)
         if (value === null || typeof value !== "object") return safeStringify(value)
@@ -108,7 +112,8 @@ export namespace SessionProcessor {
           "}"
         )
       }
-      return visit(obj, 0)
+      const result = visit(obj, 0)
+      return result.length > MAX_CANONICAL_LENGTH ? result.slice(0, MAX_CANONICAL_LENGTH) : result
     }
     const recentToolRing: RingEntry[] = []
     const doomLoopWarnings: Record<string, string> = {}
@@ -1175,7 +1180,7 @@ export namespace SessionProcessor {
                 error,
               })
             } else {
-              const retry = SessionRetry.retryable(error)
+              const retry = SessionRetry.retryable(error, input.model.providerID)
               if (retry !== undefined) {
                 attempt++
                 if (attempt <= SessionRetry.RETRY_MAX_ATTEMPTS) {

@@ -41,7 +41,20 @@ import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
+  const SUPER_LONG_PACING_MAX_ENTRIES = 64
   const superLongPacing = new Map<string, SuperLongPolicy.PacingState>()
+
+  /** LRU-capped setter for superLongPacing to prevent unbounded growth. */
+  function setPacingEntry(key: string, state: SuperLongPolicy.PacingState) {
+    // Delete first so re-insertion moves to end (most-recent).
+    superLongPacing.delete(key)
+    superLongPacing.set(key, state)
+    while (superLongPacing.size > SUPER_LONG_PACING_MAX_ENTRIES) {
+      const oldest = superLongPacing.keys().next().value
+      if (oldest === undefined) break
+      superLongPacing.delete(oldest)
+    }
+  }
   const TOOL_NAME_ALIASES: Record<string, string> = {
     list_directory: "list",
     list_dir: "list",
@@ -517,7 +530,7 @@ export namespace LLM {
           reservedState = reservation.state
           if (reservedState) {
             durableReserved = true
-            superLongPacing.set(key, reservedState)
+            setPacingEntry(key, reservedState)
           }
         } else {
           const localReservation = reserveProcessLocalSuperLongPacing({ key, now, policy })
@@ -548,12 +561,12 @@ export namespace LLM {
     const state = superLongPacing.get(input.key) ?? { timestamps: [] }
     const decision = SuperLongPolicy.evaluatePacing({ now: input.now, state, policy: input.policy })
     if (decision.waitMs > 0) {
-      superLongPacing.set(input.key, { timestamps: decision.timestamps })
+      setPacingEntry(input.key, { timestamps: decision.timestamps })
       return { decision }
     }
 
     const next = SuperLongPolicy.recordRequest({ now: input.now, state, policy: input.policy })
-    superLongPacing.set(input.key, next)
+    setPacingEntry(input.key, next)
     return { decision, state: next }
   }
 
@@ -756,7 +769,7 @@ export namespace LLM {
       if (index !== -1) {
         timestamps.splice(index, 1)
         if (timestamps.length === 0) superLongPacing.delete(reservation.key)
-        else superLongPacing.set(reservation.key, { timestamps })
+        else setPacingEntry(reservation.key, { timestamps })
       }
     }
     if (!reservation.durable) return
@@ -826,8 +839,23 @@ export namespace LLM {
   const disabledCache = new Map<string, Set<string>>()
   const DISABLED_CACHE_MAX = 32
 
+  /** Deterministic cache key: sorted tool keys + stable ruleset hash. */
+  function disabledCacheKey(toolKeys: string[], ruleset: Permission.Ruleset): string {
+    // Sort tool keys for stable ordering. Ruleset is serialized with a
+    // recursive key-sorting replacer to guarantee deterministic output
+    // regardless of property insertion order.
+    const sortedKeys = toolKeys.slice().sort().join(",")
+    const stableRuleset = JSON.stringify(ruleset, (_key, value) => {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        return Object.fromEntries(Object.keys(value).sort().map((k) => [k, value[k]]))
+      }
+      return value
+    })
+    return sortedKeys + "|" + stableRuleset
+  }
+
   function cachedDisabled(toolKeys: string[], ruleset: Permission.Ruleset) {
-    const key = JSON.stringify([toolKeys, ruleset])
+    const key = disabledCacheKey(toolKeys, ruleset)
     const cached = disabledCache.get(key)
     if (cached) {
       disabledCache.delete(key)
@@ -898,7 +926,7 @@ export namespace LLM {
     input: Pick<Parameters<typeof applySuperLongPacing>[0], "sessionID" | "providerID" | "modelID">,
     state: SuperLongPolicy.PacingState,
   ) {
-    superLongPacing.set(superLongPacingKey(input), state)
+    setPacingEntry(superLongPacingKey(input), state)
   }
 
   export async function applySuperLongPacingForTest(input: Parameters<typeof applySuperLongPacing>[0]) {
