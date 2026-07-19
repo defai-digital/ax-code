@@ -27,6 +27,107 @@ Examples:
 EOF
 }
 
+# Pinned official jedisct1 minisign release used when the host has no minisign on PATH.
+# Keep hashes in sync with https://github.com/jedisct1/minisign/releases/tag/0.12
+MINISIGN_BOOTSTRAP_VERSION="0.12"
+MINISIGN_LINUX_SHA256="9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73"
+MINISIGN_MACOS_SHA256="89000b19535765f9cffc65a65d64a820f433ef6db8020667f7570e06bf6aac63"
+
+print_message() {
+    local level=$1
+    local message=$2
+    local color=""
+
+    case "$level" in
+        info) color="${NC}" ;;
+        warning) color="${NC}" ;;
+        error) color="${RED}" ;;
+    esac
+
+    echo -e "${color}${message}${NC}"
+}
+
+sha256_file() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{print $1}'
+    else
+        shasum -a 256 "$1" | awk '{print $1}'
+    fi
+}
+
+ensure_minisign_available() {
+    if command -v minisign >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local tools_root="${XDG_CACHE_HOME:-$HOME/.cache}/ax-code/tools/minisign/${MINISIGN_BOOTSTRAP_VERSION}"
+    local bin_path="$tools_root/minisign"
+    if [ -x "$bin_path" ]; then
+        export PATH="$tools_root:$PATH"
+        return 0
+    fi
+
+    local url=""
+    local expected=""
+    local archive=""
+    case "$(uname -s)" in
+      Darwin*)
+        url="https://github.com/jedisct1/minisign/releases/download/${MINISIGN_BOOTSTRAP_VERSION}/minisign-0.12-macos.zip"
+        expected="$MINISIGN_MACOS_SHA256"
+        archive="minisign-macos.zip"
+        ;;
+      Linux*)
+        url="https://github.com/jedisct1/minisign/releases/download/${MINISIGN_BOOTSTRAP_VERSION}/minisign-0.12-linux.tar.gz"
+        expected="$MINISIGN_LINUX_SHA256"
+        archive="minisign-linux.tar.gz"
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+
+    print_message info "${MUTED}minisign not found on PATH; bootstrapping pinned minisign ${MINISIGN_BOOTSTRAP_VERSION}${NC}"
+    local tmp_dir
+    tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/ax_code_minisign.XXXXXX")"
+
+    if ! curl -fsSL -o "$tmp_dir/$archive" "$url"; then
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    local actual
+    actual="$(sha256_file "$tmp_dir/$archive")"
+    if [ "$actual" != "$expected" ]; then
+        print_message error "minisign bootstrap SHA-256 mismatch (expected $expected, got $actual)"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    mkdir -p "$tools_root"
+    if [[ "$archive" == *.zip ]]; then
+        if ! command -v unzip >/dev/null 2>&1; then
+            rm -rf "$tmp_dir"
+            return 1
+        fi
+        unzip -q "$tmp_dir/$archive" -d "$tmp_dir"
+    else
+        tar -xzf "$tmp_dir/$archive" -C "$tmp_dir"
+    fi
+
+    local found
+    found="$(find "$tmp_dir" -type f -name minisign | head -n 1 || true)"
+    if [ -z "$found" ] || [ ! -f "$found" ]; then
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+    cp "$found" "$bin_path"
+    chmod 755 "$bin_path"
+    rm -rf "$tmp_dir"
+    export PATH="$tools_root:$PATH"
+    print_message info "${MUTED}Bootstrapped minisign at ${NC}$bin_path"
+    return 0
+}
+
 requested_version=${VERSION:-}
 no_modify_path=false
 binary_path=""
@@ -105,8 +206,17 @@ else
     fi
 
     combo="$os-$arch"
+    # Keep in sync with GitHub release assets from .github/workflows/release.yml
+    # (darwin-arm64, windows-x64, windows-arm64, linux-*). Intel macOS Desktop/CLI
+    # packages are not published; use Apple Silicon or a supported Windows/Linux host.
     case "$combo" in
-      linux-x64|linux-arm64|darwin-x64|darwin-arm64|windows-x64)
+      linux-x64|linux-arm64|darwin-arm64|windows-x64|windows-arm64)
+        ;;
+      darwin-x64)
+        echo -e "${RED}Unsupported OS/Arch: $os/$arch${NC}"
+        echo -e "${MUTED}AX Code CLI release archives are published for Apple Silicon (darwin-arm64) only.${NC}"
+        echo -e "${MUTED}On an Apple Silicon Mac, use a native arm64 shell (not Rosetta x86_64), or install via Homebrew.${NC}"
+        exit 1
         ;;
       *)
         echo -e "${RED}Unsupported OS/Arch: $os/$arch${NC}"
@@ -186,9 +296,11 @@ else
     fi
 
     if [ "${AX_CODE_SKIP_MINISIGN_VERIFY:-}" != "1" ] && ! command -v minisign >/dev/null 2>&1; then
-        echo -e "${RED}Error: 'minisign' is required to verify AX Code release artifacts.${NC}"
-        echo -e "${MUTED}Install minisign, or set AX_CODE_SKIP_MINISIGN_VERIFY=1 to bypass signature verification.${NC}"
-        exit 1
+        if ! ensure_minisign_available; then
+            echo -e "${RED}Error: 'minisign' is required to verify AX Code release artifacts.${NC}"
+            echo -e "${MUTED}Install minisign (brew/apt/scoop), or set AX_CODE_SKIP_MINISIGN_VERIFY=1 to bypass signature verification.${NC}"
+            exit 1
+        fi
     fi
 
     if [ -z "$requested_version" ]; then
@@ -214,20 +326,6 @@ else
         fi
     fi
 fi
-
-print_message() {
-    local level=$1
-    local message=$2
-    local color=""
-
-    case $level in
-        info) color="${NC}" ;;
-        warning) color="${NC}" ;;
-        error) color="${RED}" ;;
-    esac
-
-    echo -e "${color}${message}${NC}"
-}
 
 list_ax_code_paths() {
     if command -v which >/dev/null 2>&1; then
@@ -472,6 +570,10 @@ verify_downloaded_archive() {
     if [ "${AX_CODE_SKIP_MINISIGN_VERIFY:-}" = "1" ]; then
         print_message warning "${ORANGE}Warning:${NC} skipping minisign verification because AX_CODE_SKIP_MINISIGN_VERIFY=1"
         return 0
+    fi
+
+    if ! command -v minisign >/dev/null 2>&1; then
+        ensure_minisign_available || true
     fi
 
     print_message info "${MUTED}Verifying release signature${NC}"

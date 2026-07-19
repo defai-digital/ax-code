@@ -452,3 +452,19 @@ jobs:
           TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: bash .github/scripts/update-homebrew.sh
+
+  # End-to-end install verification for stable releases only. Homebrew smoke
+  # polls for formula convergence; Windows smoke exercises install.ps1 minisign
+  # bootstrap (no preinstalled minisign on PATH). Continue when the Homebrew tap
+  # update job fails so the Windows channel still gets exercised.
+  install-matrix-smoke:
+    needs: [publish, homebrew]
+    if: >-
+      always() &&
+      !contains(github.ref_name, '-') &&
+      needs.publish.result == 'success'
+    uses: ./.github/workflows/install-matrix-smoke.yml
+    with:
+      version: ${{ github.ref_name }}
+      channel: all
+    secrets: inherit

@@ -58,13 +58,13 @@ explicit trust for third-party taps.
 
 **Windows**
 
-1. Install the AX Code CLI with PowerShell (requires [`minisign`](https://jedisct1.github.io/minisign/) on PATH to verify the release archive):
+1. Install the AX Code CLI with PowerShell (release archives are verified with minisign; if minisign is not on PATH the installer bootstraps a pinned official build):
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
-Install minisign with `scoop install minisign`, `choco install minisign`, or `winget install jedisct1.minisign`. Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only if you intentionally accept an unverifiable download. For a download-and-inspect flow that also verifies `install.ps1` itself, see [Installation and Runtime Channels](docs/getting-started/install-runtime.md).
+Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only if you intentionally accept an unverifiable download. For a download-and-inspect flow that also verifies `install.ps1` itself, see [Installation and Runtime Channels](docs/getting-started/install-runtime.md).
 
 2. Install AX Code Desktop separately from the [latest GitHub Release](https://github.com/defai-digital/ax-code/releases/latest):
 
@@ -103,7 +103,7 @@ brew install defai-digital/ax-code/ax-code
 curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install | bash
 ```
 
-Requires `curl`, `tar`, and `minisign` (or set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only if you intentionally accept an unverifiable download). Installs the node-bundled CLI under `~/.ax-code/bin`. Pin a version with `bash -s -- --version <release>`.
+Requires `curl` and `tar`. Release archives are verified with minisign; if minisign is not on PATH the installer bootstraps a pinned official build (or set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only if you intentionally accept an unverifiable download). Installs the node-bundled CLI under `~/.ax-code/bin`. Pin a version with `bash -s -- --version <release>`.
 
 **Windows**
 
@@ -111,7 +111,7 @@ Requires `curl`, `tar`, and `minisign` (or set `AX_CODE_SKIP_MINISIGN_VERIFY=1` 
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
-Requires `minisign` on PATH to verify the downloaded release archive (or set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only if you intentionally accept an unverifiable download). Installs the node-bundled CLI under `%USERPROFILE%\.ax-code\bin`. Pin a version with `-Version <release>`.
+Verifies the downloaded release archive with minisign (bootstraps a pinned minisign binary when needed). Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only if you intentionally accept an unverifiable download. Installs the node-bundled CLI under `%USERPROFILE%\.ax-code\bin`. Pin a version with `-Version <release>`. Uninstall with `.\install.ps1 -Uninstall`.
 
 Supported CLI install paths are Homebrew (macOS), the Bash release installer (Linux), and the GitHub release installer for Windows PowerShell. The Windows PowerShell installer is CLI-only; use the Windows `.exe` release asset for Desktop. npm packages are no longer a supported channel. See [Installation and Runtime Channels](docs/getting-started/install-runtime.md) for the full matrix.
 
@@ -146,7 +146,7 @@ hash -r
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
-This updates the Windows CLI. AX Code Desktop updates through the Desktop auto-updater, or by downloading the latest `AX-Code-<version>-win-x64.exe` / `AX-Code-<version>-win-arm64.exe` installer from GitHub Releases.
+This updates the Windows CLI. AX Code Desktop updates through the Desktop auto-updater, or by downloading the latest `AX-Code-<version>-win-x64.exe` / `AX-Code-<version>-win-arm64.exe` installer from GitHub Releases. For unattended Desktop installs, run the NSIS installer with `/S` (for example `.\AX-Code-7.1.0-win-x64.exe /S`).
 
 ### From Source (contributors)
 

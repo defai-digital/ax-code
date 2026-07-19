@@ -6,6 +6,7 @@ param(
   [string]$Binary = "",
 
   [switch]$NoModifyPath,
+  [switch]$Uninstall,
   [switch]$Help
 )
 
@@ -24,6 +25,13 @@ $InstallNodeDir = Join-Path $InstallRoot "node"
 $InstallNodeModulesDir = Join-Path $InstallRoot "node_modules"
 $InstallPackageJson = Join-Path $InstallRoot "package.json"
 
+# Official jedisct1 minisign Windows release (contains x86_64 and aarch64).
+# Pin version + SHA-256 so bootstrap does not require a preinstalled minisign.
+$MinisignVersion = "0.12"
+$MinisignZipUrl = "https://github.com/jedisct1/minisign/releases/download/$MinisignVersion/minisign-$MinisignVersion-win64.zip"
+$MinisignZipSha256 = "37b600344e20c19314b2e82813db2bfdcc408b77b876f7727889dbd46d539479"
+$script:BootstrappedMinisignPath = $null
+
 function Show-Usage {
   @"
 AX Code Installer
@@ -35,14 +43,18 @@ Options:
   -Version <version>    Install a specific version (e.g., 5.8.0)
   -Binary <path>        Install from a local binary instead of downloading
   -NoModifyPath         Do not update the user PATH
+  -Uninstall            Remove the user-local CLI install and PATH entry
 
 Release downloads are verified with minisign before extraction unless
-AX_CODE_SKIP_MINISIGN_VERIFY=1 is set.
+AX_CODE_SKIP_MINISIGN_VERIFY=1 is set. If minisign is not on PATH, the
+installer bootstraps a pinned official minisign build (SHA-256 verified)
+into %LOCALAPPDATA%\ax-code\tools\minisign.
 
 Examples:
   irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex
   .\install.ps1 -Version 5.8.0
   .\install.ps1 -Binary C:\path\to\ax-code.cmd
+  .\install.ps1 -Uninstall
 "@
 }
 
@@ -81,6 +93,14 @@ function Get-TargetArch {
     "^(AMD64|x86_64)$" { return "x64" }
     "^ARM64$" { return "arm64" }
     default { throw "Unsupported Windows architecture: $arch" }
+  }
+}
+
+function Get-MinisignNativeArchDir {
+  # Layout inside minisign-0.12-win64.zip
+  switch (Get-TargetArch) {
+    "arm64" { return "aarch64" }
+    default { return "x86_64" }
   }
 }
 
@@ -128,12 +148,88 @@ function Test-SkipMinisignVerify {
   return $env:AX_CODE_SKIP_MINISIGN_VERIFY -eq "1"
 }
 
+function Get-MinisignToolsRoot {
+  $base = $env:LOCALAPPDATA
+  if (-not $base) {
+    $base = Join-Path $HOME "AppData\Local"
+  }
+  return Join-Path $base "ax-code\tools\minisign\$MinisignVersion"
+}
+
+function Get-BootstrappedMinisignPath {
+  $exe = Join-Path (Get-MinisignToolsRoot) "minisign.exe"
+  if (Test-Path -LiteralPath $exe -PathType Leaf) {
+    return $exe
+  }
+  return $null
+}
+
 function Get-MinisignCommand {
+  if ($script:BootstrappedMinisignPath -and (Test-Path -LiteralPath $script:BootstrappedMinisignPath -PathType Leaf)) {
+    return $script:BootstrappedMinisignPath
+  }
+
   $command = Get-Command minisign -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($command -and $command.Source) {
     return $command.Source
   }
+
+  $bootstrapped = Get-BootstrappedMinisignPath
+  if ($bootstrapped) {
+    $script:BootstrappedMinisignPath = $bootstrapped
+    return $bootstrapped
+  }
+
   return $null
+}
+
+function Install-MinisignBootstrap {
+  $toolsRoot = Get-MinisignToolsRoot
+  $targetExe = Join-Path $toolsRoot "minisign.exe"
+  if (Test-Path -LiteralPath $targetExe -PathType Leaf) {
+    $script:BootstrappedMinisignPath = $targetExe
+    return $targetExe
+  }
+
+  Write-Info "minisign not found on PATH; bootstrapping pinned minisign $MinisignVersion"
+  $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ("ax_code_minisign_" + [System.Guid]::NewGuid().ToString("N"))
+  New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
+
+  try {
+    $zipPath = Join-Path $tmpDir "minisign-win64.zip"
+    Invoke-WebRequest `
+      -Uri $MinisignZipUrl `
+      -OutFile $zipPath `
+      -UseBasicParsing `
+      -Headers @{ "User-Agent" = "$App-installer" }
+
+    $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($hash -ne $MinisignZipSha256) {
+      throw "minisign bootstrap SHA-256 mismatch. expected $MinisignZipSha256, got $hash"
+    }
+
+    Expand-Archive -Path $zipPath -DestinationPath $tmpDir -Force
+    $nativeDir = Get-MinisignNativeArchDir
+    $sourceExe = Get-ChildItem -Path $tmpDir -Filter "minisign.exe" -Recurse |
+      Where-Object { $_.FullName -match "[\\/]$nativeDir[\\/]minisign\.exe$" } |
+      Select-Object -First 1
+
+    if (-not $sourceExe) {
+      # Fall back to any minisign.exe if layout changes slightly.
+      $sourceExe = Get-ChildItem -Path $tmpDir -Filter "minisign.exe" -Recurse | Select-Object -First 1
+    }
+    if (-not $sourceExe) {
+      throw "minisign.exe not found after extracting $MinisignZipUrl"
+    }
+
+    New-Item -ItemType Directory -Force -Path $toolsRoot | Out-Null
+    Copy-Item -LiteralPath $sourceExe.FullName -Destination $targetExe -Force
+    $script:BootstrappedMinisignPath = $targetExe
+    Write-Info "Bootstrapped minisign at $targetExe"
+    return $targetExe
+  } finally {
+    Remove-Item -LiteralPath $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
+  }
 }
 
 function Assert-MinisignAvailable {
@@ -145,11 +241,21 @@ function Assert-MinisignAvailable {
     return
   }
 
-  throw @"
-minisign is required to verify AX Code release artifacts.
-Install minisign (scoop install minisign, choco install minisign, or winget install jedisct1.minisign),
+  try {
+    [void](Install-MinisignBootstrap)
+  } catch {
+    throw @"
+minisign is required to verify AX Code release artifacts and automatic bootstrap failed:
+$($_.Exception.Message)
+
+Install minisign manually (scoop install minisign, choco install minisign, or winget install jedisct1.minisign),
 or set AX_CODE_SKIP_MINISIGN_VERIFY=1 to bypass signature verification.
 "@
+  }
+
+  if (-not (Get-MinisignCommand)) {
+    throw "minisign bootstrap completed but minisign.exe is still not available."
+  }
 }
 
 function Verify-DownloadedArchive {
@@ -171,7 +277,7 @@ function Verify-DownloadedArchive {
 
   $minisign = Get-MinisignCommand
   if (-not $minisign) {
-    throw "minisign is required to verify AX Code release artifacts but was not found on PATH."
+    throw "minisign is required to verify AX Code release artifacts but was not found."
   }
 
   Write-Info "Verifying release signature"
@@ -356,6 +462,57 @@ function Assert-NodeFfiRuntime([string]$NodePath) {
   }
 }
 
+function Remove-FromUserPath {
+  $currentUserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+  if (-not $currentUserPath) {
+    return
+  }
+
+  $parts = $currentUserPath -split ";" | Where-Object { $_ }
+  $remaining = @()
+  $removed = $false
+  foreach ($part in $parts) {
+    if ((Normalize-PathForCompare $part) -ieq (Normalize-PathForCompare $InstallDir)) {
+      $removed = $true
+      continue
+    }
+    $remaining += $part
+  }
+
+  if ($removed) {
+    [Environment]::SetEnvironmentVariable("Path", ($remaining -join ";"), "User")
+    Write-Info "Removed ax-code from the user PATH: $InstallDir"
+  }
+
+  $processParts = $env:Path -split ";" | Where-Object { $_ }
+  $env:Path = (
+    $processParts | Where-Object {
+      (Normalize-PathForCompare $_) -ine (Normalize-PathForCompare $InstallDir)
+    }
+  ) -join ";"
+}
+
+function Uninstall-AxCode {
+  Write-Info "Uninstalling ax-code from $InstallRoot"
+
+  if (Test-Path -LiteralPath $InstallRoot -PathType Container) {
+    Remove-Item -LiteralPath $InstallRoot -Recurse -Force -ErrorAction SilentlyContinue
+  }
+
+  Remove-FromUserPath
+
+  $toolsRoot = Get-MinisignToolsRoot
+  $toolsParent = Split-Path -Parent (Split-Path -Parent $toolsRoot)
+  if (Test-Path -LiteralPath $toolsParent -PathType Container) {
+    # Remove bootstrapped minisign cache when empty enough; keep other tools if any.
+    if (Test-Path -LiteralPath $toolsRoot -PathType Container) {
+      Remove-Item -LiteralPath $toolsRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+
+  Write-Info "ax-code uninstalled. Open a new terminal if ax-code is still resolved from PATH."
+}
+
 function Add-ToUserPath {
   $currentUserPath = [Environment]::GetEnvironmentVariable("Path", "User")
   $parts = @()
@@ -412,6 +569,11 @@ function Assert-CurrentPathLink {
 
 if ($Help) {
   Show-Usage
+  exit 0
+}
+
+if ($Uninstall) {
+  Uninstall-AxCode
   exit 0
 }
 

@@ -63,6 +63,16 @@ xattr -cr "/Applications/AX Code.app"
 3. Run the installer.
 4. Start **AX Code** from the Start Menu or Desktop shortcut.
 
+Silent / unattended install (NSIS):
+
+```powershell
+.\AX-Code-<version>-win-x64.exe /S
+# Optional install directory:
+.\AX-Code-<version>-win-x64.exe /S /D=C:\Program Files\AX Code
+```
+
+`/D=` must be the last argument when used. Uninstall from **Settings → Apps** or the Start Menu uninstall entry.
+
 For an additional signature check, run the following from PowerShell in the download directory, replacing the example filename with the file you downloaded:
 
 ```powershell

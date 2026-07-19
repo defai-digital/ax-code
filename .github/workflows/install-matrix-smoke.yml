@@ -6,10 +6,22 @@ name: Install Matrix Smoke
 # install or upgrade channels.
 #
 # Triggers:
-#   - `workflow_dispatch`: maintainers run this manually after GitHub release
+#   - `workflow_call`: tag-driven release workflow after stable publish
+#   - `workflow_dispatch`: maintainers re-run smoke after GitHub release
 #     assets and the Homebrew formula are published.
 
 on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Already-published version to smoke-test (e.g. 5.3.0 or v5.3.0)"
+        required: true
+        type: string
+      channel:
+        description: "Which channels to smoke-test (all, homebrew, windows)"
+        required: false
+        type: string
+        default: all
   workflow_dispatch:
     inputs:
       version:
@@ -183,31 +195,6 @@ jobs:
         with:
           node-version: "26"
 
-      - name: Install minisign for release verification
-        if: ${{ steps.channel.outputs.enabled == 'true' }}
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          # Pinned official win64 binary (runs natively on x64; under emulation on arm64 runners).
-          $MinisignVersion = "0.12"
-          $MinisignZipUrl = "https://github.com/jedisct1/minisign/releases/download/$MinisignVersion/minisign-$MinisignVersion-win64.zip"
-          $MinisignDir = Join-Path $env:RUNNER_TEMP "minisign"
-          $MinisignZip = Join-Path $env:RUNNER_TEMP "minisign-win64.zip"
-          New-Item -ItemType Directory -Force -Path $MinisignDir | Out-Null
-          Invoke-WebRequest -Uri $MinisignZipUrl -OutFile $MinisignZip -UseBasicParsing
-          Expand-Archive -Path $MinisignZip -DestinationPath $MinisignDir -Force
-          $MinisignExe = Get-ChildItem -Path $MinisignDir -Filter "minisign.exe" -Recurse | Select-Object -First 1
-          if (-not $MinisignExe) {
-            throw "minisign.exe not found after extracting $MinisignZipUrl"
-          }
-          $BinDir = Split-Path -Parent $MinisignExe.FullName
-          "$BinDir" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
-          $env:Path = "$BinDir;$env:Path"
-          Write-Host "Installed minisign at $($MinisignExe.FullName)"
-          if (-not (Get-Command minisign -ErrorAction SilentlyContinue)) {
-            throw "minisign is not resolvable on PATH after install"
-          }
-
       - name: Install ax-code from PowerShell release installer
         if: ${{ steps.channel.outputs.enabled == 'true' }}
         shell: pwsh
@@ -219,16 +206,41 @@ jobs:
           $Base = "https://github.com/${{ github.repository }}/releases/download/v$Version"
           Invoke-WebRequest -Uri "$Base/install.ps1" -OutFile $Installer -UseBasicParsing
           Invoke-WebRequest -Uri "$Base/install.ps1.minisig" -OutFile $InstallerSig -UseBasicParsing
-          # Prefer the checked-in public key from this checkout when available.
+
+          # Verify install.ps1 with a temporary minisign that is intentionally
+          # NOT left on PATH, so the installer must bootstrap its own pinned
+          # minisign to verify the release archive (default user experience).
+          $MinisignVersion = "0.12"
+          $MinisignZipUrl = "https://github.com/jedisct1/minisign/releases/download/$MinisignVersion/minisign-$MinisignVersion-win64.zip"
+          $MinisignDir = Join-Path $env:RUNNER_TEMP "minisign-verify-only"
+          $MinisignZip = Join-Path $env:RUNNER_TEMP "minisign-win64.zip"
+          New-Item -ItemType Directory -Force -Path $MinisignDir | Out-Null
+          Invoke-WebRequest -Uri $MinisignZipUrl -OutFile $MinisignZip -UseBasicParsing
+          Expand-Archive -Path $MinisignZip -DestinationPath $MinisignDir -Force
+          $MinisignExe = Get-ChildItem -Path $MinisignDir -Filter "minisign.exe" -Recurse | Select-Object -First 1
+          if (-not $MinisignExe) {
+            throw "minisign.exe not found after extracting $MinisignZipUrl"
+          }
+
           $PublicKeyFile = Join-Path $env:GITHUB_WORKSPACE "docs/release/ax-minisign.pub"
           if (Test-Path -LiteralPath $PublicKeyFile -PathType Leaf) {
-            & minisign -V -p $PublicKeyFile -m $Installer -x $InstallerSig
+            & $MinisignExe.FullName -V -p $PublicKeyFile -m $Installer -x $InstallerSig
             if ($LASTEXITCODE -ne 0) { throw "install.ps1 minisign verification failed" }
           } else {
             $Key = "RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO"
-            & minisign -Vm $Installer -x $InstallerSig -P $Key
+            & $MinisignExe.FullName -Vm $Installer -x $InstallerSig -P $Key
             if ($LASTEXITCODE -ne 0) { throw "install.ps1 minisign verification failed" }
           }
+
+          # Ensure no host minisign is visible so install.ps1 exercises bootstrap.
+          $pathParts = $env:Path -split ";" | Where-Object {
+            $_ -and ($_ -notlike "*minisign*") -and ($_ -ne (Split-Path -Parent $MinisignExe.FullName))
+          }
+          $env:Path = ($pathParts -join ";")
+          if (Get-Command minisign -ErrorAction SilentlyContinue) {
+            throw "expected minisign to be absent from PATH so installer bootstrap is exercised"
+          }
+
           & $Installer -Version $Version
           $Resolved = (Get-Command ax-code -ErrorAction Stop).Source
           Write-Host "Resolved ax-code to $Resolved"

@@ -5,7 +5,7 @@ import { defineConfig } from "vitest/config"
 // scoped to the root scripts only.
 export default defineConfig({
   test: {
-    include: ["script/*.test.ts"],
+    include: ["script/*.test.ts", "tools/**/*.test.ts"],
     exclude: ["**/node_modules/**", "packages/**", ".internal/**", "dist/**", "crates/**"],
     testTimeout: 30000,
     pool: "forks",
