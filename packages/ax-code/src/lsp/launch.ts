@@ -11,7 +11,11 @@ type SpawnOptions = Process.Options & {
 const liveChildren = new Set<Child>()
 const killLiveChildren = () => {
   for (const child of liveChildren) {
-    void Shell.killTree(child).catch(() => {})
+    // Best-effort cleanup during process exit. Logging is unreliable here
+    // since the process is terminating, so we silently ignore kill failures.
+    void Shell.killTree(child).catch(() => {
+      // Intentionally silent: process is exiting, no opportunity to log.
+    })
   }
 }
 process.once("exit", killLiveChildren)

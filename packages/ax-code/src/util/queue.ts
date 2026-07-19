@@ -1,5 +1,17 @@
 const CLOSED = Symbol("closed")
 
+/**
+ * An async queue that supports both `next()` and `for await...of` iteration.
+ *
+ * Invariants:
+ * - `count` tracks the number of non-CLOSED items in the internal queue.
+ * - Items resolved directly via pending resolvers never touch `count`.
+ * - The CLOSED sentinel does not affect `count`.
+ *
+ * Note: `next()` throws when the queue is closed and drained, while the
+ * async iterator returns gracefully. Use the iterator for consumption
+ * patterns that should terminate cleanly on close.
+ */
 export class AsyncQueue<T> implements AsyncIterable<T> {
   private queue: (T | typeof CLOSED)[] = []
   private resolvers: ((value: T | typeof CLOSED) => void)[] = []
@@ -49,6 +61,7 @@ export class AsyncQueue<T> implements AsyncIterable<T> {
       let item: T | typeof CLOSED
       if (this.queue.length > 0) {
         item = this.queue.shift()!
+        // Only decrement count for real items; CLOSED sentinel doesn't affect count.
         if (item !== CLOSED) this.count--
       } else if (this.closed) {
         return

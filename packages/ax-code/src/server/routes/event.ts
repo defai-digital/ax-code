@@ -7,7 +7,7 @@ import { Bus } from "@/bus"
 import { lazy } from "../../util/lazy"
 import { AsyncQueue } from "../../util/queue"
 import { Instance } from "@/project/instance"
-import { pushSseFrame } from "../sse-queue"
+import { pushSseFrame, SSE_HARD_MAX, SSE_WARN_THRESHOLD } from "../sse-queue"
 import { Event } from "../event"
 import "@/notification/events"
 
@@ -39,6 +39,7 @@ export const EventRoutes = lazy(() =>
       return streamSSE(c, async (stream) => {
         const q = new AsyncQueue<string | null>()
         let done = false
+        let warned = false
         let heartbeat: ReturnType<typeof setInterval> | undefined
         let unsub = () => {}
 
@@ -56,7 +57,22 @@ export const EventRoutes = lazy(() =>
 
         const push = (payload: unknown) => {
           const result = pushSseFrame(q, payload)
-          if (result === "overflow") stop()
+          if (result === "overflow") {
+            log.warn("SSE queue overflow — disconnecting client", {
+              queueSize: q.size,
+              hardMax: SSE_HARD_MAX,
+            })
+            stop()
+          } else if (result === "warning" && !warned) {
+            // Log only once when crossing the threshold to avoid flooding
+            // logs under sustained backpressure.
+            warned = true
+            log.warn("SSE queue approaching capacity", {
+              queueSize: q.size,
+              warnThreshold: SSE_WARN_THRESHOLD,
+              hardMax: SSE_HARD_MAX,
+            })
+          }
           return result
         }
 

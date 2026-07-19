@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { AsyncQueue } from "../../src/util/queue"
-import { encodeSsePayload, pushSseFrame, SSE_HARD_MAX } from "../../src/server/sse-queue"
+import { encodeSsePayload, pushSseFrame, SSE_HARD_MAX, SSE_WARN_THRESHOLD } from "../../src/server/sse-queue"
 
 describe("server/sse-queue", () => {
   test("enqueues frames while under the hard limit", () => {
@@ -20,18 +20,29 @@ describe("server/sse-queue", () => {
     expect(q.size).toBe(1025)
   })
 
+  test("returns warning once the warn threshold is crossed", () => {
+    const q = new AsyncQueue<string | null>()
+    for (let i = 0; i < SSE_WARN_THRESHOLD - 1; i++) {
+      q.push(`seed-${i}`)
+    }
+
+    expect(pushSseFrame(q, { type: "tool.result" })).toBe("warning")
+    expect(q.size).toBe(SSE_WARN_THRESHOLD)
+  })
+
   test("enqueues the final frame before the hard limit", () => {
     const q = new AsyncQueue<string | null>()
     for (let i = 0; i < SSE_HARD_MAX - 1; i++) {
       q.push(`seed-${i}`)
     }
 
+    // Frame is still enqueued, but returns "warning" since we're above the warn threshold
     expect(
       pushSseFrame(q, {
         type: "tool.result",
         properties: {},
       }),
-    ).toBe("queued")
+    ).toBe("warning")
     expect(q.size).toBe(SSE_HARD_MAX)
   })
 

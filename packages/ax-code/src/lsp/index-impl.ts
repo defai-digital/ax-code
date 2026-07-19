@@ -193,7 +193,9 @@ export namespace LSP {
           if (idx >= 0) s.clients.splice(idx, 1)
           // Best-effort shutdown to release the connection objects. The
           // process is already gone so server stop is a no-op.
-          client.shutdown().catch(() => {})
+          client.shutdown().catch((e) => {
+            log.debug("failed to shutdown dead LSP client", { serverID: client.serverID, root: client.root, error: e })
+          })
         }
         Bus.publishDetached(Event.Updated, {})
       }, HEALTH_CHECK_INTERVAL_MS)
@@ -328,7 +330,9 @@ export namespace LSP {
             LSPBrokenServer.markBroken(s.broken, key)
             const idx = s.clients.findIndex((item) => item.root === root && item.serverID === server.id)
             if (idx >= 0) s.clients.splice(idx, 1)
-            void stopLSPProcess(handle.process).catch(() => {})
+            void stopLSPProcess(handle.process).catch((e) => {
+              log.debug("failed to stop LSP process after unexpected close", { serverID: server.id, root, error: e })
+            })
             Bus.publishDetached(Event.Updated, {})
           },
         })

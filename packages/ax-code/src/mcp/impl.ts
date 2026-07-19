@@ -612,7 +612,9 @@ export namespace MCP {
             // Close transports that were never tried. This keeps constructor-created
             // clients from leaking sockets (notably SSE when StreamableHTTP succeeds).
             for (let j = i + 1; j < transports.length; j++) {
-              await transports[j].transport.close?.().catch(() => {})
+              await transports[j].transport.close?.().catch((e) => {
+                log.debug("failed to close unused transport", { key, transport: transports[j].name, error: toErrorMessage(e) })
+              })
             }
             break
           } catch (error) {
@@ -638,7 +640,9 @@ export namespace MCP {
                 if (client) {
                   await closeIfPossible(client, key, `connect attempt failed (${name})`)
                 }
-                await transport.close?.().catch(() => {})
+                await transport.close?.().catch((e) => {
+                  log.debug("failed to close transport after registration rejection", { key, transport: name, error: toErrorMessage(e) })
+                })
                 status = {
                   status: "needs_client_registration" as const,
                   error: "Server does not support dynamic client registration. Please provide clientId in config.",
@@ -659,7 +663,9 @@ export namespace MCP {
                 // transport would already be dead. Leave both open and only
                 // close the *other* untried candidates.
                 for (let j = i + 1; j < transports.length; j++) {
-                  await transports[j].transport.close?.().catch(() => {})
+                  await transports[j].transport.close?.().catch((e) => {
+                    log.debug("failed to close unused transport during auth flow", { key, transport: transports[j].name, error: toErrorMessage(e) })
+                  })
                 }
                 await closePendingOAuthTransport(key)
                 pendingOAuthState()
@@ -681,7 +687,9 @@ export namespace MCP {
             if (client) {
               await closeIfPossible(client, key, `connect attempt failed (${name})`)
             }
-            await transport.close?.().catch(() => {})
+            await transport.close?.().catch((e) => {
+              log.debug("failed to close transport after connection failure", { key, transport: name, error: toErrorMessage(e) })
+            })
             log.debug("transport connection failed", {
               key,
               transport: name,
@@ -1328,9 +1336,13 @@ export namespace MCP {
       try {
         await withTimeout(client.connect(transport), mcpConfig.timeout ?? DEFAULT_TIMEOUT)
         // If we get here, we're already authenticated.
-        await transport.close?.().catch(() => {})
+        await transport.close?.().catch((e) => {
+          log.debug("failed to close transport after successful auth", { mcpName, error: toErrorMessage(e) })
+        })
         await closeIfPossible(client, mcpName, "startAuth authenticated")
-        await McpAuth.clearOAuthState(mcpName).catch(() => {})
+        await McpAuth.clearOAuthState(mcpName).catch((e) => {
+          log.debug("failed to clear OAuth state after successful auth", { mcpName, error: toErrorMessage(e) })
+        })
         return { authorizationUrl: "", oauthState }
       } catch (error) {
         if (!error) {
@@ -1345,8 +1357,12 @@ export namespace MCP {
           return { authorizationUrl: capturedUrl.toString(), oauthState }
         }
         // Clear stale OAuth state so retry starts fresh
-        await McpAuth.clearOAuthState(mcpName).catch(() => {})
-        await transport.close?.().catch(() => {})
+        await McpAuth.clearOAuthState(mcpName).catch((e) => {
+          log.debug("failed to clear stale OAuth state", { mcpName, error: toErrorMessage(e) })
+        })
+        await transport.close?.().catch((e) => {
+          log.debug("failed to close transport during error recovery", { mcpName, error: toErrorMessage(e) })
+        })
         await closeIfPossible(client, mcpName, "startAuth error recovery")
         // Surface an actionable message when dynamic client registration was
         // rejected with a non-JSON body (e.g. Figma returns HTTP 403
@@ -1486,7 +1502,9 @@ export namespace MCP {
         pendingOAuthTransports.delete(key)
       }
       explicitOAuthTransports.delete(transport)
-      await transport.close?.().catch(() => {})
+      await transport.close?.().catch((e) => {
+        log.debug("failed to close transport after finishAuth", { mcpName, error: toErrorMessage(e) })
+      })
       await stopOAuthCallbackIfIdle("finishAuth completed")
     }
   }

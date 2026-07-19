@@ -872,7 +872,7 @@ export namespace Provider {
         }
         delete options["chunkTimeout"]
 
-        options["fetch"] = async (input: string | Request | URL, init?: any) => {
+        options["fetch"] = async (input: string | Request | URL, init?: RequestInit) => {
           // Preserve custom fetch if it exists, wrap it with timeout logic
           const fetchFn = customFetch ?? fetch
           // Shallow copy to avoid mutating caller's init object
