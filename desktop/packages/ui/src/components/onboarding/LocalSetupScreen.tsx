@@ -6,6 +6,7 @@ import { Icon } from "@/components/icon/Icon"
 import { updateDesktopSettings } from "@/lib/persistence"
 import { copyTextToClipboard } from "@/lib/clipboard"
 import { restartDesktopApp } from "@/lib/desktop"
+import { openExternalUrl } from "@/lib/url"
 import { API_ENDPOINTS, HTTP_DEFAULTS } from "@/lib/http"
 import { useI18n } from "@/lib/i18n"
 import type { OnboardingPlatform } from "./types"
@@ -248,6 +249,10 @@ export function LocalSetupScreen({ onBack, onCliAvailable }: LocalSetupScreenPro
     }
   }, [platform])
 
+  const handleOpenDocs = React.useCallback(() => {
+    void openExternalUrl(getInstallDocsUrl(platform))
+  }, [platform])
+
   const handleCheckAndContinue = React.useCallback(async () => {
     setIsChecking(true)
     setCheckError(null)
@@ -266,7 +271,6 @@ export function LocalSetupScreen({ onBack, onCliAvailable }: LocalSetupScreenPro
     }
   }, [checkCliAvailability, onCliAvailable, t])
 
-  const docsUrl = getInstallDocsUrl(platform)
   const binaryPlaceholder = getBinaryPathPlaceholder(platform)
 
   return (
@@ -323,15 +327,23 @@ export function LocalSetupScreen({ onBack, onCliAvailable }: LocalSetupScreenPro
           </div>
         </div>
 
-        <a
-          href={docsUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="typography-ui-label text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1 justify-center"
-        >
-          {t("onboarding.localSetup.docs.default")}
-          <Icon name="external-link" className="h-3 w-3" />
-        </a>
+        <div className="flex items-center justify-center gap-4">
+          <button
+            type="button"
+            onClick={handleOpenDocs}
+            className="typography-ui-label text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1 justify-center"
+          >
+            {t("onboarding.localSetup.docs.default")}
+            <Icon name="external-link" className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="typography-ui-label text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {t("onboarding.localSetup.actions.copyCommand")}
+          </button>
+        </div>
 
         {checkError && (
           <div className="mx-auto max-w-md rounded-lg border border-destructive/50 bg-destructive/10 p-3 typography-ui-label text-destructive">

@@ -624,6 +624,56 @@ jobs:
           fi
           gh release edit "$TAG" --draft=false
 
+  # Generate winget Desktop manifests from published NSIS installers and attach
+  # them to the desktop-v* release for microsoft/winget-pkgs submission.
+  winget-manifests:
+    needs: [create-release, finalize-release]
+    if: >-
+      always() &&
+      github.event.inputs.dry_run != 'true' &&
+      needs.finalize-release.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "24"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Generate Desktop winget manifests
+        env:
+          VERSION: ${{ needs.create-release.outputs.version }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          pnpm exec tsx tools/winget/generate-manifests.ts \
+            --version "$VERSION" \
+            --package desktop \
+            --tag "$TAG" \
+            --out "$RUNNER_TEMP/winget"
+          (cd "$RUNNER_TEMP/winget" && zip -r "$RUNNER_TEMP/winget-desktop-manifests-${TAG}.zip" manifests)
+          echo "WINGET_ZIP=$RUNNER_TEMP/winget-desktop-manifests-${TAG}.zip" >> "$GITHUB_ENV"
+
+      - name: Upload winget manifests to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" "$WINGET_ZIP" --clobber
+
+      - name: Upload winget manifests artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: winget-desktop-manifests
+          path: ${{ env.WINGET_ZIP }}
+          if-no-files-found: error
+          retention-days: 30
+
   update-homebrew-tap:
     needs: [create-release, finalize-release]
     if: >-

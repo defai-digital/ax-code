@@ -42,6 +42,7 @@
     "build:native:debug": "tsx script/build-native.ts --debug",
     "publish:github": "tsx script/publish-github-release.ts",
     "sign:release": "tsx script/sign-release-assets.ts",
+    "winget:generate": "tsx tools/winget/generate-manifests.ts",
     "prepare": "husky",
     "postinstall": "node desktop/scripts/fix-node-pty-permissions.mjs",
     "test:scripts": "vitest run",

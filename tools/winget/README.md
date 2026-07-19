@@ -27,11 +27,23 @@ Publisher: **DEFAI Private Limited** (matches Authenticode `publisherName`).
 From the monorepo root, after a GitHub release exists:
 
 ```bash
-pnpm exec tsx tools/winget/generate-manifests.ts --version 7.1.0 --out .tmp/winget
+# Both packages (default) — needs both CLI v* and Desktop desktop-v* assets on the same tag/version number
+pnpm run winget:generate -- --version 7.1.0 --out .tmp/winget
+
+# CLI only (matches CLI release workflow assets)
+pnpm run winget:generate -- --version 7.1.0 --package cli --out .tmp/winget
+
+# Desktop only (uses desktop-v* tag by default)
+pnpm run winget:generate -- --version 1.3.0 --package desktop --out .tmp/winget
 ```
 
 This downloads SHA-256 hashes for the Windows release assets and writes versioned
 manifest folders ready for a PR against `microsoft/winget-pkgs`.
+
+Stable release workflows also attach pre-built zips:
+
+- CLI tag `v*`: `winget-cli-manifests-v<ver>.zip`
+- Desktop tag `desktop-v*`: `winget-desktop-manifests-desktop-v<ver>.zip`
 
 ### Validate locally (Windows)
 

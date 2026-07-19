@@ -94,6 +94,47 @@ Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**.
 
 One-line remote execution is a convenience path, not the only path. Keep an inspectable (and, on Windows, minisign-verified) installer flow in the docs, use pinned versions in CI, and document platform installers only with install-matrix coverage that verifies `ax-code --version` and verifies `ax-code doctor` reports the expected runtime mode for that platform.
 
+## Enterprise and unattended installs
+
+### Windows Desktop (NSIS)
+
+```powershell
+# Silent install (no UI). /D= must be last when used.
+.\AX-Code-<version>-win-x64.exe /S
+.\AX-Code-<version>-win-x64.exe /S /D=C:\Program Files\AX Code
+```
+
+- Confirm Authenticode publisher **DEFAI Private Limited** before deploying broadly.
+- Disable in-app auto-update on managed fleets with `AX_CODE_DESKTOP_DISABLE_AUTO_UPDATE=1`.
+- Uninstall via **Settings → Apps** or the Start Menu uninstall entry.
+- MSI/MSIX is not published yet; use NSIS silent install or the portable ZIP for offline/air-gapped hosts.
+
+### Windows CLI (user-local, no admin)
+
+```powershell
+# Pin version in CI/images
+$env:AX_CODE_VERSION = "7.1.0"
+irm https://github.com/defai-digital/ax-code/releases/download/v$env:AX_CODE_VERSION/install.ps1 -OutFile install.ps1
+# Optional: verify install.ps1.minisig first (see SECURITY.md)
+.\install.ps1 -Version $env:AX_CODE_VERSION -NoModifyPath
+# Then add %USERPROFILE%\.ax-code\bin to the machine/user PATH via your MDM.
+```
+
+### macOS (Homebrew / MDM)
+
+Prefer the Homebrew formula and cask on managed Macs so updates track the taps:
+
+```bash
+brew install defai-digital/ax-code/ax-code
+brew install --cask defai-digital/ax-code-desktop/ax-code-desktop
+```
+
+For MDM-packaged DMG installs, use the notarized `AX-Code-*-mac-arm64.dmg` from GitHub Releases and verify the detached `.minisig` when policy requires supply-chain checks.
+
+### Winget (after community packages are published)
+
+Stable CLI and Desktop releases attach generated winget manifest zips as release assets (`winget-cli-manifests-*.zip`, `winget-desktop-manifests-*.zip`). Maintainers submit those to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs). Until packages appear in the community repo, install from GitHub Releases as above.
+
 ## Updating
 
 For supported packaged channels:

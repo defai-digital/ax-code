@@ -453,6 +453,52 @@ jobs:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: bash .github/scripts/update-homebrew.sh
 
+  # Generate winget CLI manifests from published Windows ZIP assets and attach
+  # them to the GitHub release for maintainers submitting to winget-pkgs.
+  winget-manifests:
+    needs: publish
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Generate CLI winget manifests
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          pnpm exec tsx tools/winget/generate-manifests.ts \
+            --version "$VERSION" \
+            --package cli \
+            --tag "v${VERSION}" \
+            --out "$RUNNER_TEMP/winget"
+          (cd "$RUNNER_TEMP/winget" && zip -r "$RUNNER_TEMP/winget-cli-manifests-v${VERSION}.zip" manifests)
+          echo "WINGET_ZIP=$RUNNER_TEMP/winget-cli-manifests-v${VERSION}.zip" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Upload winget manifests to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload "v${VERSION}" "$WINGET_ZIP" --clobber
+
+      - name: Upload winget manifests artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: winget-cli-manifests
+          path: ${{ env.WINGET_ZIP }}
+          if-no-files-found: error
+          retention-days: 30
+
   # End-to-end install verification for stable releases only. Homebrew smoke
   # polls for formula convergence; Windows smoke exercises install.ps1 minisign
   # bootstrap (no preinstalled minisign on PATH). Continue when the Homebrew tap

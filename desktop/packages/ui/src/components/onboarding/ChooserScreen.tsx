@@ -6,6 +6,7 @@ import { Icon } from "@/components/icon/Icon"
 import { updateDesktopSettings } from "@/lib/persistence"
 import { copyTextToClipboard } from "@/lib/clipboard"
 import { restartDesktopApp } from "@/lib/desktop"
+import { openExternalUrl } from "@/lib/url"
 import { API_ENDPOINTS, HTTP_DEFAULTS } from "@/lib/http"
 import { desktopHostsGet, desktopHostsSet } from "@/lib/desktopHosts"
 import { useI18n } from "@/lib/i18n"
@@ -277,7 +278,10 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
     }
   }, [platform])
 
-  const docsUrl = getInstallDocsUrl(platform)
+  const handleOpenDocs = React.useCallback(() => {
+    void openExternalUrl(getInstallDocsUrl(platform))
+  }, [platform])
+
   const binaryPlaceholder = getBinaryPathPlaceholder(platform)
 
   return (
@@ -331,26 +335,34 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
             )}
           </div>
 
-          <div className="app-region-no-drag flex items-center justify-between">
-            <a
-              href={docsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+          <div className="app-region-no-drag flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={handleOpenDocs}
               className="typography-micro text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
             >
               {t("onboarding.localSetup.docs.default")}
               <Icon name="external-link" className="h-3 w-3" />
-            </a>
-            <button
-              type="button"
-              onClick={handleManualCheck}
-              disabled={isManualChecking}
-              className="typography-micro text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-            >
-              {isManualChecking
-                ? t("onboarding.localSetup.actions.checking")
-                : t("onboarding.localSetup.actions.checkNow")}
             </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="typography-micro text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {t("onboarding.localSetup.actions.copyCommand")}
+              </button>
+              <button
+                type="button"
+                onClick={handleManualCheck}
+                disabled={isManualChecking}
+                className="typography-micro text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              >
+                {isManualChecking
+                  ? t("onboarding.localSetup.actions.checking")
+                  : t("onboarding.localSetup.actions.checkNow")}
+              </button>
+            </div>
           </div>
 
           <div

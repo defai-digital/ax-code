@@ -2385,6 +2385,7 @@ export const dict = {
   "onboarding.localSetup.actions.checking": "Checking…",
   "onboarding.localSetup.actions.checkAndContinue": "I've completed installation, check and continue",
   "onboarding.localSetup.actions.checkNow": "Check now",
+  "onboarding.localSetup.actions.copyCommand": "Copy install command",
   "onboarding.localSetup.helper.checkAndContinue":
     "Click to check if AX Code CLI is available. If successful, you'll automatically enter the main screen.",
   "onboarding.localSetup.status.watching": "Waiting for AX Code",
