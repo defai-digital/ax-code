@@ -4,6 +4,13 @@ import type { OnboardingPlatform } from "./types"
 export const AX_CODE_INSTALL_DOCS_URL =
   "https://github.com/defai-digital/ax-code/blob/main/docs/getting-started/install-runtime.md"
 
+const INSTALL_DOCS_URLS: Record<OnboardingPlatform, string> = {
+  macos: AX_CODE_INSTALL_DOCS_URL,
+  linux: AX_CODE_INSTALL_DOCS_URL,
+  windows: AX_CODE_INSTALL_DOCS_URL,
+  unknown: AX_CODE_INSTALL_DOCS_URL,
+}
+
 export const MACOS_INSTALL_COMMAND =
   "brew tap defai-digital/ax-code && brew install defai-digital/ax-code/ax-code"
 
@@ -89,6 +96,6 @@ export function getBinaryPathPlaceholder(platform: OnboardingPlatform): string {
   }
 }
 
-export function getInstallDocsUrl(_platform: OnboardingPlatform): string {
-  return AX_CODE_INSTALL_DOCS_URL
+export function getInstallDocsUrl(platform: OnboardingPlatform): string {
+  return INSTALL_DOCS_URLS[platform]
 }
