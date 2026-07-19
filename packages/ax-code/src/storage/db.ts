@@ -133,6 +133,15 @@ export namespace Database {
         count: entries.length,
         mode: typeof AX_CODE_MIGRATIONS !== "undefined" ? "bundled" : "dev",
       })
+      if (Flag.AX_CODE_SKIP_MIGRATIONS) {
+        // Silent skip left developers/ops unaware their schema was frozen
+        // (BP-12). Surface prominently whenever this escape hatch is used.
+        log.warn(
+          "AX_CODE_SKIP_MIGRATIONS is set — schema migrations are being skipped. " +
+            "This is unsafe for production data and should only be used for deliberate recovery.",
+          { count: entries.length },
+        )
+      }
       const journal = Flag.AX_CODE_SKIP_MIGRATIONS ? entries.map((item) => ({ ...item, sql: "select 1;" })) : entries
       migrate(db, journal)
     }

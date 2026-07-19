@@ -619,6 +619,10 @@ export namespace MessageV2 {
   // option inputs the conversion depends on. Callers must not enable `cache`
   // when something may mutate messages in place (e.g. a plugin implementing
   // experimental.chat.messages.transform).
+  //
+  // Cap the per-message inner map (PERF-06): multi-model fallback sessions
+  // can accumulate provider variants; keep only the most recent few.
+  const MODEL_MESSAGE_CACHE_MAX_KEYS = 3
   const modelMessageCache = new WeakMap<WithParts, Map<string, ModelMessage[]>>()
 
   function conversionStable(msg: WithParts) {
@@ -628,6 +632,23 @@ export namespace MessageV2 {
     return !msg.parts.some(
       (part) => part.type === "tool" && (part.state.status === "pending" || part.state.status === "running"),
     )
+  }
+
+  function setModelMessageCache(msg: WithParts, cacheKey: string, converted: ModelMessage[]) {
+    let byKey = modelMessageCache.get(msg)
+    if (!byKey) {
+      byKey = new Map()
+      modelMessageCache.set(msg, byKey)
+    }
+    if (byKey.has(cacheKey)) {
+      byKey.delete(cacheKey)
+    }
+    byKey.set(cacheKey, converted)
+    while (byKey.size > MODEL_MESSAGE_CACHE_MAX_KEYS) {
+      const oldest = byKey.keys().next().value
+      if (oldest === undefined) break
+      byKey.delete(oldest)
+    }
   }
 
   export async function toModelMessages(
@@ -667,12 +688,7 @@ export namespace MessageV2 {
       }
       const converted = await convertMessage(msg, model, options, supportsMediaInToolResults)
       if (options?.cache && conversionStable(msg)) {
-        let byKey = modelMessageCache.get(msg)
-        if (!byKey) {
-          byKey = new Map()
-          modelMessageCache.set(msg, byKey)
-        }
-        byKey.set(cacheKey, converted)
+        setModelMessageCache(msg, cacheKey, converted)
       }
       result.push(...converted)
     }

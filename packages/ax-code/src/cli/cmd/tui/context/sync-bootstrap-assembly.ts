@@ -25,6 +25,7 @@ import {
 } from "./sync-bootstrap-plan"
 import { applyProviderBootstrapState } from "./sync-bootstrap-store"
 import type { BootstrapResponse, BootstrapTask } from "./sync-bootstrap-task"
+import { pruneOrphanSessionRecords } from "./sync-session-store"
 
 export interface SyncBootstrapAssemblyStoreState {
   provider: Provider[]
@@ -87,7 +88,16 @@ export function createStoreBackedBootstrapTasks<TStore extends SyncBootstrapAsse
     continueFromArgs: input.continueFromArgs,
     sessionListPromise: input.requests.sessionListPromise,
     getExistingSessions: () => input.store.session,
-    applySessions: (sessions) => setStore("session", reconcile(sessions)),
+    applySessions: (sessions) => {
+      setStore("session", reconcile(sessions))
+      // Drop projection for sessions no longer in the list so long-running
+      // TUI processes do not retain unbounded message/part maps (STAB-03).
+      setStore(
+        produce((draft) => {
+          pruneOrphanSessionRecords(draft as any)
+        }),
+      )
+    },
   })
 
   return {

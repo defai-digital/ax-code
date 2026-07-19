@@ -5,6 +5,7 @@ import {
   applySessionSyncEnrichment,
   applySessionSyncSnapshot,
   createSessionSyncSnapshot,
+  pruneOrphanSessionRecords,
 } from "../../../src/cli/cmd/tui/context/sync-session-store"
 
 describe("tui sync session store", () => {
@@ -485,5 +486,43 @@ describe("tui sync session store", () => {
       message: {},
       part: {},
     })
+  })
+
+  test("prunes session-keyed projection for sessions no longer in the list", () => {
+    const store = {
+      session: [{ id: "ses_keep" }],
+      permission: { ses_keep: [{ id: "p1" }], ses_gone: [{ id: "p2" }] },
+      question: { ses_gone: [{ id: "q1" }] },
+      session_status: { ses_keep: "idle", ses_gone: "busy" },
+      session_error: { ses_gone: { message: "stale" } },
+      session_risk: { ses_gone: { quality: null } },
+      session_goal: { ses_gone: { objective: "old" } },
+      session_diff: { ses_gone: [{ path: "x.ts" }] },
+      todo: { ses_keep: [{ id: "t1" }], ses_gone: [{ id: "t2" }] },
+      message: {
+        ses_keep: [{ id: "msg_keep" }],
+        ses_gone: [{ id: "msg_gone" }],
+      },
+      part: {
+        msg_keep: [{ id: "part_keep" }],
+        msg_gone: [{ id: "part_gone" }],
+      },
+    }
+
+    pruneOrphanSessionRecords(store)
+
+    expect(store.permission.ses_gone).toBeUndefined()
+    expect(store.question.ses_gone).toBeUndefined()
+    expect(store.session_status.ses_gone).toBeUndefined()
+    expect(store.session_error.ses_gone).toBeUndefined()
+    expect(store.session_risk.ses_gone).toBeUndefined()
+    expect(store.session_goal.ses_gone).toBeUndefined()
+    expect(store.session_diff.ses_gone).toBeUndefined()
+    expect(store.todo.ses_gone).toBeUndefined()
+    expect(store.message.ses_gone).toBeUndefined()
+    expect(store.part.msg_gone).toBeUndefined()
+    expect(store.permission.ses_keep).toEqual([{ id: "p1" }])
+    expect(store.message.ses_keep).toEqual([{ id: "msg_keep" }])
+    expect(store.part.msg_keep).toEqual([{ id: "part_keep" }])
   })
 })

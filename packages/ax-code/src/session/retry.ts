@@ -125,9 +125,45 @@ export namespace SessionRetry {
     "subscription",
   ]
 
+  // Network-level failures that rarely recover within a single prompt step.
+  // After NETWORK_CIRCUIT_THRESHOLD consecutive hits we open the circuit for
+  // NETWORK_CIRCUIT_COOLDOWN_MS so the session fails fast instead of burning
+  // the full retry budget on a dead path (STAB-14).
+  const NETWORK_FAILURE_PATTERNS = [
+    "enotfound",
+    "econnrefused",
+    "econnreset",
+    "etimedout",
+    "eai_again",
+    "network error",
+    "fetch failed",
+    "socket hang up",
+    "connection reset",
+    "getaddrinfo",
+  ]
+  const NETWORK_CIRCUIT_THRESHOLD = 3
+  const NETWORK_CIRCUIT_COOLDOWN_MS = 30_000
+  let networkFailureStreak = 0
+  let networkCircuitOpenUntil = 0
+
+  function isNetworkFailure(message: string, responseBody?: string): boolean {
+    const lower = `${message}\n${responseBody ?? ""}`.toLowerCase()
+    return NETWORK_FAILURE_PATTERNS.some((p) => lower.includes(p))
+  }
+
   function isPermanentError(message: string, responseBody?: string): boolean {
     const lower = `${message}\n${responseBody ?? ""}`.toLowerCase()
     return NON_RETRYABLE_PATTERNS.some((p) => lower.includes(p))
+  }
+
+  /** Test helper — reset circuit state between unit tests. */
+  export function resetNetworkCircuit() {
+    networkFailureStreak = 0
+    networkCircuitOpenUntil = 0
+  }
+
+  export function networkCircuitOpen(now = Date.now()): boolean {
+    return now < networkCircuitOpenUntil
   }
 
   export function parseRetryMessageJson(message: unknown): Record<string, unknown> | undefined {
@@ -140,12 +176,28 @@ export namespace SessionRetry {
     if (MessageV2.APIError.isInstance(error)) {
       const message = typeof error.data?.message === "string" ? error.data.message : "Unknown API error"
       if (!error.data?.isRetryable) return undefined
-      if (isAlibabaTokenPlanShortWindowQuota(error)) return message
+      if (isAlibabaTokenPlanShortWindowQuota(error)) {
+        networkFailureStreak = 0
+        return message
+      }
       // Billing / quota exhaustion — retrying won't change the account
       // balance. Surface the error immediately instead of burning 60s
       // of exponential backoff. This overrides the AI SDK's blanket
       // `isRetryable: true` on all 429 responses.
       if (isPermanentError(message, error.data.responseBody)) return undefined
+
+      if (isNetworkFailure(message, error.data.responseBody)) {
+        if (networkCircuitOpen()) return undefined
+        networkFailureStreak += 1
+        if (networkFailureStreak >= NETWORK_CIRCUIT_THRESHOLD) {
+          networkCircuitOpenUntil = Date.now() + NETWORK_CIRCUIT_COOLDOWN_MS
+          networkFailureStreak = 0
+          return undefined
+        }
+      } else {
+        networkFailureStreak = 0
+      }
+
       if (error.data.responseBody?.includes("FreeUsageLimitError"))
         return `Free usage exceeded, add credits ${GITHUB_REPO_URL}`
       return message.includes("Overloaded") ? "Provider is overloaded" : message
@@ -157,13 +209,16 @@ export namespace SessionRetry {
     const code = typeof json.code === "string" ? json.code : ""
     const nestedError = isRecord(json.error) ? json.error : undefined
     if (json.type === "error" && nestedError?.type === "too_many_requests") {
+      networkFailureStreak = 0
       return "Too Many Requests"
     }
     if (code.includes("exhausted") || code.includes("unavailable")) {
+      networkFailureStreak = 0
       return "Provider is overloaded"
     }
     const nestedCode = nestedError && typeof nestedError.code === "string" ? nestedError.code : ""
     if (json.type === "error" && nestedCode.includes("rate_limit")) {
+      networkFailureStreak = 0
       return "Rate Limited"
     }
     return undefined

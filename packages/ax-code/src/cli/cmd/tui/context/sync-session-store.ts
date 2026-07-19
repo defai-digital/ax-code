@@ -186,3 +186,53 @@ export function applySessionLeavePrune<TMessage extends { id: string }, TPart, T
   delete store.todo[sessionID]
   delete store.message[sessionID]
 }
+
+/**
+ * Remove session-keyed projection for IDs that are no longer in the session
+ * list (bootstrap reconcile / deleted sessions). Prevents SyncStore Records
+ * from growing unboundedly across long TUI runs that open many conversations
+ * (STAB-03 / UI-01).
+ *
+ * Bags are optional so partial store shapes (e.g. bootstrap assembly typing)
+ * are safe; missing fields are skipped.
+ */
+export function pruneOrphanSessionRecords(store: {
+  session: Array<{ id: string }>
+  permission?: Record<string, unknown>
+  question?: Record<string, unknown>
+  session_status?: Record<string, unknown>
+  session_error?: Record<string, unknown>
+  session_risk?: Record<string, unknown>
+  session_goal?: Record<string, unknown>
+  session_diff?: Record<string, unknown>
+  todo?: Record<string, unknown>
+  message?: Record<string, Array<{ id: string }>>
+  part?: Record<string, unknown>
+}) {
+  const live = new Set(store.session.map((session) => session.id))
+  const bags: Array<Record<string, unknown> | undefined> = [
+    store.permission,
+    store.question,
+    store.session_status,
+    store.session_error,
+    store.session_risk,
+    store.session_goal,
+    store.session_diff,
+    store.todo,
+    store.message,
+  ]
+
+  for (const bag of bags) {
+    if (!bag) continue
+    for (const id of Object.keys(bag)) {
+      if (live.has(id)) continue
+      if (bag === store.message && store.part) {
+        const removedMessages = store.message?.[id] ?? []
+        for (const message of removedMessages) {
+          delete store.part[message.id]
+        }
+      }
+      delete bag[id]
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { beforeEach, describe, expect, test } from "vitest"
 import type { NamedError } from "@ax-code/util/error"
 import { APICallError } from "ai"
 import { SessionRetry } from "../../src/session/retry"
@@ -144,6 +144,10 @@ describe("session.retry.delay", () => {
 })
 
 describe("session.retry.retryable", () => {
+  beforeEach(() => {
+    SessionRetry.resetNetworkCircuit()
+  })
+
   test("parseRetryMessageJson decodes only JSON records", () => {
     expect(SessionRetry.parseRetryMessageJson(JSON.stringify({ code: "resource_exhausted" }))).toEqual({
       code: "resource_exhausted",
@@ -249,9 +253,29 @@ describe("session.retry.retryable", () => {
 
     expect(SessionRetry.retryable(error)).toBeUndefined()
   })
+
+  test("opens network circuit after consecutive network failures", () => {
+    const mk = () =>
+      new MessageV2.APIError({
+        message: "getaddrinfo ENOTFOUND api.example.com",
+        isRetryable: true,
+      }).toObject() as MessageV2.APIError
+
+    expect(SessionRetry.retryable(mk())).toBe("getaddrinfo ENOTFOUND api.example.com")
+    expect(SessionRetry.retryable(mk())).toBe("getaddrinfo ENOTFOUND api.example.com")
+    // Third consecutive network failure opens the circuit.
+    expect(SessionRetry.retryable(mk())).toBeUndefined()
+    expect(SessionRetry.networkCircuitOpen()).toBe(true)
+    // While open, further network errors fail fast.
+    expect(SessionRetry.retryable(mk())).toBeUndefined()
+  })
 })
 
 describe("session.message-v2.fromError", () => {
+  beforeEach(() => {
+    SessionRetry.resetNetworkCircuit()
+  })
+
   test.concurrent(
     "converts ECONNRESET socket errors to retryable APIError",
     async () => {

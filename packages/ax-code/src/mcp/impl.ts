@@ -307,13 +307,21 @@ export namespace MCP {
     return isRecord(entry) && "type" in entry
   }
 
+  type McpState = {
+    status: Record<string, Status>
+    clients: Record<string, MCPClient>
+    /** Set true in the dispose hook so late connect completions drop clients. */
+    disposed: boolean
+  }
+
   const state = Instance.state(
-    async () => {
+    async (): Promise<McpState> => {
       const cfg = await Config.get()
       const config = cfg.mcp ?? {}
       const entries = await Config.mcpEntries()
       const clients: Record<string, MCPClient> = {}
       const status: Record<string, Status> = {}
+      const next: McpState = { status, clients, disposed: false }
 
       await Promise.all(
         Object.entries(config).map(async ([key, mcp]) => {
@@ -349,6 +357,15 @@ export namespace MCP {
           })
           if (!result) return
 
+          // Instance may have disposed while we were connecting — drop the
+          // client instead of registering it on a torn-down instance (STAB-05).
+          if (next.disposed) {
+            if (result.mcpClient) {
+              await closeIfPossible(result.mcpClient, key, "discard after instance disposal")
+            }
+            return
+          }
+
           status[key] = result.status
 
           if (result.mcpClient) {
@@ -357,14 +374,14 @@ export namespace MCP {
           }
         }),
       )
-      return {
-        status,
-        clients,
-      }
+      return next
     },
-    async (state) => {
+    async (mcpState) => {
+      mcpState.disposed = true
       await Promise.all(
-        Object.entries(state.clients).map(([mcpName, client]) => closeIfPossible(client, mcpName, "instance shutdown")),
+        Object.entries(mcpState.clients).map(([mcpName, client]) =>
+          closeIfPossible(client, mcpName, "instance shutdown"),
+        ),
       )
       toolsCacheUnsub?.()
       toolsCacheUnsub = undefined
@@ -859,15 +876,25 @@ export namespace MCP {
     }
 
     const s = await state()
+    if (s.disposed) return
     if (s.status[name]?.status === "connected" && s.clients[name]) return
 
     const result = await create(name, { ...mcp, enabled: true }).catch(async (error) => {
+      if (s.disposed) throw error
       const existingClient = s.clients[name]
       delete s.clients[name]
       await closeIfPossible(existingClient, name, "reconnect creation failed")
       s.status[name] = { status: "failed", error: NamedError.message(error) }
       throw error
     })
+
+    // Dispose may have raced with create(); never register on a dead instance.
+    if (s.disposed) {
+      if (result?.mcpClient) {
+        await closeIfPossible(result.mcpClient, name, "discard after instance disposal")
+      }
+      return
+    }
 
     if (!result) {
       const existingClient = s.clients[name]

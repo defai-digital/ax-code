@@ -35,6 +35,9 @@ interface MessageQueueActions {
 
 type MessageQueueStore = MessageQueueState & MessageQueueActions
 
+/** Cap per-session queue length to bound localStorage / memory growth (STAB-12). */
+export const MESSAGE_QUEUE_MAX_PER_SESSION = 50
+
 export const useMessageQueueStore = create<MessageQueueStore>()(
   devtools(
     persist(
@@ -54,10 +57,16 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
 
           set((state) => {
             const currentQueue = state.queuedMessages[sessionId] ?? []
+            const nextQueue = [...currentQueue, queuedMessage]
+            // Drop oldest when over cap so a runaway queue cannot bloat storage.
+            const capped =
+              nextQueue.length > MESSAGE_QUEUE_MAX_PER_SESSION
+                ? nextQueue.slice(nextQueue.length - MESSAGE_QUEUE_MAX_PER_SESSION)
+                : nextQueue
             return {
               queuedMessages: {
                 ...state.queuedMessages,
-                [sessionId]: [...currentQueue, queuedMessage],
+                [sessionId]: capped,
               },
             }
           })

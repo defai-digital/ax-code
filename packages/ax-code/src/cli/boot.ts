@@ -134,12 +134,15 @@ export function clearForcedExitTimer() {
   forcedExitTimer = undefined
 }
 
+/** Grace period for WAL checkpoint / log flush before forced process exit (STAB-13). */
+export const FORCED_EXIT_GRACE_MS = 2_000
+
 export function scheduleForcedExit(exit: () => void = () => process.exit()) {
   clearForcedExitTimer()
   forcedExitTimer = setTimeout(() => {
     forcedExitTimer = undefined
     exit()
-  }, 500)
+  }, FORCED_EXIT_GRACE_MS)
   forcedExitTimer.unref?.()
   return forcedExitTimer
 }
