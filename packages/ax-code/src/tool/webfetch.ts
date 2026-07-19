@@ -98,6 +98,7 @@ export const WebFetchTool = Tool.define("webfetch", {
       // redirects internally without any hook to inspect the target.
       const MAX_REDIRECTS = 10
       let currentUrl = params.url
+      const approvedOrigins = new Set([parsedUrl.origin])
       for (let hop = 0; hop < MAX_REDIRECTS; hop++) {
         const attemptHeaders = hop === 0 ? headers : { ...headers }
         let res = await pinnedFetch(currentUrl, { signal, headers: attemptHeaders, redirect: "manual" })
@@ -122,8 +123,26 @@ export const WebFetchTool = Tool.define("webfetch", {
           if (!location) {
             throw new Error(`Redirect response missing Location header (status ${res.status})`)
           }
-          const next = new URL(location, currentUrl).toString()
+          const nextUrl = new URL(location, currentUrl)
+          if (nextUrl.protocol !== "http:" && nextUrl.protocol !== "https:") {
+            throw new Error(`Redirect target must use http:// or https:// (${nextUrl.protocol})`)
+          }
+          const next = nextUrl.toString()
           await assertPublicUrl(next)
+          if (!approvedOrigins.has(nextUrl.origin)) {
+            await ctx.ask({
+              permission: "webfetch",
+              patterns: [next],
+              always: originPermissionPatterns(nextUrl),
+              metadata: {
+                url: next,
+                redirectedFrom: currentUrl,
+                format: params.format,
+                timeout: params.timeout,
+              },
+            })
+            approvedOrigins.add(nextUrl.origin)
+          }
           currentUrl = next
           continue
         }

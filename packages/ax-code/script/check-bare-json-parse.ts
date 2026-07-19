@@ -53,7 +53,6 @@ export namespace JsonParseGuard {
     "src/server/ipc-transport.ts",
     "src/session/processor-impl.ts",
     "src/session/prompt-command-workflow.ts",
-    "src/skill/index.ts",
     "src/tool/visual/compare.ts",
     "src/tool/visual/critique.ts",
   ])

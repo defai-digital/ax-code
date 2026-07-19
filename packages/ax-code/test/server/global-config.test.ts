@@ -1,6 +1,6 @@
 import fs from "fs/promises"
 import path from "path"
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { Config } from "../../src/config/config"
 import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
@@ -11,6 +11,7 @@ import { tmpdir } from "../fixture/fixture"
 afterEach(async () => {
   await Instance.disposeAll()
   Config.global.reset()
+  vi.unstubAllEnvs()
 })
 
 describe("/global/config redaction", () => {
@@ -201,6 +202,10 @@ describe("/global/config redaction", () => {
   })
 
   test("project config patch ignores redacted sentinels", async () => {
+    // This test verifies preservation of existing project-level credentials,
+    // which are available only after the checkout has been explicitly trusted.
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+
     await using tmp = await tmpdir({ git: true })
     const configPath = path.join(tmp.path, "ax-code.json")
     await Filesystem.write(

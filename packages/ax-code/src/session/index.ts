@@ -1071,10 +1071,14 @@ export namespace Session {
       const anthropicMeta = (input.metadata as Record<string, unknown>)?.["anthropic"] as
         | Record<string, number>
         | undefined
+      const veniceMeta = (input.metadata as Record<string, unknown> | undefined)?.["venice"]
+      const veniceUsage =
+        veniceMeta && typeof veniceMeta === "object" && "usage" in veniceMeta
+          ? (veniceMeta.usage as Record<string, unknown> | undefined)
+          : undefined
       const cacheWriteInputTokens = safe(
         (anthropicMeta?.["cacheCreationInputTokens"] ??
-          // @ts-expect-error
-          input.metadata?.["venice"]?.["usage"]?.["cacheCreationInputTokens"] ??
+          veniceUsage?.["cacheCreationInputTokens"] ??
           inputTokenDetails?.cacheWrite ??
           0) as number,
       )

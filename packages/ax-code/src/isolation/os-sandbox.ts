@@ -1,8 +1,8 @@
 /**
- * Opt-in OS-level isolation for bash (ADR-048 Phase 2).
+ * Best-effort OS-level isolation for bash (ADR-048 Phase 2).
  *
- * App-layer isolation remains the portable default. When `backend` is `os` or
- * `auto` and the platform supports a kernel sandbox, bash is wrapped so the
+ * App-layer isolation remains the portable fallback. The default `auto`
+ * backend wraps bash when the platform supports a kernel sandbox so the
  * child process cannot write outside the workspace or open the network
  * (when network is disabled).
  *
@@ -24,6 +24,8 @@ import { Log } from "@/util/log"
 const log = Log.create({ service: "isolation.os-sandbox" })
 
 export namespace OsSandbox {
+  const bwrapProbeResults = new Map<string, { usable: boolean; detail: string }>()
+
   export type Backend = "app" | "os" | "auto"
 
   export type Availability =
@@ -56,16 +58,13 @@ export namespace OsSandbox {
         reason: string
       }
 
-  export function resolveBackend(input: {
-    configBackend?: Backend
-    envBackend?: string
-  }): Backend {
+  export function resolveBackend(input: { configBackend?: Backend; envBackend?: string }): Backend {
     const env = input.envBackend?.trim().toLowerCase()
     if (env === "app" || env === "os" || env === "auto") return env
     if (input.configBackend === "app" || input.configBackend === "os" || input.configBackend === "auto") {
       return input.configBackend
     }
-    return "app"
+    return "auto"
   }
 
   export function probeAvailability(platform: NodeJS.Platform = process.platform): Availability {
@@ -83,6 +82,30 @@ export namespace OsSandbox {
           available: false,
           platform,
           reason: "bubblewrap (bwrap) not found; install bubblewrap for OS isolation",
+        }
+      }
+      // Merely finding the binary is insufficient: containers and hardened
+      // distributions commonly install bwrap while disabling unprivileged
+      // user namespaces. With the default `auto` backend that would turn
+      // every bash command into a runtime failure instead of falling back to
+      // the app sandbox.
+      let probe = bwrapProbeResults.get(bwrap)
+      if (!probe) {
+        const result = spawnSync(bwrap, ["--die-with-parent", "--ro-bind", "/", "/", "--", "/bin/true"], {
+          stdio: "ignore",
+          timeout: 2_000,
+        })
+        probe = {
+          usable: result.status === 0,
+          detail: result.error?.message ? `: ${result.error.message}` : "",
+        }
+        bwrapProbeResults.set(bwrap, probe)
+      }
+      if (!probe.usable) {
+        return {
+          available: false,
+          platform,
+          reason: `bubblewrap is installed but unavailable in this environment${probe.detail}`,
         }
       }
       return { available: true, platform: "linux", mechanism: "bubblewrap" }
@@ -158,9 +181,7 @@ export namespace OsSandbox {
       .join("\n  ")
 
     // Deny writes into protected subpaths even if under workspace
-    const writeDeny = protectedPaths
-      .map((p) => `(deny file-write* (subpath ${sbString(p)}))`)
-      .join("\n  ")
+    const writeDeny = protectedPaths.map((p) => `(deny file-write* (subpath ${sbString(p)}))`).join("\n  ")
 
     const networkRule = input.network
       ? "(allow network*)"
@@ -261,18 +282,31 @@ ${networkRule}
     )
     const args: string[] = [
       "--die-with-parent",
+      "--ro-bind",
+      "/",
+      "/",
       "--proc",
       "/proc",
       "--dev",
       "/dev",
       "--tmpfs",
       "/tmp",
-      "--ro-bind",
-      "/",
-      "/",
     ]
     for (const root of roots) {
       args.push("--bind", root, root)
+    }
+    // Re-mask protected paths after the writable workspace binds. Existing
+    // paths retain their contents read-only; missing paths become empty,
+    // read-only mount points so the command cannot create them later.
+    const protectedPaths = uniqueRoots((input.protectedPaths ?? []).map(canonicalPath))
+    for (const protectedPath of protectedPaths) {
+      if (fs.existsSync(protectedPath)) {
+        args.push("--ro-bind", protectedPath, protectedPath)
+      } else {
+        // An empty tmpfs masks a not-yet-created protected directory without
+        // creating that directory in the writable host bind.
+        args.push("--tmpfs", protectedPath, "--remount-ro", protectedPath)
+      }
     }
     if (!input.network) {
       args.push("--unshare-net")

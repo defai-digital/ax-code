@@ -23,9 +23,11 @@ function createServerRestartPolicy(options = {}) {
       relaunching = true
       return true
     },
-    completeRestart({ successful = false } = {}) {
-      if (successful) crashRestarts = 0
+    completeRestart() {
       relaunching = false
+    },
+    markStable() {
+      crashRestarts = 0
     },
   }
 }

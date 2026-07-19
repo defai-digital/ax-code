@@ -16,6 +16,7 @@ import { Glob } from "../util/glob"
 import { Log } from "../util/log"
 import { Discovery } from "./discovery"
 import { SkillValidate } from "./validate"
+import { parseJsonResult } from "@/util/json-value"
 
 export namespace Skill {
   const log = Log.create({ service: "skill" })
@@ -168,8 +169,15 @@ export namespace Skill {
   })
 
   export function parseBuiltinSkillEntries(input: unknown): Array<{ location: string; content: string }> {
-    const raw = typeof input === "string" ? JSON.parse(input) : input
-    return z.array(BuiltinSkillEntry).parse(raw)
+    let raw = input
+    if (typeof input === "string") {
+      const parsed = parseJsonResult(input)
+      if (!parsed.ok) throw new Error("Invalid AX_CODE_BUILTIN_SKILLS JSON", { cause: parsed.error })
+      raw = parsed.value
+    }
+    const result = z.array(BuiltinSkillEntry).safeParse(raw)
+    if (!result.success) throw result.error
+    return result.data
   }
 
   function readBuildTimeBuiltinSkills(): unknown | undefined {

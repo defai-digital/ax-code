@@ -37,7 +37,11 @@ const {
   reloadLocalRendererWindowsAfterServerRestart,
   resolveServerRestartReloadUrl,
 } = require("./server-window-reload")
-const { attachDesktopBrowserWebviewPolicy, createDesktopRendererWebPreferences } = require("./webview-policy")
+const {
+  DESKTOP_BROWSER_WEBVIEW_PARTITION,
+  attachDesktopBrowserWebviewPolicy,
+  createDesktopRendererWebPreferences,
+} = require("./webview-policy")
 const {
   isAllowedDesktopHostTargetUrl,
   isLocalDesktopSenderUrl,
@@ -91,6 +95,8 @@ let serverPort = 0
 let serverChild = null
 let isQuitting = false
 let isRelaunchingServer = false
+let serverCrashRecoveryPending = false
+let serverStabilityTimer = null
 let rendererReadyForOpenProject = false
 let externalOpenPathDrainRunning = false
 let externalOpenPathHandlerReady = false
@@ -174,7 +180,35 @@ app.on("open-file", (event, filePath) => {
 const SERVER_START_TIMEOUT_MS = 30_000
 const SERVER_STOP_TIMEOUT_MS = 5_000
 const MAX_SERVER_CRASH_RESTARTS = 5
+const SERVER_CRASH_RETRY_BASE_MS = 500
+const SERVER_STABILITY_RESET_MS = 60_000
 const serverRestartPolicy = createServerRestartPolicy({ maxRestarts: MAX_SERVER_CRASH_RESTARTS })
+
+function waitForServerRestartBackoff(attempt) {
+  return new Promise((resolve) => setTimeout(resolve, Math.min(SERVER_CRASH_RETRY_BASE_MS * 2 ** (attempt - 1), 5_000)))
+}
+
+function scheduleServerStabilityReset() {
+  if (serverStabilityTimer) clearTimeout(serverStabilityTimer)
+  serverStabilityTimer = setTimeout(() => {
+    serverStabilityTimer = null
+    serverRestartPolicy.markStable()
+  }, SERVER_STABILITY_RESET_MS)
+  serverStabilityTimer.unref?.()
+}
+
+async function showServerRecoveryFailure(error) {
+  const detail = error instanceof Error ? error.message : String(error)
+  await dialog
+    .showMessageBox({
+      type: "error",
+      title: "AX Code server stopped",
+      message: "The local AX Code server could not be restarted.",
+      detail: `${detail}\n\nQuit and reopen AX Code. If the problem continues, check the application logs.`,
+      buttons: ["OK"],
+    })
+    .catch((dialogError) => console.error("[electron] failed to show server recovery dialog:", dialogError))
+}
 
 function launchServer() {
   return new Promise((resolve, reject) => {
@@ -232,16 +266,21 @@ function launchServer() {
     const child = serverChild
     child.on("exit", (code) => {
       const wasReady = settled
+      const wasCurrent = serverChild === child
       // Only null the module variable if it still points to THIS process.
       // After crash recovery the old process's exit event may fire AFTER
       // the new process is assigned, which would incorrectly null the
       // reference to the new server.
-      if (serverChild === child) serverChild = null
+      if (wasCurrent) serverChild = null
       if (!settled) {
         settled = true
         clearTimeout(timer)
         reject(new Error(`server process exited before ready (code ${code})`))
-      } else if (wasReady && code !== 0 && !isQuitting) {
+      } else if (wasReady && wasCurrent && !isQuitting) {
+        if (serverStabilityTimer) {
+          clearTimeout(serverStabilityTimer)
+          serverStabilityTimer = null
+        }
         console.error("[electron] server process exited unexpectedly with code", code)
         restartServerAfterCrash().catch((err) => {
           console.error("[electron] failed to recover server process:", err)
@@ -252,41 +291,70 @@ function launchServer() {
 }
 
 async function restartServerAfterCrash() {
-  if (isRelaunchingServer || isQuitting) return
-  if (!serverRestartPolicy.beginRestart()) {
-    console.error(
-      "[electron] server process crashed too many times (%d), giving up on restart",
-      serverRestartPolicy.crashRestarts,
-    )
+  if (isQuitting) return
+  if (isRelaunchingServer) {
+    // A replacement can become ready and then die while the first recovery
+    // is still reloading renderer windows. Remember that exit so it is not
+    // lost behind the in-progress guard.
+    serverCrashRecoveryPending = true
     return
   }
   isRelaunchingServer = true
+  serverCrashRecoveryPending = false
   const oldServerPort = serverPort
   try {
-    serverPort = 0
-    await launchServer()
-    serverRestartPolicy.completeRestart({ successful: true })
-    const willReloadMainWindow = Boolean(
-      mainWindow &&
-        !mainWindow.isDestroyed() &&
-        resolveServerRestartReloadUrl(mainWindow.webContents.getURL(), {
+    let lastError = new Error("server process exited unexpectedly")
+    while (!isQuitting) {
+      if (!serverRestartPolicy.beginRestart()) {
+        serverCrashRecoveryPending = false
+        console.error(
+          "[electron] server process crashed too many times (%d), giving up on restart",
+          serverRestartPolicy.crashRestarts,
+        )
+        await showServerRecoveryFailure(lastError)
+        return
+      }
+      const attempt = serverRestartPolicy.crashRestarts
+      try {
+        serverPort = 0
+        await launchServer()
+        serverRestartPolicy.completeRestart()
+        scheduleServerStabilityReset()
+        const willReloadMainWindow = Boolean(
+          mainWindow &&
+            !mainWindow.isDestroyed() &&
+            resolveServerRestartReloadUrl(mainWindow.webContents.getURL(), {
+              oldPort: oldServerPort,
+              newPort: serverPort,
+            }),
+        )
+        if (willReloadMainWindow) rendererReadyForOpenProject = false
+        const result = await reloadLocalRendererWindowsAfterServerRestart(BrowserWindow.getAllWindows(), {
           oldPort: oldServerPort,
           newPort: serverPort,
-        }),
-    )
-    if (willReloadMainWindow) {
-      rendererReadyForOpenProject = false
-    }
-    const result = await reloadLocalRendererWindowsAfterServerRestart(BrowserWindow.getAllWindows(), {
-      oldPort: oldServerPort,
-      newPort: serverPort,
-    })
-    if (result.failed > 0) {
-      console.warn("[electron] failed to reload %d renderer window(s) after server restart", result.failed)
+        })
+        if (result.failed > 0) {
+          console.warn("[electron] failed to reload %d renderer window(s) after server restart", result.failed)
+        }
+        return
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
+        serverRestartPolicy.completeRestart()
+        console.error("[electron] server restart attempt %d failed:", attempt, lastError)
+        await waitForServerRestartBackoff(attempt)
+      }
     }
   } finally {
     serverRestartPolicy.completeRestart()
     isRelaunchingServer = false
+    if (serverCrashRecoveryPending && !isQuitting) {
+      serverCrashRecoveryPending = false
+      queueMicrotask(() => {
+        restartServerAfterCrash().catch((error) => {
+          console.error("[electron] failed to continue server crash recovery:", error)
+        })
+      })
+    }
   }
 }
 
@@ -369,7 +437,7 @@ async function createWindow() {
     // default OS browser. Match host+port exactly via URL parsing — a prefix
     // check (startsWith) would treat e.g. `http://localhost:<port>@evil.com` or
     // `http://localhost:<port>9` as internal and load it in the trusted window
-    // (which runs with webSecurity disabled and the preload IPC bridge).
+    // (which has privileged preload IPC capabilities).
     if (isTrustedRendererNavigation(url)) {
       return { action: "allow" }
     }
@@ -608,7 +676,9 @@ function focusMainWindowIfPresent() {
 function queueExternalOpenRequest(request) {
   pendingExternalOpenRequests.push(request)
   if (externalOpenPathHandlerReady) {
-    void drainExternalOpenRequests()
+    void drainExternalOpenRequests().catch((error) => {
+      console.error("[electron] failed to process external open request:", error)
+    })
   }
 }
 
@@ -697,7 +767,9 @@ async function drainExternalOpenRequests() {
   } finally {
     externalOpenPathDrainRunning = false
     if (pendingExternalOpenRequests.length > 0) {
-      void drainExternalOpenRequests()
+      void drainExternalOpenRequests().catch((error) => {
+        console.error("[electron] failed to continue external open requests:", error)
+      })
     }
   }
 }
@@ -2527,6 +2599,18 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(ALLOWED_PERMISSIONS.has(permission))
   })
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => ALLOWED_PERMISSIONS.has(permission))
+
+  // The embedded browser uses a separate persistent session. Electron grants
+  // permissions by default when a session has no handler, so remote pages
+  // must receive their own deny-by-default policy rather than inheriting an
+  // assumption from defaultSession.
+  const browserSession = session.fromPartition(DESKTOP_BROWSER_WEBVIEW_PARTITION)
+  const WEBVIEW_ALLOWED_PERMISSIONS = new Set(["fullscreen"])
+  browserSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(WEBVIEW_ALLOWED_PERMISSIONS.has(permission))
+  })
+  browserSession.setPermissionCheckHandler((_webContents, permission) => WEBVIEW_ALLOWED_PERMISSIONS.has(permission))
 
   try {
     await purgeDisabledRemoteAccessSettings().catch((error) => {

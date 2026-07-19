@@ -153,9 +153,9 @@ pub fn parse_input(input: &str) -> Vec<InputEvent> {
                 if let Some(name) = name {
                     out.push(key(name, false, false, false));
                 }
-                // Always consume the 3-byte SS3 sequence, even for unknown finals,
+                // Always consume the complete SS3 sequence, even for unknown finals,
                 // to prevent O + final byte leaking as phantom text input.
-                idx += 3; // \x1b + O + final
+                idx += 2 + ch.len_utf8(); // \x1b + O + UTF-8 final
                 continue;
             }
         }
@@ -906,6 +906,17 @@ mod tests {
         assert!(
             events.is_empty(),
             "two unrecognized SS3 sequences should produce no events, got: {events:?}"
+        );
+
+        // A multi-byte unknown final must advance by its UTF-8 width. The old
+        // fixed `idx += 3` landed on a non-character boundary and panicked.
+        assert_eq!(
+            parse_input("\x1bOéz"),
+            vec![InputEvent::Text { text: "z".into() }]
+        );
+        assert_eq!(
+            parse_input("\x1bO中z"),
+            vec![InputEvent::Text { text: "z".into() }]
         );
     }
 

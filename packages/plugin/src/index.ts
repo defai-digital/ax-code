@@ -119,7 +119,7 @@ export type AuthHook = {
 export type AuthOuathResult = { url: string; instructions: string } & (
   | {
       method: "auto"
-      callback(): Promise<
+      callback(signal?: AbortSignal): Promise<
         | ({
             type: "success"
             provider?: string

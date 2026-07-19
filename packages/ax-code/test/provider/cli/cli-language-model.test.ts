@@ -11,6 +11,7 @@ import { usageSource } from "../../../src/provider/usage"
 import { Process } from "../../../src/util/process"
 import { Shell } from "../../../src/shell/shell"
 import { PassThrough } from "node:stream"
+import { EventEmitter } from "node:events"
 import { Instance } from "../../../src/project/instance"
 import { tmpdir } from "../../fixture/fixture"
 
@@ -209,11 +210,7 @@ describe("CliLanguageModel", () => {
   test("doGenerate rejects successful structured JSONL with no assistant text", async () => {
     const model = makeModel({
       binary: process.execPath,
-      args: [
-        "-e",
-        "process.stdout.write('{\"role\":\"meta\",\"content\":\"To resume this session\"}\\n')",
-        "--",
-      ],
+      args: ["-e", 'process.stdout.write(\'{"role":"meta","content":"To resume this session"}\\n\')', "--"],
       promptMode: "arg",
       parser: CLI_PROVIDER_DEFINITIONS["kimi-cli"]!.parser,
     })
@@ -477,6 +474,45 @@ describe("CliLanguageModel", () => {
     }
   })
 
+  test("doGenerate turns stdin EPIPE into a normal rejection", async () => {
+    const stdin = Object.assign(new EventEmitter(), {
+      write() {
+        queueMicrotask(() => {
+          stdin.emit("error", Object.assign(new Error("broken pipe"), { code: "EPIPE" }))
+          stdin.emit("close")
+        })
+        return false
+      },
+      end() {},
+    })
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    stdout.end()
+    stderr.end()
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
+      stdin,
+      stdout,
+      stderr,
+      exited: Promise.resolve(1),
+      exitCode: 1,
+      signalCode: null,
+      kill() {},
+    } as any)
+
+    try {
+      const model = makeModel({ promptMode: "stdin" })
+      await expect(
+        model.doGenerate({
+          prompt: [{ role: "user", content: [{ type: "text", text: "x".repeat(128 * 1024) }] }],
+        }),
+      ).rejects.toMatchObject({ code: "EPIPE" })
+      expect(stdin.listenerCount("error")).toBe(0)
+      expect(stdin.listenerCount("drain")).toBe(0)
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
   test("doStream fails cleanly when output streams are unavailable", async () => {
     const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
       stdin: { write() {}, end() {} },
@@ -562,11 +598,7 @@ describe("CliLanguageModel", () => {
   test("doStream does not leak kimi meta JSONL as assistant text", async () => {
     const model = makeModel({
       binary: process.execPath,
-      args: [
-        "-e",
-        "process.stdout.write('{\"role\":\"meta\",\"content\":\"To resume this session: kimi -r x\"}\\n')",
-        "--",
-      ],
+      args: ["-e", 'process.stdout.write(\'{"role":"meta","content":"To resume this session: kimi -r x"}\\n\')', "--"],
       promptMode: "stdin",
       parser: CLI_PROVIDER_DEFINITIONS["kimi-cli"]!.parser,
     })
@@ -1230,15 +1262,7 @@ describe("CliLanguageModel", () => {
         "ping",
       )
 
-      expect(cmd).toEqual([
-        "kimi",
-        "--output-format",
-        "stream-json",
-        "--model",
-        "kimi-for-coding",
-        "-p",
-        "ping",
-      ])
+      expect(cmd).toEqual(["kimi", "--output-format", "stream-json", "--model", "kimi-for-coding", "-p", "ping"])
     } finally {
       restoreAutonomous()
     }

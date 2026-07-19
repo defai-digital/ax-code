@@ -17,4 +17,9 @@ describe("preload IPC policy", () => {
     expect(isAllowedDesktopInvokeCommand("__proto__")).toBe(false)
     expect(isAllowedDesktopInvokeCommand(null)).toBe(false)
   })
+
+  test("does not grant newly named desktop commands implicitly", () => {
+    expect(isAllowedDesktopInvokeCommand("desktop_read_arbitrary_secret")).toBe(false)
+    expect(isAllowedDesktopInvokeCommand("desktop_spawn_process")).toBe(false)
+  })
 })

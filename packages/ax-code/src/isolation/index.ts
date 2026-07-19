@@ -43,7 +43,7 @@ export namespace Isolation {
     /**
      * Isolation backend for bash OS wrapping. App-layer checks always run;
      * `os`/`auto` additionally wrap bash when the platform supports it.
-     * Optional on partial states; `shouldUseOsSandbox` treats missing as `"app"`.
+     * Optional on partial states; `shouldUseOsSandbox` treats missing as `"auto"`.
      * `resolve()` always sets an explicit value.
      */
     backend?: Backend
@@ -57,7 +57,7 @@ export namespace Isolation {
   }
 
   export const DEFAULT_MODE: Mode = "workspace-write"
-  export const DEFAULT_BACKEND: Backend = "app"
+  export const DEFAULT_BACKEND: Backend = "auto"
 
   function resolvePath(filepath: string) {
     return Filesystem.resolve(filepath)
@@ -152,7 +152,8 @@ export namespace Isolation {
   export function shouldUseOsSandbox(state: State | undefined): boolean {
     if (!state) return false
     if (state.mode === "full-access") return false
-    // Missing backend means portable app-layer only (same as explicit "app").
+    // Missing backend means best-effort kernel isolation with portable
+    // app-layer fallback (same as explicit "auto").
     const backend = state.backend ?? DEFAULT_BACKEND
     if (backend === "app") return false
     return backend === "os" || backend === "auto"

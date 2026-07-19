@@ -51,6 +51,7 @@ import { FileCommand } from "../command/file-command"
 // every user's ax-code.json on first load, into legacy-TOML migrations,
 // and into remote wellknown configs that omit `$schema`. See issue #17.
 import { CONFIG_SCHEMA_URL } from "@/constants/project"
+import { ProjectConfigTrust } from "./project-config-trust"
 
 const PROGRAM_DATA_FALLBACK_DIR = "C:\\ProgramData"
 const UNIX_SYSTEM_CONFIG_DIR = "/etc/ax-code"
@@ -74,6 +75,125 @@ const DANGEROUS_WELLKNOWN_ENV_KEYS = new Set([
 
 export namespace Config {
   const log = Log.create({ service: "config" })
+
+  function denyOnlyPermission(value: unknown): unknown {
+    if (value === "deny") return value
+    if (!isRecord(value)) return undefined
+    const result: Record<string, unknown> = {}
+    for (const [permission, rule] of Object.entries(value)) {
+      if (rule === "deny") {
+        result[permission] = rule
+        continue
+      }
+      if (!isRecord(rule)) continue
+      const patterns = Object.fromEntries(Object.entries(rule).filter(([, action]) => action === "deny"))
+      if (Object.keys(patterns).length > 0) result[permission] = patterns
+    }
+    return Object.keys(result).length > 0 ? result : undefined
+  }
+
+  function denyOnlyLegacyTools(value: unknown): unknown {
+    if (!isRecord(value)) return undefined
+    const result = Object.fromEntries(Object.entries(value).filter(([, enabled]) => enabled === false))
+    return Object.keys(result).length > 0 ? result : undefined
+  }
+
+  function restrictUntrustedAgent(value: unknown): unknown {
+    if (!isRecord(value)) return value
+    const agent = { ...value }
+    const permission = denyOnlyPermission(agent.permission)
+    if (permission) agent.permission = permission
+    else delete agent.permission
+    const tools = denyOnlyLegacyTools(agent.tools)
+    if (tools) agent.tools = tools
+    else delete agent.tools
+    return agent
+  }
+
+  function isSafeProjectRelativePath(value: unknown): value is string {
+    if (typeof value !== "string" || value.length === 0) return false
+    if (path.isAbsolute(value) || path.win32.isAbsolute(value) || value.startsWith("~")) return false
+    try {
+      if (new URL(value).protocol) return false
+    } catch {}
+    return !value.split(/[\\/]+/).includes("..")
+  }
+
+  function restrictUntrustedProviders(value: unknown): unknown {
+    if (!isRecord(value)) return undefined
+    return Object.fromEntries(
+      Object.entries(value).map(([name, providerValue]) => {
+        if (!isRecord(providerValue)) return [name, providerValue]
+        const provider = { ...providerValue }
+        delete provider.api
+        delete provider.npm
+        delete provider.env
+        if (isRecord(provider.options)) {
+          provider.options = Object.fromEntries(
+            Object.entries(provider.options).filter(([key]) =>
+              ["timeout", "chunkTimeout", "setCacheKey", "toolProfile"].includes(key),
+            ),
+          )
+        }
+        if (isRecord(provider.models)) {
+          provider.models = Object.fromEntries(
+            Object.entries(provider.models).map(([modelID, modelValue]) => {
+              if (!isRecord(modelValue)) return [modelID, modelValue]
+              const model = { ...modelValue }
+              delete model.provider
+              return [modelID, model]
+            }),
+          )
+        }
+        return [name, provider]
+      }),
+    )
+  }
+
+  function restrictUntrustedProjectConfig(copy: Record<string, unknown>) {
+    // These fields can execute a repository-selected binary, import a package,
+    // redirect provider credentials, or read arbitrary files from the user's
+    // home directory. Project config may use them only after the explicit
+    // out-of-repository trust opt-in.
+    delete copy.shell
+    delete copy.skills
+    const provider = restrictUntrustedProviders(copy.provider)
+    if (provider) copy.provider = provider
+    else delete copy.provider
+
+    if (Array.isArray(copy.instructions)) {
+      const instructions = copy.instructions.filter(isSafeProjectRelativePath)
+      if (instructions.length > 0) copy.instructions = instructions
+      else delete copy.instructions
+    }
+
+    if (isRecord(copy.command)) {
+      copy.command = Object.fromEntries(
+        Object.entries(copy.command).map(([name, value]) => [
+          name,
+          isRecord(value) ? { ...value, allowShell: false } : value,
+        ]),
+      )
+    }
+
+    if (isRecord(copy.lsp)) {
+      const lsp = Object.fromEntries(
+        Object.entries(copy.lsp).filter(([, value]) => isRecord(value) && !("command" in value) && !("env" in value)),
+      )
+      if (Object.keys(lsp).length > 0) copy.lsp = lsp
+      else delete copy.lsp
+    }
+
+    if (isRecord(copy.formatter)) {
+      const formatter = Object.fromEntries(
+        Object.entries(copy.formatter).filter(
+          ([, value]) => isRecord(value) && !("command" in value) && !("environment" in value),
+        ),
+      )
+      if (Object.keys(formatter).length > 0) copy.formatter = formatter
+      else delete copy.formatter
+    }
+  }
   export const McpSourceKind = z.enum([
     "wellknown",
     "global",
@@ -335,7 +455,9 @@ export namespace Config {
       // in by anyone — treat them as untrusted so a malicious
       // `ax-code.json` committed to a shared repo cannot read files
       // outside the config's directory.
-      const configs = await Promise.allSettled(projectFiles.map((file) => loadFile(file, { trusted: false })))
+      const configs = await Promise.allSettled(
+        projectFiles.map((file) => loadFile(file, { trusted: false, projectTrust: true })),
+      )
       for (let index = 0; index < configs.length; index++) {
         const cfg = configs[index]
         const filepath = projectFiles[index]
@@ -391,17 +513,21 @@ export namespace Config {
 
         // Parallel load of all independent I/O within this directory
         const configFiles = isConfigDir ? ["ax-code.jsonc", "ax-code.json"] : []
+        const projectCodeTrusted = trusted || ProjectConfigTrust.enabled()
         const [loadedConfigs, command, agent, mode, pluginFiles] = await Promise.all([
           Promise.all(
             configFiles.map(async (file) => {
               log.debug(`loading config from ${path.join(dir, file)}`)
-              return loadFile(path.join(dir, file), { trusted })
+              return loadFile(path.join(dir, file), {
+                trusted,
+                projectTrust: inWorktree && !isUserConfigDir,
+              })
             }),
           ),
-          loadCommand(dir, inWorktree && !isUserConfigDir ? "project" : "config"),
-          loadAgent(dir),
-          loadMode(dir),
-          loadPlugin(dir),
+          loadCommand(dir, inWorktree && !isUserConfigDir ? "project" : "config", projectCodeTrusted),
+          loadAgent(dir, projectCodeTrusted),
+          loadMode(dir, projectCodeTrusted),
+          projectCodeTrusted ? loadPlugin(dir) : Promise.resolve([]),
         ])
 
         const configuredPlugins: string[] = []
@@ -450,10 +576,7 @@ export namespace Config {
       // plugins across directories / reloads.
       result.plugin = [...result.plugin, ...dr.pluginFiles]
 
-      if (
-        dr.dependencyManaged &&
-        (await hasLocalFilePlugin([...dr.configuredPlugins, ...dr.pluginFiles], dr.dir))
-      ) {
+      if (dr.dependencyManaged && (await hasLocalFilePlugin([...dr.configuredPlugins, ...dr.pluginFiles], dr.dir))) {
         deps.push(
           iife(async () => {
             const shouldInstall = await needsInstall(dr.dir)
@@ -776,7 +899,7 @@ export namespace Config {
     return loadMarkdownConfig(item, kind)
   }
 
-  async function loadCommand(dir: string, scope: FileCommand.Scope) {
+  async function loadCommand(dir: string, scope: FileCommand.Scope, trusted = true) {
     const result: Record<string, Command> = {}
     for (const item of await Glob.scan("{command,commands}/**/*.md", {
       cwd: dir,
@@ -813,7 +936,7 @@ export namespace Config {
           sourceTool: fileCommand.sourceTool,
           scope: fileCommand.scope,
           warnings: fileCommand.warnings,
-          allowShell: fileCommand.allowShell,
+          allowShell: trusted ? fileCommand.allowShell : false,
         })
         continue
       }
@@ -822,7 +945,7 @@ export namespace Config {
     return result
   }
 
-  async function loadAgent(dir: string) {
+  async function loadAgent(dir: string, trusted = true) {
     const result: Record<string, Agent> = {}
 
     for (const item of await Glob.scan("{agent,agents}/**/*.md", {
@@ -845,7 +968,7 @@ export namespace Config {
       }
       const parsed = Agent.safeParse(config)
       if (parsed.success) {
-        result[config.name] = parsed.data
+        result[config.name] = (trusted ? parsed.data : restrictUntrustedAgent(parsed.data)) as Agent
         continue
       }
       log.warn("invalid agent definition, skipping", { path: item, issues: parsed.error.issues })
@@ -853,7 +976,7 @@ export namespace Config {
     return result
   }
 
-  async function loadMode(dir: string) {
+  async function loadMode(dir: string, trusted = true) {
     const result: Record<string, Agent> = {}
     for (const item of await Glob.scan("{mode,modes}/*.md", {
       cwd: dir,
@@ -871,10 +994,11 @@ export namespace Config {
       }
       const parsed = Agent.safeParse(config)
       if (parsed.success) {
-        result[config.name] = {
+        const mode = {
           ...parsed.data,
           mode: "primary" as const,
         }
+        result[config.name] = (trusted ? mode : restrictUntrustedAgent(mode)) as Agent
         continue
       }
       log.warn("invalid mode definition, skipping", { path: item, issues: parsed.error.issues })
@@ -943,17 +1067,15 @@ export namespace Config {
     }
   }
 
-  async function isAllowedUntrustedPlugin(plugin: string, source: string, isFile: boolean) {
-    if (!isFile) return false
-    if (await isLocalFilePlugin(plugin, Instance.worktree)) return true
+  function isAllowedUntrustedPlugin(plugin: string, source: string) {
     log.warn("ignoring plugin from untrusted config", { plugin, source })
     return false
   }
 
-  async function filterAllowedUntrustedPlugins(plugins: string[], source: string, isFile: boolean) {
+  async function filterAllowedUntrustedPlugins(plugins: string[], source: string) {
     const allowed: string[] = []
     for (const plugin of plugins) {
-      if (await isAllowedUntrustedPlugin(plugin, source, isFile)) allowed.push(plugin)
+      if (isAllowedUntrustedPlugin(plugin, source)) allowed.push(plugin)
     }
     return allowed
   }
@@ -1079,20 +1201,24 @@ export namespace Config {
 
   export const { readFile } = ConfigPaths
 
-  async function loadFile(filepath: string, opts?: { trusted?: boolean }): Promise<Info> {
+  async function loadFile(filepath: string, opts?: { trusted?: boolean; projectTrust?: boolean }): Promise<Info> {
     log.info("loading", { path: filepath })
     const text = await readFile(filepath)
     if (!text) return {}
-    return load(text, { path: filepath, trusted: opts?.trusted })
+    return load(text, { path: filepath, trusted: opts?.trusted, projectTrust: opts?.projectTrust })
   }
 
   async function load(
     text: string,
-    options: ({ path: string } | { dir: string; source: string }) & { trusted?: boolean },
+    options: ({ path: string } | { dir: string; source: string }) & {
+      trusted?: boolean
+      projectTrust?: boolean
+    },
   ) {
     const original = text
     const source = "path" in options ? options.path : options.source
     const isFile = "path" in options
+    const trusted = options.trusted !== false || (options.projectTrust === true && ProjectConfigTrust.enabled())
     // Trust defaults to true for backward compatibility. Call sites
     // loading untrusted sources (project-level configs inside the
     // worktree, remote well-known configs, network account configs)
@@ -1101,18 +1227,40 @@ export namespace Config {
     const data = await ConfigPaths.parseText(
       text,
       "path" in options ? options.path : { source: options.source, dir: options.dir },
-      { trusted: options.trusted },
+      { trusted },
     )
 
     const normalized = (() => {
       if (!isRecord(data)) return data
       const copy = { ...data }
       const hadLegacy = "theme" in copy || "keybinds" in copy || "tui" in copy
-      if (!hadLegacy) return copy
-      delete copy.theme
-      delete copy.keybinds
-      delete copy.tui
-      log.warn("tui keys in ax-code config are deprecated; move them to tui.json", { path: source })
+      if (hadLegacy) {
+        delete copy.theme
+        delete copy.keybinds
+        delete copy.tui
+        log.warn("tui keys in ax-code config are deprecated; move them to tui.json", { path: source })
+      }
+      if (!trusted) {
+        // Repository-controlled config must not grant itself tool access.
+        // Project `permission`/legacy `tools` rules used to merge after the
+        // safe defaults and could silently turn an `ask` into an `allow`.
+        // The same fields are supported per agent/mode, so remove them at
+        // every project-controlled permission surface.
+        const permission = denyOnlyPermission(copy.permission)
+        if (permission) copy.permission = permission
+        else delete copy.permission
+        const tools = denyOnlyLegacyTools(copy.tools)
+        if (tools) copy.tools = tools
+        else delete copy.tools
+        for (const key of ["agent", "mode"] as const) {
+          const entries = copy[key]
+          if (!isRecord(entries)) continue
+          copy[key] = Object.fromEntries(
+            Object.entries(entries).map(([name, value]) => [name, restrictUntrustedAgent(value)]),
+          )
+        }
+        if (options.projectTrust === true) restrictUntrustedProjectConfig(copy)
+      }
       return copy
     })()
 
@@ -1144,8 +1292,8 @@ export namespace Config {
           }
         }
       }
-      if (data.plugin && options.trusted === false) {
-        data.plugin = await filterAllowedUntrustedPlugins(data.plugin, source, isFile)
+      if (data.plugin && !trusted) {
+        data.plugin = await filterAllowedUntrustedPlugins(data.plugin, source)
       }
       return data
     }

@@ -2010,7 +2010,7 @@ export type McpLocalConfig = {
    */
   enabled?: boolean
   /**
-   * Timeout in ms for MCP server requests. Defaults to 5000 (5 seconds) if not specified.
+   * Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.
    */
   timeout?: number
 }
@@ -2054,7 +2054,7 @@ export type McpRemoteConfig = {
    */
   oauth?: McpOAuthConfig | false
   /**
-   * Timeout in ms for MCP server requests. Defaults to 5000 (5 seconds) if not specified.
+   * Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.
    */
   timeout?: number
 }
@@ -2500,6 +2500,10 @@ export type Config = {
        * Maximum arena contestants (default: 3, hard max: 5).
        */
       maxContestants?: number
+      /**
+       * Per-member timeout in ms for arena fan-out (falls back to council timeout, then 60000).
+       */
+      timeoutMs?: number
       /**
        * Ranking strategy for arena candidates. verify_first is the recommended default (never pure popularity).
        */

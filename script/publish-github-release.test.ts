@@ -1,10 +1,13 @@
 import { describe, expect, test } from "vitest"
+import fs from "fs"
 import path from "path"
 import {
   defaultInstallChannel,
   defaultTag,
   expectedReleaseArchives,
   expectedReleaseInstallerAssets,
+  expectedReleaseInstallerSignatures,
+  expectedReleaseMetadataAssets,
   expectedReleaseSignatures,
   isPrerelease,
   missingReleaseAssets,
@@ -15,6 +18,15 @@ import {
 } from "./publish-github-release"
 
 describe("publish-github-release helpers", () => {
+  test("keeps the workflow as sole signer and independently verifies its assets", () => {
+    const source = fs.readFileSync(path.join(import.meta.dirname, "publish-github-release.ts"), "utf8")
+
+    expect(source).toContain('run("minisign", ["-V"')
+    expect(source).toContain("Downloaded ax-minisign.pub does not match")
+    expect(source).not.toContain('["release", "upload"')
+    expect(source).not.toContain("signReleaseAssetsCommand")
+  })
+
   test("normalizes versions and tags", () => {
     expect(normalizeVersion("v5.10.1")).toBe("5.10.1")
     expect(normalizeVersion("5.10.1-beta.1")).toBe("5.10.1-beta.1")
@@ -41,6 +53,8 @@ describe("publish-github-release helpers", () => {
       "ax-code-windows-arm64.zip.minisig",
     ])
     expect(expectedReleaseInstallerAssets()).toEqual(["install.ps1"])
+    expect(expectedReleaseInstallerSignatures()).toEqual(["install.ps1.minisig"])
+    expect(expectedReleaseMetadataAssets()).toEqual(["ax-minisign.pub"])
   })
 
   test("reports missing release assets", () => {
@@ -52,7 +66,12 @@ describe("publish-github-release helpers", () => {
         "ax-code-darwin-arm64.zip.minisig",
         "install.ps1",
       ]),
-    ).toEqual(["ax-code-windows-x64.zip.minisig", "ax-code-windows-arm64.zip.minisig"])
+    ).toEqual([
+      "ax-code-windows-x64.zip.minisig",
+      "ax-code-windows-arm64.zip.minisig",
+      "install.ps1.minisig",
+      "ax-minisign.pub",
+    ])
   })
 
   test("reports tracked internal files as a release privacy issue", () => {
@@ -73,18 +92,7 @@ describe("publish-github-release helpers", () => {
 
   test("parses publish options with safe defaults", () => {
     const options = parsePublishGithubReleaseArgs(
-      [
-        "--version",
-        "v5.10.1",
-        "--repo",
-        "owner/repo",
-        "--key-dir",
-        "~/release-keys",
-        "--asset-dir",
-        "/tmp/assets",
-        "--existing-tag",
-        "--skip-watch",
-      ],
+      ["--version", "v5.10.1", "--repo", "owner/repo", "--asset-dir", "/tmp/assets", "--existing-tag", "--skip-watch"],
       {},
       "/repo",
       "/home/ax",
@@ -93,11 +101,9 @@ describe("publish-github-release helpers", () => {
     expect(options.version).toBe("5.10.1")
     expect(options.tag).toBe("v5.10.1")
     expect(options.repo).toBe("owner/repo")
-    expect(options.keyDir).toBe(path.join("/home/ax", "release-keys"))
     expect(options.assetDir).toBe("/tmp/assets")
     expect(options.existingTag).toBe(true)
     expect(options.skipWatch).toBe(true)
-    expect(options.skipSign).toBe(false)
   })
 
   test("describes the publish plan", () => {
@@ -106,7 +112,7 @@ describe("publish-github-release helpers", () => {
       "publish v5.10.1-beta.1 to defai-digital/ax-code",
       "create and push annotated release tag",
       "watch release.yml",
-      "sign release archives with /home/ax/.minisign/minisign.key",
+      "independently verify release signatures with docs/ax-minisign.pub",
       "dispatch install-matrix-smoke.yml channel=windows",
     ])
   })

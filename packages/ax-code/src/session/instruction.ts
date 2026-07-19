@@ -42,6 +42,11 @@ async function allowInstructionAbsolutePath(input: string) {
   )
 }
 
+async function allowRelativeInstructionPath(input: string) {
+  const real = await realpathOrResolved(input)
+  return Filesystem.contains(Instance.worktree, input) && Filesystem.contains(Instance.worktree, real)
+}
+
 function globalFiles() {
   const files = []
   if (Flag.AX_CODE_CONFIG_DIR) {
@@ -129,6 +134,7 @@ export namespace InstructionPrompt {
     if (config.instructions) {
       for (let instruction of config.instructions) {
         if (isHttpInstructionUrl(instruction)) continue
+        const relative = !path.isAbsolute(instruction) && !instruction.startsWith("~/")
         if (instruction.startsWith("~/")) {
           const resolved = await resolveHomeInstructionPath(instruction)
           if (!resolved) continue
@@ -150,7 +156,10 @@ export namespace InstructionPrompt {
           : await resolveRelative(instruction)
         for (const match of matches) {
           const resolved = path.resolve(match)
-          if (!(await allowInstructionAbsolutePath(resolved))) {
+          const allowed = relative
+            ? await allowRelativeInstructionPath(resolved)
+            : await allowInstructionAbsolutePath(resolved)
+          if (!allowed) {
             log.warn("instruction match escapes allowed roots", { path: resolved })
             continue
           }

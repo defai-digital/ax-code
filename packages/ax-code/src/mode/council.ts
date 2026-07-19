@@ -53,11 +53,11 @@ export namespace Council {
 
   const SEVERITY_RANK: Record<Severity, number> = { high: 0, medium: 1, low: 2 }
 
-  /** Collapse whitespace and case for deterministic grouping. */
+  /** Collapse whitespace and case for deterministic grouping; preserve code-meaningful punctuation. */
   export function normalizeSummary(summary: string): string {
     return summary
       .toLowerCase()
-      .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+      .replace(/[^\p{L}\p{N}\s`'"()]+/gu, " ")
       .replace(/\s+/g, " ")
       .trim()
   }
@@ -258,16 +258,57 @@ export namespace Council {
    */
   export function providerFamily(providerID: string): string {
     const id = providerID.toLowerCase()
-    if (id.includes("anthropic") || id.includes("claude")) return "anthropic"
-    if (id.includes("openai") || id.includes("codex") || id === "github-copilot") return "openai"
-    if (id.includes("google") || id.includes("gemini") || id.includes("antigravity")) return "google"
-    if (id.includes("xai") || id.includes("grok")) return "xai"
-    if (id.includes("alibaba") || id.includes("qwen")) return "alibaba"
-    if (id.includes("zai") || id.includes("zhipu") || id.includes("glm")) return "zhipu"
-    if (id.includes("ax-engine") || id.includes("ollama") || id.includes("local")) return "local"
-    if (id.includes("groq")) return "groq"
-    if (id.includes("openrouter")) return "openrouter"
-    return id.split(/[-_]/)[0] || id
+    const segments = id.split(/[-_]/)
+    const prefixMap: Record<string, string> = {
+      anthropic: "anthropic",
+      claude: "anthropic",
+      openai: "openai",
+      codex: "openai",
+      google: "google",
+      gemini: "google",
+      antigravity: "google",
+      xai: "xai",
+      grok: "xai",
+      alibaba: "alibaba",
+      qwen: "alibaba",
+      zai: "zhipu",
+      zhipu: "zhipu",
+      glm: "zhipu",
+      "ax-engine": "local",
+      ollama: "local",
+      local: "local",
+      groq: "groq",
+      openrouter: "openrouter",
+    }
+    // Exact full-id match first (e.g. "github-copilot")
+    if (id === "github-copilot") return "openai"
+    if (id === "ax-engine") return "local"
+    // Prefix-based: check each segment against known vendor prefixes
+    for (const seg of segments) {
+      if (prefixMap[seg]) return prefixMap[seg]
+    }
+    // Fall back to substring matching for providers without delimiter boundaries
+    const substringChecks: Array<[string, string]> = [
+      ["anthropic", "anthropic"],
+      ["claude", "anthropic"],
+      ["openai", "openai"],
+      ["copilot", "openai"],
+      ["codex", "openai"],
+      ["google", "google"],
+      ["gemini", "google"],
+      ["antigravity", "google"],
+      ["xai", "xai"],
+      ["grok", "xai"],
+      ["alibaba", "alibaba"],
+      ["qwen", "alibaba"],
+      ["groq", "groq"],
+      ["openrouter", "openrouter"],
+      ["zhipu", "zhipu"],
+    ]
+    for (const [needle, family] of substringChecks) {
+      if (id.includes(needle)) return family
+    }
+    return segments[0] || id
   }
 
   export function dedupeMembers<T extends { providerID: string; modelID?: unknown }>(candidates: readonly T[]): T[] {

@@ -31,7 +31,7 @@ async function checkClaudeAuth(binary: string): Promise<string | undefined> {
   try {
     const out = await Process.run([binary, "--print", "--verbose", "--output-format", "stream-json", "ping"], {
       stdin: "ignore",
-      env: cliEnv(),
+      env: cliEnv([], "claude-code"),
       abort: AbortSignal.timeout(5_000),
       nothrow: true,
     })

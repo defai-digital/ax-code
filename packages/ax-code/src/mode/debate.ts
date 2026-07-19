@@ -22,7 +22,20 @@ export namespace Debate {
 
   function redactMemberIdentities(report: Council.CouncilReport, text: string): string {
     const identities = new Set<string>()
-    const genericParts = new Set(["api", "cli", "cloud", "local", "model"])
+    const genericParts = new Set([
+      "api",
+      "cli",
+      "cloud",
+      "local",
+      "model",
+      "core",
+      "lab",
+      "labs",
+      "ai",
+      "engine",
+      "code",
+      "copilot",
+    ])
     for (const item of [...report.consensus, ...report.majority, ...report.minority, ...report.singleton]) {
       for (const memberId of item.memberIds) {
         identities.add(memberId)

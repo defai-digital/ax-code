@@ -9,6 +9,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::LazyLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 // ─── Shared types ──────────────────────────────────────────────────
@@ -73,6 +74,8 @@ impl SecurityPatterns {
     }
     }
 }
+
+static SECURITY_PATTERNS: LazyLock<SecurityPatterns> = LazyLock::new(SecurityPatterns::new);
 
 fn nearby_window(lines: &[&str], idx: usize, before: usize, after: usize) -> String {
     let start = idx.saturating_sub(before);
@@ -263,7 +266,7 @@ struct ResourceRule {
     description: &'static str,
 }
 
-fn lifecycle_rules() -> Vec<ResourceRule> {
+static LIFECYCLE_RULES: LazyLock<Vec<ResourceRule>> = LazyLock::new(|| {
     vec![
         ResourceRule {
             rtype: "event_listener",
@@ -314,7 +317,19 @@ fn lifecycle_rules() -> Vec<ResourceRule> {
             description: "Child process without kill or exit handler",
         },
     ]
-}
+});
+
+static FUNCTION_SCOPE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?:function\s+\w+|(?:async\s+)?(?:\w+\s*\(|=>\s*\{)|\w+\s*\([^)]*\)\s*(?::\s*\w+)?\s*\{)",
+    )
+    .unwrap()
+});
+static CONTROL_SCOPE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\b(?:if|for|while|switch|catch|class)\s*\(").unwrap());
+static LIFECYCLE_SUPPRESS_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"//\s*@scan-suppress\s+lifecycle_scan").unwrap());
+static MAP_SET_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\w+)\.set\s*\(").unwrap());
 
 struct FunctionScope {
     start: usize,
@@ -324,11 +339,6 @@ struct FunctionScope {
 }
 
 fn find_function_scopes(content: &str) -> Vec<FunctionScope> {
-    let func_re = Regex::new(
-        r"(?:function\s+\w+|(?:async\s+)?(?:\w+\s*\(|=>\s*\{)|\w+\s*\([^)]*\)\s*(?::\s*\w+)?\s*\{)",
-    )
-    .unwrap();
-    let control_re = Regex::new(r"\b(?:if|for|while|switch|catch|class)\s*\(").unwrap();
     let lines: Vec<&str> = content.lines().collect();
     let mut scopes = Vec::new();
     let mut depth: i32 = 0;
@@ -336,7 +346,10 @@ fn find_function_scopes(content: &str) -> Vec<FunctionScope> {
     let mut in_block_comment = false;
 
     for (i, line) in lines.iter().enumerate() {
-        if scope_start.is_none() && func_re.is_match(line) && !control_re.is_match(line) {
+        if scope_start.is_none()
+            && FUNCTION_SCOPE_RE.is_match(line)
+            && !CONTROL_SCOPE_RE.is_match(line)
+        {
             scope_start = Some(i);
             depth = 0;
             in_block_comment = false;
@@ -405,15 +418,13 @@ fn scan_lifecycle(
     enabled: &HashSet<String>,
     max: usize,
 ) -> Vec<LifecycleFinding> {
-    let suppress = Regex::new(r"//\s*@scan-suppress\s+lifecycle_scan").unwrap();
     let lines: Vec<&str> = content.lines().collect();
-    let rules = lifecycle_rules();
     let scopes = find_function_scopes(content);
     let mut findings = Vec::new();
 
     // Resource leak detection per function scope
     for scope in &scopes {
-        for rule in &rules {
+        for rule in LIFECYCLE_RULES.iter() {
             if !enabled.contains(rule.rtype) {
                 continue;
             }
@@ -428,7 +439,7 @@ fn scan_lifecycle(
                 let global_line = scope.start + create_line_offset;
                 if global_line > 0
                     && global_line <= lines.len()
-                    && is_suppressed(&lines, global_line - 1, &suppress)
+                    && is_suppressed(&lines, global_line - 1, &LIFECYCLE_SUPPRESS_RE)
                 {
                     continue;
                 }
@@ -454,9 +465,8 @@ fn scan_lifecycle(
 
     // Unbounded map growth detection
     if enabled.contains("map_growth") && findings.len() < max {
-        let map_set_re = Regex::new(r"(\w+)\.set\s*\(").unwrap();
         let mut set_names: HashMap<String, usize> = HashMap::new();
-        for mat in map_set_re.captures_iter(content) {
+        for mat in MAP_SET_RE.captures_iter(content) {
             let name = mat.get(1).unwrap().as_str().to_string();
             let line = content[..mat.get(0).unwrap().start()].lines().count() + 1;
             set_names.entry(name).or_insert(line);
@@ -504,6 +514,45 @@ pub struct HardcodeFinding {
     pub suggestion: String,
     pub severity: String,
 }
+
+struct HardcodePatterns {
+    suppress: Regex,
+    const_assignment: Regex,
+    magic: Regex,
+    enum_declaration: Regex,
+    url: Regex,
+    path: Regex,
+    secret: Regex,
+    base64: Regex,
+    class_name: Regex,
+    snake: Regex,
+    kebab: Regex,
+    hex: Regex,
+    svg: Regex,
+}
+
+static HARDCODE_PATTERNS: LazyLock<HardcodePatterns> = LazyLock::new(|| HardcodePatterns {
+    suppress: Regex::new(r"//\s*@scan-suppress\s+hardcode_scan").unwrap(),
+    const_assignment: Regex::new(
+        r"^\s*(export\s+)?(const|let|var)\s+[A-Z_][A-Z0-9_]*\s*(:[^=]+)?=",
+    )
+    .unwrap(),
+    magic: Regex::new(r"-?\d+(?:\.\d+)?").unwrap(),
+    enum_declaration: Regex::new(r"^\s*(export\s+)?(enum|type)\s").unwrap(),
+    url: Regex::new(r#"https?://[^\s"')<>]+"#).unwrap(),
+    path: Regex::new(r#"(["'`])(/(?:Users|home|opt|var|etc|tmp)/[^"'`]*|[A-Z]:\\[^"'`]*)(["'`])"#)
+        .unwrap(),
+    secret: Regex::new(r#"(["'`])([A-Za-z0-9_\-+/=]{20,})(["'`])"#).unwrap(),
+    base64: Regex::new(r"^[A-Za-z0-9+/]+=*$").unwrap(),
+    class_name: Regex::new(r"^[A-Z][a-zA-Z0-9]*([A-Z][a-zA-Z0-9]*){2,}$").unwrap(),
+    snake: Regex::new(r"^[a-z][a-z0-9]*(_[a-z0-9]+)+$").unwrap(),
+    kebab: Regex::new(r"^[a-z][a-z0-9]*(-[a-z0-9]+)+$").unwrap(),
+    hex: Regex::new(r"(?i)^[a-f0-9]+$").unwrap(),
+    svg: Regex::new(r"^[MLHVCSQTAZmlhvcsqtaz0-9.,\s\-]+$").unwrap(),
+});
+
+static TRIVIAL_MAGIC_NUMBERS: LazyLock<HashSet<&'static str>> =
+    LazyLock::new(|| ["0", "1", "-1", "2"].into_iter().collect());
 
 fn shannon_entropy(s: &str) -> f64 {
     let mut counts: HashMap<char, usize> = HashMap::new();
@@ -589,9 +638,7 @@ fn is_word_byte(byte: u8) -> bool {
 }
 
 fn is_const_assignment(line: &str) -> bool {
-    let re =
-        Regex::new(r"^\s*(export\s+)?(const|let|var)\s+[A-Z_][A-Z0-9_]*\s*(:[^=]+)?=").unwrap();
-    re.is_match(line)
+    HARDCODE_PATTERNS.const_assignment.is_match(line)
 }
 
 fn truncate_with_ellipsis(value: &str, max_bytes: usize) -> String {
@@ -617,32 +664,16 @@ fn scan_hardcodes(
     enabled: &HashSet<String>,
     max: usize,
 ) -> Vec<HardcodeFinding> {
-    let suppress = Regex::new(r"//\s*@scan-suppress\s+hardcode_scan").unwrap();
     let lines: Vec<&str> = content.lines().collect();
     let mut findings = Vec::new();
     let mut in_block_comment = false;
-
-    let magic_re = Regex::new(r"-?\d+(?:\.\d+)?").unwrap();
-    let enum_re = Regex::new(r"^\s*(export\s+)?(enum|type)\s").unwrap();
-    let url_re = Regex::new(r#"https?://[^\s"')<>]+"#).unwrap();
-    let path_re =
-        Regex::new(r#"(["'`])(/(?:Users|home|opt|var|etc|tmp)/[^"'`]*|[A-Z]:\\[^"'`]*)(["'`])"#)
-            .unwrap();
-    let secret_re = Regex::new(r#"(["'`])([A-Za-z0-9_\-+/=]{20,})(["'`])"#).unwrap();
-    let base64_re = Regex::new(r"^[A-Za-z0-9+/]+=*$").unwrap();
-    let class_name_re = Regex::new(r"^[A-Z][a-zA-Z0-9]*([A-Z][a-zA-Z0-9]*){2,}$").unwrap();
-    let snake_re = Regex::new(r"^[a-z][a-z0-9]*(_[a-z0-9]+)+$").unwrap();
-    let kebab_re = Regex::new(r"^[a-z][a-z0-9]*(-[a-z0-9]+)+$").unwrap();
-    let hex_re = Regex::new(r"(?i)^[a-f0-9]+$").unwrap();
-    let svg_re = Regex::new(r"^[MLHVCSQTAZmlhvcsqtaz0-9.,\s\-]+$").unwrap();
-
-    let trivial: HashSet<&str> = ["0", "1", "-1", "2"].into_iter().collect();
+    let patterns = &*HARDCODE_PATTERNS;
 
     for (i, &line) in lines.iter().enumerate() {
         if findings.len() >= max {
             break;
         }
-        if is_suppressed(&lines, i, &suppress) {
+        if is_suppressed(&lines, i, &patterns.suppress) {
             continue;
         }
 
@@ -653,9 +684,11 @@ fn scan_hardcodes(
         let trimmed = stripped.trim();
 
         // Magic numbers
-        if enabled.contains("magic_number") && !is_const_assignment(line) && !enum_re.is_match(line)
+        if enabled.contains("magic_number")
+            && !is_const_assignment(line)
+            && !patterns.enum_declaration.is_match(line)
         {
-            for mat in magic_re.find_iter(trimmed) {
+            for mat in patterns.magic.find_iter(trimmed) {
                 if findings.len() >= max {
                     break;
                 }
@@ -667,7 +700,7 @@ fn scan_hardcodes(
                     continue;
                 }
                 let val = mat.as_str();
-                if trivial.contains(val) {
+                if TRIVIAL_MAGIC_NUMBERS.contains(val) {
                     continue;
                 }
                 // Skip years 1900-2100
@@ -705,7 +738,7 @@ fn scan_hardcodes(
 
         // Inline URLs
         if enabled.contains("inline_url") && !is_const_assignment(line) {
-            for mat in url_re.find_iter(trimmed) {
+            for mat in patterns.url.find_iter(trimmed) {
                 if findings.len() >= max {
                     break;
                 }
@@ -732,7 +765,7 @@ fn scan_hardcodes(
 
         // Inline paths
         if enabled.contains("inline_path") {
-            for caps in path_re.captures_iter(trimmed) {
+            for caps in patterns.path.captures_iter(trimmed) {
                 if findings.len() >= max {
                     break;
                 }
@@ -754,7 +787,7 @@ fn scan_hardcodes(
 
         // Secret shapes
         if enabled.contains("inline_secret_shape") {
-            for caps in secret_re.captures_iter(trimmed) {
+            for caps in patterns.secret.captures_iter(trimmed) {
                 if findings.len() >= max {
                     break;
                 }
@@ -765,22 +798,22 @@ fn scan_hardcodes(
                 if val.len() < 30 {
                     continue;
                 }
-                if hex_re.is_match(val) && val.len() <= 40 {
+                if patterns.hex.is_match(val) && val.len() <= 40 {
                     continue;
                 }
-                if class_name_re.is_match(val) {
+                if patterns.class_name.is_match(val) {
                     continue;
                 }
-                if snake_re.is_match(val) {
+                if patterns.snake.is_match(val) {
                     continue;
                 }
-                if kebab_re.is_match(val) {
+                if patterns.kebab.is_match(val) {
                     continue;
                 }
-                if val.ends_with('=') && base64_re.is_match(val) {
+                if val.ends_with('=') && patterns.base64.is_match(val) {
                     continue;
                 }
-                if svg_re.is_match(val) {
+                if patterns.svg.is_match(val) {
                     continue;
                 }
                 if !has_char_class_diversity(val) {
@@ -830,9 +863,11 @@ fn default_20() -> usize {
 }
 
 fn is_test_file(path: &str) -> bool {
-    let test_dir = regex::Regex::new(r"(^|/)(test|tests|__tests__|__mocks__|spec)/").unwrap();
-    let test_file = regex::Regex::new(r"\.(test|spec)\.[jt]sx?$").unwrap();
-    test_dir.is_match(path) || test_file.is_match(path)
+    static TEST_DIR_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(^|/)(test|tests|__tests__|__mocks__|spec)/").unwrap());
+    static TEST_FILE_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\.(test|spec)\.[jt]sx?$").unwrap());
+    TEST_DIR_RE.is_match(path) || TEST_FILE_RE.is_match(path)
 }
 
 const EXCLUDE_DIRS: &[&str] = &[
@@ -868,7 +903,6 @@ pub fn detect_security_native(input_json: &str) -> Result<String, String> {
         heuristics.push("file-cap-hit".into());
     }
 
-    let patterns = SecurityPatterns::new();
     let scanned = AtomicUsize::new(0);
 
     let all_findings: Vec<Vec<SecurityFinding>> = files
@@ -879,7 +913,13 @@ pub fn detect_security_native(input_json: &str) -> Result<String, String> {
                 Ok(c) => c,
                 Err(_) => return Vec::new(),
             };
-            scan_security(&content, rel, &enabled, input.max_per_file, &patterns)
+            scan_security(
+                &content,
+                rel,
+                &enabled,
+                input.max_per_file,
+                &SECURITY_PATTERNS,
+            )
         })
         .collect();
 

@@ -8,6 +8,7 @@ import { providerModelKey } from "../provider/model-key"
 import { Provider } from "../provider/provider"
 import { ProviderID } from "../provider/schema"
 import { SessionCompaction } from "./compaction"
+import { SessionRetry } from "./retry"
 import { BlastRadius } from "./blast-radius"
 import { AutonomousCompletionGate } from "../control-plane/autonomous-completion-gate"
 import { Instance } from "../project/instance"
@@ -199,6 +200,7 @@ export namespace SessionPrompt {
 
     let step = 0
     let totalSteps = 0
+    let lastProducedAssistantID: string | undefined
     // Bookkeeping for the durable Super-Long step counter: how many of
     // `totalSteps` have already been reported to the runtime store, and the
     // cumulative cross-invocation count it returned. The durable count is
@@ -704,6 +706,7 @@ export namespace SessionPrompt {
         abort,
         messages: msgs,
       })
+      lastProducedAssistantID = processor.message.id
       using _ = defer(() => clearPromptProcessorInstructions(processor))
 
       const tools = await resolveTools({
@@ -1153,6 +1156,21 @@ export namespace SessionPrompt {
         break
       }
       if (processor.message.error) {
+        const delay = SessionRetry.delay(Math.max(1, consecutiveErrors))
+        log.info("backing off before outer prompt retry", {
+          sessionID,
+          consecutiveErrors,
+          delay,
+        })
+        try {
+          await SessionRetry.sleep(delay, abort)
+        } catch (error) {
+          if (abort.aborted) {
+            reason = "aborted"
+            break
+          }
+          log.warn("outer prompt retry sleep failed", { sessionID, error })
+        }
         continue
       }
 
@@ -1195,6 +1213,7 @@ export namespace SessionPrompt {
     return resolvePromptLoopResult({
       sessionID,
       abort,
+      expectedMessageID: lastProducedAssistantID,
       shiftQueuedCallback: runState.shiftQueuedCallback,
     })
   })

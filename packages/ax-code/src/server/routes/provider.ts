@@ -535,6 +535,7 @@ export const ProviderRoutes = lazy(() =>
           providerID,
           method,
           code,
+          signal: c.req.raw.signal,
         })
         return c.json(true)
       }),

@@ -22,12 +22,15 @@ describe("createServerRestartPolicy", () => {
     expect(policy.crashRestarts).toBe(3)
   })
 
-  test("resets the crash counter after a successful restart", () => {
+  test("resets the crash counter only after a stability window", () => {
     const policy = createServerRestartPolicy({ maxRestarts: 1 })
 
     expect(policy.beginRestart()).toBe(true)
-    policy.completeRestart({ successful: true })
+    policy.completeRestart()
 
+    expect(policy.crashRestarts).toBe(1)
+    expect(policy.shouldRestart()).toBe(false)
+    policy.markStable()
     expect(policy.crashRestarts).toBe(0)
     expect(policy.shouldRestart()).toBe(true)
   })

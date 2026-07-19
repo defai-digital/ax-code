@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-05-16
+Last reviewed: 2026-07-19
 Owner: ax-code runtime
 
 AX Code includes a built-in execution sandbox that restricts what the AI agent can do on your system. By default, AX Code starts in **workspace-write** with network disabled. Switch to `full-access` only when you intentionally want to disable sandbox boundaries.
@@ -134,11 +134,11 @@ To allow network while keeping write restrictions:
 
 ## Isolation backend (app vs OS)
 
-| Backend | Config / env | Behavior |
-| ------- | ------------ | -------- |
-| `app` (default) | `"backend": "app"` or unset | Portable tool-layer checks only |
-| `os` | `"backend": "os"` / `AX_CODE_ISOLATION_BACKEND=os` | App checks + kernel sandbox for bash; errors if OS tools missing |
-| `auto` | `"backend": "auto"` / `AX_CODE_ISOLATION_BACKEND=auto` | Prefer OS bash wrap; fall back to app-only |
+| Backend          | Config / env                                                    | Behavior                                                         |
+| ---------------- | --------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `app`            | `"backend": "app"`                                              | Portable tool-layer checks only                                  |
+| `os`             | `"backend": "os"` / `AX_CODE_ISOLATION_BACKEND=os`              | App checks + kernel sandbox for bash; errors if OS tools missing |
+| `auto` (default) | `"backend": "auto"`, unset, or `AX_CODE_ISOLATION_BACKEND=auto` | Prefer OS bash wrap; fall back to app-only                       |
 
 **macOS:** Seatbelt profiles via `sandbox-exec` (write limited to workspace/worktree, network denied when `network: false`).  
 **Linux:** bubblewrap (`bwrap`) when installed (`--unshare-net` when network disabled, workspace bind-mounted RW).  
@@ -156,18 +156,32 @@ To allow network while keeping write restrictions:
 
 See [SECURITY.md](../SECURITY.md) for the threat model.
 
+## Repository-controlled permissions and hooks
+
+Project files are untrusted by default. Permission rules in `ax-code.json`, `.ax-code/policy.json`, and project agent or mode definitions may tighten access with `deny`, but repository-controlled `allow`/`ask` grants are ignored. Project commands cannot enable shell expansion. `.ax-code/hooks.json`, `.ax-code/plugin/`, and project-configured plugins are not executed.
+
+Untrusted project config also cannot select a custom shell, executable LSP or formatter, provider package or API endpoint, provider credential environment variables, external skill source, or instruction path outside the worktree. Safe relative instruction paths and non-executable built-in overrides remain available. MCP servers use a separate fingerprinted approval flow described in [MCP Integrations](mcp.md).
+
+After reviewing the repository-controlled configuration, users can opt in outside the repository for the current process:
+
+```bash
+AX_CODE_TRUST_PROJECT_CONFIG=1 ax-code
+```
+
+The environment-only switch prevents a checkout from declaring itself trusted.
+
 ## How Enforcement Works
 
 Sandbox enforcement is **always** application-layer, checked at each tool invocation. When `backend` is `os` or `auto` and the platform supports it, **bash** is additionally wrapped in a kernel sandbox.
 
-| Tool          | Check                                                                                                                  |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Tool          | Check                                                                                                                                    |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `bash`        | Working directory + all resolved paths must be inside workspace; network-only clients blocked when network is disabled; optional OS wrap |
-| `edit`        | Target file must be inside workspace and not protected                                                                 |
-| `write`       | Target file must be inside workspace and not protected                                                                 |
-| `apply_patch` | All target files must be inside workspace and not protected                                                            |
-| `webfetch`    | Network access must be enabled                                                                                         |
-| `websearch`   | Network access must be enabled                                                                                         |
-| `codesearch`  | Network access must be enabled                                                                                         |
+| `edit`        | Target file must be inside workspace and not protected                                                                                   |
+| `write`       | Target file must be inside workspace and not protected                                                                                   |
+| `apply_patch` | All target files must be inside workspace and not protected                                                                              |
+| `webfetch`    | Network access must be enabled                                                                                                           |
+| `websearch`   | Network access must be enabled                                                                                                           |
+| `codesearch`  | Network access must be enabled                                                                                                           |
 
 When a tool violates isolation, it throws an `IsolationDeniedError` with a clear message explaining what was blocked and why.

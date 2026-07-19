@@ -832,6 +832,10 @@ test("parseBuiltinSkillEntries still accepts string payloads", () => {
   expect(entries[0].location).toBe("/bundle/skills/debug-n-fix/SKILL.md")
 })
 
+test("parseBuiltinSkillEntries rejects malformed build-time JSON with context", () => {
+  expect(() => Skill.parseBuiltinSkillEntries("{not-json")).toThrow("Invalid AX_CODE_BUILTIN_SKILLS JSON")
+})
+
 test("properly resolves directories that skills live in", async () => {
   await using tmp = await tmpdir({
     git: true,

@@ -117,7 +117,7 @@ describe("distribution support guardrails", () => {
     )
   })
 
-  test("release workflow publishes GitHub release assets without package-channel gates", async () => {
+  test("release workflow verifies draft assets before publishing without package-channel gates", async () => {
     const text = await readFile(releaseWorkflow, "utf-8")
     const publishJob = text.match(/\n  publish:[\s\S]*$/)
     expect(publishJob).not.toBeNull()
@@ -127,7 +127,8 @@ describe("distribution support guardrails", () => {
     expect(publishJob![0]).toContain("packages/ax-code/dist/install.ps1")
     expect(publishJob![0]).toContain("*.tar.gz.minisig")
     expect(publishJob![0]).toContain("*.zip.minisig")
-    expect(publishJob![0]).not.toMatch(/\n\s+--draft(?:\s|\\|$)/)
+    expect(publishJob![0]).toMatch(/\n\s+--draft(?:\s|\\|$)/)
+    expect(publishJob![0]).toContain("Publish verified release")
     expect(text).not.toMatch(/\n  finalize:/)
     expect(text).not.toContain("gh workflow run install-matrix-smoke.yml")
   })
@@ -144,24 +145,31 @@ describe("distribution support guardrails", () => {
     expect(job).toContain("AX_CODE_MINISIGN_SECRET_KEY_B64")
     expect(job).toContain("secrets.AX_CODE_MINISIGN_SECRET_KEY_B64")
     expect(job).toContain("chmod 600")
-    expect(job).toContain("RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A")
+    expect(job).toContain("RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO")
     // The passphrase is stored in the macOS Keychain from the secret, then the
     // signing script reads it back via minisignPasswordFromKeychain().
     expect(job).toContain("secrets.AX_CODE_MINISIGN_PASSWORD")
     expect(job).toContain("security add-generic-password")
-    expect(job).toContain("ax-code-minisign")
-    expect(job).toContain("ax-code-release")
+    expect(job).toContain("ax-minisign")
+    expect(job).toContain("ax-release")
     expect(job).toContain("Clean up Keychain passphrase")
     expect(job).toContain("security delete-generic-password")
     expect(job).toContain("Sign release assets")
     expect(job).toContain("minisignPasswordFromKeychain")
     expect(job).toContain("pnpm exec tsx script/sign-release-assets.ts --dist-dir packages/ax-code/dist")
-    expect(job).toContain("missing minisign signature for ${archive}")
+    expect(job).toContain("missing minisign signature for ${asset}")
     expect(job).toContain("shopt -s nullglob")
     expect(job).toContain("no release assets found to upload")
     expect(job).not.toContain('gh release upload "$TAG" "$f" --clobber || true')
     expect(job.indexOf("Sign release assets")).toBeLessThan(job.indexOf("Create GitHub release"))
     expect(job.indexOf("Sign release assets")).toBeLessThan(job.indexOf("Upload release assets"))
+    expect(job).toContain("--draft")
+    expect(job).toContain("docs/ax-minisign.pub")
+    expect(job).toContain("Verify uploaded release signatures")
+    expect(job).toContain("minisign -V -p docs/ax-minisign.pub")
+    expect(job).toContain("Publish verified release")
+    expect(job).toContain("release $TAG is no longer a draft; refusing to publish or mutate it")
+    expect(job.indexOf("Verify uploaded release signatures")).toBeLessThan(job.indexOf("Publish verified release"))
   })
 
   test("release workflow requires Developer ID signing and notarizes the macOS CLI archive", async () => {
@@ -240,6 +248,15 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("TAP_TOKEN")
     expect(text).toContain("HOMEBREW_TAP_TOKEN")
     expect(text).toContain("!contains(github.ref_name, '-')")
+  })
+
+  test("Homebrew verifies the detached release signature before hashing", async () => {
+    const script = await readFile(path.join(repoRoot, ".github/scripts/update-homebrew.sh"), "utf-8")
+
+    expect(script).toContain('MINISIGN_PUBLIC_KEY="${AX_CODE_MINISIGN_PUBLIC_KEY:-docs/ax-minisign.pub}"')
+    expect(script).toContain('download_asset "${DARWIN_ARM64_ASSET}.minisig"')
+    expect(script).toContain("minisign -V")
+    expect(script.indexOf("minisign -V")).toBeLessThan(script.indexOf("cat > /tmp/ax-code.rb"))
   })
 
   test("install matrix is dispatch-only so release.published cannot race package publication", async () => {

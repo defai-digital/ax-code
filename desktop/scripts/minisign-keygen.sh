@@ -7,6 +7,7 @@ set -euo pipefail
 KEY_DIR="${SIGNKEY_DIR:-$HOME/signkey}"
 SECRET_KEY="${AX_CODE_DESKTOP_MINISIGN_SECRET_KEY:-${MINISIGN_SECRET_KEY:-}}"
 PUBLIC_KEY="${AX_CODE_DESKTOP_MINISIGN_PUBLIC_KEY:-${MINISIGN_PUBLIC_KEY:-}}"
+CREATE_SECRET_KEY_ALIAS=false
 FORCE=false
 NO_PASSWORD=false
 DRY_RUN=false
@@ -19,8 +20,9 @@ Generate the minisign keypair for signing AX Code Desktop release artifacts.
 
 Options:
   --key-dir <path>          Directory for generated keys (default: ~/signkey)
-  --secret-key <path>       Secret key path (default: <key-dir>/ax-code-desktop.minisign.key)
-  --public-key <path>       Public key path (default: <key-dir>/ax-code-desktop.minisign.pub)
+  --secret-key <path>       Secret key path (default: <key-dir>/ax.minisign.key,
+                            backed by <key-dir>/ax.sec)
+  --public-key <path>       Public key path (default: <key-dir>/ax.pub)
   --force                   Overwrite an existing keypair
   --allow-unencrypted-test-key
                             Generate an unencrypted secret key for short-lived
@@ -109,9 +111,15 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-SECRET_KEY="${SECRET_KEY:-$KEY_DIR/ax-code-desktop.minisign.key}"
-PUBLIC_KEY="${PUBLIC_KEY:-$KEY_DIR/ax-code-desktop.minisign.pub}"
-SECRET_KEY_DIR="$(dirname "$SECRET_KEY")"
+if [[ -z "$SECRET_KEY" ]]; then
+  SECRET_KEY="$KEY_DIR/ax.minisign.key"
+  SECRET_KEY_BACKING="$KEY_DIR/ax.sec"
+  CREATE_SECRET_KEY_ALIAS=true
+else
+  SECRET_KEY_BACKING="$SECRET_KEY"
+fi
+PUBLIC_KEY="${PUBLIC_KEY:-$KEY_DIR/ax.pub}"
+SECRET_KEY_DIR="$(dirname "$SECRET_KEY_BACKING")"
 PUBLIC_KEY_DIR="$(dirname "$PUBLIC_KEY")"
 
 if ! command -v minisign >/dev/null 2>&1; then
@@ -120,16 +128,19 @@ if ! command -v minisign >/dev/null 2>&1; then
 fi
 
 if [[ "$FORCE" != true ]]; then
-  if [[ -e "$SECRET_KEY" || -e "$PUBLIC_KEY" ]]; then
+  if [[ -e "$SECRET_KEY" || -L "$SECRET_KEY" || -e "$SECRET_KEY_BACKING" || -e "$PUBLIC_KEY" ]]; then
     echo "error: refusing to overwrite an existing keypair:" >&2
     echo "       $SECRET_KEY" >&2
+    if [[ "$CREATE_SECRET_KEY_ALIAS" == true ]]; then
+      echo "       $SECRET_KEY_BACKING" >&2
+    fi
     echo "       $PUBLIC_KEY" >&2
     echo "       pass --force only if you intentionally want to rotate the signing key" >&2
     exit 1
   fi
 fi
 
-MINISIGN_ARGS=(-G -s "$SECRET_KEY" -p "$PUBLIC_KEY")
+MINISIGN_ARGS=(-G -s "$SECRET_KEY_BACKING" -p "$PUBLIC_KEY")
 if [[ "$FORCE" == true ]]; then
   MINISIGN_ARGS+=(-f)
 fi
@@ -139,6 +150,9 @@ fi
 
 echo "Key directory: $KEY_DIR"
 echo "Secret key:    $SECRET_KEY"
+if [[ "$CREATE_SECRET_KEY_ALIAS" == true ]]; then
+  echo "Secret backing: $SECRET_KEY_BACKING"
+fi
 echo "Public key:    $PUBLIC_KEY"
 
 if [[ "$DRY_RUN" == true ]]; then
@@ -167,10 +181,16 @@ fi
 
 minisign "${MINISIGN_ARGS[@]}"
 
-chmod 600 "$SECRET_KEY"
+chmod 600 "$SECRET_KEY_BACKING"
+if [[ "$CREATE_SECRET_KEY_ALIAS" == true ]]; then
+  if [[ -e "$SECRET_KEY" || -L "$SECRET_KEY" ]]; then
+    rm -f "$SECRET_KEY"
+  fi
+  ln -s "$(basename "$SECRET_KEY_BACKING")" "$SECRET_KEY"
+fi
 chmod 644 "$PUBLIC_KEY"
 require_private_path "$SECRET_KEY_DIR" "secret key directory"
-require_private_path "$SECRET_KEY" "secret key"
+require_private_path "$SECRET_KEY_BACKING" "secret key"
 
 echo ""
 echo "Generated minisign keypair."

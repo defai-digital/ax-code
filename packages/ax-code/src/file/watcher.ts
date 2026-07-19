@@ -154,9 +154,13 @@ export namespace FileWatcher {
     overrides.delete(directory)
   }
 
+  async function closeHandles(handles: CloseHandle[]) {
+    await Promise.allSettled(handles.map((close) => Promise.resolve().then(() => close())))
+  }
+
   async function disposeState(directory: string, handles: CloseHandle[], override: InitOptions | undefined) {
     clearOverride(directory, override)
-    await Promise.allSettled(handles.map((close) => Promise.resolve().then(() => close())))
+    await closeHandles(handles)
   }
 
   export const hasNativeBinding = () => !!watcher()
@@ -303,6 +307,7 @@ export namespace FileWatcher {
             error,
             native: false,
           })
+          throw error
         }
       }
 
@@ -346,20 +351,29 @@ export namespace FileWatcher {
         await subscribePoll(dir, ignore)
       }
 
-      const cfg = await Config.get()
-      const cfgIgnores = cfg.watcher?.ignore ?? []
+      try {
+        const cfg = await Config.get()
+        const cfgIgnores = cfg.watcher?.ignore ?? []
 
-      await subscribe(directory, [...FileIgnore.PATTERNS, ...cfgIgnores, ...protecteds(directory)])
+        await subscribe(directory, [...FileIgnore.PATTERNS, ...cfgIgnores, ...protecteds(directory)])
 
-      if (Instance.project.vcs === "git") {
-        const result = await git(["rev-parse", "--git-dir"], {
-          cwd: Instance.project.worktree,
-        })
-        const vcsDir = result.exitCode === 0 ? path.resolve(Instance.project.worktree, result.text().trim()) : undefined
-        if (vcsDir && !cfgIgnores.includes(".git") && !cfgIgnores.includes(vcsDir)) {
-          const ignore = (await readdir(vcsDir).catch(() => [])).filter((entry) => entry !== "HEAD")
-          await subscribe(vcsDir, ignore)
+        if (Instance.project.vcs === "git") {
+          const result = await git(["rev-parse", "--git-dir"], {
+            cwd: Instance.project.worktree,
+          })
+          const vcsDir =
+            result.exitCode === 0 ? path.resolve(Instance.project.worktree, result.text().trim()) : undefined
+          if (vcsDir && !cfgIgnores.includes(".git") && !cfgIgnores.includes(vcsDir)) {
+            const ignore = (await readdir(vcsDir).catch(() => [])).filter((entry) => entry !== "HEAD")
+            await subscribe(vcsDir, ignore)
+          }
         }
+      } catch (error) {
+        // A later subscription can fail after the workspace watcher was
+        // already installed. State initialization has no disposer on failure,
+        // so close partial handles here before surfacing the error.
+        await closeHandles(handles)
+        throw error
       }
 
       return {

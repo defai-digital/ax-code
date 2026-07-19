@@ -107,7 +107,7 @@ export namespace AutoIndex {
     "Automatic indexing is disabled by AX_CODE_DISABLE_AUTO_INDEX. Run `ax-code index` when you want to build the graph."
 
   export function getState(projectID: ProjectID): IndexState {
-    const key = projectID as unknown as string
+    const key = projectID as string
     return (
       stateByProject.get(key) ?? {
         state: "idle",
@@ -125,7 +125,7 @@ export namespace AutoIndex {
   // corresponding bus event so the TUI picks it up without waiting
   // on the 10s poll.
   export function setState(projectID: ProjectID, patch: Partial<IndexState> & { state: IndexState["state"] }): void {
-    const key = projectID as unknown as string
+    const key = projectID as string
     const prev = getState(projectID)
     const next: IndexState = { ...prev, ...patch }
     stateByProject.set(key, next)
@@ -151,7 +151,7 @@ export namespace AutoIndex {
   }
 
   export function reportProgress(projectID: ProjectID, completed: number, total: number): void {
-    const key = projectID as unknown as string
+    const key = projectID as string
     const prev = getState(projectID)
     stateByProject.set(key, { ...prev, completed, total })
     Bus.publishDetached(Event.Progress, { projectID: key, completed, total })
@@ -215,7 +215,7 @@ export namespace AutoIndex {
     // on its own.
     if (!Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE) return
 
-    const key = projectID as unknown as string
+    const key = projectID as string
     if (inFlight.has(key)) {
       log.info("skipping: already in flight", { projectID })
       return

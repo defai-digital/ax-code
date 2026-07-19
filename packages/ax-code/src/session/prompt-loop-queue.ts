@@ -13,13 +13,14 @@ export function finishPromptLoopQueue(input: {
   cancel: (sessionID: SessionID) => Promise<unknown>
   resumeLoop: (input: { sessionID: SessionID; resume_existing: true }) => Promise<MessageV2.WithParts>
 }): void | Promise<void> {
-  if (input.reason !== "completed") {
-    return input.cancel(input.sessionID).then(() => undefined)
-  }
   const callbacks = input.queuedCallbacks(input.sessionID)
   if (callbacks.length === 0) {
     return input.cancel(input.sessionID).then(() => undefined)
   }
+  // Queued prompts already have durable user messages. Cancelling them when
+  // the preceding turn ended with an error rejects the caller while leaving
+  // those messages permanently unanswered. Resume a fresh loop whenever
+  // callbacks exist, regardless of how the previous turn ended.
   input.markIdle(input.sessionID)
   input.resumeLoop({ sessionID: input.sessionID, resume_existing: true }).catch(async (error) => {
     log.error("session loop failed to resume for queued messages", {

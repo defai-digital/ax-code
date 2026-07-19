@@ -134,8 +134,10 @@ export namespace LSP {
           clients,
           rootCache: new Map<string, string | null>(),
           spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
+          spawningProcesses: new Set<ChildProcessWithoutNullStreams>(),
           healthCheck: undefined,
           rootCacheUnsubscribe: undefined,
+          disposed: false,
         }
       }
 
@@ -155,8 +157,10 @@ export namespace LSP {
         clients,
         rootCache: new Map<string, string | null>(),
         spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
+        spawningProcesses: new Set<ChildProcessWithoutNullStreams>(),
         healthCheck: undefined as ReturnType<typeof setInterval> | undefined,
         rootCacheUnsubscribe: undefined as (() => void) | undefined,
+        disposed: false,
       }
 
       s.rootCacheUnsubscribe = Bus.subscribe(FileWatcher.Event.Updated, (event) => {
@@ -198,8 +202,16 @@ export namespace LSP {
       return s
     },
     async (state) => {
+      state.disposed = true
       state.rootCacheUnsubscribe?.()
       if (state.healthCheck) clearInterval(state.healthCheck)
+      // Interrupt initialization before awaiting it. Some language servers
+      // never answer initialize, so merely waiting for the spawn promise can
+      // hold instance disposal until the RPC timeout expires.
+      await Promise.allSettled(
+        [...state.spawningProcesses].map((process) => stopLSPProcessBestEffort(process, { phase: "instance-dispose" })),
+      )
+      await Promise.allSettled(state.spawning.values())
       // Per-client catch so one client's shutdown failure (process
       // already exited, broken pipe, RPC timeout) doesn't skip the
       // others and leak their child processes. The MCP shutdown
@@ -292,55 +304,77 @@ export namespace LSP {
     }
 
     log.info("spawned lsp server", { serverID: server.id })
+    s.spawningProcesses.add(handle.process)
 
-    let client: LSPClient.Info | undefined
-    const initializeStarted = performance.now()
     try {
-      client = await LSPClient.create({
-        serverID: server.id,
-        server: handle,
-        root,
-        languageId: server.languageId,
-        semantic: server.semantic,
-        priority: server.priority,
-        capabilityHints: server.capabilityHints,
-        onClose: () => {
-          log.warn("lsp connection closed unexpectedly", { serverID: server.id, root })
-          LSPBrokenServer.markBroken(s.broken, key)
-          const idx = s.clients.findIndex((item) => item.root === root && item.serverID === server.id)
-          if (idx >= 0) s.clients.splice(idx, 1)
-          void stopLSPProcess(handle.process).catch(() => {})
-          Bus.publishDetached(Event.Updated, {})
-        },
-      })
-      LSPPerf.finishPhase("client.initialize", initializeStarted, true)
-    } catch (err) {
-      LSPPerf.finishPhase("client.initialize", initializeStarted, false)
-      LSPBrokenServer.markBroken(s.broken, key)
-      await stopLSPProcessBestEffort(handle.process, { serverID: server.id, root, phase: "initialize" })
-      log.error(`Failed to initialize LSP client ${server.id}`, { error: err })
-      return undefined
-    }
+      if (s.disposed) {
+        await stopLSPProcessBestEffort(handle.process, { serverID: server.id, root, phase: "disposed-before-init" })
+        return undefined
+      }
 
-    if (!client) {
-      return undefined
-    }
+      let client: LSPClient.Info | undefined
+      const initializeStarted = performance.now()
+      try {
+        client = await LSPClient.create({
+          serverID: server.id,
+          server: handle,
+          root,
+          languageId: server.languageId,
+          semantic: server.semantic,
+          priority: server.priority,
+          capabilityHints: server.capabilityHints,
+          onClose: () => {
+            log.warn("lsp connection closed unexpectedly", { serverID: server.id, root })
+            LSPBrokenServer.markBroken(s.broken, key)
+            const idx = s.clients.findIndex((item) => item.root === root && item.serverID === server.id)
+            if (idx >= 0) s.clients.splice(idx, 1)
+            void stopLSPProcess(handle.process).catch(() => {})
+            Bus.publishDetached(Event.Updated, {})
+          },
+        })
+        LSPPerf.finishPhase("client.initialize", initializeStarted, true)
+      } catch (err) {
+        LSPPerf.finishPhase("client.initialize", initializeStarted, false)
+        LSPBrokenServer.markBroken(s.broken, key)
+        await stopLSPProcessBestEffort(handle.process, { serverID: server.id, root, phase: "initialize" })
+        log.error(`Failed to initialize LSP client ${server.id}`, { error: err })
+        return undefined
+      }
 
-    const existing = s.clients.find((x) => x.root === root && x.serverID === server.id)
-    if (existing) {
-      await stopLSPProcessBestEffort(handle.process, { serverID: server.id, root, phase: "duplicate" })
-      return existing
-    }
+      if (!client) {
+        return undefined
+      }
 
-    if (client.closed || !client.ping()) {
-      log.warn("lsp client died during spawn, skipping active registration", { serverID: server.id, root })
-      LSPBrokenServer.markBroken(s.broken, key)
-      await stopLSPProcessBestEffort(handle.process, { serverID: server.id, root, phase: "liveness" })
-      return undefined
-    }
+      if (s.disposed) {
+        log.info("discarding LSP client completed after instance disposal", { serverID: server.id, root })
+        await client.shutdown().catch(() =>
+          stopLSPProcessBestEffort(handle.process, {
+            serverID: server.id,
+            root,
+            phase: "disposed",
+          }),
+        )
+        return undefined
+      }
 
-    s.clients.push(client)
-    return client
+      const existing = s.clients.find((x) => x.root === root && x.serverID === server.id)
+      if (existing) {
+        await stopLSPProcessBestEffort(handle.process, { serverID: server.id, root, phase: "duplicate" })
+        return existing
+      }
+
+      if (client.closed || !client.ping()) {
+        log.warn("lsp client died during spawn, skipping active registration", { serverID: server.id, root })
+        LSPBrokenServer.markBroken(s.broken, key)
+        await stopLSPProcessBestEffort(handle.process, { serverID: server.id, root, phase: "liveness" })
+        return undefined
+      }
+
+      s.clients.push(client)
+      return client
+    } finally {
+      s.spawningProcesses.delete(handle.process)
+    }
   }
 
   type PendingClientSpawn = {

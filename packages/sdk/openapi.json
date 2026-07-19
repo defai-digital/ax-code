@@ -40915,7 +40915,7 @@
             "type": "boolean"
           },
           "timeout": {
-            "description": "Timeout in ms for MCP server requests. Defaults to 5000 (5 seconds) if not specified.",
+            "description": "Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.",
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
@@ -40984,7 +40984,7 @@
             ]
           },
           "timeout": {
-            "description": "Timeout in ms for MCP server requests. Defaults to 5000 (5 seconds) if not specified.",
+            "description": "Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.",
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
@@ -41824,6 +41824,12 @@
                   },
                   "maxContestants": {
                     "description": "Maximum arena contestants (default: 3, hard max: 5).",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "timeoutMs": {
+                    "description": "Per-member timeout in ms for arena fan-out (falls back to council timeout, then 60000).",
                     "type": "integer",
                     "exclusiveMinimum": 0,
                     "maximum": 9007199254740991

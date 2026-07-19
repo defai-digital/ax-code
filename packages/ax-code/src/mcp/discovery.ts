@@ -12,8 +12,19 @@ import { access, readFile, constants } from "fs/promises"
 import { Log } from "../util/log"
 import { Process } from "../util/process"
 import { Env } from "../util/env"
+import { createRequire } from "node:module"
 
 const log = Log.create({ service: "mcp.discovery" })
+const require = createRequire(import.meta.url)
+
+function packageInstalled(name: string) {
+  try {
+    require.resolve(`${name}/package.json`)
+    return true
+  } catch {
+    return false
+  }
+}
 
 const CDP_DEFAULT_PORT = 9222
 
@@ -210,8 +221,9 @@ const CANDIDATES: Candidate[] = [
     type: "stdio",
     command: "npx",
     args: ["-y", "@modelcontextprotocol/server-puppeteer"],
-    check: () =>
-      spawnExitsCleanly("npx", ["-y", "@modelcontextprotocol/server-puppeteer", "--help"], { timeoutMs: 5000 }),
+    // Detection must be passive: `npx -y <package>` downloads and executes
+    // arbitrary registry code when the package is absent.
+    check: async () => packageInstalled("@modelcontextprotocol/server-puppeteer"),
   },
   {
     name: "playwright",

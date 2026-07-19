@@ -11,6 +11,7 @@ import { spawnSync } from "child_process"
 import path from "path"
 import { fileURLToPath } from "url"
 import { createRequire } from "module"
+import { resolveAppleSigningEnv } from "./apple-signing.mjs"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const electronDir = path.join(__dirname, "..")
@@ -25,6 +26,7 @@ const args = process.argv.slice(2)
 // pass it through, matching how rebuild-native.mjs pins the Electron ABI.
 const require = createRequire(import.meta.url)
 const { version: electronVersion } = require("electron/package.json")
+const builderEnv = resolveAppleSigningEnv(args)
 
 // Resolve electron-builder via npx (it's hoisted to the workspace root, not
 // packages/electron/node_modules/.bin), matching how the macOS job invokes it.
@@ -37,7 +39,9 @@ const result = spawnSync("npx", ["electron-builder", `-c.electronVersion=${elect
   // (scripts/sign-windows.cjs) using AzureSignTool and an Azure Key Vault key.
   // Release CI requires signing; local builds with no signing env remain
   // unsigned.
-  env: process.env,
+  // Local macOS release packages default to the ax-notary Keychain profile and
+  // the AX Code Developer ID team. CI keeps using its explicit API-key env.
+  env: builderEnv,
 })
 
 if (result.error) throw result.error

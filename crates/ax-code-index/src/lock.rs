@@ -133,15 +133,17 @@ impl AdvisoryLock {
             return Ok(());
         }
 
+        let mut release_error: Option<napi::Error> = None;
+
         #[cfg(unix)]
         if let Some(ref file) = self.file {
             let fd = file.as_raw_fd();
             let result = unsafe { libc::flock(fd, libc::LOCK_UN) };
             if result != 0 {
-                eprintln!(
-                    "WARNING: flock(LOCK_UN) failed: {}",
+                release_error = Some(napi::Error::from_reason(format!(
+                    "flock(LOCK_UN) failed: {}",
                     std::io::Error::last_os_error()
-                );
+                )));
             }
         }
 
@@ -154,10 +156,10 @@ impl AdvisoryLock {
                 unsafe { std::mem::zeroed::<windows_sys::Win32::System::IO::OVERLAPPED>() };
             let result = unsafe { UnlockFileEx(handle, 0, 1, 0, &mut overlapped) };
             if result == 0 {
-                eprintln!(
-                    "WARNING: UnlockFileEx failed: {}",
+                release_error = Some(napi::Error::from_reason(format!(
+                    "UnlockFileEx failed: {}",
                     std::io::Error::last_os_error()
-                );
+                )));
             }
         }
 
@@ -169,6 +171,9 @@ impl AdvisoryLock {
         // inode, while a third process creates a new file at the same path
         // — both believe they hold the exclusive lock. Stale lock files are
         // harmless (flock is advisory and tied to the fd, not the file).
+        if let Some(error) = release_error {
+            return Err(error);
+        }
         Ok(())
     }
 

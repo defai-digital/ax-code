@@ -72,16 +72,16 @@ describe("agentic-runtime-eval", () => {
       protectedPaths: ["/proj/.git"],
     })
     expect(profile).toContain("(deny network*)")
-    expect(Isolation.shouldUseOsSandbox(Isolation.resolve({ backend: "os", mode: "workspace-write" }, os.tmpdir()))).toBe(
-      true,
-    )
+    expect(
+      Isolation.shouldUseOsSandbox(Isolation.resolve({ backend: "os", mode: "workspace-write" }, os.tmpdir())),
+    ).toBe(true)
   })
 
-  test("lifecycle packs include PreToolUse/PostToolUse/Stop and block force-push", () => {
+  test("lifecycle packs include PreToolUse/PostToolUse/Stop and block force-push", async () => {
     const packs = LifecycleHooks.listBuiltinPacks()
     expect(packs.length).toBeGreaterThanOrEqual(5)
     const force = packs.find((p) => p.name === "block-force-push")!
-    const result = LifecycleHooks.runHooks(force.hooks, {
+    const result = await LifecycleHooks.runHooks(force.hooks, {
       event: "PreToolUse",
       tool: "bash",
       args: { command: "git push -f origin HEAD" },

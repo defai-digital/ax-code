@@ -18,6 +18,7 @@ VERSION="${GITHUB_REF_NAME#v}"
 TAG="v${VERSION}"
 RELEASE_BASE="https://github.com/defai-digital/ax-code/releases/download/${TAG}"
 SOURCE_REPO="${GITHUB_REPOSITORY:-defai-digital/ax-code}"
+MINISIGN_PUBLIC_KEY="${AX_CODE_MINISIGN_PUBLIC_KEY:-docs/ax-minisign.pub}"
 RELEASE_READ_TOKEN="${GH_TOKEN:-}"
 LEGACY_TAP_AUTH_TOKEN="${TAP_TOKEN:-}"
 NAMED_TAP_AUTH_TOKEN="${HOMEBREW_TAP_TOKEN:-}"
@@ -47,6 +48,14 @@ add_tap_token() {
 
 if [ -z "${RELEASE_READ_TOKEN}" ]; then
   echo "::error::GH_TOKEN is required to read release assets from ${SOURCE_REPO}"
+  exit 1
+fi
+if ! command -v minisign >/dev/null 2>&1; then
+  echo "::error::minisign is required to verify release assets"
+  exit 1
+fi
+if [ ! -f "${MINISIGN_PUBLIC_KEY}" ]; then
+  echo "::error::pinned minisign public key not found: ${MINISIGN_PUBLIC_KEY}"
   exit 1
 fi
 
@@ -111,6 +120,11 @@ download_asset() {
 DARWIN_ARM64_ASSET="ax-code-darwin-arm64.zip"
 
 DARWIN_ARM64_SHA="$(download_asset "${DARWIN_ARM64_ASSET}")"
+download_asset "${DARWIN_ARM64_ASSET}.minisig" >/dev/null
+minisign -V \
+  -p "${MINISIGN_PUBLIC_KEY}" \
+  -m "/tmp/${DARWIN_ARM64_ASSET}" \
+  -x "/tmp/${DARWIN_ARM64_ASSET}.minisig"
 
 cat > /tmp/ax-code.rb << HEADER
 # typed: false

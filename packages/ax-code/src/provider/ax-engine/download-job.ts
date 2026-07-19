@@ -23,7 +23,6 @@ export type AxEngineModelJobSummary = {
 
 type AxEngineDownloadJob = AxEngineModelJobSummary & {
   controller: AbortController
-  promise: Promise<AxEngineModelJobSummary>
 }
 
 export type AxEngineDownloadJobRuntime = {
@@ -81,7 +80,6 @@ export async function startDownloadJob(
     quantization,
     status: "queued",
     controller,
-    promise: Promise.resolve(undefined as unknown as AxEngineModelJobSummary),
   }
   const run = async (): Promise<AxEngineModelJobSummary> => {
     try {
@@ -141,7 +139,7 @@ export async function startDownloadJob(
     }
   }
   jobs.set(key, job)
-  job.promise = run()
+  void run()
   return summarize(job)
 }
 

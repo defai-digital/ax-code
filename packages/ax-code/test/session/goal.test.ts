@@ -6,6 +6,7 @@ import { SessionGoal } from "../../src/session/goal"
 import { LLM } from "../../src/session/llm"
 import { SessionPrompt } from "../../src/session/prompt"
 import { tmpdir } from "../fixture/fixture"
+import { Snapshot } from "../../src/snapshot"
 
 const model: Provider.Model = {
   id: "test-model" as any,
@@ -38,6 +39,7 @@ const model: Provider.Model = {
 
 let streamSpy: MockInstance | undefined
 let modelSpy: MockInstance | undefined
+let snapshotTrackSpy: MockInstance | undefined
 
 // Goal auto-continuation runs inside the autonomous prompt loop. Pin the
 // flag explicitly: config loads with an `autonomous` key sync the env, so
@@ -45,6 +47,10 @@ let modelSpy: MockInstance | undefined
 const origAutonomous = process.env.AX_CODE_AUTONOMOUS
 beforeEach(() => {
   process.env.AX_CODE_AUTONOMOUS = "1"
+  // Goal-loop behavior is independent of git snapshotting. Avoid spawning git
+  // for every synthetic continuation so this suite stays deterministic under
+  // the full test matrix's subprocess load.
+  snapshotTrackSpy = vi.spyOn(Snapshot, "track").mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -57,6 +63,8 @@ afterEach(() => {
   streamSpy = undefined
   modelSpy?.mockRestore()
   modelSpy = undefined
+  snapshotTrackSpy?.mockRestore()
+  snapshotTrackSpy = undefined
 })
 
 describe("SessionGoal", () => {

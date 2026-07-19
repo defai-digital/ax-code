@@ -501,6 +501,9 @@ pub(crate) fn strategy_context_aware(content: &str, find: &str) -> Vec<String> {
 }
 
 pub(crate) fn strategy_multi_occurrence(content: &str, find: &str) -> Vec<String> {
+    if find.is_empty() {
+        return Vec::new();
+    }
     let mut results = Vec::new();
     let mut start = 0;
     while let Some(idx) = content[start..].find(find) {

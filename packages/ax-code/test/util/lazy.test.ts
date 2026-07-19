@@ -34,6 +34,26 @@ describe("util.lazy", () => {
     expect(result1).toBe(result2)
   })
 
+  test("peek observes an initialized value without triggering initialization", () => {
+    let calls = 0
+    const value = lazy(() => {
+      calls++
+      return { ready: true }
+    })
+
+    expect(value.loaded()).toBe(false)
+    expect(value.peek()).toBeUndefined()
+    expect(calls).toBe(0)
+
+    const initialized = value()
+    expect(value.loaded()).toBe(true)
+    expect(value.peek()).toBe(initialized)
+
+    value.reset()
+    expect(value.loaded()).toBe(false)
+    expect(value.peek()).toBeUndefined()
+  })
+
   test("should work with different return types", () => {
     const lazyString = lazy(() => "string")
     const lazyNumber = lazy(() => 123)

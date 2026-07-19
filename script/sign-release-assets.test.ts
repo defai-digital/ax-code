@@ -3,6 +3,8 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 import {
+  DEFAULT_MINISIGN_KEYCHAIN_ACCOUNT,
+  DEFAULT_MINISIGN_KEYCHAIN_SERVICE,
   defaultKeyPaths,
   expandHome,
   findReleaseAssets,
@@ -20,25 +22,27 @@ import {
 
 describe("sign-release-assets helpers", () => {
   test("expands home-relative key paths", () => {
-    expect(expandHome("~/.minisign", "/home/ax")).toBe(path.join("/home/ax", ".minisign"))
+    expect(expandHome("~/signkey", "/home/ax")).toBe(path.join("/home/ax", "signkey"))
     expect(expandHome("relative", "/home/ax")).toBe("relative")
     expect(defaultKeyPaths({}, "/home/ax")).toEqual({
-      secretKey: path.join("/home/ax", ".minisign", "minisign.key"),
-      publicKey: path.join("/home/ax", ".minisign", "minisign.pub"),
+      secretKey: path.join("/home/ax", "signkey", "ax.minisign.key"),
+      publicKey: path.join("/home/ax", "signkey", "ax.pub"),
     })
   })
 
-  test("finds release archives only", () => {
+  test("finds signable release assets only", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ax-code-sign-assets-"))
     try {
       fs.writeFileSync(path.join(dir, "ax-code-darwin-arm64.zip"), "")
       fs.writeFileSync(path.join(dir, "ax-code-linux-x64.tar.gz"), "")
       fs.writeFileSync(path.join(dir, "ax-code-linux-x64.tar.gz.minisig"), "")
+      fs.writeFileSync(path.join(dir, "install.ps1"), "")
       fs.writeFileSync(path.join(dir, "notes.txt"), "")
 
       expect(findReleaseAssets(dir).map((file) => path.basename(file))).toEqual([
         "ax-code-darwin-arm64.zip",
         "ax-code-linux-x64.tar.gz",
+        "install.ps1",
       ])
     } finally {
       fs.rmSync(dir, { recursive: true, force: true })
@@ -61,7 +65,7 @@ describe("sign-release-assets helpers", () => {
       "/home/ax",
     )
 
-    expect(options.secretKey).toBe(path.join("/home/ax", "keys", "minisign.key"))
+    expect(options.secretKey).toBe(path.join("/home/ax", "keys", "ax.minisign.key"))
     expect(options.publicKey).toBe(path.join("/home/ax", "keys", "release.pub"))
     expect(options.verifyOnly).toBe(true)
     expect(options.force).toBe(true)
@@ -75,8 +79,8 @@ describe("sign-release-assets helpers", () => {
       fs.writeFileSync(
         matching,
         [
-          "untrusted comment: minisign public key 5B7AB63CD6D674BE",
-          "RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A",
+          "untrusted comment: minisign public key CF42FC69BEEF0EA5",
+          "RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO",
           "",
         ].join("\n"),
       )
@@ -98,6 +102,8 @@ describe("sign-release-assets helpers", () => {
   })
 
   test("uses explicit minisign password before keychain lookup", () => {
+    expect(DEFAULT_MINISIGN_KEYCHAIN_SERVICE).toBe("ax-minisign")
+    expect(DEFAULT_MINISIGN_KEYCHAIN_ACCOUNT).toBe("ax-release")
     expect(minisignPassword({ AX_CODE_MINISIGN_PASSWORD: "secret" } as NodeJS.ProcessEnv, "darwin")).toBe("secret")
     expect(minisignPassword({} as NodeJS.ProcessEnv, "linux")).toBeUndefined()
   })

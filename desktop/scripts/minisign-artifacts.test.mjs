@@ -6,7 +6,7 @@ import path from "node:path"
 
 const repoRoot = path.resolve(import.meta.dirname, "..")
 const script = path.join(repoRoot, "scripts/minisign-artifacts.sh")
-const pinnedPublicKey = "RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A"
+const pinnedPublicKey = "RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO"
 
 function makeTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "ax-code-desktop-minisign-test-"))
@@ -16,13 +16,7 @@ function shellQuote(value) {
   return `'${value.replaceAll("'", "'\\''")}'`
 }
 
-function writeFakeCommandEnv(
-  fixture,
-  {
-    unameBody = "printf 'Linux\\n'",
-    securityBody = "return 1",
-  } = {},
-) {
+function writeFakeCommandEnv(fixture, { unameBody = "printf 'Linux\\n'", securityBody = "return 1" } = {}) {
   fs.writeFileSync(
     fixture.bashEnv,
     `
@@ -62,8 +56,8 @@ function createFixture() {
   const bin = path.join(dir, "bin")
   fs.mkdirSync(bin)
 
-  const secretKey = path.join(dir, "ax-code-desktop.minisign.key")
-  const publicKey = path.join(dir, "ax-code-desktop.minisign.pub")
+  const secretKey = path.join(dir, "ax.minisign.key")
+  const publicKey = path.join(dir, "ax.pub")
   const asset = path.join(dir, "asset.zip")
   const stdinLog = path.join(dir, "minisign-stdin.log")
   const bashEnv = path.join(dir, "fake-commands.sh")
@@ -72,7 +66,7 @@ function createFixture() {
   fs.chmodSync(secretKey, 0o600)
   fs.writeFileSync(
     publicKey,
-    ["untrusted comment: minisign public key 5B7AB63CD6D674BE", pinnedPublicKey, ""].join("\n"),
+    ["untrusted comment: minisign public key CF42FC69BEEF0EA5", pinnedPublicKey, ""].join("\n"),
   )
   fs.writeFileSync(asset, "asset")
 
@@ -150,6 +144,26 @@ describe("minisign-artifacts.sh", () => {
       expect(result.status).toBe(0)
       expect(fs.existsSync(`${fixture.asset}.minisig`)).toBe(true)
       expect(fs.readFileSync(fixture.stdinLog, "utf8")).toBe("from-env")
+    } finally {
+      fs.rmSync(fixture.dir, { recursive: true, force: true })
+    }
+  })
+
+  test("accepts the private backing key through the keygen compatibility symlink", () => {
+    const fixture = createFixture()
+    try {
+      const backingKey = path.join(fixture.dir, "ax.sec")
+      fs.renameSync(fixture.secretKey, backingKey)
+      fs.symlinkSync(path.basename(backingKey), fixture.secretKey)
+
+      const result = runScript(
+        ["--secret-key", fixture.secretKey, "--public-key", fixture.publicKey, fixture.asset],
+        fixture,
+        { AX_CODE_DESKTOP_MINISIGN_PASSWORD: "from-env" },
+      )
+
+      expect(result.status).toBe(0)
+      expect(fs.existsSync(`${fixture.asset}.minisig`)).toBe(true)
     } finally {
       fs.rmSync(fixture.dir, { recursive: true, force: true })
     }

@@ -61,8 +61,32 @@ import { ServerRuntimeAuth } from "./runtime-auth"
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
 
+function isSameLoopbackListenerOrigin(originRaw: string, requestRaw: string): boolean {
+  try {
+    const origin = new URL(originRaw)
+    const request = new URL(requestRaw)
+    return (
+      (origin.protocol === "http:" || origin.protocol === "https:") &&
+      origin.protocol === request.protocol &&
+      origin.port === request.port &&
+      isLoopbackHostname(origin.hostname) &&
+      isLoopbackHostname(request.hostname)
+    )
+  } catch {
+    return false
+  }
+}
+
 export namespace Server {
   const log = Log.create({ service: "server" })
+  const activeServerUrls = new Set<string>()
+
+  export function currentUrl() {
+    // The in-process client works without a listening socket. Only expose a
+    // bound URL when there is a single unambiguous listener.
+    if (activeServerUrls.size === 1) return new URL(activeServerUrls.values().next().value!)
+    return new URL(`http://localhost:${DEFAULT_SERVER_PORT}`)
+  }
 
   export const Default = lazy(() => createApp({ port: DEFAULT_SERVER_PORT }))
 
@@ -157,8 +181,7 @@ export namespace Server {
           ["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method) ||
           c.req.header("upgrade")?.toLowerCase() === "websocket"
         if (origin && browserPrivilegedRequest) {
-          const request = new URL(c.req.url).origin
-          if (origin !== request && !allowedCors.includes(origin)) {
+          if (!isSameLoopbackListenerOrigin(origin, c.req.url) && !allowedCors.includes(origin)) {
             return forbidden(c, { message: "Origin mismatch" })
           }
         }
@@ -168,19 +191,9 @@ export namespace Server {
       .use(createRequestLoggingMiddleware(log))
       .use(
         cors({
-          origin(input) {
+          origin(input, c) {
             if (!input) return
-
-            const boundPort = Number(url?.port ?? "")
-            const serverPort =
-              Number.isFinite(boundPort) && boundPort > 0
-                ? boundPort
-                : opts?.port && opts.port > 0
-                  ? opts.port
-                  : undefined
-            if (serverPort === undefined) return
-            const serverOrigins = [`http://localhost:${serverPort}`, `http://127.0.0.1:${serverPort}`]
-            if (serverOrigins.includes(input)) return input
+            if (isSameLoopbackListenerOrigin(input, c.req.url)) return input
             if (allowedCors.includes(input)) return input
 
             return
@@ -323,9 +336,6 @@ export namespace Server {
     return result
   }
 
-  /** @deprecated Use the returned listen URL instead of shared mutable server state. */
-  export let url: URL
-
   export async function listen(opts: {
     port: number
     hostname: string
@@ -348,22 +358,31 @@ export namespace Server {
       )
     }
     const app = opts.app ?? createApp({ ...opts, hostname })
-    let lastServeError: unknown
-    const tryServe = async (port: number): Promise<ServerHandle | undefined> => {
+    let server: ServerHandle
+    if (port === 0) {
       try {
-        return await runtimeServe({ app, hostname, port, idleTimeout: 0 })
-      } catch (e) {
-        lastServeError = e
-        return undefined
+        server = await runtimeServe({ app, hostname, port: DEFAULT_SERVER_PORT, idleTimeout: 0 })
+      } catch (error) {
+        const code =
+          error && typeof error === "object" && "code" in error ? (error as NodeJS.ErrnoException).code : undefined
+        if (code !== "EADDRINUSE") {
+          throw new Error(`Failed to start server on port ${DEFAULT_SERVER_PORT}: ${toErrorMessage(error)}`)
+        }
+        log.warn("default server port is in use; falling back to an ephemeral port", {
+          port: DEFAULT_SERVER_PORT,
+          hostname,
+        })
+        server = await runtimeServe({ app, hostname, port: 0, idleTimeout: 0 })
+      }
+    } else {
+      try {
+        server = await runtimeServe({ app, hostname, port, idleTimeout: 0 })
+      } catch (error) {
+        throw new Error(`Failed to start server on port ${port}: ${toErrorMessage(error)}`)
       }
     }
-    const server = port === 0 ? ((await tryServe(DEFAULT_SERVER_PORT)) ?? (await tryServe(0))) : await tryServe(port)
-    if (!server) {
-      const reason = toErrorMessage(lastServeError)
-      throw new Error(`Failed to start server on port ${port}: ${reason}`)
-    }
-    url = new URL(`http://${formatHostnameForUrl(hostname)}:${server.port}`)
-
+    const serverUrl = new URL(`http://${formatHostnameForUrl(hostname)}:${server.port}`)
+    activeServerUrls.add(serverUrl.toString())
     const shouldPublishMDNS = opts.mdns && server.port && !isLoopbackHostname(hostname)
     if (shouldPublishMDNS) {
       MDNS.publish(server.port!, opts.mdnsDomain)
@@ -374,7 +393,11 @@ export namespace Server {
     const originalStop = server.stop.bind(server)
     server.stop = async (closeActiveConnections?: boolean) => {
       if (shouldPublishMDNS) MDNS.unpublish()
-      return originalStop(closeActiveConnections)
+      try {
+        await originalStop(closeActiveConnections)
+      } finally {
+        activeServerUrls.delete(serverUrl.toString())
+      }
     }
 
     return server

@@ -184,6 +184,7 @@ const ensureCallbackRunningSpy = vi.spyOn(McpOAuthCallback, "ensureRunning")
 const waitForCallbackSpy = vi.spyOn(McpOAuthCallback, "waitForCallback")
 const cancelPendingSpy = vi.spyOn(McpOAuthCallback, "cancelPending")
 const stopCallbackSpy = vi.spyOn(McpOAuthCallback, "stop")
+const stopIdleCallbackSpy = vi.spyOn(McpOAuthCallback, "stopIfIdle")
 const isCallbackRunningSpy = vi.spyOn(McpOAuthCallback, "isRunning")
 const isCallbackPortInUseSpy = vi.spyOn(McpOAuthCallback, "isPortInUse")
 
@@ -438,6 +439,7 @@ test("startAuth reuses an existing saved oauth state", async () => {
 
       expect(result.oauthState).toBe(state)
       expect(await McpAuth.getOAuthState("test-oauth")).toBe(state)
+      await MCP.removeAuth("test-oauth")
     },
   })
 })
@@ -470,6 +472,7 @@ test("startAuth returns the oauth state used for the flow", async () => {
       const result = await MCP.startAuth("test-oauth-state")
       expect(typeof result.oauthState).toBe("string")
       expect(result.oauthState).toBe(await McpAuth.getOAuthState("test-oauth-state"))
+      await MCP.removeAuth("test-oauth-state")
     },
   })
 })
@@ -546,6 +549,7 @@ test("startAuth closes temporary client and transport when authentication is alr
     fn: async () => {
       authenticatedUrls.add("https://example.com/mcp")
       await trustConfiguredMcp("test-oauth-success")
+      const stopCallsBefore = stopIdleCallbackSpy.mock.calls.length
 
       const result = await MCP.startAuth("test-oauth-success")
       expect(result.authorizationUrl).toBe("")
@@ -554,6 +558,7 @@ test("startAuth closes temporary client and transport when authentication is alr
       const client = clientInstances[0]
       expect(transport?.closeCalls).toBe(1)
       expect(client?.closeCalls).toBe(1)
+      expect(stopIdleCallbackSpy.mock.calls.length).toBeGreaterThan(stopCallsBefore)
     },
   })
 })
@@ -584,10 +589,12 @@ test("finishAuth closes the pending OAuth transport after reconnecting", async (
       await MCP.startAuth("test-oauth-finish")
       const pending = transportInstances[0]!
       expect(pending.closeCalls).toBe(0)
+      const stopCallsBefore = stopIdleCallbackSpy.mock.calls.length
 
       const status = await MCP.finishAuth("test-oauth-finish", "auth-code")
       expect(status.status).toBe("connected")
       expect(pending.closeCalls).toBe(1)
+      expect(stopIdleCallbackSpy.mock.calls.length).toBeGreaterThan(stopCallsBefore)
     },
   })
 })

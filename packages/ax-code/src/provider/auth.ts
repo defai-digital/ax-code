@@ -183,7 +183,12 @@ export namespace ProviderAuth {
     }
   }
 
-  export async function callback(input: { providerID: ProviderID; method: number; code?: string }) {
+  export async function callback(input: {
+    providerID: ProviderID
+    method: number
+    code?: string
+    signal?: AbortSignal
+  }) {
     const pending = (await state()).pending
     const match = pending.get(input.providerID)
     if (!match) throw new OauthMissing({ providerID: input.providerID })
@@ -191,8 +196,12 @@ export namespace ProviderAuth {
       throw new OauthCodeMissing({ providerID: input.providerID })
     }
 
-    const result = match.method === "code" ? await match.callback(input.code!) : await match.callback()
-    pending.delete(input.providerID)
+    let result: Awaited<ReturnType<typeof match.callback>>
+    try {
+      result = match.method === "code" ? await match.callback(input.code!) : await match.callback(input.signal)
+    } finally {
+      pending.delete(input.providerID)
+    }
     if (!result || result.type !== "success") throw new OauthCallbackFailed({})
 
     if ("key" in result) {

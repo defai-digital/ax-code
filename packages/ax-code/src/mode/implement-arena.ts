@@ -6,6 +6,10 @@
 import { Arena } from "./arena"
 import { WorktreePolicy } from "./worktree-policy"
 
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`
+}
+
 export namespace ImplementArena {
   export type ContestantResult = {
     id: string
@@ -116,10 +120,39 @@ export namespace ImplementArena {
         : "_No branch is recommended for promotion. Inspect failed candidates only for diagnosis or salvage._",
       "_Multi-writer isolation uses worktrees (WorktreePolicy). Main workspace is untouched by contestants._",
     )
+
+    const worktreeEntries = input.ranked.filter((c) => c.worktreeDirectory)
+    if (worktreeEntries.length > 0) {
+      lines.push("")
+      lines.push("## Worktree Cleanup")
+      lines.push("")
+      lines.push("The following worktrees were created for arena contestants. Review and merge before cleaning up:")
+      lines.push("")
+      lines.push("| Contestant | Worktree Path | Branch |")
+      lines.push("|-----------|--------------|--------|")
+      for (let i = 0; i < worktreeEntries.length; i++) {
+        const c = worktreeEntries[i]!
+        const branch = c.worktreeBranch ?? "(unknown)"
+        lines.push(`| ${i + 1} | \`${c.worktreeDirectory}\` | \`${branch}\` |`)
+      }
+      lines.push("")
+      lines.push("To clean up:")
+      lines.push("```bash")
+      for (const c of worktreeEntries) {
+        lines.push(`git worktree remove -- ${shellQuote(c.worktreeDirectory!)}`)
+      }
+      lines.push("```")
+      lines.push("")
+      lines.push("_Worktrees are NOT auto-cleaned. Review and merge changes before removing._")
+    }
+
     return lines.join("\n")
   }
 
-  /** Policy check: implement arena always needs worktree isolation for N writers. */
+  /**
+   * Policy check: implement arena always needs worktree isolation for N writers.
+   * @deprecated Reserved for future use — not currently called from production code.
+   */
   export function isolationForContestants(count: number): WorktreePolicy.IsolationMode {
     return count > 1 ? "worktree" : "shared"
   }

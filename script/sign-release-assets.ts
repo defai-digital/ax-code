@@ -7,9 +7,13 @@ import path from "path"
 import { parseArgs } from "util"
 
 export const ROOT = path.resolve(import.meta.dirname, "..")
-export const AX_CODE_MINISIGN_PUBLIC_KEY = "RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A"
-export const DEFAULT_MINISIGN_KEYCHAIN_SERVICE = "ax-code-minisign"
-export const DEFAULT_MINISIGN_KEYCHAIN_ACCOUNT = "ax-code-release"
+export const AX_CODE_MINISIGN_PUBLIC_KEY = "RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO"
+export const AX_CODE_MINISIGN_PUBLIC_KEY_FILE = "docs/ax-minisign.pub"
+export const DEFAULT_MINISIGN_KEY_DIR = "~/signkey"
+export const DEFAULT_MINISIGN_SECRET_KEY_NAME = "ax.minisign.key"
+export const DEFAULT_MINISIGN_PUBLIC_KEY_NAME = "ax.pub"
+export const DEFAULT_MINISIGN_KEYCHAIN_SERVICE = "ax-minisign"
+export const DEFAULT_MINISIGN_KEYCHAIN_ACCOUNT = "ax-release"
 export const SIGN_RELEASE_ASSETS_SCRIPT = "script/sign-release-assets.ts"
 
 export type SignReleaseOptions = {
@@ -29,15 +33,15 @@ export function expandHome(input: string, home = os.homedir()) {
 }
 
 export function defaultKeyPaths(env: NodeJS.ProcessEnv = process.env, home = os.homedir()) {
-  const keyDir = expandHome(env.AX_CODE_MINISIGN_KEY_DIR ?? "~/.minisign", home)
+  const keyDir = expandHome(env.AX_CODE_MINISIGN_KEY_DIR ?? DEFAULT_MINISIGN_KEY_DIR, home)
   return {
-    secretKey: expandHome(env.AX_CODE_MINISIGN_SECRET_KEY ?? path.join(keyDir, "minisign.key"), home),
-    publicKey: expandHome(env.AX_CODE_MINISIGN_PUBLIC_KEY ?? path.join(keyDir, "minisign.pub"), home),
+    secretKey: expandHome(env.AX_CODE_MINISIGN_SECRET_KEY ?? path.join(keyDir, DEFAULT_MINISIGN_SECRET_KEY_NAME), home),
+    publicKey: expandHome(env.AX_CODE_MINISIGN_PUBLIC_KEY ?? path.join(keyDir, DEFAULT_MINISIGN_PUBLIC_KEY_NAME), home),
   }
 }
 
 export function isReleaseArchive(file: string) {
-  return file.endsWith(".tar.gz") || file.endsWith(".zip")
+  return file.endsWith(".tar.gz") || file.endsWith(".zip") || path.basename(file) === "install.ps1"
 }
 
 export function findReleaseAssets(distDir: string) {
@@ -99,8 +103,8 @@ export function parseSignReleaseArgs(
   const keyDir = parsed.values["key-dir"] ? expandHome(parsed.values["key-dir"], home) : undefined
   const defaults = keyDir
     ? {
-        secretKey: path.join(keyDir, "minisign.key"),
-        publicKey: path.join(keyDir, "minisign.pub"),
+        secretKey: path.join(keyDir, DEFAULT_MINISIGN_SECRET_KEY_NAME),
+        publicKey: path.join(keyDir, DEFAULT_MINISIGN_PUBLIC_KEY_NAME),
       }
     : defaultKeyPaths(env, home)
 
@@ -126,10 +130,10 @@ function usage() {
 Options:
   --dist-dir <dir>      Directory to scan when no files are provided
                         (default: packages/ax-code/dist)
-  --key-dir <dir>       Directory containing minisign.key and minisign.pub
-                        (default: ~/.minisign)
-  --secret-key <file>   Secret key path (default: ~/.minisign/minisign.key)
-  --public-key <file>   Public key path (default: ~/.minisign/minisign.pub)
+  --key-dir <dir>       Directory containing ax.minisign.key and ax.pub
+                        (default: ~/signkey)
+  --secret-key <file>   Secret key path (default: ~/signkey/ax.minisign.key)
+  --public-key <file>   Public key path (default: ~/signkey/ax.pub)
   --verify-only         Verify existing .minisig files without signing
   --dry-run             Print the release archives that would be processed
   -f, --force           Replace existing .minisig files before signing
@@ -144,10 +148,11 @@ Environment:
   AX_CODE_MINISIGN_KEYCHAIN_ACCOUNT
 
 Generate a password-protected local key:
-  minisign -G -s ~/.minisign/minisign.key -p ~/.minisign/minisign.pub
+  minisign -G -s ~/signkey/ax.sec -p ~/signkey/ax.pub
+  ln -s ax.sec ~/signkey/ax.minisign.key
 
 Store the release key passphrase in macOS Keychain:
-  security add-generic-password -U -a ax-code-release -s ax-code-minisign -w
+  security add-generic-password -U -a ax-release -s ax-minisign -w
 `
 }
 
@@ -266,7 +271,7 @@ async function main() {
 
   const assets = releaseAssetsForOptions(options)
   if (assets.length === 0) {
-    throw new Error(`No release archives found. Build first, or pass files explicitly. Scanned: ${options.distDir}`)
+    throw new Error(`No release assets found. Build first, or pass files explicitly. Scanned: ${options.distDir}`)
   }
 
   requireRegularFile(options.publicKey, "Public key")
@@ -274,7 +279,7 @@ async function main() {
   if (!options.verifyOnly) requireSecretKey(options.secretKey)
 
   for (const asset of assets) {
-    requireRegularFile(asset, "Release archive")
+    requireRegularFile(asset, "Release asset")
     const sig = signaturePath(asset)
     prepareSignaturePath(sig, options)
 

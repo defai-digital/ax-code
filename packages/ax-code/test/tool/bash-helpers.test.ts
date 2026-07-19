@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   absolutePathLiterals,
   assertStaticRedirectTarget,
+  expandLeadingTilde,
   hasDynamicRedirection,
   hasDynamicShellExpansion,
   isStaticPathArg,
@@ -29,6 +30,19 @@ describe("tool.bash helpers", () => {
     expect(stripShellQuotes('"file name.txt"')).toBe("file name.txt")
     expect(stripShellQuotes("'file name.txt'")).toBe("file name.txt")
     expect(stripShellQuotes("file.txt")).toBe("file.txt")
+  })
+
+  test("expands current-user tilde paths and rejects other-user shorthands", () => {
+    expect(expandLeadingTilde("~", "/home/alice")).toBe("/home/alice")
+    expect(expandLeadingTilde("~/outside.txt", "/home/alice")).toBe("/home/alice/outside.txt")
+    expect(expandLeadingTilde("~bob/outside.txt", "/home/alice")).toBeUndefined()
+    expect(expandLeadingTilde("relative.txt", "/home/alice")).toBe("relative.txt")
+  })
+
+  test("treats globs and brace expansion as dynamic shell paths", () => {
+    for (const value of ["../*", "file?.txt", "[ab].txt", "{../outside,inside}"]) {
+      expect(hasDynamicShellExpansion(value)).toBe(true)
+    }
   })
 
   test("returns undefined for empty or dynamic path args", () => {

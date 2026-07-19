@@ -27,7 +27,7 @@ process.on("unhandledRejection", (reason) => {
 process.on("uncaughtException", (error) => {
   console.error("[server-process] uncaught exception:", error)
   // Best-effort graceful shutdown before exit.
-  void stop()
+  void stop(1)
 })
 
 function parseStartupSnapshot() {
@@ -54,7 +54,7 @@ async function boot() {
   process.parentPort.postMessage({ type: "ready", port: serverHandle.getPort() })
 }
 
-async function stop() {
+async function stop(exitCode = 0) {
   if (stopping) return
   stopping = true
   try {
@@ -63,7 +63,7 @@ async function stop() {
   } catch {
     // Best-effort — we exit regardless.
   } finally {
-    process.exit(0)
+    process.exit(exitCode)
   }
 }
 

@@ -112,3 +112,37 @@ test("isPortInUse reflects callback server state", async () => {
   await McpOAuthCallback.stop()
   expect(await getState()).toBe(false)
 }, 5000)
+
+test("callback listener can restart after a completed initialization", async () => {
+  const McpOAuthCallback = await getCallbackModule()
+
+  try {
+    await McpOAuthCallback.ensureRunning()
+  } catch {
+    // Binding may be unavailable in constrained CI sandboxes.
+    return
+  }
+  expect(McpOAuthCallback.isRunning()).toBe(true)
+
+  await McpOAuthCallback.stop()
+  expect(McpOAuthCallback.isRunning()).toBe(false)
+
+  await McpOAuthCallback.ensureRunning()
+  expect(McpOAuthCallback.isRunning()).toBe(true)
+}, 5000)
+
+test("stop racing initialization does not publish a stale listener", async () => {
+  const McpOAuthCallback = await getCallbackModule()
+
+  const initialization = McpOAuthCallback.ensureRunning()
+  const stopping = McpOAuthCallback.stop()
+  const [initResult] = await Promise.allSettled([initialization, stopping])
+  if (initResult.status === "rejected") {
+    // Binding may be unavailable in constrained CI sandboxes.
+    return
+  }
+
+  expect(McpOAuthCallback.isRunning()).toBe(false)
+  await McpOAuthCallback.ensureRunning()
+  expect(McpOAuthCallback.isRunning()).toBe(true)
+}, 5000)

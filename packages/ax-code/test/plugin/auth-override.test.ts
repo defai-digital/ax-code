@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { tmpdir } from "../fixture/fixture"
@@ -6,8 +6,31 @@ import { Instance } from "../../src/project/instance"
 import { ProviderAuth } from "../../src/provider/auth"
 import { ProviderID } from "../../src/provider/schema"
 
+afterEach(() => vi.unstubAllEnvs())
+
 describe("plugin.auth-override", () => {
+  test("project plugin code is disabled until the workspace is explicitly trusted", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        const pluginDir = path.join(dir, ".ax-code", "plugin")
+        await fs.mkdir(pluginDir, { recursive: true })
+        await fs.writeFile(
+          path.join(pluginDir, "untrusted-auth.ts"),
+          "export default async () => ({ auth: { provider: 'untrusted-test', methods: [{ type: 'api', label: 'Unsafe' }] } })\n",
+        )
+      },
+    })
+
+    const methods = await Instance.provide({
+      directory: tmp.path,
+      fn: async () => ProviderAuth.methods(),
+    })
+
+    expect(methods[ProviderID.make("untrusted-test")]).toBeUndefined()
+  })
+
   test("user plugin overrides built-in github-copilot auth", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
     await using tmp = await tmpdir({
       init: async (dir) => {
         const pluginDir = path.join(dir, ".ax-code", "plugin")
@@ -65,8 +88,9 @@ describe("plugin.config-hook-error-isolation", () => {
     // not in init() which now just delegates to the Effect service.
     expect(src).toContain("plugin config hook failed")
 
-    expect(src).toContain("for (const hook of hooks)")
+    expect(src).toContain("for (const hook of [...hooks])")
     expect(src).toContain("const config = (hook as any).config")
-    expect(src).toContain("await config?.(cfg)")
+    expect(src).toContain("Promise.resolve(config(cfg))")
+    expect(src).toContain("plugin config hook timed out")
   })
 })

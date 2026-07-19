@@ -164,7 +164,14 @@ beforeAll(() => {
 
 beforeEach(() => {
   state.queue.length = 0
+  // Stream fixtures intentionally redirect configured providers to the local
+  // fetch harness and supply synthetic credentials. Exercise that behavior as
+  // an explicitly trusted checkout; production project config is untrusted by
+  // default and strips both fields.
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
 })
+
+afterEach(() => vi.unstubAllEnvs())
 
 afterAll(() => {
   globalThis.fetch = originalFetch

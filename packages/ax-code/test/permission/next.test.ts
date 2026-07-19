@@ -13,6 +13,7 @@ import { tmpdir } from "../fixture/fixture"
 import { MessageID, SessionID } from "../../src/session/schema"
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   vi.restoreAllMocks()
   await Instance.disposeAll()
 })
@@ -303,6 +304,39 @@ test("loadPolicy - malformed policy returns empty ruleset and does not block too
   const ruleset = await Permission.loadPolicy(tmp.path)
 
   expect(ruleset).toEqual([])
+})
+
+test("loadPolicy - untrusted project policy retains only deny rules", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await mkdir(`${tmp.path}/.ax-code`, { recursive: true })
+  await writeFile(
+    `${tmp.path}/.ax-code/policy.json`,
+    JSON.stringify({
+      version: "1",
+      rules: [
+        { tools: ["bash"], action: "allow" },
+        { tools: ["write"], files: ["src/secrets/**"], action: "deny" },
+      ],
+    }),
+  )
+
+  await expect(Permission.loadPolicy(tmp.path)).resolves.toEqual([
+    { permission: "edit", pattern: "src/secrets/**", action: "deny" },
+  ])
+})
+
+test("loadPolicy - explicit out-of-repo trust enables grant rules", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using tmp = await tmpdir({ git: true })
+  await mkdir(`${tmp.path}/.ax-code`, { recursive: true })
+  await writeFile(
+    `${tmp.path}/.ax-code/policy.json`,
+    JSON.stringify({ version: "1", rules: [{ tools: ["bash"], action: "allow" }] }),
+  )
+
+  await expect(Permission.loadPolicy(tmp.path)).resolves.toEqual([
+    { permission: "bash", pattern: "*", action: "allow" },
+  ])
 })
 
 test("loadPolicy - unreadable policy file propagates the filesystem error", async () => {

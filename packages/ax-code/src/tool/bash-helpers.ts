@@ -1,5 +1,7 @@
+import os from "os"
+
 export function hasDynamicShellExpansion(value: string) {
-  return /\$\(|\$\{|`/.test(value)
+  return /[$`*?[\]{}]/.test(value)
 }
 
 export function assertStaticRedirectTarget(target: string) {
@@ -10,6 +12,15 @@ export function assertStaticRedirectTarget(target: string) {
 
 export function stripShellQuotes(value: string) {
   return value.replace(/^"(.*)"$|^'(.*)'$/s, "$1$2")
+}
+
+/** Expand only the current user's POSIX home shorthand. `~user` requires a
+ * shell/user database lookup and is therefore treated as dynamic. */
+export function expandLeadingTilde(value: string, home = os.homedir()): string | undefined {
+  if (value === "~") return home
+  if (value.startsWith("~/") || value.startsWith("~\\")) return home + value.slice(1)
+  if (value.startsWith("~")) return undefined
+  return value
 }
 
 // Matches any shell metacharacter that makes an argument non-literal: variable
@@ -72,7 +83,7 @@ export function staticallyCheckablePathArgs(cmd: string, args: string[]) {
 }
 
 export function hasDynamicRedirection(command: string) {
-  return /(?:^|[\s&;])\d*>>?\s*(?:\$\(|\$\{|`)/.test(command)
+  return /(?:^|[\s&;])\d*>>?\s*(?:\$|`)/.test(command)
 }
 
 export function absolutePathLiterals(value: string) {

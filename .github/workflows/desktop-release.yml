@@ -110,6 +110,21 @@ jobs:
           fs.writeFileSync('artifacts/desktop-release-notes.md', `## ${section}`.trim() + '\n');
           NODE
 
+      - name: Require an absent or draft release
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if IS_DRAFT="$(gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null)"; then
+            if [ "$IS_DRAFT" != "true" ]; then
+              echo "::error::release $TAG is already published; refusing to replace verified assets"
+              exit 1
+            fi
+            echo "Continuing existing draft release $TAG"
+          fi
+
       - name: Create draft GitHub release
         if: ${{ github.event.inputs.dry_run != 'true' }}
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
@@ -251,12 +266,24 @@ jobs:
       # offline / before mounting.
       - name: Notarize and staple the dmg
         if: ${{ env.HAS_APPLE_CERT == 'true' }}
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           DMG="$(ls desktop/packages/electron/dist/*.dmg)"
           xcrun notarytool submit "$DMG" --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait
           xcrun stapler staple "$DMG"
           xcrun stapler validate "$DMG"
+          spctl --assess --type install --verbose=2 "$DMG"
+
+          APP="$(find desktop/packages/electron/dist -maxdepth 2 -type d -name 'AX Code.app' -print -quit)"
+          test -n "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          SIGNATURE_DETAILS="$(codesign -dv --verbose=4 "$APP" 2>&1)"
+          printf '%s\n' "$SIGNATURE_DETAILS"
+          grep -F "Authority=Developer ID Application: DEFAI PRIVATE LIMITED" <<< "$SIGNATURE_DETAILS"
+          grep -F "TeamIdentifier=${APPLE_TEAM_ID}" <<< "$SIGNATURE_DETAILS"
+          spctl --assess --type execute --verbose=2 "$APP"
 
       - name: Packaged app smoke
         run: node desktop/packages/electron/scripts/smoke-packaged-app.mjs --artifacts "$RUNNER_TEMP/desktop-smoke"
@@ -489,16 +516,13 @@ jobs:
 
       - name: Sign release assets
         env:
-          AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64: ${{ secrets.AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64 || secrets.AX_CODE_MINISIGN_SECRET_KEY_B64 }}
-          AX_CODE_DESKTOP_MINISIGN_PASSWORD: ${{ secrets.AX_CODE_DESKTOP_MINISIGN_PASSWORD || secrets.AX_CODE_MINISIGN_PASSWORD }}
+          AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64: ${{ secrets.AX_CODE_MINISIGN_SECRET_KEY_B64 || secrets.AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64 }}
+          AX_CODE_DESKTOP_MINISIGN_PASSWORD: ${{ secrets.AX_CODE_MINISIGN_PASSWORD || secrets.AX_CODE_DESKTOP_MINISIGN_PASSWORD }}
         run: |
           set -euo pipefail
-          SECRET_KEY="$RUNNER_TEMP/ax-code-desktop.minisign.key"
-          PUBLIC_KEY="$RUNNER_TEMP/ax-code-desktop.minisign.pub"
-          cat > "$PUBLIC_KEY" <<'EOF'
-          untrusted comment: minisign public key 5B7AB63CD6D674BE
-          RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A
-          EOF
+          SECRET_KEY="$RUNNER_TEMP/ax.minisign.key"
+          PUBLIC_KEY="$RUNNER_TEMP/ax.pub"
+          cp docs/ax-minisign.pub "$PUBLIC_KEY"
           if [ -z "$AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64" ] || [ -z "$AX_CODE_DESKTOP_MINISIGN_PASSWORD" ]; then
             echo "::error::Desktop minisign secrets are required to publish signed release assets. Configure AX_CODE_DESKTOP_MINISIGN_* or AX_CODE_MINISIGN_*."
             exit 1
@@ -508,7 +532,7 @@ jobs:
           assets=()
           while IFS= read -r -d '' file; do
             case "$file" in
-              *.minisig|*.sig) ;;
+              *.minisig|*.sig|*/ax-minisign.pub) ;;
               *) assets+=("$file") ;;
             esac
           done < <(find release-assets -type f -print0)
@@ -521,12 +545,46 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          uploads=(release-assets/install.ps1)
+          uploads=(release-assets/install.ps1 docs/ax-minisign.pub)
           signatures=()
           test -f release-assets/install.ps1
           while IFS= read -r -d '' file; do signatures+=("$file"); done < <(find release-assets -type f -name '*.minisig' -print0)
           test "${#signatures[@]}" -gt 0
           gh release upload "$TAG" --repo "$REPOSITORY" --clobber "${uploads[@]}" "${signatures[@]}"
+
+  verify-release-assets:
+    needs: [create-release, sign-release-assets]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install minisign
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y minisign
+
+      - name: Verify uploaded Minisign coverage and signatures
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          gh release download "$TAG" --repo "$REPOSITORY" --dir release-assets --clobber
+          cmp docs/ax-minisign.pub release-assets/ax-minisign.pub
+
+          verified=0
+          while IFS= read -r -d '' asset; do
+            case "$(basename "$asset")" in
+              *.minisig|*.sig|ax-minisign.pub) continue ;;
+            esac
+            signature="${asset}.minisig"
+            test -f "$signature"
+            minisign -V -p docs/ax-minisign.pub -m "$asset" -x "$signature"
+            verified=$((verified + 1))
+          done < <(find release-assets -type f -print0)
+          test "$verified" -gt 0
 
   finalize-release:
     needs:
@@ -538,6 +596,7 @@ jobs:
         build-windows-arm64,
         merge-windows-latest-yml,
         sign-release-assets,
+        verify-release-assets,
       ]
     if: >-
       always() &&
@@ -548,16 +607,22 @@ jobs:
       needs.build-windows.result == 'success' &&
       needs.build-windows-arm64.result == 'success' &&
       needs.merge-windows-latest-yml.result == 'success' &&
-      needs.sign-release-assets.result == 'success'
+      needs.sign-release-assets.result == 'success' &&
+      needs.verify-release-assets.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Publish release
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
-        with:
-          tag_name: ${{ needs.create-release.outputs.tag }}
-          draft: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          IS_DRAFT="$(gh release view "$TAG" --json isDraft --jq '.isDraft')"
+          if [ "$IS_DRAFT" != "true" ]; then
+            echo "::error::release $TAG is no longer a draft; refusing to publish or mutate it"
+            exit 1
+          fi
+          gh release edit "$TAG" --draft=false
 
   update-homebrew-tap:
     needs: [create-release, finalize-release]
@@ -568,18 +633,29 @@ jobs:
     env:
       HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
     steps:
+      - uses: actions/checkout@v7
+        if: ${{ env.HAS_TAP_TOKEN == 'true' }}
+
       - name: Skip Homebrew update when token is absent
         if: ${{ env.HAS_TAP_TOKEN != 'true' }}
         run: echo "::notice::HOMEBREW_TAP_TOKEN not configured; skipping Desktop Homebrew cask update."
 
-      - name: Download release DMG
+      - name: Download and verify release DMG
         if: ${{ env.HAS_TAP_TOKEN == 'true' }}
         env:
           TAG: ${{ needs.create-release.outputs.tag }}
           VERSION: ${{ needs.create-release.outputs.version }}
         run: |
-          curl -fsSL -o release.dmg \
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y minisign
+          curl --fail --location --no-progress-meter --retry 6 --retry-all-errors --retry-delay 10 \
+            --output release.dmg \
             "https://github.com/defai-digital/ax-code/releases/download/${TAG}/AX-Code-${VERSION}-mac-arm64.dmg"
+          curl --fail --location --no-progress-meter --retry 6 --retry-all-errors --retry-delay 10 \
+            --output release.dmg.minisig \
+            "https://github.com/defai-digital/ax-code/releases/download/${TAG}/AX-Code-${VERSION}-mac-arm64.dmg.minisig"
+          minisign -V -p docs/ax-minisign.pub -m release.dmg -x release.dmg.minisig
           echo "DMG_SHA256=$(sha256sum release.dmg | awk '{print $1}')" >> "$GITHUB_ENV"
 
       - name: Push updated Desktop cask
@@ -613,11 +689,6 @@ jobs:
             '  homepage "https://github.com/defai-digital/ax-code"',
             '',
             '  app "AX Code.app"',
-            '',
-            '  postflight do',
-            '    system_command "/usr/bin/xattr",',
-            '      args: ["-cr", "#{appdir}/AX Code.app"]',
-            '  end',
             '',
             '  zap trash: [',
             '    "~/Library/Application Support/AX Code Desktop",',

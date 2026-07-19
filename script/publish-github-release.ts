@@ -4,12 +4,7 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 import { parseArgs } from "util"
-import {
-  AX_CODE_MINISIGN_PUBLIC_KEY,
-  expandHome,
-  secretKeyPermissionIssue,
-  signReleaseAssetsCommand,
-} from "./sign-release-assets"
+import { AX_CODE_MINISIGN_PUBLIC_KEY_FILE, expandHome } from "./sign-release-assets"
 
 export const ROOT = path.resolve(import.meta.dirname, "..")
 
@@ -17,14 +12,12 @@ export type PublishGithubReleaseOptions = {
   version: string
   tag: string
   repo: string
-  keyDir: string
   assetDir?: string
   dryRun: boolean
   existingTag: boolean
   allowDirty: boolean
   allowNonMain: boolean
   skipWatch: boolean
-  skipSign: boolean
   skipInstallSmoke: boolean
   installChannel?: "all" | "homebrew" | "windows"
 }
@@ -62,9 +55,23 @@ export function expectedReleaseInstallerAssets() {
   return ["install.ps1"]
 }
 
+export function expectedReleaseInstallerSignatures() {
+  return expectedReleaseInstallerAssets().map((asset) => `${asset}.minisig`)
+}
+
+export function expectedReleaseMetadataAssets() {
+  return ["ax-minisign.pub"]
+}
+
 export function missingReleaseAssets(
   actual: Iterable<string>,
-  expected = [...expectedReleaseArchives(), ...expectedReleaseSignatures(), ...expectedReleaseInstallerAssets()],
+  expected = [
+    ...expectedReleaseArchives(),
+    ...expectedReleaseSignatures(),
+    ...expectedReleaseInstallerAssets(),
+    ...expectedReleaseInstallerSignatures(),
+    ...expectedReleaseMetadataAssets(),
+  ],
 ) {
   const found = new Set(actual)
   return expected.filter((asset) => !found.has(asset))
@@ -122,14 +129,12 @@ export function parsePublishGithubReleaseArgs(
       version: { type: "string", short: "v", default: packageVersion },
       tag: { type: "string" },
       repo: { type: "string", default: env.GH_REPO ?? "defai-digital/ax-code" },
-      "key-dir": { type: "string", default: env.AX_CODE_MINISIGN_KEY_DIR ?? "~/.minisign" },
       "asset-dir": { type: "string" },
       "dry-run": { type: "boolean", default: false },
       "existing-tag": { type: "boolean", default: false },
       "allow-dirty": { type: "boolean", default: false },
       "allow-non-main": { type: "boolean", default: false },
       "skip-watch": { type: "boolean", default: false },
-      "skip-sign": { type: "boolean", default: false },
       "skip-install-smoke": { type: "boolean", default: false },
       "install-channel": { type: "string" },
       help: { type: "boolean", short: "h", default: false },
@@ -146,14 +151,12 @@ export function parsePublishGithubReleaseArgs(
     version,
     tag: parsed.values.tag ?? defaultTag(version),
     repo: parsed.values.repo ?? env.GH_REPO ?? "defai-digital/ax-code",
-    keyDir: path.resolve(cwd, expandHome(parsed.values["key-dir"] ?? "~/.minisign", home)),
     assetDir: parsed.values["asset-dir"] ? path.resolve(cwd, expandHome(parsed.values["asset-dir"], home)) : undefined,
     dryRun: Boolean(parsed.values["dry-run"]),
     existingTag: Boolean(parsed.values["existing-tag"]),
     allowDirty: Boolean(parsed.values["allow-dirty"]),
     allowNonMain: Boolean(parsed.values["allow-non-main"]),
     skipWatch: Boolean(parsed.values["skip-watch"]),
-    skipSign: Boolean(parsed.values["skip-sign"]),
     skipInstallSmoke: Boolean(parsed.values["skip-install-smoke"]),
     installChannel: channel as PublishGithubReleaseOptions["installChannel"],
     help: Boolean(parsed.values.help),
@@ -168,13 +171,11 @@ Options:
   -v, --version <version>     Version to publish (default: packages/ax-code/package.json)
   --tag <tag>                 Git tag to publish (default: v<version>)
   --repo <owner/repo>         GitHub repo (default: defai-digital/ax-code)
-  --key-dir <dir>             Minisign key directory (default: ~/.minisign)
   --asset-dir <dir>           Directory used for downloaded release assets
   --existing-tag              Continue from an already-pushed release tag
   --allow-dirty               Allow a dirty worktree
   --allow-non-main            Allow publishing from a non-main branch
   --skip-watch                Do not watch the tag-driven release workflow
-  --skip-sign                 Do not sign or upload .minisig files
   --skip-install-smoke        Do not dispatch install-matrix-smoke.yml
   --install-channel <channel> Install smoke channel: all, homebrew, windows
   --dry-run                   Print commands without mutating git or GitHub state
@@ -182,7 +183,7 @@ Options:
 
 Default flow:
   preflight -> create and push tag -> watch release.yml -> download release assets
-  -> minisign archives -> upload .minisig assets -> verify release asset set
+  -> independently verify the complete Minisign asset set
   -> dispatch and watch install-matrix-smoke.yml
 `
 }
@@ -221,7 +222,7 @@ function requireCommand(command: string) {
 function ensurePreflight(options: PublishGithubReleaseOptions) {
   requireCommand("git")
   requireCommand("gh")
-  if (!options.skipSign) requireCommand("minisign")
+  requireCommand("minisign")
 
   const packageVersion = readPackageVersion()
   if (packageVersion !== options.version) {
@@ -239,22 +240,6 @@ function ensurePreflight(options: PublishGithubReleaseOptions) {
     const branch = run("git", ["branch", "--show-current"], { capture: true })
     if (branch !== "main")
       throw new Error(`Refusing to publish from ${branch || "detached HEAD"}. Pass --allow-non-main to override.`)
-  }
-
-  if (!options.skipSign) {
-    const secretKey = path.join(options.keyDir, "minisign.key")
-    const publicKey = path.join(options.keyDir, "minisign.pub")
-    if (!fs.existsSync(publicKey)) throw new Error(`Minisign public key not found: ${publicKey}`)
-    const actualPublicKey = fs
-      .readFileSync(publicKey, "utf8")
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .find((line) => line.startsWith("RW"))
-    if (actualPublicKey !== AX_CODE_MINISIGN_PUBLIC_KEY) {
-      throw new Error(`Minisign public key does not match the pinned AX Code release key: ${publicKey}`)
-    }
-    const issue = secretKeyPermissionIssue(secretKey)
-    if (issue) throw new Error(issue)
   }
 }
 
@@ -352,57 +337,33 @@ function listReleaseAssetNames(options: PublishGithubReleaseOptions) {
 
 function requireReleaseAssets(options: PublishGithubReleaseOptions) {
   if (options.dryRun) return
-  const expected = options.skipSign
-    ? expectedReleaseArchives()
-    : [...expectedReleaseArchives(), ...expectedReleaseSignatures()]
-  const missing = missingReleaseAssets(listReleaseAssetNames(options), expected)
+  const missing = missingReleaseAssets(listReleaseAssetNames(options))
   if (missing.length > 0) throw new Error(`GitHub release ${options.tag} is missing assets: ${missing.join(", ")}`)
 }
 
-function archivePaths(assetDir: string) {
-  return expectedReleaseArchives().map((name) => path.join(assetDir, name))
+function signableAssetPaths(assetDir: string) {
+  return [...expectedReleaseArchives(), ...expectedReleaseInstallerAssets()].map((name) => path.join(assetDir, name))
 }
 
-function downloadReleaseArchives(options: PublishGithubReleaseOptions, assetDir: string) {
-  run(
-    "gh",
-    [
-      "release",
-      "download",
-      options.tag,
-      "--repo",
-      options.repo,
-      "--dir",
-      assetDir,
-      "--clobber",
-      "--pattern",
-      "*.zip",
-      "--pattern",
-      "*.tar.gz",
-    ],
-    { dryRun: options.dryRun },
-  )
+function downloadReleaseAssets(options: PublishGithubReleaseOptions, assetDir: string) {
+  run("gh", ["release", "download", options.tag, "--repo", options.repo, "--dir", assetDir, "--clobber"], {
+    dryRun: options.dryRun,
+  })
   if (options.dryRun) return
-  const missing = archivePaths(assetDir).filter((file) => !fs.existsSync(file))
-  if (missing.length > 0)
-    throw new Error(`Downloaded release is missing expected archives: ${missing.map((file) => path.basename(file)).join(", ")}`)
+  const missing = missingReleaseAssets(fs.readdirSync(assetDir))
+  if (missing.length > 0) throw new Error(`Downloaded release is missing expected assets: ${missing.join(", ")}`)
 }
 
-function signAndUpload(options: PublishGithubReleaseOptions, assetDir: string) {
-  if (options.skipSign) {
-    console.log("Skipping minisign signing")
-    return
+function verifyDownloadedReleaseAssets(options: PublishGithubReleaseOptions, assetDir: string) {
+  if (options.dryRun) return
+  const downloadedPublicKey = path.join(assetDir, expectedReleaseMetadataAssets()[0])
+  const committedPublicKey = path.join(ROOT, AX_CODE_MINISIGN_PUBLIC_KEY_FILE)
+  if (fs.readFileSync(downloadedPublicKey, "utf8") !== fs.readFileSync(committedPublicKey, "utf8")) {
+    throw new Error(`Downloaded ax-minisign.pub does not match ${AX_CODE_MINISIGN_PUBLIC_KEY_FILE}`)
   }
-
-  const archives = archivePaths(assetDir)
-  const sign = signReleaseAssetsCommand(["--key-dir", options.keyDir, ...archives])
-  run(sign.command, sign.args, {
-    dryRun: options.dryRun,
-  })
-  const signatures = archives.map((asset) => `${asset}.minisig`)
-  run("gh", ["release", "upload", options.tag, "--repo", options.repo, ...signatures, "--clobber"], {
-    dryRun: options.dryRun,
-  })
+  for (const asset of signableAssetPaths(assetDir)) {
+    run("minisign", ["-V", "-p", committedPublicKey, "-m", asset, "-x", `${asset}.minisig`])
+  }
 }
 
 function dispatchInstallSmoke(options: PublishGithubReleaseOptions) {
@@ -435,9 +396,7 @@ export function publishPlan(options: PublishGithubReleaseOptions) {
     `publish ${options.tag} to ${options.repo}`,
     options.existingTag ? "continue from existing tag" : "create and push annotated release tag",
     options.skipWatch ? "skip release workflow watch" : "watch release.yml",
-    options.skipSign
-      ? "skip minisign signatures"
-      : `sign release archives with ${path.join(options.keyDir, "minisign.key")}`,
+    `independently verify release signatures with ${AX_CODE_MINISIGN_PUBLIC_KEY_FILE}`,
     options.skipInstallSmoke ? "skip install matrix smoke" : `dispatch install-matrix-smoke.yml channel=${channel}`,
   ]
 }
@@ -463,8 +422,8 @@ async function main() {
 
   const assetDir = releaseAssetDir(options)
   console.log(`Using release asset directory: ${assetDir}`)
-  downloadReleaseArchives(options, assetDir)
-  signAndUpload(options, assetDir)
+  downloadReleaseAssets(options, assetDir)
+  verifyDownloadedReleaseAssets(options, assetDir)
   requireReleaseAssets(options)
   dispatchInstallSmoke(options)
   console.log(`Published ${options.tag} to ${options.repo}`)

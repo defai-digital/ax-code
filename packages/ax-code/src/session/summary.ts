@@ -14,6 +14,13 @@ import { Log } from "@/util/log"
 const log = Log.create({ service: "session.summary" })
 
 export namespace SessionSummary {
+  type SummaryTask = {
+    input: { sessionID: SessionID; messageID: MessageID }
+    messages?: MessageV2.WithParts[]
+  }
+  const pending = new Map<SessionID, SummaryTask>()
+  const inFlight = new Map<SessionID, Promise<void>>()
+
   function unquoteGitPath(input: string) {
     if (!input.startsWith('"')) return input
     if (!input.endsWith('"')) return input
@@ -74,6 +81,41 @@ export namespace SessionSummary {
     input: { sessionID: SessionID; messageID: MessageID },
     messages?: MessageV2.WithParts[],
   ) {
+    pending.set(input.sessionID, { input, messages })
+    const existing = inFlight.get(input.sessionID)
+    if (existing) return existing
+
+    const worker = (async () => {
+      let firstError: unknown
+      try {
+        while (true) {
+          const task = pending.get(input.sessionID)
+          if (!task) {
+            if (firstError) throw firstError
+            return
+          }
+          pending.delete(input.sessionID)
+          try {
+            await summarizeNow(task.input, task.messages)
+          } catch (error) {
+            // A failed summary must not strand a newer queued request. Drain the
+            // latest task before surfacing the first failure to callers.
+            firstError ??= error
+          }
+        }
+      } finally {
+        // Delete inside the worker's own continuation, before its promise
+        // settles. A Promise.prototype.finally cleanup leaves a microtask-sized
+        // window where a new request can observe the finished worker and become
+        // stranded in `pending` after that cleanup runs.
+        inFlight.delete(input.sessionID)
+      }
+    })()
+    inFlight.set(input.sessionID, worker)
+    return worker
+  }
+
+  async function summarizeNow(input: { sessionID: SessionID; messageID: MessageID }, messages?: MessageV2.WithParts[]) {
     const all = messages ?? (await Session.messages({ sessionID: input.sessionID }))
     const settled = await Promise.allSettled([
       summarizeSession({ sessionID: input.sessionID, messages: all }),

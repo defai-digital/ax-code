@@ -9,24 +9,34 @@ import { ServerRuntimeAuth } from "../../src/server/runtime-auth"
 import { Worktree } from "../../src/worktree"
 import { tmpdir } from "../fixture/fixture"
 
-test("cors uses the bound port after --port=0 fallback", async () => {
-  const previousUrl = (Server as any).url
-  ;(Server as any).url = new URL("http://localhost:52134")
+test("cors derives an ephemeral listener origin from each request", async () => {
+  const app = Server.createApp({ port: 0 })
+  const response = await app.fetch(
+    new Request("http://localhost:52134/not-found", {
+      headers: {
+        origin: "http://localhost:52134",
+      },
+    }),
+  )
 
-  try {
-    const app = Server.createApp({ port: 0 })
-    const response = await app.fetch(
-      new Request("http://localhost:52134/not-found", {
-        headers: {
-          origin: "http://localhost:52134",
-        },
-      }),
-    )
+  expect(response.headers.get("access-control-allow-origin")).toBe("http://localhost:52134")
+})
 
-    expect(response.headers.get("access-control-allow-origin")).toBe("http://localhost:52134")
-  } finally {
-    ;(Server as any).url = previousUrl
-  }
+test("cors rejects a DNS-rebound request host even when its origin matches", async () => {
+  const app = Server.createApp({ hostname: "127.0.0.1", port: 52134 })
+  const headers = { origin: "http://evil.example:52134" }
+
+  const readResponse = await app.fetch(new Request("http://evil.example:52134/not-found", { headers }))
+  expect(readResponse.headers.get("access-control-allow-origin")).toBeNull()
+
+  const writeResponse = await app.fetch(
+    new Request("http://evil.example:52134/not-found", {
+      method: "POST",
+      headers,
+    }),
+  )
+  expect(writeResponse.status).toBe(403)
+  expect(await writeResponse.json()).toMatchObject({ message: "Origin mismatch" })
 })
 
 test("listen port validation rejects invalid port numbers before binding", () => {

@@ -46,6 +46,20 @@ describe("desktop read file policy", () => {
     ).toThrow("Access to this path is not allowed")
   })
 
+  test("denies credential stores and browser profiles under home", () => {
+    const options = { home: "/Users/alice", tmp: "/tmp", pathTools: path.posix }
+    for (const target of [
+      "/Users/alice/.netrc",
+      "/Users/alice/.npmrc",
+      "/Users/alice/.docker/config.json",
+      "/Users/alice/.kube/config",
+      "/Users/alice/.config/gh/hosts.yml",
+      "/Users/alice/Library/Application Support/Google/Chrome/Default/Cookies",
+    ]) {
+      expect(() => assertDesktopReadFileAllowed(target, options)).toThrow("Access to this path is not allowed")
+    }
+  })
+
   test("allows temp files outside home", () => {
     expect(() =>
       assertDesktopReadFileAllowed("/tmp/ax-code/screenshot.png", {

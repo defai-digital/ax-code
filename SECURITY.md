@@ -90,10 +90,10 @@ MCP OAuth tokens, client secrets, and account access/refresh tokens are also enc
 
 ### Release Artifact Verification
 
-The shell installer verifies downloaded GitHub release archives with minisign before extraction. The pinned AX Code release public key is:
+The shell installer verifies downloaded GitHub release archives with minisign before extraction. Release archives and the PowerShell installer itself carry detached signatures. The pinned AX Code release public key is:
 
 ```text
-RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A
+RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO
 ```
 
 The installer downloads the matching `.minisig` asset for the selected archive and fails closed when `minisign` is unavailable or verification fails. Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only when you intentionally accept an unverifiable release download.
@@ -101,7 +101,7 @@ The installer downloads the matching `.minisig` asset for the selected archive a
 Maintainers should keep the minisign secret key encrypted. For local release signing on macOS, store the passphrase in Keychain instead of a plaintext file:
 
 ```bash
-security add-generic-password -U -a ax-code-release -s ax-code-minisign -w
+security add-generic-password -U -a ax-release -s ax-minisign -w
 ```
 
 Release tooling reads that Keychain item automatically when `AX_CODE_MINISIGN_PASSWORD` is not set.
@@ -115,7 +115,8 @@ AX_CODE_MINISIGN_PASSWORD
 ```
 
 `AX_CODE_MINISIGN_SECRET_KEY_B64` must be the base64-encoded contents of the
-encrypted `minisign.key` minisign secret key. The workflow writes it to a
+encrypted `ax.minisign.key` minisign secret key (the local path may be a symlink
+to `ax.sec`). The workflow writes it to a
 temporary `0600` key file, verifies the pinned public key, signs each release
 archive, and uploads the matching `.minisig` assets with the archives.
 
@@ -142,20 +143,22 @@ signing or notarization credential is missing.
 
 | Effective date | Key ID             | Public key                                                 | Status      |
 | -------------- | ------------------ | ---------------------------------------------------------- | ----------- |
-| 2026-06-16     | `5B7AB63CD6D674BE` | `RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A` | **Current** |
+| 2026-07-19     | `CF42FC69BEEF0EA5` | `RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO` | **Current** |
+| 2026-07-19     | `2D5140E0904E48B3` | `RWSzSE6Q4EBRLeUmabk1YM6bzP/wn54tXE09il3d2srulrCfaB4Uyt1n` | Rotated out |
+| 2026-06-16     | `5B7AB63CD6D674BE` | `RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A` | Rotated out |
 | pre-2026-06-16 | `8138FAD32CAD95BA` | `RWS6la0s0/o4gdFUZ0Bk/BkrnN8qC2CFOfLXVP5OtQTrvm1BQeOvXgao` | Rotated out |
 
-The release signing key was rotated on 2026-06-16. The installer and release
-workflow pin only the current key, so archives signed with the retired key will
-fail signature verification. Historical release archives are re-signed with the
-current key via `script/resign-release-assets.ts` so every published release
-verifies against the pinned key without trusting the retired key.
+The release signing key was most recently rotated on 2026-07-19. The installer
+and release workflow pin only the current key, so archives signed with a retired
+key fail signature verification. After a rotation, maintainers must re-sign
+historical release archives with `script/resign-release-assets.ts` so every
+published release verifies against the pinned key without trusting retired keys.
 
 To re-sign and re-upload an existing release's `.minisig` assets with the
 current key:
 
 ```bash
-tsx script/resign-release-assets.ts --tag v5.5.0 --key-dir ~/.minisign
+tsx script/resign-release-assets.ts --tag v5.5.0 --key-dir ~/signkey
 ```
 
 ---

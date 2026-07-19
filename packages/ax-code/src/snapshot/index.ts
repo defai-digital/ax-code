@@ -93,14 +93,18 @@ export namespace Snapshot {
       }
 
       const scheduleCleanup = () => {
+        const cleanup = () =>
+          withOperationLock(next, () => cleanupFor(next)).catch((error) => {
+            log.warn("scheduled snapshot cleanup failed", { error })
+          })
         next.cleanupDelay = setTimeout(() => {
           next.cleanupDelay = undefined
           if (next.disposed) return
-          void withOperationLock(next, () => cleanupFor(next))
+          void cleanup()
           next.cleanupInterval = setInterval(
             () => {
               if (next.disposed) return
-              void withOperationLock(next, () => cleanupFor(next))
+              void cleanup()
             },
             60 * 60 * 1000,
           )
@@ -148,10 +152,10 @@ export namespace Snapshot {
     await fs.rm(file, { recursive: true, force: true }).catch(() => undefined)
   }
 
-  async function writeSnapshotMeta(current: State, hash: string) {
+  async function writeSnapshotMeta(current: State, hash: string, timestamp = Date.now()) {
     const file = snapshotMetaPath(current, hash)
     await fs.mkdir(path.dirname(file), { recursive: true })
-    await Filesystem.write(file, `${Date.now()}\n`)
+    await Filesystem.write(file, `${timestamp}\n`)
   }
 
   async function removeSnapshotMeta(current: State, hash: string) {
@@ -159,12 +163,27 @@ export namespace Snapshot {
   }
 
   async function snapshotTimestamp(current: State, ref: string, hash: string) {
-    const meta = await fs.stat(snapshotMetaPath(current, hash)).catch(() => undefined)
-    if (meta) return meta.mtimeMs
+    const metaPath = snapshotMetaPath(current, hash)
+    const metaValue = await Filesystem.readText(metaPath).catch(() => undefined)
+    if (metaValue) {
+      const timestamp = Number(metaValue.trim())
+      if (Number.isFinite(timestamp) && timestamp > 0) return timestamp
+      const meta = await fs.stat(metaPath).catch(() => undefined)
+      if (meta) return meta.mtimeMs
+    }
     const looseRef = snapshotRefPath(current, ref)
     const loose = looseRef ? await fs.stat(looseRef).catch(() => undefined) : undefined
-    if (loose) return loose.mtimeMs
-    return (await fs.stat(path.join(current.gitdir, "packed-refs")).catch(() => undefined))?.mtimeMs
+    if (loose) {
+      await writeSnapshotMeta(current, hash, loose.mtimeMs)
+      return loose.mtimeMs
+    }
+    const packed = await fs.stat(path.join(current.gitdir, "packed-refs")).catch(() => undefined)
+    if (!packed) return
+    // Older installs have no per-snapshot metadata. Persist the one-time
+    // packed-ref fallback so a later `git gc` cannot refresh every snapshot's
+    // apparent age indefinitely.
+    await writeSnapshotMeta(current, hash, packed.mtimeMs)
+    return packed.mtimeMs
   }
 
   async function withOperationLock<T>(current: State, fn: () => Promise<T>): Promise<T> {

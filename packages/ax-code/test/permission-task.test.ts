@@ -1,10 +1,11 @@
-import { afterEach, describe, test, expect } from "vitest"
+import { afterEach, beforeEach, describe, test, expect, vi } from "vitest"
 import { Permission } from "../src/permission"
 import { Config } from "../src/config/config"
 import { Instance } from "../src/project/instance"
 import { tmpdir } from "./fixture/fixture"
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   await Instance.disposeAll()
 })
 
@@ -143,6 +144,8 @@ describe("Permission.disabled for task tool", () => {
 
 // Integration tests that load permissions from real config files
 describe("permission.task with real config files", () => {
+  beforeEach(() => vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1"))
+
   test("loads task permissions from ax-code.json config", async () => {
     await using tmp = await tmpdir({
       git: true,

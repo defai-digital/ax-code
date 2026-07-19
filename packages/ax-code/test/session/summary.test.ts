@@ -154,4 +154,114 @@ describe("session.summary", () => {
       storageWrite.mockRestore()
     }
   })
+
+  test("drains a newer queued summary even when the active summary fails", async () => {
+    const sessionID = SessionID.make("ses_summary_queue_failure")
+    const firstID = MessageID.make("msg_summary_queue_first")
+    const secondID = MessageID.make("msg_summary_queue_second")
+    const message = (id: MessageID) =>
+      [
+        {
+          info: {
+            id,
+            sessionID,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "build",
+            model: { providerID: "openai", modelID: "gpt-5.2" },
+          },
+          parts: [],
+        },
+      ] as any
+
+    let rejectFirst!: (error: Error) => void
+    const firstWrite = new Promise<never>((_resolve, reject) => {
+      rejectFirst = reject
+    })
+    const setSummary = vi
+      .spyOn(Session, "setSummary")
+      .mockImplementationOnce(() => firstWrite)
+      .mockResolvedValue(undefined as any)
+    const updateMessage = vi.spyOn(Session, "updateMessage").mockResolvedValue(undefined as any)
+    const publish = vi.spyOn(Bus, "publish").mockResolvedValue(undefined as any)
+    const storageWrite = vi.spyOn(Storage, "write").mockResolvedValue(undefined as any)
+
+    try {
+      const first = SessionSummary.summarize({ sessionID, messageID: firstID }, message(firstID))
+      await vi.waitFor(() => expect(setSummary).toHaveBeenCalledTimes(1))
+      const second = SessionSummary.summarize({ sessionID, messageID: secondID }, message(secondID))
+      rejectFirst(new Error("first summary failed"))
+
+      await expect(first).rejects.toThrow("first summary failed")
+      await expect(second).rejects.toThrow("first summary failed")
+      expect(setSummary).toHaveBeenCalledTimes(2)
+    } finally {
+      setSummary.mockRestore()
+      updateMessage.mockRestore()
+      publish.mockRestore()
+      storageWrite.mockRestore()
+    }
+  })
+
+  test("does not strand a summary queued as the active worker settles", async () => {
+    const sessionID = SessionID.make("ses_summary_queue_settle")
+    const firstID = MessageID.make("msg_summary_settle_first")
+    const secondID = MessageID.make("msg_summary_settle_second")
+    const message = (id: MessageID) =>
+      [
+        {
+          info: {
+            id,
+            sessionID,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "build",
+            model: { providerID: "openai", modelID: "gpt-5.2" },
+          },
+          parts: [],
+        },
+      ] as any
+
+    let releaseFirstPublish!: () => void
+    const firstPublish = new Promise<void>((resolve) => {
+      releaseFirstPublish = resolve
+    })
+    const setSummary = vi.spyOn(Session, "setSummary").mockResolvedValue(undefined as any)
+    const updateMessage = vi.spyOn(Session, "updateMessage").mockResolvedValue(undefined as any)
+    const storageWrite = vi.spyOn(Storage, "write").mockResolvedValue(undefined as any)
+    const publish = vi
+      .spyOn(Bus, "publish")
+      .mockImplementationOnce(() => firstPublish as any)
+      .mockResolvedValue(undefined as any)
+
+    try {
+      const first = SessionSummary.summarize({ sessionID, messageID: firstID }, message(firstID))
+      await vi.waitFor(() => expect(publish).toHaveBeenCalledTimes(1))
+
+      let second: Promise<void> | undefined
+      releaseFirstPublish()
+      // Queue the second request after the worker continuation but before a
+      // Promise.prototype.finally cleanup reaction from the old implementation.
+      queueMicrotask(() =>
+        queueMicrotask(() =>
+          queueMicrotask(() =>
+            queueMicrotask(() => {
+              second = SessionSummary.summarize({ sessionID, messageID: secondID }, message(secondID))
+            }),
+          ),
+        ),
+      )
+
+      await first
+      await vi.waitFor(() => expect(second).toBeDefined())
+      await second
+      expect(setSummary).toHaveBeenCalledTimes(2)
+      expect(publish).toHaveBeenCalledTimes(2)
+    } finally {
+      setSummary.mockRestore()
+      updateMessage.mockRestore()
+      storageWrite.mockRestore()
+      publish.mockRestore()
+    }
+  })
 })

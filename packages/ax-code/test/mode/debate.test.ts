@@ -142,4 +142,71 @@ describe("Debate", () => {
     expect(Debate.agreementRatio(report)).toBe(0.8)
     expect(decision.continue).toBe(true)
   })
+
+  test("genericParts like 'labs', 'ai', 'engine', 'copilot' are NOT redacted from text", () => {
+    // Member IDs whose parts include generic terms — the generic terms should survive redaction
+    const report = Council.aggregateCouncil([
+      {
+        memberId: "acme-labs/engine-v2",
+        providerID: "acme-labs",
+        modelID: "engine-v2",
+        issues: [
+          {
+            memberId: "acme-labs/engine-v2",
+            severity: "medium",
+            category: "design",
+            summary: "The labs team built an ai engine with copilot support",
+          },
+        ],
+      },
+      {
+        memberId: "other/provider",
+        providerID: "other",
+        modelID: "provider",
+        issues: [],
+      },
+    ])
+
+    const prompt = Debate.renderSynthesisPrompt(Debate.buildAnonymousSynthesis(report, 1))
+    // Generic parts should survive — they are not specific enough to be identity-bearing
+    expect(prompt.toLowerCase()).toContain("labs")
+    expect(prompt.toLowerCase()).toContain("ai")
+    expect(prompt.toLowerCase()).toContain("engine")
+    expect(prompt.toLowerCase()).toContain("copilot")
+    // The specific composite member id parts should not leak into the output
+    // (they were never in the summary text, and the redaction logic would strip them if they were)
+    expect(prompt).not.toContain("acme-labs")
+    expect(prompt).not.toContain("engine-v2")
+  })
+
+  test("non-generic member name parts are still redacted even when combined with generic words", () => {
+    const report = Council.aggregateCouncil([
+      {
+        memberId: "novacorp/ai-gpt",
+        providerID: "novacorp",
+        modelID: "ai-gpt",
+        issues: [
+          {
+            memberId: "novacorp/ai-gpt",
+            severity: "high",
+            category: "security",
+            summary: "novacorp and ai-gpt found a critical auth bypass",
+          },
+        ],
+      },
+      {
+        memberId: "peer/model",
+        providerID: "peer",
+        modelID: "model",
+        issues: [],
+      },
+    ])
+
+    const prompt = Debate.renderSynthesisPrompt(Debate.buildAnonymousSynthesis(report, 1))
+    // "novacorp" and "ai-gpt" are specific enough to be redacted
+    expect(prompt.toLowerCase()).not.toContain("novacorp")
+    expect(prompt).not.toContain("ai-gpt")
+    // The standalone generic word "ai" in the summary should survive
+    expect(prompt).toContain("[member]")
+  })
 })

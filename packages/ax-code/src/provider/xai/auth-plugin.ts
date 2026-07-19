@@ -8,6 +8,21 @@ const DEVICE_CODE_SLOW_DOWN_INCREMENT_MS = 5_000
 const OAUTH_POLLING_SAFETY_MARGIN_MS = 500
 const DEFAULT_EXPIRY_MS = 5 * 60 * 1000
 
+function sleep(ms: number, signal?: AbortSignal) {
+  if (signal?.aborted) return Promise.reject(signal.reason ?? new DOMException("Aborted", "AbortError"))
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort)
+      resolve()
+    }, ms)
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(signal?.reason ?? new DOMException("Aborted", "AbortError"))
+    }
+    signal?.addEventListener("abort", onAbort, { once: true })
+  })
+}
+
 const hooks: Hooks = {
   auth: {
     provider: "xai",
@@ -45,17 +60,16 @@ const hooks: Hooks = {
             url,
             method: "auto" as const,
             instructions,
-            async callback() {
+            async callback(signal?: AbortSignal) {
               while (Date.now() < expiresAt) {
                 const remaining = expiresAt - Date.now()
-                await new Promise((r) =>
-                  setTimeout(r, Math.min(intervalMs + OAUTH_POLLING_SAFETY_MARGIN_MS, remaining)),
-                )
+                await sleep(Math.min(intervalMs + OAUTH_POLLING_SAFETY_MARGIN_MS, remaining), signal)
 
                 let body: { error?: string; access_token?: string; refresh_token?: string; expires_in?: number }
                 try {
                   const tokenRes = await fetch(TOKEN_URL, {
                     method: "POST",
+                    signal,
                     headers: { "Content-Type": "application/x-www-form-urlencoded" },
                     body: new URLSearchParams({
                       grant_type: "urn:ietf:params:oauth:grant-type:device_code",
@@ -64,7 +78,8 @@ const hooks: Hooks = {
                     }).toString(),
                   })
                   body = (await tokenRes.json()) as typeof body
-                } catch {
+                } catch (error) {
+                  if (signal?.aborted) throw error
                   continue
                 }
 

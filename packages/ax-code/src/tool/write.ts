@@ -97,6 +97,18 @@ export const WriteTool = Tool.define("write", {
         },
       })
 
+      // The in-process lock does not stop an editor or another process from
+      // changing the path while the approval UI is open. Revalidate the
+      // symlink and exact bytes the user reviewed before committing the write.
+      await assertSymlinkInsideProject(filepath)
+      const existsAfterApproval = await Filesystem.exists(filepath)
+      if (exists !== existsAfterApproval) {
+        throw new Error(`File ${filepath} changed while write approval was pending. Read it again and retry.`)
+      }
+      if (existsAfterApproval && (await Filesystem.readText(filepath)) !== contentOld) {
+        throw new Error(`File ${filepath} changed while write approval was pending. Read it again and retry.`)
+      }
+
       await Filesystem.write(filepath, params.content)
       await notifyFileEdited(filepath, exists ? "change" : "add")
       await FileTime.read(ctx.sessionID, filepath)

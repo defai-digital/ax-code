@@ -11,9 +11,10 @@ import { Global } from "../global"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
 import { Log } from "../util/log"
+import { parseNumstatLine } from "../util/git-output"
 import { Protected } from "./protected"
 import { Ripgrep } from "./ripgrep"
-import { deletedFileStatus, parseDeletedPaths, parseModifiedNumstat, untrackedFileStatus } from "./status"
+import { deletedFileStatus, parseModifiedNumstat, untrackedFileStatus } from "./status"
 
 export namespace File {
   // Thrown when a requested path escapes the project directory (directly or via
@@ -586,24 +587,19 @@ export namespace File {
       }
     }
 
-    const deletedOutput = (
+    const deletedNumstat = (
       await git(
-        ["-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "diff", "--name-only", "--diff-filter=D", "HEAD"],
+        ["-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "diff", "--numstat", "--diff-filter=D", "HEAD"],
         {
           cwd: Instance.directory,
         },
       )
     ).text()
 
-    if (deletedOutput.trim()) {
-      for (const file of parseDeletedPaths(deletedOutput)) {
-        const deletedNumstat = (
-          await git(
-            ["-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "diff", "--numstat", "HEAD", "--", file],
-            { cwd: Instance.directory },
-          )
-        ).text()
-        changed.push(deletedFileStatus(file, deletedNumstat))
+    if (deletedNumstat.trim()) {
+      for (const line of deletedNumstat.trim().split("\n")) {
+        const parsed = parseNumstatLine(line)
+        if (parsed) changed.push(deletedFileStatus(parsed.file, line))
       }
     }
 

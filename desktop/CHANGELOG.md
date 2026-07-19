@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Release: rotates CLI and Desktop minisign verification to key `CF42FC69BEEF0EA5` and uses the shared `~/signkey/ax.minisign.key` plus `ax.pub` local key layout.
+
 ## [7.1.0] - 2026-07-18
 
 ### Added

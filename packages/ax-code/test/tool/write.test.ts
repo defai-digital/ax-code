@@ -476,6 +476,35 @@ describe("tool.write", () => {
   })
 
   describe("error handling", () => {
+    test("rejects when an existing file changes while approval is pending", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "race.txt")
+      await fs.writeFile(filepath, "before\n", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const { FileTime } = await import("../../src/file/time")
+          await FileTime.read(ctx.sessionID, filepath)
+          const write = await WriteTool.init()
+
+          await expect(
+            write.execute(
+              { filePath: filepath, content: "agent update\n" },
+              {
+                ...ctx,
+                ask: async () => {
+                  await fs.writeFile(filepath, "concurrent update\n", "utf-8")
+                },
+              },
+            ),
+          ).rejects.toThrow(/changed since it was read|changed while write approval/)
+
+          expect(await fs.readFile(filepath, "utf-8")).toBe("concurrent update\n")
+        },
+      })
+    })
+
     test("throws error when file path contains null byte", async () => {
       await using tmp = await tmpdir()
 

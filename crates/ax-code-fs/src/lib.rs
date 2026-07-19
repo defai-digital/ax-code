@@ -841,20 +841,22 @@ pub fn scan_files(cwd: String, config_json: String) -> napi::Result<String> {
 
 /// Batch file reader: reads multiple files in parallel using rayon.
 /// Returns a JSON object mapping file paths to their UTF-8 contents.
-/// Files that fail to read (binary, permissions, etc.) are silently skipped.
+/// If any file cannot be read as UTF-8, return an error so the JavaScript
+/// caller can fall back to its per-file reader without silently losing input.
 #[napi]
 pub fn read_files_batch(files_json: String) -> napi::Result<String> {
     let files: Vec<String> = serde_json::from_str(&files_json)
         .map_err(|e| napi::Error::from_reason(format!("invalid JSON: {e}")))?;
 
-    let results: Vec<(String, String)> = files
+    let results: Result<Vec<(String, String)>, String> = files
         .par_iter()
-        .filter_map(|path| {
+        .map(|path| {
             std::fs::read_to_string(path)
-                .ok()
                 .map(|content| (path.clone(), content))
+                .map_err(|error| format!("failed to read {path}: {error}"))
         })
         .collect();
+    let results = results.map_err(napi::Error::from_reason)?;
 
     // Serialize as array of [path, content] pairs for efficient JS parsing
     serde_json::to_string(&results).map_err(|e| napi::Error::from_reason(e.to_string()))

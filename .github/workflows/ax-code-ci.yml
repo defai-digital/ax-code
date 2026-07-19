@@ -15,9 +15,12 @@ on:
       - "packages/util/**"
       - "packages/plugin/**"
       - "packages/script/**"
+      - "script/**"
+      - "desktop/**"
   push:
     branches:
       - dev
+      - main
     paths:
       - ".github/workflows/ax-code-ci.yml"
       - "package.json"
@@ -31,6 +34,8 @@ on:
       - "packages/util/**"
       - "packages/plugin/**"
       - "packages/script/**"
+      - "script/**"
+      - "desktop/**"
   workflow_dispatch:
     inputs:
       live:
@@ -41,7 +46,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -78,7 +83,6 @@ jobs:
 
       - name: Security scan
         uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
-        continue-on-error: true
         with:
           scan-args: |-
             --lockfile=pnpm-lock.yaml
@@ -103,6 +107,9 @@ jobs:
       - name: Test SDK
         run: pnpm --dir packages/sdk/js test
 
+      - name: Test repository scripts
+        run: pnpm run test:scripts
+
       - name: Build Plugin
         run: pnpm --dir packages/plugin run build
 
@@ -121,18 +128,23 @@ jobs:
           mkdir -p "$dest"
 
           run_id="$(
-            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ax-code-ci.yml/runs?branch=dev&event=push&status=completed&per_page=50" \
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ax-code-ci.yml/runs?branch=${GITHUB_REF_NAME}&event=push&status=completed&per_page=50" \
               --jq '.workflow_runs[] | select(.conclusion=="success") | .id' \
               | head -n1
           )"
 
           if [ -z "$run_id" ]; then
-            echo "No successful dev coverage baseline found."
+            echo "No successful ${GITHUB_REF_NAME} coverage baseline found; this run will establish it."
             exit 0
           fi
 
-          gh run download "$run_id" -n ax-code-coverage-baseline-summary -D "$dest" || true
-          find "$dest" -maxdepth 2 -type f -print || true
+          gh run download "$run_id" -n ax-code-coverage-baseline-summary -D "$dest"
+          baseline="$(find "$dest" -name '*.json' -print -quit)"
+          if [ -z "$baseline" ]; then
+            echo "Coverage baseline artifact from run $run_id contained no JSON summary."
+            exit 1
+          fi
+          find "$dest" -maxdepth 2 -type f -print
 
       - name: Run deterministic ax-code tests
         shell: bash
@@ -147,8 +159,6 @@ jobs:
             test:ci
             --
             deterministic
-            --rerun-on-fail
-            1
           )
 
           # Full V8 coverage is retained on post-merge dev pushes, where it
@@ -203,7 +213,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload coverage baseline summary
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        if: always() && github.event_name == 'push'
         uses: actions/upload-artifact@v7
         with:
           name: ax-code-coverage-baseline-summary
@@ -247,7 +257,6 @@ jobs:
 
   tui-node26-smoke:
     runs-on: ubuntu-latest
-    continue-on-error: true
     env:
       AX_CODE_DISABLE_SHARE: "true"
     steps:

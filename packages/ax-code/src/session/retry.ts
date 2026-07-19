@@ -26,6 +26,7 @@ export namespace SessionRetry {
         },
         Math.min(ms, RETRY_MAX_DELAY),
       )
+      timeout.unref?.()
       if (signal.aborted) {
         clearTimeout(timeout)
         reject(new DOMException("Aborted", "AbortError"))

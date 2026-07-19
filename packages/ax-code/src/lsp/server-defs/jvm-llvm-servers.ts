@@ -91,7 +91,10 @@ export const ElixirLS: Info = {
       process.platform === "win32" ? "language_server.bat" : "language_server.sh",
     )
     if (await pathExists(binary)) {
-      log.warn("using legacy unmanaged elixir-ls install; reinstall manually to replace the old runtime Mix.install path", { bin: binary })
+      log.warn(
+        "using legacy unmanaged elixir-ls install; reinstall manually to replace the old runtime Mix.install path",
+        { bin: binary },
+      )
       return spawnInfo(binary, root)
     }
 
@@ -114,7 +117,9 @@ export const Zls: Info = {
     const legacyBin = globalBin("zls")
     const hasLegacyBin = await pathExists(legacyBin)
     const useLegacyBin = () => {
-      log.warn("using legacy unmanaged zls install; install zls on PATH or configure lsp.zls.command to pin it", { bin: legacyBin })
+      log.warn("using legacy unmanaged zls install; install zls on PATH or configure lsp.zls.command to pin it", {
+        bin: legacyBin,
+      })
       return spawnInfo(legacyBin, root)
     }
 
@@ -135,7 +140,9 @@ export const Zls: Info = {
     const zlsTag = zlsReleaseForZig(zigVersion.text)
     if (!zlsTag) {
       if (hasLegacyBin) return useLegacyBin()
-      log.error("Automatic zls install only supports stable Zig releases with a pinned compatibility mapping", { zigVersion: zigVersion.text.trim() })
+      log.error("Automatic zls install only supports stable Zig releases with a pinned compatibility mapping", {
+        zigVersion: zigVersion.text.trim(),
+      })
       return
     }
 
@@ -151,10 +158,17 @@ export const Zls: Info = {
         log.error(`Platform ${platform} and architecture ${arch} is not supported by zls`)
         return
       }
-      bin = (await installPinnedGitHubReleaseAsset({
-        id: "zls", repo: "zigtools/zls", tag: zlsTag, assetName, bin: managedBin,
-        installDir: path.dirname(managedBin), platform, tarArgs: ["-xf"],
-      })) ?? null
+      bin =
+        (await installPinnedGitHubReleaseAsset({
+          id: "zls",
+          repo: "zigtools/zls",
+          tag: zlsTag,
+          assetName,
+          bin: managedBin,
+          installDir: path.dirname(managedBin),
+          platform,
+          tarArgs: ["-xf"],
+        })) ?? null
     }
 
     if (!bin && hasLegacyBin) return useLegacyBin()
@@ -218,7 +232,10 @@ export const RustAnalyzer: Info = {
       try {
         const cargoTomlContent = await Filesystem.readText(cargoTomlPath)
         if (cargoTomlContent.includes("[workspace]")) return currentDir
-      } catch (err) {}
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException | undefined)?.code
+        if (code !== "ENOENT" && code !== "ENOTDIR") throw err
+      }
       const parentDir = path.dirname(currentDir)
       if (parentDir === currentDir) break
       currentDir = parentDir
@@ -259,7 +276,10 @@ export const Clangd: Info = {
       if (!entry.name.startsWith("clangd_")) continue
       const candidate = path.join(Global.Path.bin, entry.name, "bin", "clangd" + ext)
       if (await pathExists(candidate)) {
-        log.warn("using legacy unmanaged clangd install; remove extracted shared-bin copy to switch to pinned managed installs", { bin: candidate })
+        log.warn(
+          "using legacy unmanaged clangd install; remove extracted shared-bin copy to switch to pinned managed installs",
+          { bin: candidate },
+        )
         return spawnInfo(candidate, root, args)
       }
     }
@@ -271,10 +291,17 @@ export const Clangd: Info = {
       return
     }
     log.info("downloading pinned clangd release", { tag: pinned.tag })
-    const bin = (await installPinnedGitHubReleaseAsset({
-      id: "clangd", repo: pinned.repo, tag: pinned.tag, assetName, bin: managedBin,
-      installDir: managedToolDir("clangd", version, platform, arch), platform, tarArgs: ["-xJf", "--strip-components=1"],
-    })) ?? null
+    const bin =
+      (await installPinnedGitHubReleaseAsset({
+        id: "clangd",
+        repo: pinned.repo,
+        tag: pinned.tag,
+        assetName,
+        bin: managedBin,
+        installDir: managedToolDir("clangd", version, platform, arch),
+        platform,
+        tarArgs: ["-xJf", "--strip-components=1"],
+      })) ?? null
     if (!bin) return
     return spawnInfo(bin, root, args)
   },
@@ -282,7 +309,8 @@ export const Clangd: Info = {
 
 const spawnJdtls = async (java: string, root: string, distPath: string, launcherDir: string) => {
   const jarFileName = (await fs.readdir(launcherDir).catch(() => []))
-    .find((item) => /^org\.eclipse\.equinox\.launcher_.*\.jar$/.test(item))?.trim()
+    .find((item) => /^org\.eclipse\.equinox\.launcher_.*\.jar$/.test(item))
+    ?.trim()
   if (!jarFileName) {
     log.error(`Failed to locate the JDTLS launcher jar in: ${launcherDir}`)
     return
@@ -292,41 +320,62 @@ const spawnJdtls = async (java: string, root: string, distPath: string, launcher
     log.error(`Failed to locate the JDTLS launcher module in the installed directory: ${distPath}.`)
     return
   }
-  const configFile = path.join(distPath, (() => {
-    switch (process.platform) {
-      case "darwin": return "config_mac"
-      case "linux": return "config_linux"
-      case "win32": return "config_win"
-      default: return "config_linux"
-    }
-  })())
+  const configFile = path.join(
+    distPath,
+    (() => {
+      switch (process.platform) {
+        case "darwin":
+          return "config_mac"
+        case "linux":
+          return "config_linux"
+        case "win32":
+          return "config_win"
+        default:
+          return "config_linux"
+      }
+    })(),
+  )
   await JdtlsDataDir.cleanupStale()
   const dataDir = await JdtlsDataDir.create()
   let proc
   try {
-    proc = spawn(java, [
-      "-jar", launcherJar, "-configuration", configFile, "-data", dataDir,
-      "-Declipse.application=org.eclipse.jdt.ls.core.id1",
-      "-Dosgi.bundles.defaultStartLevel=4",
-      "-Declipse.product=org.eclipse.jdt.ls.core.product",
-      "-Dlog.level=ALL", "--add-modules=ALL-SYSTEM",
-      "--add-opens java.base/java.util=ALL-UNNAMED",
-      "--add-opens java.base/java.lang=ALL-UNNAMED",
-    ], {
-      cwd: root,
-      onStderr: (chunk: Buffer | string) => {
-        const message = chunk.toString().trim()
-        if (!message) return
-        log.debug("jdtls stderr", { root, message: message.slice(0, 500) })
+    proc = spawn(
+      java,
+      [
+        "-jar",
+        launcherJar,
+        "-configuration",
+        configFile,
+        "-data",
+        dataDir,
+        "-Declipse.application=org.eclipse.jdt.ls.core.id1",
+        "-Dosgi.bundles.defaultStartLevel=4",
+        "-Declipse.product=org.eclipse.jdt.ls.core.product",
+        "-Dlog.level=ALL",
+        "--add-modules=ALL-SYSTEM",
+        "--add-opens java.base/java.util=ALL-UNNAMED",
+        "--add-opens java.base/java.lang=ALL-UNNAMED",
+      ],
+      {
+        cwd: root,
+        onStderr: (chunk: Buffer | string) => {
+          const message = chunk.toString().trim()
+          if (!message) return
+          log.debug("jdtls stderr", { root, message: message.slice(0, 500) })
+        },
       },
-    })
+    )
   } catch (err) {
     await JdtlsDataDir.remove(dataDir).catch(() => {})
     throw err
   }
   void proc.exited
-    .finally(() => { JdtlsDataDir.remove(dataDir).catch((err) => log.warn("failed to remove jdtls data dir", { dataDir, err })) })
-    .catch((err) => { log.debug("jdtls process exited with error", { dataDir, err }) })
+    .finally(() => {
+      JdtlsDataDir.remove(dataDir).catch((err) => log.warn("failed to remove jdtls data dir", { dataDir, err }))
+    })
+    .catch((err) => {
+      log.debug("jdtls process exited with error", { dataDir, err })
+    })
   return { process: proc }
 }
 
@@ -337,7 +386,10 @@ export const JDTLS: Info = {
     const gradleMarkers = ["gradlew", "gradlew.bat"]
     const exclusionsForMonorepos = gradleMarkers.concat(settingsMarkers)
     const [projectRoot, wrapperRoot, settingsRoot] = await Promise.all([
-      NearestRoot(["pom.xml", "build.gradle", "build.gradle.kts", ".project", ".classpath"], exclusionsForMonorepos)(file),
+      NearestRoot(
+        ["pom.xml", "build.gradle", "build.gradle.kts", ".project", ".classpath"],
+        exclusionsForMonorepos,
+      )(file),
       NearestRoot(gradleMarkers, settingsMarkers)(file),
       NearestRoot(settingsMarkers)(file),
     ])
@@ -369,16 +421,26 @@ export const JDTLS: Info = {
       const legacyDistPath = path.join(Global.Path.bin, "jdtls")
       const legacyLauncherDir = path.join(legacyDistPath, "plugins")
       if (await pathExists(legacyLauncherDir)) {
-        log.warn("using legacy unmanaged jdtls install; remove shared-bin copy to switch to pinned managed installs", { distPath: legacyDistPath })
+        log.warn("using legacy unmanaged jdtls install; remove shared-bin copy to switch to pinned managed installs", {
+          distPath: legacyDistPath,
+        })
         return spawnJdtls(java, root, legacyDistPath, legacyLauncherDir)
       }
       if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
       log.info("Downloading pinned JDTLS LSP server.", { version: pinned.version })
-      const installed = (await installPinnedChecksumReleaseAsset({
-        id: "jdtls", assetName: pinned.assetName, url: jdtlsAssetUrl(pinned.assetName),
-        checksumUrl: jdtlsChecksumUrl(pinned.assetName), bin: distPath, verifyPath: launcherDir,
-        installDir: distPath, platform, tarArgs: ["-xzf"], skipChmod: true,
-      })) ?? null
+      const installed =
+        (await installPinnedChecksumReleaseAsset({
+          id: "jdtls",
+          assetName: pinned.assetName,
+          url: jdtlsAssetUrl(pinned.assetName),
+          checksumUrl: jdtlsChecksumUrl(pinned.assetName),
+          bin: distPath,
+          verifyPath: launcherDir,
+          installDir: distPath,
+          platform,
+          tarArgs: ["-xzf"],
+          skipChmod: true,
+        })) ?? null
       if (!installed) return
     }
     return spawnJdtls(java, root, distPath, launcherDir)
@@ -403,13 +465,21 @@ export const KotlinLS: Info = {
     const arch = process.arch
     const launcherName = platform === "win32" ? "kotlin-lsp.cmd" : "kotlin-lsp.sh"
     const managedLauncher = managedToolPath("kotlin-ls", pinned.version, launcherName, platform, arch)
-    const installedLauncher = which("kotlin-lsp") ?? (platform === "win32" ? which("kotlin-lsp.cmd") : which("kotlin-lsp.sh"))
-    const selectedLauncher = await resolveManagedToolBin({ toolName: "kotlin-lsp", managedBin: managedLauncher, installedBin: installedLauncher })
+    const installedLauncher =
+      which("kotlin-lsp") ?? (platform === "win32" ? which("kotlin-lsp.cmd") : which("kotlin-lsp.sh"))
+    const selectedLauncher = await resolveManagedToolBin({
+      toolName: "kotlin-lsp",
+      managedBin: managedLauncher,
+      installedBin: installedLauncher,
+    })
     if (selectedLauncher) return spawnInfo(selectedLauncher, root, ["--stdio"])
 
     const legacyLauncher = path.join(Global.Path.bin, "kotlin-ls", launcherName)
     if (await pathExists(legacyLauncher)) {
-      log.warn("using legacy unmanaged kotlin-lsp install; remove shared-bin copy to switch to pinned managed installs", { bin: legacyLauncher })
+      log.warn(
+        "using legacy unmanaged kotlin-lsp install; remove shared-bin copy to switch to pinned managed installs",
+        { bin: legacyLauncher },
+      )
       return spawnInfo(legacyLauncher, root, ["--stdio"])
     }
 
@@ -422,10 +492,16 @@ export const KotlinLS: Info = {
       return
     }
     log.info("downloading pinned kotlin-lsp release", { version: pinned.version })
-    const launcher = (await installPinnedChecksumReleaseAsset({
-      id: "kotlin-lsp", assetName, url: assetUrl, checksumUrl, bin: managedLauncher,
-      installDir: managedToolDir("kotlin-ls", pinned.version, platform, arch), platform,
-    })) ?? null
+    const launcher =
+      (await installPinnedChecksumReleaseAsset({
+        id: "kotlin-lsp",
+        assetName,
+        url: assetUrl,
+        checksumUrl,
+        bin: managedLauncher,
+        installDir: managedToolDir("kotlin-ls", pinned.version, platform, arch),
+        platform,
+      })) ?? null
     if (!launcher) return
     return spawnInfo(launcher, root, ["--stdio"])
   },
@@ -433,22 +509,46 @@ export const KotlinLS: Info = {
 
 export const LuaLS: Info = {
   id: "lua-ls",
-  root: NearestRoot([".luarc.json", ".luarc.jsonc", ".luacheckrc", ".stylua.toml", "stylua.toml", "selene.toml", "selene.yml"]),
+  root: NearestRoot([
+    ".luarc.json",
+    ".luarc.jsonc",
+    ".luacheckrc",
+    ".stylua.toml",
+    "stylua.toml",
+    "selene.toml",
+    "selene.yml",
+  ]),
   extensions: [".lua"],
   async spawn(root) {
     const pinned = PINNED_GITHUB_LSP_RELEASES.luaLs
     const platform = process.platform
     const arch = process.arch
     const version = releaseVersion(pinned.tag)
-    const managedBin = managedToolPath("lua-language-server", version, path.join("bin", "lua-language-server" + (platform === "win32" ? ".exe" : "")), platform, arch)
+    const managedBin = managedToolPath(
+      "lua-language-server",
+      version,
+      path.join("bin", "lua-language-server" + (platform === "win32" ? ".exe" : "")),
+      platform,
+      arch,
+    )
     const installedBin = which("lua-language-server")
     const selectedBin = await resolveManagedToolBin({ toolName: "lua-language-server", managedBin, installedBin })
     if (selectedBin) return spawnInfo(selectedBin, root)
 
     const target = luaLsReleaseTarget(platform, arch)
-    const legacyBin = target && path.join(Global.Path.bin, `lua-language-server-${target.arch}-${target.platform}`, "bin", "lua-language-server" + (platform === "win32" ? ".exe" : ""))
+    const legacyBin =
+      target &&
+      path.join(
+        Global.Path.bin,
+        `lua-language-server-${target.arch}-${target.platform}`,
+        "bin",
+        "lua-language-server" + (platform === "win32" ? ".exe" : ""),
+      )
     if (legacyBin && (await pathExists(legacyBin))) {
-      log.warn("using legacy unmanaged lua-language-server install; remove shared-bin copy to switch to pinned managed installs", { bin: legacyBin })
+      log.warn(
+        "using legacy unmanaged lua-language-server install; remove shared-bin copy to switch to pinned managed installs",
+        { bin: legacyBin },
+      )
       return spawnInfo(legacyBin, root)
     }
 
@@ -459,11 +559,17 @@ export const LuaLS: Info = {
       return
     }
     log.info("downloading pinned lua-language-server release", { tag: pinned.tag })
-    const bin = (await installPinnedGitHubReleaseAsset({
-      id: "lua-language-server", repo: pinned.repo, tag: pinned.tag, assetName, bin: managedBin,
-      installDir: managedToolDir("lua-language-server", version, platform, arch), platform,
-      tarArgs: target.ext === "zip" ? undefined : ["-xzf"],
-    })) ?? null
+    const bin =
+      (await installPinnedGitHubReleaseAsset({
+        id: "lua-language-server",
+        repo: pinned.repo,
+        tag: pinned.tag,
+        assetName,
+        bin: managedBin,
+        installDir: managedToolDir("lua-language-server", version, platform, arch),
+        platform,
+        tarArgs: target.ext === "zip" ? undefined : ["-xzf"],
+      })) ?? null
     if (!bin) return
     return spawnInfo(bin, root)
   },

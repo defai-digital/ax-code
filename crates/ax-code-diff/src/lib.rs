@@ -26,6 +26,9 @@ pub fn edit_replace(
     new_string: String,
     replace_all: bool,
 ) -> napi::Result<String> {
+    if old_string.is_empty() {
+        return Err(napi::Error::from_reason("oldString must not be empty."));
+    }
     if old_string == new_string {
         return Err(napi::Error::from_reason(
             "No changes to apply: oldString and newString are identical.",
@@ -608,5 +611,12 @@ mod tests {
         let content = "abcabcabc";
         let results = strategy_multi_occurrence(content, "abc");
         assert_eq!(results.len(), 3);
+    }
+
+    #[test]
+    fn empty_old_string_is_rejected_without_looping() {
+        let err = edit_replace("abc".into(), "".into(), "x".into(), false).unwrap_err();
+        assert!(err.reason.contains("must not be empty"));
+        assert!(strategy_multi_occurrence("abc", "").is_empty());
     }
 }

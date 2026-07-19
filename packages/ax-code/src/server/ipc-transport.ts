@@ -59,13 +59,16 @@ export async function listenIpc(opts: IpcServerOptions): Promise<IpcServerHandle
 
   return {
     socketPath,
-    stop: async (closeActiveConnections) => {
-      if (closeActiveConnections) {
-        for (const socket of connections) {
-          socket.destroy()
-        }
-        connections.clear()
+    stop: async (_closeActiveConnections) => {
+      // `server.close()` waits for every socket, while each IPC socket owns a
+      // long-lived event stream. Always terminate those streams first or a
+      // nominally graceful shutdown can wait forever. Keep the optional
+      // argument for API compatibility; shutdown safety no longer depends on
+      // callers remembering to opt in.
+      for (const socket of connections) {
+        socket.destroy()
       }
+      connections.clear()
       return new Promise((resolve) => server.close(() => resolve()))
     },
   }

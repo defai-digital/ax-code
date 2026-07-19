@@ -14,6 +14,7 @@ import { Instance } from "../../src/project/instance"
 describe("Format", () => {
   afterEach(async () => {
     await Instance.disposeAll()
+    vi.unstubAllEnvs()
   })
 
   test("status() returns built-in formatters when no config overrides", async () => {
@@ -206,6 +207,11 @@ describe("Format", () => {
   })
 
   test("runs matching formatters sequentially for the same file", async () => {
+    // This fixture intentionally defines executable project formatters. The
+    // production default rejects those until the user explicitly trusts the
+    // checkout, so opt this test into the trusted-project path.
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+
     await using tmp = await tmpdir({
       config: {
         formatter: {

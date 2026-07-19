@@ -68,18 +68,78 @@ const CLI_TIMEOUT_MS = 300_000 // 5 minutes
 
 export function cliEnv(providerEnvKeys: readonly string[] = [], providerID?: string) {
   const env: Record<string, string> = {
-    ...Env.withCliProviderKeys(Env.sanitize()),
+    ...Env.withCliProviderKeys(Env.sanitize(), providerID),
     TERM: "dumb",
     NO_COLOR: "1",
   }
   // Qoder runs its command tool through $SHELL. A login Bash shell can load
   // unrelated user profile scripts or fail before the requested command runs.
   if (providerID === "qoder-cli" && process.platform !== "win32") env.SHELL = "/bin/sh"
-  for (const key of providerEnvKeys) {
-    const value = process.env[key]
-    if (value !== undefined) env[key] = value
-  }
+  // Provider metadata may name additional non-secret runtime variables, but
+  // it must not punch through the sanitizer. In particular, project config
+  // can override provider metadata and must not be able to request arbitrary
+  // credentials from the parent environment.
+  const requested = Object.fromEntries(providerEnvKeys.map((key) => [key, process.env[key]]))
+  Object.assign(env, Env.sanitize(requested))
   return env
+}
+
+async function writeCliPrompt(
+  stdin: NonNullable<ReturnType<typeof Process.spawn>["stdin"]>,
+  text: string,
+): Promise<void> {
+  let rejectDrain: ((error: Error) => void) | undefined
+  let onDrain: (() => void) | undefined
+  let emittedError = false
+
+  const clearDrain = () => {
+    if (onDrain) stdin.off("drain", onDrain)
+    onDrain = undefined
+    rejectDrain = undefined
+  }
+  const onError = (error: Error) => {
+    emittedError = true
+    log.debug("cli provider stdin closed", { error: toErrorMessage(error) })
+    const reject = rejectDrain
+    clearDrain()
+    reject?.(error)
+  }
+  const onClose = () => {
+    const reject = rejectDrain
+    clearDrain()
+    stdin.off("error", onError)
+    reject?.(new Error("CLI provider stdin closed before buffered prompt data drained"))
+  }
+
+  // Keep the listener for the stream lifetime. EPIPE may arrive after end()
+  // and must never escape as an uncaught EventEmitter "error" event.
+  stdin.on("error", onError)
+  stdin.once("close", onClose)
+
+  try {
+    const wrote = stdin.write(text)
+    if (wrote === false) {
+      await new Promise<void>((resolve, reject) => {
+        onDrain = () => {
+          clearDrain()
+          resolve()
+        }
+        rejectDrain = reject
+        stdin.once("drain", onDrain)
+      })
+    }
+    stdin.end()
+  } catch (error) {
+    // An emitted stream error is followed by `close`; leave the handler in
+    // place until then so a late EPIPE cannot become uncaught. Synchronous
+    // write/end failures do not have that lifecycle, so release immediately.
+    if (!emittedError) {
+      clearDrain()
+      stdin.off("error", onError)
+      stdin.off("close", onClose)
+    }
+    throw error
+  }
 }
 
 function autonomousCliArgs(providerID: string): string[] {
@@ -219,6 +279,7 @@ export class CliLanguageModel implements LanguageModelV3 {
       () => attachments.cleanup(),
     )
 
+    if (!proc.stdout || !proc.stderr) throw new Error("CLI process output not available")
     if (this.useStdin()) {
       if (!proc.stdin) throw new Error("CLI process stdin not available")
       // Await drain for large prompts. ChildProcess.stdin.write returns
@@ -228,15 +289,8 @@ export class CliLanguageModel implements LanguageModelV3 {
       // nothing" with no error. Strict `=== false` check so non-Writable
       // test mocks (write() returning undefined) don't enter the drain
       // path and fail on the absence of .once.
-      const stdin = proc.stdin
-      const wrote = stdin.write(text)
-      if (wrote === false && typeof (stdin as { once?: unknown }).once === "function") {
-        await new Promise<void>((resolve) => stdin.once("drain", resolve))
-      }
-      stdin.end()
+      await writeCliPrompt(proc.stdin, text)
     }
-    if (!proc.stdout || !proc.stderr) throw new Error("CLI process output not available")
-
     let timeoutTimer: ReturnType<typeof setTimeout> | undefined
     proc.exited.catch((err) => {
       log.debug("cli process exited with error", {
@@ -253,9 +307,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         stack: err instanceof Error ? err.stack : undefined,
       })
     })
-    type GenerateOutcome =
-      | { kind: "result"; value: [number, Buffer, Buffer] }
-      | { kind: "timeout" }
+    type GenerateOutcome = { kind: "result"; value: [number, Buffer, Buffer] } | { kind: "timeout" }
     const timeout = new Promise<GenerateOutcome>((resolve) => {
       // Keep the main CLI timeout ref'd — it is the intentional ceiling for a
       // hung provider process and must keep the event loop alive until it fires.
@@ -335,6 +387,7 @@ export class CliLanguageModel implements LanguageModelV3 {
       () => attachments.cleanup(),
     )
 
+    if (!proc.stdout || !proc.stderr) throw new Error("CLI process output not available")
     if (this.useStdin()) {
       if (!proc.stdin) throw new Error("CLI process stdin not available")
       // Await drain for large prompts. ChildProcess.stdin.write returns
@@ -344,15 +397,8 @@ export class CliLanguageModel implements LanguageModelV3 {
       // nothing" with no error. Strict `=== false` check so non-Writable
       // test mocks (write() returning undefined) don't enter the drain
       // path and fail on the absence of .once.
-      const stdin = proc.stdin
-      const wrote = stdin.write(text)
-      if (wrote === false && typeof (stdin as { once?: unknown }).once === "function") {
-        await new Promise<void>((resolve) => stdin.once("drain", resolve))
-      }
-      stdin.end()
+      await writeCliPrompt(proc.stdin, text)
     }
-    if (!proc.stdout || !proc.stderr) throw new Error("CLI process output not available")
-
     const parser = this.config.parser
     const textId = "cli-0"
 
@@ -489,9 +535,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           // lines) or we re-leak control payloads the complete parser dropped.
           const rawOutput = raw.join("")
           const complete = parser.parseComplete(rawOutput)
-          const fallback =
-            complete.text ||
-            (stdoutHasCliJsonEvents(rawOutput) ? "" : rawFallbackText(rawOutput))
+          const fallback = complete.text || (stdoutHasCliJsonEvents(rawOutput) ? "" : rawFallbackText(rawOutput))
           if (!emitted && fallback) {
             output.push(fallback)
             controller.enqueue({ type: "text-delta", id: textId, delta: fallback })

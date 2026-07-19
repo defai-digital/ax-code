@@ -9,8 +9,10 @@ import { Env } from "@/util/env"
 import { Flag } from "@/flag/flag"
 import { Global } from "@/global"
 import { uniqueStrings } from "@/util/string-list"
+import { Log } from "@/util/log"
 
 export namespace ConfigPaths {
+  const log = Log.create({ service: "config.paths" })
   export async function projectFiles(name: string, directory: string, worktree: string) {
     const files: string[] = []
     for (const file of [`${name}.json`, `${name}.jsonc`]) {
@@ -135,7 +137,14 @@ export namespace ConfigPaths {
     // e.g. their own custom endpoint URLs stored in env vars.
     const envSource = trusted ? process.env : Env.sanitize(process.env)
     text = text.replace(/\{env:([^}]+)\}/g, (_, varName) => {
-      return envSource[varName] ?? ""
+      const value = envSource[varName]
+      if (value !== undefined) return value
+      log.warn("config references an unavailable environment variable", {
+        source: source(input),
+        variable: varName,
+        trusted,
+      })
+      return ""
     })
 
     const fileMatches = Array.from(text.matchAll(/\{file:[^}]+\}/g))

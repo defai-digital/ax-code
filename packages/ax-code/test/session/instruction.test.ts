@@ -282,6 +282,7 @@ describe("InstructionPrompt.systemPaths AX_CODE_CONFIG_DIR", () => {
   })
 
   test("allows ~/ instruction paths that stay within the home directory", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
     await using tmp = await tmpdir({
       git: true,
       config: {
@@ -382,10 +383,37 @@ describe("InstructionPrompt.systemPaths AX_CODE_CONFIG_DIR", () => {
       globSpy.mockRestore()
     }
   })
+
+  test.skipIf(process.platform === "win32")(
+    "rejects relative instruction symlinks that escape the worktree",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      await using outside = await tmpdir({
+        init: async (dir) => fs.writeFile(path.join(dir, "PRIVATE.md"), "outside secret"),
+      })
+      await fs.symlink(path.join(outside.path, "PRIVATE.md"), path.join(tmp.path, "linked.md"))
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const getSpy = vi.spyOn(Config, "get").mockResolvedValue({
+            instructions: ["linked.md"],
+          } as Awaited<ReturnType<typeof Config.get>>)
+          try {
+            const paths = await InstructionPrompt.systemPaths()
+            expect(paths.has(path.join(tmp.path, "linked.md"))).toBe(false)
+          } finally {
+            getSpy.mockRestore()
+          }
+        },
+      })
+    },
+  )
 })
 
 describe("InstructionPrompt.system remote instructions", () => {
   test("loads HTTP instruction URLs case-insensitively", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
     await using tmp = await tmpdir({
       git: true,
       config: {
@@ -415,6 +443,7 @@ describe("InstructionPrompt.system remote instructions", () => {
   })
 
   test("ignores non-decimal remote instruction content-length headers", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
     await using tmp = await tmpdir({
       git: true,
       config: {

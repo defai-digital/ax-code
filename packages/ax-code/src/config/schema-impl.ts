@@ -4,9 +4,10 @@ import { ModelsDev } from "../provider/models"
 import { Log } from "../util/log"
 import { LSPServer } from "../lsp/server"
 import { GITHUB_REPO_URL as REPO_URL } from "@/constants/project"
+import { MCP_DEFAULT_TIMEOUT_MS } from "@/mcp/constants"
 
 const MODEL_SCHEMA_URL = "https://models.dev/model-schema.json#/$defs/Model"
-const MCP_TIMEOUT_MS = 5000
+const MCP_TIMEOUT_MS = MCP_DEFAULT_TIMEOUT_MS
 const MCP_TIMEOUT_SECONDS = MCP_TIMEOUT_MS / 1000
 const PROVIDER_TIMEOUT_MS = 300_000
 const PROVIDER_TIMEOUT_MINUTES = 5
@@ -935,6 +936,9 @@ export const Info = z
               .optional()
               .describe("Enable arena multi-contestant mode tools. Default: false until Phase 2."),
             maxContestants: PositiveInteger.optional().describe("Maximum arena contestants (default: 3, hard max: 5)."),
+            timeoutMs: PositiveInteger.optional().describe(
+              "Per-member timeout in ms for arena fan-out (falls back to council timeout, then 60000).",
+            ),
             strategy: z
               .enum(["verify_first", "diversity", "hybrid_score"])
               .optional()

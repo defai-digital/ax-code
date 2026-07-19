@@ -6,8 +6,8 @@ import os from "os"
 import path from "path"
 
 describe("OsSandbox.resolveBackend", () => {
-  test("defaults to app", () => {
-    expect(OsSandbox.resolveBackend({})).toBe("app")
+  test("defaults to auto", () => {
+    expect(OsSandbox.resolveBackend({})).toBe("auto")
   })
 
   test("env overrides config", () => {
@@ -110,19 +110,19 @@ describe("Isolation.shouldUseOsSandbox", () => {
     expect(Isolation.shouldUseOsSandbox(auto)).toBe(true)
   })
 
-  test("partial config without backend defaults to app (routes write mode/network only)", () => {
+  test("partial config without backend defaults to auto", () => {
     // Isolation routes and project config updates often set { mode, network }
-    // without backend. That must remain valid and resolve to portable app-layer.
+    // without backend. That remains valid and uses OS isolation when available.
     const state = Isolation.resolve({ mode: "workspace-write", network: false }, os.tmpdir())
-    expect(state.backend).toBe("app")
-    expect(Isolation.shouldUseOsSandbox(state)).toBe(false)
-    // Explicit missing backend on a partial state is treated as app.
+    expect(state.backend).toBe("auto")
+    expect(Isolation.shouldUseOsSandbox(state)).toBe(true)
+    // Explicit missing backend on a partial state is treated as auto.
     expect(
       Isolation.shouldUseOsSandbox({
         mode: "workspace-write",
         network: false,
         protected: [],
       }),
-    ).toBe(false)
+    ).toBe(true)
   })
 })

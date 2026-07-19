@@ -71,7 +71,9 @@ export namespace SessionProcessor {
         if (existing) existing.push(delta)
         else pending.set(partID, [delta])
         if (!timer) {
-          timer = setTimeout(() => { flush()?.catch((err) => log.warn("delta flush failed", { error: err })) }, DELTA_BATCH_MS)
+          timer = setTimeout(() => {
+            flush()?.catch((err) => log.warn("delta flush failed", { error: err }))
+          }, DELTA_BATCH_MS)
           timer.unref?.()
         }
       },
@@ -692,6 +694,12 @@ export namespace SessionProcessor {
                       fallbackInput: match.state.input,
                       output: value.output.output,
                     })
+                  } else {
+                    log.warn("late or duplicate tool result ignored", {
+                      toolCallID: value.toolCallId,
+                      status: match?.state.status ?? "missing",
+                      sessionID: input.sessionID,
+                    })
                   }
                   break
                 }
@@ -809,6 +817,12 @@ export namespace SessionProcessor {
                       eventInput: value.input,
                       fallbackInput: match.state.input,
                       output: errorMsg,
+                    })
+                  } else {
+                    log.warn("late or duplicate tool error ignored", {
+                      toolCallID: value.toolCallId,
+                      status: match?.state.status ?? "missing",
+                      sessionID: input.sessionID,
                     })
                   }
                   break
@@ -1046,6 +1060,10 @@ export namespace SessionProcessor {
                   ) {
                     needsCompaction = true
                   }
+                  // Retry limits apply to consecutive provider failures. A
+                  // successful finish-step restores the full budget for the
+                  // next step in a long tool-using turn.
+                  attempt = 0
                   break
 
                 case "text-start":
@@ -1129,7 +1147,10 @@ export namespace SessionProcessor {
             // doing compaction, the connection was likely severed by a
             // network interruption. Throw so the catch path triggers retry.
             if (!receivedFinish && !needsCompaction && !input.abort.aborted) {
-              throw new Error("Stream ended without finish event — possible network interruption")
+              throw new MessageV2.APIError({
+                message: "Stream ended without finish event — possible network interruption",
+                isRetryable: true,
+              }).toObject()
             }
           } catch (e: unknown) {
             streamErrored = true
@@ -1229,10 +1250,7 @@ export namespace SessionProcessor {
           for (const part of Object.values(reasoningMap)) {
             finalizeBufferedPart(part, finalizeOverwrite)
           }
-          const finalizedParts = [
-            ...(currentText ? [currentText] : []),
-            ...Object.values(reasoningMap),
-          ]
+          const finalizedParts = [...(currentText ? [currentText] : []), ...Object.values(reasoningMap)]
           // Batch final cleanup writes in one transaction
           input.assistantMessage.time.completed = Date.now()
           Database.transaction(() => {
@@ -1267,7 +1285,9 @@ export namespace SessionProcessor {
             }
             Session.updateMessage.force(input.assistantMessage)
           })
-          deltaBatcher.flush()?.catch((err) => log.warn("delta flush failed", { error: err }))
+          // Compaction can rewrite this message immediately after return, so
+          // all detached deltas must be delivered first.
+          await deltaBatcher.flush()
           if (needsCompaction) return "compact"
           if (blocked) return "stop"
           if (input.assistantMessage.error) return "stop"

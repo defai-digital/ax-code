@@ -156,7 +156,11 @@ export namespace Database {
         error: toErrorMessage(error),
       })
     }
-    const client = Client()
+    const client = Client.peek()
+    if (!client) {
+      NativeStore.close()
+      return
+    }
     try {
       // Keep the file-backed SQLite database as the durable source of truth,
       // but opportunistically shrink the WAL during graceful shutdown. This

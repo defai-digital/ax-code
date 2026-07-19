@@ -17,6 +17,7 @@ import { RuntimeLocalClient } from "@/runtime/local-client"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
+  const PLUGIN_TIMEOUT_MS = 15_000
 
   type State = {
     hooks: Hooks[]
@@ -61,7 +62,11 @@ export namespace Plugin {
 
       for (const plugin of INTERNAL_PLUGINS) {
         log.info("loading internal plugin", { name: plugin.name })
-        const init = await plugin(input).catch((err) => {
+        const init = await withTimeout(
+          plugin(input),
+          PLUGIN_TIMEOUT_MS,
+          `initializing internal plugin timed out: ${plugin.name}`,
+        ).catch((err) => {
           log.error("failed to load internal plugin", { name: plugin.name, error: err })
         })
         if (init) hooks.push(init)
@@ -101,13 +106,13 @@ export namespace Plugin {
           plugin = pathToFileURL(pluginPath).href
         }
 
-        await withTimeout(import(plugin), 15_000, `loading plugin timed out: ${plugin}`)
+        await withTimeout(import(plugin), PLUGIN_TIMEOUT_MS, `loading plugin timed out: ${plugin}`)
           .then(async (mod) => {
             const seen = new Set<PluginInstance>()
             for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
               if (seen.has(fn)) continue
               seen.add(fn)
-              hooks.push(await fn(input))
+              hooks.push(await withTimeout(fn(input), PLUGIN_TIMEOUT_MS, `initializing plugin timed out: ${plugin}`))
             }
           })
           .catch((err) => {
@@ -123,7 +128,13 @@ export namespace Plugin {
       for (const hook of [...hooks]) {
         try {
           const config = (hook as any).config
-          await config?.(cfg)
+          if (config) {
+            await withTimeout(
+              Promise.resolve(config(cfg)),
+              PLUGIN_TIMEOUT_MS,
+              `plugin config hook timed out after ${PLUGIN_TIMEOUT_MS}ms`,
+            )
+          }
         } catch (err) {
           const index = hooks.indexOf(hook)
           if (index !== -1) hooks.splice(index, 1)
@@ -132,8 +143,11 @@ export namespace Plugin {
       }
 
       const unsubscribe = Bus.subscribeAll(async (event) => {
-        for (const hook of hooks) {
-          hook["event"]?.({ event })
+        const results = await Promise.allSettled(hooks.map((hook) => hook["event"]?.({ event })))
+        for (const result of results) {
+          if (result.status === "rejected") {
+            log.error("plugin event hook failed", { event: event.type, error: result.reason })
+          }
         }
       })
 

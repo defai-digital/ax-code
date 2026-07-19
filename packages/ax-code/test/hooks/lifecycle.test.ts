@@ -29,10 +29,10 @@ describe("LifecycleHooks matcher and run", () => {
     expect(LifecycleHooks.matcherHits("*", "anything")).toBe(true)
   })
 
-  test("block-force-push PreToolUse blocks force push", () => {
+  test("block-force-push PreToolUse blocks force push", async () => {
     const packs = LifecycleHooks.listBuiltinPacks()
     const hooks = packs.find((p) => p.name === "block-force-push")!.hooks
-    const blocked = LifecycleHooks.runHooks(hooks, {
+    const blocked = await LifecycleHooks.runHooks(hooks, {
       event: "PreToolUse",
       tool: "bash",
       args: { command: "git push --force origin main" },
@@ -41,13 +41,33 @@ describe("LifecycleHooks matcher and run", () => {
     expect(blocked.blocked).toBe(true)
     expect(blocked.ok).toBe(false)
 
-    const allowed = LifecycleHooks.runHooks(hooks, {
+    const allowed = await LifecycleHooks.runHooks(hooks, {
       event: "PreToolUse",
       tool: "bash",
       args: { command: "git push origin main" },
       cwd: process.cwd(),
     })
     expect(allowed.blocked).toBe(false)
+  })
+
+  test("sends large hook arguments through stdin without exceeding spawn environment limits", async () => {
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PreToolUse",
+          command:
+            "node -e \"let s='';process.stdin.on('data',c=>s+=c).on('end',()=>process.stdout.write(String(JSON.parse(s).payload.length)))\"",
+        },
+      ],
+      {
+        event: "PreToolUse",
+        args: { payload: "x".repeat(64 * 1024) },
+      },
+    )
+
+    expect(result.outputs).toHaveLength(1)
+    expect(result.outputs[0]?.exit).toBe(0)
+    expect(result.outputs[0]?.stdout).toBe(String(64 * 1024))
   })
 
   test("loads packs from .ax-code/hooks.json", async () => {
@@ -58,7 +78,8 @@ describe("LifecycleHooks matcher and run", () => {
       JSON.stringify({ packs: ["log-bash-commands"] }),
       "utf8",
     )
-    const hooks = await LifecycleHooks.loadProjectHooks(dir)
+    await expect(LifecycleHooks.loadProjectHooks(dir)).resolves.toEqual([])
+    const hooks = await LifecycleHooks.loadProjectHooks(dir, true)
     expect(hooks.some((h) => h.pack === "log-bash-commands")).toBe(true)
   })
 
@@ -71,6 +92,6 @@ describe("LifecycleHooks matcher and run", () => {
       "utf8",
     )
 
-    await expect(LifecycleHooks.loadProjectHooks(dir)).resolves.toEqual([])
+    await expect(LifecycleHooks.loadProjectHooks(dir, true)).resolves.toEqual([])
   })
 })

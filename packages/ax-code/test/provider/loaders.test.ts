@@ -1,4 +1,4 @@
-import { afterEach, test, expect, describe } from "vitest"
+import { afterEach, test, expect, describe, vi } from "vitest"
 import path from "path"
 import { writeFile, readFile } from "fs/promises"
 import { tmpdir } from "../fixture/fixture"
@@ -14,6 +14,7 @@ const originalFetch = globalThis.fetch
 afterEach(async () => {
   globalThis.fetch = originalFetch
   delete process.env.AX_STUDIO_HOST
+  vi.unstubAllEnvs()
   await Instance.disposeAll()
 })
 
@@ -642,6 +643,10 @@ describe("offline provider loaders", () => {
 
 describe("provider config integration", () => {
   test("config-based provider with baseURL", async () => {
+    // Redirecting provider traffic from project config is intentionally gated
+    // behind explicit checkout trust. This fixture exercises the trusted path.
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+
     await using tmp = await tmpdir({
       init: async (dir) => {
         await writeFile(

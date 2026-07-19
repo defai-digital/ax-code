@@ -8,7 +8,7 @@ public key.
 Pinned public key:
 
 ```text
-RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A
+RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO
 ```
 
 The signing key lives outside the repository in `~/signkey` by default for
@@ -20,11 +20,14 @@ Actions secrets.
 Default paths:
 
 ```text
-~/signkey/ax-code-desktop.minisign.key
-~/signkey/ax-code-desktop.minisign.pub
+~/signkey/ax.minisign.key -> ax.sec
+~/signkey/ax.sec
+~/signkey/ax.pub
 ```
 
-The secret key must never be committed, logged, or uploaded as a release asset.
+`ax.minisign.key` is the minisign-compatible secret-key path and may be a
+symlink to the encrypted `ax.sec` backing file. Both secret-key paths must stay
+private and must never be committed, logged, or uploaded as release assets.
 The public key is safe to publish so users can verify downloaded artifacts.
 `desktop/scripts/minisign-artifacts.sh` refuses to sign or verify with a public key that
 does not match the pinned release key.
@@ -37,7 +40,9 @@ Run this from the repository root:
 desktop/scripts/minisign-keygen.sh
 ```
 
-`minisign` prompts for a password and writes the keypair to `~/signkey`.
+`minisign` prompts for a password and writes `ax.sec` plus `ax.pub` to
+`~/signkey`; the script creates `ax.minisign.key` as a relative symlink to
+`ax.sec` for signing-tool compatibility.
 The script sets the directory to mode `700`, the secret key to `600`, and the
 public key to `644`.
 
@@ -116,7 +121,7 @@ file on disk), pass it explicitly. Pin enforcement then compares the string
 directly, and verification uses `minisign -P`:
 
 ```bash
-desktop/scripts/minisign-artifacts.sh --public-key-string 'RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A' ...
+desktop/scripts/minisign-artifacts.sh --public-key-string 'RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO' ...
 ```
 
 ### Write signatures to a separate directory
@@ -139,8 +144,8 @@ desktop/scripts/minisign-artifacts.sh --signature-dir ./signatures ...
 --signature-dir <dir>     Write all .minisig files into this directory
 --trusted-comment <text>  Trusted minisign comment
 --untrusted-comment <text> Untrusted minisign comment
---keychain-service <svc>  macOS Keychain service name (default: ax-code-desktop-minisign)
---keychain-account <acct> macOS Keychain account name (default: ax-code-desktop-release)
+--keychain-service <svc>  macOS Keychain service name (default: ax-minisign)
+--keychain-account <acct> macOS Keychain account name (default: ax-release)
 --force                   Replace existing .minisig files
 --no-verify               Skip verification after signing
 --dry-run                 Print what would be signed
@@ -152,24 +157,25 @@ Users can verify a downloaded artifact with the pinned public key:
 
 ```bash
 minisign -V \
-  -P RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A \
+  -P RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO \
   -m desktop/packages/electron/dist/AX-Code-0.8.0-mac-arm64.dmg \
   -x desktop/packages/electron/dist/AX-Code-0.8.0-mac-arm64.dmg.minisig
 ```
 
 ## GitHub Actions secrets
 
-The release workflow requires these repository secrets before a release can be
-published:
+The release workflow prefers these shared repository secrets before a release
+can be published:
 
 ```text
-AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64
-AX_CODE_DESKTOP_MINISIGN_PASSWORD
+AX_CODE_MINISIGN_SECRET_KEY_B64
+AX_CODE_MINISIGN_PASSWORD
 ```
 
-`AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64` is the base64-encoded minisign secret
-key file that matches the pinned public key. `AX_CODE_DESKTOP_MINISIGN_PASSWORD`
-unlocks that key during the signing job.
+`AX_CODE_MINISIGN_SECRET_KEY_B64` is the base64-encoded minisign secret key file
+that matches the pinned public key. `AX_CODE_MINISIGN_PASSWORD` unlocks that key
+during the signing job. The legacy `AX_CODE_DESKTOP_MINISIGN_*` secrets remain
+fallbacks during migration.
 
 ## macOS Keychain for local signing
 
@@ -178,8 +184,8 @@ disk with mode `600` and store only its passphrase in Apple Keychain:
 
 ```bash
 security add-generic-password -U \
-  -a ax-code-desktop-release \
-  -s ax-code-desktop-minisign \
+  -a ax-release \
+  -s ax-minisign \
   -w
 ```
 

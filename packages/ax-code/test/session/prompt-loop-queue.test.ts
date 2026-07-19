@@ -3,7 +3,7 @@ import { finishPromptLoopQueue } from "../../src/session/prompt-loop-queue"
 import { SessionID } from "../../src/session/schema"
 
 describe("finishPromptLoopQueue", () => {
-  test("cancels unfinished runs", async () => {
+  test("resumes durable queued prompts after an unfinished run", async () => {
     const sessionID = SessionID.descending()
     const calls: string[] = []
 
@@ -20,11 +20,11 @@ describe("finishPromptLoopQueue", () => {
       },
       resumeLoop: async () => {
         calls.push("resume")
-        throw new Error("should not resume")
+        return {} as any
       },
     })
 
-    expect(calls).toEqual(["cancel"])
+    expect(calls).toEqual(["queued", "idle", "resume"])
   })
 
   test("cancels completed runs without queued callbacks", async () => {

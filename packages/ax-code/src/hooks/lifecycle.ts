@@ -8,7 +8,7 @@
  * - config `hooks` field
  */
 
-import { spawnSync } from "child_process"
+import { spawn } from "child_process"
 import fs from "fs/promises"
 import path from "path"
 import z from "zod"
@@ -16,10 +16,33 @@ import { Log } from "@/util/log"
 import { parseJsonResult } from "@/util/json-value"
 import { Global } from "@/global"
 import { Instance } from "@/project/instance"
+import { ProjectConfigTrust } from "@/config/project-config-trust"
 
 const log = Log.create({ service: "hooks.lifecycle" })
 
 export namespace LifecycleHooks {
+  const HOOK_TIMEOUT_MS = 30_000
+  const MAX_CONCURRENT_HOOKS = 4
+  const MAX_CAPTURE_BYTES = 1024 * 1024
+  const MAX_COMPAT_ENV_BYTES = 32 * 1024
+  const READ_HOOK_ARGS =
+    "const fs=require('fs');const raw=process.env.HOOK_ARGS_JSON||fs.readFileSync(0,'utf8')||'{}';const a=JSON.parse(raw);"
+  let activeHooks = 0
+  const hookWaiters: Array<() => void> = []
+
+  async function acquireHookSlot() {
+    if (activeHooks < MAX_CONCURRENT_HOOKS) {
+      activeHooks++
+      return
+    }
+    await new Promise<void>((resolve) => hookWaiters.push(resolve))
+  }
+
+  function releaseHookSlot() {
+    const next = hookWaiters.shift()
+    if (next) next()
+    else activeHooks--
+  }
   const EventNameSchema = z.enum(["PreToolUse", "PostToolUse", "Stop"])
   const HookCommandSchema = z.object({
     event: EventNameSchema,
@@ -81,7 +104,7 @@ export namespace LifecycleHooks {
           event: "PreToolUse",
           matcher: "bash",
           blockOnFailure: true,
-          command: `node -e "const a=JSON.parse(process.env.HOOK_ARGS_JSON||'{}');const c=String(a.command||'');if(/git\\s+push\\s+.*(--force|-f)\\b/.test(c)){console.error('Blocked force push by block-force-push hook');process.exit(2)}"`,
+          command: `node -e "${READ_HOOK_ARGS}const c=String(a.command||'');if(/git\\s+push\\s+.*(--force|-f)\\b/.test(c)){console.error('Blocked force push by block-force-push hook');process.exit(2)}"`,
           pack: "block-force-push",
         },
       ],
@@ -105,7 +128,7 @@ export namespace LifecycleHooks {
         {
           event: "PreToolUse",
           matcher: "read|edit|write|bash",
-          command: `node -e "const a=JSON.parse(process.env.HOOK_ARGS_JSON||'{}');const s=JSON.stringify(a);if(/\\.env($|[^a-z])/i.test(s)){console.error('[hook:protect-env-files] Tool args reference .env — double-check secrets handling');}"`,
+          command: `node -e "${READ_HOOK_ARGS}const s=JSON.stringify(a);if(/\\.env($|[^a-z])/i.test(s)){console.error('[hook:protect-env-files] Tool args reference .env — double-check secrets handling');}"`,
           pack: "protect-env-files",
         },
       ],
@@ -117,7 +140,7 @@ export namespace LifecycleHooks {
         {
           event: "PreToolUse",
           matcher: "bash",
-          command: `node -e "const a=JSON.parse(process.env.HOOK_ARGS_JSON||'{}');console.error('[hook:log-bash]', String(a.command||'').slice(0,500))"`,
+          command: `node -e "${READ_HOOK_ARGS}console.error('[hook:log-bash]', String(a.command||'').slice(0,500))"`,
           pack: "log-bash-commands",
         },
       ],
@@ -145,7 +168,11 @@ export namespace LifecycleHooks {
     return hooks.filter((h) => h.event === event && matcherHits(h.matcher, tool))
   }
 
-  export async function loadProjectHooks(directory: string): Promise<HookCommand[]> {
+  export async function loadProjectHooks(
+    directory: string,
+    trusted = ProjectConfigTrust.enabled(),
+  ): Promise<HookCommand[]> {
+    if (!trusted) return []
     const file = path.join(directory, ".ax-code", "hooks.json")
     try {
       const raw = await fs.readFile(file, "utf8")
@@ -180,35 +207,96 @@ export namespace LifecycleHooks {
     return [...fromConfigPacks, ...fromProject, ...(input.extra ?? [])]
   }
 
-  export function runHooks(hooks: readonly HookCommand[], input: RunInput): RunResult {
+  function appendCaptured(current: string, chunk: Buffer | string) {
+    if (Buffer.byteLength(current) >= MAX_CAPTURE_BYTES) return current
+    const remaining = MAX_CAPTURE_BYTES - Buffer.byteLength(current)
+    return current + Buffer.from(chunk).subarray(0, remaining).toString("utf8")
+  }
+
+  async function runHookProcess(hook: HookCommand, input: RunInput): Promise<RunResult["outputs"][number]> {
+    const argsJson = JSON.stringify(input.args ?? {})
+    const env = {
+      ...process.env,
+      HOOK_EVENT: input.event,
+      HOOK_TOOL: input.tool ?? "",
+      HOOK_SESSION_ID: input.sessionID ?? "",
+      // Preserve compatibility for ordinary payloads. Large payloads travel
+      // only over stdin so spawning cannot fail with E2BIG.
+      HOOK_ARGS_JSON: Buffer.byteLength(argsJson) <= MAX_COMPAT_ENV_BYTES ? argsJson : "",
+      HOOK_ARGS_STDIN: "1",
+      HOOK_PACK: hook.pack ?? "",
+    }
+    const detached = process.platform !== "win32"
+    const child = spawn(hook.command, {
+      shell: true,
+      cwd: input.cwd ?? process.cwd(),
+      env,
+      detached,
+      stdio: ["pipe", "pipe", "pipe"],
+    })
+    let stdout = ""
+    let stderr = ""
+    let timedOut = false
+    let settled = false
+    child.stdout.on("data", (chunk) => {
+      stdout = appendCaptured(stdout, chunk)
+    })
+    child.stderr.on("data", (chunk) => {
+      stderr = appendCaptured(stderr, chunk)
+    })
+    // A hook may exit before consuming its input. EPIPE is part of normal
+    // process teardown and must not become an uncaught exception.
+    child.stdin.on("error", () => undefined)
+    child.stdin.end(argsJson)
+
+    const exit = await new Promise<number>((resolve) => {
+      const finish = (code: number) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        resolve(code)
+      }
+      const timer = setTimeout(() => {
+        timedOut = true
+        if (detached && child.pid) {
+          try {
+            process.kill(-child.pid, "SIGKILL")
+          } catch {
+            child.kill("SIGKILL")
+          }
+        } else {
+          child.kill("SIGKILL")
+        }
+      }, HOOK_TIMEOUT_MS)
+      timer.unref?.()
+      child.once("error", (error) => {
+        stderr = appendCaptured(stderr, error instanceof Error ? error.message : String(error))
+        finish(1)
+      })
+      child.once("close", (code, signal) => finish(timedOut ? 124 : (code ?? (signal ? 1 : 0))))
+    })
+
+    return { command: hook.command, exit, stdout, stderr }
+  }
+
+  async function runHook(hook: HookCommand, input: RunInput): Promise<RunResult["outputs"][number]> {
+    await acquireHookSlot()
+    try {
+      return await runHookProcess(hook, input)
+    } finally {
+      releaseHookSlot()
+    }
+  }
+
+  export async function runHooks(hooks: readonly HookCommand[], input: RunInput): Promise<RunResult> {
     const selected = selectHooks(hooks, input.event, input.tool)
     const outputs: RunResult["outputs"] = []
     let blocked = false
     for (const hook of selected) {
-      const env = {
-        ...process.env,
-        HOOK_EVENT: input.event,
-        HOOK_TOOL: input.tool ?? "",
-        HOOK_SESSION_ID: input.sessionID ?? "",
-        HOOK_ARGS_JSON: JSON.stringify(input.args ?? {}),
-        HOOK_PACK: hook.pack ?? "",
-      }
-      const result = spawnSync(hook.command, {
-        shell: true,
-        cwd: input.cwd ?? process.cwd(),
-        env,
-        encoding: "utf8",
-        timeout: 30_000,
-      })
-      const exit = result.status ?? (result.error ? 1 : 0)
-      outputs.push({
-        command: hook.command,
-        exit,
-        stdout: result.stdout ?? "",
-        stderr: result.stderr ?? "",
-      })
-      if (exit !== 0) {
-        log.warn("lifecycle hook non-zero", { event: input.event, tool: input.tool, exit })
+      const result = await runHook(hook, input)
+      outputs.push(result)
+      if (result.exit !== 0) {
+        log.warn("lifecycle hook non-zero", { event: input.event, tool: input.tool, exit: result.exit })
         if (hook.blockOnFailure && input.event === "PreToolUse") {
           blocked = true
           break

@@ -17,12 +17,12 @@ KEY_DIR="${SIGNKEY_DIR:-$HOME/signkey}"
 SECRET_KEY="${AX_CODE_DESKTOP_MINISIGN_SECRET_KEY:-${MINISIGN_SECRET_KEY:-}}"
 PUBLIC_KEY="${AX_CODE_DESKTOP_MINISIGN_PUBLIC_KEY:-${MINISIGN_PUBLIC_KEY:-}}"
 PUBLIC_KEY_STRING="${AX_CODE_DESKTOP_MINISIGN_PUBLIC_KEY_STRING:-}"
-PINNED_PUBLIC_KEY="${AX_CODE_DESKTOP_MINISIGN_PINNED_PUBLIC_KEY:-RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A}"
+PINNED_PUBLIC_KEY="${AX_CODE_DESKTOP_MINISIGN_PINNED_PUBLIC_KEY:-RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO}"
 TRUSTED_COMMENT="${AX_CODE_DESKTOP_MINISIGN_TRUSTED_COMMENT:-${MINISIGN_TRUSTED_COMMENT:-}}"
 UNTRUSTED_COMMENT="${AX_CODE_DESKTOP_MINISIGN_UNTRUSTED_COMMENT:-${MINISIGN_UNTRUSTED_COMMENT:-signature from ax-code-desktop local signing key}}"
 MINISIGN_KEY_PASSWORD="${AX_CODE_DESKTOP_MINISIGN_PASSWORD:-${MINISIGN_PASSWORD:-}}"
-KEYCHAIN_SERVICE="${AX_CODE_DESKTOP_MINISIGN_KEYCHAIN_SERVICE:-ax-code-desktop-minisign}"
-KEYCHAIN_ACCOUNT="${AX_CODE_DESKTOP_MINISIGN_KEYCHAIN_ACCOUNT:-ax-code-desktop-release}"
+KEYCHAIN_SERVICE="${AX_CODE_DESKTOP_MINISIGN_KEYCHAIN_SERVICE:-ax-minisign}"
+KEYCHAIN_ACCOUNT="${AX_CODE_DESKTOP_MINISIGN_KEYCHAIN_ACCOUNT:-ax-release}"
 SIGNATURE_DIR=""
 VERIFY=true
 FORCE=false
@@ -38,8 +38,8 @@ under desktop/packages/electron/dist and desktop/packages/web.
 
 Options:
   --key-dir <path>          Directory containing keys (default: ~/signkey)
-  --secret-key <path>       Secret key path (default: <key-dir>/ax-code-desktop.minisign.key)
-  --public-key <path>       Public key path (default: <key-dir>/ax-code-desktop.minisign.pub)
+  --secret-key <path>       Secret key path (default: <key-dir>/ax.minisign.key)
+  --public-key <path>       Public key path (default: <key-dir>/ax.pub)
   --public-key-string <key> Verify with a raw public key string (no file needed).
   --pinned-public-key <key> Fail unless the public key matches this key.
                              Default: AX_CODE_DESKTOP_MINISIGN_PINNED_PUBLIC_KEY
@@ -49,9 +49,9 @@ Options:
   --untrusted-comment <text>
                             Untrusted minisign comment
   --keychain-service <svc>  macOS Keychain service name for passphrase lookup.
-                             Default: ax-code-desktop-minisign
+                             Default: ax-minisign
   --keychain-account <acct> macOS Keychain account name for passphrase lookup.
-                             Default: ax-code-desktop-release
+                             Default: ax-release
   --force                   Replace existing .minisig files
   --no-verify               Skip verification after signing
   --dry-run                 Print what would be signed
@@ -84,7 +84,10 @@ check_cmd() {
 # Portable permission mode: stat -f (BSD/macOS) then stat -c (GNU/Linux).
 path_mode() {
   local path="$1"
-  stat -f '%Lp' "$path" 2>/dev/null || stat -c '%a' "$path" 2>/dev/null || true
+  # Follow the compatibility symlink created by minisign-keygen.sh. Without
+  # -L, GNU stat reports the symlink's 0777 mode and rejects a safely-permissioned
+  # backing key on Linux.
+  stat -L -f '%Lp' "$path" 2>/dev/null || stat -L -c '%a' "$path" 2>/dev/null || true
 }
 
 require_private_path() {
@@ -244,8 +247,8 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-SECRET_KEY="${SECRET_KEY:-$KEY_DIR/ax-code-desktop.minisign.key}"
-PUBLIC_KEY="${PUBLIC_KEY:-$KEY_DIR/ax-code-desktop.minisign.pub}"
+SECRET_KEY="${SECRET_KEY:-$KEY_DIR/ax.minisign.key}"
+PUBLIC_KEY="${PUBLIC_KEY:-$KEY_DIR/ax.pub}"
 SIGNED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 if [[ "$DRY_RUN" != true ]]; then

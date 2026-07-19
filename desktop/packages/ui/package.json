@@ -19,6 +19,7 @@
     "test": "node scripts/run-tests.mjs"
   },
   "dependencies": {
+    "ax-code": "workspace:*",
     "@ax-code/sdk": "workspace:*",
     "@base-ui/react": "^1.4.0",
     "@codemirror/autocomplete": "^6.20.0",

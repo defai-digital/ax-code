@@ -67,6 +67,7 @@ export namespace McpOAuthCallback {
   // `Bun.serve()` on the same port (EADDRINUSE). Cleared on completion so
   // a subsequent start after stop() can still initialize.
   let initPromise: Promise<void> | undefined
+  let stopPromise: Promise<void> | undefined
   let initGeneration = 0
   const pendingAuths = new Map<string, PendingAuth>()
   const pendingStates = new Map<string, string>()
@@ -101,11 +102,15 @@ export namespace McpOAuthCallback {
   }
 
   export async function ensureRunning(): Promise<void> {
+    if (stopPromise) {
+      await stopPromise
+      return ensureRunning()
+    }
     if (server) return
     if (initPromise) return initPromise
     const generation = initGeneration
     const nextInit = (async () => {
-      server = await serve({
+      const started = await serve({
         hostname: "127.0.0.1",
         port: 0,
         fetch: (req) => {
@@ -181,19 +186,20 @@ export namespace McpOAuthCallback {
       })
 
       if (initGeneration !== generation) {
-        server.stop()
-        server = undefined
+        await started.stop(true)
         return
       }
 
-      const boundPort = server.port ?? OAUTH_CALLBACK_PORT
+      server = started
+      const boundPort = started.port ?? OAUTH_CALLBACK_PORT
       setCallbackPort(boundPort)
       log.info("oauth callback server started", { port: boundPort })
     })()
-    initPromise = nextInit.finally(() => {
-      if (initPromise === nextInit) initPromise = undefined
+    const trackedInit = nextInit.finally(() => {
+      if (initPromise === trackedInit) initPromise = undefined
     })
-    return initPromise
+    initPromise = trackedInit
+    return trackedInit
   }
 
   export function waitForCallback(oauthState: string, mcpName?: string): Promise<string> {
@@ -243,19 +249,40 @@ export namespace McpOAuthCallback {
   }
 
   export async function stop(): Promise<void> {
-    initGeneration++
-    if (server) {
-      server.stop()
+    if (stopPromise) return stopPromise
+    const nextStop = (async () => {
+      initGeneration++
+      const initializing = initPromise
+      const active = server
       server = undefined
-      log.info("oauth callback server stopped")
-    }
+      try {
+        if (active) {
+          await active.stop(true)
+          log.info("oauth callback server stopped")
+        }
+      } finally {
+        // An initialization that was already inside serve() owns its local
+        // handle and observes the generation change before publishing it.
+        await initializing?.catch(() => undefined)
 
-    for (const [, pending] of pendingAuths) {
-      clearTimeout(pending.timeout)
-      pending.reject(new Error("OAuth callback server stopped"))
-    }
-    pendingAuths.clear()
-    pendingStates.clear()
+        for (const [, pending] of pendingAuths) {
+          clearTimeout(pending.timeout)
+          pending.reject(new Error("OAuth callback server stopped"))
+        }
+        pendingAuths.clear()
+        pendingStates.clear()
+      }
+    })()
+    const trackedStop = nextStop.finally(() => {
+      if (stopPromise === trackedStop) stopPromise = undefined
+    })
+    stopPromise = trackedStop
+    return trackedStop
+  }
+
+  export async function stopIfIdle(): Promise<void> {
+    if (pendingAuths.size > 0) return
+    await stop()
   }
 
   export function isRunning(): boolean {

@@ -1,4 +1,4 @@
-import { test, expect, vi } from "vitest"
+import { afterEach, test, expect, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { pathToFileURL } from "url"
@@ -13,6 +13,8 @@ import bundledSnapshot from "../../src/provider/models-snapshot.json"
 import { CUSTOM_LOADERS, type CustomLoader } from "../../src/provider/loaders"
 import { Global } from "../../src/global"
 import { Filesystem } from "../../src/util/filesystem"
+
+afterEach(() => vi.unstubAllEnvs())
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -384,6 +386,7 @@ test("provider loaded from config with apiKey option", async () => {
 })
 
 test("provider api keys are stripped of pasted newlines before SDK use", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -1026,6 +1029,7 @@ test("defaultModel surfaces unreadable recent-model store errors", async () => {
 })
 
 test("provider with baseURL from config", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -1065,6 +1069,7 @@ test("provider with baseURL from config", async () => {
 })
 
 test("local provider file URLs reject symlinks that escape allowed directories", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   if (process.platform === "win32") return
 
   await using outside = await tmpdir()
@@ -1123,6 +1128,7 @@ test("local provider file URLs reject symlinks that escape allowed directories",
 })
 
 test("local provider file URLs are detected case-insensitively", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({
     init: async (dir) => {
       const providerFile = path.join(dir, "local-provider.mjs")
@@ -1318,6 +1324,7 @@ test("getModel uses realIdByKey for aliased models", async () => {
 })
 
 test("provider api field sets model api.url", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -1357,6 +1364,7 @@ test("provider api field sets model api.url", async () => {
 })
 
 test("explicit baseURL overrides api field", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2126,6 +2134,7 @@ test("Kimi Cloud Plan exposes only the current validated Kimi coding model", asy
 })
 
 test("provider with custom npm package", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2201,6 +2210,7 @@ test("model alias name defaults to alias key when id differs", async () => {
 })
 
 test("provider with multiple env var options only includes apiKey when single env", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2243,6 +2253,7 @@ test("provider with multiple env var options only includes apiKey when single en
 })
 
 test("provider with single env var includes apiKey automatically", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2768,6 +2779,7 @@ test("model limit defaults to zero when not specified", async () => {
 })
 
 test("provider options are deeply merged", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -3202,6 +3214,7 @@ test("custom model with variants enabled and disabled", async () => {
 })
 
 test("Google Vertex: retains baseURL for custom proxy", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -3318,6 +3331,7 @@ test("cloudflare-ai-gateway loads with env variables", async () => {
 })
 
 test("cloudflare-ai-gateway forwards config metadata options", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(

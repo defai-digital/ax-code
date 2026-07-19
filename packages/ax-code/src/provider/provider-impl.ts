@@ -343,14 +343,15 @@ export namespace Provider {
       const sanitized = sanitizeProviderAuth(provider)
       const existing = providers[providerID]
       if (existing) {
-        // @ts-expect-error
-        providers[providerID] = mergeDeep(existing, sanitized)
+        // `existing` is a fully normalized Info; overlaying a Partial<Info>
+        // preserves the required shape. Remeda cannot express that relation
+        // in its generic merge return type.
+        providers[providerID] = mergeDeep(existing, sanitized) as Info
         return
       }
       const match = database[providerID]
       if (!match) return
-      // @ts-expect-error
-      providers[providerID] = mergeDeep(match, sanitized)
+      providers[providerID] = mergeDeep(match, sanitized) as Info
     }
 
     function applyModelFilters(providerID: ProviderID, provider: Info) {
@@ -830,13 +831,44 @@ export namespace Provider {
         // network interruptions. Generous enough for extended thinking
         // (servers send keepalive events) but prevents indefinite hangs.
         // Explicit 0 or false disables the timeout.
+        const rawProviderTimeout = options["timeout"]
+        const providerTimeout =
+          rawProviderTimeout === false || rawProviderTimeout === 0 || rawProviderTimeout == null
+            ? 0
+            : typeof rawProviderTimeout === "number" &&
+                Number.isFinite(rawProviderTimeout) &&
+                rawProviderTimeout > 0 &&
+                rawProviderTimeout <= 2_147_483_647
+              ? Math.floor(rawProviderTimeout)
+              : 0
+        if (rawProviderTimeout != null && rawProviderTimeout !== false && providerTimeout === 0) {
+          log.warn("ignoring invalid provider timeout", { providerID: model.providerID, value: rawProviderTimeout })
+          delete options["timeout"]
+        } else if (providerTimeout > 0) {
+          options["timeout"] = providerTimeout
+        }
+
         const rawChunkTimeout = options["chunkTimeout"]
         const chunkTimeout =
           rawChunkTimeout === false || rawChunkTimeout === 0
             ? 0
-            : typeof rawChunkTimeout === "number"
-              ? rawChunkTimeout
+            : typeof rawChunkTimeout === "number" &&
+                Number.isFinite(rawChunkTimeout) &&
+                rawChunkTimeout > 0 &&
+                rawChunkTimeout <= 2_147_483_647
+              ? Math.floor(rawChunkTimeout)
               : 90_000
+        if (
+          rawChunkTimeout !== undefined &&
+          rawChunkTimeout !== false &&
+          rawChunkTimeout !== 0 &&
+          chunkTimeout === 90_000
+        ) {
+          log.warn("using default for invalid provider chunk timeout", {
+            providerID: model.providerID,
+            value: rawChunkTimeout,
+          })
+        }
         delete options["chunkTimeout"]
 
         options["fetch"] = async (input: string | Request | URL, init?: any) => {
@@ -849,8 +881,7 @@ export namespace Provider {
 
           if (opts.signal) signals.push(opts.signal as AbortSignal)
           if (chunkAbortCtl) signals.push(chunkAbortCtl.signal)
-          if (options["timeout"] !== undefined && options["timeout"] !== null && options["timeout"] !== false)
-            signals.push(AbortSignal.timeout(options["timeout"]))
+          if (providerTimeout > 0) signals.push(AbortSignal.timeout(providerTimeout))
 
           const combined = signals.length === 0 ? null : signals.length === 1 ? signals[0] : AbortSignal.any(signals)
           if (combined) opts.signal = combined

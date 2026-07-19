@@ -7,7 +7,6 @@
   "packageManager": "pnpm@10.33.4",
   "workspaces": [
     "packages/*",
-    "!packages/ax-code-render-native",
     "packages/sdk/js",
     "desktop/packages/*"
   ],
@@ -35,7 +34,7 @@
     "desktop:test": "pnpm --dir packages/sdk/js run build && pnpm --filter \"./desktop/packages/*\" --if-present run test",
     "desktop:lint": "pnpm --filter \"./desktop/packages/*\" --if-present run lint",
     "desktop:smoke:packaged": "node desktop/packages/electron/scripts/smoke-packaged-app.mjs",
-    "release:cli": "pnpm run sign:release && pnpm run publish:github",
+    "release:cli": "pnpm run publish:github",
     "release:desktop": "./desktop/scripts/publish-github-release.sh",
     "release:all": "pnpm run release:cli && pnpm run release:desktop",
     "typecheck": "pnpm -r --if-present run typecheck",

@@ -6,7 +6,14 @@ import os from "os"
 import { whichSync } from "./which"
 import path from "path"
 import { parseArgs } from "util"
-import { expandHome, signaturePath, signReleaseAssetsCommand } from "./sign-release-assets"
+import {
+  DEFAULT_MINISIGN_KEY_DIR,
+  DEFAULT_MINISIGN_PUBLIC_KEY_NAME,
+  DEFAULT_MINISIGN_SECRET_KEY_NAME,
+  expandHome,
+  signaturePath,
+  signReleaseAssetsCommand,
+} from "./sign-release-assets"
 import {
   ROOT,
   expectedReleaseArchives,
@@ -102,7 +109,7 @@ export function parseResignArgs(
       tag: { type: "string", multiple: true },
       all: { type: "boolean", default: false },
       repo: { type: "string", default: env.GH_REPO ?? "defai-digital/ax-code" },
-      "key-dir": { type: "string", default: env.AX_CODE_MINISIGN_KEY_DIR ?? "~/.minisign" },
+      "key-dir": { type: "string", default: env.AX_CODE_MINISIGN_KEY_DIR ?? DEFAULT_MINISIGN_KEY_DIR },
       "secret-key": { type: "string" },
       "public-key": { type: "string" },
       "asset-dir": { type: "string" },
@@ -122,8 +129,14 @@ export function parseResignArgs(
     tags: rawTags.map(normalizeTag),
     allReleases: Boolean(parsed.values.all),
     keyDir,
-    secretKey: path.resolve(cwd, expandHome(parsed.values["secret-key"] ?? path.join(keyDir, "minisign.key"), home)),
-    publicKey: path.resolve(cwd, expandHome(parsed.values["public-key"] ?? path.join(keyDir, "minisign.pub"), home)),
+    secretKey: path.resolve(
+      cwd,
+      expandHome(parsed.values["secret-key"] ?? path.join(keyDir, DEFAULT_MINISIGN_SECRET_KEY_NAME), home),
+    ),
+    publicKey: path.resolve(
+      cwd,
+      expandHome(parsed.values["public-key"] ?? path.join(keyDir, DEFAULT_MINISIGN_PUBLIC_KEY_NAME), home),
+    ),
     assetDir: parsed.values["asset-dir"] ? path.resolve(cwd, expandHome(parsed.values["asset-dir"], home)) : undefined,
     skipUpload: Boolean(parsed.values["skip-upload"]),
     dryRun: Boolean(parsed.values["dry-run"]),
@@ -144,9 +157,9 @@ Options:
   --tag <tag>           Release tag to re-sign (repeatable). Leading "v" optional.
   --all                 Re-sign every non-draft published release.
   --repo <owner/repo>   GitHub repo (default: defai-digital/ax-code)
-  --key-dir <dir>       Directory with minisign.key and minisign.pub (default: ~/.minisign)
-  --secret-key <file>   Secret key path (default: <key-dir>/minisign.key)
-  --public-key <file>   Public key path (default: <key-dir>/minisign.pub)
+  --key-dir <dir>       Directory with ax.minisign.key and ax.pub (default: ~/signkey)
+  --secret-key <file>   Secret key path (default: <key-dir>/ax.minisign.key)
+  --public-key <file>   Public key path (default: <key-dir>/ax.pub)
   --asset-dir <dir>     Directory used for downloaded release assets
   --skip-upload         Sign and verify locally, but do not re-upload .minisig files
   --dry-run             Print commands without downloading, signing, or uploading

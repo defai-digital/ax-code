@@ -1,4 +1,5 @@
 import path from "node:path"
+import { Env } from "@/util/env"
 
 type DeriveOptions = {
   worktree?: string
@@ -11,7 +12,6 @@ type Candidate = {
 
 const URL_KEYS = new Set(["url", "uri", "endpoint"])
 const PATH_KEYS = new Set(["path", "file", "filePath", "filepath", "root", "directory"])
-const SECRET_KEY = /(?:token|secret|password|credential|authorization|api[_-]?key)/i
 const MAX_VALUE_LENGTH = 240
 const MAX_PATTERNS = 8
 
@@ -36,7 +36,7 @@ function normalizeUrl(value: string): string | undefined {
     parsed.password = parsed.password ? "[redacted]" : ""
     parsed.hash = ""
     for (const key of [...parsed.searchParams.keys()]) {
-      if (SECRET_KEY.test(key)) parsed.searchParams.set(key, "[redacted]")
+      if (Env.isSensitiveName(key)) parsed.searchParams.set(key, "[redacted]")
     }
     return parsed.toString()
   } catch {
@@ -71,7 +71,7 @@ function summarizeArgs(args: unknown): Record<string, unknown> {
   if (!isRecord(args)) return { type: typeof args }
   const result: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(args).slice(0, 20)) {
-    if (SECRET_KEY.test(key)) {
+    if (Env.isSensitiveName(key)) {
       result[key] = "[redacted]"
       continue
     }
@@ -121,7 +121,7 @@ export namespace McpPermissionPattern {
       }
 
       for (const [key, value] of Object.entries(args)) {
-        if (SECRET_KEY.test(key)) continue
+        if (Env.isSensitiveName(key)) continue
         const text = scalar(value)
         if (!text) continue
         const normalizedKey = key.replace(/[^a-zA-Z0-9_-]/g, "").toLowerCase()

@@ -43,8 +43,8 @@ describe("Env.sanitize", () => {
     expect(sanitized.APITOKEN).toBeUndefined()
     expect(sanitized.API_SECRET).toBeUndefined()
     expect(sanitized.PATH).toBe("/usr/local/bin")
-    expect(sanitized.SSH_AUTH_SOCK).toBe("/tmp/agent.sock")
-    expect(sanitized.GIT_ASKPASS).toBe("/usr/bin/askpass")
+    expect(sanitized.SSH_AUTH_SOCK).toBeUndefined()
+    expect(sanitized.GIT_ASKPASS).toBeUndefined()
     expect(sanitized.GIT_CREDENTIAL_HELPER).toBeUndefined()
   })
 
@@ -62,6 +62,22 @@ describe("Env.sanitize", () => {
     expect(sanitized.XAI_API_KEY).toBeUndefined()
   })
 
+  test("strips credentials embedded in URL values", () => {
+    const sanitized = Env.sanitize({
+      SAFE_URL: "https://example.com/api",
+      PRIVATE_REGISTRY: "https://alice:secret@example.com/npm",
+    })
+
+    expect(sanitized.SAFE_URL).toBe("https://example.com/api")
+    expect(sanitized.PRIVATE_REGISTRY).toBeUndefined()
+  })
+
+  test("redacts authorization headers, JSON secrets, and URL credentials", () => {
+    expect(Env.redactSecrets("Authorization: Bearer abc123")).toBe("Authorization=[redacted]")
+    expect(Env.redactSecrets('{"token":"abc123","safe":"yes"}')).toBe('{"token":"[redacted]","safe":"yes"}')
+    expect(Env.redactSecrets("https://alice:secret@example.com/path")).toBe("https://alice:[redacted]@example.com/path")
+  })
+
   test("forwards CLI provider API keys only through explicit CLI provider overlay", () => {
     const originalGemini = process.env.GEMINI_API_KEY
     const originalOpenAI = process.env.OPENAI_API_KEY
@@ -76,14 +92,14 @@ describe("Env.sanitize", () => {
       process.env.XAI_API_KEY = "xai-key"
       process.env.KIMI_API_KEY = "kimi-key"
 
-      const env = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }))
+      const env = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), "gemini-cli")
 
       expect(env.PATH).toBe("/bin")
       expect(env.GEMINI_API_KEY).toBe("gemini-key")
-      expect(env.OPENAI_API_KEY).toBe("openai-key")
-      expect(env.ANTHROPIC_API_KEY).toBe("anthropic-key")
-      expect(env.XAI_API_KEY).toBe("xai-key")
-      expect(env.KIMI_API_KEY).toBe("kimi-key")
+      expect(env.OPENAI_API_KEY).toBeUndefined()
+      expect(env.ANTHROPIC_API_KEY).toBeUndefined()
+      expect(env.XAI_API_KEY).toBeUndefined()
+      expect(env.KIMI_API_KEY).toBeUndefined()
     } finally {
       if (originalGemini === undefined) delete process.env.GEMINI_API_KEY
       else process.env.GEMINI_API_KEY = originalGemini

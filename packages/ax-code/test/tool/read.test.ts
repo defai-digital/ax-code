@@ -17,6 +17,7 @@ const LSP_FILE = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-ls
 
 afterEach(async () => {
   await Instance.disposeAll()
+  vi.unstubAllEnvs()
 })
 
 const ctx = {
@@ -595,6 +596,10 @@ root_type Monster;`
 
 describe("tool.read lsp", () => {
   test("activates lsp while reading a file", async () => {
+    // The fixture deliberately launches a project-provided LSP process, which
+    // requires the same explicit checkout trust as it does in production.
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+
     await using tmp = await tmpdir({
       config: {
         lsp: {

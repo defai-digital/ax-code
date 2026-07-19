@@ -22,11 +22,11 @@ describe("resign-release-assets", () => {
     expect(() => parseResignArgs(["--all", "--tag", "v5.5.0"])).not.toThrow()
   })
 
-  test("defaults key dir to ~/.minisign and derives key file paths", () => {
+  test("defaults key dir to ~/signkey and derives key file paths", () => {
     const options = parseResignArgs(["v5.5.0"], {}, "/repo", "/home/ax")
-    expect(options.keyDir).toBe(path.resolve("/home/ax/.minisign"))
-    expect(options.secretKey).toBe(path.resolve("/home/ax/.minisign/minisign.key"))
-    expect(options.publicKey).toBe(path.resolve("/home/ax/.minisign/minisign.pub"))
+    expect(options.keyDir).toBe(path.resolve("/home/ax/signkey"))
+    expect(options.secretKey).toBe(path.resolve("/home/ax/signkey/ax.minisign.key"))
+    expect(options.publicKey).toBe(path.resolve("/home/ax/signkey/ax.pub"))
   })
 
   test("respects explicit key paths and GH_REPO", () => {
@@ -44,7 +44,7 @@ describe("resign-release-assets", () => {
   test("honors AX_CODE_MINISIGN_KEY_DIR env override", () => {
     const options = parseResignArgs(["v5.5.0"], { AX_CODE_MINISIGN_KEY_DIR: "~/altkeys" }, "/repo", "/home/ax")
     expect(options.keyDir).toBe(path.resolve("/home/ax/altkeys"))
-    expect(options.secretKey).toBe(path.resolve("/home/ax/altkeys/minisign.key"))
+    expect(options.secretKey).toBe(path.resolve("/home/ax/altkeys/ax.minisign.key"))
   })
 
   test("archivePaths and signaturePaths cover every expected release archive", () => {
@@ -58,9 +58,9 @@ describe("resign-release-assets", () => {
       repo: "defai-digital/ax-code",
       tags: ["v5.5.0"],
       allReleases: false,
-      keyDir: "/home/ax/.minisign",
-      secretKey: "/home/ax/.minisign/minisign.key",
-      publicKey: "/home/ax/.minisign/minisign.pub",
+      keyDir: "/home/ax/signkey",
+      secretKey: "/home/ax/signkey/ax.minisign.key",
+      publicKey: "/home/ax/signkey/ax.pub",
       skipUpload: false,
       dryRun: false,
       yes: false,

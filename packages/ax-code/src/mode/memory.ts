@@ -7,12 +7,16 @@ import fs from "fs/promises"
 import path from "path"
 import z from "zod"
 import { Global } from "../global"
+import { FileLock } from "../util/filelock"
+import { Filesystem } from "../util/filesystem"
 import { parseJsonResult } from "../util/json-value"
 import { Log } from "../util/log"
+import { Lock } from "../util/lock"
 
 export namespace ModeMemory {
   const log = Log.create({ service: "mode.memory" })
   const MAX_OUTCOMES = 2000
+  let writeChain: Promise<void> = Promise.resolve()
 
   const TaskClassSchema = z.enum(["review", "design", "implement", "debug", "security", "general"])
   const OutcomeResultSchema = z.enum(["win", "place", "fail", "participate"])
@@ -129,17 +133,22 @@ export namespace ModeMemory {
 
   export async function append(outcomes: readonly Outcome[]): Promise<void> {
     if (!outcomes.length) return
-    const current = await load()
-    const next: Store = {
-      version: 1,
-      outcomes: [...current.outcomes, ...outcomes].slice(-MAX_OUTCOMES),
-    }
-    try {
-      await fs.mkdir(path.dirname(storePath()), { recursive: true })
-      await fs.writeFile(storePath(), JSON.stringify(next, null, 2), "utf8")
-    } catch (error) {
-      log.warn("mode memory write failed", { error })
-    }
+    writeChain = writeChain.then(async () => {
+      try {
+        const target = storePath()
+        using _inProcess = await Lock.write(target)
+        using _crossProcess = await FileLock.acquire(target)
+        const current = await load()
+        const next: Store = {
+          version: 1,
+          outcomes: [...current.outcomes, ...outcomes].slice(-MAX_OUTCOMES),
+        }
+        await Filesystem.writeJson(target, next)
+      } catch (error) {
+        log.warn("mode memory write failed", { error })
+      }
+    })
+    return writeChain
   }
 
   export async function recordArenaRanking(input: {

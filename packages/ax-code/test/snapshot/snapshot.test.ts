@@ -450,7 +450,7 @@ test("cleanup deletes expired snapshot refs before pruning", async () => {
       await $`git --git-dir=${gitdir} pack-refs --all`.quiet()
       const firstRefPath = path.join(gitdir, "ax-code", "snapshots", first!)
       const expired = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
-      await fs.utimes(firstRefPath, expired, expired)
+      await Filesystem.write(firstRefPath, `${expired.getTime()}\n`)
 
       await Snapshot.cleanup()
 

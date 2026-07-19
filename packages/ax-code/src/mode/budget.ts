@@ -65,6 +65,7 @@ export namespace Budget {
         typeof input.callsPerMember === "number" && Number.isFinite(input.callsPerMember)
           ? Math.max(1, Math.floor(input.callsPerMember))
           : 1
+
       const estimatedPerMember = per * callsPerMember
       if (callsPerMember > 1) reasons.push(`calls_per_member:${callsPerMember}`)
       // How many members fit under USD budget?

@@ -13,10 +13,9 @@
  * implementation at REQUEST time, so routes can register first and the Node
  * helper can be wired in when the server actually starts.
  *
- * Spike limitation: the active Node upgrade impl is module-global, so multiple
- * concurrent Node servers would share the last one's `wss`. Production needs
- * per-app binding (keyed by the Hono instance). Bun is unaffected (its helper
- * is static). Tracked as a P1 follow-up.
+ * Node upgrade implementations are keyed by the HTTP server that owns the
+ * incoming socket, so concurrent servers cannot route upgrades through one
+ * another's WebSocketServer. Bun is unaffected (its helper is static).
  */
 import type { Hono } from "hono"
 import type { UpgradeWebSocket } from "hono/ws"
@@ -57,13 +56,9 @@ function isNodeRuntime(): boolean {
 
 // --- upgradeWebSocket forwarder -------------------------------------------
 
-// Bun's helper is static and safe to resolve lazily on first use. The Node
-// helper is set per-server in serveNode() before any upgrade can arrive.
-let activeUpgrade: UpgradeWebSocket<any, any> | null = null
-
-export function setActiveUpgrade(fn: UpgradeWebSocket<any, any>) {
-  activeUpgrade = fn
-}
+// Bun's helper is static and safe to resolve lazily on first use. Node exposes
+// the owning http.Server through c.env.incoming.socket.server.
+const nodeUpgrades = new WeakMap<object, UpgradeWebSocket<any, any>>()
 
 function resolveBunUpgrade(): UpgradeWebSocket<any, any> {
   // hono/bun is only importable under Bun; require lazily so Node never loads it.
@@ -79,7 +74,8 @@ function resolveBunUpgrade(): UpgradeWebSocket<any, any> {
  */
 export const upgradeWebSocket: UpgradeWebSocket<any, any> = ((createEvents: any, options?: any) => {
   return async (c: any, next: any) => {
-    let impl = activeUpgrade
+    const owner = c.env?.incoming?.socket?.server
+    let impl = owner && typeof owner === "object" ? nodeUpgrades.get(owner) : undefined
     if (!impl && !isNodeRuntime()) impl = resolveBunUpgrade()
     if (!impl) return next() // no ws support on this path
     return impl(createEvents, options)(c, next)
@@ -119,7 +115,6 @@ async function serveNode(opts: ServeOptions): Promise<ServerHandle> {
   if (opts.app) {
     const { createNodeWebSocket } = await import("@hono/node-ws")
     nodeWs = createNodeWebSocket({ app: opts.app as any })
-    setActiveUpgrade(nodeWs.upgradeWebSocket as unknown as UpgradeWebSocket<any, any>)
   }
 
   return await new Promise<ServerHandle>((resolve, reject) => {
@@ -148,6 +143,9 @@ async function serveNode(opts: ServeOptions): Promise<ServerHandle> {
       reject(err)
     }
     httpServer.on("error", onError)
+    if (nodeWs) {
+      nodeUpgrades.set(httpServer, nodeWs.upgradeWebSocket as unknown as UpgradeWebSocket<any, any>)
+    }
     nodeWs?.injectWebSocket(httpServer)
   })
 }

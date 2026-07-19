@@ -5,15 +5,10 @@ export namespace Env {
   // tokens, passwords, and other credentials held by the parent
   // process. Defaults to a strict keyword match so non-standard secret-like
   // names are filtered too (for example OPENAI_APIKEY or AWS_ACCESSKEY).
-  // Functional variables like `SSH_AUTH_SOCK` (auth agent socket)
-  // and `GIT_ASKPASS` (credential helper) aren't stripped. An explicit
-  // allowlist covers the few legitimate cases where a secret-looking
-  // keyword IS a real substring we want to keep.
   const SECRET_PATTERN = /KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|AUTH/i
+  const CREDENTIAL_URL_NAME = /(?:DATABASE|REDIS|AMQP|MONGODB|POSTGRES|MYSQL|ELASTIC|BROKER)_?(?:URL|URI)/i
+  const CREDENTIAL_HELPER_NAMES = new Set(["SSH_AUTH_SOCK", "GIT_ASKPASS", "SUDO_ASKPASS"])
   const SAFE_ALLOWLIST = new Set([
-    "SSH_AUTH_SOCK",
-    "GIT_ASKPASS",
-    "SUDO_ASKPASS",
     "PYTHON_KEYRING_BACKEND",
     "XAUTHORITY",
     "DOTNET_CLI_TELEMETRY_SESSION_TOKEN",
@@ -26,17 +21,20 @@ export namespace Env {
   // forwarded. Kept out of SAFE_ALLOWLIST so pty user env and untrusted
   // {env:} config substitution still strip them — only the CLI provider
   // spawn path opts into forwarding via `withCliProviderKeys`.
-  const CLI_PROVIDER_KEYS = [
-    "OPENAI_API_KEY",
-    "GEMINI_API_KEY",
-    "ANTHROPIC_API_KEY",
-    "XAI_API_KEY",
-    "KIMI_API_KEY",
-  ] as const
+  const CLI_PROVIDER_KEYS: Record<string, readonly string[]> = {
+    "codex-cli": ["OPENAI_API_KEY"],
+    "gemini-cli": ["GEMINI_API_KEY"],
+    "claude-code": ["ANTHROPIC_API_KEY"],
+    "grok-build-cli": ["XAI_API_KEY"],
+    "kimi-cli": ["KIMI_API_KEY"],
+  }
 
-  export function withCliProviderKeys(env: Record<string, string | undefined>): Record<string, string | undefined> {
+  export function withCliProviderKeys(
+    env: Record<string, string | undefined>,
+    providerID: string | undefined,
+  ): Record<string, string | undefined> {
     const out = { ...env }
-    for (const key of CLI_PROVIDER_KEYS) {
+    for (const key of (providerID && CLI_PROVIDER_KEYS[providerID]) ?? []) {
       const value = process.env[key]
       if (value !== undefined) out[key] = value
     }
@@ -50,10 +48,48 @@ export namespace Env {
         out[k] = v
         continue
       }
-      if (SECRET_PATTERN.test(k)) continue
+      if (
+        CREDENTIAL_HELPER_NAMES.has(k) ||
+        isSensitiveName(k) ||
+        CREDENTIAL_URL_NAME.test(k) ||
+        containsUrlCredential(v)
+      ) {
+        continue
+      }
       out[k] = v
     }
     return out
+  }
+
+  export function isSensitiveName(name: string): boolean {
+    return SECRET_PATTERN.test(name)
+  }
+
+  function containsUrlCredential(value: string | undefined): boolean {
+    if (!value || !value.includes("://")) return false
+    try {
+      const parsed = new URL(value)
+      return parsed.username.length > 0 || parsed.password.length > 0
+    } catch {
+      return false
+    }
+  }
+
+  /** Redact common key/value and HTTP authorization spellings in child logs. */
+  export function redactSecrets(value: string): string {
+    const jsonRedacted = value.replace(
+      /(["'])(token|secret|password|passwd|credential|authorization|api[_-]?key)\1\s*:\s*(["'])[^"'\r\n]*\3/gi,
+      (_match, quote: string, key: string, valueQuote: string) =>
+        `${quote}${key}${quote}:${valueQuote}[redacted]${valueQuote}`,
+    )
+    const fieldsRedacted = jsonRedacted.replace(
+      /\b(token|secret|password|passwd|credential|authorization|api[_-]?key)\b\s*(?:=|:)\s*(?:bearer\s+)?[^\s,;}\]]+/gi,
+      (_match, key: string) => `${key}=[redacted]`,
+    )
+    return fieldsRedacted.replace(
+      /\b(https?:\/\/)([^\s/:@]+):([^\s/@]+)@/gi,
+      (_match, scheme: string, username: string) => `${scheme}${username}:[redacted]@`,
+    )
   }
 
   // Interpret an environment-variable string as a tri-state boolean.

@@ -12,17 +12,16 @@ import { Config } from "../config/config"
 import { Arena } from "../mode/arena"
 import { Budget } from "../mode/budget"
 import { Council } from "../mode/council"
+import { EnsembleShared } from "../mode/ensemble-shared"
 import { ensureJsonModeInstruction } from "../mode/json-mode-prompt"
 import { EnsemblePreflight } from "../mode/preflight"
 import { ModeMemory } from "../mode/memory"
 import type { ModePolicy } from "../mode/policy"
 import { Instance } from "../project/instance"
 import { Provider } from "../provider/provider"
-import { modelSelectableForProvider } from "../provider/model-selectability"
-import { ModelID, ProviderID } from "../provider/schema"
 import { Agent } from "../agent/agent"
 import { Log } from "../util/log"
-import { toErrorMessage } from "../util/error-message"
+import { FanOut } from "../util/fan-out"
 import { Tool } from "./tool"
 import { inspectImplementArenaBase, runImplementArena } from "./arena-implement"
 import DESCRIPTION from "./arena.txt"
@@ -41,31 +40,26 @@ const ProposalSchema = z.object({
   confidence: z.number().min(0).max(1).optional(),
 })
 
+// Kept local to avoid circular-dependency at module-load time (identical to council.ts).
 const MemberSelectionSchema = z.object({
   providerID: z.string().min(1).max(200),
   modelID: z.string().min(1).max(300).optional(),
 })
 
-function uniqueMemberSelections(selections: Array<z.infer<typeof MemberSelectionSchema>>, ctx: z.RefinementCtx): void {
+function validateMemberSelections(
+  selections: Array<z.infer<typeof MemberSelectionSchema>>,
+  ctx: z.RefinementCtx,
+): void {
   const seen = new Set<string>()
   selections.forEach((selection, index) => {
     const key = `${selection.providerID}\u0000${selection.modelID ?? ""}`
-    if (!seen.has(key)) {
-      seen.add(key)
-      return
+    if (seen.has(key)) {
+      ctx.addIssue({ code: "custom", message: "Duplicate provider/model selection", path: [index] })
     }
-    ctx.addIssue({
-      code: "custom",
-      message: "Duplicate provider/model selection",
-      path: [index],
-    })
+    seen.add(key)
   })
-  if (new Set(selections.map((selection) => selection.providerID)).size < 2) {
-    ctx.addIssue({
-      code: "custom",
-      message: "Arena requires at least two distinct providers",
-      path: [],
-    })
+  if (new Set(selections.map((s) => s.providerID)).size < 2) {
+    ctx.addIssue({ code: "custom", message: "Arena requires at least two distinct providers", path: [] })
   }
 }
 
@@ -78,7 +72,7 @@ const parameters = z.object({
     .describe(
       "plan (default): multi-model approach comparison only. implement: worktree-isolated implement arena with verify-first ranking.",
     ),
-  providers: z.array(MemberSelectionSchema).min(2).max(HARD_MAX).superRefine(uniqueMemberSelections).optional(),
+  providers: z.array(MemberSelectionSchema).min(2).max(HARD_MAX).superRefine(validateMemberSelections).optional(),
   strategy: z.enum(["verify_first", "diversity", "hybrid_score"]).optional(),
   enableIfDisabled: z
     .boolean()
@@ -88,174 +82,117 @@ const parameters = z.object({
     ),
 })
 
-type MemberSpec = { providerID: ProviderID; modelID: ModelID; memberId: string }
-type MemberResolution = { members: MemberSpec[]; rejected: string[] }
-
-async function snapshotSelectableProviders(): Promise<EnsemblePreflight.ProviderSnapshot> {
-  await Provider.ready()
-  const providers = await Provider.list()
-  const ids: string[] = []
-  for (const provider of Object.values(providers)) {
-    const models = Object.values(provider.models).filter((m) => modelSelectableForProvider(provider.id, m))
-    if (models.length === 0) continue
-    if (models.every((m) => String(m.id).toLowerCase().includes("embed"))) continue
-    ids.push(String(provider.id))
-  }
-  return { count: ids.length, ids: ids.sort() }
-}
-
 function fingerprint(text: string): string {
   const normalized = text.toLowerCase().replace(/\s+/g, " ").trim()
   return createHash("sha256").update(normalized).digest("hex").slice(0, 16)
 }
 
-async function resolveMembers(
-  explicit: Array<{ providerID: string; modelID?: string }> | undefined,
-  maxMembers: number,
-  task: string,
-): Promise<MemberResolution> {
-  await Provider.ready()
-  const providers = await Provider.list()
-
-  if (explicit?.length) {
-    const out: MemberSpec[] = []
-    const rejected: string[] = []
-    for (const item of explicit) {
-      const providerID = ProviderID.make(item.providerID)
-      const provider = providers[providerID]
-      if (!provider) {
-        rejected.push(`Unknown provider ${JSON.stringify(item.providerID)}`)
-        continue
-      }
-      let modelID: ModelID | undefined
-      if (item.modelID) {
-        const model = Object.values(provider.models).find(
-          (candidate) =>
-            String(candidate.id) === item.modelID &&
-            modelSelectableForProvider(providerID, candidate) &&
-            !String(candidate.id).toLowerCase().includes("embed"),
-        )
-        modelID = model?.id
-        if (!modelID) {
-          rejected.push(`Unknown or unselectable model ${JSON.stringify(`${item.providerID}/${item.modelID}`)}`)
-        }
-      } else {
-        const sorted = Provider.sort(
-          Object.values(provider.models).filter(
-            (model) =>
-              modelSelectableForProvider(providerID, model) && !String(model.id).toLowerCase().includes("embed"),
-          ),
-        )
-        modelID = sorted[0]?.id
-      }
-      if (!modelID) {
-        if (!item.modelID) rejected.push(`No selectable coding model for ${JSON.stringify(item.providerID)}`)
-        continue
-      }
-      out.push({ providerID, modelID, memberId: `${providerID}/${modelID}` })
-    }
-    return { members: Council.dedupeMembers(out).slice(0, maxMembers), rejected }
-  }
-
-  let candidates: Array<{ providerID: string; modelID: ModelID }> = []
-  for (const provider of Object.values(providers)) {
-    const models = Provider.sort(
-      Object.values(provider.models).filter(
-        (model) => modelSelectableForProvider(provider.id, model) && !String(model.id).toLowerCase().includes("embed"),
-      ),
-    )
-    const model = models[0]
-    if (!model) continue
-    candidates.push({ providerID: String(provider.id), modelID: model.id })
-  }
-
-  try {
-    const store = await ModeMemory.load()
-    const stats = ModeMemory.aggregateStats(store.outcomes, ModeMemory.classifyTask(task))
-    candidates = ModeMemory.biasByMemory(
-      candidates.map((c) => ({ ...c, modelID: String(c.modelID) })),
-      stats,
-    ).map((c) => ({ providerID: c.providerID, modelID: ModelID.make(String(c.modelID)) }))
-  } catch {
-    // best-effort
-  }
-
-  const diverse = Council.selectDiverseMembers(candidates, maxMembers)
-  return {
-    members: diverse.map((c) => ({
-      providerID: ProviderID.make(c.providerID),
-      modelID: ModelID.make(String(c.modelID)),
-      memberId: `${c.providerID}/${c.modelID}`,
-    })),
-    rejected: [],
-  }
-}
-
 async function runProposal(input: {
-  member: MemberSpec
+  member: EnsembleShared.MemberSpec
   task: string
   context?: string
   timeoutMs: number
   abort: AbortSignal
+  retryOnce?: boolean
 }): Promise<{
-  member: MemberSpec
+  member: EnsembleShared.MemberSpec
   proposal?: z.infer<typeof ProposalSchema>
   error?: string
 }> {
-  const localAbort = new AbortController()
-  const onParent = () => localAbort.abort(input.abort.reason)
-  if (input.abort.aborted) onParent()
-  else input.abort.addEventListener("abort", onParent, { once: true })
-  const timer = setTimeout(() => localAbort.abort(), input.timeoutMs)
-  timer.unref?.()
   const started = Date.now()
-  try {
-    const model = await Provider.getModel(input.member.providerID, input.member.modelID)
-    const language = await Provider.getLanguage(model)
-    const proposal = await generateObject({
-      model: language,
-      schema: ProposalSchema,
-      abortSignal: localAbort.signal,
-      temperature: 0.3,
-      messages: [
-        {
-          role: "system",
-          // ensureJsonModeInstruction: Qwen/Alibaba require the word "json" when generateObject
-          // uses response_format json_object.
-          content: ensureJsonModeInstruction(`You are one independent contestant in a coding-agent arena.
+  const retryOnce = input.retryOnce ?? true
+
+  const attemptProposal = async (): Promise<FanOut.MemberResult<z.infer<typeof ProposalSchema>>> => {
+    const [result] = await FanOut.run({
+      members: [input.member],
+      timeoutMs: input.timeoutMs,
+      abort: input.abort,
+      onMemberComplete: (completed, total, m) => {
+        log.info("arena fan-out member done", {
+          toolName: "arena",
+          memberId: m.memberId,
+          completed,
+          total,
+        })
+      },
+      execute: async (_m, signal) => {
+        const model = await Provider.getModel(input.member.providerID, input.member.modelID)
+        const language = await Provider.getLanguage(model)
+        return generateObject({
+          model: language,
+          schema: ProposalSchema,
+          abortSignal: signal,
+          temperature: 0.3,
+          messages: [
+            {
+              role: "system",
+              // ensureJsonModeInstruction: Qwen/Alibaba require the word "json" when generateObject
+              // uses response_format json_object.
+              content: ensureJsonModeInstruction(`You are one independent contestant in a coding-agent arena.
 Propose a concrete implementation approach for the task. Do not write full source files.
 Focus on approach, ordered steps, and risks. Be specific to the context.
 Give an overall riskScore from 0 (low implementation risk) to 20 (high). Do not lower it by omitting risks.`),
-        },
-        {
-          role: "user",
-          content: [`Task: ${input.task}`, input.context ? `\nContext:\n${input.context.slice(0, 20_000)}` : ""]
-            .filter(Boolean)
-            .join("\n"),
-        },
-      ],
-    }).then((r) => r.object)
+            },
+            {
+              role: "user",
+              content: [`Task: ${input.task}`, input.context ? `\nContext:\n${input.context.slice(0, 20_000)}` : ""]
+                .filter(Boolean)
+                .join("\n"),
+            },
+          ],
+        }).then((r) => r.object)
+      },
+    })
+    return result!
+  }
 
+  // First attempt
+  const first = await attemptProposal()
+  if (first.result) {
     log.info("arena proposal ok", {
       toolName: "arena",
       memberId: input.member.memberId,
       durationMs: Date.now() - started,
       status: "ok",
     })
-    return { member: input.member, proposal }
-  } catch (err) {
-    log.warn("arena proposal failed", {
+    return { member: input.member, proposal: first.result }
+  }
+
+  const wasAborted = (first.error ?? "").startsWith("aborted:") || input.abort.aborted
+  log.warn("arena proposal failed", {
+    toolName: "arena",
+    memberId: input.member.memberId,
+    durationMs: Date.now() - started,
+    status: wasAborted ? "timeout" : "error",
+  })
+
+  // Retry once on non-abort, non-timeout failure
+  if (retryOnce && !wasAborted) {
+    log.info("arena proposal retrying", {
       toolName: "arena",
       memberId: input.member.memberId,
-      durationMs: Date.now() - started,
-      status: localAbort.signal.aborted ? "timeout" : "error",
-      errorCode: err instanceof Error ? err.name : "Unknown",
     })
-    return { member: input.member, error: toErrorMessage(err) }
-  } finally {
-    clearTimeout(timer)
-    input.abort.removeEventListener("abort", onParent)
+    const retryStarted = Date.now()
+    const retry = await attemptProposal()
+    if (retry.result) {
+      log.info("arena proposal retry ok", {
+        toolName: "arena",
+        memberId: input.member.memberId,
+        durationMs: Date.now() - retryStarted,
+        status: "ok",
+      })
+      return { member: input.member, proposal: retry.result }
+    }
+    log.warn("arena proposal retry failed", {
+      toolName: "arena",
+      memberId: input.member.memberId,
+      durationMs: Date.now() - retryStarted,
+      status: (retry.error ?? "").startsWith("aborted:") || input.abort.aborted ? "timeout" : "error",
+    })
+    return { member: input.member, error: retry.error ?? "unknown" }
   }
+
+  return { member: input.member, error: first.error ?? "unknown" }
 }
 
 type ArenaMetadata = {
@@ -291,7 +228,7 @@ export const ArenaTool = Tool.define("arena", async () => {
       let cfg = await Config.getFresh()
       let modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
       let enabledThisCall = false
-      const providerSnap = await snapshotSelectableProviders()
+      const providerSnap = await EnsembleShared.snapshotSelectableProviders()
       const suggestedTool = EnsemblePreflight.suggestTool(args.task)
       const arenaMode = args.mode ?? "plan"
       let baseCommit: string | undefined
@@ -370,14 +307,14 @@ export const ArenaTool = Tool.define("arena", async () => {
 
       const strategy =
         args.strategy ?? modes.arena?.strategy ?? (arenaMode === "implement" ? "verify_first" : "diversity")
-      const timeoutMs = modes.council?.timeoutMs ?? DEFAULT_TIMEOUT_MS
+      const timeoutMs = modes.arena?.timeoutMs ?? modes.council?.timeoutMs ?? DEFAULT_TIMEOUT_MS
       const maxContestants = Math.min(HARD_MAX, Math.max(1, modes.arena?.maxContestants ?? DEFAULT_MAX))
 
       const budgetCheck = Budget.check({
         kind: "arena",
         requestedMembers: args.providers?.length ?? maxContestants,
         budget: {
-          maxMembers: modes.council?.maxMembers ?? 3,
+          maxMembers: modes.arena?.maxContestants ?? 3,
           maxContestants,
           timeoutMs,
           maxEstimatedUsd: modes.budget?.maxEstimatedUsd,
@@ -400,7 +337,12 @@ export const ArenaTool = Tool.define("arena", async () => {
         }
       }
 
-      const resolution = await resolveMembers(args.providers, budgetCheck.allowedMembers, args.task)
+      const resolution = await EnsembleShared.resolveMembers(
+        { minMembers: 2, maxMembers: budgetCheck.allowedMembers, requireDistinctProviders: false },
+        args.providers,
+        budgetCheck.allowedMembers,
+        args.task,
+      )
       let members = resolution.members
       if (members.length > budgetCheck.allowedMembers) {
         members = members.slice(0, budgetCheck.allowedMembers)
@@ -483,19 +425,28 @@ export const ArenaTool = Tool.define("arena", async () => {
       }
 
       // --- Plan arena (approach comparison only) ---
+      let arenaCompleted = 0
       const results = await Promise.all(
-        members.map((member) =>
-          runProposal({
+        members.map(async (member) => {
+          const result = await runProposal({
             member,
             task: args.task,
             context: args.context,
             timeoutMs,
             abort: ctx.abort,
-          }),
-        ),
+          })
+          arenaCompleted++
+          log.info("arena proposal progress", {
+            toolName: "arena",
+            memberId: member.memberId,
+            completed: arenaCompleted,
+            total: members.length,
+          })
+          return result
+        }),
       )
+      // Propagate abort cleanly before aggregation / memory recording.
       ctx.abort.throwIfAborted()
-
       const candidates: Arena.ArenaCandidate[] = []
       const proposalById = new Map<string, z.infer<typeof ProposalSchema>>()
       const errors: string[] = []

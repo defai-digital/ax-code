@@ -30,10 +30,7 @@ const defaultDeps: PromptLoopResultDeps = {
   },
 }
 
-async function fireStopHooks(
-  sessionID: SessionID,
-  runStopHooks: NonNullable<PromptLoopResultDeps["runStopHooks"]>,
-) {
+async function fireStopHooks(sessionID: SessionID, runStopHooks: NonNullable<PromptLoopResultDeps["runStopHooks"]>) {
   try {
     let cwd: string | undefined
     try {
@@ -60,6 +57,7 @@ export async function resolvePromptLoopResult(
   input: {
     sessionID: SessionID
     abort: AbortSignal
+    expectedMessageID?: string
     shiftQueuedCallback: (sessionID: SessionID) => { resolve: (message: MessageV2.WithParts) => void } | undefined
   },
   deps: PromptLoopResultDeps = defaultDeps,
@@ -75,6 +73,7 @@ export async function resolvePromptLoopResult(
 
   for await (const item of deps.stream(input.sessionID)) {
     if (item.info.role === "user") continue
+    if (input.expectedMessageID && item.info.id !== input.expectedMessageID) continue
     // Turn completed: run user-visible Stop hooks (e.g. require-tests-on-stop).
     if (deps.runStopHooks) await fireStopHooks(input.sessionID, deps.runStopHooks)
     input.shiftQueuedCallback(input.sessionID)?.resolve(item)

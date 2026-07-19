@@ -14,6 +14,7 @@ REMOTE="origin"
 BRANCH=""
 REPO=""
 KEY_DIR="${SIGNKEY_DIR:-$HOME/signkey}"
+CANONICAL_MINISIGN_PUBLIC_KEY="$REPO_ROOT/docs/ax-minisign.pub"
 PUBLISH=false
 ALLOW_DIRTY=false
 ALLOW_BRANCH=false
@@ -159,8 +160,8 @@ NODE
 }
 
 validate_minisign_key() {
-  local secret_key="${MINISIGN_SECRET_KEY:-$KEY_DIR/ax-code-desktop.minisign.key}"
-  local public_key="${MINISIGN_PUBLIC_KEY:-$KEY_DIR/ax-code-desktop.minisign.pub}"
+  local secret_key="${MINISIGN_SECRET_KEY:-$KEY_DIR/ax.minisign.key}"
+  local public_key="${MINISIGN_PUBLIC_KEY:-$KEY_DIR/ax.pub}"
 
   [[ -f "$secret_key" ]] || fail "minisign secret key not found: $secret_key. Run: desktop/scripts/minisign-keygen.sh"
   [[ -f "$public_key" ]] || fail "minisign public key not found: $public_key. Run: desktop/scripts/minisign-keygen.sh"
@@ -303,7 +304,7 @@ download_sign_and_upload_assets() {
 
   while IFS= read -r -d '' file; do
     case "$file" in
-      *.minisig|*.sig)
+      *.minisig|*.sig|*/ax-minisign.pub)
         ;;
       *)
         files+=("$file")
@@ -326,8 +327,13 @@ download_sign_and_upload_assets() {
     fail "no .minisig files were produced"
   fi
 
-  log "Uploading ${#sig_files[@]} minisign signature asset(s)"
-  gh release upload "$tag" --repo "$repo" --clobber "${sig_files[@]}"
+  [[ -f "$CANONICAL_MINISIGN_PUBLIC_KEY" ]] || {
+    fail "canonical minisign public key not found: $CANONICAL_MINISIGN_PUBLIC_KEY"
+  }
+  log "Uploading ${#sig_files[@]} minisign signature asset(s) and canonical public key"
+  gh release upload "$tag" --repo "$repo" --clobber \
+    "${sig_files[@]}" \
+    "$CANONICAL_MINISIGN_PUBLIC_KEY"
 }
 
 verify_release_assets() {
@@ -341,7 +347,7 @@ verify_release_assets() {
   const names = new Set(release.assets.map((asset) => asset.name));
   const unsignedAssets = release.assets
     .map((asset) => asset.name)
-    .filter((name) => !name.endsWith('.minisig') && !name.endsWith('.sig'));
+    .filter((name) => !name.endsWith('.minisig') && !name.endsWith('.sig') && name !== 'ax-minisign.pub');
 
   if (release.isDraft) {
     console.error('Release is still a draft.');
@@ -354,6 +360,10 @@ verify_release_assets() {
   }
 
   if (process.env.SKIP_SIGNING !== 'true') {
+    if (!names.has('ax-minisign.pub')) {
+      console.error('Release is missing the canonical ax-minisign.pub key.');
+      process.exit(1);
+    }
     const missing = unsignedAssets.filter((name) => !names.has(`${name}.minisig`));
     if (missing.length > 0) {
       console.error('Release assets missing minisign signatures:');

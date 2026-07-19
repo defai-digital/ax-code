@@ -181,7 +181,7 @@ macOS users installing via Homebrew bypass Gatekeeper automatically — no extra
 For manual downloads, only use the official [Releases page](https://github.com/defai-digital/ax-code/releases). Release assets include detached `.minisig` signatures that can be verified with this pinned public key:
 
 ```text
-RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A
+RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO
 ```
 
 Windows Desktop releases are Authenticode-signed by **DEFAI Private Limited**, and release CI fails if signing or timestamp verification does not succeed. SmartScreen can still warn for a newly released, low-reputation file; a signed warning should identify the expected publisher, while **Unknown publisher** is a reason to stop. Release notes should state the expected first-run SmartScreen behavior. Detached minisign signatures verify release asset integrity, but they do not replace Windows SmartScreen reputation, Windows Authenticode signing, or macOS Gatekeeper/notarization trust.

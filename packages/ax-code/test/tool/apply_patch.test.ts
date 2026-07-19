@@ -562,6 +562,29 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("rejects delete when the file changes while approval is pending", async () => {
+    await using fixture = await tmpdir()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const target = path.join(fixture.path, "delete.txt")
+        await writeAndTrack(target, "original\n")
+        const ctx: ToolCtx = {
+          ...baseCtx,
+          ask: async () => {
+            await fs.writeFile(target, "concurrent update\n", "utf-8")
+          },
+        }
+
+        await expect(
+          execute({ patchText: "*** Begin Patch\n*** Delete File: delete.txt\n*** End Patch" }, ctx),
+        ).rejects.toThrow("modified between verification and delete")
+        expect(await fs.readFile(target, "utf-8")).toBe("concurrent update\n")
+      },
+    })
+  })
+
   test("rejects delete when target is a directory", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()

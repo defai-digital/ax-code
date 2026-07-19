@@ -20,6 +20,7 @@ import { classify as classifyRisk } from "./risk-classes"
 import { PermissionID } from "./schema"
 import { Flag } from "@/flag/flag"
 import { ScopedFlag } from "@/flag/scoped"
+import { ProjectConfigTrust } from "@/config/project-config-trust"
 
 export namespace Permission {
   const log = Log.create({ service: "permission" })
@@ -611,8 +612,21 @@ export namespace Permission {
     try {
       const raw = await Filesystem.readJson(filepath)
       const policy = PolicyFile.parse(raw)
-      log.info("loaded policy", { name: policy.name, rules: policy.rules.length, path: filepath })
-      return fromPolicy(policy, currentAgent)
+      const rules = fromPolicy(policy, currentAgent)
+      if (ProjectConfigTrust.enabled()) {
+        log.info("loaded trusted project policy", { name: policy.name, rules: rules.length, path: filepath })
+        return rules
+      }
+      const restrictions = rules.filter((rule) => rule.action === "deny")
+      if (restrictions.length !== rules.length) {
+        log.warn("ignored permission grants from untrusted project policy", {
+          name: policy.name,
+          ignored: rules.length - restrictions.length,
+          path: filepath,
+          optIn: ProjectConfigTrust.ENV,
+        })
+      }
+      return restrictions
     } catch (e) {
       const code = errnoCode(e)
       if (code === "ENOENT") return []

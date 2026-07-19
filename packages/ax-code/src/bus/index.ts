@@ -36,11 +36,21 @@ export namespace Bus {
           directory: Instance.directory,
         },
       }
-      for (const sub of [...wildcard]) {
-        sub(event)
-      }
+      await Promise.all(deliver([...wildcard], event, InstanceDisposed.type))
     },
   )
+
+  function deliver(subscriptions: Subscription[], payload: unknown, type: string): Pending {
+    return subscriptions.map((sub) =>
+      withTimeout(
+        Promise.resolve()
+          .then(() => sub(payload))
+          .catch((err) => log.error("subscriber threw", { type, err })),
+        BUS_SUBSCRIBER_TIMEOUT_MS,
+        `Bus subscriber for "${type}" timed out after ${BUS_SUBSCRIBER_TIMEOUT_MS}ms`,
+      ).catch((err) => log.error("subscriber timed out", { type, err })),
+    )
+  }
 
   function prepare<Definition extends BusEvent.Definition>(
     def: Definition,
@@ -60,15 +70,7 @@ export namespace Bus {
         // Wrap in Promise.resolve().then so a synchronous throw from any
         // subscriber becomes a rejected promise instead of propagating up
         // and skipping later subscribers in the same publish cycle.
-        pending.push(
-          withTimeout(
-            Promise.resolve()
-              .then(() => sub(payload))
-              .catch((err) => log.error("subscriber threw", { type: def.type, err })),
-            BUS_SUBSCRIBER_TIMEOUT_MS,
-            `Bus subscriber for "${def.type}" timed out after ${BUS_SUBSCRIBER_TIMEOUT_MS}ms`,
-          ).catch((err) => log.error("subscriber timed out", { type: def.type, err })),
-        )
+        pending.push(...deliver([sub], payload, def.type))
       }
     }
     return { payload, pending }

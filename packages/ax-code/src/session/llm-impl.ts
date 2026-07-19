@@ -821,8 +821,27 @@ export namespace LLM {
     })
   }
 
-  // Cache Permission.disabled() results — the ruleset rarely changes within a session
-  let _disabledCache: { key: string; toolKeys: string; result: Set<string> } | undefined
+  // Cache Permission.disabled() across concurrent sessions. A small LRU
+  // avoids the previous single-entry cache thrashing when rulesets interleave.
+  const disabledCache = new Map<string, Set<string>>()
+  const DISABLED_CACHE_MAX = 32
+
+  function cachedDisabled(toolKeys: string[], ruleset: Permission.Ruleset) {
+    const key = JSON.stringify([toolKeys, ruleset])
+    const cached = disabledCache.get(key)
+    if (cached) {
+      disabledCache.delete(key)
+      disabledCache.set(key, cached)
+      return cached
+    }
+    const result = Permission.disabled(toolKeys, ruleset)
+    disabledCache.set(key, result)
+    if (disabledCache.size > DISABLED_CACHE_MAX) {
+      const oldest = disabledCache.keys().next().value
+      if (oldest !== undefined) disabledCache.delete(oldest)
+    }
+    return result
+  }
 
   async function resolveTools(
     input: Pick<StreamInput, "tools" | "agent" | "permission" | "user">,
@@ -835,16 +854,7 @@ export namespace LLM {
       permissionRulesetFromLegacyTools(input.user.tools),
     )
     const toolKeys = Object.keys(tools)
-    const toolKeysStr = toolKeys.join(",")
-    const key = JSON.stringify(ruleset)
-    const disabled =
-      _disabledCache?.key === key && _disabledCache.toolKeys === toolKeysStr
-        ? _disabledCache.result
-        : (() => {
-            const r = Permission.disabled(toolKeys, ruleset)
-            _disabledCache = { key, toolKeys: toolKeysStr, result: r }
-            return r
-          })()
+    const disabled = cachedDisabled(toolKeys, ruleset)
     for (const tool of toolKeys) {
       if (input.user.tools?.[tool] === false || disabled.has(tool)) {
         delete tools[tool]

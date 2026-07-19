@@ -67561,6 +67561,9 @@
         "limit": {
           "context": 500000,
           "output": 500000
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
       "minimax-m3-free": {
@@ -80963,6 +80966,9 @@
         "limit": {
           "context": 500000,
           "output": 500000
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
       "mimo-v2-pro": {
@@ -108723,7 +108729,8 @@
         "limit": {
           "context": 262144,
           "output": 262144
-        }
+        },
+        "status": "deprecated"
       },
       "Qwen/Qwen3.5-397B-A17B": {
         "id": "Qwen/Qwen3.5-397B-A17B",
@@ -108754,7 +108761,8 @@
         "limit": {
           "context": 262144,
           "output": 130000
-        }
+        },
+        "status": "deprecated"
       },
       "Qwen/Qwen3-Coder-Next-FP8": {
         "id": "Qwen/Qwen3-Coder-Next-FP8",
@@ -108858,7 +108866,8 @@
         "limit": {
           "context": 32768,
           "output": 32768
-        }
+        },
+        "status": "deprecated"
       },
       "nvidia/nemotron-3-ultra-550b-a55b": {
         "id": "nvidia/nemotron-3-ultra-550b-a55b",
@@ -109321,7 +109330,8 @@
         "limit": {
           "context": 202752,
           "output": 131072
-        }
+        },
+        "status": "deprecated"
       },
       "moonshotai/Kimi-K2.7-Code": {
         "id": "moonshotai/Kimi-K2.7-Code",
@@ -110601,32 +110611,6 @@
           "output": 8192
         }
       },
-      "meta/llama-3.2-1b": {
-        "id": "meta/llama-3.2-1b",
-        "name": "Llama 3.2 1B Instruct",
-        "description": "Open Llama instruction model for multilingual chat, reasoning, and coding",
-        "family": "llama",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "knowledge": "2023-12",
-        "release_date": "2024-09-25",
-        "last_updated": "2024-09-18",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 128000,
-          "output": 8192
-        }
-      },
       "meta/llama-3.1-70b": {
         "id": "meta/llama-3.1-70b",
         "name": "Llama 3.1 70B Instruct",
@@ -110692,86 +110676,6 @@
         "limit": {
           "context": 1048576,
           "output": 1048576
-        }
-      },
-      "meta/llama-3.2-3b": {
-        "id": "meta/llama-3.2-3b",
-        "name": "Llama 3.2 3B Instruct",
-        "description": "Open Llama instruction model for multilingual chat, reasoning, and coding",
-        "family": "llama",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "knowledge": "2023-12",
-        "release_date": "2024-09-25",
-        "last_updated": "2024-09-18",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 128000,
-          "output": 8192
-        }
-      },
-      "meta/llama-3.2-11b": {
-        "id": "meta/llama-3.2-11b",
-        "name": "Llama 3.2 11B Vision Instruct",
-        "description": "Open Llama multimodal model for image understanding and text reasoning",
-        "family": "llama",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2023-12",
-        "release_date": "2024-09-25",
-        "last_updated": "2024-09-25",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 128000,
-          "output": 8192
-        }
-      },
-      "meta/llama-3.2-90b": {
-        "id": "meta/llama-3.2-90b",
-        "name": "Llama 3.2 90B Vision Instruct",
-        "description": "Open Llama multimodal model for image understanding and text reasoning",
-        "family": "llama",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2023-12",
-        "release_date": "2024-09-25",
-        "last_updated": "2024-09-25",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 128000,
-          "output": 8192
         }
       },
       "meta/llama-4-scout": {
@@ -134198,39 +134102,6 @@
     "api": "http://localhost:11434/v1",
     "name": "Ollama",
     "models": {}
-  },
-  "kimi-cli": {
-    "id": "kimi-cli",
-    "name": "Kimi Code CLI",
-    "env": [],
-    "npm": "cli",
-    "models": {
-      "kimi-cli": {
-        "id": "kimi-cli",
-        "name": "Kimi Code CLI",
-        "family": "kimi",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": false,
-        "release_date": "2026-07-01",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "output": 16384
-        },
-        "options": {},
-        "status": "active"
-      }
-    }
   },
   "groq": {
     "id": "groq",

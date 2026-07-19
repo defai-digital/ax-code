@@ -298,11 +298,11 @@ jobs:
           fi
           KEY_DIR="$RUNNER_TEMP/ax-code-minisign"
           mkdir -p "$KEY_DIR"
-          printf '%s' "$AX_CODE_MINISIGN_SECRET_KEY_B64" | base64 -D > "$KEY_DIR/minisign.key"
-          chmod 600 "$KEY_DIR/minisign.key"
-          cat > "$KEY_DIR/minisign.pub" <<'PUB'
-          untrusted comment: minisign public key 5B7AB63CD6D674BE
-          RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A
+          printf '%s' "$AX_CODE_MINISIGN_SECRET_KEY_B64" | base64 -D > "$KEY_DIR/ax.minisign.key"
+          chmod 600 "$KEY_DIR/ax.minisign.key"
+          cat > "$KEY_DIR/ax.pub" <<'PUB'
+          untrusted comment: minisign public key CF42FC69BEEF0EA5
+          RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO
           PUB
           echo "AX_CODE_MINISIGN_KEY_DIR=$KEY_DIR" >> "$GITHUB_ENV"
 
@@ -315,22 +315,22 @@ jobs:
             exit 1
           fi
           security add-generic-password -U \
-            -s ax-code-minisign \
-            -a ax-code-release \
+            -s ax-minisign \
+            -a ax-release \
             -w "$AX_CODE_MINISIGN_PASSWORD"
-          echo "Minisign passphrase stored in macOS Keychain (service: ax-code-minisign, account: ax-code-release)"
+          echo "Minisign passphrase stored in macOS Keychain (service: ax-minisign, account: ax-release)"
 
       - name: Sign release assets
         run: |
           # AX_CODE_MINISIGN_PASSWORD is intentionally NOT exported here — the
           # signing script reads the passphrase from the macOS Keychain via
           # minisignPasswordFromKeychain() in sign-release-assets.ts.
-          pnpm exec tsx script/sign-release-assets.ts --dist-dir packages/ax-code/dist --secret-key "$AX_CODE_MINISIGN_KEY_DIR/minisign.key" --public-key "$AX_CODE_MINISIGN_KEY_DIR/minisign.pub"
+          pnpm exec tsx script/sign-release-assets.ts --dist-dir packages/ax-code/dist --secret-key "$AX_CODE_MINISIGN_KEY_DIR/ax.minisign.key" --public-key "$AX_CODE_MINISIGN_KEY_DIR/ax.pub"
           shopt -s nullglob
-          archives=(packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip)
-          for archive in "${archives[@]}"; do
-            if [ ! -f "${archive}.minisig" ]; then
-              echo "::error::missing minisign signature for ${archive}"
+          signable_assets=(packages/ax-code/dist/install.ps1 packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip)
+          for asset in "${signable_assets[@]}"; do
+            if [ ! -f "${asset}.minisig" ]; then
+              echo "::error::missing minisign signature for ${asset}"
               exit 1
             fi
           done
@@ -338,7 +338,7 @@ jobs:
       - name: Clean up Keychain passphrase
         if: always()
         run: |
-          security delete-generic-password -s ax-code-minisign -a ax-code-release 2>/dev/null || true
+          security delete-generic-password -s ax-minisign -a ax-release 2>/dev/null || true
 
       - name: Create GitHub release
         env:
@@ -353,7 +353,8 @@ jobs:
           # The release workflow publishes GitHub release assets and updates the
           # Homebrew tap (stable releases, see the homebrew job); npm
           # distribution is no longer supported.
-          # Idempotent: skip if any release (draft or published) already exists.
+          # Idempotent while the release is still a draft. Never mutate a
+          # published release before re-verifying all detached signatures.
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             VERSION="${TAG#v}"
             NOTES_FILE="packages/ax-code/.internal/release/release-notes-v${VERSION}.md"
@@ -366,9 +367,15 @@ jobs:
               --title "$TAG" \
               "${NOTES_ARGS[@]}" \
               --verify-tag \
+              --draft \
               "${PRERELEASE_ARGS[@]}"
           else
-            gh release edit "$TAG" --draft=false
+            IS_DRAFT="$(gh release view "$TAG" --json isDraft --jq '.isDraft')"
+            if [ "$IS_DRAFT" != "true" ]; then
+              echo "::error::release $TAG is already published; refusing to replace its assets"
+              exit 1
+            fi
+            echo "Continuing existing draft release $TAG"
           fi
 
       - name: Upload release assets
@@ -377,7 +384,7 @@ jobs:
         run: |
           TAG="${{ github.ref_name }}"
           shopt -s nullglob
-          files=(packages/ax-code/dist/install.ps1 packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.tar.gz.minisig packages/ax-code/dist/*.zip packages/ax-code/dist/*.zip.minisig)
+          files=(docs/ax-minisign.pub packages/ax-code/dist/install.ps1 packages/ax-code/dist/install.ps1.minisig packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.tar.gz.minisig packages/ax-code/dist/*.zip packages/ax-code/dist/*.zip.minisig)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "::error::no release assets found to upload"
             exit 1
@@ -385,6 +392,41 @@ jobs:
           for f in "${files[@]}"; do
             gh release upload "$TAG" "$f" --clobber
           done
+
+      - name: Verify uploaded release signatures
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          VERIFY_DIR="$RUNNER_TEMP/release-verify"
+          mkdir -p "$VERIFY_DIR"
+          gh release download "$TAG" --dir "$VERIFY_DIR" --clobber
+          cmp docs/ax-minisign.pub "$VERIFY_DIR/ax-minisign.pub"
+
+          verified=0
+          shopt -s nullglob
+          assets=("$VERIFY_DIR/install.ps1" "$VERIFY_DIR"/*.tar.gz "$VERIFY_DIR"/*.zip)
+          for asset in "${assets[@]}"; do
+            signature="${asset}.minisig"
+            test -f "$signature"
+            minisign -V -p docs/ax-minisign.pub -m "$asset" -x "$signature"
+            verified=$((verified + 1))
+          done
+          test "$verified" -gt 0
+
+      - name: Publish verified release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          IS_DRAFT="$(gh release view "$TAG" --json isDraft --jq '.isDraft')"
+          if [ "$IS_DRAFT" != "true" ]; then
+            echo "::error::release $TAG is no longer a draft; refusing to publish or mutate it"
+            exit 1
+          fi
+          gh release edit "$TAG" --draft=false
 
   homebrew:
     # Update the Homebrew tap automatically after a STABLE release. Beta /
@@ -398,6 +440,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+      - name: Install minisign
+        run: sudo apt-get update && sudo apt-get install -y minisign
       - name: Update Homebrew tap
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}

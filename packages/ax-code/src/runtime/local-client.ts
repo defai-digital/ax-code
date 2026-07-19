@@ -6,7 +6,7 @@ import { ServerRuntimeAuth } from "@/server/runtime-auth"
 
 export namespace RuntimeLocalClient {
   export function url() {
-    return Server.url ?? new URL(`http://localhost:${DEFAULT_SERVER_PORT}`)
+    return Server.currentUrl()
   }
 
   export function create(input: { directory: string }) {

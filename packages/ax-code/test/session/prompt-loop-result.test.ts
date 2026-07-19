@@ -66,4 +66,23 @@ describe("resolvePromptLoopResult", () => {
       ),
     ).rejects.toThrow("Aborted")
   })
+
+  test("ignores stale assistant messages when an exact turn message is expected", async () => {
+    const current = message("assistant", "msg_current")
+
+    const result = await resolvePromptLoopResult(
+      {
+        sessionID: SessionID.descending(),
+        abort: new AbortController().signal,
+        expectedMessageID: current.info.id,
+        shiftQueuedCallback: () => undefined,
+      },
+      {
+        prune: async () => {},
+        stream: (() => stream([message("assistant", "msg_stale"), current])) as any,
+      },
+    )
+
+    expect(result).toBe(current)
+  })
 })

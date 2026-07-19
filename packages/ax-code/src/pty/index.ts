@@ -276,9 +276,9 @@ export namespace Pty {
     try {
       session.process.kill()
     } catch {}
-    for (const [key, ws] of session.subscribers.entries()) {
+    for (const ws of session.subscribers.values()) {
       try {
-        if (ws.data === key) ws.close()
+        ws.close()
       } catch {}
     }
     session.subscribers.clear()

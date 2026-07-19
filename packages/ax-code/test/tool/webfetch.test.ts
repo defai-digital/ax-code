@@ -273,6 +273,47 @@ describe("tool.webfetch", () => {
     )
   })
 
+  test("asks permission again when a redirect changes origin", async () => {
+    let calls = 0
+    const permissions: string[][] = []
+
+    await withFetch(
+      async () => {
+        calls++
+        if (calls === 1) {
+          return new Response(null, {
+            status: 302,
+            headers: { location: "https://93.184.216.35/final.txt" },
+          })
+        }
+        return new Response("redirected", {
+          status: 200,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        })
+      },
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            const result = await webfetch.execute(
+              { url: "https://93.184.216.34/start.txt", format: "text" },
+              {
+                ...ctx,
+                ask: async (request: Omit<Permission.Request, "id" | "sessionID" | "tool">) => {
+                  permissions.push(request.patterns)
+                },
+              },
+            )
+
+            expect(result.output).toBe("redirected")
+            expect(permissions).toEqual([["https://93.184.216.34/start.txt"], ["https://93.184.216.35/final.txt"]])
+          },
+        })
+      },
+    )
+  })
+
   test("cancels non-ok response bodies before throwing", async () => {
     let cancelled = 0
     const body = new ReadableStream({

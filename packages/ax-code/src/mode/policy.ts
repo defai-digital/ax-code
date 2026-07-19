@@ -25,6 +25,7 @@ export namespace ModePolicy {
     arena?: {
       enabled?: boolean
       maxContestants?: number
+      timeoutMs?: number
       strategy?: "verify_first" | "diversity" | "hybrid_score"
     }
     budget?: {
@@ -103,8 +104,7 @@ export namespace ModePolicy {
   export function resolveMode(config: ModesConfig, signals: ModeSignals): ModeDecision {
     const reasons: string[] = []
     const requested = signals.requestedMode ?? null
-    const configuredDefault: ModeId =
-      config.default ?? (signals.localAvailable ? "hybrid" : "cloud")
+    const configuredDefault: ModeId = config.default ?? (signals.localAvailable ? "hybrid" : "cloud")
 
     let mode: ModeId = requested ?? configuredDefault
     if (requested) reasons.push(`requested:${requested}`)

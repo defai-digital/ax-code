@@ -27,12 +27,12 @@ import { isRecord } from "@/util/record"
 import { KeyedSerialQueue } from "@/util/queue"
 import { Shell } from "../shell/shell"
 import { convertMcpTool, mcpItemKey, mcpToolPermissionKey, type ConvertedMcpTool } from "./tool-conversion"
+import { MCP_DEFAULT_TIMEOUT_MS } from "./constants"
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
-  const DEFAULT_TIMEOUT = 30_000
+  const DEFAULT_TIMEOUT = MCP_DEFAULT_TIMEOUT_MS
   const MAX_STDERR_LINE = 2_000
-  const SECRET_PATTERN = /(?:token|secret|password|credential|authorization|api[_-]?key)=?[^ \t\r\n]*/gi
   const isErrnoException = (error: unknown): error is NodeJS.ErrnoException =>
     error instanceof Error && "code" in error && typeof (error as NodeJS.ErrnoException).code === "string"
 
@@ -237,9 +237,12 @@ export namespace MCP {
     })
   }
   const pendingOAuthTransports = new Map<string, TransportWithAuth>()
+  const explicitOAuthTransports = new Set<TransportWithAuth>()
+  let oauthCallbackUsers = 0
   async function closePendingOAuthTransport(mcpName: string) {
     const transport = pendingOAuthTransports.get(mcpName)
     pendingOAuthTransports.delete(mcpName)
+    if (transport) explicitOAuthTransports.delete(transport)
     await transport?.close?.().catch((error) => {
       log.debug("failed to close pending oauth transport", { mcpName, error })
     })
@@ -247,6 +250,7 @@ export namespace MCP {
   async function closeAllPendingOAuthTransports() {
     const transports = [...pendingOAuthTransports.entries()]
     pendingOAuthTransports.clear()
+    explicitOAuthTransports.clear()
     await Promise.all(
       transports.map(async ([mcpName, transport]) => {
         await transport.close?.().catch((error) => {
@@ -254,6 +258,25 @@ export namespace MCP {
         })
       }),
     )
+  }
+  async function stopOAuthCallbackIfIdle(context: string) {
+    if (oauthCallbackUsers > 0 || explicitOAuthTransports.size > 0) return
+    await McpOAuthCallback.stopIfIdle().catch((error) => {
+      log.debug("failed to stop idle oauth callback listener", { context, error })
+    })
+  }
+  async function acquireOAuthCallback() {
+    oauthCallbackUsers++
+    try {
+      await McpOAuthCallback.ensureRunning()
+    } catch (error) {
+      oauthCallbackUsers--
+      throw error
+    }
+  }
+  async function releaseOAuthCallback(context: string) {
+    oauthCallbackUsers = Math.max(0, oauthCallbackUsers - 1)
+    await stopOAuthCallbackIfIdle(context)
   }
   // Prompt cache types
   type PromptInfo = Awaited<ReturnType<MCPClient["listPrompts"]>>["prompts"][number]
@@ -329,6 +352,10 @@ export namespace MCP {
       cachedTools = undefined
       toolsPromise = undefined
       await closeAllPendingOAuthTransports()
+      // The callback listener is process-global and otherwise keeps one-shot
+      // commands alive after their instance has been disposed. Do not disrupt
+      // an authorization flow owned by another concurrent instance.
+      await stopOAuthCallbackIfIdle("instance shutdown")
       // Drop any in-flight connect promises tracked here so a graceful
       // instance shutdown doesn't leave entries pointing at promises
       // that still resolve and try to write to state we just tore down.
@@ -478,154 +505,162 @@ export namespace MCP {
     let status: Status | undefined = undefined
 
     if (mcp.type === "remote") {
-      // OAuth is enabled by default for remote servers unless explicitly disabled with oauth: false
-      const oauthDisabled = mcp.oauth === false
-      const oauthConfig = isRecord(mcp.oauth) ? mcp.oauth : undefined
-      let authProvider: McpOAuthProvider | undefined
+      let callbackListenerStarted = false
+      try {
+        // OAuth is enabled by default for remote servers unless explicitly disabled with oauth: false
+        const oauthDisabled = mcp.oauth === false
+        const oauthConfig = isRecord(mcp.oauth) ? mcp.oauth : undefined
+        let authProvider: McpOAuthProvider | undefined
 
-      if (!oauthDisabled) {
-        // Open callback listener first so the OAuth redirect URI is always bound
-        // to a real local port before creating the provider or attempting
-        // discovery/registration.
-        await McpOAuthCallback.ensureRunning()
+        if (!oauthDisabled) {
+          // Open callback listener first so the OAuth redirect URI is always bound
+          // to a real local port before creating the provider or attempting
+          // discovery/registration.
+          await acquireOAuthCallback()
+          callbackListenerStarted = true
 
-        authProvider = new McpOAuthProvider(
-          key,
-          mcp.url,
-          {
-            clientId: oauthConfig?.clientId,
-            clientSecret: oauthConfig?.clientSecret,
-            scope: oauthConfig?.scope,
-          },
-          {
-            onRedirect: async (url) => {
-              log.info("oauth redirect requested", { key, url: url.toString() })
-              // Store the URL - actual browser opening is handled by startAuth
+          authProvider = new McpOAuthProvider(
+            key,
+            mcp.url,
+            {
+              clientId: oauthConfig?.clientId,
+              clientSecret: oauthConfig?.clientSecret,
+              scope: oauthConfig?.scope,
             },
+            {
+              onRedirect: async (url) => {
+                log.info("oauth redirect requested", { key, url: url.toString() })
+                // Store the URL - actual browser opening is handled by startAuth
+              },
+            },
+          )
+        }
+
+        await Ssrf.assertPublicUrl(mcp.url, "mcp")
+        const requestInit = remoteRequestInit(mcp.headers)
+        const fetch = pinnedMcpFetch("mcp")
+
+        const transports: Array<{ name: string; transport: TransportWithAuth }> = [
+          {
+            name: "StreamableHTTP",
+            transport: new StreamableHTTPClientTransport(new URL(mcp.url), {
+              authProvider,
+              requestInit,
+              fetch,
+            }),
           },
-        )
-      }
+          {
+            name: "SSE",
+            transport: new SSEClientTransport(new URL(mcp.url), {
+              authProvider,
+              requestInit,
+              fetch,
+            }),
+          },
+        ]
 
-      await Ssrf.assertPublicUrl(mcp.url, "mcp")
-      const requestInit = remoteRequestInit(mcp.headers)
-      const fetch = pinnedMcpFetch("mcp")
+        let lastError: Error | undefined
+        const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
+        for (let i = 0; i < transports.length; i++) {
+          const { name, transport } = transports[i]!
+          let client: MCPClient | undefined
+          try {
+            client = createClient()
+            await withTimeout(client.connect(transport), connectTimeout)
+            rememberClientTransport(client, transport)
+            registerNotificationHandlers(client, key)
+            mcpClient = client
+            log.info("connected", { key, transport: name })
+            status = { status: "connected" }
 
-      const transports: Array<{ name: string; transport: TransportWithAuth }> = [
-        {
-          name: "StreamableHTTP",
-          transport: new StreamableHTTPClientTransport(new URL(mcp.url), {
-            authProvider,
-            requestInit,
-            fetch,
-          }),
-        },
-        {
-          name: "SSE",
-          transport: new SSEClientTransport(new URL(mcp.url), {
-            authProvider,
-            requestInit,
-            fetch,
-          }),
-        },
-      ]
-
-      let lastError: Error | undefined
-      const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
-      for (let i = 0; i < transports.length; i++) {
-        const { name, transport } = transports[i]!
-        let client: MCPClient | undefined
-        try {
-          client = createClient()
-          await withTimeout(client.connect(transport), connectTimeout)
-          rememberClientTransport(client, transport)
-          registerNotificationHandlers(client, key)
-          mcpClient = client
-          log.info("connected", { key, transport: name })
-          status = { status: "connected" }
-
-          // Close transports that were never tried. This keeps constructor-created
-          // clients from leaking sockets (notably SSE when StreamableHTTP succeeds).
-          for (let j = i + 1; j < transports.length; j++) {
-            await transports[j].transport.close?.().catch(() => {})
-          }
-          break
-        } catch (error) {
-          lastError = toError(error)
-
-          // Handle OAuth-specific errors.
-          // The SDK throws UnauthorizedError when auth() returns 'REDIRECT',
-          // but may also throw plain Errors when auth() fails internally
-          // (e.g. during discovery, registration, or state generation).
-          // When an authProvider is attached, treat both cases as auth-related.
-          const isAuthError =
-            error instanceof UnauthorizedError || (authProvider && lastError.message.includes("OAuth"))
-          if (isAuthError) {
-            log.info("mcp server requires authentication", { key, transport: name })
-
-            // Check if this is a "needs registration" error — includes the
-            // case where the server rejects dynamic registration with a
-            // non-JSON body (HTTP 403 Forbidden), which the SDK wraps as a
-            // cryptic SyntaxError inside "Invalid OAuth error response".
-            if (isDynamicRegistrationRejection(lastError.message)) {
-              // Registration failure: nothing left to reuse — close client
-              // and the failed transport.
-              if (client) {
-                await closeIfPossible(client, key, `connect attempt failed (${name})`)
-              }
-              await transport.close?.().catch(() => {})
-              status = {
-                status: "needs_client_registration" as const,
-                error: "Server does not support dynamic client registration. Please provide clientId in config.",
-              }
-              // Show toast for needs_client_registration
-              Bus.publishDetached(NotificationEvent.ToastShow, {
-                title: "MCP Authentication Required",
-                message: `Server "${key}" requires a pre-registered client ID. Add clientId to your config.`,
-                variant: "warning",
-                duration: TOAST_DURATION_LONG_MS,
-              })
-            } else {
-              // needs_auth path: the client/transport will be reused by
-              // `finishAuth` once the user completes the OAuth flow.
-              // Closing the client here would close the underlying
-              // transport too (the SDK chains close), so by the time
-              // finishAuth tried to call `transport.finishAuth(code)` the
-              // transport would already be dead. Leave both open and only
-              // close the *other* untried candidates.
-              for (let j = i + 1; j < transports.length; j++) {
-                await transports[j].transport.close?.().catch(() => {})
-              }
-              await closePendingOAuthTransport(key)
-              pendingOAuthTransports.set(key, transport)
-              status = { status: "needs_auth" as const }
-              // Show toast for needs_auth
-              Bus.publishDetached(NotificationEvent.ToastShow, {
-                title: "MCP Authentication Required",
-                message: `Server "${key}" requires authentication. Run: ax-code mcp auth ${key}`,
-                variant: "warning",
-                duration: TOAST_DURATION_LONG_MS,
-              })
+            // Close transports that were never tried. This keeps constructor-created
+            // clients from leaking sockets (notably SSE when StreamableHTTP succeeds).
+            for (let j = i + 1; j < transports.length; j++) {
+              await transports[j].transport.close?.().catch(() => {})
             }
             break
-          }
+          } catch (error) {
+            lastError = toError(error)
 
-          // Non-auth error: clean up everything before falling through to
-          // the next transport candidate.
-          if (client) {
-            await closeIfPossible(client, key, `connect attempt failed (${name})`)
-          }
-          await transport.close?.().catch(() => {})
-          log.debug("transport connection failed", {
-            key,
-            transport: name,
-            url: mcp.url,
-            error: lastError.message,
-          })
-          status = {
-            status: "failed" as const,
-            error: lastError.message,
+            // Handle OAuth-specific errors.
+            // The SDK throws UnauthorizedError when auth() returns 'REDIRECT',
+            // but may also throw plain Errors when auth() fails internally
+            // (e.g. during discovery, registration, or state generation).
+            // When an authProvider is attached, treat both cases as auth-related.
+            const isAuthError =
+              error instanceof UnauthorizedError || (authProvider && lastError.message.includes("OAuth"))
+            if (isAuthError) {
+              log.info("mcp server requires authentication", { key, transport: name })
+
+              // Check if this is a "needs registration" error — includes the
+              // case where the server rejects dynamic registration with a
+              // non-JSON body (HTTP 403 Forbidden), which the SDK wraps as a
+              // cryptic SyntaxError inside "Invalid OAuth error response".
+              if (isDynamicRegistrationRejection(lastError.message)) {
+                // Registration failure: nothing left to reuse — close client
+                // and the failed transport.
+                if (client) {
+                  await closeIfPossible(client, key, `connect attempt failed (${name})`)
+                }
+                await transport.close?.().catch(() => {})
+                status = {
+                  status: "needs_client_registration" as const,
+                  error: "Server does not support dynamic client registration. Please provide clientId in config.",
+                }
+                // Show toast for needs_client_registration
+                Bus.publishDetached(NotificationEvent.ToastShow, {
+                  title: "MCP Authentication Required",
+                  message: `Server "${key}" requires a pre-registered client ID. Add clientId to your config.`,
+                  variant: "warning",
+                  duration: TOAST_DURATION_LONG_MS,
+                })
+              } else {
+                // needs_auth path: the client/transport will be reused by
+                // `finishAuth` once the user completes the OAuth flow.
+                // Closing the client here would close the underlying
+                // transport too (the SDK chains close), so by the time
+                // finishAuth tried to call `transport.finishAuth(code)` the
+                // transport would already be dead. Leave both open and only
+                // close the *other* untried candidates.
+                for (let j = i + 1; j < transports.length; j++) {
+                  await transports[j].transport.close?.().catch(() => {})
+                }
+                await closePendingOAuthTransport(key)
+                pendingOAuthTransports.set(key, transport)
+                status = { status: "needs_auth" as const }
+                // Show toast for needs_auth
+                Bus.publishDetached(NotificationEvent.ToastShow, {
+                  title: "MCP Authentication Required",
+                  message: `Server "${key}" requires authentication. Run: ax-code mcp auth ${key}`,
+                  variant: "warning",
+                  duration: TOAST_DURATION_LONG_MS,
+                })
+              }
+              break
+            }
+
+            // Non-auth error: clean up everything before falling through to
+            // the next transport candidate.
+            if (client) {
+              await closeIfPossible(client, key, `connect attempt failed (${name})`)
+            }
+            await transport.close?.().catch(() => {})
+            log.debug("transport connection failed", {
+              key,
+              transport: name,
+              url: mcp.url,
+              error: lastError.message,
+            })
+            status = {
+              status: "failed" as const,
+              error: lastError.message,
+            }
           }
         }
+      } finally {
+        // Initial capability detection does not wait for a browser callback.
+        // Keep the listener only for an explicit authentication flow.
+        if (callbackListenerStarted) await releaseOAuthCallback("initial capability detection")
       }
     }
 
@@ -651,7 +686,7 @@ export namespace MCP {
         },
       })
       const onStderr = (chunk: Buffer) => {
-        const line = chunk.toString().trimEnd().replaceAll(SECRET_PATTERN, "[redacted]").slice(0, MAX_STDERR_LINE)
+        const line = Env.redactSecrets(chunk.toString().trimEnd()).slice(0, MAX_STDERR_LINE)
         if (line) log.info("mcp stderr", { key, line })
       }
       transport.stderr?.on("data", onStderr)
@@ -1168,77 +1203,82 @@ export namespace MCP {
       throw new Error(`MCP server ${mcpName} has OAuth explicitly disabled`)
     }
 
-    // Start the callback server
-    await McpOAuthCallback.ensureRunning()
-
-    const oauthState =
-      (await McpAuth.getOAuthState(mcpName)) ??
-      Array.from(crypto.getRandomValues(new Uint8Array(32)))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("")
-    await McpAuth.updateOAuthState(mcpName, oauthState)
-
-    // Create a new auth provider for this flow
-    // OAuth config is optional - if not provided, we'll use auto-discovery
-    const oauthConfig = isRecord(mcpConfig.oauth) ? mcpConfig.oauth : undefined
-    let capturedUrl: URL | undefined
-    const authProvider = new McpOAuthProvider(
-      mcpName,
-      mcpConfig.url,
-      {
-        clientId: oauthConfig?.clientId,
-        clientSecret: oauthConfig?.clientSecret,
-        scope: oauthConfig?.scope,
-      },
-      {
-        onRedirect: async (url) => {
-          capturedUrl = url
-        },
-      },
-      oauthState,
-    )
-
-    // Create transport with auth provider
-    const transport = new StreamableHTTPClientTransport(new URL(mcpConfig.url), {
-      authProvider,
-      requestInit: remoteRequestInit(mcpConfig.headers),
-      fetch: pinnedMcpFetch("mcp-auth"),
-    })
-    const client = createClient()
-
-    // Try to connect - this will trigger the OAuth flow
+    // Hold a listener lease during discovery/registration so concurrent MCP
+    // probes cannot stop or rebind the callback port mid-flow.
+    await acquireOAuthCallback()
     try {
-      await client.connect(transport)
-      // If we get here, we're already authenticated.
-      await transport.close?.().catch(() => {})
-      await closeIfPossible(client, mcpName, "startAuth authenticated")
-      await McpAuth.clearOAuthState(mcpName).catch(() => {})
-      return { authorizationUrl: "", oauthState }
-    } catch (error) {
-      if (!error) {
-        throw new Error("Unknown OAuth error")
+      const oauthState =
+        (await McpAuth.getOAuthState(mcpName)) ??
+        Array.from(crypto.getRandomValues(new Uint8Array(32)))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("")
+      await McpAuth.updateOAuthState(mcpName, oauthState)
+
+      // Create a new auth provider for this flow
+      // OAuth config is optional - if not provided, we'll use auto-discovery
+      const oauthConfig = isRecord(mcpConfig.oauth) ? mcpConfig.oauth : undefined
+      let capturedUrl: URL | undefined
+      const authProvider = new McpOAuthProvider(
+        mcpName,
+        mcpConfig.url,
+        {
+          clientId: oauthConfig?.clientId,
+          clientSecret: oauthConfig?.clientSecret,
+          scope: oauthConfig?.scope,
+        },
+        {
+          onRedirect: async (url) => {
+            capturedUrl = url
+          },
+        },
+        oauthState,
+      )
+
+      // Create transport with auth provider
+      const transport = new StreamableHTTPClientTransport(new URL(mcpConfig.url), {
+        authProvider,
+        requestInit: remoteRequestInit(mcpConfig.headers),
+        fetch: pinnedMcpFetch("mcp-auth"),
+      })
+      const client = createClient()
+
+      // Try to connect - this will trigger the OAuth flow
+      try {
+        await withTimeout(client.connect(transport), mcpConfig.timeout ?? DEFAULT_TIMEOUT)
+        // If we get here, we're already authenticated.
+        await transport.close?.().catch(() => {})
+        await closeIfPossible(client, mcpName, "startAuth authenticated")
+        await McpAuth.clearOAuthState(mcpName).catch(() => {})
+        return { authorizationUrl: "", oauthState }
+      } catch (error) {
+        if (!error) {
+          throw new Error("Unknown OAuth error")
+        }
+        if (error instanceof UnauthorizedError && capturedUrl) {
+          // Store transport for finishAuth
+          await closePendingOAuthTransport(mcpName)
+          pendingOAuthTransports.set(mcpName, transport)
+          explicitOAuthTransports.add(transport)
+          return { authorizationUrl: capturedUrl.toString(), oauthState }
+        }
+        // Clear stale OAuth state so retry starts fresh
+        await McpAuth.clearOAuthState(mcpName).catch(() => {})
+        await transport.close?.().catch(() => {})
+        await closeIfPossible(client, mcpName, "startAuth error recovery")
+        // Surface an actionable message when dynamic client registration was
+        // rejected with a non-JSON body (e.g. Figma returns HTTP 403
+        // "Forbidden" and the SDK wraps it as a SyntaxError).
+        const errMsg = toErrorMessage(error)
+        if (isDynamicRegistrationRejection(errMsg)) {
+          throw new Error(
+            `Dynamic client registration was rejected by "${mcpName}". ` +
+              `The server may require a pre-registered client ID — provide oauth.clientId and oauth.clientSecret in your MCP config.`,
+          )
+        }
+        throw error
       }
-      if (error instanceof UnauthorizedError && capturedUrl) {
-        // Store transport for finishAuth
-        await closePendingOAuthTransport(mcpName)
-        pendingOAuthTransports.set(mcpName, transport)
-        return { authorizationUrl: capturedUrl.toString(), oauthState }
-      }
-      // Clear stale OAuth state so retry starts fresh
-      await McpAuth.clearOAuthState(mcpName).catch(() => {})
-      await transport.close?.().catch(() => {})
-      await closeIfPossible(client, mcpName, "startAuth error recovery")
-      // Surface an actionable message when dynamic client registration was
-      // rejected with a non-JSON body (e.g. Figma returns HTTP 403
-      // "Forbidden" and the SDK wraps it as a SyntaxError).
-      const errMsg = toErrorMessage(error)
-      if (isDynamicRegistrationRejection(errMsg)) {
-        throw new Error(
-          `Dynamic client registration was rejected by "${mcpName}". ` +
-            `The server may require a pre-registered client ID — provide oauth.clientId and oauth.clientSecret in your MCP config.`,
-        )
-      }
-      throw error
+    } finally {
+      await releaseOAuthCallback("startAuth setup completed")
     }
   }
 
@@ -1247,67 +1287,74 @@ export namespace MCP {
    * Opens the browser and waits for callback.
    */
   export async function authenticate(mcpName: string): Promise<Status> {
-    const { authorizationUrl, oauthState } = await startAuth(mcpName)
-
-    if (!authorizationUrl) {
-      // Already authenticated
-      const s = await state()
-      return s.status[mcpName] ?? { status: "connected" }
-    }
-
-    if (!oauthState) {
-      throw new Error("OAuth state not found - this should not happen")
-    }
-
-    // The SDK has already added the state parameter to the authorization URL
-    // We just need to open the browser
-    log.info("opening browser for oauth", { mcpName, url: authorizationUrl, state: oauthState })
-
-    // Register the callback BEFORE opening the browser to avoid race condition
-    // when the IdP has an active SSO session and redirects immediately
-    const callbackPromise = McpOAuthCallback.waitForCallback(oauthState, mcpName)
-
     try {
-      const subprocess = await open(authorizationUrl)
-      // The open package spawns a detached process and returns immediately.
-      // We need to listen for errors which fire asynchronously:
-      // - "error" event: command not found (ENOENT)
-      // - "exit" with non-zero code: command exists but failed (e.g., no display)
-      await new Promise<void>((resolve, reject) => {
-        const proc = subprocess as unknown as {
-          on(event: "error", listener: (error: Error) => void): void
-          on(event: "exit", listener: (code: number | null) => void): void
-        }
-        // Give the process a moment to fail if it's going to
-        const timeout = setTimeout(() => resolve(), 500)
-        proc.on("error", (error) => {
-          clearTimeout(timeout)
-          reject(error)
-        })
-        proc.on("exit", (code) => {
-          if (code !== null && code !== 0) {
-            clearTimeout(timeout)
-            reject(new Error(`Browser open failed with exit code ${code}`))
+      const { authorizationUrl, oauthState } = await startAuth(mcpName)
+
+      if (!authorizationUrl) {
+        // Already authenticated
+        const s = await state()
+        return s.status[mcpName] ?? { status: "connected" }
+      }
+
+      if (!oauthState) {
+        throw new Error("OAuth state not found - this should not happen")
+      }
+
+      // The SDK has already added the state parameter to the authorization URL
+      // We just need to open the browser
+      log.info("opening browser for oauth", { mcpName, url: authorizationUrl, state: oauthState })
+
+      // Register the callback BEFORE opening the browser to avoid race condition
+      // when the IdP has an active SSO session and redirects immediately
+      const callbackPromise = McpOAuthCallback.waitForCallback(oauthState, mcpName)
+
+      try {
+        const subprocess = await open(authorizationUrl)
+        // The open package spawns a detached process and returns immediately.
+        // We need to listen for errors which fire asynchronously:
+        // - "error" event: command not found (ENOENT)
+        // - "exit" with non-zero code: command exists but failed (e.g., no display)
+        await new Promise<void>((resolve, reject) => {
+          const proc = subprocess as unknown as {
+            on(event: "error", listener: (error: Error) => void): void
+            on(event: "exit", listener: (code: number | null) => void): void
           }
+          // Give the process a moment to fail if it's going to
+          const timeout = setTimeout(() => resolve(), 500)
+          proc.on("error", (error) => {
+            clearTimeout(timeout)
+            reject(error)
+          })
+          proc.on("exit", (code) => {
+            if (code !== null && code !== 0) {
+              clearTimeout(timeout)
+              reject(new Error(`Browser open failed with exit code ${code}`))
+            }
+          })
         })
-      })
+      } catch (error) {
+        // Browser opening failed (e.g., in remote/headless sessions like SSH, devcontainers)
+        // Emit event so CLI can display the URL for manual opening
+        log.warn("failed to open browser, user must open URL manually", { mcpName, error })
+        Bus.publishDetached(BrowserOpenFailed, { mcpName, url: authorizationUrl })
+      }
+
+      // Wait for callback using the already-registered promise
+      const code = await callbackPromise
+
+      // The callback waiter already validated the state against the request that
+      // initiated this flow. Only clear the persisted state if it still matches
+      // this flow so a concurrent replacement flow does not get torn down here.
+      await McpAuth.clearOAuthStateIfMatches(mcpName, oauthState)
+
+      // Finish auth
+      return await finishAuth(mcpName, code)
     } catch (error) {
-      // Browser opening failed (e.g., in remote/headless sessions like SSH, devcontainers)
-      // Emit event so CLI can display the URL for manual opening
-      log.warn("failed to open browser, user must open URL manually", { mcpName, error })
-      Bus.publishDetached(BrowserOpenFailed, { mcpName, url: authorizationUrl })
+      await closePendingOAuthTransport(mcpName)
+      throw error
+    } finally {
+      await stopOAuthCallbackIfIdle("authenticate completed")
     }
-
-    // Wait for callback using the already-registered promise
-    const code = await callbackPromise
-
-    // The callback waiter already validated the state against the request that
-    // initiated this flow. Only clear the persisted state if it still matches
-    // this flow so a concurrent replacement flow does not get torn down here.
-    await McpAuth.clearOAuthStateIfMatches(mcpName, oauthState)
-
-    // Finish auth
-    return finishAuth(mcpName, code)
   }
 
   /**
@@ -1354,7 +1401,9 @@ export namespace MCP {
       if (pendingOAuthTransports.get(mcpName) === transport) {
         pendingOAuthTransports.delete(mcpName)
       }
+      explicitOAuthTransports.delete(transport)
       await transport.close?.().catch(() => {})
+      await stopOAuthCallbackIfIdle("finishAuth completed")
     }
   }
 
@@ -1365,6 +1414,7 @@ export namespace MCP {
     await McpAuth.remove(mcpName)
     McpOAuthCallback.cancelPending(mcpName)
     await closePendingOAuthTransport(mcpName)
+    await stopOAuthCallbackIfIdle("removeAuth completed")
     log.info("removed oauth credentials", { mcpName })
   }
 

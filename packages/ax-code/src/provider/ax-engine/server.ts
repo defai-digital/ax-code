@@ -5,6 +5,7 @@ import z from "zod"
 import { FileLock } from "@/util/filelock"
 import { Filesystem } from "@/util/filesystem"
 import { Process } from "@/util/process"
+import { Env } from "@/util/env"
 import {
   AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
   AX_ENGINE_DEFAULT_PORT,
@@ -537,7 +538,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
         // Inject the resolved provider value so configured credentials and
         // client probes always agree without exposing the secret in `ps`.
         env: {
-          ...process.env,
+          ...Env.sanitize(process.env),
           AX_ENGINE_API_KEY: options.apiKey ?? resolveAxEngineApiKey(),
         },
       },

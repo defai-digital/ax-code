@@ -14,6 +14,10 @@ import { git } from "@/util/git"
 export namespace Storage {
   const log = Log.create({ service: "storage" })
 
+  function legacyWorktreePath(value: unknown): string | undefined {
+    return typeof value === "string" && value.length > 0 && path.isAbsolute(value) ? value : undefined
+  }
+
   type Migration = (dir: string) => Promise<void>
 
   export const NotFoundError = NamedError.create(
@@ -37,83 +41,140 @@ export namespace Storage {
         log.info(`migrating project ${projectDir}`)
         let projectID = projectDir
         const fullProjectDir = path.join(project, projectDir)
-        let worktree = "/"
+        let worktree: string | undefined
 
         if (projectID !== "global") {
+          const legacySessionFiles = await Glob.scan("storage/session/info/*.json", {
+            cwd: fullProjectDir,
+            absolute: true,
+          })
           for (const msgFile of await Glob.scan("storage/session/message/*/*.json", {
             cwd: path.join(project, projectDir),
             absolute: true,
           })) {
             try {
               const json = await Filesystem.readJson<any>(msgFile)
-              worktree = json.path?.root
+              worktree = legacyWorktreePath(json.path?.root)
               if (worktree) break
             } catch {
               log.warn("skipping corrupted message file during migration", { file: msgFile })
             }
           }
-          if (!worktree) continue
-          if (!(await Filesystem.isDir(worktree))) continue
-          const result = await git(["rev-list", "--max-parents=0", "--all"], {
-            cwd: worktree,
-          })
-          const [id] = result
-            .text()
-            .split("\n")
-            .filter(Boolean)
-            .map((x) => x.trim())
-            .toSorted()
-          if (!id) continue
-          projectID = id
+          if (!worktree) {
+            for (const sessionFile of legacySessionFiles) {
+              try {
+                const session = await Filesystem.readJson<any>(sessionFile)
+                worktree = legacyWorktreePath(session.directory) ?? legacyWorktreePath(session.path?.root)
+                if (worktree) break
+              } catch {
+                log.warn("skipping corrupted session while recovering legacy worktree", { file: sessionFile })
+              }
+            }
+          }
+          let vcs: "git" | undefined
+          if (worktree && (await Filesystem.isDir(worktree))) {
+            try {
+              const result = await git(["rev-list", "--max-parents=0", "--all"], {
+                cwd: worktree,
+              })
+              const [id] = result
+                .text()
+                .split("\n")
+                .filter(Boolean)
+                .map((x) => x.trim())
+                .toSorted()
+              if (id) {
+                projectID = id
+                vcs = "git"
+              } else {
+                log.warn("legacy project has no root commit; preserving its directory ID", {
+                  projectDir,
+                  worktree,
+                })
+              }
+            } catch (error) {
+              log.warn("failed to identify legacy project; preserving its directory ID", {
+                projectDir,
+                worktree,
+                error,
+              })
+            }
+          } else {
+            // Never silently discard all history because the first readable
+            // message is missing its old worktree metadata. The legacy
+            // directory name is already a stable project identifier and is a
+            // safer recovery key than advancing the migration past the data.
+            log.warn("legacy project has no readable worktree; preserving its directory ID", {
+              projectDir,
+            })
+          }
 
+          // The subsequent JSON→SQLite migration requires a parent project
+          // record. Without this fallback, successfully copied sessions are
+          // classified as orphans and disappear from history.
+          const now = Date.now()
           await Filesystem.writeJson(path.join(dir, "project", projectID + ".json"), {
-            id,
-            vcs: "git",
-            worktree,
+            id: projectID,
+            ...(vcs ? { vcs } : {}),
+            // Keep the fallback scoped to this legacy record. Using `/` here
+            // would make an unresolved migration look like a project rooted
+            // at the entire filesystem when it is later loaded.
+            worktree: worktree ?? fullProjectDir,
             time: {
-              created: Date.now(),
-              initialized: Date.now(),
+              created: now,
+              updated: now,
+              initialized: now,
             },
+            sandboxes: [],
           })
 
           log.info(`migrating sessions for project ${projectID}`)
-          for (const sessionFile of await Glob.scan("storage/session/info/*.json", {
-            cwd: fullProjectDir,
-            absolute: true,
-          })) {
-            const dest = path.join(dir, "session", projectID, path.basename(sessionFile))
-            log.info("copying", {
-              sessionFile,
-              dest,
-            })
-            const session = await Filesystem.readJson<any>(sessionFile)
-            await Filesystem.writeJson(dest, session)
-            log.info(`migrating messages for session ${session.id}`)
-            for (const msgFile of await Glob.scan(`storage/session/message/${session.id}/*.json`, {
-              cwd: fullProjectDir,
-              absolute: true,
-            })) {
-              const dest = path.join(dir, "message", session.id, path.basename(msgFile))
+          for (const sessionFile of legacySessionFiles) {
+            try {
+              const dest = path.join(dir, "session", projectID, path.basename(sessionFile))
               log.info("copying", {
-                msgFile,
+                sessionFile,
                 dest,
               })
-              const message = await Filesystem.readJson<any>(msgFile)
-              await Filesystem.writeJson(dest, message)
-
-              log.info(`migrating parts for message ${message.id}`)
-              for (const partFile of await Glob.scan(`storage/session/part/${session.id}/${message.id}/*.json`, {
+              const session = await Filesystem.readJson<any>(sessionFile)
+              await Filesystem.writeJson(dest, session)
+              log.info(`migrating messages for session ${session.id}`)
+              for (const msgFile of await Glob.scan(`storage/session/message/${session.id}/*.json`, {
                 cwd: fullProjectDir,
                 absolute: true,
               })) {
-                const dest = path.join(dir, "part", message.id, path.basename(partFile))
-                const part = await Filesystem.readJson(partFile)
-                log.info("copying", {
-                  partFile,
-                  dest,
-                })
-                await Filesystem.writeJson(dest, part)
+                try {
+                  const dest = path.join(dir, "message", session.id, path.basename(msgFile))
+                  log.info("copying", {
+                    msgFile,
+                    dest,
+                  })
+                  const message = await Filesystem.readJson<any>(msgFile)
+                  await Filesystem.writeJson(dest, message)
+
+                  log.info(`migrating parts for message ${message.id}`)
+                  for (const partFile of await Glob.scan(`storage/session/part/${session.id}/${message.id}/*.json`, {
+                    cwd: fullProjectDir,
+                    absolute: true,
+                  })) {
+                    try {
+                      const dest = path.join(dir, "part", message.id, path.basename(partFile))
+                      const part = await Filesystem.readJson(partFile)
+                      log.info("copying", {
+                        partFile,
+                        dest,
+                      })
+                      await Filesystem.writeJson(dest, part)
+                    } catch (error) {
+                      log.warn("skipping corrupted part file during migration", { file: partFile, error })
+                    }
+                  }
+                } catch (error) {
+                  log.warn("skipping corrupted message file during migration", { file: msgFile, error })
+                }
               }
+            } catch (error) {
+              log.warn("skipping corrupted session file during migration", { file: sessionFile, error })
             }
           }
         }
@@ -124,18 +185,31 @@ export namespace Storage {
         cwd: dir,
         absolute: true,
       })) {
-        const session = await Filesystem.readJson<any>(item)
-        if (!session.projectID) continue
-        if (!session.summary?.diffs) continue
-        const { diffs } = session.summary
-        await Filesystem.write(path.join(dir, "session_diff", session.id + ".json"), JSON.stringify(diffs))
-        await Filesystem.writeJson(path.join(dir, "session", session.projectID, session.id + ".json"), {
-          ...session,
-          summary: {
-            additions: diffs.reduce((sum: number, x: { additions: number; deletions: number }) => sum + x.additions, 0),
-            deletions: diffs.reduce((sum: number, x: { additions: number; deletions: number }) => sum + x.deletions, 0),
-          },
-        })
+        try {
+          const session = await Filesystem.readJson<any>(item)
+          if (!session.projectID) continue
+          if (!session.summary?.diffs) continue
+          const { diffs } = session.summary
+          await Filesystem.write(path.join(dir, "session_diff", session.id + ".json"), JSON.stringify(diffs))
+          await Filesystem.writeJson(path.join(dir, "session", session.projectID, session.id + ".json"), {
+            ...session,
+            summary: {
+              additions: diffs.reduce(
+                (sum: number, x: { additions: number; deletions: number }) => sum + x.additions,
+                0,
+              ),
+              deletions: diffs.reduce(
+                (sum: number, x: { additions: number; deletions: number }) => sum + x.deletions,
+                0,
+              ),
+            },
+          })
+        } catch (error) {
+          // One partial/corrupt legacy JSON file must not trap every future
+          // startup in the same migration. Preserve the source file for
+          // manual recovery and continue migrating the remaining sessions.
+          log.warn("skipping corrupted session file during summary migration", { file: item, error })
+        }
       }
     },
   ]

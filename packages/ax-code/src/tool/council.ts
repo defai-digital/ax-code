@@ -9,15 +9,14 @@ import { Config } from "../config/config"
 import { Budget } from "../mode/budget"
 import { Council } from "../mode/council"
 import { Debate } from "../mode/debate"
+import { EnsembleShared } from "../mode/ensemble-shared"
 import { ensureJsonModeInstruction } from "../mode/json-mode-prompt"
 import { EnsemblePreflight } from "../mode/preflight"
 import { ModeMemory } from "../mode/memory"
 import { ModePolicy } from "../mode/policy"
 import { Provider } from "../provider/provider"
-import { modelSelectableForProvider } from "../provider/model-selectability"
-import { ModelID, ProviderID } from "../provider/schema"
 import { Log } from "../util/log"
-import { toErrorMessage } from "../util/error-message"
+import { FanOut } from "../util/fan-out"
 import { Tool } from "./tool"
 import DESCRIPTION from "./council.txt"
 
@@ -40,22 +39,22 @@ const MemberOutputSchema = z.object({
   issues: z.array(IssueSchema).max(20),
 })
 
+// Kept local to avoid circular-dependency at module-load time (identical to arena.ts).
 const MemberSelectionSchema = z.object({
   providerID: z.string().min(1).max(200),
   modelID: z.string().min(1).max(300).optional(),
 })
 
-function uniqueMemberSelections(selections: Array<z.infer<typeof MemberSelectionSchema>>, ctx: z.RefinementCtx): void {
+function validateMemberSelections(
+  selections: Array<z.infer<typeof MemberSelectionSchema>>,
+  ctx: z.RefinementCtx,
+): void {
   const seen = new Set<string>()
   const seenProviders = new Set<string>()
   selections.forEach((selection, index) => {
     const key = `${selection.providerID}\u0000${selection.modelID ?? ""}`
     if (seen.has(key)) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Duplicate provider/model selection",
-        path: [index],
-      })
+      ctx.addIssue({ code: "custom", message: "Duplicate provider/model selection", path: [index] })
     }
     seen.add(key)
     if (seenProviders.has(selection.providerID)) {
@@ -84,13 +83,10 @@ const parameters = z.object({
     .array(MemberSelectionSchema)
     .min(1)
     .max(HARD_MAX_MEMBERS)
-    .superRefine(uniqueMemberSelections)
+    .superRefine(validateMemberSelections)
     .optional()
     .describe("Optional explicit provider/model members; otherwise auto-select diverse connected providers"),
 })
-
-type MemberSpec = { providerID: ProviderID; modelID: ModelID; memberId: string }
-type MemberResolution = { members: MemberSpec[]; rejected: string[] }
 
 function systemPrompt(kind: "review" | "design"): string {
   // ensureJsonModeInstruction: Qwen/Alibaba require the word "json" when generateObject
@@ -106,178 +102,119 @@ Return structured issues with severity, category, optional location (file:line),
 Be concrete. Prefer fewer high-signal issues. Do not claim other models' opinions.`)
 }
 
-async function resolveMembers(
-  explicit: Array<{ providerID: string; modelID?: string }> | undefined,
-  maxMembers: number,
-  task: string,
-): Promise<MemberResolution> {
-  await Provider.ready()
-  const providers = await Provider.list()
-
-  if (explicit?.length) {
-    const out: MemberSpec[] = []
-    const rejected: string[] = []
-    for (const item of explicit) {
-      const providerID = ProviderID.make(item.providerID)
-      const provider = providers[providerID]
-      if (!provider) {
-        rejected.push(`Unknown provider ${JSON.stringify(item.providerID)}`)
-        continue
-      }
-      let modelID: ModelID | undefined
-      if (item.modelID) {
-        const model = Object.values(provider.models).find(
-          (candidate) =>
-            String(candidate.id) === item.modelID &&
-            modelSelectableForProvider(providerID, candidate) &&
-            !String(candidate.id).toLowerCase().includes("embed"),
-        )
-        modelID = model?.id
-        if (!modelID) {
-          rejected.push(`Unknown or unselectable model ${JSON.stringify(`${item.providerID}/${item.modelID}`)}`)
-        }
-      } else {
-        const sorted = Provider.sort(
-          Object.values(provider.models).filter(
-            (model) =>
-              modelSelectableForProvider(providerID, model) && !String(model.id).toLowerCase().includes("embed"),
-          ),
-        )
-        modelID = sorted[0]?.id
-      }
-      if (!modelID) {
-        if (!item.modelID) rejected.push(`No selectable coding model for ${JSON.stringify(item.providerID)}`)
-        continue
-      }
-      out.push({
-        providerID,
-        modelID,
-        memberId: `${providerID}/${modelID}`,
-      })
-    }
-    return { members: Council.dedupeMembers(out).slice(0, maxMembers), rejected }
-  }
-
-  type Cand = { providerID: string; modelID: ModelID }
-  let candidates: Cand[] = []
-  for (const provider of Object.values(providers)) {
-    const models = Provider.sort(
-      Object.values(provider.models).filter(
-        (model) => modelSelectableForProvider(provider.id, model) && !String(model.id).toLowerCase().includes("embed"),
-      ),
-    )
-    const model = models[0]
-    if (!model) continue
-    candidates.push({ providerID: String(provider.id), modelID: model.id })
-  }
-
-  // Soft bias by historical performance, then diversify families
-  try {
-    const store = await ModeMemory.load()
-    const stats = ModeMemory.aggregateStats(store.outcomes, ModeMemory.classifyTask(task))
-    candidates = ModeMemory.biasByMemory(
-      candidates.map((c) => ({ ...c, modelID: String(c.modelID) })),
-      stats,
-    ).map((c) => ({ providerID: c.providerID, modelID: ModelID.make(String(c.modelID)) }))
-  } catch {
-    // memory is best-effort
-  }
-
-  const diverse = Council.selectDiverseMembers(candidates, maxMembers)
-
-  return {
-    members: diverse.map((c) => ({
-      providerID: ProviderID.make(c.providerID),
-      modelID: ModelID.make(String(c.modelID)),
-      memberId: `${c.providerID}/${c.modelID}`,
-    })),
-    rejected: [],
-  }
-}
-
 async function runMember(input: {
-  member: MemberSpec
+  member: EnsembleShared.MemberSpec
   kind: "review" | "design"
   question: string
   context?: string
   debateContext?: string
   timeoutMs: number
   abort: AbortSignal
+  retryOnce?: boolean
 }): Promise<Council.CouncilMemberResult> {
-  const { member, kind, question, context, debateContext, timeoutMs, abort } = input
+  const { member, kind, question, context, debateContext, timeoutMs, abort, retryOnce = true } = input
   const started = Date.now()
-  const localAbort = new AbortController()
-  const onParentAbort = () => localAbort.abort(abort.reason)
-  if (abort.aborted) onParentAbort()
-  else abort.addEventListener("abort", onParentAbort, { once: true })
-  const timer = setTimeout(() => localAbort.abort(), timeoutMs)
-  timer.unref?.()
+  const maxAttempts = retryOnce ? 2 : 1
 
-  try {
-    const model = await Provider.getModel(member.providerID, member.modelID)
-    const language = await Provider.getLanguage(model)
-    const userParts = [
-      `Kind: ${kind}`,
-      `Question: ${question}`,
-      context ? `\nContext:\n${context.slice(0, 24_000)}` : "",
-      debateContext ? `\n${debateContext}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n")
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (abort.aborted) break
 
-    const raw = await generateObject({
-      model: language,
-      schema: MemberOutputSchema,
-      abortSignal: localAbort.signal,
-      temperature: 0.2,
-      messages: [
-        { role: "system", content: systemPrompt(kind) },
-        { role: "user", content: userParts },
-      ],
-    }).then((r) => r.object)
+    const [fanOutResult] = await FanOut.run({
+      members: [member],
+      timeoutMs,
+      abort,
+      onMemberComplete: (completed, total, m) => {
+        log.info("council fan-out member done", {
+          toolName: "council",
+          memberId: m.memberId,
+          completed,
+          total,
+        })
+      },
+      execute: async (_m, signal) => {
+        const model = await Provider.getModel(member.providerID, member.modelID)
+        const language = await Provider.getLanguage(model)
+        const userParts = [
+          `Kind: ${kind}`,
+          `Question: ${question}`,
+          context ? `\nContext:\n${context.slice(0, 24_000)}` : "",
+          debateContext ? `\n${debateContext}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n")
 
-    log.info("council member ok", {
-      toolName: "council",
-      memberId: member.memberId,
-      durationMs: Date.now() - started,
-      status: "ok",
-      issueCount: raw.issues.length,
+        return generateObject({
+          model: language,
+          schema: MemberOutputSchema,
+          abortSignal: signal,
+          temperature: 0.2,
+          messages: [
+            { role: "system", content: systemPrompt(kind) },
+            { role: "user", content: userParts },
+          ],
+        }).then((r) => r.object)
+      },
     })
 
-    return {
-      memberId: member.memberId,
-      providerID: String(member.providerID),
-      modelID: String(member.modelID),
-      overall: raw.overall,
-      issues: raw.issues.map((issue) => ({
+    if (fanOutResult?.result) {
+      const raw = fanOutResult.result
+      log.info("council member ok", {
+        toolName: "council",
         memberId: member.memberId,
-        severity: issue.severity,
-        category: issue.category,
-        location: issue.location,
-        summary: issue.summary,
-        suggestedFix: issue.suggestedFix,
-      })),
+        durationMs: Date.now() - started,
+        status: "ok",
+        issueCount: raw.issues.length,
+      })
+      return {
+        memberId: member.memberId,
+        providerID: String(member.providerID),
+        modelID: String(member.modelID),
+        overall: raw.overall,
+        issues: raw.issues.map((issue) => ({
+          memberId: member.memberId,
+          severity: issue.severity,
+          category: issue.category,
+          location: issue.location,
+          summary: issue.summary,
+          suggestedFix: issue.suggestedFix,
+        })),
+      }
     }
-  } catch (err) {
-    const aborted = localAbort.signal.aborted
-    const message = aborted ? `timeout or aborted: ${toErrorMessage(err)}` : toErrorMessage(err)
+
+    const errMessage = fanOutResult?.error ?? "aborted"
+    const wasAborted = errMessage.startsWith("aborted:") || abort.aborted
+
+    if (!wasAborted && attempt < maxAttempts) {
+      log.info("council member retrying", {
+        toolName: "council",
+        memberId: member.memberId,
+        attempt,
+        error: errMessage,
+      })
+      continue
+    }
+
     log.warn("council member failed", {
       toolName: "council",
       memberId: member.memberId,
       durationMs: Date.now() - started,
-      status: aborted ? "timeout" : "error",
-      errorCode: err instanceof Error ? err.name : "Unknown",
+      status: wasAborted ? "timeout" : "error",
     })
     return {
       memberId: member.memberId,
       providerID: String(member.providerID),
       modelID: String(member.modelID),
       issues: [],
-      error: message,
+      error: wasAborted ? `timeout or aborted: ${errMessage}` : errMessage,
     }
-  } finally {
-    clearTimeout(timer)
-    abort.removeEventListener("abort", onParentAbort)
+  }
+
+  return {
+    memberId: member.memberId,
+    providerID: String(member.providerID),
+    modelID: String(member.modelID),
+    issues: [],
+    error: "aborted",
   }
 }
 
@@ -299,19 +236,6 @@ type CouncilMetadata = {
   selectionErrors?: string[]
 }
 
-async function snapshotSelectableProviders(): Promise<EnsemblePreflight.ProviderSnapshot> {
-  await Provider.ready()
-  const providers = await Provider.list()
-  const ids: string[] = []
-  for (const provider of Object.values(providers)) {
-    const models = Object.values(provider.models).filter((m) => modelSelectableForProvider(provider.id, m))
-    if (models.length === 0) continue
-    if (models.every((m) => String(m.id).toLowerCase().includes("embed"))) continue
-    ids.push(String(provider.id))
-  }
-  return { count: ids.length, ids: ids.sort() }
-}
-
 export const CouncilTool = Tool.define("council", async () => {
   return {
     description: DESCRIPTION,
@@ -330,7 +254,7 @@ export const CouncilTool = Tool.define("council", async () => {
       // Re-read project config so mid-session ax-code.json edits apply.
       const cfg = await Config.getFresh()
       const modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
-      const providerSnap = await snapshotSelectableProviders()
+      const providerSnap = await EnsembleShared.snapshotSelectableProviders()
       if (modes?.council?.enabled === false) {
         const metadata: CouncilMetadata = {
           status: "disabled",
@@ -370,7 +294,12 @@ export const CouncilTool = Tool.define("council", async () => {
         }
       }
 
-      const resolution = await resolveMembers(args.providers, budgetCheck.allowedMembers, args.question)
+      const resolution = await EnsembleShared.resolveMembers(
+        { minMembers: 1, maxMembers: budgetCheck.allowedMembers, requireDistinctProviders: true },
+        args.providers,
+        budgetCheck.allowedMembers,
+        args.question,
+      )
       let members = resolution.members
       if (members.length > budgetCheck.allowedMembers) {
         members = members.slice(0, budgetCheck.allowedMembers)
@@ -396,20 +325,28 @@ export const CouncilTool = Tool.define("council", async () => {
         }
       }
 
+      let councilCompleted = 0
       let results = await Promise.all(
-        members.map((member) =>
-          runMember({
+        members.map(async (member) => {
+          const result = await runMember({
             member,
             kind,
             question: args.question,
             context: args.context,
             timeoutMs,
             abort: ctx.abort,
-          }),
-        ),
+          })
+          councilCompleted++
+          log.info("council member progress", {
+            toolName: "council",
+            memberId: member.memberId,
+            completed: councilCompleted,
+            total: members.length,
+          })
+          return result
+        }),
       )
       ctx.abort.throwIfAborted()
-
       let report = Council.aggregateCouncil(results)
       let debateRoundsRun = 0
       let debateStopReason = maxRounds > 0 ? "not_started" : "debate_disabled"
@@ -440,6 +377,7 @@ export const CouncilTool = Tool.define("council", async () => {
               debateContext: synthesis,
               timeoutMs,
               abort: ctx.abort,
+              retryOnce: false,
             }),
           ),
         )

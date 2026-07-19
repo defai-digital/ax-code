@@ -24,6 +24,7 @@ import { git } from "../util/git"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 import { withTimeout } from "../util/timeout"
+import { FanOut } from "../util/fan-out"
 
 const log = Log.create({ service: "tool.arena-implement" })
 
@@ -643,20 +644,41 @@ export async function runImplementArena(input: {
   markdown: string
 }> {
   // Parallel contestants — each isolated in its own worktree + Instance context
-  const settled = await Promise.all(
-    input.members.map((member) =>
-      runImplementContestant({
+  // Concurrency capped at 2 to reduce disk/memory pressure from parallel worktree operations.
+  const fanOutResults = await FanOut.run({
+    members: input.members,
+    concurrency: 2,
+    timeoutMs: (input.timeoutMs ?? IMPLEMENT_TIMEOUT_MS) + 60_000,
+    abort: input.abort,
+    execute: async (member, signal) => {
+      return runImplementContestant({
         member,
         task: input.task,
         context: input.context,
         parentSessionID: input.parentSessionID,
         baseCommit: input.baseCommit,
         agentName: input.agentName,
-        abort: input.abort,
+        abort: signal,
         timeoutMs: input.timeoutMs,
-      }),
-    ),
-  )
+      })
+    },
+  })
+  const settled = fanOutResults.map((r, i) => {
+    if (r.result) return r.result
+    // FanOut caught an error — synthesise a failed ContestantResult so ranking
+    // never receives `undefined` (which would crash ImplementArena.rank).
+    const member = input.members[i]!
+    return {
+      id: member.memberId,
+      providerID: String(member.providerID),
+      modelID: String(member.modelID),
+      completed: false,
+      verification: "fail" as const,
+      error: r.error ?? "Contestant failed",
+      summary: r.error ?? "Contestant failed",
+      baseCommit: input.baseCommit,
+    } satisfies ImplementArena.ContestantResult
+  })
   throwIfAborted(input.abort)
 
   const ranked = ImplementArena.rank(settled, input.strategy)

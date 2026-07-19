@@ -6,18 +6,32 @@ describe("Council.normalizeSummary / issueKey", () => {
     expect(Council.normalizeSummary("  Foo, BAR!!! ")).toBe("foo bar")
   })
 
-  test("issueKey groups similar issues", () => {
+  test("issueKey groups similar issues despite case and harmless punctuation", () => {
     const a = Council.issueKey({
       location: "src/a.ts:10",
       category: "security",
       summary: "Hardcoded secret!",
     })
     const b = Council.issueKey({
-      location: "src/a.ts:10",
+      location: "Src/A.ts:10",
       category: "Security",
       summary: "hardcoded secret",
     })
     expect(a).toBe(b)
+  })
+
+  test("issueKey preserves code-significant punctuation", () => {
+    const a = Council.issueKey({
+      location: "src/a.ts:10",
+      category: "security",
+      summary: "Don't use `eval()` in auth.ts",
+    })
+    const b = Council.issueKey({
+      location: "src/a.ts:10",
+      category: "security",
+      summary: "Don't use eval in auth.ts",
+    })
+    expect(a).not.toBe(b)
   })
 
   test("issueKey does not collide for findings that differ after a long prefix", () => {
@@ -210,5 +224,46 @@ describe("Council.selectDiverseMembers", () => {
     ])
 
     expect(unique.map((member) => member.id)).toEqual([1, 3])
+  })
+})
+
+describe("Council.providerFamily", () => {
+  test("maps known providers to their canonical family", () => {
+    expect(Council.providerFamily("anthropic")).toBe("anthropic")
+    expect(Council.providerFamily("claude-code")).toBe("anthropic")
+    expect(Council.providerFamily("openai")).toBe("openai")
+    expect(Council.providerFamily("google")).toBe("google")
+    expect(Council.providerFamily("gemini-cli")).toBe("google")
+    expect(Council.providerFamily("xai")).toBe("xai")
+    expect(Council.providerFamily("grok-2")).toBe("xai")
+    expect(Council.providerFamily("alibaba")).toBe("alibaba")
+    expect(Council.providerFamily("qwen-max")).toBe("alibaba")
+    expect(Council.providerFamily("zhipu")).toBe("zhipu")
+    expect(Council.providerFamily("glm-4")).toBe("zhipu")
+    expect(Council.providerFamily("ax-engine")).toBe("local")
+    expect(Council.providerFamily("ollama")).toBe("local")
+    expect(Council.providerFamily("groq")).toBe("groq")
+    expect(Council.providerFamily("openrouter")).toBe("openrouter")
+  })
+
+  test("uses prefix-based matching, not exact substring", () => {
+    // "codex" contains "code" but should still resolve to openai (via includes("codex"))
+    expect(Council.providerFamily("codex-mini")).toBe("openai")
+    // "github-copilot" exact match → openai
+    expect(Council.providerFamily("github-copilot")).toBe("openai")
+    // "antigravity" → google, not some other family
+    expect(Council.providerFamily("antigravity-model")).toBe("google")
+    // Case-insensitive: "Claude" with capital C still matches
+    expect(Council.providerFamily("Claude-Sonnet")).toBe("anthropic")
+    // "zai" prefix → zhipu
+    expect(Council.providerFamily("zai-provider")).toBe("zhipu")
+  })
+
+  test("falls back to first path segment for unknown providers", () => {
+    expect(Council.providerFamily("mistral-ai")).toBe("mistral")
+    expect(Council.providerFamily("cohere_command")).toBe("cohere")
+    expect(Council.providerFamily("perplexity")).toBe("perplexity")
+    // Edge case: empty string after split returns the id itself
+    expect(Council.providerFamily("unknown")).toBe("unknown")
   })
 })

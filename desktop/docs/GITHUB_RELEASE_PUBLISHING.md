@@ -32,12 +32,14 @@ The publish path:
 5. Creates and pushes the annotated `desktop-v<version>` tag.
 6. Waits for `.github/workflows/desktop-release.yml` to finish.
 7. The workflow signs each release asset with `desktop/scripts/minisign-artifacts.sh`
-   using the `AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64` and
-   `AX_CODE_DESKTOP_MINISIGN_PASSWORD` GitHub Actions secrets.
-8. The workflow uploads the generated `.minisig` files before publishing the
-   draft release.
-9. Verifies the release is public and every signed asset has a matching
-   `.minisig`.
+   using the shared `AX_CODE_MINISIGN_SECRET_KEY_B64` and
+   `AX_CODE_MINISIGN_PASSWORD` GitHub Actions secrets (with the legacy
+   `AX_CODE_DESKTOP_MINISIGN_*` names as fallbacks).
+8. The workflow uploads the generated `.minisig` files and canonical
+   `docs/ax-minisign.pub` key.
+9. A separate job re-downloads the draft assets, requires signature coverage,
+   and verifies every Minisign signature against that committed key.
+10. The workflow publishes the release only after those checks pass.
 
 If the GitHub workflow succeeded before signatures were uploaded, or you need
 to repair signature assets manually, rerun only the local signature upload step:
@@ -49,6 +51,15 @@ pnpm run release:desktop -- --version 0.8.0 --signatures-only --publish
 On macOS, the local repair path can read the minisign passphrase from Apple
 Keychain when `AX_CODE_DESKTOP_MINISIGN_PASSWORD` is not set. See
 `docs/MINISIGN.md` for the Keychain item names.
+
+Local macOS packaging defaults to the `ax-notary` notarytool Keychain profile
+and Developer team `N5ZUZDUJS6`. Store the Apple ID credentials once with
+`xcrun notarytool store-credentials ax-notary`; the packaging process passes
+only the profile name to electron-builder and does not read or commit the
+app-specific password. Set `APPLE_KEYCHAIN_PROFILE` to another profile to
+override it, or set it to an empty value to keep an ad hoc local package
+unnotarized. GitHub Actions continues to use its explicit App Store Connect API
+key secrets.
 
 Use `--skip-signing` only for emergency releases where detached minisign
 signatures are intentionally not being published. Use `--skip-local-validation`

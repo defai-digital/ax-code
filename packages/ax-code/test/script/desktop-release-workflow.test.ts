@@ -64,19 +64,52 @@ describe("desktop release workflow", () => {
     expect(text).toContain("cask_renames.json")
   })
 
-  test("signing job falls back to the shared minisign release secrets", async () => {
+  test("signing job prefers the shared minisign release secrets", async () => {
     const text = await readFile(desktopReleaseWorkflow, "utf-8")
-    const job = text.match(/  sign-release-assets:[\s\S]*?(?=\n  finalize-release:|$)/)
+    const job = text.match(/  sign-release-assets:[\s\S]*?(?=\n  verify-release-assets:|$)/)
 
     expect(job, "sign-release-assets job should exist").not.toBeNull()
     expect(job![0]).toContain(
-      "secrets.AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64 || secrets.AX_CODE_MINISIGN_SECRET_KEY_B64",
+      "secrets.AX_CODE_MINISIGN_SECRET_KEY_B64 || secrets.AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64",
     )
-    expect(job![0]).toContain("secrets.AX_CODE_DESKTOP_MINISIGN_PASSWORD || secrets.AX_CODE_MINISIGN_PASSWORD")
+    expect(job![0]).toContain("secrets.AX_CODE_MINISIGN_PASSWORD || secrets.AX_CODE_DESKTOP_MINISIGN_PASSWORD")
     expect(job![0]).toContain("Install minisign")
     expect(job![0]).toContain("cp install.ps1 release-assets/install.ps1")
     expect(job![0]).toContain("Sign release assets")
     expect(job![0]).toContain("gh release upload")
     expect(job![0]).toContain("release-assets/install.ps1")
+    expect(job![0]).toContain("docs/ax-minisign.pub")
+  })
+
+  test("publishes only after independent Apple and Minisign verification", async () => {
+    const text = await readFile(desktopReleaseWorkflow, "utf-8")
+
+    expect(text).toContain("codesign --verify --deep --strict")
+    expect(text).toContain("TeamIdentifier=${APPLE_TEAM_ID}")
+    expect(text).toContain("spctl --assess --type install")
+    expect(text).toContain("spctl --assess --type execute")
+
+    const verifyJob = text.match(/  verify-release-assets:[\s\S]*?(?=\n  finalize-release:|$)/)
+    expect(verifyJob, "verify-release-assets job should exist").not.toBeNull()
+    expect(verifyJob![0]).toContain("cmp docs/ax-minisign.pub release-assets/ax-minisign.pub")
+    expect(verifyJob![0]).toContain("minisign -V -p docs/ax-minisign.pub")
+    expect(verifyJob![0]).toContain('test -f "$signature"')
+
+    const finalizeJob = text.match(/  finalize-release:[\s\S]*?(?=\n  update-homebrew-tap:|$)/)
+    expect(finalizeJob, "finalize-release job should exist").not.toBeNull()
+    expect(finalizeJob![0]).toContain("verify-release-assets")
+    expect(text).toContain("release $TAG is already published; refusing to replace verified assets")
+    expect(finalizeJob![0]).toContain("release $TAG is no longer a draft; refusing to publish or mutate it")
+  })
+
+  test("verifies the Minisign signature before trusting the Homebrew DMG", async () => {
+    const text = await readFile(desktopReleaseWorkflow, "utf-8")
+    const job = text.match(/  update-homebrew-tap:[\s\S]*$/)
+
+    expect(job, "update-homebrew-tap job should exist").not.toBeNull()
+    expect(job![0]).toContain("release.dmg.minisig")
+    expect(job![0]).toContain("minisign -V -p docs/ax-minisign.pub")
+    expect(job![0].indexOf("minisign -V")).toBeLessThan(job![0].indexOf("DMG_SHA256"))
+    expect(job![0]).not.toContain("/usr/bin/xattr")
   })
 })

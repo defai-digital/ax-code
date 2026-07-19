@@ -35,6 +35,7 @@ import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 import {
   absolutePathLiterals,
   assertStaticRedirectTarget,
+  expandLeadingTilde,
   hasDynamicRedirection,
   hasDynamicShellExpansion,
   isStaticPathArg,
@@ -310,12 +311,22 @@ export const BashTool = Tool.define("bash", async () => {
       // commands nested inside eval / shell -c strings; drives the
       // interactive-only bash_destructive ask below.
       const destructiveCommands = new Map<string, string>()
+      let dynamicPathAccess = false
       let foundCommands = false
 
       const recordResolvedPath = async (raw: string) => {
         const arg = stripShellQuotes(raw)
-        if (!arg || hasDynamicShellExpansion(arg)) return
-        const resolved = await fs.realpath(path.resolve(cwd, arg)).catch(() => path.resolve(cwd, arg))
+        if (!arg) return
+        if (hasDynamicShellExpansion(arg)) {
+          dynamicPathAccess = true
+          return
+        }
+        const literal = expandLeadingTilde(arg)
+        if (!literal) {
+          dynamicPathAccess = true
+          return
+        }
+        const resolved = await fs.realpath(path.resolve(cwd, literal)).catch(() => path.resolve(cwd, literal))
         const normalized =
           process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
         resolvedPaths.add(normalized)
@@ -403,7 +414,11 @@ export const BashTool = Tool.define("bash", async () => {
         for (const arg of args) {
           if (arg.startsWith("-")) continue
           const unquoted = stripShellQuotes(arg)
-          if (!unquoted || hasDynamicShellExpansion(unquoted)) continue
+          if (!unquoted) continue
+          if (hasDynamicShellExpansion(unquoted) || unquoted.startsWith("~")) {
+            dynamicPathAccess = true
+            continue
+          }
           if (path.isAbsolute(unquoted)) {
             await recordResolvedPath(unquoted)
             continue
@@ -507,16 +522,8 @@ export const BashTool = Tool.define("bash", async () => {
                   const target = stripShellQuotes(c.text)
                   if (!target || /^&/.test(target)) continue
                   assertStaticRedirectTarget(target)
-                  const resolved = await fs.realpath(path.resolve(cwd, target)).catch(() => path.resolve(cwd, target))
-                  if (!resolved) continue
-                  const normalized =
-                    process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
-                  resolvedPaths.add(normalized)
-                  if (isWriteFileRedirect(innerRedirect)) redirectWritePaths.add(normalized)
-                  if (!Instance.containsPath(normalized)) {
-                    const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
-                    directories.add(dir)
-                  }
+                  const resolved = await recordResolvedPath(target)
+                  if (resolved && isWriteFileRedirect(innerRedirect)) redirectWritePaths.add(resolved)
                 }
               }
             }
@@ -526,16 +533,7 @@ export const BashTool = Tool.define("bash", async () => {
           if (!isShellWithC && !isEval) {
             for (const arg of command.slice(1)) {
               if (arg.startsWith("-")) continue
-              const resolved = await fs.realpath(path.resolve(cwd, arg)).catch(() => path.resolve(cwd, arg))
-              if (resolved) {
-                const normalized =
-                  process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
-                resolvedPaths.add(normalized)
-                if (!Instance.containsPath(normalized)) {
-                  const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
-                  directories.add(dir)
-                }
-              }
+              await recordResolvedPath(arg)
             }
           }
         } else {
@@ -546,17 +544,7 @@ export const BashTool = Tool.define("bash", async () => {
         if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(command[0])) {
           for (const arg of command.slice(1)) {
             if (arg.startsWith("-") || (command[0] === "chmod" && arg.startsWith("+"))) continue
-            const resolved = await fs.realpath(path.resolve(cwd, arg)).catch(() => path.resolve(cwd, arg))
-            log.info("resolved path", { arg, resolved })
-            if (resolved) {
-              const normalized =
-                process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
-              resolvedPaths.add(normalized)
-              if (!Instance.containsPath(normalized)) {
-                const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
-                directories.add(dir)
-              }
-            }
+            await recordResolvedPath(arg)
           }
         }
 
@@ -583,7 +571,9 @@ export const BashTool = Tool.define("bash", async () => {
           // Skip command substitution / fd dup (&1 etc.) — opaque or non-path.
           if (!target || /^&/.test(target)) continue
           assertStaticRedirectTarget(target)
-          const resolved = await fs.realpath(path.resolve(cwd, target)).catch(() => path.resolve(cwd, target))
+          const literal = expandLeadingTilde(target)
+          if (!literal) throw new Error("Dynamic redirection targets are not allowed")
+          const resolved = await fs.realpath(path.resolve(cwd, literal)).catch(() => path.resolve(cwd, literal))
           if (!resolved) continue
           const normalized =
             process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
@@ -635,11 +625,24 @@ export const BashTool = Tool.define("bash", async () => {
         )
       }
 
+      if (dynamicPathAccess) {
+        await ctx.ask({
+          permission: "external_directory",
+          patterns: [params.command],
+          always: [],
+          metadata: {
+            reason: "dynamic shell path",
+            requireInteractive: true,
+          },
+        })
+      }
+
       Isolation.assertBash(ctx.extra?.isolation, cwd, Instance.directory, Instance.worktree, [...resolvedPaths])
       Isolation.assertBashNetwork(ctx.extra?.isolation, commandNames)
 
-      // Opt-in OS sandbox wrap for bash (Seatbelt / bubblewrap). App-layer
-      // checks above always run; this adds kernel enforcement when available.
+      // OS sandbox wrap for bash (Seatbelt / bubblewrap). App-layer checks
+      // above always run; the default `auto` backend adds kernel enforcement
+      // whenever the platform supports it.
       let osWrap: OsSandbox.WrapResult | undefined
       if (Isolation.shouldUseOsSandbox(ctx.extra?.isolation)) {
         const state = ctx.extra!.isolation!
@@ -734,7 +737,7 @@ export const BashTool = Tool.define("bash", async () => {
                 ...sanitizedEnv,
               },
               stdio: ["ignore", "pipe", "pipe"],
-              detached: false,
+              detached: process.platform !== "win32",
               windowsHide: process.platform === "win32",
             })
           : useSetsidProcessGroup

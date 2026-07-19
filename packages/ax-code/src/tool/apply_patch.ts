@@ -455,6 +455,11 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             await FileTime.withLock(change.filePath, async () => {
               await assertSymlinkInsideProject(change.filePath)
 
+              const current = await readFileIfExists(change.filePath)
+              if (current !== change.oldContent) {
+                throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and delete`)
+              }
+
               activeDirty = true
               await fs.unlink(change.filePath).catch((error: unknown) => {
                 if (errorCode(error) !== "ENOENT") throw error
