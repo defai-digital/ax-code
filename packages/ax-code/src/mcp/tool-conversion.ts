@@ -3,6 +3,7 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { CallToolResultSchema, type Tool as MCPToolDef } from "@modelcontextprotocol/sdk/types.js"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
+import { createHash } from "node:crypto"
 
 const log = Log.create({ service: "mcp" })
 const MAX_TOOL_DESCRIPTION = 4_000
@@ -20,6 +21,55 @@ export function mcpItemKey(clientName: string, itemName: string): string {
 
 export function mcpToolPermissionKey(server: string, tool: string): string {
   return `${sanitizeMcpName(server)}_${sanitizeMcpName(tool)}`
+}
+
+export type McpToolIdentity = { server: string; tool: string }
+
+/**
+ * Preserve the established MCP permission key when it is unique, while
+ * deterministically disambiguating names that collapse to the same sanitized
+ * representation. Exact duplicate identities intentionally share a key.
+ */
+export function resolveMcpToolPermissionKeys(items: readonly McpToolIdentity[]): string[] {
+  const groups = new Map<string, Map<string, McpToolIdentity>>()
+  for (const item of items) {
+    const base = mcpToolPermissionKey(item.server, item.tool)
+    const identity = JSON.stringify([item.server, item.tool])
+    const group = groups.get(base) ?? new Map<string, McpToolIdentity>()
+    group.set(identity, item)
+    groups.set(base, group)
+  }
+
+  const resolved = new Map<string, string>()
+  const reserved = new Set<string>()
+  for (const [base, group] of groups) {
+    if (group.size !== 1) continue
+    const identity = group.keys().next().value
+    if (identity === undefined) continue
+    resolved.set(identity, base)
+    reserved.add(base)
+  }
+
+  const collisions = [...groups.entries()]
+    .filter(([, group]) => group.size > 1)
+    .flatMap(([base, group]) => [...group.keys()].map((identity) => ({ base, identity })))
+    .sort((a, b) => {
+      if (a.base !== b.base) return a.base < b.base ? -1 : 1
+      if (a.identity === b.identity) return 0
+      return a.identity < b.identity ? -1 : 1
+    })
+
+  for (const { base, identity } of collisions) {
+    const hash = createHash("sha256").update(identity).digest("hex").slice(0, 12)
+    const prefix = `${base}__mcp_${hash}`
+    let key = prefix
+    let suffix = 2
+    while (reserved.has(key)) key = `${prefix}_${suffix++}`
+    resolved.set(identity, key)
+    reserved.add(key)
+  }
+
+  return items.map((item) => resolved.get(JSON.stringify([item.server, item.tool]))!)
 }
 
 export function mcpSchemaByteLength(schema: JSONSchema7): number {

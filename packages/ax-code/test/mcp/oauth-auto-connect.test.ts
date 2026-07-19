@@ -312,6 +312,48 @@ test("connect path closes unused SSE transport when StreamableHTTP path is selec
   })
 })
 
+test("pending OAuth transports are isolated by project directory", async () => {
+  await using firstDir = await tmpdir()
+  await using secondDir = await tmpdir()
+  const name = `same-name-${Math.random().toString(36).slice(2)}`
+  let readyCount = 0
+  let markReady!: () => void
+  const bothReady = new Promise<void>((resolve) => {
+    markReady = resolve
+  })
+  let release!: () => void
+  const hold = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  const run = (directory: string, url: string) =>
+    Instance.provide({
+      directory,
+      fn: async () => {
+        const result = await MCP.add(name, { type: "remote", url })
+        expect((result.status as Record<string, { status: string }>)[name]?.status).toBe("needs_auth")
+        readyCount++
+        if (readyCount === 2) markReady()
+        await hold
+      },
+    })
+
+  const first = run(firstDir.path, "https://first.example.com/mcp")
+  const second = run(secondDir.path, "https://second.example.com/mcp")
+  await bothReady
+
+  const pending = transportInstances.filter(
+    (transport) =>
+      transport.url === "https://first.example.com/mcp" || transport.url === "https://second.example.com/mcp",
+  )
+  expect(pending.filter((transport) => transport.closeCalls === 0)).toHaveLength(2)
+
+  release()
+  await Promise.all([first, second])
+  await Instance.disposeAll()
+  expect(pending.every((transport) => transport.closeCalls === 1)).toBe(true)
+})
+
 test("state() generates a new state when none is saved", async () => {
   const { McpOAuthProvider } = await import("../../src/mcp/oauth-provider")
   const { McpAuth } = await import("../../src/mcp/auth")

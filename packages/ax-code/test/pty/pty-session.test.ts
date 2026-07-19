@@ -53,6 +53,11 @@ describe("pty", () => {
     ).toBe(false)
   })
 
+  test("direct resize calls reject invalid terminal dimensions", async () => {
+    await expect(Pty.resize("pty_missing" as PtyID, 0, 24)).rejects.toThrow()
+    await expect(Pty.resize("pty_missing" as PtyID, 80, Number.NaN)).rejects.toThrow()
+  })
+
   test("sanitizes user-provided terminal env before spawn", () => {
     const env = Pty.sanitizeUserEnv({
       OPENAI_API_KEY: "api_key_from_user",
@@ -211,6 +216,28 @@ describe("pty", () => {
             message: expect.stringContaining("PTY cwd escapes project directory:"),
           },
         })
+      },
+    })
+  })
+
+  test("stores the canonical cwd for symlinks inside the project", async () => {
+    if (process.platform === "win32") return
+
+    await using dir = await tmpdir({ git: true })
+    const target = path.join(dir.path, "target")
+    const link = path.join(dir.path, "target-link")
+    await fs.mkdir(target)
+    await fs.symlink(target, link)
+
+    await Instance.provide({
+      directory: dir.path,
+      fn: async () => {
+        const info = await Pty.create({ command: "/usr/bin/env", args: ["true"], cwd: link })
+        try {
+          expect(info.cwd).toBe(await fs.realpath(target))
+        } finally {
+          await Pty.remove(info.id)
+        }
       },
     })
   })

@@ -2,13 +2,14 @@ import { test, expect, describe } from "vitest"
 import { MCP } from "../../src/mcp"
 import { Permission } from "../../src/permission"
 import type { Config } from "../../src/config/config"
+import { resolveMcpToolPermissionKeys } from "../../src/mcp/tool-conversion"
 
 // These tests pin a load-bearing but easy-to-break contract:
 //
-//   1. Every MCP tool is registered into the LLM tool surface under the
-//      key `<sanitizedServer>_<sanitizedTool>`. The same key is what the
-//      Permission system evaluates against at runtime (the actual call
-//      lives in session/prompt.ts: `ctx.ask({ permission: key, ... })`).
+//   1. Every uniquely named MCP tool is registered into the LLM tool surface
+//      under `<sanitizedServer>_<sanitizedTool>`. Sanitization collisions get
+//      deterministic suffixes. The resulting key is what the Permission
+//      system evaluates at runtime.
 //
 //   2. Therefore users can target MCP tools from `permission` in their
 //      ax-code.json with either an exact key or a wildcard, exactly the
@@ -37,6 +38,27 @@ describe("MCP.permissionKey", () => {
 
   test("colons (common in MCP names) become underscores", () => {
     expect(MCP.permissionKey("ns:server", "ns:tool")).toBe("ns_server_ns_tool")
+  })
+})
+
+describe("MCP collision-resistant permission keys", () => {
+  test("keeps unique legacy keys and disambiguates sanitized collisions deterministically", () => {
+    const tools = [
+      { server: "github", tool: "search" },
+      { server: "foo.bar", tool: "read/item" },
+      { server: "foo_bar", tool: "read_item" },
+    ]
+    const keys = resolveMcpToolPermissionKeys(tools)
+
+    expect(keys[0]).toBe("github_search")
+    expect(keys[1]).not.toBe(keys[2])
+    expect(keys[1]).toMatch(/^foo_bar_read_item__mcp_[a-f0-9]{12}$/)
+    expect(keys[2]).toMatch(/^foo_bar_read_item__mcp_[a-f0-9]{12}$/)
+
+    const reversed = resolveMcpToolPermissionKeys(tools.toReversed())
+    expect(new Map(tools.toReversed().map((tool, index) => [JSON.stringify(tool), reversed[index]]))).toEqual(
+      new Map(tools.map((tool, index) => [JSON.stringify(tool), keys[index]])),
+    )
   })
 })
 

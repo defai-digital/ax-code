@@ -308,10 +308,11 @@ export namespace Pty {
   }
 
   export async function resize(id: PtyID, cols: number, rows: number) {
+    const size = TerminalSize.parse({ cols, rows })
     const current = state()
     const session = current.sessions.get(id)
     if (session && session.info.status === "running") {
-      session.process.resize(cols, rows)
+      session.process.resize(size.cols, size.rows)
     }
   }
 
@@ -387,7 +388,7 @@ export namespace Pty {
         message: `PTY cwd escapes project directory: ${input.cwd}`,
       })
     }
-    return cwd
+    return targetCwd
   }
 
   export async function create(input: CreateInput) {
@@ -407,7 +408,7 @@ export namespace Pty {
     const cwd = await resolveCwd(input)
     const shellEnv = await Plugin.trigger("shell.env", { cwd }, { env: {} })
     const baseEnv = Env.sanitize({
-      ...Env.sanitize(process.env),
+      ...process.env,
       ...shellEnv.env,
     })
     const env = {

@@ -91,6 +91,8 @@ describe("tool.bash helpers", () => {
     expect(hasDynamicRedirection("echo ok > out.txt")).toBe(false)
     expect(hasDynamicRedirection("echo ok > $(pwd)/out.txt")).toBe(true)
     expect(hasDynamicRedirection("echo ok 2>> ${LOG_FILE}")).toBe(true)
+    expect(hasDynamicRedirection("echo ok|>$OUTPUT_FILE")).toBe(true)
+    expect(hasDynamicRedirection("echo ok |2>>`log-path`")).toBe(true)
   })
 
   test("extracts quoted absolute path literals", () => {

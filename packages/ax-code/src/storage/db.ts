@@ -133,12 +133,8 @@ export namespace Database {
         count: entries.length,
         mode: typeof AX_CODE_MIGRATIONS !== "undefined" ? "bundled" : "dev",
       })
-      if (Flag.AX_CODE_SKIP_MIGRATIONS) {
-        for (const item of entries) {
-          item.sql = "select 1;"
-        }
-      }
-      migrate(db, entries)
+      const journal = Flag.AX_CODE_SKIP_MIGRATIONS ? entries.map((item) => ({ ...item, sql: "select 1;" })) : entries
+      migrate(db, journal)
     }
 
     return db

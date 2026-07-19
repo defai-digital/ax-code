@@ -13,6 +13,8 @@ import { Filesystem } from "../../src/util/filesystem"
 import { BunProc } from "../../src/bun"
 import { Process } from "../../src/util/process"
 import { Ssrf } from "../../src/util/ssrf"
+import { ConfigPaths } from "../../src/config/paths"
+import { Installation } from "../../src/installation"
 
 // Get managed config directory from environment (set in preload.ts)
 const managedConfigDir = process.env.AX_CODE_TEST_MANAGED_CONFIG_DIR!
@@ -507,6 +509,23 @@ test("handles file inclusion with replacement tokens", async () => {
       expect(config.username).toBe("const out = await Bun.$`echo hi`")
     },
   })
+})
+
+test("auto-injects $schema after leading JSONC comments", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const filepath = path.join(tmp.path, "ax-code.jsonc")
+  await Filesystem.write(filepath, '// keep this comment\n{\n  "username": "commented"\n}\n')
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect((await Config.get()).username).toBe("commented")
+    },
+  })
+
+  const updated = await Filesystem.readText(filepath)
+  expect(updated).toContain("// keep this comment")
+  expect(updated).toContain('"$schema"')
 })
 
 test("ignores invalid project config fields and keeps loading defaults", async () => {
@@ -1140,6 +1159,34 @@ test("serializes concurrent config dependency installs", async () => {
   expect(relevant.toSorted()).toEqual(dirs.toSorted())
   expect(await Filesystem.exists(path.join(dirs[0], "package.json"))).toBe(true)
   expect(await Filesystem.exists(path.join(dirs[1], "package.json"))).toBe(true)
+})
+
+test("restores package.json when a non-strict dependency install fails", async () => {
+  await using tmp = await tmpdir()
+  const pkg = path.join(tmp.path, "package.json")
+  const targetVersion = Installation.isLocal() ? "*" : Installation.VERSION
+  const original = `${JSON.stringify(
+    { name: "config-dir", dependencies: { kept: "1.0.0", "@ax-code/plugin": targetVersion } },
+    null,
+    2,
+  )}\n`
+  await Filesystem.write(pkg, original)
+  await Filesystem.write(
+    path.join(tmp.path, "node_modules", "@ax-code", "plugin", "package.json"),
+    JSON.stringify({ version: targetVersion }),
+  )
+
+  const failure = new Process.RunFailedError(["npm", "install"], 1, Buffer.alloc(0), Buffer.from("offline"))
+  const run = vi.spyOn(Process, "run").mockRejectedValue(failure)
+  try {
+    await expect(Config.installDependencies(tmp.path)).resolves.toBeUndefined()
+  } finally {
+    run.mockRestore()
+  }
+
+  expect(await Filesystem.readText(pkg)).toBe(original)
+  expect(await Filesystem.exists(path.join(tmp.path, ".ax-code-dependencies-install-failed"))).toBe(true)
+  await expect(Config.needsInstall(tmp.path)).resolves.toBe(true)
 })
 
 test("does not overwrite malformed config package.json during dependency install", async () => {
@@ -2444,23 +2491,29 @@ test("wellknown auth ignores dangerous environment variable names", async () => 
   const originalPinnedFetch = Ssrf.pinnedFetch
   const originalAssert = Ssrf.assertPublicUrl
   const originalAuthAll = Auth.all
-  const originalNodeOptions = process.env["NODE_OPTIONS"]
+  const dangerousKeys = ["NODE_OPTIONS", "RUBYOPT", "BASH_ENV", "IFS", "PERL5OPT"]
+  const originals = new Map(dangerousKeys.map((key) => [key, process.env[key]]))
   Ssrf.assertPublicUrl = vi.fn(() => Promise.resolve())
   Ssrf.pinnedFetch = vi.fn(() =>
     Promise.resolve(new Response(JSON.stringify({ config: {} }), { status: 200 })),
   ) as typeof Ssrf.pinnedFetch
   Auth.all = vi.fn(() =>
-    Promise.resolve({
-      "https://example.com": {
-        type: "wellknown" as const,
-        key: "NODE_OPTIONS",
-        token: "--require ./evil.js",
-      },
-    }),
+    Promise.resolve(
+      Object.fromEntries(
+        dangerousKeys.map((key, index) => [
+          `https://example${index}.com`,
+          {
+            type: "wellknown" as const,
+            key,
+            token: "malicious-runtime-option",
+          },
+        ]),
+      ),
+    ),
   )
 
   try {
-    delete process.env["NODE_OPTIONS"]
+    for (const key of dangerousKeys) delete process.env[key]
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
@@ -2476,12 +2529,14 @@ test("wellknown auth ignores dangerous environment variable names", async () => 
       directory: tmp.path,
       fn: async () => {
         await Config.get()
-        expect(process.env["NODE_OPTIONS"]).toBeUndefined()
+        for (const key of dangerousKeys) expect(process.env[key]).toBeUndefined()
       },
     })
   } finally {
-    if (originalNodeOptions === undefined) delete process.env["NODE_OPTIONS"]
-    else process.env["NODE_OPTIONS"] = originalNodeOptions
+    for (const [key, value] of originals) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
     Ssrf.pinnedFetch = originalPinnedFetch
     Ssrf.assertPublicUrl = originalAssert
     Auth.all = originalAuthAll
@@ -2941,6 +2996,40 @@ describe("project config {file:} substitution is sandboxed", () => {
         expect(config.username).toBe("inside-project")
       },
     })
+  })
+
+  test("reads the validated target if a symlink is swapped after realpath", async () => {
+    if (process.platform === "win32") return
+
+    await using tmp = await tmpdir({ git: true })
+    await using outside = await tmpdir()
+    const inside = path.join(tmp.path, "inside.txt")
+    const secret = path.join(outside.path, "secret.txt")
+    const link = path.join(tmp.path, "value.txt")
+    await Filesystem.write(inside, "inside-value")
+    await Filesystem.write(secret, "outside-secret")
+    await fs.symlink(inside, link)
+
+    const realpath = fs.realpath.bind(fs)
+    const spy = vi.spyOn(fs, "realpath").mockImplementation(async (target, options) => {
+      const resolved = await realpath(target, options as never)
+      if (path.resolve(String(target)) === link) {
+        await fs.unlink(link)
+        await fs.symlink(secret, link)
+      }
+      return resolved
+    })
+
+    try {
+      const parsed = await ConfigPaths.parseText(
+        '{"username":"{file:value.txt}"}',
+        { source: path.join(tmp.path, "ax-code.json"), dir: tmp.path },
+        { trusted: false },
+      )
+      expect(parsed.username).toBe("inside-value")
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   test("strips secret-pattern {env:} refs in project config", async () => {

@@ -185,6 +185,7 @@ export namespace ConfigPaths {
       }
 
       const resolvedPath = path.isAbsolute(filePath) ? filePath : path.resolve(configDir, filePath)
+      let readPath = resolvedPath
 
       if (!trusted) {
         // For untrusted configs, confine resolution to the config's
@@ -223,10 +224,14 @@ export namespace ConfigPaths {
             message: `file reference escapes config directory: "${token}"`,
           })
         }
+        // Read through the path that was actually validated. Reopening the
+        // original path would follow a symlink again and allow its target to
+        // be swapped between the containment check and the read.
+        readPath = real
       }
 
       const fileContent = (
-        await Filesystem.readText(resolvedPath).catch((error: NodeJS.ErrnoException) => {
+        await Filesystem.readText(readPath).catch((error: NodeJS.ErrnoException) => {
           if (missing === "empty") return ""
 
           const errMsg = `bad file reference: "${token}"`
@@ -234,7 +239,7 @@ export namespace ConfigPaths {
             throw new InvalidError(
               {
                 path: configSource,
-                message: errMsg + ` ${resolvedPath} does not exist`,
+                message: errMsg + ` ${readPath} does not exist`,
               },
               { cause: error },
             )

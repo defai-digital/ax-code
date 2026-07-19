@@ -1100,6 +1100,53 @@ test("reply - concurrent always approvals persist all rules", async () => {
   })
 })
 
+test("reply - always merges rules persisted by another process", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const ask = Permission.ask({
+        id: PermissionID.make("per_cross_process_merge"),
+        sessionID: SessionID.make("session_cross_process_merge"),
+        permission: "bash",
+        patterns: ["ls"],
+        metadata: {},
+        always: ["ls"],
+        ruleset: [],
+      })
+      await waitForPending(1)
+
+      const externalRule = { permission: "edit", pattern: "src/external.ts", action: "allow" as const }
+      Database.use((db) =>
+        db
+          .insert(PermissionTable)
+          .values({
+            project_id: Instance.project.id,
+            data: [externalRule],
+            time_created: Date.now(),
+            time_updated: Date.now(),
+          })
+          .onConflictDoUpdate({
+            target: PermissionTable.project_id,
+            set: { data: [externalRule], time_updated: Date.now() },
+          })
+          .run(),
+      )
+
+      await Permission.reply({ requestID: PermissionID.make("per_cross_process_merge"), reply: "always" })
+      await expect(ask).resolves.toBeUndefined()
+
+      const row = Database.use((db) =>
+        db.select().from(PermissionTable).where(eq(PermissionTable.project_id, Instance.project.id)).get(),
+      )
+      expect(row?.data).toEqual(
+        expect.arrayContaining([externalRule, { permission: "bash", pattern: "ls", action: "allow" }]),
+      )
+      expect(row?.data).toHaveLength(2)
+    },
+  })
+})
+
 test("reply - reject cancels all pending for same session", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({

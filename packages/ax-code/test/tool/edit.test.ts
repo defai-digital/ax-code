@@ -887,6 +887,14 @@ describe("tool.edit", () => {
       const output = replace("target()\n// target()\n", "  target()", "updated()")
       expect(output).toBe("updated()\n// target()\n")
     })
+
+    test("rejects equally good block-anchor matches instead of replacing the first", () => {
+      const content =
+        "start\n  const value = 1234567890abcdefghijA\nend\nseparator\nstart\n  const value = 1234567890abcdefghijA\nend\n"
+      expect(() => replace(content, "start\n  const value = 1234567890abcdefghijB\nend", "replacement")).toThrow(
+        "Found multiple matches",
+      )
+    })
   })
 
   describe("concurrent editing", () => {

@@ -21,6 +21,7 @@ import { PermissionID } from "./schema"
 import { Flag } from "@/flag/flag"
 import { ScopedFlag } from "@/flag/scoped"
 import { ProjectConfigTrust } from "@/config/project-config-trust"
+import { FileLock } from "@/util/filelock"
 
 export namespace Permission {
   const log = Log.create({ service: "permission" })
@@ -467,32 +468,36 @@ export namespace Permission {
         pattern,
         action: "allow" as const,
       }))
-      const nextApproved = [...approved, ...rules]
 
       try {
-        await Database.use((db) =>
-          db
-            .insert(PermissionTable)
+        // The in-memory queue serializes replies in this instance; the file
+        // lock also protects read-modify-write persistence across processes.
+        using _permissionLock = await FileLock.acquire(`${Database.Path}.permissions`)
+        const nextApproved = Database.transaction((db) => {
+          const latest = db.select().from(PermissionTable).where(eq(PermissionTable.project_id, projectID)).get()
+          const merged = [...(latest?.data ?? []), ...rules]
+          db.insert(PermissionTable)
             .values({
               project_id: projectID,
-              data: nextApproved,
+              data: merged,
               time_created: Date.now(),
               time_updated: Date.now(),
             })
             .onConflictDoUpdate({
               target: PermissionTable.project_id,
               set: {
-                data: nextApproved,
+                data: merged,
                 time_updated: Date.now(),
               },
             })
-            .run(),
-        )
+            .run()
+          return merged
+        })
+        approved.splice(0, approved.length, ...nextApproved)
       } catch (error) {
         existing.deferred.reject(error)
         throw error
       }
-      approved.push(...rules)
       publishReply(existing, input.reply)
       existing.deferred.resolve(undefined)
 

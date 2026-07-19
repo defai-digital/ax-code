@@ -83,7 +83,7 @@ export function staticallyCheckablePathArgs(cmd: string, args: string[]) {
 }
 
 export function hasDynamicRedirection(command: string) {
-  return /(?:^|[\s&;])\d*>>?\s*(?:\$|`)/.test(command)
+  return /(?:^|[\s&;|])\d*>>?\s*(?:\$|`)/.test(command)
 }
 
 export function absolutePathLiterals(value: string) {

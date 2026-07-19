@@ -406,7 +406,7 @@ const BlockAnchorReplacer: Replacer = function* (content, find) {
   }
 
   // Calculate similarity for multiple candidates
-  let bestMatch: { startLine: number; endLine: number } | null = null
+  let bestMatches: Array<{ startLine: number; endLine: number }> = []
   let maxSimilarity = -1
 
   for (const candidate of candidates) {
@@ -437,22 +437,25 @@ const BlockAnchorReplacer: Replacer = function* (content, find) {
 
     if (similarity > maxSimilarity) {
       maxSimilarity = similarity
-      bestMatch = candidate
+      bestMatches = [candidate]
+    } else if (similarity === maxSimilarity) {
+      bestMatches.push(candidate)
     }
   }
 
   // Threshold judgment
-  if (maxSimilarity >= MULTIPLE_CANDIDATES_SIMILARITY_THRESHOLD && bestMatch) {
-    const { startLine, endLine } = bestMatch
-    const matchStartIndex = lineStartIndex(originalLines, startLine)
-    let matchEndIndex = matchStartIndex
-    for (let k = startLine; k <= endLine; k++) {
-      matchEndIndex += originalLines[k].length
-      if (k < endLine) {
-        matchEndIndex += 1
+  if (maxSimilarity >= MULTIPLE_CANDIDATES_SIMILARITY_THRESHOLD) {
+    for (const { startLine, endLine } of bestMatches) {
+      const matchStartIndex = lineStartIndex(originalLines, startLine)
+      let matchEndIndex = matchStartIndex
+      for (let k = startLine; k <= endLine; k++) {
+        matchEndIndex += originalLines[k].length
+        if (k < endLine) {
+          matchEndIndex += 1
+        }
       }
+      yield { text: content.substring(matchStartIndex, matchEndIndex), index: matchStartIndex }
     }
-    yield { text: content.substring(matchStartIndex, matchEndIndex), index: matchStartIndex }
   }
 }
 

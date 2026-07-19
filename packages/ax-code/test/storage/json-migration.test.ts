@@ -141,6 +141,36 @@ describe("JSON to SQLite migration", () => {
     expect(projects[0].sandboxes).toEqual(["/test/sandbox"])
   })
 
+  test("does not let a throwing progress callback abort migration", async () => {
+    await writeProject(storageDir, fixtures.project)
+
+    const stats = await JsonMigration.run(sqlite, {
+      progress: () => {
+        throw new Error("progress observer failed")
+      },
+    })
+
+    expect(stats.projects).toBe(1)
+  })
+
+  test("preserves the migration error when rollback also fails", async () => {
+    const commitError = new Error("commit failed")
+    const rollbackError = new Error("rollback failed")
+    const wrapped = {
+      prepare: sqlite.prepare.bind(sqlite),
+      exec(sql: string) {
+        if (sql === "COMMIT") throw commitError
+        if (sql === "ROLLBACK") {
+          sqlite.exec(sql)
+          throw rollbackError
+        }
+        sqlite.exec(sql)
+      },
+    }
+
+    await expect(JsonMigration.run(wrapped)).rejects.toBe(commitError)
+  })
+
   test("uses filename for project id when JSON has different value", async () => {
     await writeFile(
       path.join(storageDir, "project", "proj_filename.json"),

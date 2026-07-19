@@ -219,13 +219,23 @@ export namespace JsonMigration {
         shareFiles.length,
     )
     const progress = options?.progress
+    const reportProgress = (event: Progress) => {
+      try {
+        progress?.(event)
+      } catch (error) {
+        log.warn("json migration progress callback failed", {
+          event,
+          error: toErrorMessage(error),
+        })
+      }
+    }
     let current = 0
     const step = (label: string, count: number) => {
       current = Math.min(total, current + count)
-      progress?.({ current, total, label })
+      reportProgress({ current, total, label })
     }
 
-    progress?.({ current, total, label: "starting" })
+    reportProgress({ current, total, label: "starting" })
 
     sqlite.exec("BEGIN TRANSACTION")
     try {
@@ -511,7 +521,14 @@ export namespace JsonMigration {
 
       sqlite.exec("COMMIT")
     } catch (error) {
-      sqlite.exec("ROLLBACK")
+      try {
+        sqlite.exec("ROLLBACK")
+      } catch (rollbackError) {
+        log.error("json migration rollback failed", {
+          error: toErrorMessage(rollbackError),
+          originalError: toErrorMessage(error),
+        })
+      }
       throw error
     }
 
@@ -532,7 +549,7 @@ export namespace JsonMigration {
       log.warn("migration errors", { errors: stats.errors.slice(0, 20) })
     }
 
-    progress?.({ current: total, total, label: "complete" })
+    reportProgress({ current: total, total, label: "complete" })
 
     return stats
   }

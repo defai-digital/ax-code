@@ -26,7 +26,13 @@ import open from "open"
 import { isRecord } from "@/util/record"
 import { KeyedSerialQueue } from "@/util/queue"
 import { Shell } from "../shell/shell"
-import { convertMcpTool, mcpItemKey, mcpToolPermissionKey, type ConvertedMcpTool } from "./tool-conversion"
+import {
+  convertMcpTool,
+  mcpItemKey,
+  mcpToolPermissionKey,
+  resolveMcpToolPermissionKeys,
+  type ConvertedMcpTool,
+} from "./tool-conversion"
 import { MCP_DEFAULT_TIMEOUT_MS } from "./constants"
 
 export namespace MCP {
@@ -239,22 +245,29 @@ export namespace MCP {
   const pendingOAuthTransports = new Map<string, TransportWithAuth>()
   const explicitOAuthTransports = new Set<TransportWithAuth>()
   let oauthCallbackUsers = 0
-  async function closePendingOAuthTransport(mcpName: string) {
-    const transport = pendingOAuthTransports.get(mcpName)
-    pendingOAuthTransports.delete(mcpName)
+  function oauthFlowKey(mcpName: string, directory = Instance.directory) {
+    return `${directory}\0${mcpName}`
+  }
+  async function closePendingOAuthTransport(mcpName: string, directory = Instance.directory) {
+    const key = oauthFlowKey(mcpName, directory)
+    const transport = pendingOAuthTransports.get(key)
+    pendingOAuthTransports.delete(key)
     if (transport) explicitOAuthTransports.delete(transport)
     await transport?.close?.().catch((error) => {
       log.debug("failed to close pending oauth transport", { mcpName, error })
     })
   }
-  async function closeAllPendingOAuthTransports() {
-    const transports = [...pendingOAuthTransports.entries()]
-    pendingOAuthTransports.clear()
-    explicitOAuthTransports.clear()
+  async function closePendingOAuthTransportsForDirectory(directory: string) {
+    const prefix = `${directory}\0`
+    const transports = [...pendingOAuthTransports.entries()].filter(([key]) => key.startsWith(prefix))
+    for (const [key, transport] of transports) {
+      pendingOAuthTransports.delete(key)
+      explicitOAuthTransports.delete(transport)
+    }
     await Promise.all(
-      transports.map(async ([mcpName, transport]) => {
+      transports.map(async ([key, transport]) => {
         await transport.close?.().catch((error) => {
-          log.debug("failed to close pending oauth transport", { mcpName, error })
+          log.debug("failed to close pending oauth transport", { key, error })
         })
       }),
     )
@@ -278,6 +291,13 @@ export namespace MCP {
     oauthCallbackUsers = Math.max(0, oauthCallbackUsers - 1)
     await stopOAuthCallbackIfIdle(context)
   }
+  const pendingOAuthState = Instance.state(
+    () => ({ directory: Instance.directory }),
+    async ({ directory }) => {
+      await closePendingOAuthTransportsForDirectory(directory)
+      await stopOAuthCallbackIfIdle("instance oauth shutdown")
+    },
+  )
   // Prompt cache types
   type PromptInfo = Awaited<ReturnType<MCPClient["listPrompts"]>>["prompts"][number]
 
@@ -351,7 +371,6 @@ export namespace MCP {
       toolsCacheSubscribed = false
       cachedTools = undefined
       toolsPromise = undefined
-      await closeAllPendingOAuthTransports()
       // The callback listener is process-global and otherwise keeps one-shot
       // commands alive after their instance has been disposed. Do not disrupt
       // an authorization flow owned by another concurrent instance.
@@ -452,24 +471,24 @@ export namespace MCP {
     return withConnectLock(name, "MCP add failed", async () => {
       const s = await state()
       const result = await create(name, mcp).catch((error) => {
-        s.status[name] = {
-          status: "failed" as const,
-          error: NamedError.message(error),
-        }
-        throw error
+        return { error }
       })
-      if (!result) {
-        const status = {
-          status: "failed" as const,
-          error: "unknown error",
-        }
-        s.status[name] = status
-        return {
-          status: s.status,
-        }
+      if ("error" in result) {
+        const existingClient = s.clients[name]
+        delete s.clients[name]
+        await closeIfPossible(existingClient, name, "replacement creation failed")
+        s.status[name] = { status: "failed", error: NamedError.message(result.error) }
+        cachedTools = undefined
+        toolsCacheGeneration++
+        throw result.error
       }
       if (!result.mcpClient) {
+        const existingClient = s.clients[name]
+        delete s.clients[name]
+        await closeIfPossible(existingClient, name, "replacement did not connect")
         s.status[name] = result.status
+        cachedTools = undefined
+        toolsCacheGeneration++
         return {
           status: s.status,
         }
@@ -626,7 +645,8 @@ export namespace MCP {
                   await transports[j].transport.close?.().catch(() => {})
                 }
                 await closePendingOAuthTransport(key)
-                pendingOAuthTransports.set(key, transport)
+                pendingOAuthState()
+                pendingOAuthTransports.set(oauthFlowKey(key), transport)
                 status = { status: "needs_auth" as const }
                 // Show toast for needs_auth
                 Bus.publishDetached(NotificationEvent.ToastShow, {
@@ -839,9 +859,18 @@ export namespace MCP {
     const s = await state()
     if (s.status[name]?.status === "connected" && s.clients[name]) return
 
-    const result = await create(name, { ...mcp, enabled: true })
+    const result = await create(name, { ...mcp, enabled: true }).catch(async (error) => {
+      const existingClient = s.clients[name]
+      delete s.clients[name]
+      await closeIfPossible(existingClient, name, "reconnect creation failed")
+      s.status[name] = { status: "failed", error: NamedError.message(error) }
+      throw error
+    })
 
     if (!result) {
+      const existingClient = s.clients[name]
+      delete s.clients[name]
+      await closeIfPossible(existingClient, name, "reconnect returned no result")
       s.status[name] = {
         status: "failed",
         error: "Unknown error during connection",
@@ -858,6 +887,10 @@ export namespace MCP {
       }
       s.clients[name] = result.mcpClient
       registerClientOnClose(name, result.mcpClient)
+    } else {
+      const existingClient = s.clients[name]
+      delete s.clients[name]
+      await closeIfPossible(existingClient, name, "reconnect did not connect")
     }
   }
 
@@ -952,7 +985,14 @@ export namespace MCP {
 
       const toolsResults = await Promise.all(
         connectedClients.map(async ([clientName, client]) => {
-          const toolsResult = await client.listTools().catch((e) => {
+          const mcpConfig = config[clientName]
+          const entry = isConfigured(mcpConfig) ? mcpConfig : undefined
+          const timeout = entry?.timeout ?? defaultTimeout ?? DEFAULT_TIMEOUT
+          const toolsResult = await withTimeout(
+            client.listTools(),
+            timeout,
+            `listing tools timed out for MCP server ${clientName}`,
+          ).catch((e) => {
             log.error("failed to get tools", { clientName, error: NamedError.message(e) })
             return { _failed: true as const, error: NamedError.message(e) }
           })
@@ -973,33 +1013,37 @@ export namespace MCP {
         }
       }
 
+      const listedTools = toolsResults.flatMap(({ clientName, client, toolsResult }) => {
+        if (!toolsResult || "_failed" in toolsResult) return []
+        return toolsResult.tools.map((mcpTool) => ({ clientName, client, mcpTool }))
+      })
+      const permissionKeys = resolveMcpToolPermissionKeys(
+        listedTools.map(({ clientName, mcpTool }) => ({ server: clientName, tool: mcpTool.name })),
+      )
       const conversions: Promise<void>[] = []
-      for (const { clientName, client, toolsResult } of toolsResults) {
-        if (!toolsResult || "_failed" in toolsResult) continue
+      for (const [index, { clientName, client, mcpTool }] of listedTools.entries()) {
         const mcpConfig = config[clientName]
         const entry = isConfigured(mcpConfig) ? mcpConfig : undefined
         const timeout = entry?.timeout ?? defaultTimeout
-        for (const mcpTool of toolsResult.tools) {
-          const key = mcpToolPermissionKey(clientName, mcpTool.name)
-          conversions.push(
-            convertMcpTool(mcpTool, client, timeout)
-              .then((tool) => {
-                result[key] = tool
+        const key = permissionKeys[index]!
+        conversions.push(
+          convertMcpTool(mcpTool, client, timeout)
+            .then((tool) => {
+              result[key] = tool
+            })
+            .catch((e) => {
+              const error = NamedError.message(e)
+              log.error("failed to convert MCP tool", {
+                clientName,
+                tool: mcpTool.name,
+                error,
               })
-              .catch((e) => {
-                const error = NamedError.message(e)
-                log.error("failed to convert MCP tool", {
-                  clientName,
-                  tool: mcpTool.name,
-                  error,
-                })
-                s.status[clientName] = {
-                  status: "failed",
-                  error: `Failed to convert MCP tool ${mcpTool.name}: ${error}`,
-                }
-              }),
-          )
-        }
+              s.status[clientName] = {
+                status: "failed",
+                error: `Failed to convert MCP tool ${mcpTool.name}: ${error}`,
+              }
+            }),
+        )
       }
       await Promise.all(conversions)
       // Only cache if no invalidation occurred during computation
@@ -1016,12 +1060,10 @@ export namespace MCP {
     }
   }
 
-  // The key under which a single MCP tool is registered for the LLM tool
-  // surface AND the key the Permission system evaluates against. Users
-  // can target MCP tools from `permission` in `ax-code.json` using this
-  // exact shape, including wildcards (e.g. "github_*": "deny"). Keep this
-  // helper as the ONLY public source of the key derivation rule so the
-  // CLI and tests cannot drift from the runtime in session/prompt.ts.
+  // The established base permission key. Runtime tool enumeration preserves
+  // this shape when unique and adds a deterministic hash suffix only when two
+  // raw identities sanitize to the same base. listAllTools() exposes the exact
+  // resolved key; server wildcards such as "github_*" continue to cover both.
   export function permissionKey(server: string, tool: string): string {
     return mcpToolPermissionKey(server, tool)
   }
@@ -1040,11 +1082,21 @@ export namespace MCP {
   // omitted; callers can cross-reference `status()` to surface those.
   export async function listAllTools(): Promise<ToolListing[]> {
     const s = await state()
+    const cfg = await Config.get()
+    const config = cfg.mcp ?? {}
+    const defaultTimeout = cfg.experimental?.mcp_timeout
     const clientsSnapshot = await clients()
     const results = await Promise.all(
       Object.entries(clientsSnapshot).map(async ([server, client]) => {
         if (s.status[server]?.status !== "connected") return []
-        const listed = await client.listTools().catch((e) => {
+        const mcpConfig = config[server]
+        const entry = isConfigured(mcpConfig) ? mcpConfig : undefined
+        const timeout = entry?.timeout ?? defaultTimeout ?? DEFAULT_TIMEOUT
+        const listed = await withTimeout(
+          client.listTools(),
+          timeout,
+          `listing tools timed out for MCP server ${server}`,
+        ).catch((e) => {
           log.error("failed to list tools", { server, error: NamedError.message(e) })
           return undefined
         })
@@ -1053,11 +1105,12 @@ export namespace MCP {
           server,
           name: t.name,
           description: t.description,
-          permissionKey: permissionKey(server, t.name),
         }))
       }),
     )
-    return results.flat()
+    const tools = results.flat()
+    const permissionKeys = resolveMcpToolPermissionKeys(tools.map(({ server, name }) => ({ server, tool: name })))
+    return tools.map((tool, index) => ({ ...tool, permissionKey: permissionKeys[index]! }))
   }
 
   export async function prompts() {
@@ -1257,7 +1310,8 @@ export namespace MCP {
         if (error instanceof UnauthorizedError && capturedUrl) {
           // Store transport for finishAuth
           await closePendingOAuthTransport(mcpName)
-          pendingOAuthTransports.set(mcpName, transport)
+          pendingOAuthState()
+          pendingOAuthTransports.set(oauthFlowKey(mcpName), transport)
           explicitOAuthTransports.add(transport)
           return { authorizationUrl: capturedUrl.toString(), oauthState }
         }
@@ -1306,7 +1360,7 @@ export namespace MCP {
 
       // Register the callback BEFORE opening the browser to avoid race condition
       // when the IdP has an active SSO session and redirects immediately
-      const callbackPromise = McpOAuthCallback.waitForCallback(oauthState, mcpName)
+      const callbackPromise = McpOAuthCallback.waitForCallback(oauthState, oauthFlowKey(mcpName))
 
       try {
         const subprocess = await open(authorizationUrl)
@@ -1361,7 +1415,8 @@ export namespace MCP {
    * Complete OAuth authentication with the authorization code.
    */
   export async function finishAuth(mcpName: string, authorizationCode: string): Promise<Status> {
-    const transport = pendingOAuthTransports.get(mcpName)
+    const key = oauthFlowKey(mcpName)
+    const transport = pendingOAuthTransports.get(key)
 
     if (!transport) {
       throw new Error(`No pending OAuth flow for MCP server: ${mcpName}`)
@@ -1398,8 +1453,8 @@ export namespace MCP {
         error: NamedError.message(error),
       }
     } finally {
-      if (pendingOAuthTransports.get(mcpName) === transport) {
-        pendingOAuthTransports.delete(mcpName)
+      if (pendingOAuthTransports.get(key) === transport) {
+        pendingOAuthTransports.delete(key)
       }
       explicitOAuthTransports.delete(transport)
       await transport.close?.().catch(() => {})
@@ -1412,7 +1467,7 @@ export namespace MCP {
    */
   export async function removeAuth(mcpName: string): Promise<void> {
     await McpAuth.remove(mcpName)
-    McpOAuthCallback.cancelPending(mcpName)
+    McpOAuthCallback.cancelPending(oauthFlowKey(mcpName))
     await closePendingOAuthTransport(mcpName)
     await stopOAuthCallbackIfIdle("removeAuth completed")
     log.info("removed oauth credentials", { mcpName })

@@ -56,6 +56,7 @@ import { ProjectConfigTrust } from "./project-config-trust"
 const PROGRAM_DATA_FALLBACK_DIR = "C:\\ProgramData"
 const UNIX_SYSTEM_CONFIG_DIR = "/etc/ax-code"
 const PLATFORM_CONFIG_DIR = "ax-code"
+const DEPENDENCY_INSTALL_FAILURE_MARKER = ".ax-code-dependencies-install-failed"
 
 const DANGEROUS_WELLKNOWN_ENV_KEYS = new Set([
   "NODE_OPTIONS",
@@ -67,6 +68,10 @@ const DANGEROUS_WELLKNOWN_ENV_KEYS = new Set([
   "DYLD_INSERT_LIBRARIES",
   "PYTHONPATH",
   "PYTHONSTARTUP",
+  "RUBYOPT",
+  "BASH_ENV",
+  "IFS",
+  "PERL5OPT",
   "CLASSPATH",
   "PATH",
   "SHELL",
@@ -756,34 +761,88 @@ export namespace Config {
 
   export async function installDependencies(dir: string) {
     const pkg = path.join(dir, "package.json")
+    const marker = path.join(dir, DEPENDENCY_INSTALL_FAILURE_MARKER)
     const targetVersion = Installation.isLocal() ? "*" : Installation.VERSION
 
     // Acquire install lock before read-modify-write to prevent races
     using _ = await Lock.write("bun-install")
 
-    const raw = await Filesystem.readJson<unknown>(pkg).catch((error) => {
-      if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return { dependencies: {} }
+    let packageJsonExisted = true
+    const originalPackageJson = await fs.readFile(pkg, "utf8").catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") {
+        packageJsonExisted = false
+        return undefined
+      }
       throw error
     })
+    const restorePackageJson = async (originalError: unknown) => {
+      try {
+        if (packageJsonExisted) {
+          await Filesystem.write(pkg, originalPackageJson!)
+        } else {
+          await fs.unlink(pkg).catch((error: NodeJS.ErrnoException) => {
+            if (error.code !== "ENOENT") throw error
+          })
+        }
+      } catch (restoreError) {
+        log.error("failed to restore package.json after dependency setup failure", {
+          dir,
+          error: restoreError,
+        })
+        throw new AggregateError([originalError, restoreError], `Failed to install dependencies and restore ${pkg}`)
+      }
+    }
+    const raw = packageJsonExisted ? await Filesystem.readJson<unknown>(pkg) : { dependencies: {} }
     const json = normalizeDependencyPackageJson(pkg, raw)
     json.dependencies = {
       ...json.dependencies,
       "@ax-code/plugin": targetVersion,
     }
-    await Filesystem.writeJson(pkg, json)
 
     const gitignore = path.join(dir, ".gitignore")
     const hasGitIgnore = await Filesystem.exists(gitignore)
-    if (!hasGitIgnore)
+    if (!hasGitIgnore) {
       await Filesystem.write(
         gitignore,
-        ["node_modules", "package.json", "bun.lock", "package-lock.json", ".gitignore"].join("\n"),
+        [
+          "node_modules",
+          "package.json",
+          "bun.lock",
+          "package-lock.json",
+          DEPENDENCY_INSTALL_FAILURE_MARKER,
+          ".gitignore",
+        ].join("\n"),
       )
-    const install =
-      packageManagerKind() === "npm"
+    } else {
+      const ignore = await Filesystem.readText(gitignore)
+      const entries = ignore.split(/\r?\n/)
+      if (!entries.includes(DEPENDENCY_INSTALL_FAILURE_MARKER)) {
+        await Filesystem.write(
+          gitignore,
+          `${ignore}${ignore.length > 0 && !ignore.endsWith("\n") ? "\n" : ""}${DEPENDENCY_INSTALL_FAILURE_MARKER}\n`,
+        )
+      }
+    }
+    await Filesystem.writeJson(pkg, json)
+    // Create the failure marker before starting the package manager. It also
+    // covers process crashes or forced termination during installation.
+    await Filesystem.write(marker, `${targetVersion}\n`).catch(async (error) => {
+      await restorePackageJson(error)
+      throw error
+    })
+    try {
+      await (packageManagerKind() === "npm"
         ? Process.run([NpmManager.executable, ...NpmManager.installArgs(dir)], { cwd: dir })
-        : BunProc.run(["install", ...BunProc.installCacheWorkaroundArgs()], { cwd: dir })
-    await install.catch((err) => {
+        : BunProc.run(["install", ...BunProc.installCacheWorkaroundArgs()], { cwd: dir }))
+      await fs.unlink(marker).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== "ENOENT") throw error
+      })
+    } catch (err) {
+      // Restore the declaration while leaving the failure marker in place.
+      // needsInstall() will retry even if npm created a partial node_modules
+      // tree or the prior declaration already named the target version.
+      await restorePackageJson(err)
+
       if (err instanceof Process.RunFailedError) {
         const detail = {
           dir,
@@ -805,7 +864,7 @@ export namespace Config {
         throw err
       }
       log.warn("failed to install dependencies", { dir, error: err })
-    })
+    }
   }
 
   async function isWritable(dir: string) {
@@ -825,6 +884,8 @@ export namespace Config {
       log.debug("config dir is not writable, skipping dependency install", { dir })
       return false
     }
+
+    if (await Filesystem.exists(path.join(dir, DEPENDENCY_INSTALL_FAILURE_MARKER))) return true
 
     const nodeModules = path.join(dir, "node_modules")
     if (!existsSync(nodeModules)) return true
@@ -1268,7 +1329,15 @@ export namespace Config {
     if (parsed.success) {
       if (!parsed.data.$schema && isFile) {
         parsed.data.$schema = CONFIG_SCHEMA_URL
-        const updated = original.replace(/^\s*\{/, `{\n  "$schema": "${CONFIG_SCHEMA_URL}",`)
+        const updated = applyEdits(
+          original,
+          modify(original, ["$schema"], CONFIG_SCHEMA_URL, {
+            formattingOptions: {
+              insertSpaces: true,
+              tabSize: 2,
+            },
+          }),
+        )
         // Log write failures — a silent `.catch(() => {})` leaves the
         // user staring at a config that keeps getting "$schema" added
         // on every load but never persisted (e.g. permission denied).

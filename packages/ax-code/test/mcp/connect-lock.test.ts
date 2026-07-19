@@ -7,6 +7,7 @@ let resolveConnectStarted!: () => void
 let releaseConnect!: () => void
 let connectRelease!: Promise<void>
 let failListTools = false
+let hangListTools = false
 let nextTransportPid = 5001
 
 function resetGate() {
@@ -17,6 +18,7 @@ function resetGate() {
     releaseConnect = resolve
   })
   failListTools = false
+  hangListTools = false
   nextTransportPid = 5001
 }
 
@@ -26,6 +28,7 @@ vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class MockClient {
     onclose?: () => void
     transport?: unknown
+    closed = false
 
     async connect(transport: unknown) {
       this.transport = transport
@@ -34,13 +37,16 @@ vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
     }
 
     async listTools() {
+      if (hangListTools) return new Promise<never>(() => {})
       if (failListTools) throw new Error("list failed")
       return { tools: [] }
     }
 
     setNotificationHandler() {}
 
-    async close() {}
+    async close() {
+      this.closed = true
+    }
   },
 }))
 
@@ -155,6 +161,56 @@ test("tools closes and kills MCP clients when listTools fails", async () => {
       const clients = await MCP.clients()
       expect(clients["failing-tools"]).toBeUndefined()
       expect(source).toContain('await closeIfPossible(client, clientName, "listTools failed")')
+    },
+  })
+})
+
+test("failed replacement closes and removes the previous MCP client", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const first = MCP.add("replace-failure", {
+        type: "local",
+        command: ["mock-mcp-server"],
+      })
+      await connectStarted
+      releaseConnect()
+      await first
+
+      const previous = (await MCP.clients())["replace-failure"] as unknown as { closed: boolean }
+      expect(previous.closed).toBe(false)
+
+      failListTools = true
+      await MCP.add("replace-failure", {
+        type: "local",
+        command: ["mock-mcp-server"],
+      })
+
+      expect(previous.closed).toBe(true)
+      expect((await MCP.clients())["replace-failure"]).toBeUndefined()
+    },
+  })
+})
+
+test("tool enumeration times out and removes an unresponsive MCP client", async () => {
+  await using tmp = await tmpdir({ git: true, config: { experimental: { mcp_timeout: 10 } } })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const add = MCP.add("hanging-tools", {
+        type: "local",
+        command: ["mock-mcp-server"],
+      })
+      await connectStarted
+      releaseConnect()
+      await add
+
+      hangListTools = true
+      await expect(MCP.tools()).resolves.toEqual({})
+      expect((await MCP.clients())["hanging-tools"]).toBeUndefined()
     },
   })
 })

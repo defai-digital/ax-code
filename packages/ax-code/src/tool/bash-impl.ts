@@ -885,7 +885,7 @@ export const BashTool = Tool.define("bash", async () => {
             error,
           })
         })
-      }, timeout + 100)
+      }, timeout)
 
       let procExitCode: number | null = null
 

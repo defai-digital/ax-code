@@ -748,6 +748,7 @@ export namespace Provider {
   // request rate (one BunProc.install per getSDK call). 5s is short enough
   // that recovery from a transient registry blip is still automatic.
   const PROVIDER_INSTALL_NEGATIVE_CACHE_MS = 5_000
+  const PROVIDER_INSTALL_NEGATIVE_CACHE_MAX = 128
   const PROVIDER_INSTALL_TIMEOUT_MS = 60_000
   const providerInstallFailures = new Map<string, { at: number; error: unknown }>()
 
@@ -921,8 +922,12 @@ export namespace Provider {
 
         let installedPath: string
         if (!isFileUrl) {
+          const now = Date.now()
+          for (const [pkg, failure] of providerInstallFailures) {
+            if (now - failure.at >= PROVIDER_INSTALL_NEGATIVE_CACHE_MS) providerInstallFailures.delete(pkg)
+          }
           const cached = providerInstallFailures.get(model.api.npm)
-          if (cached && Date.now() - cached.at < PROVIDER_INSTALL_NEGATIVE_CACHE_MS) {
+          if (cached) {
             // Surface the cached install error instead of re-running install
             // against the same registry that just failed.
             throw cached.error
@@ -938,6 +943,12 @@ export namespace Provider {
             )
             providerInstallFailures.delete(model.api.npm)
           } catch (error) {
+            providerInstallFailures.delete(model.api.npm)
+            while (providerInstallFailures.size >= PROVIDER_INSTALL_NEGATIVE_CACHE_MAX) {
+              const oldest = providerInstallFailures.keys().next().value
+              if (oldest === undefined) break
+              providerInstallFailures.delete(oldest)
+            }
             providerInstallFailures.set(model.api.npm, { at: Date.now(), error })
             throw error
           }

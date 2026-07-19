@@ -401,9 +401,7 @@ export namespace SessionPrompt {
         // active goal so it is explicitly resumable instead of being left
         // "active" forever in a session that will not auto-continue.
         if (activeGoal?.status === "active") {
-          await SessionGoal.pause(sessionID).catch((error) => {
-            log.warn("failed to pause goal after super-long deadline", { sessionID, error })
-          })
+          await SessionGoal.pause(sessionID)
           Session.publishError({
             sessionID,
             message:
