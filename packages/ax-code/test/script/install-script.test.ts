@@ -95,6 +95,42 @@ describe("install script", () => {
     expect(text).toContain("Warn-PathPrecedence")
   })
 
+  test("verifies Windows release archives with pinned minisign public key", async () => {
+    const text = await readFile(installPowerShellScript, "utf-8")
+    const bashText = await readFile(installScript, "utf-8")
+    const keyMatch = bashText.match(/AX_CODE_MINISIGN_PUBLIC_KEY='([^']+)'/)
+    expect(keyMatch?.[1]).toBeTruthy()
+    expect(text).toContain(`$AxCodeMinisignPublicKey = "${keyMatch![1]}"`)
+    expect(text).toContain("Assert-MinisignAvailable")
+    expect(text).toContain("Verify-DownloadedArchive")
+    expect(text).toContain("AX_CODE_SKIP_MINISIGN_VERIFY")
+    expect(text).toContain('Test-SkipMinisignVerify')
+    expect(text).toContain('return $env:AX_CODE_SKIP_MINISIGN_VERIFY -eq "1"')
+    expect(text).toContain("skipping minisign verification because AX_CODE_SKIP_MINISIGN_VERIFY=1")
+    expect(text).toContain("minisign is required to verify AX Code release artifacts")
+    expect(text).toContain("scoop install minisign")
+    expect(text).toContain("choco install minisign")
+    expect(text).toContain("winget install jedisct1.minisign")
+    expect(text).toContain('"$archive.minisig"')
+    expect(text).toContain('"$($release.Url).minisig"')
+    expect(text).toContain("-Vm $ArchivePath")
+    expect(text).toContain("-x $SignaturePath")
+    expect(text).toContain("-P $AxCodeMinisignPublicKey")
+    expect(text).toContain("Verifying release signature")
+    expect(text).toContain("minisign verification failed")
+    // Release path must preflight minisign and verify before extract.
+    const installFromRelease = text.slice(
+      text.indexOf("function Install-FromRelease"),
+      text.indexOf("function Get-InstalledVersion"),
+    )
+    expect(installFromRelease.indexOf("Assert-MinisignAvailable")).toBeLessThan(
+      installFromRelease.indexOf("Resolve-ReleaseDownload"),
+    )
+    expect(installFromRelease.indexOf("Verify-DownloadedArchive")).toBeLessThan(
+      installFromRelease.indexOf("Expand-Archive"),
+    )
+  })
+
   test("installs the Windows Node distribution without AVX2 binary fallback", async () => {
     const text = await readFile(installPowerShellScript, "utf-8")
     expect(text).toContain('$filename = "$App-windows-$arch.zip"')

@@ -76,12 +76,12 @@ configure a workflow, understand a runtime boundary, or integrate AX Code with a
 `docs/` contains public guidance for behavior that exists in the current runtime. Planning material and temporary
 analysis do not belong here:
 
-| Content                                          | Location             |
-| ------------------------------------------------ | -------------------- |
-| Architecture decisions                           | `.internal/adr/`     |
-| Product requirements                             | `.internal/prd/`     |
-| Temporary audits and reports                     | `.internal/reports/` |
-| Shipped behavior and public integration guidance | `docs/`              |
+| Content                                             | Location             |
+| --------------------------------------------------- | -------------------- |
+| Architecture decisions                              | `.internal/adr/`     |
+| Product requirements                                | `.internal/prd/`     |
+| Internal plans, test/QA output, audits, and reports | `.internal/reports/` |
+| Shipped behavior and public integration guidance    | `docs/`              |
 
 Every public Markdown page should declare its status, scope, last-reviewed date, and owner near the top. Prefer links to
 generated contracts or implementation sources over copied route lists and other high-drift snapshots.

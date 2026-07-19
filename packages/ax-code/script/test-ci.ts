@@ -21,6 +21,7 @@ type Result = {
 }
 
 const harmlessEffectInterrupt = "All fibers interrupted without error"
+const testingReports = path.resolve(root, "../../.internal/reports/testing")
 
 // Resolve the vitest CLI from the installed package (its ./vitest.mjs bin is not
 // exposed via "exports"). Spawned with the current node so CI runs Bun-free.
@@ -108,7 +109,9 @@ function tee(stream: Readable | null, writer: NodeJS.WriteStream): Promise<strin
 
 async function run(group: string, files: string[], dir: string, run: number, shard?: number) {
   const file = path.join(dir, `${group}-${run}${shard ? `-shard-${shard}` : ""}.xml`)
-  const coverageDir = flag("--coverage") ? path.join(root, arg("--coverage-dir") ?? ".tmp/coverage") : undefined
+  const coverageDir = flag("--coverage")
+    ? path.resolve(root, arg("--coverage-dir") ?? path.join(testingReports, "coverage"))
+    : undefined
   // The 30s per-test timeout and setup/preload files come from vitest.config.ts.
   // The exact file set is passed through the config's `include` via AX_TEST_FILES
   // (vitest positional filters can't reliably target an exact set).
@@ -206,9 +209,8 @@ async function main() {
     return
   }
 
-  const dir = path.join(root, arg("--dir") ?? ".tmp/test-report")
+  const dir = path.resolve(root, arg("--dir") ?? path.join(testingReports, "junit"))
   await fs.mkdir(dir, { recursive: true })
-  await fs.writeFile(path.join(dir, ".keep"), "")
 
   const shardSize = process.env.AX_TEST_SHARD_SIZE ? Number.parseInt(process.env.AX_TEST_SHARD_SIZE, 10) : files.length
   const shards = shardFiles(files, shardSize)
@@ -248,9 +250,12 @@ async function main() {
       await writeCoverageArtifacts({
         group,
         lcovFile,
-        summaryFile: path.join(root, arg("--coverage-summary-out") ?? ".tmp/coverage-summary.json"),
-        reportFile: path.join(root, arg("--coverage-report-out") ?? ".tmp/coverage-report.md"),
-        baselineFile: arg("--coverage-baseline") ? path.join(root, arg("--coverage-baseline")!) : undefined,
+        summaryFile: path.resolve(
+          root,
+          arg("--coverage-summary-out") ?? path.join(testingReports, "coverage-summary.json"),
+        ),
+        reportFile: path.resolve(root, arg("--coverage-report-out") ?? path.join(testingReports, "coverage-report.md")),
+        baselineFile: arg("--coverage-baseline") ? path.resolve(root, arg("--coverage-baseline")!) : undefined,
       })
     }
   }

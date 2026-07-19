@@ -386,8 +386,11 @@ export function resolve(cwd: string, file: string | undefined, cfg: Config): Opt
       : baseFile
         ? sidecar(baseFile)
         : undefined
-  const out = arg("--out") ?? (cfg.out ? path.resolve(here, cfg.out) : ".tmp/perf-index.json")
-  const sum = arg("--summary-out") ?? (cfg.summary ? path.resolve(here, cfg.summary) : ".tmp/perf-index-summary.json")
+  const out =
+    arg("--out") ?? (cfg.out ? path.resolve(here, cfg.out) : "../../.internal/reports/performance/perf-index.json")
+  const sum =
+    arg("--summary-out") ??
+    (cfg.summary ? path.resolve(here, cfg.summary) : "../../.internal/reports/performance/perf-index-summary.json")
   const write = arg("--write-baseline")
   const writeSum = arg("--write-baseline-summary") ?? (write ? sidecar(write) : undefined)
 

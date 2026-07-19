@@ -40,7 +40,26 @@ const runtimeBoundaryAllowedFiles = new Set([
 ])
 
 const ext = new Set([".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"])
-const old = ["ax-internal", "ADRS", "PRDS", "BUGS", "TODOS", "specs", "sdks", "github", "scripts"]
+const old = [
+  "ax-internal",
+  "ADRS",
+  "PRDS",
+  "BUGS",
+  "TODOS",
+  "specs",
+  "sdks",
+  "github",
+  "scripts",
+  "coverage",
+  "plans",
+  "planning",
+  "qa",
+  "QA",
+  "report",
+  "reports",
+  "test-reports",
+  "test-results",
+]
 const keep = [
   ".ax-code",
   ".ax-grok",
@@ -62,12 +81,10 @@ const keep = [
   "desktop",
   "docs",
   "logo",
-  "planning",
   "nix",
   "node_modules",
   "packages",
   "patches",
-  "reports",
   "script",
   "tools",
 ]

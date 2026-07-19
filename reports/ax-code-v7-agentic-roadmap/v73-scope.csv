@@ -1,7 +1,0 @@
-initiative,deliverable,release_gate
-Engineering work control plane,"GitHub/Jira/Linear/webhook task state, one durable workspace per task, stall recovery, verified PR handoff",Thirty-day dogfood with issue state and agent state reconciliation under restart and duplicate events
-Workload identity and secret broker,"Short-lived per-run identity, scoped tools/secrets/network, delegated authority, revocation",Zero credential exposure to model-generated code and zero unsafe-action escapes in the security suite
-Agent package system,"Versioned agents, skills, hooks, workflows, evaluators, compatibility metadata, signing and trust policy","Untrusted packages cannot gain tools, secrets, memory, hooks, or network authority without policy approval"
-Feedback-to-eval loop,"Rejected changes, rollbacks, incidents, and human corrections become reviewed regression candidates","No automatic memory/prompt promotion; every promoted lesson has provenance, expiry, owner, and regression evidence"
-Local/cloud worker pool,"Portable run manifest, sandbox capability matching, local AX Engine routing, cloud burst, rehydration",A failed worker can rehydrate elsewhere without losing checkpoint or expanding authority
-Portfolio supervision,"Queue, task status, blocked reasons, budgets, SLA, review inbox, PR evidence and outcome analytics",Dogfood shows improved accepted changes per human review hour without higher rollback rate

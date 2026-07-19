@@ -70,14 +70,14 @@ jobs:
         run: pnpm run check:structure
 
       - name: Run ax-code self-scan
-        run: pnpm run check:self-scan -- --report .internal/reports/self-scan.md
+        run: pnpm run check:self-scan -- --report .internal/reports/qa/self-scan.md
 
       - name: Upload ax-code self-scan report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: ax-code-self-scan
-          path: .internal/reports/self-scan.md
+          path: .internal/reports/qa/self-scan.md
           if-no-files-found: ignore
 
       - name: Ensure internal planning files are not tracked

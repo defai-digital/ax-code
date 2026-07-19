@@ -164,8 +164,8 @@ describe("script.test-ci", () => {
 
   test("defaults to deterministic when no positional group is provided", () => {
     expect(resolveTestCIGroup()).toBe("deterministic")
-    expect(resolveTestCIGroup(["--dir", ".tmp/test-report"])).toBe("deterministic")
-    expect(resolveTestCIGroup(["--", "--dir", ".tmp/test-report"])).toBe("deterministic")
+    expect(resolveTestCIGroup(["--dir", "../../.internal/reports/testing/junit"])).toBe("deterministic")
+    expect(resolveTestCIGroup(["--", "--dir", "../../.internal/reports/testing/junit"])).toBe("deterministic")
   })
 
   test("defaults to deterministic when positional group is empty", () => {

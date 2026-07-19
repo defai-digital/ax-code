@@ -13,6 +13,8 @@ $ErrorActionPreference = "Stop"
 
 $App = "ax-code"
 $Repo = "defai-digital/ax-code"
+# Keep in sync with install (bash), docs/release/ax-minisign.pub, and script/sign-release-assets.ts
+$AxCodeMinisignPublicKey = "RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO"
 $InstallDir = Join-Path $HOME ".ax-code\bin"
 $InstallRoot = Split-Path -Parent $InstallDir
 $InstallPath = Join-Path $InstallDir "ax-code.exe"
@@ -33,6 +35,9 @@ Options:
   -Version <version>    Install a specific version (e.g., 5.8.0)
   -Binary <path>        Install from a local binary instead of downloading
   -NoModifyPath         Do not update the user PATH
+
+Release downloads are verified with minisign before extraction unless
+AX_CODE_SKIP_MINISIGN_VERIFY=1 is set.
 
 Examples:
   irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex
@@ -119,6 +124,81 @@ function Resolve-ReleaseDownload {
   }
 }
 
+function Test-SkipMinisignVerify {
+  return $env:AX_CODE_SKIP_MINISIGN_VERIFY -eq "1"
+}
+
+function Get-MinisignCommand {
+  $command = Get-Command minisign -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($command -and $command.Source) {
+    return $command.Source
+  }
+  return $null
+}
+
+function Assert-MinisignAvailable {
+  if (Test-SkipMinisignVerify) {
+    return
+  }
+
+  if (Get-MinisignCommand) {
+    return
+  }
+
+  throw @"
+minisign is required to verify AX Code release artifacts.
+Install minisign (scoop install minisign, choco install minisign, or winget install jedisct1.minisign),
+or set AX_CODE_SKIP_MINISIGN_VERIFY=1 to bypass signature verification.
+"@
+}
+
+function Verify-DownloadedArchive {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$ArchivePath,
+
+    [Parameter(Mandatory = $true)]
+    [string]$SignatureUrl,
+
+    [Parameter(Mandatory = $true)]
+    [string]$SignaturePath
+  )
+
+  if (Test-SkipMinisignVerify) {
+    Write-Warn "skipping minisign verification because AX_CODE_SKIP_MINISIGN_VERIFY=1"
+    return
+  }
+
+  $minisign = Get-MinisignCommand
+  if (-not $minisign) {
+    throw "minisign is required to verify AX Code release artifacts but was not found on PATH."
+  }
+
+  Write-Info "Verifying release signature"
+  Invoke-WebRequest `
+    -Uri $SignatureUrl `
+    -OutFile $SignaturePath `
+    -UseBasicParsing `
+    -Headers @{ "User-Agent" = "$App-installer" }
+
+  $previousErrorAction = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $output = & $minisign -Vm $ArchivePath -x $SignaturePath -P $AxCodeMinisignPublicKey 2>&1
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorAction
+  }
+
+  if ($exitCode -ne 0) {
+    $details = ($output | Out-String).Trim()
+    if (-not $details) {
+      $details = "minisign exited with status $exitCode"
+    }
+    throw "minisign verification failed for $(Split-Path -Leaf $ArchivePath). $details"
+  }
+}
+
 function Install-NodeBundleTree([string]$Root) {
   $launcher = Join-Path $Root "bin\ax-code.cmd"
   $lib = Join-Path $Root "lib"
@@ -178,14 +258,18 @@ function Install-FromBinary([string]$Path) {
 }
 
 function Install-FromRelease {
+  Assert-MinisignAvailable
+
   $release = Resolve-ReleaseDownload
   $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ("ax_code_install_" + [System.Guid]::NewGuid().ToString("N"))
   New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
 
   try {
     $archive = Join-Path $tmpDir $release.FileName
+    $signature = "$archive.minisig"
     Write-Info "Installing ax-code version: $($release.Version)"
     Invoke-WebRequest -Uri $release.Url -OutFile $archive -UseBasicParsing -Headers @{ "User-Agent" = "$App-installer" }
+    Verify-DownloadedArchive -ArchivePath $archive -SignatureUrl "$($release.Url).minisig" -SignaturePath $signature
 
     Expand-Archive -Path $archive -DestinationPath $tmpDir -Force
     $launcher = Get-ChildItem -Path $tmpDir -Filter "ax-code.cmd" -Recurse | Select-Object -First 1

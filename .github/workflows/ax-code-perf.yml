@@ -67,17 +67,17 @@ on:
         description: Baseline output path relative to packages/ax-code when promotion is enabled
         required: false
         type: string
-        default: ".tmp/perf-index-baseline.json"
+        default: "../../.internal/reports/performance/perf-index-baseline.json"
       baseline_summary_out:
         description: Baseline summary path relative to packages/ax-code when promotion is enabled
         required: false
         type: string
-        default: ".tmp/perf-index-baseline-summary.json"
+        default: "../../.internal/reports/performance/perf-index-baseline-summary.json"
       summary_out:
         description: Machine-readable verdict path relative to packages/ax-code
         required: false
         type: string
-        default: ".tmp/perf-index-summary.json"
+        default: "../../.internal/reports/performance/perf-index-summary.json"
       max_elapsed_regression_pct:
         description: Optional elapsed regression limit
         required: false
@@ -231,14 +231,14 @@ jobs:
         run: |
           pnpm --dir packages/ax-code run perf:report \
             --summary "${{ inputs.summary_out }}" \
-            --out ".tmp/perf-index-report.md"
+            --out "../../.internal/reports/performance/perf-index-report.md"
 
       - name: Upload perf artifact
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: ax-code-perf-report
-          path: packages/ax-code/.tmp/perf-index.json
+          path: .internal/reports/performance/perf-index.json
           if-no-files-found: ignore
 
       - name: Upload perf summary
@@ -254,7 +254,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ax-code-perf-markdown
-          path: packages/ax-code/.tmp/perf-index-report.md
+          path: .internal/reports/performance/perf-index-report.md
           if-no-files-found: ignore
 
       - name: Upload promoted baseline

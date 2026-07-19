@@ -124,7 +124,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          dest="packages/ax-code/.tmp/coverage-baseline"
+          dest=".internal/reports/testing/coverage-baseline"
           mkdir -p "$dest"
 
           run_id="$(
@@ -172,16 +172,16 @@ jobs:
             cmd+=(
               --coverage
               --coverage-dir
-              .tmp/coverage
+              ../../.internal/reports/testing/coverage
               --coverage-summary-out
-              .tmp/coverage-summary.json
+              ../../.internal/reports/testing/coverage-summary.json
               --coverage-report-out
-              .tmp/coverage-report.md
+              ../../.internal/reports/testing/coverage-report.md
             )
 
-            baseline="$(find packages/ax-code/.tmp/coverage-baseline -name '*.json' | head -n1 || true)"
+            baseline="$(find .internal/reports/testing/coverage-baseline -name '*.json' | head -n1 || true)"
             if [ -n "$baseline" ]; then
-              cmd+=(--coverage-baseline "${baseline#packages/ax-code/}")
+              cmd+=(--coverage-baseline "../../${baseline}")
             fi
           fi
 
@@ -197,8 +197,8 @@ jobs:
         with:
           name: ax-code-deterministic-report
           path: |
-            packages/ax-code/.tmp/test-report/*.xml
-            packages/ax-code/.tmp/test-risk.md
+            .internal/reports/testing/junit/*.xml
+            .internal/reports/testing/test-risk.md
           if-no-files-found: ignore
 
       - name: Upload coverage artifacts
@@ -207,9 +207,9 @@ jobs:
         with:
           name: ax-code-coverage-report
           path: |
-            packages/ax-code/.tmp/coverage/lcov.info
-            packages/ax-code/.tmp/coverage-summary.json
-            packages/ax-code/.tmp/coverage-report.md
+            .internal/reports/testing/coverage/lcov.info
+            .internal/reports/testing/coverage-summary.json
+            .internal/reports/testing/coverage-report.md
           if-no-files-found: ignore
 
       - name: Upload coverage baseline summary
@@ -217,7 +217,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ax-code-coverage-baseline-summary
-          path: packages/ax-code/.tmp/coverage-summary.json
+          path: .internal/reports/testing/coverage-summary.json
           if-no-files-found: ignore
 
   live:
@@ -252,7 +252,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ax-code-live-report
-          path: packages/ax-code/.tmp/test-report/*.xml
+          path: .internal/reports/testing/junit/*.xml
           if-no-files-found: ignore
 
   tui-node26-smoke:

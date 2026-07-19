@@ -5,7 +5,7 @@ describe("repository internal-only path policy", () => {
   test("recognizes the canonical internal root only", () => {
     expect(INTERNAL_ONLY_ROOTS).toEqual([".internal"])
     expect(isInternalOnlyPath(".internal")).toBe(true)
-    expect(isInternalOnlyPath("./.internal/reports/self-scan.md")).toBe(true)
+    expect(isInternalOnlyPath("./.internal/reports/qa/self-scan.md")).toBe(true)
     expect(isInternalOnlyPath(".internal/plan.md")).toBe(true)
     expect(isInternalOnlyPath("docs/internal.md")).toBe(false)
     expect(isInternalOnlyPath(".internalized/file.md")).toBe(false)
@@ -13,6 +13,6 @@ describe("repository internal-only path policy", () => {
   })
 
   test("normalizes Windows separators", () => {
-    expect(isInternalOnlyPath(".internal\\reports\\self-scan.md")).toBe(true)
+    expect(isInternalOnlyPath(".internal\\reports\\qa\\self-scan.md")).toBe(true)
   })
 })

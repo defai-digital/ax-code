@@ -57,7 +57,7 @@ async function main() {
     await writeText(file, `${previous}${text}\n`)
   }
 
-  const target = path.join(import.meta.dirname, "..", ".tmp", "test-risk.md")
+  const target = path.resolve(import.meta.dirname, "../../..", ".internal/reports/testing/test-risk.md")
   await writeText(target, text)
 }
 

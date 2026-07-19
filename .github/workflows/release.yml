@@ -62,7 +62,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ax-code-deterministic-test-report
-          path: packages/ax-code/.tmp/test-report/
+          path: .internal/reports/testing/junit/
           if-no-files-found: warn
           retention-days: 14
 

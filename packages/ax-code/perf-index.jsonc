@@ -14,6 +14,6 @@
   "baseline": {
     "phases": {},
   },
-  "summary": ".tmp/perf-index-summary.json",
-  "out": ".tmp/perf-index.json",
+  "summary": "../../.internal/reports/performance/perf-index-summary.json",
+  "out": "../../.internal/reports/performance/perf-index.json",
 }

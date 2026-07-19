@@ -1,7 +1,0 @@
-initiative,deliverable,release_gate
-Workflow compiler,"Constrained plan to immutable WorkflowSpec with typed ports and bounded condition/join/quorum/retry/approval primitives","Invalid, cyclic, unbounded, over-budget, or conflicting write plans are rejected before execution"
-Checkpoint and recovery,"Safe-step snapshots, leases, heartbeats, idempotency keys, child reattachment, orphan recovery",At least 95% forced-failure recovery; zero duplicate non-idempotent side effects in the fault suite
-Replay semantics,"Separate trace replay, resume, fork, tool re-simulation, and clean-environment model rerun",Each operation documents and tests which calls and side effects are reused versus re-executed
-Workspace and merge planning,"Read/write sets, per-writer worktrees, conflict preflight, durable snapshots, explicit promotion",No cross-worker writes outside assigned scope; conflicts produce a reviewable terminal state
-Bound approval,"Approval tied to exact diff, command, environment, actor, policy, expiry, and proposal hash",Mutation after approval invalidates the decision; proposer and approver separation supported
-Agent Control Center,"Graph/timeline, children, artifacts, evidence, cost, pause/resume/cancel/retry/fork/compare/approve",Operators can diagnose and recover reference workflow failures without inspecting raw database state

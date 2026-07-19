@@ -132,8 +132,8 @@ export function render(verdict: Verdict, report: Bench) {
 
 async function main() {
   const cwd = process.cwd()
-  const sum = path.resolve(cwd, arg("--summary") ?? ".tmp/perf-index-summary.json")
-  const out = path.resolve(cwd, arg("--out") ?? ".tmp/perf-index-report.md")
+  const sum = path.resolve(cwd, arg("--summary") ?? "../../.internal/reports/performance/perf-index-summary.json")
+  const out = path.resolve(cwd, arg("--out") ?? "../../.internal/reports/performance/perf-index-report.md")
   const verdict = (await readJson(sum)) as Verdict
   const file = path.resolve(cwd, arg("--report") ?? verdict.out)
   const report = (await readJson(file)) as Bench

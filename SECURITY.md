@@ -90,13 +90,15 @@ MCP OAuth tokens, client secrets, and account access/refresh tokens are also enc
 
 ### Release Artifact Verification
 
-The shell installer verifies downloaded GitHub release archives with minisign before extraction. Release archives and the PowerShell installer itself carry detached signatures. The pinned AX Code release public key is:
+Both the Bash installer (`install`) and the Windows PowerShell installer (`install.ps1`) verify downloaded GitHub release archives with minisign before extraction. Release archives and the PowerShell installer script itself carry detached signatures. The pinned AX Code release public key is:
 
 ```text
 RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO
 ```
 
-The installer downloads the matching `.minisig` asset for the selected archive and fails closed when `minisign` is unavailable or verification fails. Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only when you intentionally accept an unverifiable release download.
+Each installer downloads the matching `.minisig` asset for the selected archive and fails closed when `minisign` is unavailable or verification fails. Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only when you intentionally accept an unverifiable release download.
+
+The convenience one-liner `irm …/install.ps1 | iex` does not verify the installer script before execution. For security-sensitive installs, download `install.ps1` and `install.ps1.minisig`, verify the script with minisign, then run it locally (see [Installation and Runtime Channels](docs/getting-started/install-runtime.md)).
 
 Maintainers should keep the minisign secret key encrypted. For local release signing on macOS, store the passphrase in Keychain instead of a plaintext file:
 

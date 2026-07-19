@@ -35,7 +35,7 @@ pnpm test:e2e
 pnpm test:deterministic
 pnpm test:live
 pnpm test:risk
-pnpm test:ci -- deterministic --coverage --coverage-summary-out .tmp/coverage-summary.json --coverage-report-out .tmp/coverage-report.md
+pnpm test:ci -- deterministic --coverage --coverage-summary-out ../../.internal/reports/testing/coverage-summary.json --coverage-report-out ../../.internal/reports/testing/coverage-report.md
 pnpm perf:index --config perf-index.jsonc
 ```
 
@@ -46,8 +46,8 @@ pnpm perf:index --config perf-index.jsonc
 - `test:e2e` covers real CLI and control-plane flows.
 - `test:deterministic` runs the non-live CI lane.
 - `test:live` is reserved for provider-backed live tests.
-- `test:risk` writes the current risk-family summary used by CI.
-- `test:ci -- deterministic --coverage` writes LCOV plus machine-readable and markdown coverage summaries under `.tmp/`.
+- `test:risk` writes the current risk-family summary to `.internal/reports/testing/`.
+- `test:ci -- deterministic --coverage` writes JUnit, LCOV, machine-readable, and markdown reports to `.internal/reports/testing/`.
 
 ## Performance
 
@@ -62,20 +62,20 @@ Common overrides:
 ```bash
 pnpm perf:index --config perf-index.jsonc --limit 25 --repeat 5 --warmup 1
 pnpm perf:index --config perf-index.jsonc --max-elapsed-median-ms 2000 --max-phase-median-ms lsp.touch=800
-pnpm perf:index --config perf-index.jsonc --baseline .tmp/perf-index-baseline.json --max-elapsed-regression-pct 20
-pnpm perf:index --config perf-index.jsonc --baseline .tmp/perf-index-baseline.json --baseline-summary .tmp/perf-index-baseline-summary.json --max-elapsed-regression-pct 20
-pnpm perf:index --config perf-index.jsonc --summary-out .tmp/perf-index-summary.json --write-baseline .tmp/perf-index-baseline.json
-pnpm perf:index --config perf-index.jsonc --write-baseline .tmp/perf-index-baseline.json --write-baseline-summary .tmp/perf-index-baseline-summary.json
-pnpm perf:report --summary .tmp/perf-index-summary.json --out .tmp/perf-index-report.md
+pnpm perf:index --config perf-index.jsonc --baseline ../../.internal/reports/performance/perf-index-baseline.json --max-elapsed-regression-pct 20
+pnpm perf:index --config perf-index.jsonc --baseline ../../.internal/reports/performance/perf-index-baseline.json --baseline-summary ../../.internal/reports/performance/perf-index-baseline-summary.json --max-elapsed-regression-pct 20
+pnpm perf:index --config perf-index.jsonc --summary-out ../../.internal/reports/performance/perf-index-summary.json --write-baseline ../../.internal/reports/performance/perf-index-baseline.json
+pnpm perf:index --config perf-index.jsonc --write-baseline ../../.internal/reports/performance/perf-index-baseline.json --write-baseline-summary ../../.internal/reports/performance/perf-index-baseline-summary.json
+pnpm perf:report --summary ../../.internal/reports/performance/perf-index-summary.json --out ../../.internal/reports/performance/perf-index-report.md
 ```
 
 `perf-index.jsonc` is the checked-in policy file for benchmark defaults, absolute gates, optional baseline comparison, and the default machine-readable summary path.
 
 Artifacts:
 
-- `.tmp/perf-index.json` stores the raw benchmark report.
-- `.tmp/perf-index-summary.json` stores the machine-readable verdict used by CI or downstream automation.
-- `.tmp/perf-index-report.md` stores the human-readable markdown report artifact.
+- `.internal/reports/performance/perf-index.json` stores the raw benchmark report.
+- `.internal/reports/performance/perf-index-summary.json` stores the machine-readable verdict used by CI or downstream automation.
+- `.internal/reports/performance/perf-index-report.md` stores the human-readable markdown report artifact.
 - `--write-baseline` writes the current report to a baseline file so the next run can compare against it.
 - `--write-baseline-summary` writes the promoted baseline's sidecar verdict with provenance metadata.
 - `--baseline-summary` lets you override the baseline sidecar summary path; otherwise `perf-index` infers `<baseline>-summary.json`.
@@ -88,9 +88,9 @@ Artifacts:
 GitHub Actions runs the `ax-code` workflow on `packages/ax-code/**` changes.
 
 - PRs and pushes to `dev` run the deterministic lane: typecheck, grouped deterministic tests, risk summary artifact upload, and coverage artifact upload.
-- The deterministic lane writes `packages/ax-code/.tmp/coverage/lcov.info`, `packages/ax-code/.tmp/coverage-summary.json`, and `packages/ax-code/.tmp/coverage-report.md`.
+- The deterministic lane writes coverage output and summaries under `.internal/reports/testing/`.
 - PR workflows try to download the latest successful `dev` coverage summary and include line/function trend deltas in the step summary. Branch trend is reported as unavailable until the vitest LCOV reporter emits branch counters.
 - `workflow_dispatch` can optionally run the live lane.
 - `ax-code-perf` is a separate manual workflow for perf sampling, optional regression gating, machine-readable summary upload, markdown report upload, and optional baseline promotion. It uploads the raw report, the verdict JSON, the markdown report, and optionally a promoted baseline artifact plus baseline summary artifact.
 
-Reports are written under `packages/ax-code/.tmp/test-report`.
+JUnit reports are written under `.internal/reports/testing/junit/`.

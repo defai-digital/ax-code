@@ -1,7 +1,0 @@
-initiative,deliverable,release_gate
-Unified AgenticRun,"One provenance, child-session, artifact, evidence, verification, budget, cost, approval, and outcome envelope",100% of Agent/Council/Arena runs emit a complete manifest; schema migration and redaction tested
-Typed handoffs,"Versioned schema for objective, constraints, claims, evidence refs, artifacts, risks, and next action",At least 99% schema-valid handoffs in the controlled suite; invalid payloads fail closed
-Council v2,"Evidence-bearing findings, semantic clustering, blind adjudication, dissent retention, calibrated confidence",Improves validated-review precision or recall over the best single reviewer on the AX corpus
-Arena v2,"Task-specific verifier manifest, externally computed diff risk, semantic diversity, early stopping",Verified winner beats single Agent on eligible tasks with bounded cost; no winner when acceptance evidence is insufficient
-Evaluation Lab,"At least 50 fresh tasks, counterfactual mode runs, reproducible environments, human-reviewed evaluator quality","Every task has reviewed intent, acceptance criteria, regression checks, and failure taxonomy"
-Router shadow mode,"Scores decomposability, dependency, tool density, write overlap, risk, value, and verifier strength",No automatic execution routing; recommendation quality reported against observed counterfactual utility

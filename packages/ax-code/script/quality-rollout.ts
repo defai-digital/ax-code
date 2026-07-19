@@ -44,6 +44,12 @@ import { QualityRollbackAdvisor } from "../src/quality/rollback-advisor"
 import { QualityShadowStore } from "../src/quality/shadow-store"
 import { QualityStabilityGuard } from "../src/quality/stability-guard"
 
+const qaReports = path.resolve(import.meta.dirname, "../../..", ".internal/reports/qa")
+
+function qaReport(name: string) {
+  return path.join(qaReports, name)
+}
+
 function arg(name: string) {
   const idx = process.argv.indexOf(name)
   if (idx === -1) return
@@ -125,7 +131,7 @@ async function exportMode() {
   const sessionIDs = argsMany("--session")
   if (sessionIDs.length === 0) throw new Error("At least one --session value is required for export mode")
 
-  const out = path.resolve(process.cwd(), arg("--out") ?? `.tmp/quality-${workflow}-replay.json`)
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport(`quality-${workflow}-replay.json`))
   const exports = await Instance.provide({
     directory: process.cwd(),
     fn: async () => {
@@ -166,7 +172,7 @@ async function replayReadinessMode() {
     generatedAt: new Date().toISOString(),
     summaries,
   })
-  const out = path.resolve(process.cwd(), arg("--out") ?? `.tmp/quality-${workflow}-replay-readiness.json`)
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport(`quality-${workflow}-replay-readiness.json`))
   await write(out, JSON.stringify(file, null, 2))
 
   if (file.summaries.length === 1) {
@@ -1531,7 +1537,7 @@ async function labelsExportMode() {
   const sessionIDs = argsMany("--session")
   if (sessionIDs.length === 0) throw new Error("At least one --session value is required for labels-export mode")
   const workflow = arg("--workflow")
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-labels.json")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-labels.json"))
   const exported = await QualityLabelStore.exportFile({
     sessionIDs,
     workflow: workflow ? ProbabilisticRollout.Workflow.parse(workflow) : undefined,
@@ -1548,8 +1554,8 @@ async function reportMode() {
   const abstainRaw = arg("--abstain-below")
   const abstainBelow = abstainRaw === undefined ? undefined : Number(abstainRaw)
   const predictionArg = arg("--predictions")
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-calibration-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-calibration-report.md")
+  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? qaReport("quality-calibration-summary.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-calibration-report.md"))
 
   const items = flattenReplay(await readJson<unknown>(path.resolve(process.cwd(), itemsFile)))
   const labels = await loadLabels(arg("--labels"), argsMany("--session"))
@@ -1579,7 +1585,7 @@ async function trainMode() {
     minBinCount: arg("--min-bin-count") ? Number(arg("--min-bin-count")) : undefined,
     laplaceAlpha: arg("--laplace-alpha") ? Number(arg("--laplace-alpha")) : undefined,
   })
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-calibration-model.json")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-calibration-model.json"))
   await write(out, JSON.stringify(model, null, 2))
   console.log(`Trained calibration model ${model.source} with ${model.training.labeledItems} labeled item(s)`)
 }
@@ -1592,7 +1598,7 @@ async function predictMode() {
   const items = flattenReplay(await readJson<unknown>(path.resolve(process.cwd(), itemsFile)))
   const model = await loadModelFile(modelFile)
   const predictions = QualityCalibrationModel.predict(items, model)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-predictions.json")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-predictions.json"))
   await write(out, JSON.stringify(predictions, null, 2))
   console.log(`Generated ${predictions.predictions.length} prediction(s) from ${model.source}`)
 }
@@ -1615,22 +1621,25 @@ async function benchmarkMode() {
     abstainBelow,
   })
 
-  const bundleOut = path.resolve(process.cwd(), arg("--bundle-out") ?? ".tmp/quality-benchmark-bundle.json")
-  const modelOut = path.resolve(process.cwd(), arg("--model-out") ?? ".tmp/quality-benchmark-model.json")
+  const bundleOut = path.resolve(process.cwd(), arg("--bundle-out") ?? qaReport("quality-benchmark-bundle.json"))
+  const modelOut = path.resolve(process.cwd(), arg("--model-out") ?? qaReport("quality-benchmark-model.json"))
   const predictionsOut = path.resolve(
     process.cwd(),
-    arg("--predictions-out") ?? ".tmp/quality-benchmark-predictions.json",
+    arg("--predictions-out") ?? qaReport("quality-benchmark-predictions.json"),
   )
   const baselineSummaryOut = path.resolve(
     process.cwd(),
-    arg("--baseline-summary-out") ?? ".tmp/quality-benchmark-baseline-summary.json",
+    arg("--baseline-summary-out") ?? qaReport("quality-benchmark-baseline-summary.json"),
   )
   const candidateSummaryOut = path.resolve(
     process.cwd(),
-    arg("--candidate-summary-out") ?? ".tmp/quality-benchmark-candidate-summary.json",
+    arg("--candidate-summary-out") ?? qaReport("quality-benchmark-candidate-summary.json"),
   )
-  const comparisonOut = path.resolve(process.cwd(), arg("--comparison-out") ?? ".tmp/quality-benchmark-comparison.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-benchmark-report.md")
+  const comparisonOut = path.resolve(
+    process.cwd(),
+    arg("--comparison-out") ?? qaReport("quality-benchmark-comparison.json"),
+  )
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-benchmark-report.md"))
   const report = QualityCalibrationModel.renderBenchmarkReport(benchmark.bundle)
 
   await write(bundleOut, JSON.stringify(benchmark.bundle, null, 2))
@@ -2105,8 +2114,8 @@ async function modelPromotionSummaryMode() {
   const record = await QualityModelRegistry.getPromotion(promotionID)
   const summary = QualityModelRegistry.summarizeCanonicalPromotion(record)
   const report = QualityModelRegistry.renderCanonicalPromotionReport(summary)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-summary.md")
+  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? qaReport("quality-promotion-summary.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-promotion-summary.md"))
 
   await write(summaryOut, JSON.stringify(summary, null, 2))
   await write(reportOut, report)
@@ -2123,8 +2132,8 @@ async function modelPromotionEligibilityMode() {
     releasePolicyDigest: QualityPromotionReleasePolicyStore.provenance(releasePolicyResolution).digest,
   })
   const report = QualityPromotionEligibility.renderReport(eligibility)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-eligibility.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-eligibility.md")
+  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? qaReport("quality-promotion-eligibility.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-promotion-eligibility.md"))
 
   await write(summaryOut, JSON.stringify(eligibility, null, 2))
   await write(reportOut, report)
@@ -2141,8 +2150,11 @@ async function modelDecisionBundleMode() {
     releasePolicyResolution,
   })
   const report = QualityPromotionDecisionBundle.renderReport(decisionBundle)
-  const bundleOut = path.resolve(process.cwd(), arg("--bundle-out") ?? ".tmp/quality-promotion-decision-bundle.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-decision-bundle.md")
+  const bundleOut = path.resolve(
+    process.cwd(),
+    arg("--bundle-out") ?? qaReport("quality-promotion-decision-bundle.json"),
+  )
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-promotion-decision-bundle.md"))
 
   await write(bundleOut, JSON.stringify(decisionBundle, null, 2))
   await write(reportOut, report)
@@ -2165,8 +2177,8 @@ async function modelApprovalCreateMode() {
   })
   await QualityPromotionApproval.append(approval)
   const report = QualityPromotionApproval.renderReport(approval)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-approval.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-approval.md")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-approval.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-promotion-approval.md"))
 
   await write(out, JSON.stringify(approval, null, 2))
   await write(reportOut, report)
@@ -2187,8 +2199,8 @@ async function modelAdoptionReviewCreateMode() {
   })
   await QualityPromotionAdoptionReview.append(review)
   const report = QualityPromotionAdoptionReview.renderReport(review)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-adoption-review.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-adoption-review.md")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-adoption-review.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-promotion-adoption-review.md"))
 
   await write(out, JSON.stringify(review, null, 2))
   await write(reportOut, report)
@@ -2220,11 +2232,11 @@ async function modelAdoptionReviewConsensusMode() {
   const report = QualityPromotionAdoptionReview.renderConsensus(summary)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-adoption-review-consensus.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-adoption-review-consensus.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-adoption-review-consensus.md",
+    arg("--report-out") ?? qaReport("quality-promotion-adoption-review-consensus.md"),
   )
 
   await write(summaryOut, JSON.stringify(summary, null, 2))
@@ -2260,10 +2272,13 @@ async function modelAdoptionDissentResolutionCreateMode() {
   })
   await QualityPromotionAdoptionDissentResolution.append(resolution)
   const report = QualityPromotionAdoptionDissentResolution.renderReport(resolution)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-adoption-dissent-resolution.json")
+  const out = path.resolve(
+    process.cwd(),
+    arg("--out") ?? qaReport("quality-promotion-adoption-dissent-resolution.json"),
+  )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-adoption-dissent-resolution.md",
+    arg("--report-out") ?? qaReport("quality-promotion-adoption-dissent-resolution.md"),
   )
 
   await write(out, JSON.stringify(resolution, null, 2))
@@ -2316,10 +2331,13 @@ async function modelAdoptionDissentSupersessionCreateMode() {
   })
   await QualityPromotionAdoptionDissentSupersession.append(supersession)
   const report = QualityPromotionAdoptionDissentSupersession.renderReport(supersession)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-adoption-dissent-supersession.json")
+  const out = path.resolve(
+    process.cwd(),
+    arg("--out") ?? qaReport("quality-promotion-adoption-dissent-supersession.json"),
+  )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-adoption-dissent-supersession.md",
+    arg("--report-out") ?? qaReport("quality-promotion-adoption-dissent-supersession.md"),
   )
 
   await write(out, JSON.stringify(supersession, null, 2))
@@ -2372,10 +2390,10 @@ async function modelAdoptionDissentHandlingCreateMode() {
   })
   await QualityPromotionAdoptionDissentHandling.append(handling)
   const report = QualityPromotionAdoptionDissentHandling.renderReport(handling)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-adoption-dissent-handling.json")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-adoption-dissent-handling.json"))
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-adoption-dissent-handling.md",
+    arg("--report-out") ?? qaReport("quality-promotion-adoption-dissent-handling.md"),
   )
 
   await write(out, JSON.stringify(handling, null, 2))
@@ -2439,11 +2457,11 @@ async function modelAdoptionDissentHandlingStatusMode() {
   const report = QualityPromotionAdoptionDissentHandling.renderReport(handling)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-adoption-dissent-handling-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-adoption-dissent-handling-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-adoption-dissent-handling-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-adoption-dissent-handling-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(handling.summary, null, 2))
@@ -2474,11 +2492,11 @@ async function modelAdoptionDissentSupersessionStatusMode() {
   const report = QualityPromotionAdoptionDissentSupersession.renderSummary(summary)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-adoption-dissent-supersession-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-adoption-dissent-supersession-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-adoption-dissent-supersession-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-adoption-dissent-supersession-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(summary, null, 2))
@@ -2504,11 +2522,11 @@ async function modelAdoptionDissentResolutionStatusMode() {
   const report = QualityPromotionAdoptionDissentResolution.renderSummary(summary)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-adoption-dissent-resolution-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-adoption-dissent-resolution-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-adoption-dissent-resolution-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-adoption-dissent-resolution-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(summary, null, 2))
@@ -2558,8 +2576,8 @@ async function modelApprovalPacketCreateMode() {
   })
   await QualityPromotionApprovalPacket.append(packet)
   const report = QualityPromotionApprovalPacket.renderReport(packet)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-approval-packet.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-approval-packet.md")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-approval-packet.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-promotion-approval-packet.md"))
 
   await write(out, JSON.stringify(packet, null, 2))
   await write(reportOut, report)
@@ -2617,11 +2635,11 @@ async function modelApprovalPacketStatusMode() {
   const report = QualityPromotionApprovalPacket.renderReport(packet)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-approval-packet-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-approval-packet-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-approval-packet-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-approval-packet-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(packet.readiness, null, 2))
@@ -2639,8 +2657,11 @@ async function modelSubmissionBundleCreateMode() {
   })
   await QualityPromotionSubmissionBundle.append(submissionBundle)
   const report = QualityPromotionSubmissionBundle.renderReport(submissionBundle)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-submission-bundle.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-submission-bundle.md")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-submission-bundle.json"))
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? qaReport("quality-promotion-submission-bundle.md"),
+  )
 
   await write(out, JSON.stringify(submissionBundle, null, 2))
   await write(reportOut, report)
@@ -2671,11 +2692,11 @@ async function modelSubmissionBundleStatusMode() {
   const report = QualityPromotionSubmissionBundle.renderReport(submission)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-submission-bundle-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-submission-bundle-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-submission-bundle-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-submission-bundle-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(submission.summary, null, 2))
@@ -2692,8 +2713,8 @@ async function modelReviewDossierCreateMode() {
   })
   await QualityPromotionReviewDossier.append(dossier)
   const report = QualityPromotionReviewDossier.renderReport(dossier)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-review-dossier.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-review-dossier.md")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-review-dossier.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-promotion-review-dossier.md"))
 
   await write(out, JSON.stringify(dossier, null, 2))
   await write(reportOut, report)
@@ -2724,11 +2745,11 @@ async function modelReviewDossierStatusMode() {
   const report = QualityPromotionReviewDossier.renderReport(dossier)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-review-dossier-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-review-dossier-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-review-dossier-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-review-dossier-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(dossier.summary, null, 2))
@@ -2743,8 +2764,8 @@ async function modelBoardDecisionCreateMode() {
   const boardDecision = createBoardDecisionFromDossier(await resolveReviewDossierForDecisionBundle(decisionBundle))
   await QualityPromotionBoardDecision.append(boardDecision)
   const report = QualityPromotionBoardDecision.renderReport(boardDecision)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-board-decision.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-board-decision.md")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-board-decision.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-promotion-board-decision.md"))
 
   await write(out, JSON.stringify(boardDecision, null, 2))
   await write(reportOut, report)
@@ -2777,11 +2798,11 @@ async function modelBoardDecisionStatusMode() {
   const report = QualityPromotionBoardDecision.renderReport(boardDecision)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-board-decision-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-board-decision-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-board-decision-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-board-decision-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(boardDecision.summary, null, 2))
@@ -2799,10 +2820,10 @@ async function modelReleaseDecisionRecordCreateMode() {
   })
   await QualityPromotionReleaseDecisionRecord.append(record)
   const report = QualityPromotionReleaseDecisionRecord.renderReport(record)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-release-decision-record.json")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-release-decision-record.json"))
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-release-decision-record.md",
+    arg("--report-out") ?? qaReport("quality-promotion-release-decision-record.md"),
   )
 
   await write(out, JSON.stringify(record, null, 2))
@@ -2835,11 +2856,11 @@ async function modelReleaseDecisionRecordStatusMode() {
   const report = QualityPromotionReleaseDecisionRecord.renderReport(record)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-release-decision-record-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-release-decision-record-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-release-decision-record-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-release-decision-record-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(record.summary, null, 2))
@@ -2856,8 +2877,8 @@ async function modelReleasePacketCreateMode() {
   })
   await QualityPromotionReleasePacket.append(packet)
   const report = QualityPromotionReleasePacket.renderReport(packet)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-release-packet.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-release-packet.md")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-release-packet.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-promotion-release-packet.md"))
 
   await write(out, JSON.stringify(packet, null, 2))
   await write(reportOut, report)
@@ -2888,11 +2909,11 @@ async function modelReleasePacketStatusMode() {
   const report = QualityPromotionReleasePacket.renderReport(packet)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-release-packet-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-release-packet-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-release-packet-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-release-packet-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(packet.summary, null, 2))
@@ -2923,8 +2944,8 @@ async function modelAuditManifestCreateMode() {
   })
   await QualityPromotionAuditManifest.append(manifest)
   const report = QualityPromotionAuditManifest.renderReport(manifest)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-audit-manifest.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-audit-manifest.md")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-audit-manifest.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-promotion-audit-manifest.md"))
 
   await write(out, JSON.stringify(manifest, null, 2))
   await write(reportOut, report)
@@ -2955,11 +2976,11 @@ async function modelAuditManifestStatusMode() {
   const report = QualityPromotionAuditManifest.renderReport(manifest)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-audit-manifest-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-audit-manifest-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-audit-manifest-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-audit-manifest-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(manifest.summary, null, 2))
@@ -2976,8 +2997,8 @@ async function modelExportBundleCreateMode() {
   })
   await QualityPromotionExportBundle.append(bundle)
   const report = QualityPromotionExportBundle.renderReport(bundle)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-export-bundle.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-export-bundle.md")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-export-bundle.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-promotion-export-bundle.md"))
 
   await write(out, JSON.stringify(bundle, null, 2))
   await write(reportOut, report)
@@ -3008,11 +3029,11 @@ async function modelExportBundleStatusMode() {
   const report = QualityPromotionExportBundle.renderReport(bundle)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-export-bundle-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-export-bundle-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-export-bundle-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-export-bundle-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(bundle.summary, null, 2))
@@ -3029,8 +3050,11 @@ async function modelArchiveManifestCreateMode() {
   })
   await QualityPromotionArchiveManifest.append(archive)
   const report = QualityPromotionArchiveManifest.renderReport(archive)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-archive-manifest.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-archive-manifest.md")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-archive-manifest.json"))
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? qaReport("quality-promotion-archive-manifest.md"),
+  )
 
   await write(out, JSON.stringify(archive, null, 2))
   await write(reportOut, report)
@@ -3061,11 +3085,11 @@ async function modelArchiveManifestStatusMode() {
   const report = QualityPromotionArchiveManifest.renderReport(archive)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-archive-manifest-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-archive-manifest-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-archive-manifest-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-archive-manifest-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(archive.summary, null, 2))
@@ -3082,8 +3106,8 @@ async function modelHandoffPackageCreateMode() {
   })
   await QualityPromotionHandoffPackage.append(packet)
   const report = QualityPromotionHandoffPackage.renderReport(packet)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-handoff-package.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-handoff-package.md")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-handoff-package.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-promotion-handoff-package.md"))
 
   await write(out, JSON.stringify(packet, null, 2))
   await write(reportOut, report)
@@ -3114,11 +3138,11 @@ async function modelHandoffPackageStatusMode() {
   const report = QualityPromotionHandoffPackage.renderReport(packet)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-handoff-package-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-handoff-package-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-handoff-package-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-handoff-package-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(packet.summary, null, 2))
@@ -3135,8 +3159,8 @@ async function modelPortableExportCreateMode() {
   })
   await QualityPromotionPortableExport.append(exportArtifact)
   const report = QualityPromotionPortableExport.renderReport(exportArtifact)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-portable-export.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-portable-export.md")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-portable-export.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-promotion-portable-export.md"))
 
   await write(out, JSON.stringify(exportArtifact, null, 2))
   await write(reportOut, report)
@@ -3167,11 +3191,11 @@ async function modelPortableExportStatusMode() {
   const report = QualityPromotionPortableExport.renderReport(exportArtifact)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-portable-export-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-portable-export-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-portable-export-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-portable-export-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(exportArtifact.summary, null, 2))
@@ -3202,8 +3226,11 @@ async function modelPackagedArchiveCreateMode() {
   })
   await QualityPromotionPackagedArchive.append(archive)
   const report = QualityPromotionPackagedArchive.renderReport(archive)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-packaged-archive.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-packaged-archive.md")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-packaged-archive.json"))
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? qaReport("quality-promotion-packaged-archive.md"),
+  )
 
   await write(out, JSON.stringify(archive, null, 2))
   await write(reportOut, report)
@@ -3234,11 +3261,11 @@ async function modelPackagedArchiveStatusMode() {
   const report = QualityPromotionPackagedArchive.renderReport(archive)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-packaged-archive-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-packaged-archive-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-packaged-archive-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-packaged-archive-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(archive.summary, null, 2))
@@ -3286,8 +3313,8 @@ async function modelSignedArchiveCreateMode() {
   })
   await QualityPromotionSignedArchive.append(archive)
   const report = QualityPromotionSignedArchive.renderReport(archive, ["__signature_ok__"])
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-signed-archive.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-signed-archive.md")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-signed-archive.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-promotion-signed-archive.md"))
 
   await write(out, JSON.stringify(archive, null, 2))
   await write(reportOut, report)
@@ -3319,11 +3346,11 @@ async function modelSignedArchiveStatusMode() {
   const report = QualityPromotionSignedArchive.renderReport(archive)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-signed-archive-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-signed-archive-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(archive.summary, null, 2))
@@ -3353,11 +3380,11 @@ async function modelSignedArchiveVerifyMode() {
   )
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-verification.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-signed-archive-verification.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-verification.md",
+    arg("--report-out") ?? qaReport("quality-promotion-signed-archive-verification.md"),
   )
 
   await write(
@@ -3418,8 +3445,11 @@ async function modelSignedArchiveTrustCreateMode() {
   })
   await QualityPromotionSignedArchiveTrust.append(trust)
   const report = QualityPromotionSignedArchiveTrust.renderTrust(trust)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-signed-archive-trust.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-trust.md")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-promotion-signed-archive-trust.json"))
+  const reportOut = path.resolve(
+    process.cwd(),
+    arg("--report-out") ?? qaReport("quality-promotion-signed-archive-trust.md"),
+  )
 
   await write(out, JSON.stringify(trust, null, 2))
   await write(reportOut, report)
@@ -3474,11 +3504,11 @@ async function modelSignedArchiveTrustStatusMode() {
   const report = QualityPromotionSignedArchiveTrust.renderReport(summary)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-trust-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-signed-archive-trust-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-trust-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-signed-archive-trust-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(summary, null, 2))
@@ -3505,11 +3535,11 @@ async function modelSignedArchiveAttestationStatusMode() {
   const report = QualityPromotionSignedArchiveAttestationPolicy.renderReport(summary)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-attestation-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-signed-archive-attestation-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-signed-archive-attestation-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(summary, null, 2))
@@ -3543,11 +3573,11 @@ async function modelSignedArchiveAttestationRecordCreateMode() {
   const report = QualityPromotionSignedArchiveAttestationRecord.renderReport(record)
   const out = path.resolve(
     process.cwd(),
-    arg("--out") ?? ".tmp/quality-promotion-signed-archive-attestation-record.json",
+    arg("--out") ?? qaReport("quality-promotion-signed-archive-attestation-record.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-record.md",
+    arg("--report-out") ?? qaReport("quality-promotion-signed-archive-attestation-record.md"),
   )
 
   await write(out, JSON.stringify(record, null, 2))
@@ -3602,11 +3632,11 @@ async function modelSignedArchiveAttestationRecordStatusMode() {
   const report = QualityPromotionSignedArchiveAttestationRecord.renderReport(record)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-attestation-record-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-signed-archive-attestation-record-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-record-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-signed-archive-attestation-record-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(record.summary, null, 2))
@@ -3635,11 +3665,11 @@ async function modelSignedArchiveAttestationPacketCreateMode() {
   const report = QualityPromotionSignedArchiveAttestationPacket.renderReport(packet)
   const out = path.resolve(
     process.cwd(),
-    arg("--out") ?? ".tmp/quality-promotion-signed-archive-attestation-packet.json",
+    arg("--out") ?? qaReport("quality-promotion-signed-archive-attestation-packet.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-packet.md",
+    arg("--report-out") ?? qaReport("quality-promotion-signed-archive-attestation-packet.md"),
   )
 
   await write(out, JSON.stringify(packet, null, 2))
@@ -3676,11 +3706,11 @@ async function modelSignedArchiveAttestationPacketStatusMode() {
   const report = QualityPromotionSignedArchiveAttestationPacket.renderReport(packet)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-attestation-packet-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-signed-archive-attestation-packet-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-packet-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-signed-archive-attestation-packet-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(packet.summary, null, 2))
@@ -3722,11 +3752,11 @@ async function modelSignedArchiveGovernancePacketCreateMode() {
   const report = QualityPromotionSignedArchiveGovernancePacket.renderReport(packet)
   const out = path.resolve(
     process.cwd(),
-    arg("--out") ?? ".tmp/quality-promotion-signed-archive-governance-packet.json",
+    arg("--out") ?? qaReport("quality-promotion-signed-archive-governance-packet.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-governance-packet.md",
+    arg("--report-out") ?? qaReport("quality-promotion-signed-archive-governance-packet.md"),
   )
 
   await write(out, JSON.stringify(packet, null, 2))
@@ -3775,11 +3805,11 @@ async function modelSignedArchiveGovernancePacketStatusMode() {
   const report = QualityPromotionSignedArchiveGovernancePacket.renderReport(packet)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-governance-packet-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-signed-archive-governance-packet-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-governance-packet-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-signed-archive-governance-packet-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(packet.summary, null, 2))
@@ -3827,10 +3857,13 @@ async function modelSignedArchiveReviewDossierCreateMode() {
   )
   await QualityPromotionSignedArchiveReviewDossier.append(dossier)
   const report = QualityPromotionSignedArchiveReviewDossier.renderReport(dossier)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-promotion-signed-archive-review-dossier.json")
+  const out = path.resolve(
+    process.cwd(),
+    arg("--out") ?? qaReport("quality-promotion-signed-archive-review-dossier.json"),
+  )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-review-dossier.md",
+    arg("--report-out") ?? qaReport("quality-promotion-signed-archive-review-dossier.md"),
   )
 
   await write(out, JSON.stringify(dossier, null, 2))
@@ -3887,11 +3920,11 @@ async function modelSignedArchiveReviewDossierStatusMode() {
   const report = QualityPromotionSignedArchiveReviewDossier.renderReport(dossier)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-review-dossier-summary.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-signed-archive-review-dossier-summary.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-review-dossier-summary.md",
+    arg("--report-out") ?? qaReport("quality-promotion-signed-archive-review-dossier-summary.md"),
   )
 
   await write(summaryOut, JSON.stringify(dossier.summary, null, 2))
@@ -3903,11 +3936,11 @@ async function modelSignedArchiveAttestationPolicyShowMode() {
   const scope = policyScope()
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-attestation-policy-resolution.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-signed-archive-attestation-policy-resolution.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-policy-resolution.md",
+    arg("--report-out") ?? qaReport("quality-promotion-signed-archive-attestation-policy-resolution.md"),
   )
 
   if (scope === "resolved") {
@@ -3963,11 +3996,11 @@ async function modelSignedArchiveAttestationPolicySetMode() {
   const report = QualityPromotionSignedArchiveAttestationPolicyStore.renderStoredPolicy(record)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-signed-archive-attestation-policy-record.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-signed-archive-attestation-policy-record.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-signed-archive-attestation-policy-record.md",
+    arg("--report-out") ?? qaReport("quality-promotion-signed-archive-attestation-policy-record.md"),
   )
 
   await write(summaryOut, JSON.stringify(record, null, 2))
@@ -4006,8 +4039,11 @@ async function modelApprovalPolicyMode() {
     policyProjectID: policyResolution.projectID,
   })
   const report = QualityPromotionApprovalPolicy.renderReport(summary)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-approval-policy.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-approval-policy.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? qaReport("quality-promotion-approval-policy.json"),
+  )
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-promotion-approval-policy.md"))
 
   await write(summaryOut, JSON.stringify(summary, null, 2))
   await write(reportOut, report)
@@ -4018,11 +4054,11 @@ async function modelApprovalPolicyShowMode() {
   const scope = policyScope()
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-approval-policy-resolution.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-approval-policy-resolution.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-approval-policy-resolution.md",
+    arg("--report-out") ?? qaReport("quality-promotion-approval-policy-resolution.md"),
   )
 
   if (scope === "resolved") {
@@ -4088,11 +4124,11 @@ async function modelApprovalConcentrationRecommendMode() {
     : QualityPromotionApprovalPolicy.renderConcentrationRecommendation(recommendation)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-approval-concentration-recommendation.json",
+    arg("--summary-out") ?? qaReport("quality-approval-concentration-recommendation.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-approval-concentration-recommendation.md",
+    arg("--report-out") ?? qaReport("quality-approval-concentration-recommendation.md"),
   )
 
   await write(summaryOut, JSON.stringify(contextual ?? recommendation, null, 2))
@@ -4123,11 +4159,11 @@ async function modelApprovalPolicySetMode() {
   const report = QualityPromotionApprovalPolicyStore.renderStoredPolicy(record)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-approval-policy-record.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-approval-policy-record.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-approval-policy-record.md",
+    arg("--report-out") ?? qaReport("quality-promotion-approval-policy-record.md"),
   )
 
   await write(summaryOut, JSON.stringify(record, null, 2))
@@ -4153,11 +4189,11 @@ async function modelReleasePolicyShowMode() {
   const scope = policyScope()
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-release-policy-resolution.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-release-policy-resolution.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-release-policy-resolution.md",
+    arg("--report-out") ?? qaReport("quality-promotion-release-policy-resolution.md"),
   )
 
   if (scope === "resolved") {
@@ -4207,11 +4243,11 @@ async function modelReleasePolicySetMode() {
   const report = QualityPromotionReleasePolicyStore.renderStoredPolicy(record)
   const summaryOut = path.resolve(
     process.cwd(),
-    arg("--summary-out") ?? ".tmp/quality-promotion-release-policy-record.json",
+    arg("--summary-out") ?? qaReport("quality-promotion-release-policy-record.json"),
   )
   const reportOut = path.resolve(
     process.cwd(),
-    arg("--report-out") ?? ".tmp/quality-promotion-release-policy-record.md",
+    arg("--report-out") ?? qaReport("quality-promotion-release-policy-record.md"),
   )
 
   await write(summaryOut, JSON.stringify(record, null, 2))
@@ -4241,8 +4277,11 @@ async function modelWatchMode() {
     maxRecords: arg("--max-records") ? Number(arg("--max-records")) : undefined,
   })
   const report = QualityPromotionWatch.renderWatchReport(summary)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-promotion-watch-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-promotion-watch-report.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? qaReport("quality-promotion-watch-summary.json"),
+  )
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-promotion-watch-report.md"))
 
   await write(summaryOut, JSON.stringify(summary, null, 2))
   await write(reportOut, report)
@@ -4304,8 +4343,8 @@ async function modelReentryRemediationCreateMode() {
   await QualityReentryRemediation.append(remediation)
 
   const report = QualityReentryRemediation.renderReport(remediation)
-  const out = path.resolve(process.cwd(), arg("--out") ?? ".tmp/quality-reentry-remediation.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-reentry-remediation.md")
+  const out = path.resolve(process.cwd(), arg("--out") ?? qaReport("quality-reentry-remediation.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-reentry-remediation.md"))
   await write(out, JSON.stringify(remediation, null, 2))
   await write(reportOut, report)
   console.log(report)
@@ -4386,8 +4425,11 @@ async function modelRollbackRecommendMode() {
     currentActiveSource: active?.source ?? null,
   })
   const report = QualityRollbackAdvisor.renderRecommendationReport(recommendation)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-rollback-recommendation.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-rollback-recommendation.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? qaReport("quality-rollback-recommendation.json"),
+  )
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-rollback-recommendation.md"))
 
   await write(summaryOut, JSON.stringify(recommendation, null, 2))
   await write(reportOut, report)
@@ -4432,8 +4474,11 @@ async function modelStabilityCheckMode() {
     ...releasePolicyResolution.policy.stability,
   })
   const report = QualityStabilityGuard.renderReport(summary)
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-model-stability-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-model-stability-report.md")
+  const summaryOut = path.resolve(
+    process.cwd(),
+    arg("--summary-out") ?? qaReport("quality-model-stability-summary.json"),
+  )
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-model-stability-report.md"))
 
   await write(summaryOut, JSON.stringify(summary, null, 2))
   await write(reportOut, report)
@@ -4447,9 +4492,9 @@ async function compareMode() {
 
   const comparisonOut = path.resolve(
     process.cwd(),
-    arg("--comparison-out") ?? ".tmp/quality-calibration-comparison.json",
+    arg("--comparison-out") ?? qaReport("quality-calibration-comparison.json"),
   )
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-calibration-comparison.md")
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-calibration-comparison.md"))
   const baseline = ProbabilisticRollout.CalibrationSummary.parse(
     await readJson<unknown>(path.resolve(process.cwd(), baselineFile)),
   )
@@ -4471,9 +4516,9 @@ async function shadowMode() {
 
   const items = flattenReplay(await readJson<unknown>(path.resolve(process.cwd(), itemsFile)))
   const predictions = await loadPredictionFile(predictionArg)
-  const shadowOut = path.resolve(process.cwd(), arg("--shadow-out") ?? ".tmp/quality-shadow.json")
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-shadow-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-shadow-report.md")
+  const shadowOut = path.resolve(process.cwd(), arg("--shadow-out") ?? qaReport("quality-shadow.json"))
+  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? qaReport("quality-shadow-summary.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-shadow-report.md"))
 
   const shadow = ProbabilisticRollout.buildShadowFile(items, predictions, {
     baselineThreshold: Number(arg("--baseline-threshold") ?? "0.5"),
@@ -4497,9 +4542,9 @@ async function shadowExportMode() {
   if (sessionIDs.length === 0) throw new Error("At least one --session value is required for shadow-export mode")
 
   const candidateSource = arg("--candidate-source")
-  const shadowOut = path.resolve(process.cwd(), arg("--shadow-out") ?? ".tmp/quality-shadow-live.json")
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-shadow-live-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-shadow-live-report.md")
+  const shadowOut = path.resolve(process.cwd(), arg("--shadow-out") ?? qaReport("quality-shadow-live.json"))
+  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? qaReport("quality-shadow-live-summary.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-shadow-live-report.md"))
   const shadow = await QualityShadowStore.exportFile({ sessionIDs, candidateSource })
   const summary = ProbabilisticRollout.summarizeShadowFile(shadow)
   const report = ProbabilisticRollout.renderShadowReport(summary)
@@ -4514,8 +4559,8 @@ async function shadowReportMode() {
   const file = arg("--file")
   if (!file) throw new Error("--file is required for shadow-report mode")
 
-  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? ".tmp/quality-shadow-summary.json")
-  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? ".tmp/quality-shadow-report.md")
+  const summaryOut = path.resolve(process.cwd(), arg("--summary-out") ?? qaReport("quality-shadow-summary.json"))
+  const reportOut = path.resolve(process.cwd(), arg("--report-out") ?? qaReport("quality-shadow-report.md"))
   const shadow = ProbabilisticRollout.ShadowFile.parse(await readJson<unknown>(path.resolve(process.cwd(), file)))
   const summary = ProbabilisticRollout.summarizeShadowFile(shadow)
   const report = ProbabilisticRollout.renderShadowReport(summary)

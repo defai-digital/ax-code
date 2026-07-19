@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-19
 Owner: ax-code runtime
 
 The root [README](../../README.md) keeps the primary install path. This page is the source of truth for supported CLI installer channels, `ax-code doctor` runtime labels, local launcher behavior, and how those channels relate to Desktop installers.
@@ -23,14 +23,21 @@ curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/ins
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
-For security-sensitive environments, inspect the installer before execution and pin the release version used by CI:
+One-line remote execution is a convenience path. The Windows installer verifies the downloaded CLI ZIP with minisign after it starts, but `irm | iex` does not verify `install.ps1` itself before execution.
+
+For security-sensitive environments, download the installer, verify it with minisign, inspect it, and pin the release version used by CI:
 
 ```powershell
 $AX_CODE_VERSION = "<release>"
+$AxCodeMinisignPublicKey = "RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO"
 irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 -OutFile ax-code-install.ps1
+irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1.minisig -OutFile ax-code-install.ps1.minisig
+minisign -Vm ax-code-install.ps1 -x ax-code-install.ps1.minisig -P $AxCodeMinisignPublicKey
 Get-Content .\ax-code-install.ps1
 .\ax-code-install.ps1 -Version $AX_CODE_VERSION -NoModifyPath
 ```
+
+Install `minisign` first (`scoop install minisign`, `choco install minisign`, or `winget install jedisct1.minisign`). Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only when you intentionally accept an unverifiable release download.
 
 Verify the installed runtime:
 
@@ -76,11 +83,11 @@ Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**.
   equivalents and are useful for CI, but user-facing docs should prefer the clearer `brew tap ...` plus
   `brew install ax-code` form.
 - Linux: use the Bash release installer (`install` script from GitHub Releases). It supports `linux-x64` and `linux-arm64` (including musl/baseline variants when detected). Requires `curl`, `tar`, and `minisign` for signature verification.
-- Windows CLI: use the native PowerShell installer. It installs the GitHub release asset into a user-local directory and updates the user PATH unless `-NoModifyPath` is provided. The Bash installer is not the canonical Windows user experience.
+- Windows CLI: use the native PowerShell installer. It installs the GitHub release asset into a user-local directory and updates the user PATH unless `-NoModifyPath` is provided. Requires `minisign` on PATH and verifies the downloaded ZIP with the pinned public key before extraction (same fail-closed policy as the Bash installer, including `AX_CODE_SKIP_MINISIGN_VERIFY=1`). The Bash installer is not the canonical Windows user experience.
 - Windows Desktop: use the signed Electron installer from GitHub Releases, named `AX-Code-<version>-win-x64.exe` or `AX-Code-<version>-win-arm64.exe`. The expected Authenticode publisher is `DEFAI Private Limited`. Do not describe `install.ps1` as a Desktop installer.
 - npm: not a supported install or upgrade channel.
 
-One-line remote execution is a convenience path, not the only path. Keep an inspectable installer flow in the docs, use pinned versions in CI, and document platform installers only with install-matrix coverage that verifies `ax-code --version` and verifies `ax-code doctor` reports the expected runtime mode for that platform.
+One-line remote execution is a convenience path, not the only path. Keep an inspectable (and, on Windows, minisign-verified) installer flow in the docs, use pinned versions in CI, and document platform installers only with install-matrix coverage that verifies `ax-code --version` and verifies `ax-code doctor` reports the expected runtime mode for that platform.
 
 ## Updating
 
