@@ -110,14 +110,15 @@ describe("session.processor", () => {
   })
 
   test("delta batch timer does not keep the process alive", async () => {
-    const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
-    const start = src.indexOf("function createDeltaBatcher")
-    const end = src.indexOf("export type Info", start)
-    expect(start).toBeGreaterThan(-1)
-    expect(end).toBeGreaterThan(start)
-    const batcher = src.slice(start, end)
-    expect(batcher).toContain("flush()?.catch(")
-    expect(batcher).toContain("timer.unref?.()")
+    // Batched in session/delta-batcher.ts (PERF-05); processor wires it with
+    // onFlushError so timer failures never become unhandled rejections.
+    const batcherSrc = await readFile(path.join(import.meta.dirname, "../../src/session/delta-batcher.ts"), "utf-8")
+    expect(batcherSrc).toContain("id.unref?.()")
+    expect(batcherSrc).toContain("onFlushError")
+    const processorSrc = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
+    expect(processorSrc).toContain('import { createDeltaBatcher } from "./delta-batcher"')
+    expect(processorSrc).toContain("onFlushError:")
+    expect(processorSrc).toContain("partWriteBatcher")
   })
 
   test("wraps recurring error-pattern guidance in system-reminder tags", async () => {

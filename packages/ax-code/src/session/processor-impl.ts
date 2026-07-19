@@ -32,6 +32,8 @@ import { usageSource } from "@/provider/usage"
 import { AgentOptimizationTrace } from "@/session/agent-optimization-trace"
 import { longAgentProfileForModel } from "@/provider/agent-optimization-profile"
 import { LongAgentContextPacker } from "@/context/long-agent-packer"
+import { createDeltaBatcher } from "./delta-batcher"
+import { createPartWriteBatcher } from "./part-write-batcher"
 
 export namespace SessionProcessor {
   const log = Log.create({ service: "session.processor" })
@@ -39,49 +41,6 @@ export namespace SessionProcessor {
   /** Strip XML tags that could escape a <system-reminder> wrapper and inject arbitrary LLM instructions. */
   function sanitizeForXmlTag(input: string): string {
     return input.replace(/<\/?system-reminder\b[^>]*>/gi, "[tag-stripped]")
-  }
-  const DELTA_BATCH_MS = 16
-
-  /** Batches delta events by time window to reduce event fan-out */
-  function createDeltaBatcher(sessionID: SessionID, messageID: MessageID) {
-    const pending = new Map<PartID, string[]>() // partID -> accumulated delta chunks
-    let timer: ReturnType<typeof setTimeout> | undefined
-
-    const flush = (): Promise<unknown> | undefined => {
-      timer = undefined
-      if (pending.size === 0) return undefined
-      const entries = [...pending]
-      pending.clear()
-      return Promise.all(
-        entries.map(([partID, chunks]) =>
-          Bus.publish(MessageV2.Event.PartDelta, {
-            sessionID,
-            messageID,
-            partID,
-            field: "text",
-            delta: chunks.join(""),
-          }),
-        ),
-      )
-    }
-
-    return {
-      push(partID: PartID, delta: string) {
-        const existing = pending.get(partID)
-        if (existing) existing.push(delta)
-        else pending.set(partID, [delta])
-        if (!timer) {
-          timer = setTimeout(() => {
-            flush()?.catch((err) => log.warn("delta flush failed", { error: err }))
-          }, DELTA_BATCH_MS)
-          timer.unref?.()
-        }
-      },
-      flush() {
-        if (timer) clearTimeout(timer)
-        return flush()
-      },
-    }
   }
 
   export type Info = Awaited<ReturnType<typeof create>>
@@ -197,7 +156,25 @@ export namespace SessionProcessor {
     const RATE_LIMIT_WINDOW_MS = 10_000
     const RATE_LIMIT_MAX_CALLS = 30
     const toolCallTimestamps: number[] = []
-    const deltaBatcher = createDeltaBatcher(input.sessionID, input.assistantMessage.id)
+    const deltaBatcher = createDeltaBatcher({
+      sessionID: input.sessionID,
+      messageID: input.assistantMessage.id,
+      publish: (event) =>
+        Bus.publish(MessageV2.Event.PartDelta, {
+          sessionID: event.sessionID as SessionID,
+          messageID: event.messageID as MessageID,
+          partID: event.partID as PartID,
+          field: event.field,
+          delta: event.delta,
+        }),
+      onFlushError: (error) => log.warn("delta flush failed", { error }),
+    })
+    // Mid-stream progress snapshots for text/reasoning (PERF-05). State
+    // transitions still use forceImmediate so tool/text start-end stay ordered.
+    const partWriteBatcher = createPartWriteBatcher<MessageV2.Part>({
+      write: (part) => Session.updatePart.force(part),
+      onError: (error, partID) => log.warn("part write batch failed", { error, partID }),
+    })
     const partBase = () => ({
       id: PartID.ascending(),
       messageID: input.assistantMessage.id,
@@ -360,7 +337,7 @@ export namespace SessionProcessor {
                     metadata: value.providerMetadata,
                   }
                   reasoningMap[value.id] = reasoningPart
-                  await Session.updatePart.force(reasoningPart)
+                  await partWriteBatcher.forceImmediate(reasoningPart)
                   break
 
                 case "reasoning-delta":
@@ -369,6 +346,8 @@ export namespace SessionProcessor {
                     part.text += value.text
                     if (value.providerMetadata) part.metadata = value.providerMetadata
                     deltaBatcher.push(part.id, value.text)
+                    // Coalesce SQLite progress snapshots for long reasoning.
+                    partWriteBatcher.schedule({ ...part })
                   }
                   break
 
@@ -379,7 +358,7 @@ export namespace SessionProcessor {
                     finalizeBufferedPart(part, { overwriteEndTime: true })
                     if (value.providerMetadata) part.metadata = value.providerMetadata
                     stepParts.push({ type: "reasoning", text: part.text })
-                    await Session.updatePart.force(part)
+                    await partWriteBatcher.forceImmediate(part)
                     delete reasoningMap[value.id]
                   }
                   break
@@ -1085,7 +1064,7 @@ export namespace SessionProcessor {
                     },
                     metadata: value.providerMetadata,
                   }
-                  await Session.updatePart.force(currentText)
+                  await partWriteBatcher.forceImmediate(currentText)
                   break
 
                 case "text-delta":
@@ -1093,6 +1072,9 @@ export namespace SessionProcessor {
                     currentText.text += value.text
                     if (value.providerMetadata) currentText.metadata = value.providerMetadata
                     deltaBatcher.push(currentText.id, value.text)
+                    // Coalesce progress snapshots so multi-KB streams do not
+                    // issue one DB write per provider delta (PERF-05).
+                    partWriteBatcher.schedule({ ...currentText })
                   }
                   break
 
@@ -1116,7 +1098,7 @@ export namespace SessionProcessor {
                     }
                     if (value.providerMetadata) currentText.metadata = value.providerMetadata
                     stepParts.push({ type: "text", text: currentText.text })
-                    await Session.updatePart.force(currentText)
+                    await partWriteBatcher.forceImmediate(currentText)
                   }
                   currentText = undefined
                   break
@@ -1135,14 +1117,15 @@ export namespace SessionProcessor {
                 // Await delta flush so all detached events are delivered
                 // before compaction rewrites history (BUG-4).
                 await deltaBatcher.flush()
+                await partWriteBatcher.flush()
                 // Finalize in-flight parts before compaction rewrites context
                 if (currentText) {
                   finalizeBufferedPart(currentText, { overwriteEndTime: false })
-                  await Session.updatePart.force(currentText)
+                  await partWriteBatcher.forceImmediate(currentText)
                 }
                 for (const part of Object.values(reasoningMap)) {
                   finalizeBufferedPart(part, { overwriteEndTime: false })
-                  await Session.updatePart.force(part)
+                  await partWriteBatcher.forceImmediate(part)
                 }
                 // Reset error pattern tracker on compaction — the context
                 // window is about to be rewritten, so stale pattern counts
@@ -1260,6 +1243,9 @@ export namespace SessionProcessor {
             finalizeBufferedPart(part, finalizeOverwrite)
           }
           const finalizedParts = [...(currentText ? [currentText] : []), ...Object.values(reasoningMap)]
+          // Drain coalesced mid-stream writes so finalization sees the latest
+          // progress and does not race a pending timer (PERF-05).
+          await partWriteBatcher.flush()
           // Batch final cleanup writes in one transaction
           input.assistantMessage.time.completed = Date.now()
           Database.transaction(() => {

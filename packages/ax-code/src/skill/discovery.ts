@@ -3,6 +3,7 @@ import { rm } from "fs/promises"
 import path from "path"
 import z from "zod"
 import { Global } from "../global"
+import { mapWithConcurrency, OutboundLimits } from "../util/concurrency"
 import { Filesystem } from "../util/filesystem"
 import { parseJsonStrict } from "../util/json-value"
 import { Log } from "../util/log"
@@ -53,23 +54,6 @@ export namespace Discovery {
 
   export function parseIndexText(text: string): IndexData {
     return decodeIndexValue(parseJsonStrict(text))
-  }
-
-  async function mapWithConcurrency<T, R>(
-    items: readonly T[],
-    concurrency: number,
-    mapper: (item: T) => Promise<R>,
-  ): Promise<R[]> {
-    const result = new Array<R>(items.length)
-    let next = 0
-    const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-      while (next < items.length) {
-        const index = next++
-        result[index] = await mapper(items[index])
-      }
-    })
-    await Promise.all(workers)
-    return result
   }
 
   const isExternalFileReference = (file: string) => /^[A-Za-z][A-Za-z0-9+.-]*:/.test(file) || file.startsWith("//")
@@ -202,7 +186,10 @@ export namespace Discovery {
       })
 
       const downloads = await mapWithConcurrency(safeFiles, fileConcurrency, (file) =>
-        download(new URL(file.path, `${host}/${skill.name}/`).href, path.join(root, file.path), file.sha256),
+        // Bound global outbound network fan-out across concurrent skill installs (STAB-04).
+        OutboundLimits.network.run(() =>
+          download(new URL(file.path, `${host}/${skill.name}/`).href, path.join(root, file.path), file.sha256),
+        ),
       )
       if (!downloads.every(Boolean)) return null
 

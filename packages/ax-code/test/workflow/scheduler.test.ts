@@ -46,6 +46,45 @@ describe("WorkflowScheduler", () => {
     }
   })
 
+  test("advances sequential multi-phase noop workflows in order", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({
+            spec: parseWorkflowSpecV1({
+              schemaVersion: 1,
+              id: "multi-noop",
+              name: "Multi Noop",
+              description: "Two sequential noop phases for multi-phase advancement coverage (BP-13).",
+              phases: [
+                { id: "phase-a", name: "Phase A", kind: "noop" },
+                { id: "phase-b", name: "Phase B", kind: "noop", dependsOn: ["phase-a"] },
+              ],
+            }),
+          })
+          const result = await WorkflowScheduler.start(run.id)
+          expect(result.status).toBe("completed")
+          expect(result.phases).toHaveLength(2)
+          expect(result.phases.map((phase) => phase.status)).toEqual(["completed", "completed"])
+          expect(result.phases.map((phase) => phase.specPhaseID)).toEqual(["phase-a", "phase-b"])
+          // Both phases produced summary artifacts — proves the scheduler
+          // advanced past phase-a rather than stopping after the first.
+          const phaseSummaries = result.artifacts.filter(
+            (artifact) => artifact.kind === "summary" && typeof artifact.summary === "string" && artifact.summary.includes("Noop phase completed"),
+          )
+          expect(phaseSummaries.length).toBeGreaterThanOrEqual(2)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("runs a noop workflow to completion without queueing children", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME

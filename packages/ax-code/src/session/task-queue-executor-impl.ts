@@ -7,6 +7,7 @@ import { EventQuery } from "@/replay/query"
 import { Log } from "@/util/log"
 import { KeyedSerialQueue } from "@/util/queue"
 import { uniqueItems, uniqueSortedStrings, uniqueStrings } from "@/util/string-list"
+import { voidSafe } from "@/util/void-safe"
 import { NamedError } from "@ax-code/util/error"
 import { lazy } from "../util/lazy"
 import { SessionPrompt } from "./prompt"
@@ -214,17 +215,15 @@ function startDetachedQueueTask(task: () => Promise<void>) {
   // throws become uncaught exceptions (process.exit via the global handler),
   // and rejected promises must also be swallowed after logging.
   setTimeout(() => {
-    try {
-      void Promise.resolve()
-        .then(() => task())
-        .catch((error) => {
-          DiagnosticLog.recordProcess("server.taskQueueTaskUnhandledFailure", { error })
-          log.error("detached task queue execution failed", { error })
-        })
-    } catch (error) {
-      DiagnosticLog.recordProcess("server.taskQueueTaskUnhandledFailure", { error })
-      log.error("detached task queue execution failed", { error })
-    }
+    voidSafe(async () => {
+      try {
+        await task()
+      } catch (error) {
+        DiagnosticLog.recordProcess("server.taskQueueTaskUnhandledFailure", { error })
+        log.error("detached task queue execution failed", { error })
+        throw error
+      }
+    }, "task-queue.detached")
   }, 0)
 }
 
@@ -397,19 +396,19 @@ function ensureSessionBlockObservers() {
   state.initialized = true
   state.unsubscribe.push(
     Bus.subscribe(Permission.Event.Asked, (event) => {
-      void refreshSessionBlockStatus(event.properties.sessionID)
+      voidSafe(() => refreshSessionBlockStatus(event.properties.sessionID), "task-queue.block-refresh.permission-asked")
     }),
     Bus.subscribe(Permission.Event.Replied, (event) => {
-      void refreshSessionBlockStatus(event.properties.sessionID)
+      voidSafe(() => refreshSessionBlockStatus(event.properties.sessionID), "task-queue.block-refresh.permission-replied")
     }),
     Bus.subscribe(Question.Event.Asked, (event) => {
-      void refreshSessionBlockStatus(event.properties.sessionID)
+      voidSafe(() => refreshSessionBlockStatus(event.properties.sessionID), "task-queue.block-refresh.question-asked")
     }),
     Bus.subscribe(Question.Event.Replied, (event) => {
-      void refreshSessionBlockStatus(event.properties.sessionID)
+      voidSafe(() => refreshSessionBlockStatus(event.properties.sessionID), "task-queue.block-refresh.question-replied")
     }),
     Bus.subscribe(Question.Event.Rejected, (event) => {
-      void refreshSessionBlockStatus(event.properties.sessionID)
+      voidSafe(() => refreshSessionBlockStatus(event.properties.sessionID), "task-queue.block-refresh.question-rejected")
     }),
   )
 }

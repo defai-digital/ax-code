@@ -14,6 +14,7 @@ import z from "zod"
 import { Risk } from "../risk/score"
 import { QualityShadow } from "../quality/shadow-runtime"
 import { Log } from "../util/log"
+import { voidSafe } from "../util/void-safe"
 import { Session } from "."
 import { SessionBranchRank } from "./branch"
 import { SessionDebug } from "./debug"
@@ -124,9 +125,14 @@ export namespace SessionRisk {
       SessionSemanticDiff.load(sessionID).catch(() => undefined),
     ])
     const assessment = Risk.fromSession(sessionID)
-    void QualityShadow.captureSessionRisk({ session, assessment }).catch((err) => {
-      log.warn("quality shadow capture failed", { sessionID, err })
-    })
+    voidSafe(
+      () =>
+        QualityShadow.captureSessionRisk({ session, assessment }).catch((err) => {
+          log.warn("quality shadow capture failed", { sessionID, err })
+          throw err
+        }),
+      "session.risk.quality-shadow",
+    )
     const quality = options?.includeQuality ? await loadQualityReadiness(sessionID) : undefined
     const findings = options?.includeFindings ? loadSessionFindings(sessionID) : undefined
     const envelopes = options?.includeEnvelopes ? SessionVerifications.load(sessionID) : undefined
