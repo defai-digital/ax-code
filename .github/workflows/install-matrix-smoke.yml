@@ -18,7 +18,7 @@ on:
         required: true
         type: string
       channel:
-        description: "Which channels to smoke-test (all, homebrew, windows)"
+        description: "Which channels to smoke-test (all, homebrew, windows, linux)"
         required: false
         type: string
         default: all
@@ -37,6 +37,7 @@ on:
           - all
           - homebrew
           - windows
+          - linux
 
 permissions:
   contents: read
@@ -276,3 +277,66 @@ jobs:
           if ($Output -notmatch 'Runtime: Node .* \(node-bundled\)') {
             throw "Windows install did not report node-bundled runtimeMode"
           }
+
+  linux:
+    name: ${{ matrix.label }} / linux-bash-installer
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: linux-x64
+          - os: ubuntu-24.04-arm
+            label: linux-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate manual dispatch inputs
+        shell: bash
+        run: bash .github/scripts/validate-install-matrix-inputs.sh "${{ inputs.version }}" "${{ inputs.channel }}"
+
+      - name: Set isolated home paths
+        shell: bash
+        run: |
+          bash .github/scripts/set-isolated-home-env.sh "$RUNNER_TEMP/ax-code-linux-smoke-home"
+
+      - name: Resolve version under test
+        id: version
+        shell: bash
+        run: bash .github/scripts/resolve-version-for-workflow.sh "$GITHUB_OUTPUT" "${{ inputs.version }}"
+
+      - name: Filter dispatch channel
+        id: channel
+        shell: bash
+        run: bash .github/scripts/filter-dispatch-channel.sh "$GITHUB_OUTPUT" "${{ inputs.channel }}" "linux" "Linux Bash installer"
+
+      - name: Install ax-code from Bash release installer (bootstrap minisign)
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          # Ensure host minisign is absent so the installer exercises bootstrap.
+          export PATH="/usr/bin:/bin"
+          if command -v minisign >/dev/null 2>&1; then
+            echo "WARN: minisign still on PATH at $(command -v minisign); continuing"
+          fi
+          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/install" -o "$RUNNER_TEMP/install"
+          chmod +x "$RUNNER_TEMP/install"
+          bash "$RUNNER_TEMP/install" --version "$VERSION"
+          echo "$HOME/.ax-code/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.ax-code/bin:$PATH"
+          command -v ax-code
+          bash .github/scripts/assert-ax-code-version.sh "$VERSION"
+
+      - name: ax-code doctor - assert Linux runtime is node-bundled
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.ax-code/bin:$PATH"
+          OUTPUT="$(ax-code doctor 2>&1)"
+          echo "$OUTPUT"
+          echo "$OUTPUT" | bash .github/scripts/assert-runtime-mode.sh "linux" doctor

@@ -10,10 +10,13 @@ import { API_ENDPOINTS, HTTP_DEFAULTS } from "@/lib/http"
 import { useI18n } from "@/lib/i18n"
 import type { OnboardingPlatform } from "./types"
 import { clearOnboardingTimer, replaceOnboardingTimer } from "./onboardingTimers"
+import {
+  getBinaryPathPlaceholder,
+  getInstallCommand,
+  getInstallCommandHighlights,
+  getInstallDocsUrl,
+} from "./installCommands"
 
-const INSTALL_COMMAND = "curl -fsSL https://ax-code.ai/install | bash"
-const DOCS_URL = "https://ax-code.ai/docs"
-const WINDOWS_WSL_DOCS_URL = "https://ax-code.ai/docs/windows-wsl"
 const FEEDBACK_RESET_DELAY_MS = 2000
 
 type LocalSetupScreenProps = {
@@ -23,19 +26,44 @@ type LocalSetupScreenProps = {
   onCliAvailable?: () => void
 }
 
-function BashCommand({ onCopy, copyTitle }: { onCopy: () => void; copyTitle: string }) {
+function InstallCommandDisplay({
+  platform,
+  onCopy,
+  copyTitle,
+}: {
+  platform: OnboardingPlatform
+  onCopy: () => void
+  copyTitle: string
+}) {
+  const highlights = getInstallCommandHighlights(platform)
   return (
-    <div className="flex items-center justify-center gap-3">
-      <code>
-        <span style={{ color: "var(--syntax-keyword)" }}>curl</span>
-        <span className="text-muted-foreground"> -fsSL </span>
-        <span style={{ color: "var(--syntax-string)" }}>https://ax-code.ai/install</span>
-        <span className="text-muted-foreground"> | </span>
-        <span style={{ color: "var(--syntax-keyword)" }}>bash</span>
+    <div className="flex items-center justify-center gap-3 max-w-full">
+      <code className="overflow-x-auto whitespace-nowrap text-left">
+        {highlights.map((part, index) => {
+          if (part.kind === "keyword") {
+            return (
+              <span key={index} style={{ color: "var(--syntax-keyword)" }}>
+                {part.text}
+              </span>
+            )
+          }
+          if (part.kind === "string") {
+            return (
+              <span key={index} style={{ color: "var(--syntax-string)" }}>
+                {part.text}
+              </span>
+            )
+          }
+          return (
+            <span key={index} className="text-muted-foreground">
+              {part.text}
+            </span>
+          )
+        })}
       </code>
       <button
         onClick={onCopy}
-        className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
+        className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors shrink-0"
         title={copyTitle}
       >
         <Icon name="file-copy" className="h-4 w-4" />
@@ -204,7 +232,7 @@ export function LocalSetupScreen({ onBack, onCliAvailable }: LocalSetupScreenPro
   }, [axCodeBinary])
 
   const handleCopy = React.useCallback(async () => {
-    const result = await copyTextToClipboard(INSTALL_COMMAND)
+    const result = await copyTextToClipboard(getInstallCommand(platform))
     if (result.ok) {
       setCopied(true)
       copiedResetTimerRef.current = replaceOnboardingTimer(
@@ -218,7 +246,7 @@ export function LocalSetupScreen({ onBack, onCliAvailable }: LocalSetupScreenPro
     } else {
       console.error("Failed to copy:", result.error)
     }
-  }, [])
+  }, [platform])
 
   const handleCheckAndContinue = React.useCallback(async () => {
     setIsChecking(true)
@@ -238,13 +266,8 @@ export function LocalSetupScreen({ onBack, onCliAvailable }: LocalSetupScreenPro
     }
   }, [checkCliAvailability, onCliAvailable, t])
 
-  const docsUrl = platform === "windows" ? WINDOWS_WSL_DOCS_URL : DOCS_URL
-  const binaryPlaceholder =
-    platform === "windows"
-      ? "C:\\Users\\you\\AppData\\Roaming\\npm\\ax-code.cmd"
-      : platform === "linux"
-        ? "/home/you/.ax-code/bin/ax-code"
-        : "/Users/you/.ax-code/bin/ax-code"
+  const docsUrl = getInstallDocsUrl(platform)
+  const binaryPlaceholder = getBinaryPathPlaceholder(platform)
 
   return (
     <div
@@ -267,26 +290,35 @@ export function LocalSetupScreen({ onBack, onCliAvailable }: LocalSetupScreenPro
           <div className="mx-auto max-w-2xl rounded-lg border border-border bg-background/50 p-4 text-left">
             <div className="typography-ui-label text-foreground">{t("onboarding.localSetup.windows.title")}</div>
             <ol className="mt-2 list-decimal space-y-1 pl-5 typography-ui-label text-muted-foreground">
-              <li>
-                {t("onboarding.localSetup.windows.stepInstallWsl")}{" "}
-                <code className="text-foreground/80">wsl --install</code>{" "}
-                {t("onboarding.localSetup.windows.stepInstallWslSuffix")}
-              </li>
-              <li>{t("onboarding.localSetup.windows.stepRunInstallInWsl")}</li>
+              <li>{t("onboarding.localSetup.windows.stepOpenPowerShell")}</li>
+              <li>{t("onboarding.localSetup.windows.stepRunInstallCommand")}</li>
               <li>{t("onboarding.localSetup.windows.stepSetBinaryPath")}</li>
             </ol>
           </div>
         )}
 
+        {platform === "macos" && (
+          <div className="mx-auto max-w-2xl rounded-lg border border-border bg-background/50 p-4 text-left">
+            <div className="typography-ui-label text-foreground">{t("onboarding.localSetup.macos.title")}</div>
+            <p className="mt-2 typography-ui-label text-muted-foreground">
+              {t("onboarding.localSetup.macos.hintHomebrew")}
+            </p>
+          </div>
+        )}
+
         <div className="flex justify-center">
-          <div className="bg-background/60 backdrop-blur-sm border border-border rounded-lg px-5 py-3 font-mono typography-ui-label w-fit">
+          <div className="bg-background/60 backdrop-blur-sm border border-border rounded-lg px-5 py-3 font-mono typography-ui-label w-fit max-w-full">
             {copied ? (
               <div className="flex items-center justify-center gap-2" style={{ color: "var(--status-success)" }}>
                 <Icon name="check" className="h-4 w-4" />
                 {t("onboarding.common.status.copiedToClipboard")}
               </div>
             ) : (
-              <BashCommand onCopy={handleCopy} copyTitle={t("onboarding.common.copyToClipboard")} />
+              <InstallCommandDisplay
+                platform={platform}
+                onCopy={handleCopy}
+                copyTitle={t("onboarding.common.copyToClipboard")}
+              />
             )}
           </div>
         </div>
@@ -297,7 +329,7 @@ export function LocalSetupScreen({ onBack, onCliAvailable }: LocalSetupScreenPro
           rel="noopener noreferrer"
           className="typography-ui-label text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1 justify-center"
         >
-          {platform === "windows" ? t("onboarding.localSetup.docs.windows") : t("onboarding.localSetup.docs.default")}
+          {t("onboarding.localSetup.docs.default")}
           <Icon name="external-link" className="h-3 w-3" />
         </a>
 
@@ -355,7 +387,9 @@ export function LocalSetupScreen({ onBack, onCliAvailable }: LocalSetupScreenPro
         <div className="absolute bottom-8 left-0 right-0 text-center space-y-1">
           {platform === "windows" ? (
             <>
-              <p className="typography-ui-label text-muted-foreground">{t("onboarding.localSetup.windows.hintInstallInWsl")}</p>
+              <p className="typography-ui-label text-muted-foreground">
+                {t("onboarding.localSetup.windows.hintOpenNewShell")}
+              </p>
               <p className="typography-ui-label text-muted-foreground">
                 {t("onboarding.localSetup.windows.hintDetectionFailed")}
               </p>

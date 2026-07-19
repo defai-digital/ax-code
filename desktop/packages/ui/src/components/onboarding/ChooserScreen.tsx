@@ -11,10 +11,13 @@ import { desktopHostsGet, desktopHostsSet } from "@/lib/desktopHosts"
 import { useI18n } from "@/lib/i18n"
 import type { OnboardingPlatform } from "./types"
 import { clearOnboardingTimer, replaceOnboardingTimer } from "./onboardingTimers"
+import {
+  getBinaryPathPlaceholder,
+  getInstallCommand,
+  getInstallCommandHighlights,
+  getInstallDocsUrl,
+} from "./installCommands"
 
-const INSTALL_COMMAND = "curl -fsSL https://ax-code.ai/install | bash"
-const DOCS_URL = "https://ax-code.ai/docs"
-const WINDOWS_WSL_DOCS_URL = "https://ax-code.ai/docs/windows-wsl"
 const POLL_INTERVAL_MS = 2500
 const FEEDBACK_RESET_DELAY_MS = 2000
 
@@ -23,15 +26,40 @@ type ChooserScreenProps = {
   onCliAvailable?: () => void
 }
 
-function BashCommand({ onCopy, copyTitle }: { onCopy: () => void; copyTitle: string }) {
+function InstallCommandDisplay({
+  platform,
+  onCopy,
+  copyTitle,
+}: {
+  platform: OnboardingPlatform
+  onCopy: () => void
+  copyTitle: string
+}) {
+  const highlights = getInstallCommandHighlights(platform)
   return (
     <div className="flex items-center justify-between gap-3 w-full">
       <code className="flex-1 text-left overflow-x-auto whitespace-nowrap">
-        <span style={{ color: "var(--syntax-keyword)" }}>curl</span>
-        <span className="text-muted-foreground"> -fsSL </span>
-        <span style={{ color: "var(--syntax-string)" }}>https://ax-code.ai/install</span>
-        <span className="text-muted-foreground"> | </span>
-        <span style={{ color: "var(--syntax-keyword)" }}>bash</span>
+        {highlights.map((part, index) => {
+          if (part.kind === "keyword") {
+            return (
+              <span key={index} style={{ color: "var(--syntax-keyword)" }}>
+                {part.text}
+              </span>
+            )
+          }
+          if (part.kind === "string") {
+            return (
+              <span key={index} style={{ color: "var(--syntax-string)" }}>
+                {part.text}
+              </span>
+            )
+          }
+          return (
+            <span key={index} className="text-muted-foreground">
+              {part.text}
+            </span>
+          )
+        })}
       </code>
       <button
         onClick={onCopy}
@@ -233,7 +261,7 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
   }, [axCodeBinary, persistLocalChoice])
 
   const handleCopy = React.useCallback(async () => {
-    const result = await copyTextToClipboard(INSTALL_COMMAND)
+    const result = await copyTextToClipboard(getInstallCommand(platform))
     if (result.ok) {
       setCopied(true)
       copiedResetTimerRef.current = replaceOnboardingTimer(
@@ -247,15 +275,10 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
     } else {
       console.error("Failed to copy:", result.error)
     }
-  }, [])
+  }, [platform])
 
-  const docsUrl = platform === "windows" ? WINDOWS_WSL_DOCS_URL : DOCS_URL
-  const binaryPlaceholder =
-    platform === "windows"
-      ? "C:\\Users\\you\\AppData\\Roaming\\npm\\ax-code.cmd"
-      : platform === "linux"
-        ? "/home/you/.ax-code/bin/ax-code"
-        : "/Users/you/.ax-code/bin/ax-code"
+  const docsUrl = getInstallDocsUrl(platform)
+  const binaryPlaceholder = getBinaryPathPlaceholder(platform)
 
   return (
     <div
@@ -273,14 +296,19 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
             <div className="rounded-lg border border-border bg-background/50 p-4">
               <div className="typography-ui-label text-foreground">{t("onboarding.localSetup.windows.title")}</div>
               <ol className="mt-2 list-decimal space-y-1 pl-5 typography-ui-label text-muted-foreground">
-                <li>
-                  {t("onboarding.localSetup.windows.stepInstallWsl")}{" "}
-                  <code className="text-foreground/80">wsl --install</code>{" "}
-                  {t("onboarding.localSetup.windows.stepInstallWslSuffix")}
-                </li>
-                <li>{t("onboarding.localSetup.windows.stepRunInstallInWsl")}</li>
+                <li>{t("onboarding.localSetup.windows.stepOpenPowerShell")}</li>
+                <li>{t("onboarding.localSetup.windows.stepRunInstallCommand")}</li>
                 <li>{t("onboarding.localSetup.windows.stepSetBinaryPath")}</li>
               </ol>
+            </div>
+          )}
+
+          {platform === "macos" && (
+            <div className="rounded-lg border border-border bg-background/50 p-4">
+              <div className="typography-ui-label text-foreground">{t("onboarding.localSetup.macos.title")}</div>
+              <p className="mt-2 typography-ui-label text-muted-foreground">
+                {t("onboarding.localSetup.macos.hintHomebrew")}
+              </p>
             </div>
           )}
 
@@ -295,7 +323,11 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
                 {t("onboarding.common.status.copiedToClipboard")}
               </div>
             ) : (
-              <BashCommand onCopy={handleCopy} copyTitle={t("onboarding.common.copyToClipboard")} />
+              <InstallCommandDisplay
+                platform={platform}
+                onCopy={handleCopy}
+                copyTitle={t("onboarding.common.copyToClipboard")}
+              />
             )}
           </div>
 
@@ -306,9 +338,7 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
               rel="noopener noreferrer"
               className="typography-micro text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
             >
-              {platform === "windows"
-                ? t("onboarding.localSetup.docs.windows")
-                : t("onboarding.localSetup.docs.default")}
+              {t("onboarding.localSetup.docs.default")}
               <Icon name="external-link" className="h-3 w-3" />
             </a>
             <button
@@ -409,8 +439,9 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
             <ul className="pb-4 space-y-1.5 typography-micro text-muted-foreground list-disc pl-4">
               {platform === "windows" ? (
                 <>
-                  <li>{t("onboarding.localSetup.windows.hintInstallInWsl")}</li>
+                  <li>{t("onboarding.localSetup.windows.hintOpenNewShell")}</li>
                   <li>{t("onboarding.localSetup.windows.hintDetectionFailed")}</li>
+                  <li>{t("onboarding.localSetup.hint.setEnv")}</li>
                 </>
               ) : (
                 <>

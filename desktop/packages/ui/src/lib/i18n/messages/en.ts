@@ -2370,15 +2370,18 @@ export const dict = {
   "onboarding.localSetup.errors.cliNotReady":
     "AX Code CLI is not ready yet. Please confirm installation is complete and try again.",
   "onboarding.localSetup.errors.detectionFailed": "Detection failed",
-  "onboarding.localSetup.windows.title": "Windows setup (WSL recommended)",
-  "onboarding.localSetup.windows.stepInstallWsl": "Install WSL (if needed) with",
-  "onboarding.localSetup.windows.stepInstallWslSuffix": "in PowerShell.",
-  "onboarding.localSetup.windows.stepRunInstallInWsl": "Run the install command below inside your WSL terminal.",
+  "onboarding.localSetup.windows.title": "Windows setup",
+  "onboarding.localSetup.windows.stepOpenPowerShell": "Open PowerShell (no admin required).",
+  "onboarding.localSetup.windows.stepRunInstallCommand":
+    "Run the install command below. The installer verifies the release and places the CLI in your user profile.",
   "onboarding.localSetup.windows.stepSetBinaryPath":
-    "If AX Code does not detect AX Code automatically, set the binary path below.",
-  "onboarding.localSetup.intro": "AX Code is the heart of AX Code — install it to get started.",
-  "onboarding.localSetup.docs.windows": "AX Code Windows + WSL docs",
-  "onboarding.localSetup.docs.default": "AX Code docs",
+    "If AX Code Desktop does not detect the CLI automatically, open a new terminal or set the binary path below to %USERPROFILE%\\.ax-code\\bin\\ax-code.cmd.",
+  "onboarding.localSetup.macos.title": "macOS setup",
+  "onboarding.localSetup.macos.hintHomebrew":
+    "Homebrew is the recommended install path. After install, Desktop detects /opt/homebrew/bin/ax-code automatically.",
+  "onboarding.localSetup.intro": "Install the AX Code CLI to power Desktop coding sessions.",
+  "onboarding.localSetup.docs.windows": "AX Code install docs",
+  "onboarding.localSetup.docs.default": "AX Code install docs",
   "onboarding.localSetup.actions.checking": "Checking…",
   "onboarding.localSetup.actions.checkAndContinue": "I've completed installation, check and continue",
   "onboarding.localSetup.actions.checkNow": "Check now",
@@ -2394,10 +2397,10 @@ export const dict = {
   "onboarding.localSetup.helper.saveAndReload": "Saves to AX Code settings and reloads AX Code configuration.",
   "onboarding.localSetup.remotePreference": "Prefer to use a remote server?",
   "onboarding.localSetup.actions.connectRemoteServer": "Connect to Remote Server →",
-  "onboarding.localSetup.windows.hintInstallInWsl":
-    "On Windows, install and run AX Code in WSL for best compatibility.",
+  "onboarding.localSetup.windows.hintOpenNewShell":
+    "After installing, open a new PowerShell window so PATH updates apply, or paste the full path to ax-code.cmd.",
   "onboarding.localSetup.windows.hintDetectionFailed":
-    "If detection fails, set a native path (ax-code.cmd/ax-code.exe), wsl.exe, or wsl:/usr/local/bin/ax-code.",
+    "If detection fails, set a native path such as %USERPROFILE%\\.ax-code\\bin\\ax-code.cmd (WSL paths are still supported).",
   "onboarding.localSetup.hint.ensurePath": "Already installed? Make sure ax-code is in your PATH.",
   "onboarding.localSetup.hint.setEnv": "Or set AX_CODE_BINARY environment variable.",
   "onboarding.localSetup.hint.missingRuntime":

@@ -52,6 +52,16 @@ winget install DEFAI.AXCode
 winget install DEFAI.AXCode.Desktop
 ```
 
+## Release checklist (after each Desktop/CLI Windows release)
+
+1. Tag/publish the GitHub release so `AX-Code-*-win-*.exe` and `ax-code-windows-*.zip` exist.
+2. Generate manifests:  
+   `pnpm exec tsx tools/winget/generate-manifests.ts --version <ver> --out .tmp/winget`
+3. On Windows: `winget validate --manifest .tmp/winget/manifests/d/DEFAI/AXCode/<ver>`  
+   and the Desktop sibling under `.../AXCode/Desktop/<ver>`.
+4. Open a PR to `microsoft/winget-pkgs` with both package folders.
+5. In release notes, mention SmartScreen publisher **DEFAI Private Limited** and NSIS silent `/S`.
+
 ## Notes
 
 - Desktop auto-update continues to use electron-updater + GitHub Releases; winget
