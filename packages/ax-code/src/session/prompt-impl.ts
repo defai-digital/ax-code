@@ -32,7 +32,7 @@ import { handlePromptLoopAgentStepLimit } from "./prompt-loop-agent-step-limit"
 import { emitPromptLoopCompletionGateDecision } from "./prompt-loop-completion-gate"
 import { handlePromptLoopCompletionGateRetry } from "./prompt-loop-completion-gate-retry"
 import { handlePromptLoopEmptyTurn } from "./prompt-loop-empty-turn"
-import { handlePromptLoopTruncatedTurn } from "./prompt-loop-truncated-turn"
+import { handlePromptLoopTruncatedTurn, truncatedModelOutputPrefix } from "./prompt-loop-truncated-turn"
 import { handlePromptLoopTodoConvergence } from "./prompt-loop-todo-convergence"
 import { handlePromptLoopTodoContinuation } from "./prompt-loop-todo-continuation"
 import { appendNewerMessages, loopMessages, scanLoopMessages } from "./prompt-loop-messages"
@@ -106,6 +106,16 @@ function describeStreamErrorCause(error: unknown): string | undefined {
   const message = toErrorMessage(error).trim()
   if (!message) return undefined
   return message.length > 300 ? `${message.slice(0, 297)}...` : message
+}
+
+function modelOutputText(messages: MessageV2.WithParts[], messageID: MessageV2.Info["id"]): string | undefined {
+  const message = messages.find((item) => item.info.id === messageID)
+  if (!message) return undefined
+  const text = message.parts
+    .filter((part): part is MessageV2.TextPart => part.type === "text" && !part.synthetic)
+    .map((part) => part.text)
+    .join("\n")
+  return text || undefined
 }
 
 export namespace SessionPrompt {
@@ -256,6 +266,7 @@ export namespace SessionPrompt {
     let stagnantTodoRetries = 0
     let emptyModelTurnRetries = 0
     let truncatedModelTurnRetries = 0
+    let previousTruncatedModelOutputPrefix: string | undefined
     // Consecutive outer-loop turns where the model only produced tool calls
     // (finish="tool-calls") without ever finishing with a text response.
     // Reset to 0 whenever the model finishes cleanly. If this exceeds
@@ -759,7 +770,10 @@ export namespace SessionPrompt {
         finish: processor.message.finish,
       })
       if (!emptyModelTurn) emptyModelTurnRetries = 0
-      if (!truncatedModelTurn) truncatedModelTurnRetries = 0
+      if (!truncatedModelTurn) {
+        truncatedModelTurnRetries = 0
+        previousTruncatedModelOutputPrefix = undefined
+      }
       // Reset the tool-only streak HERE, not in the tracking block further
       // down: a turn that finished with a text response but is immediately
       // followed by a todo/gate/convergence continuation `continue`s past
@@ -874,6 +888,9 @@ export namespace SessionPrompt {
           continue
         }
 
+        const currentTruncatedModelOutputPrefix = truncatedModelTurn
+          ? truncatedModelOutputPrefix(modelOutputText(latestMessages, processor.message.id))
+          : undefined
         const truncatedTurnTransition = await handlePromptLoopTruncatedTurn({
           sessionID,
           assistant: processor.message,
@@ -881,6 +898,8 @@ export namespace SessionPrompt {
           truncatedModelTurnRetries,
           maxTruncatedModelTurnRetries,
           pendingCount: pendingTodos.length,
+          previousOutputPrefix: previousTruncatedModelOutputPrefix,
+          currentOutputPrefix: currentTruncatedModelOutputPrefix,
         })
         truncatedModelTurnRetries = truncatedTurnTransition.truncatedModelTurnRetries
 
@@ -890,6 +909,7 @@ export namespace SessionPrompt {
         }
 
         if (truncatedTurnTransition.action === "recover") {
+          previousTruncatedModelOutputPrefix = currentTruncatedModelOutputPrefix
           await createAutonomousTextContinuation({
             sessionID,
             messages: latestMessages,

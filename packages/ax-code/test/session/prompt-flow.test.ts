@@ -1661,4 +1661,83 @@ describe("session.prompt flow", () => {
       else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
     }
   })
+
+  test("stops early when a truncation retry repeats the same substantial model output", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          build: {
+            steps: 10,
+          },
+        },
+      },
+    })
+
+    const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+    process.env["AX_CODE_AUTONOMOUS"] = "true"
+
+    try {
+      const staleOutput = "The Journal of Modern African Studies has additional publication details. ".repeat(8)
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+      streamSpy = vi.spyOn(LLM, "stream").mockImplementation(
+        async () =>
+          ({
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield { type: "text-start", id: "text_1" }
+              yield { type: "text-delta", id: "text_1", text: staleOutput }
+              yield { type: "text-end", id: "text_1" }
+              yield {
+                type: "finish-step",
+                finishReason: "length",
+                usage: { inputTokens: 10, outputTokens: 80, totalTokens: 90 },
+              }
+              yield { type: "finish" }
+            })(),
+          }) as any,
+      )
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Repeated Truncated Output Test" })
+
+          await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "assess this project" }],
+          })
+
+          expect(streamSpy).toHaveBeenCalledTimes(2)
+
+          const messages = await Session.messages({ sessionID: session.id })
+          const recoveryMessages = messages.filter(
+            (message) =>
+              message.info.role === "user" &&
+              message.parts.some(
+                (part) =>
+                  part.type === "text" &&
+                  part.text.includes("The previous autonomous model turn was truncated by the provider"),
+              ),
+          )
+          expect(recoveryMessages).toHaveLength(1)
+
+          const assistantMessages = messages.filter((message) => message.info.role === "assistant")
+          const lastAssistant = assistantMessages.at(-1)?.info
+          expect(lastAssistant?.role).toBe("assistant")
+          if (lastAssistant?.role !== "assistant") throw new Error("expected assistant")
+          expect(lastAssistant.error?.data.message).toContain("repeated the same substantial output")
+          expect(lastAssistant.error?.data.message).toContain("restart its runtime")
+
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
+      else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
+    }
+  })
 })

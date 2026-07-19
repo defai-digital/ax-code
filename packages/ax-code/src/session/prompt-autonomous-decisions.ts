@@ -14,6 +14,11 @@ const TRUNCATED_MODEL_TURN_INCOMPLETE_MESSAGE =
   `Autonomous mode received a truncated model turn: the provider returned finish=length before the model ` +
   `could complete its response. The session is stopped, but the work should not be treated as complete.`
 
+const REPEATED_TRUNCATED_MODEL_TURN_INCOMPLETE_MESSAGE =
+  `Autonomous mode stopped because the provider repeated the same substantial output after a truncated-turn ` +
+  `recovery instead of continuing. This usually indicates stale provider or local model runtime state. Retry with ` +
+  `a fresh provider connection; for a local model, restart its runtime. The work should not be treated as complete.`
+
 type ModelTurnTokens = {
   input?: number
   output?: number
@@ -70,7 +75,7 @@ type TruncatedModelTurnDecision =
   | {
       action: "stop"
       reason: "stalled"
-      errorCode: "TRUNCATED_MODEL_TURN"
+      errorCode: "TRUNCATED_MODEL_TURN" | "REPEATED_TRUNCATED_MODEL_TURN"
       message: string
     }
 
@@ -555,6 +560,7 @@ export function truncatedModelTurnDecision(input: {
   truncatedModelTurn: boolean
   truncatedModelTurnRetries: number
   maxTruncatedModelTurnRetries: number
+  repeatedOutput?: boolean
 }): TruncatedModelTurnDecision {
   if (!input.truncatedModelTurn) {
     return {
@@ -564,6 +570,15 @@ export function truncatedModelTurnDecision(input: {
   }
 
   const retries = normalizedDecisionCount(input.truncatedModelTurnRetries)
+  if (input.repeatedOutput) {
+    return {
+      action: "stop",
+      reason: "stalled",
+      errorCode: "REPEATED_TRUNCATED_MODEL_TURN",
+      message: REPEATED_TRUNCATED_MODEL_TURN_INCOMPLETE_MESSAGE,
+    }
+  }
+
   if (retryBudgetExhausted({ attempts: retries, maxAttempts: input.maxTruncatedModelTurnRetries })) {
     return {
       action: "stop",

@@ -742,6 +742,25 @@ describe("autonomous continuation decisions", () => {
     expect(decision.message).toContain("truncated model turn")
     expect(decision.message).toContain("should not be treated as complete")
   })
+
+  test("stops immediately when a truncation retry repeats stale provider output", () => {
+    const decision = truncatedModelTurnDecision({
+      truncatedModelTurn: true,
+      truncatedModelTurnRetries: 1,
+      maxTruncatedModelTurnRetries: 3,
+      repeatedOutput: true,
+    })
+
+    expect(decision.action).toBe("stop")
+    if (decision.action !== "stop") throw new Error("expected stop decision")
+    expect(decision).toMatchObject({
+      action: "stop",
+      reason: "stalled",
+      errorCode: "REPEATED_TRUNCATED_MODEL_TURN",
+    })
+    expect(decision.message).toContain("repeated the same substantial output")
+    expect(decision.message).toContain("restart its runtime")
+  })
 })
 
 describe("total step limit decision", () => {
