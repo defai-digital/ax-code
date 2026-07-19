@@ -25,8 +25,9 @@ describe("repo-structure workflow policy", () => {
     expect(structureIndex).toBeGreaterThan(testsIndex)
   })
 
-  test("guards both legacy and current internal planning folders", () => {
-    expect(workflow).toContain('"ax-internal/**"')
-    expect(workflow).toContain("git ls-files .internal ax-internal")
+  test("guards the canonical internal planning folder", () => {
+    expect(workflow).toContain('".internal/**"')
+    expect(workflow).toContain("git ls-files .internal")
+    expect(workflow).not.toContain("ax-internal")
   })
 })

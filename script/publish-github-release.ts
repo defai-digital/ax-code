@@ -88,7 +88,7 @@ export function readPackageVersion(root = ROOT) {
 }
 
 export function trackedInternalFiles(root = ROOT) {
-  const result = childProcess.spawnSync("git", ["ls-files", "ax-internal"], {
+  const result = childProcess.spawnSync("git", ["ls-files", ".internal"], {
     cwd: root,
     encoding: "utf8",
     stdio: ["inherit", "pipe", "pipe"],
@@ -96,7 +96,7 @@ export function trackedInternalFiles(root = ROOT) {
   if (result.error) throw result.error
   if (result.status !== 0) {
     const stderr = typeof result.stderr === "string" ? result.stderr.trim() : ""
-    throw new Error(`git ls-files ax-internal exited with status ${result.status}${stderr ? `: ${stderr}` : ""}`)
+    throw new Error(`git ls-files .internal exited with status ${result.status}${stderr ? `: ${stderr}` : ""}`)
   }
   return result.stdout
     .split(/\r?\n/)
@@ -108,7 +108,7 @@ export function trackedInternalPrivacyIssue(files: readonly string[]) {
   if (files.length === 0) return undefined
   const sample = files.slice(0, 5).join(", ")
   const suffix = files.length > 5 ? `, and ${files.length - 5} more` : ""
-  return `ax-internal files are tracked: ${sample}${suffix}. Remove them from git index before publishing.`
+  return `.internal files are tracked: ${sample}${suffix}. Remove them from git index before publishing.`
 }
 
 export function assertNoTrackedInternalFiles(root = ROOT) {

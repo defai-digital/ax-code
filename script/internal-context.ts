@@ -1,9 +1,9 @@
 /**
- * ax-internal-context.ts
+ * internal-context.ts
  *
  * Status-filtered context feed for cleanup/improvement skills (e.g. improve-overall).
  *
- * Reads ax-internal/adr/INDEX.md and ax-internal/arch/*-policy.md and emits ONLY the
+ * Reads .internal/adr/INDEX.md and .internal/arch/*-policy.md and emits ONLY the
  * authoritative tier as cleanup targets:
  *   - ADRs with status starting "Acc" (accepted, possibly implemented) — these are decided
  *     boundaries code should align to.
@@ -17,24 +17,25 @@
  *   - PRD roadmap and maturity snapshots — directional/advisory, not mandates.
  *
  * Usage:
- *   pnpm exec tsx script/ax-internal-context.ts       # print context block to stdout
- *   pnpm exec tsx script/ax-internal-context.ts --json # emit machine-readable JSON
+ *   pnpm exec tsx script/internal-context.ts        # print context block to stdout
+ *   pnpm exec tsx script/internal-context.ts --json # emit machine-readable JSON
  *
- * This is the safety guardrail that lets a cleanup skill consume ax-internal/ safely.
+ * This is the safety guardrail that lets a cleanup skill consume .internal/ safely.
  */
 import { readFile, readdir } from "node:fs/promises"
 import path from "node:path"
 import { parseArgs } from "node:util"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
-const ADR_INDEX = path.join(ROOT, "ax-internal/adr/INDEX.md")
-const ARCH_DIR = path.join(ROOT, "ax-internal/arch")
+const ADR_INDEX = path.join(ROOT, ".internal/adr/INDEX.md")
+const ARCH_DIR = path.join(ROOT, ".internal/arch")
 
 interface AdrRow {
   id: string
   title: string
   status: string
   href: string
+  date?: string
   authoritative: boolean
 }
 
@@ -44,20 +45,20 @@ interface PolicyFile {
 }
 
 /**
- * Parse all markdown table rows from the ADR INDEX. Columns: link, title, status.
+ * Parse all markdown table rows from the ADR index. Columns: link, title, status, optional date.
  * Status values seen: "Acc", "Acc — Impl", "Part; ...", "Prop — ...", "Prop — Def", etc.
  */
 function parseAdrIndex(markdown: string): AdrRow[] {
   const rows: AdrRow[] = []
-  const tableRowRe = /^\|\s*\[([^\]]+)\]\(([^)]+)\)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*$/
+  const tableRowRe = /^\|\s*\[([^\]]+)\]\(([^)]+)\)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|(?:\s*([^|]+?)\s*\|)?$/
   for (const line of markdown.split("\n")) {
     const m = line.match(tableRowRe)
     if (!m) continue
-    const [, id, href, title, status] = m
+    const [, id, href, title, status, date] = m
     // Skip header separator rows and non-ADR rows
     if (id.startsWith("---") || id.toLowerCase().includes("title")) continue
-    const authoritative = /^Acc\b/.test(status.trim())
-    rows.push({ id, title: title.trim(), status: status.trim(), href, authoritative })
+    const authoritative = /^Acc(?:\b|epted\b)/.test(status.trim())
+    rows.push({ id, title: title.trim(), status: status.trim(), href, date: date?.trim(), authoritative })
   }
   return rows
 }
@@ -66,7 +67,7 @@ async function listPolicies(): Promise<PolicyFile[]> {
   const entries = await readdir(ARCH_DIR).catch(() => [])
   return entries
     .filter((f) => f.endsWith("-policy.md") || f === "repo-structure.md")
-    .map((name) => ({ name, path: `ax-internal/arch/${name}` }))
+    .map((name) => ({ name, path: `.internal/arch/${name}` }))
 }
 
 async function main() {
@@ -90,7 +91,7 @@ async function main() {
             id,
             title,
             status,
-            file: `ax-internal/adr/${href}`,
+            file: `.internal/adr/${href}`,
           })),
           excludedAdrs: excluded.map((r) => ({ id: r.id, status: r.status })),
           policies,
@@ -103,10 +104,10 @@ async function main() {
   }
 
   // Human-readable context block for a cleanup skill
-  console.log("# ax-internal authoritative context for cleanup\n")
+  console.log("# .internal authoritative context for cleanup\n")
   console.log("## Authoritative ADRs (status: Acc / Acc — Impl) — code should align to these boundaries\n")
   for (const r of authoritative) {
-    console.log(`- **${r.id}** (${r.status}): ${r.title} → ax-internal/adr/${r.href}`)
+    console.log(`- **${r.id}** (${r.status}): ${r.title} → .internal/adr/${r.href}`)
   }
   console.log("\n## Living policies — hard constraints; any cleanup must not violate these\n")
   for (const p of policies) {
@@ -116,10 +117,12 @@ async function main() {
   for (const r of excluded) {
     console.log(`- ${r.id} [${r.status}]`)
   }
-  console.log("\n## Also excluded (advisory, not mandates): prd/PRD.md roadmap, arch/product-maturity-assessment-*.md")
+  console.log(
+    "\n## Also excluded (advisory, not mandates): .internal/prd/* roadmaps, arch/product-maturity-assessment-*.md",
+  )
 }
 
 main().catch((err) => {
-  console.error("ax-internal-context failed:", err)
+  console.error("internal-context failed:", err)
   process.exit(1)
 })

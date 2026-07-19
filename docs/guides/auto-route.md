@@ -120,7 +120,7 @@ The environment variable overrides the config file setting.
 | **Autonomous Mode** | Auto-route works independently. Agent routing and complexity classification happen before permission checks.                    |
 | **Sandbox Mode**    | No interaction. Auto-route only affects which agent and model tier is selected, not what the agent can do.                      |
 | **Model Selection** | `low`-complexity messages use the provider's small model automatically when auto-route is on and no model is explicitly pinned. |
-| **Execution Modes** | Hybrid placement (`modes.default: "hybrid"`) is separate: it chooses local vs cloud. See [Execution Modes](modes.md). |
+| **Execution Modes** | Hybrid placement (`modes.default: "hybrid"`) is separate: it chooses local vs cloud. See [Execution Modes](modes.md).           |
 
 ## When to Enable Auto-Route
 

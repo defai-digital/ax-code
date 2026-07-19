@@ -56,19 +56,19 @@ describe("tool.bash helpers", () => {
     // be statically path-checked — it would resolve to a literal "$f" and trigger
     // a false "Path does not exist". Regression for the reported session error.
     expect(isStaticPathArg("$f")).toBeUndefined()
-    expect(isStaticPathArg("ax-internal/prd/$f")).toBeUndefined()
+    expect(isStaticPathArg(".internal/prd/$f")).toBeUndefined()
     expect(isStaticPathArg('"$f"')).toBeUndefined()
     expect(isStaticPathArg("${file}")).toBeUndefined()
     // Globs and brace expansion are resolved by the shell, not statically.
     expect(isStaticPathArg("*.ts")).toBeUndefined()
     expect(isStaticPathArg("src/**/*.tsx")).toBeUndefined()
-    expect(isStaticPathArg("ax-internal/prd/prd-*.md")).toBeUndefined()
+    expect(isStaticPathArg(".internal/prd/prd-*.md")).toBeUndefined()
     expect(isStaticPathArg("file?.txt")).toBeUndefined()
     expect(isStaticPathArg("{a,b}.txt")).toBeUndefined()
     expect(isStaticPathArg("~/notes.txt")).toBeUndefined()
     // Plain literal paths are still checkable.
     expect(isStaticPathArg("src/index.ts")).toBe("src/index.ts")
-    expect(isStaticPathArg("ax-internal/prd/spec.md")).toBe("ax-internal/prd/spec.md")
+    expect(isStaticPathArg(".internal/prd/spec.md")).toBe(".internal/prd/spec.md")
   })
 
   test("selects read-side path args for statically checkable commands", () => {

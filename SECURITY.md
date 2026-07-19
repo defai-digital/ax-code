@@ -236,4 +236,4 @@ missing server route validation, and unsafe Electron IPC bridges.
 
 For full enterprise governance (RBAC, policy-as-code, SIEM export, cryptographic audit), integrate with **AX Trust** (roadmap item).
 
-See [docs/sandbox.md](docs/sandbox.md) for isolation configuration and runtime behavior.
+See [docs/guides/sandbox.md](docs/guides/sandbox.md) for isolation configuration and runtime behavior.

@@ -29,7 +29,7 @@ allowed — the contract test in
 `packages/web/server/lib/ax-code/sdk-contract.test.js` pins the entry points.
 
 **Tracking — gRPC status (verified 2026-06-10 against SDK 2.2.0 and upstream
-`docs/sdk-grpc-native.md`):** `@ax-code/sdk/grpc` is currently an API facade,
+`docs/sdk/native-transport.md`):** `@ax-code/sdk/grpc` is currently an API facade,
 not a transport change. `createAxCodeGrpcHttpBridge` implements every method
 over `createHeadlessClient` (the same HTTP client), `SubscribeEvents` consumes
 the same SSE route, `ConnectPty` uses WebSocket, and every method descriptor

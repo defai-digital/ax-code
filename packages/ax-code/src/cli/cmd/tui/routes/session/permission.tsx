@@ -240,7 +240,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
   // permission.replied event on old servers, so nothing would ever unmount
   // this prompt. Remove the request locally once the reply succeeds; the
   // event-driven removal is a no-op when it also arrives. See
-  // ax-internal/bugs BUG-005.
+  // .internal/bugs BUG-005.
   function removeRequestLocally(sessionID: string, id: string) {
     sync.set(
       "permission",

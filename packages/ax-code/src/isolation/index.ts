@@ -16,7 +16,7 @@ export namespace Isolation {
   // Deliberately excludes dual-use tools (git, npm, pip, go, ssh-with-local
   // subcommands) whose offline invocations are common — those are not
   // statically distinguishable from their networked ones and would cause
-  // excessive false denials. See docs/sandbox.md for the documented limits.
+  // excessive false denials. See docs/guides/sandbox.md for the documented limits.
   export const NETWORK_COMMANDS = new Set([
     "curl",
     "wget",

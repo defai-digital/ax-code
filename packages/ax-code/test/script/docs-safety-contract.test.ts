@@ -12,7 +12,7 @@ describe("public safety documentation contract", () => {
   test("front-door docs state that runtime isolation defaults to workspace-write", async () => {
     const readme = await readRepoFile("README.md")
     const security = await readRepoFile("SECURITY.md")
-    const sandbox = await readRepoFile("docs/sandbox.md")
+    const sandbox = await readRepoFile("docs/guides/sandbox.md")
 
     expect(readme).toContain(
       "AX Code starts with autonomous mode on and runtime isolation in `workspace-write` by default",
@@ -22,7 +22,7 @@ describe("public safety documentation contract", () => {
   })
 
   test("autonomous safety docs describe sandbox-on as the default", async () => {
-    const autonomous = await readRepoFile("docs/autonomous.md")
+    const autonomous = await readRepoFile("docs/guides/autonomous.md")
 
     expect(autonomous).toContain("Recommended default")
     expect(autonomous).toContain("The default runtime posture is autonomous on plus sandbox on")

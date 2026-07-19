@@ -7,12 +7,12 @@ Owner: ax-code runtime
 
 AX Code uses **effort** (also called thinking level) to control how hard the active model reasons. Effort is **not** a work mode and is **not** a placement mode.
 
-| Axis | Question | Examples |
-| ---- | -------- | -------- |
-| **Model** | Which model? | Sonnet, Opus, GPT, local Qwen |
-| **Effort** | How hard should it think? | Auto, Fast, Balanced, Deep, Max |
-| **Work mode** | How is the job structured? | Agent, Council, Arena |
-| **Placement** | Where does inference run? | local, cloud, hybrid |
+| Axis          | Question                   | Examples                        |
+| ------------- | -------------------------- | ------------------------------- |
+| **Model**     | Which model?               | Sonnet, Opus, GPT, local Qwen   |
+| **Effort**    | How hard should it think?  | Auto, Fast, Balanced, Deep, Max |
+| **Work mode** | How is the job structured? | Agent, Council, Arena           |
+| **Placement** | Where does inference run?  | local, cloud, hybrid            |
 
 See [Execution Modes](modes.md) for work and placement modes.
 
@@ -20,15 +20,15 @@ See [Execution Modes](modes.md) for work and placement modes.
 
 The runtime still stores and sends OpenCode-compatible **variant** keys from the provider catalog (for example `low`, `medium`, `high`, `xhigh`, `max`). UI labels are a presentation layer only:
 
-| UI label | Typical wire key |
-| -------- | ---------------- |
-| Auto | _(none — model / policy default)_ |
-| Off | `none` |
-| Minimal | `minimal` |
-| Fast | `low` |
-| Balanced | `medium` |
-| Deep | `high` |
-| Max | `xhigh`, `max` |
+| UI label | Typical wire key                  |
+| -------- | --------------------------------- |
+| Auto     | _(none — model / policy default)_ |
+| Off      | `none`                            |
+| Minimal  | `minimal`                         |
+| Fast     | `low`                             |
+| Balanced | `medium`                          |
+| Deep     | `high`                            |
+| Max      | `xhigh`, `max`                    |
 
 Available keys are **per model**. Models with no variants hide the effort control.
 
@@ -36,17 +36,17 @@ Available keys are **per model**. Models with no variants hide the effort contro
 
 Effort levels are generated automatically for supported models on these providers:
 
-| Provider | Mechanism | Levels |
-| -------- | --------- | ------ |
-| Anthropic (Claude) | `effort` on current models; thinking budgets on legacy models | Fast, Balanced, Deep, Max (model-dependent) |
-| OpenAI (GPT-5.x) | `reasoningEffort` | Fast, Balanced, Deep |
-| xAI (Grok) | Responses API `reasoningEffort` | Fast, Balanced, Deep |
-| Google (Gemini 3.x) | `thinkingConfig.thinkingLevel` | Fast, Deep (3.1 adds Balanced) |
-| OpenAI-compatible endpoints | `reasoningEffort` | Fast, Balanced, Deep |
-| Venice | `reasoningEffort` | Fast, Balanced, Deep |
-| Claude Code CLI | `--effort` | Fast, Balanced, Deep, Max |
-| Codex CLI | `model_reasoning_effort` config override | Minimal, Fast, Balanced, Deep, Max |
-| Grok Build CLI | `--reasoning-effort` | Fast, Balanced, Deep |
+| Provider                    | Mechanism                                                     | Levels                                      |
+| --------------------------- | ------------------------------------------------------------- | ------------------------------------------- |
+| Anthropic (Claude)          | `effort` on current models; thinking budgets on legacy models | Fast, Balanced, Deep, Max (model-dependent) |
+| OpenAI (GPT-5.x)            | `reasoningEffort`                                             | Fast, Balanced, Deep                        |
+| xAI (Grok)                  | Responses API `reasoningEffort`                               | Fast, Balanced, Deep                        |
+| Google (Gemini 3.x)         | `thinkingConfig.thinkingLevel`                                | Fast, Deep (3.1 adds Balanced)              |
+| OpenAI-compatible endpoints | `reasoningEffort`                                             | Fast, Balanced, Deep                        |
+| Venice                      | `reasoningEffort`                                             | Fast, Balanced, Deep                        |
+| Claude Code CLI             | `--effort`                                                    | Fast, Balanced, Deep, Max                   |
+| Codex CLI                   | `model_reasoning_effort` config override                      | Minimal, Fast, Balanced, Deep, Max          |
+| Grok Build CLI              | `--reasoning-effort`                                          | Fast, Balanced, Deep                        |
 
 Providers whose effort API is unverified or incompatible (Groq's hosted API, OpenRouter, DeepSeek/Alibaba/MiniMax/GLM/Mistral families, unsupported CLI providers, and third-party gateways) expose **no** built-in levels; `/effort` explains this instead of failing silently. Define custom levels under `provider.<id>.models.<model>.variants` in `ax-code.json` when a provider documents a supported option shape.
 
@@ -68,7 +68,7 @@ Providers whose effort API is unverified or incompatible (Groq's hosted API, Ope
 ## Defaults and auto behavior
 
 1. **Auto** means no explicit user override for that model.
-2. When Auto is active, [ReasoningPolicy](../packages/ax-code/src/control-plane/reasoning-policy.ts) applies a **balanced** baseline (`medium` / provider `default` variant) so models actually enable thinking / pass effort flags instead of omitting them.
+2. When Auto is active, [ReasoningPolicy](../../packages/ax-code/src/control-plane/reasoning-policy.ts) applies a **balanced** baseline (`medium` / provider `default` variant) so models actually enable thinking / pass effort flags instead of omitting them.
 3. This applies both to models with `reasoning: true` and to providers that only expose effort as variants (for example Claude Code / Codex / Grok Build CLIs, which report `reasoning: false` because output is opaque to the AI SDK).
 4. Policy may still **raise** depth to Deep for plan mode, autonomous mode, or high-risk prompts (and for repeated failure / high uncertainty / high blast radius when those signals are supplied).
 5. When the user picks an explicit effort, that override wins for subsequent turns (policy does not fight it). Config or agent options that already set reasoning/`effort`/`thinking` are also left alone.
@@ -100,5 +100,5 @@ Define or disable provider variants under `provider.<id>.models.<model>.variants
 ## Related
 
 - [Execution Modes](modes.md) — Agent / Council / Arena and hybrid placement
-- [Supported Providers](supported-providers.md) — which providers expose models
+- [Supported Providers](../providers/supported-providers.md) — which providers expose models
 - OpenCode model variants: https://opencode.ai/docs/models/

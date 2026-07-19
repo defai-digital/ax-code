@@ -590,7 +590,7 @@ export namespace LLM {
     // is blocked on local work (a long shell command, a permission or
     // question prompt awaiting the user), so the watchdog re-arms instead
     // of aborting. Provider-executed tools stay on the provider's clock and
-    // are not exempted. See ax-internal/bugs BUG-005.
+    // are not exempted. See .internal/bugs BUG-005.
     let executingToolCalls = 0
     const trackChunk = (chunk: unknown) => {
       if (!chunk || typeof chunk !== "object") return

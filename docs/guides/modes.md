@@ -100,7 +100,7 @@ When `modes.default` is **`hybrid`** and the user/agent did not pin a model:
 
 Complexity still uses the existing small/fast model path for `low` messages when auto-route complexity routing is enabled ([Auto-Route](auto-route.md)). Hybrid does not replace keyword specialist routing.
 
-Local models and memory guidance: [AX Engine Model Selection](ax-engine-model-selection.md). Providers list: [Supported Providers](supported-providers.md).
+Local models and memory guidance: [AX Engine Model Selection](../providers/ax-engine-model-selection.md). Providers list: [Supported Providers](../providers/supported-providers.md).
 
 ## Council (consensus mode)
 
@@ -180,5 +180,5 @@ Naive majority vote on similar wrong patches is an anti-pattern (popularity trap
 ## Related
 
 - [Auto-Route](auto-route.md) — specialist keywords + complexity tier
-- [Supported Providers](supported-providers.md) — cloud, CLI, AX Engine
-- [AX Engine Model Selection](ax-engine-model-selection.md) — local model choice
+- [Supported Providers](../providers/supported-providers.md) — cloud, CLI, AX Engine
+- [AX Engine Model Selection](../providers/ax-engine-model-selection.md) — local model choice

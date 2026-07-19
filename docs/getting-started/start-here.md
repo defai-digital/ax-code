@@ -5,7 +5,7 @@ Scope: current-state
 Last reviewed: 2026-07-04
 Owner: ax-code runtime
 
-If the root [README](../README.md) is the fastest way to install AX Code, this page is the fastest way to understand it.
+If the root [README](../../README.md) is the fastest way to install AX Code, this page is the fastest way to understand it.
 
 ## What AX Code Is
 
@@ -44,36 +44,35 @@ The rest of the documentation maps onto those layers.
 
 ### I want to try it quickly
 
-- Start with the [root README](../README.md) for install and first launch.
+- Start with the [root README](../../README.md) for install and first launch.
 - Supported install paths use the compiled runtime:
   - Homebrew for macOS CLI: `brew tap defai-digital/ax-code && brew install ax-code`
   - GitHub release installer for Windows PowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"`
 - The Bash installer is not the canonical Windows setup path.
 - npm packages are no longer supported install or upgrade channels. See [Installation and Runtime Channels](install-runtime.md) for platform policy, runtime labels, and the local launcher matrix.
-- Use `/connect` or `ax-code providers login` to set a model. See [Supported Providers and Models](supported-providers.md) for Cloud API providers including OpenRouter, CLI providers, AX Engine, and model ids.
+- Use `/connect` or `ax-code providers login` to set a model. See [Supported Providers and Models](../providers/supported-providers.md) for Cloud API providers including OpenRouter, CLI providers, AX Engine, and model ids.
 - Run `ax-code init` after opening a real project so `AGENTS.md` captures local conventions.
-- If you want tighter safety boundaries, enable [Sandbox Mode](sandbox.md) before broader edits.
+- If you want tighter safety boundaries, enable [Sandbox Mode](../guides/sandbox.md) before broader edits.
 
 ### I want to use it safely in a team or company repo
 
 - AX Code starts with autonomous mode on and sandbox mode on: `workspace-write` with network disabled by default.
 - Keep the default boundary for broad edits; use `--sandbox full-access` only when a trusted task intentionally needs unrestricted filesystem and network access.
-- Read [Sandbox Mode](sandbox.md) for execution boundaries.
-- Read [Autonomous Mode](autonomous.md) if the agent will run unattended.
-- Read [Security Policy](../SECURITY.md) for threat model and credential storage details.
-- Read [Semantic Layer](semantic-layer.md) if provenance and replay matter for your workflow.
+- Read [Sandbox Mode](../guides/sandbox.md) for execution boundaries.
+- Read [Autonomous Mode](../guides/autonomous.md) if the agent will run unattended.
+- Read [Security Policy](../../SECURITY.md) for threat model and credential storage details.
+- Read [Semantic Layer](../architecture/semantic-layer.md) if provenance and replay matter for your workflow.
 
 ### I want to embed or automate it
 
-- Use [`@ax-code/sdk`](../packages/sdk/js/README.md) for in-process TypeScript integration.
-- Use [HTTP and OpenAPI SDKs](sdk-http-openapi.md) if you want a service boundary, generated clients, or non-JavaScript integration.
-- Use [Project API Spec](specs/project.md) for the current project and session API shape.
+- Use [`@ax-code/sdk`](../../packages/sdk/js/README.md) for in-process TypeScript integration.
+- Use [HTTP and OpenAPI Compatibility](../sdk/http-openapi.md) for a service boundary, generated clients, and the authoritative OpenAPI contract.
 - Use `ax-code mcp add` when the agent needs external tools or services.
 
 ### I want to understand the repo or contribute feedback
 
-- Read the [Documentation Hub](README.md) for the rest of the public docs.
-- Read [CONTRIBUTING.md](../CONTRIBUTING.md) for the current external contribution policy.
+- Read the [Documentation Hub](../README.md) for the rest of the public docs.
+- Read [CONTRIBUTING.md](../../CONTRIBUTING.md) for the current external contribution policy.
 
 ## When AX Code May Not Fit
 
@@ -101,15 +100,15 @@ For Grok, `/connect` defaults to `Grok Build CLI`, which uses the local `grok` c
 
 ## Doc Map
 
-| Topic                    | Start here                                                      |
-| ------------------------ | --------------------------------------------------------------- |
-| Product overview         | [Start Here](start-here.md)                                     |
-| Install/runtime channels | [Installation and Runtime Channels](install-runtime.md)         |
-| Providers and models     | [Supported Providers and Models](supported-providers.md)        |
-| Sandbox and permissions  | [Sandbox Mode](sandbox.md)                                      |
-| Unattended execution     | [Autonomous Mode](autonomous.md)                                |
-| Routing and model tier   | [Auto-Route](auto-route.md)                                     |
-| SDK embedding            | [`@ax-code/sdk`](../packages/sdk/js/README.md)                  |
-| HTTP/OpenAPI clients     | [HTTP and OpenAPI SDKs](sdk-http-openapi.md)                    |
-| VS Code integration      | [VS Code integration](../packages/integration-vscode/README.md) |
-| Architecture             | [Semantic Layer](semantic-layer.md)                             |
+| Topic                    | Start here                                                            |
+| ------------------------ | --------------------------------------------------------------------- |
+| Product overview         | [Start Here](start-here.md)                                           |
+| Install/runtime channels | [Installation and Runtime Channels](install-runtime.md)               |
+| Providers and models     | [Supported Providers and Models](../providers/supported-providers.md) |
+| Sandbox and permissions  | [Sandbox Mode](../guides/sandbox.md)                                  |
+| Unattended execution     | [Autonomous Mode](../guides/autonomous.md)                            |
+| Routing and model tier   | [Auto-Route](../guides/auto-route.md)                                 |
+| SDK embedding            | [`@ax-code/sdk`](../../packages/sdk/js/README.md)                     |
+| HTTP/OpenAPI clients     | [HTTP and OpenAPI Compatibility](../sdk/http-openapi.md)              |
+| VS Code integration      | [VS Code integration](../../packages/integration-vscode/README.md)    |
+| Architecture             | [Semantic Layer](../architecture/semantic-layer.md)                   |

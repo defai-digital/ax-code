@@ -109,7 +109,7 @@ Requires `curl`, `tar`, and `minisign` (or set `AX_CODE_SKIP_MINISIGN_VERIFY=1` 
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
-Supported CLI install paths are Homebrew (macOS), the Bash release installer (Linux), and the GitHub release installer for Windows PowerShell. The Windows PowerShell installer is CLI-only; use the Windows `.exe` release asset for Desktop. npm packages are no longer a supported channel. Use `-Version <release>` on Windows to pin a specific version. See [Installation and Runtime Channels](docs/install-runtime.md) for the full matrix.
+Supported CLI install paths are Homebrew (macOS), the Bash release installer (Linux), and the GitHub release installer for Windows PowerShell. The Windows PowerShell installer is CLI-only; use the Windows `.exe` release asset for Desktop. npm packages are no longer a supported channel. Use `-Version <release>` on Windows to pin a specific version. See [Installation and Runtime Channels](docs/getting-started/install-runtime.md) for the full matrix.
 
 AX Engine local inference is available only on eligible Apple Silicon Macs. Windows Desktop users should use hosted providers or OpenAI-compatible provider gateways; AX Code itself remains local-only and cannot be used as a remote server. For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `ZHIPU_API_KEY`, Alibaba plan keys, and `GITHUB_TOKEN`.
 
@@ -202,7 +202,7 @@ AX Code starts with autonomous mode on and runtime isolation in `workspace-write
 - Use `ax-code mcp list --tools`, `ax-code mcp trust`, and permission rules to control external MCP tool surfaces.
 - Provider and MCP credentials are encrypted at rest; server mode is localhost-only by default.
 
-See [Sandbox Mode](docs/sandbox.md), [Autonomous Mode](docs/autonomous.md), [MCP Integrations](docs/mcp.md), and [SECURITY.md](SECURITY.md) for the full control model.
+See [Sandbox Mode](docs/guides/sandbox.md), [Autonomous Mode](docs/guides/autonomous.md), [MCP Integrations](docs/integrations/mcp.md), and [SECURITY.md](SECURITY.md) for the full control model.
 
 ## Typical Workflow
 
@@ -225,28 +225,28 @@ Default setup flows support three provider families:
 | CLI providers            | Claude Code, Gemini CLI, Codex CLI, Grok Build CLI, Qoder CLI, Antigravity CLI, and Kimi Code CLI | One model id per CLI bridge, using the local vendor CLI session   |
 | AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                        | Curated 6-bit MLX MTP models: Qwen3.6, Gemma 4, and GLM 4.7 Flash |
 
-See [Supported Providers and Models](docs/supported-providers.md) for provider ids, credential variables, and the exact supported model ids.
+See [Supported Providers and Models](docs/providers/supported-providers.md) for provider ids, credential variables, and the exact supported model ids.
 
 ## Local AX Engine Models
 
 AX Engine local inference is optimized for eligible Apple Silicon Macs. The built-in AX Code provider uses a
 curated 6-bit MLX MTP model set and defaults to Qwen3.6-27B for the best daily balance of offline coding,
-reasoning, and local memory fit. See [AX Engine Model Selection](docs/ax-engine-model-selection.md) for the
+reasoning, and local memory fit. See [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md) for the
 ranking, GLM-4.7-Flash placement, and memory-based recommendations.
 
 ## Documentation
 
-- [Start Here](docs/start-here.md): understand what AX Code is, where the value comes from, and which docs to read next
+- [Start Here](docs/getting-started/start-here.md): understand what AX Code is, where the value comes from, and which docs to read next
 - [Documentation Hub](docs/README.md): guides, architecture, specs, and reference docs
-- [Sandbox Mode](docs/sandbox.md): isolation modes, protected paths, and network controls
-- [Autonomous Mode](docs/autonomous.md): unattended execution behavior and safeguards
-- [MCP Integrations](docs/mcp.md): trust, permissions, and prompt/resource safety for MCP servers
-- [Auto-Route](docs/auto-route.md): keyword-based specialist routing and optional fast-model complexity routing
-- [Supported Providers and Models](docs/supported-providers.md): Cloud API providers, CLI providers, and AX Engine model ids
-- [AX Engine Model Selection](docs/ax-engine-model-selection.md): local AX Engine model ranking and memory guidance
-- [Semantic Layer](docs/semantic-layer.md): provenance and replay boundaries for graph and LSP-backed answers
-- [AX Wiki](docs/wiki.md): native source-backed semantic wiki; complements `ax-code index`
-- [Stability](docs/stability.md): crash hygiene, aborts vs faults, TUI lifecycle, timeouts
+- [Sandbox Mode](docs/guides/sandbox.md): isolation modes, protected paths, and network controls
+- [Autonomous Mode](docs/guides/autonomous.md): unattended execution behavior and safeguards
+- [MCP Integrations](docs/integrations/mcp.md): trust, permissions, and prompt/resource safety for MCP servers
+- [Auto-Route](docs/guides/auto-route.md): keyword-based specialist routing and optional fast-model complexity routing
+- [Supported Providers and Models](docs/providers/supported-providers.md): Cloud API providers, CLI providers, and AX Engine model ids
+- [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md): local AX Engine model ranking and memory guidance
+- [Semantic Layer](docs/architecture/semantic-layer.md): provenance and replay boundaries for graph and LSP-backed answers
+- [AX Wiki](docs/integrations/wiki.md): native source-backed semantic wiki; complements `ax-code index`
+- [Stability](docs/architecture/stability.md): crash hygiene, aborts vs faults, TUI lifecycle, timeouts
 
 ## Common Commands
 

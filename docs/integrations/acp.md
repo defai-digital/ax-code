@@ -3,6 +3,7 @@
 Status: Active  
 Scope: documented happy path for IDE hosts  
 Last reviewed: 2026-07-12
+Owner: AX Code runtime
 
 AX Code exposes an ACP server so IDEs (for example Zed) can host the agent without a custom transport.
 
@@ -34,10 +35,10 @@ printf '%s\n' \
 
 Typical host sequence:
 
-1. `initialize` — negotiate protocol version and agent capabilities  
-2. `session/new` — create a session with `cwd` set to the project root  
-3. `session/prompt` — send user text; agent runs tools and returns a stop reason  
-4. `session/load` — resume a session id known to the host  
+1. `initialize` — negotiate protocol version and agent capabilities
+2. `session/new` — create a session with `cwd` set to the project root
+3. `session/prompt` — send user text; agent runs tools and returns a stop reason
+4. `session/load` — resume a session id known to the host
 
 ## Zed example
 
@@ -54,15 +55,15 @@ Typical host sequence:
 
 ## What works today
 
-| Capability | Status |
-|------------|--------|
-| initialize / capabilities | Supported |
-| session/new | Supported |
-| session/prompt | Supported (session completes before response) |
-| session/load | Supported for session id + mode restore |
-| Client file read/write | Supported |
-| Streaming `session/update` | Partial / not full progressive stream |
-| Full terminal bridge | Placeholder |
+| Capability                 | Status                                        |
+| -------------------------- | --------------------------------------------- |
+| initialize / capabilities  | Supported                                     |
+| session/new                | Supported                                     |
+| session/prompt             | Supported (session completes before response) |
+| session/load               | Supported for session id + mode restore       |
+| Client file read/write     | Supported                                     |
+| Streaming `session/update` | Partial / not full progressive stream         |
+| Full terminal bridge       | Placeholder                                   |
 
 Details and limitations: `packages/ax-code/src/acp/README.md`.
 

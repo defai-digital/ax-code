@@ -154,13 +154,13 @@ To allow network while keeping write restrictions:
 }
 ```
 
-See [SECURITY.md](../SECURITY.md) for the threat model.
+See [SECURITY.md](../../SECURITY.md) for the threat model.
 
 ## Repository-controlled permissions and hooks
 
 Project files are untrusted by default. Permission rules in `ax-code.json`, `.ax-code/policy.json`, and project agent or mode definitions may tighten access with `deny`, but repository-controlled `allow`/`ask` grants are ignored. Project commands cannot enable shell expansion. `.ax-code/hooks.json`, `.ax-code/plugin/`, and project-configured plugins are not executed.
 
-Untrusted project config also cannot select a custom shell, executable LSP or formatter, provider package or API endpoint, provider credential environment variables, external skill source, or instruction path outside the worktree. Safe relative instruction paths and non-executable built-in overrides remain available. MCP servers use a separate fingerprinted approval flow described in [MCP Integrations](mcp.md).
+Untrusted project config also cannot select a custom shell, executable LSP or formatter, provider package or API endpoint, provider credential environment variables, external skill source, or instruction path outside the worktree. Safe relative instruction paths and non-executable built-in overrides remain available. MCP servers use a separate fingerprinted approval flow described in [MCP Integrations](../integrations/mcp.md).
 
 After reviewing the repository-controlled configuration, users can opt in outside the repository for the current process:
 

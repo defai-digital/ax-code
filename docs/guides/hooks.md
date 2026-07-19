@@ -75,4 +75,4 @@ Hooks do **not** replace the sandbox. Use:
 2. **OS isolation** (the default `"auto"` backend) for kernel-enforced bash sandboxing when available
 3. **Hooks** for policy side-effects and hard blocks like force-push
 
-See [Sandbox Mode](sandbox.md) and [SECURITY.md](../SECURITY.md).
+See [Sandbox Mode](sandbox.md) and [SECURITY.md](../../SECURITY.md).

@@ -423,7 +423,7 @@ describe("memory.recorder", () => {
     await using tmp = await tmpdir()
     await recordEntry(tmp.path, "reference", {
       name: "grafana",
-      body: "Latency dashboard at grafanaax-internal/d/api-latency",
+      body: "Latency dashboard at grafana.internal/d/api-latency",
       why: "oncall watches this",
     })
     const entries = await listEntries(tmp.path, "reference")

@@ -27,7 +27,7 @@ The transport is not the dominant latency source for normal agent turns. LLM cal
 
 ## Contract Shape
 
-The language-neutral contract lives at [`packages/sdk/proto/ax_code/v1/headless.proto`](../packages/sdk/proto/ax_code/v1/headless.proto).
+The language-neutral contract lives at [`packages/sdk/proto/ax_code/v1/headless.proto`](../../packages/sdk/proto/ax_code/v1/headless.proto).
 Published packages also include it at `@ax-code/sdk/proto/ax_code/v1/headless.proto` for native hosts that generate
 clients from the installed SDK package.
 

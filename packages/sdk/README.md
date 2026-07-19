@@ -28,7 +28,7 @@ The first-party package today is `@ax-code/sdk`. Other languages should integrat
 | Python, Go, Java, Rust, or another runtime      | Generate a client from `openapi.json`         |
 | Interactive developer workflow                  | Root README, TUI, CLI, or VS Code integration |
 
-Keep this page short. Detailed cross-language guidance belongs in `docs/sdk-http-openapi.md`; detailed TypeScript examples belong in `js/README.md`.
+Keep this page short. Detailed cross-language guidance belongs in `docs/sdk/http-openapi.md`; detailed TypeScript examples belong in `js/README.md`.
 
 ## Cross-Language Policy
 

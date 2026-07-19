@@ -5,7 +5,7 @@ Scope: current-state
 Last reviewed: 2026-07-13
 Owner: ax-code runtime
 
-The root [README](../README.md) keeps the primary install path. This page is the source of truth for supported CLI installer channels, `ax-code doctor` runtime labels, local launcher behavior, and how those channels relate to Desktop installers.
+The root [README](../../README.md) keeps the primary install path. This page is the source of truth for supported CLI installer channels, `ax-code doctor` runtime labels, local launcher behavior, and how those channels relate to Desktop installers.
 
 ## Recommended Path
 
@@ -52,15 +52,15 @@ Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**.
 
 ## Channel Matrix
 
-| Channel                              | Install or setup command                                                                                                                       | Expected runtime label | Support status       | Use when                                                           |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------ |
-| Homebrew formula                     | `brew tap defai-digital/ax-code && brew install ax-code`                                                                                       | `node-bundled`         | Supported            | Normal macOS package-manager install path                          |
-| Linux Bash release installer         | `curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install \| bash`                                                  | `node-bundled`         | Supported on Linux   | Linux x64/arm64 user and CI CLI install path                       |
+| Channel                              | Install or setup command                                                                                                                            | Expected runtime label | Support status       | Use when                                                           |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------ |
+| Homebrew formula                     | `brew tap defai-digital/ax-code && brew install ax-code`                                                                                            | `node-bundled`         | Supported            | Normal macOS package-manager install path                          |
+| Linux Bash release installer         | `curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install \| bash`                                                      | `node-bundled`         | Supported on Linux   | Linux x64/arm64 user and CI CLI install path                       |
 | Windows PowerShell release installer | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 \| iex"` | `node-bundled`         | Supported on Windows | Windows user-local install path                                    |
-| Windows release assets               | Download `ax-code-windows-*.zip` from GitHub releases                                                                                          | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
-| Local bundled launcher               | `pnpm install && pnpm run setup:cli`                                                                                                           | `node-bundled`         | Contributor          | Contributor parity with the packaged startup path                  |
-| Local source launcher                | `pnpm run setup:cli -- --source`                                                                                                               | `source`               | Contributor          | Contributor-only source debugging                                  |
-| Direct checkout run                  | `pnpm cli` or `pnpm dev`                                                                                                                       | `source`               | Contributor          | Short-lived development runs without replacing the global launcher |
+| Windows release assets               | Download `ax-code-windows-*.zip` from GitHub releases                                                                                               | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
+| Local bundled launcher               | `pnpm install && pnpm run setup:cli`                                                                                                                | `node-bundled`         | Contributor          | Contributor parity with the packaged startup path                  |
+| Local source launcher                | `pnpm run setup:cli -- --source`                                                                                                                    | `source`               | Contributor          | Contributor-only source debugging                                  |
+| Direct checkout run                  | `pnpm cli` or `pnpm dev`                                                                                                                            | `source`               | Contributor          | Short-lived development runs without replacing the global launcher |
 
 `node-bundled` and `source` are runtime modes, not package-manager names. They describe which executable loads the app code:
 

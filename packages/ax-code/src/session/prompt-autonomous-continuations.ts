@@ -7,7 +7,7 @@ type ReportTodoClosureMode = "deadline" | "continuation" | "context"
 function reportTodoClosureGuidance(mode: ReportTodoClosureMode) {
   if (mode === "context") {
     return (
-      `\nThe context is already large. For report-style todos, write the ax-internal/bugs report now ` +
+      `\nThe context is already large. For report-style todos, write the .internal/bugs report now ` +
       `when there is credible suspected or confirmed evidence. Otherwise cancel that report todo with the ` +
       `concrete reason; do not read more files for broad exploration.`
     )
@@ -15,14 +15,14 @@ function reportTodoClosureGuidance(mode: ReportTodoClosureMode) {
 
   if (mode === "deadline") {
     return (
-      `\nFor report-style todos, create the required ax-internal/bugs report now if there is a credible suspected ` +
+      `\nFor report-style todos, create the required .internal/bugs report now if there is a credible suspected ` +
       `or confirmed issue. If the evidence is not credible enough, cancel that report todo with the concrete ` +
       `reason instead of continuing broad analysis.`
     )
   }
 
   return (
-    `\nFor report-style todos, write the ax-internal/bugs report now when there is credible suspected or confirmed ` +
+    `\nFor report-style todos, write the .internal/bugs report now when there is credible suspected or confirmed ` +
     `evidence. Otherwise cancel that report todo with the concrete reason; do not keep doing broad exploration.`
   )
 }

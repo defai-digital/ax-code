@@ -157,6 +157,6 @@ Use a language-aware workflow instead:
   `bundle exec ruby/rubocop/rspec` for Ruby.
 - Keep manual review bounded to the smallest crate/package/module that can
   explain the symptom.
-- For `ax-internal/bugs` reporting, write a suspected or confirmed report as soon
+- For `.internal/bugs` reporting, write a suspected or confirmed report as soon
   as there is credible evidence, or cancel the report todo with the concrete
   reason. Do not continue broad exploration just because more source files exist.

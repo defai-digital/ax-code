@@ -55,7 +55,7 @@ function todoDeadlineStepBuffer(pendingTodoCount: number) {
 }
 
 function hasReportStyleTodo(todos: Array<Pick<PromptTodo, "content">>) {
-  return todos.some((todo) => /\b(report|reports|bug|bugs)\b|ax-internal\/bugs/i.test(todo.content))
+  return todos.some((todo) => /\b(report|reports|bug|bugs)\b|\.internal\/bugs/i.test(todo.content))
 }
 
 export function todoContextConvergenceDecision(input: {

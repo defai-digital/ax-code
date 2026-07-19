@@ -5,7 +5,7 @@ Scope: current implementation notes
 Last reviewed: 2026-07-12
 Owner: ax-code runtime
 
-This directory contains ax-code's [Agent Client Protocol](https://agentclientprotocol.com/) integration. The **documented happy path** is: `initialize` → `session/new` → `session/prompt` with a configured provider (see [docs/acp.md](../../../../docs/acp.md)). Advanced surfaces (streaming updates, full terminal bridge) remain partial.
+This directory contains ax-code's [Agent Client Protocol](https://agentclientprotocol.com/) integration. The **documented happy path** is: `initialize` → `session/new` → `session/prompt` with a configured provider (see [docs/integrations/acp.md](../../../../docs/integrations/acp.md)). Advanced surfaces (streaming updates, full terminal bridge) remain partial.
 
 ## Architecture
 

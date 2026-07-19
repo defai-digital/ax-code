@@ -83,7 +83,7 @@ export function createWikiPlan(sources: WikiSource[], config: AxWikiConfig = {})
         "go.mod",
         "pyproject.toml",
         "pnpm-workspace.yaml",
-        "docs/start-here.md",
+        "docs/getting-started/start-here.md",
       ],
       kind: "quickstart",
     },

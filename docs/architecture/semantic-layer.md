@@ -105,7 +105,7 @@ A third, **optional** knowledge surface is the native semantic repo wiki under `
 | `lsp` / `code_intelligence` | Structural precision (this document)            |
 | `ax-wiki/`                  | Source-backed architecture narrative for agents |
 
-See [AX Wiki](wiki.md) for CLI, routing, and non-goals. Wiki synthesis must not be treated as a substitute for callers/callees/refs.
+See [AX Wiki](../integrations/wiki.md) for CLI, routing, and non-goals. Wiki synthesis must not be treated as a substitute for callers/callees/refs.
 
 ## Important Non-Goals
 
@@ -115,7 +115,7 @@ The current semantic layer does not do these things:
 - no claim that graph freshness equals live LSP freshness
 - no claim that every internal semantic helper is exposed through HTTP or SDK
 - no Rust semantic runtime split in the current implementation
-- no claim that AX Wiki markdown is a structural source of truth (see [wiki.md](wiki.md))
+- no claim that AX Wiki markdown is a structural source of truth (see [AX Wiki](../integrations/wiki.md))
 
 ## Integration Guidance
 

@@ -1,79 +1,96 @@
 # AX Code Documentation
 
 Status: Active
-Scope: current-state
-Last reviewed: 2026-05-16
-Owner: ax-code runtime
+Scope: public, current-state
+Last reviewed: 2026-07-19
+Owner: AX Code maintainers
 
-The root [README](../README.md) is the shortest path to install and launch AX Code. This documentation hub is the next step once you want a clearer product overview, operational guidance, or architecture detail.
+The root [README](../README.md) is the shortest path to install and launch AX Code. Use this hub when you need to
+configure a workflow, understand a runtime boundary, or integrate AX Code with another system.
 
-## Entry Points
+## Choose by task
 
-| Need                                            | Go here                                                         | What you get                                                                |
-| ----------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Understand what AX Code is and why teams use it | [Start Here](start-here.md)                                     | Product overview, value proposition, mental model, and next paths           |
-| Install and launch quickly                      | [Root README](../README.md)                                     | 60-second setup, supported installer channels, and main entrypoints         |
-| Compare install and runtime channels            | [Installation and Runtime Channels](install-runtime.md)         | Platform policy, package names, runtime labels, and local launcher behavior |
-| Embed AX Code in TypeScript or JavaScript       | [`@ax-code/sdk`](../packages/sdk/js/README.md)                  | `createAgent()`, streaming, custom tools, testing, and migration notes      |
-| Build a desktop/native GUI                      | [gRPC and Native SDK Transport](sdk-grpc-native.md)             | Optional gRPC-shaped headless contract, native transport guidance, fallback |
-| Use AX Code from Python, Go, Java, or services  | [HTTP and OpenAPI SDKs](sdk-http-openapi.md)                    | `ax-code serve`, OpenAPI generation, and cross-language guardrails          |
-| Use AX Code from VS Code                        | [VS Code integration](../packages/integration-vscode/README.md) | Editor commands, settings, and extension workflow                           |
+| I want to…                                               | Start here                                                              |
+| -------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Understand AX Code before installing it                  | [Start Here](getting-started/start-here.md)                             |
+| Choose an install or runtime channel                     | [Installation and Runtime Channels](getting-started/install-runtime.md) |
+| Connect a hosted, CLI, custom, or local provider         | [Supported Providers and Models](providers/supported-providers.md)      |
+| Run an agent with safe filesystem and network boundaries | [Sandbox Mode](guides/sandbox.md)                                       |
+| Run unattended or in CI                                  | [Autonomous Mode](guides/autonomous.md)                                 |
+| Choose local, cloud, hybrid, council, or arena execution | [Execution Modes](guides/modes.md)                                      |
+| Connect external tools and data                          | [MCP Integrations](integrations/mcp.md)                                 |
+| Embed AX Code in an application                          | [`@ax-code/sdk`](../packages/sdk/js/README.md)                          |
+| Generate a client for another language                   | [HTTP and OpenAPI Compatibility](sdk/http-openapi.md)                   |
+| Build a desktop or native host                           | [Native SDK Transport](sdk/native-transport.md)                         |
 
-## Guides
+## Getting started
 
-| Document                                                  | Summary                                                                                                  |
-| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| [Sandbox Mode](sandbox.md)                                | Execution isolation, protected paths, network behavior, and configuration                                |
-| [Stability](stability.md)                                 | Crash hygiene, aborts vs faults, TUI lifecycle, timeouts, permission latch                               |
-| [Installation and Runtime Channels](install-runtime.md)   | Platform policy, package channels, `ax-code doctor` runtime labels, updates, and local launcher behavior |
-| [Autonomous Mode](autonomous.md)                          | Unattended execution, approval behavior, headless usage, and safeguards                                  |
-| [MCP Integrations](mcp.md)                                | MCP trust, permissions, prompt/resource handling, and server-route security                              |
-| [Auto-Route](auto-route.md)                               | Keyword-based specialist routing (active by default) and optional fast-model complexity routing          |
-| [Execution Modes](modes.md)                               | Local, cloud, hybrid placement; multi-provider council consensus and arena best-of-N                     |
-| [Model Effort](effort.md)                                 | Reasoning / thinking levels (Auto, Fast, Balanced, Deep, Max) as model variants                          |
-| [AX Wiki](wiki.md)                                        | Native source-backed semantic wiki; complements structural `ax-code index`                               |
-| [Supported Providers and Models](supported-providers.md)  | Default Cloud API providers, CLI providers, and AX Engine local models                                   |
-| [Custom and Gateway Providers](custom-provider.md)        | Connect any OpenAI- or Anthropic-compatible endpoint or self-hosted gateway via custom provider config   |
-| [AX Engine Model Selection](ax-engine-model-selection.md) | Local AX Engine model ranking, memory guidance, and practical default choices                            |
-| [Lifecycle Hooks](hooks.md)                               | PreToolUse / PostToolUse / Stop hooks and official packs                                                 |
-| [ACP happy path](acp.md)                                  | Agent Client Protocol for IDE hosts (Zed, etc.)                                                          |
-| [Skill / plugin catalog](skills/CATALOG.md)               | Built-in skills, project skill locations, plugins, eval harness                                          |
+- [Start Here](getting-started/start-here.md) — product mental model and the shortest paths by use case.
+- [Installation and Runtime Channels](getting-started/install-runtime.md) — supported platforms, packages, updates, and
+  contributor launchers.
 
-## Architecture
+## Runtime guides
 
-| Document                            | Summary                                                                                   |
-| ----------------------------------- | ----------------------------------------------------------------------------------------- |
-| [Semantic Layer](semantic-layer.md) | Current semantic contract for graph and LSP-backed answers, provenance, audit, and replay |
-| [AX Wiki](wiki.md)                  | Native wiki compiler, protected content, AGENTS pointers, and routing vs structural index |
+- [Sandbox Mode](guides/sandbox.md) — isolation modes, protected paths, network controls, and precedence.
+- [Autonomous Mode](guides/autonomous.md) — unattended execution, approvals, headless use, and safeguards.
+- [Execution Modes](guides/modes.md) — agent, hybrid, council, and arena behavior.
+- [Auto-Route](guides/auto-route.md) — specialist routing and optional complexity routing.
+- [Model Effort](guides/effort.md) — thinking levels and provider-specific behavior.
+- [Lifecycle Hooks](guides/hooks.md) — hook events and bundled policy packs.
 
-## Specs and Reference
+## Providers
 
-| Document                                            | Summary                                                       |
-| --------------------------------------------------- | ------------------------------------------------------------- |
-| [Project API Spec](specs/project.md)                | Current project and session API shape                         |
-| [gRPC and Native SDK Transport](sdk-grpc-native.md) | Desktop/native GUI transport contract and security posture    |
-| [HTTP and OpenAPI SDKs](sdk-http-openapi.md)        | Cross-language HTTP integration and generated-client guidance |
-| [Security Policy](../SECURITY.md)                   | Threat model, credential storage, and server security posture |
+- [Supported Providers and Models](providers/supported-providers.md) — provider IDs, credentials, and built-in models.
+- [Custom and Gateway Providers](providers/custom-provider.md) — OpenAI- and Anthropic-compatible endpoints.
+- [AX Engine Model Selection](providers/ax-engine-model-selection.md) — local model ranking and memory guidance.
 
-## Policies
+## Integrations
 
-Machine-readable examples live in [`policies/`](policies/). See [policies/README.md](policies/README.md).
+- [MCP Integrations](integrations/mcp.md) — trust, permissions, resources, and server security.
+- [ACP](integrations/acp.md) — the Agent Client Protocol happy path for IDE hosts.
+- [AX Wiki](integrations/wiki.md) — source-backed repository knowledge and CI workflow.
+- [VS Code Integration](../packages/integration-vscode/README.md) — editor commands, settings, and workflows.
 
-## Notes on Scope
+## SDK and service boundaries
 
-This folder is for product-facing documentation. Planning documents, PRDs, ADRs, and temporary reports should stay outside the public docs surface or carry an explicit status so historical or proposed behavior is not mistaken for shipped behavior.
+- [`@ax-code/sdk`](../packages/sdk/js/README.md) — first-party TypeScript and JavaScript embedding.
+- [Native SDK Transport](sdk/native-transport.md) — gRPC-shaped desktop/native boundary and fallback behavior.
+- [HTTP and OpenAPI Compatibility](sdk/http-openapi.md) — server mode and generated clients for other languages.
+- [OpenAPI snapshot](../packages/sdk/openapi.json) — authoritative HTTP route and schema contract.
 
-## Doc Freshness Policy
+## Architecture and reliability
 
-Public docs should stay close to the shipped runtime. Before a release or major documentation refresh, verify the most drift-prone claims against their source of truth:
+- [Semantic Layer](architecture/semantic-layer.md) — graph and LSP provenance, audit, and replay boundaries.
+- [Local Engine Architecture](architecture/local-engine.md) — why AX Code uses an AX Engine sidecar.
+- [Runtime Stability](architecture/stability.md) — cancellation, crash, stream, timeout, and TUI reliability contracts.
 
-| Claim area                                                     | Source of truth                                                                                                 | What to check                                                                                        |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Install, runtime, package manager, and local launcher behavior | Root `package.json`, `packages/ax-code/package.json`, `script/setup-cli.ts`, `packages/ax-code/script/build.ts` | Package names, Bun/pnpm requirements, build/link commands, and `ax-code doctor` runtime labels       |
-| Local AX Engine provider and model selection                   | `packages/ax-code/src/provider/ax-engine/` and `docs/ax-engine-model-selection.md`                              | Platform gates, selectable models, quantization, memory guidance, disk requirements, and model ids   |
-| Sandbox, autonomous mode, routing, and TUI status labels       | Runtime config, TUI command handlers, and status view models under `packages/ax-code/src/`                      | Defaults, command names, environment variables, persisted config keys, and user-facing labels        |
-| Execution modes (local/cloud/hybrid/council/arena)             | `packages/ax-code/src/mode/`, `tool/council.ts`, `tool/arena.ts`, `docs/modes.md`                               | Config keys, tool names, ranking rules, and isolation guarantees                                     |
-| SDK and OpenAPI integration                                    | `packages/sdk/js/package.json`, `packages/sdk/openapi.json`, SDK exports, and `docs/sdk-http-openapi.md`        | Official entry points, version examples, generated-client guidance, and service-boundary limitations |
-| Architecture and semantic behavior                             | Current implementation plus architecture docs such as `semantic-layer.md`                                       | Whether a document describes current behavior, roadmap intent, or historical context                 |
+## Reference
 
-Prefer updating the specific behavior doc and linking to it from this hub rather than duplicating detailed behavior in multiple front-door pages.
+- [Skill and Plugin Catalog](reference/skills-and-plugins.md) — bundled skills, project skills, plugins, and evals.
+- [Isolation Policy Packs](policies/README.md) — machine-readable policy examples.
+- [Release Verification](release/README.md) — canonical minisign public key and verification command.
+- [Security Policy](../SECURITY.md) — threat model, credential storage, and supported versions.
+
+## Documentation boundaries
+
+`docs/` contains public guidance for behavior that exists in the current runtime. Planning material and temporary
+analysis do not belong here:
+
+| Content                                          | Location             |
+| ------------------------------------------------ | -------------------- |
+| Architecture decisions                           | `.internal/adr/`     |
+| Product requirements                             | `.internal/prd/`     |
+| Temporary audits and reports                     | `.internal/reports/` |
+| Shipped behavior and public integration guidance | `docs/`              |
+
+Every public Markdown page should declare its status, scope, last-reviewed date, and owner near the top. Prefer links to
+generated contracts or implementation sources over copied route lists and other high-drift snapshots.
+
+## Maintenance checklist
+
+Before a release or a substantial documentation change:
+
+1. Verify commands, defaults, flags, provider IDs, and runtime labels against their implementation.
+2. Update the narrowest authoritative guide instead of repeating the same behavior in several front-door pages.
+3. Run `pnpm run test:scripts` to catch broken local links, orphaned pages, and missing page metadata.
+4. Keep proposals and historical decision records under `.internal/`, not in the public navigation.

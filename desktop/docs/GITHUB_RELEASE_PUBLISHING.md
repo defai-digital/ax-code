@@ -36,7 +36,7 @@ The publish path:
    `AX_CODE_MINISIGN_PASSWORD` GitHub Actions secrets (with the legacy
    `AX_CODE_DESKTOP_MINISIGN_*` names as fallbacks).
 8. The workflow uploads the generated `.minisig` files and canonical
-   `docs/ax-minisign.pub` key.
+   `docs/release/ax-minisign.pub` key.
 9. A separate job re-downloads the draft assets, requires signature coverage,
    and verifies every Minisign signature against that committed key.
 10. The workflow publishes the release only after those checks pass.

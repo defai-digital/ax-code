@@ -7,10 +7,10 @@ Owner: ax-code sdk
 
 AX Code has two integration paths:
 
-- Use [`@ax-code/sdk`](../packages/sdk/js/README.md) for first-party TypeScript and JavaScript embedding.
+- Use [`@ax-code/sdk`](../../packages/sdk/js/README.md) for first-party TypeScript and JavaScript embedding.
 - Use `@ax-code/sdk/headless` or `@ax-code/sdk/grpc` for first-party app and desktop GUI work.
 - Use `ax-code serve` plus the OpenAPI contract when another language or compatibility process boundary is required.
-- Use [gRPC and Native SDK Transport](sdk-grpc-native.md) for first-party desktop GUI work where AX Code owns both ends of the transport.
+- Use [Native SDK Transport](native-transport.md) for first-party desktop GUI work where AX Code owns both ends of the transport.
 
 The HTTP/OpenAPI path is compatibility and generated-client infrastructure. It lets Python, Go, Java, Rust, and other clients call the same server API without AX Code committing to maintain a full official package for every language. It should not be treated as the preferred privileged bridge inside a first-party desktop GUI when the gRPC/native contract is available, and it is no longer exposed as first-party JavaScript SDK subpaths.
 

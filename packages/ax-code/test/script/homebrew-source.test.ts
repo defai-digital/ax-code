@@ -164,9 +164,9 @@ describe("distribution support guardrails", () => {
     expect(job.indexOf("Sign release assets")).toBeLessThan(job.indexOf("Create GitHub release"))
     expect(job.indexOf("Sign release assets")).toBeLessThan(job.indexOf("Upload release assets"))
     expect(job).toContain("--draft")
-    expect(job).toContain("docs/ax-minisign.pub")
+    expect(job).toContain("docs/release/ax-minisign.pub")
     expect(job).toContain("Verify uploaded release signatures")
-    expect(job).toContain("minisign -V -p docs/ax-minisign.pub")
+    expect(job).toContain("minisign -V -p docs/release/ax-minisign.pub")
     expect(job).toContain("Publish verified release")
     expect(job).toContain("release $TAG is no longer a draft; refusing to publish or mutate it")
     expect(job.indexOf("Verify uploaded release signatures")).toBeLessThan(job.indexOf("Publish verified release"))
@@ -253,7 +253,7 @@ describe("distribution support guardrails", () => {
   test("Homebrew verifies the detached release signature before hashing", async () => {
     const script = await readFile(path.join(repoRoot, ".github/scripts/update-homebrew.sh"), "utf-8")
 
-    expect(script).toContain('MINISIGN_PUBLIC_KEY="${AX_CODE_MINISIGN_PUBLIC_KEY:-docs/ax-minisign.pub}"')
+    expect(script).toContain('MINISIGN_PUBLIC_KEY="${AX_CODE_MINISIGN_PUBLIC_KEY:-docs/release/ax-minisign.pub}"')
     expect(script).toContain('download_asset "${DARWIN_ARM64_ASSET}.minisig"')
     expect(script).toContain("minisign -V")
     expect(script.indexOf("minisign -V")).toBeLessThan(script.indexOf("cat > /tmp/ax-code.rb"))

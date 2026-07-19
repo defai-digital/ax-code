@@ -78,15 +78,15 @@ describe("publish-github-release helpers", () => {
     expect(trackedInternalPrivacyIssue([])).toBeUndefined()
     expect(
       trackedInternalPrivacyIssue([
-        "ax-internal/prd/private.md",
-        "ax-internal/adr/private.md",
-        "ax-internal/bugs/private.md",
-        "ax-internal/release/private.md",
-        "ax-internal/reports/private.md",
-        "ax-internal/archive/private.md",
+        ".internal/prd/private.md",
+        ".internal/adr/private.md",
+        ".internal/bugs/private.md",
+        ".internal/release/private.md",
+        ".internal/reports/private.md",
+        ".internal/archive/private.md",
       ]),
     ).toBe(
-      "ax-internal files are tracked: ax-internal/prd/private.md, ax-internal/adr/private.md, ax-internal/bugs/private.md, ax-internal/release/private.md, ax-internal/reports/private.md, and 1 more. Remove them from git index before publishing.",
+      ".internal files are tracked: .internal/prd/private.md, .internal/adr/private.md, .internal/bugs/private.md, .internal/release/private.md, .internal/reports/private.md, and 1 more. Remove them from git index before publishing.",
     )
   })
 
@@ -112,7 +112,7 @@ describe("publish-github-release helpers", () => {
       "publish v5.10.1-beta.1 to defai-digital/ax-code",
       "create and push annotated release tag",
       "watch release.yml",
-      "independently verify release signatures with docs/ax-minisign.pub",
+      "independently verify release signatures with docs/release/ax-minisign.pub",
       "dispatch install-matrix-smoke.yml channel=windows",
     ])
   })

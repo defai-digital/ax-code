@@ -20,7 +20,7 @@ How AX Code stays reliable for long interactive sessions and headless runs.
 
 ## Blessed TUI path
 
-See [TUI stability status](../.internal/tui-stability/STATUS.md) (internal) and maintainer notes:
+The supported runtime stack is:
 
 - Runtime: Node bundled
 - UI: OpenTUI + Solid
@@ -49,6 +49,6 @@ Permission replies are:
 
 ## Related docs
 
-- [Sandbox](sandbox.md) — execution isolation
-- [Autonomous](autonomous.md) — unattended runs
-- [AX Wiki](wiki.md) — source-backed semantic layer (not a graph substitute)
+- [Sandbox](../guides/sandbox.md) — execution isolation
+- [Autonomous](../guides/autonomous.md) — unattended runs
+- [AX Wiki](../integrations/wiki.md) — source-backed semantic layer (not a graph substitute)

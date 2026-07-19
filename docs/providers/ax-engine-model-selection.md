@@ -10,11 +10,11 @@ model-selection policy for the built-in `ax-engine` provider: which local models
 default is conservative, and how to choose a model by memory budget.
 
 Integration shape (sidecar HTTP, not in-process SDK): see
-[local-engine-integration.md](./local-engine-integration.md).
+[Local Engine Architecture](../architecture/local-engine.md).
 
 The current AX Code provider list is intentionally narrower than the full AX Engine research or benchmark
 matrix. In this checkout it exposes curated 6-bit MLX variants, matching the model definitions in
-[`packages/ax-code/src/provider/ax-engine/constants.ts`](../packages/ax-code/src/provider/ax-engine/constants.ts).
+[`packages/ax-code/src/provider/ax-engine/constants.ts`](../../packages/ax-code/src/provider/ax-engine/constants.ts).
 Some upstream model cards also describe 4-bit or larger-context deployments; those are useful for planning,
 but they are not the built-in AX Code provider contract unless the provider definitions add those
 quantizations.

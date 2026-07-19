@@ -1,6 +1,6 @@
 Help with the native AX Wiki for this project (path: ${path}).
 
-AX Wiki is the source-backed semantic layer for architecture, module intent, and workflows. It complements `code_intelligence` and LSP, which remain authoritative for precise symbols and relationships. Guide: docs/wiki.md
+AX Wiki is the source-backed semantic layer for architecture, module intent, and workflows. It complements `code_intelligence` and LSP, which remain authoritative for precise symbols and relationships. Guide: docs/integrations/wiki.md
 
 User request: $ARGUMENTS
 

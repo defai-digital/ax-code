@@ -8,7 +8,7 @@ import { parseArgs } from "util"
 
 export const ROOT = path.resolve(import.meta.dirname, "..")
 export const AX_CODE_MINISIGN_PUBLIC_KEY = "RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO"
-export const AX_CODE_MINISIGN_PUBLIC_KEY_FILE = "docs/ax-minisign.pub"
+export const AX_CODE_MINISIGN_PUBLIC_KEY_FILE = "docs/release/ax-minisign.pub"
 export const DEFAULT_MINISIGN_KEY_DIR = "~/signkey"
 export const DEFAULT_MINISIGN_SECRET_KEY_NAME = "ax.minisign.key"
 export const DEFAULT_MINISIGN_PUBLIC_KEY_NAME = "ax.pub"

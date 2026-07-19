@@ -6,7 +6,7 @@ import { defineConfig } from "vitest/config"
 export default defineConfig({
   test: {
     include: ["script/*.test.ts"],
-    exclude: ["**/node_modules/**", "packages/**", "ax-internal/**", "dist/**", "crates/**"],
+    exclude: ["**/node_modules/**", "packages/**", ".internal/**", "dist/**", "crates/**"],
     testTimeout: 30000,
     pool: "forks",
   },

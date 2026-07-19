@@ -6,7 +6,6 @@ on:
       - ".github/workflows/repo-structure.yml"
       - ".github/**"
       - ".internal/**"
-      - "ax-internal/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -24,7 +23,6 @@ on:
       - ".github/workflows/repo-structure.yml"
       - ".github/**"
       - ".internal/**"
-      - "ax-internal/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -84,11 +82,11 @@ jobs:
 
       - name: Ensure internal planning files are not tracked
         run: |
-          tracked_internal="$(git ls-files .internal ax-internal | tr '\n' ' ')"
+          tracked_internal="$(git ls-files .internal | tr '\n' ' ')"
           if [ -n "$tracked_internal" ]; then
             echo "Error: internal planning files are tracked and must stay local-only."
             echo "Tracked files:"
-            git ls-files .internal ax-internal
+            git ls-files .internal
             exit 1
           fi
 

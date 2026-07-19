@@ -522,7 +522,7 @@ jobs:
           set -euo pipefail
           SECRET_KEY="$RUNNER_TEMP/ax.minisign.key"
           PUBLIC_KEY="$RUNNER_TEMP/ax.pub"
-          cp docs/ax-minisign.pub "$PUBLIC_KEY"
+          cp docs/release/ax-minisign.pub "$PUBLIC_KEY"
           if [ -z "$AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64" ] || [ -z "$AX_CODE_DESKTOP_MINISIGN_PASSWORD" ]; then
             echo "::error::Desktop minisign secrets are required to publish signed release assets. Configure AX_CODE_DESKTOP_MINISIGN_* or AX_CODE_MINISIGN_*."
             exit 1
@@ -545,7 +545,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          uploads=(release-assets/install.ps1 docs/ax-minisign.pub)
+          uploads=(release-assets/install.ps1 docs/release/ax-minisign.pub)
           signatures=()
           test -f release-assets/install.ps1
           while IFS= read -r -d '' file; do signatures+=("$file"); done < <(find release-assets -type f -name '*.minisig' -print0)
@@ -572,7 +572,7 @@ jobs:
           set -euo pipefail
           mkdir -p release-assets
           gh release download "$TAG" --repo "$REPOSITORY" --dir release-assets --clobber
-          cmp docs/ax-minisign.pub release-assets/ax-minisign.pub
+          cmp docs/release/ax-minisign.pub release-assets/ax-minisign.pub
 
           verified=0
           while IFS= read -r -d '' asset; do
@@ -581,7 +581,7 @@ jobs:
             esac
             signature="${asset}.minisig"
             test -f "$signature"
-            minisign -V -p docs/ax-minisign.pub -m "$asset" -x "$signature"
+            minisign -V -p docs/release/ax-minisign.pub -m "$asset" -x "$signature"
             verified=$((verified + 1))
           done < <(find release-assets -type f -print0)
           test "$verified" -gt 0
@@ -655,7 +655,7 @@ jobs:
           curl --fail --location --no-progress-meter --retry 6 --retry-all-errors --retry-delay 10 \
             --output release.dmg.minisig \
             "https://github.com/defai-digital/ax-code/releases/download/${TAG}/AX-Code-${VERSION}-mac-arm64.dmg.minisig"
-          minisign -V -p docs/ax-minisign.pub -m release.dmg -x release.dmg.minisig
+          minisign -V -p docs/release/ax-minisign.pub -m release.dmg -x release.dmg.minisig
           echo "DMG_SHA256=$(sha256sum release.dmg | awk '{print $1}')" >> "$GITHUB_ENV"
 
       - name: Push updated Desktop cask

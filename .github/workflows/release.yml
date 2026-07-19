@@ -357,7 +357,7 @@ jobs:
           # published release before re-verifying all detached signatures.
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             VERSION="${TAG#v}"
-            NOTES_FILE="packages/ax-code/.internal/release/release-notes-v${VERSION}.md"
+            NOTES_FILE=".internal/release/release-notes-v${VERSION}.md"
             if [ -f "$NOTES_FILE" ]; then
               NOTES_ARGS=(--notes-file "$NOTES_FILE")
             else
@@ -384,7 +384,7 @@ jobs:
         run: |
           TAG="${{ github.ref_name }}"
           shopt -s nullglob
-          files=(docs/ax-minisign.pub packages/ax-code/dist/install.ps1 packages/ax-code/dist/install.ps1.minisig packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.tar.gz.minisig packages/ax-code/dist/*.zip packages/ax-code/dist/*.zip.minisig)
+          files=(docs/release/ax-minisign.pub packages/ax-code/dist/install.ps1 packages/ax-code/dist/install.ps1.minisig packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.tar.gz.minisig packages/ax-code/dist/*.zip packages/ax-code/dist/*.zip.minisig)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "::error::no release assets found to upload"
             exit 1
@@ -402,7 +402,7 @@ jobs:
           VERIFY_DIR="$RUNNER_TEMP/release-verify"
           mkdir -p "$VERIFY_DIR"
           gh release download "$TAG" --dir "$VERIFY_DIR" --clobber
-          cmp docs/ax-minisign.pub "$VERIFY_DIR/ax-minisign.pub"
+          cmp docs/release/ax-minisign.pub "$VERIFY_DIR/ax-minisign.pub"
 
           verified=0
           shopt -s nullglob
@@ -410,7 +410,7 @@ jobs:
           for asset in "${assets[@]}"; do
             signature="${asset}.minisig"
             test -f "$signature"
-            minisign -V -p docs/ax-minisign.pub -m "$asset" -x "$signature"
+            minisign -V -p docs/release/ax-minisign.pub -m "$asset" -x "$signature"
             verified=$((verified + 1))
           done
           test "$verified" -gt 0

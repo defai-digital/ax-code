@@ -1,4 +1,4 @@
-export const INTERNAL_ONLY_ROOTS = [".internal", "ax-internal"] as const
+export const INTERNAL_ONLY_ROOTS = [".internal"] as const
 
 export function isInternalOnlyPath(file: string) {
   const normalized = file.replaceAll("\\", "/").replace(/^\.\//, "")

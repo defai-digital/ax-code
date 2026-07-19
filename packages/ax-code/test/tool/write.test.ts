@@ -25,7 +25,7 @@ describe("tool.write", () => {
   test("describes the internal bug report format before validation fails", async () => {
     const write = await WriteTool.init()
 
-    expect(write.description).toContain("ax-internal/bugs/*.md")
+    expect(write.description).toContain(".internal/bugs/*.md")
     expect(write.description).toContain("Classification: confirmed|suspected|false_positive")
     expect(write.description).toContain("## Evidence")
     expect(write.description).toContain("## Suggested Fix")
@@ -103,7 +103,7 @@ describe("tool.write", () => {
 
     test("requires classification and evidence for internal bug reports", async () => {
       await using tmp = await tmpdir()
-      const filepath = path.join(tmp.path, "ax-internal", "bugs", "bug.md")
+      const filepath = path.join(tmp.path, ".internal", "bugs", "bug.md")
 
       await Instance.provide({
         directory: tmp.path,
@@ -117,7 +117,7 @@ describe("tool.write", () => {
               },
               ctx,
             ),
-          ).rejects.toThrow("Internal bug reports under ax-internal/bugs must include")
+          ).rejects.toThrow("Internal bug reports under .internal/bugs must include")
 
           await write.execute(
             {
@@ -141,7 +141,7 @@ describe("tool.write", () => {
 
     test("bug report validation checks each missing section independently", async () => {
       await using tmp = await tmpdir()
-      const filepath = path.join(tmp.path, "ax-internal", "bugs", "bug.md")
+      const filepath = path.join(tmp.path, ".internal", "bugs", "bug.md")
 
       await Instance.provide({
         directory: tmp.path,
@@ -191,7 +191,7 @@ describe("tool.write", () => {
       })
     })
 
-    test("bug report validation only applies inside ax-internal/bugs/", async () => {
+    test("bug report validation only applies inside .internal/bugs/", async () => {
       await using tmp = await tmpdir()
 
       await Instance.provide({
@@ -199,7 +199,7 @@ describe("tool.write", () => {
         fn: async () => {
           const write = await WriteTool.init()
 
-          // Normal markdown file outside ax-internal/bugs/ — no validation
+          // Normal markdown file outside .internal/bugs/ — no validation
           await write.execute(
             {
               filePath: path.join(tmp.path, "notes.md"),
@@ -211,7 +211,7 @@ describe("tool.write", () => {
           // .md file in a sibling directory — no validation
           await write.execute(
             {
-              filePath: path.join(tmp.path, "ax-internal", "adr", "decision.md"),
+              filePath: path.join(tmp.path, ".internal", "adr", "decision.md"),
               content: "# ADR\n\nNo classification needed.\n",
             },
             ctx,
@@ -230,7 +230,7 @@ describe("tool.write", () => {
 
           await write.execute(
             {
-              filePath: path.join(tmp.path, "ax-internal", "bugs", "README.md"),
+              filePath: path.join(tmp.path, ".internal", "bugs", "README.md"),
               content: "# Bug Reports\n\nThis folder tracks repo-grounded bug reports.\n",
             },
             ctx,
@@ -238,7 +238,7 @@ describe("tool.write", () => {
 
           await write.execute(
             {
-              filePath: path.join(tmp.path, "ax-internal", "bugs", "summary.md"),
+              filePath: path.join(tmp.path, ".internal", "bugs", "summary.md"),
               content: "# Bug Summary\n\nNo report classification is required for this index file.\n",
             },
             ctx,

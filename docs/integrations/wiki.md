@@ -3,6 +3,7 @@
 Status: Active  
 Scope: current-state  
 Last reviewed: 2026-07-18
+Owner: AX Code runtime
 
 AX Wiki is AX Code's native repository-wiki compiler. It turns tracked source, configuration, tests, workflows, and existing documentation into a small source-backed Markdown knowledge base under `ax-wiki/`. It uses the same provider configuration and model routing as AX Code; there is no separate executable or credential store.
 
@@ -105,7 +106,7 @@ The managed `<!-- AX-WIKI:START -->` block in `AGENTS.md` carries the same routi
 
 ## CI
 
-Run `ax-code wiki update` followed by `ax-code wiki lint` in a provider-authenticated job, then open a documentation PR. See [`examples/ax-wiki-update.yml`](examples/ax-wiki-update.yml). Treat generated wiki changes like other documentation: review source citations and avoid auto-merging model output.
+Run `ax-code wiki update` followed by `ax-code wiki lint` in a provider-authenticated job, then open a documentation PR. See [`examples/ax-wiki-update.yml`](../examples/ax-wiki-update.yml). Treat generated wiki changes like other documentation: review source citations and avoid auto-merging model output.
 
 ## Troubleshooting
 
