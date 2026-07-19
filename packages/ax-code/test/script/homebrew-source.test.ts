@@ -270,15 +270,17 @@ describe("distribution support guardrails", () => {
     expect(text).not.toContain("release workflow dispatches")
   })
 
-  test("install matrix supports Homebrew and Windows without npm package installs", async () => {
+  test("install matrix supports Homebrew, Windows, and Linux without npm package installs", async () => {
     const text = await readFile(installMatrixWorkflow, "utf-8")
     const filterDispatchChannel = await readFile(filterDispatchChannelScript, "utf-8")
     const validateInputs = await readFile(validateInstallMatrixInputsScript, "utf-8")
-    // Linux support was dropped: no curl/linux smoke legs remain.
-    expect(text).not.toContain("- curl")
-    expect(text).not.toContain("ubuntu")
+    // Supported non-npm channels: Homebrew (macOS), Windows install.ps1, Linux bash installer.
     expect(text).toContain("- homebrew")
     expect(text).toContain("- windows")
+    expect(text).toContain("- linux")
+    expect(text).toContain("ubuntu-latest")
+    expect(text).toContain("ubuntu-24.04-arm")
+    expect(text).toContain("linux-bash-installer")
     expect(text).toContain("brew install defai-digital/ax-code/ax-code")
     // Regression guard for issue #342: installing the Desktop cask next to
     // the CLI formula must not unlink the ax-code command. The cask installs
@@ -287,12 +289,13 @@ describe("distribution support guardrails", () => {
     expect(text).toContain('brew list --cask | grep -Fx "ax-code"')
     expect(text).not.toContain("brew list --cask ax-code >/dev/null")
     expect(text).toContain("command -v ax-code")
-    expect(text).toContain("Install minisign for release verification")
+    // Windows leg verifies install.ps1 with a temporary minisign (not left on PATH).
     expect(text).toContain('minisign-$MinisignVersion-win64.zip')
     expect(text).toContain('$MinisignVersion = "0.12"')
     expect(text).toContain("install.ps1.minisig")
     expect(text).toContain("docs/release/ax-minisign.pub")
-    expect(text).toContain("& minisign -V -p $PublicKeyFile -m $Installer -x $InstallerSig")
+    expect(text).toContain("& $MinisignExe.FullName -V -p $PublicKeyFile -m $Installer -x $InstallerSig")
+    expect(text).toContain("expected minisign to be absent from PATH so installer bootstrap is exercised")
     expect(text).toContain("Invoke-WebRequest -Uri")
     expect(text).toContain("& $Installer -Version $Version")
     expect(text).not.toContain("& $Installer -Version $Version -NoModifyPath")
@@ -305,16 +308,20 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("Smoke - installed backend stdio handshake")
     expect(text).toContain("tui-backend --stdio")
     expect(text).toContain("id: channel")
+    // Linux leg uses the signed Bash release installer (not a curl|bash pipe).
+    expect(text).toContain('curl -fsSL "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/install"')
+    expect(text).toContain('bash "$RUNNER_TEMP/install" --version "$VERSION"')
     expect(filterDispatchChannel).toContain("enabled=false")
     expect(filterDispatchChannel).toContain('"all"')
-    expect(validateInputs).toContain("all|homebrew|windows")
+    expect(validateInputs).toContain("all|homebrew|windows|linux")
     expect(text).toContain("steps.channel.outputs.enabled == 'true'")
     expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "homebrew" doctor')
     expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "homebrew" backend')
+    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "linux" doctor')
     // The literal runtimeMode assertion now lives in the shared assert script
     // (invoked above), which maps every non-source channel — Homebrew included —
     // to the node-bundled runtime. With Bun fully removed, macOS arm64 now ships
-    // the same node-bundled distribution as the Windows legs.
+    // the same node-bundled distribution as the Windows and Linux legs.
     const assertRuntimeMode = await readFile(assertRuntimeModeScript, "utf-8")
     expect(assertRuntimeMode).toContain("RUNTIME_RE='node-bundled'")
     expect(assertRuntimeMode).toContain('PATTERN="\\"runtimeMode\\":\\"${RUNTIME_RE}\\""')
