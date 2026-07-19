@@ -95,7 +95,8 @@ describe("session.processor", () => {
   test("resets short-lived tool loop state across processor errors", async () => {
     const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
     const catchStart = src.indexOf("} catch (e: unknown) {")
-    const retryStart = src.indexOf("const retry = SessionRetry.retryable(error)", catchStart)
+    // Per-provider circuit breaker (STAB-14b) passes providerID into retryable().
+    const retryStart = src.indexOf("const retry = SessionRetry.retryable(error, input.model.providerID)", catchStart)
     expect(catchStart).toBeGreaterThan(-1)
     expect(retryStart).toBeGreaterThan(catchStart)
     expect(src.slice(catchStart, retryStart)).toContain("resetShortLivedToolLoopState()")
