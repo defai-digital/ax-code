@@ -138,11 +138,16 @@ jobs:
             exit 0
           fi
 
-          gh run download "$run_id" -n ax-code-coverage-baseline-summary -D "$dest"
+          # Successful runs may still lack this artifact (upload uses if-no-files-found: ignore).
+          # Treat a missing or empty baseline as "no baseline" so tests always run.
+          if ! gh run download "$run_id" -n ax-code-coverage-baseline-summary -D "$dest"; then
+            echo "Coverage baseline artifact missing from successful run $run_id; continuing without baseline."
+            exit 0
+          fi
           baseline="$(find "$dest" -name '*.json' -print -quit)"
           if [ -z "$baseline" ]; then
-            echo "Coverage baseline artifact from run $run_id contained no JSON summary."
-            exit 1
+            echo "Coverage baseline artifact from run $run_id contained no JSON summary; continuing without baseline."
+            exit 0
           fi
           find "$dest" -maxdepth 2 -type f -print
 

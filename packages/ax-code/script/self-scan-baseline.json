@@ -3,7 +3,7 @@
   "scope": "packages/ax-code/src",
   "scanners": {
     "race_scan": {
-      "count": 109,
+      "count": 112,
       "findings": [
         {
           "fingerprint": "3d3065523434f5546e63b368db904bd163079d8cf1a87fe366a8ccd7229dfc45",
@@ -35,8 +35,8 @@
         {
           "fingerprint": "4b523692403734c9088c2974f46d92f93ada7826f437a958629fd483bb46e54c",
           "file": "src/provider/loaders.ts",
-          "line": 334,
-          "endLine": 362,
+          "line": 337,
+          "endLine": 365,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -80,7 +80,7 @@
         {
           "fingerprint": "8641019dfe607445546ccf02b7419f0124493526a300724c4582d26386d44d71",
           "file": "src/cli/boot.ts",
-          "line": 269,
+          "line": 272,
           "severity": "medium",
           "kind": "non_atomic_counter",
           "summary": "non_atomic_counter"
@@ -884,11 +884,35 @@
           "severity": "medium",
           "kind": "non_atomic_counter",
           "summary": "non_atomic_counter"
+        },
+        {
+          "fingerprint": "5158a5c105310f45a28fa52e1520eed86fd08ce9e83be30c642fc1817ba235e9",
+          "file": "src/util/queue.ts",
+          "line": 31,
+          "severity": "medium",
+          "kind": "non_atomic_counter",
+          "summary": "non_atomic_counter"
+        },
+        {
+          "fingerprint": "66d0141e75e94bde417cfe1cfc8a25f9b8c48569ed05df2893b54f710ef69808",
+          "file": "src/util/queue.ts",
+          "line": 47,
+          "severity": "medium",
+          "kind": "non_atomic_counter",
+          "summary": "non_atomic_counter"
+        },
+        {
+          "fingerprint": "5eec45b8445c426ada6cba5f8cdbf6b516d1edbfcb5ff6e8e6a54cd358ca792b",
+          "file": "src/util/queue.ts",
+          "line": 65,
+          "severity": "medium",
+          "kind": "non_atomic_counter",
+          "summary": "non_atomic_counter"
         }
       ]
     },
     "lifecycle_scan": {
-      "count": 198,
+      "count": 199,
       "findings": [
         {
           "fingerprint": "988fc40c0ae29463c01aa66d00474a79033c16bb47b846775fe9a251acb59cbf",
@@ -909,7 +933,7 @@
         {
           "fingerprint": "139bd6e0419ca024fda87bda08a45547a58ebed712c7259c6c808b84eaf05b37",
           "file": "src/cli/boot-node.ts",
-          "line": 54,
+          "line": 57,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -925,7 +949,7 @@
         {
           "fingerprint": "011375d5ca98bbf6180580718ed14802b80ec9f114d05d92d0285698610de733",
           "file": "src/cli/boot.ts",
-          "line": 139,
+          "line": 142,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -1125,7 +1149,7 @@
         {
           "fingerprint": "6c247a5596b9188346886d4f81cbf6263912a726e925e5dd3e062fb94c3c37d1",
           "file": "src/lsp/launch.ts",
-          "line": 21,
+          "line": 25,
           "severity": "high",
           "kind": "child_process:no_cleanup",
           "summary": "child_process:no_cleanup"
@@ -1133,7 +1157,7 @@
         {
           "fingerprint": "267ca26ba80ba97f6f03b5a1811218dad668ae569aa28abadbd21f4995368b46",
           "file": "src/lsp/launch.ts",
-          "line": 25,
+          "line": 29,
           "severity": "high",
           "kind": "child_process:no_cleanup",
           "summary": "child_process:no_cleanup"
@@ -1323,9 +1347,17 @@
           "summary": "child_process:no_cleanup"
         },
         {
-          "fingerprint": "518cc9d61c28608b7333fa465dc8aaa72bd304c6a104173c0c875790d73c3e5c",
+          "fingerprint": "b88b1158c751b385ae4de2d17ace5645e562db422a5645470718b0839f6f4ca5",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 213,
+          "line": 214,
+          "severity": "high",
+          "kind": "timer:no_cleanup",
+          "summary": "timer:no_cleanup"
+        },
+        {
+          "fingerprint": "14e895f5b71e65cc9ff5579cf6db87c8318784489d6f563b1e2e9513b9f4a35d",
+          "file": "src/session/task-queue-executor-impl.ts",
+          "line": 217,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -1333,7 +1365,7 @@
         {
           "fingerprint": "545668efcf2713957893c05507526c15a8680d75d4cdeb4d88909cbc440deaf6",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 304,
+          "line": 313,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -1389,7 +1421,7 @@
         {
           "fingerprint": "62ca379c82fd5629e0de7f047bf23fa615df75c4859feab358d265cdd8e40f0e",
           "file": "src/cli/boot.ts",
-          "line": 150,
+          "line": 153,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -1397,7 +1429,7 @@
         {
           "fingerprint": "a0e2e992829edc3444e341ba4deb0b823fb5d1db89c202da74451bc1137ba3fb",
           "file": "src/cli/boot.ts",
-          "line": 151,
+          "line": 154,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -2109,7 +2141,7 @@
         {
           "fingerprint": "0fdee5ba04281f754f9a5aba5bef77480ffbfb272069899a65be65ab919d59cb",
           "file": "src/provider/loaders.ts",
-          "line": 362,
+          "line": 365,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -2307,31 +2339,7 @@
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "498ea1497c84f20fe24ad02470c1906fbb6234e3684be68eb02c15d33e7206e6",
-          "file": "src/session/task-queue-executor-impl.ts",
-          "line": 389,
-          "severity": "medium",
-          "kind": "subscription:no_cleanup",
-          "summary": "subscription:no_cleanup"
-        },
-        {
-          "fingerprint": "de23f3d5bd3b482a94354d93e626e8756b866e8221f5a056453274a0b2bd3d88",
-          "file": "src/session/task-queue-executor-impl.ts",
-          "line": 392,
-          "severity": "medium",
-          "kind": "subscription:no_cleanup",
-          "summary": "subscription:no_cleanup"
-        },
-        {
-          "fingerprint": "eee8e0c7e90a2e628105e73e737a5d2192e8a5bd57d5a46787190735e2435977",
-          "file": "src/session/task-queue-executor-impl.ts",
-          "line": 395,
-          "severity": "medium",
-          "kind": "subscription:no_cleanup",
-          "summary": "subscription:no_cleanup"
-        },
-        {
-          "fingerprint": "06d565d982ec87e206c55908ff4acefa5ca1ee99037401d4ee06f95febedabe8",
+          "fingerprint": "6053307853041c16c2d09e923b896b28a90b197be35b7d37054232480e76749b",
           "file": "src/session/task-queue-executor-impl.ts",
           "line": 398,
           "severity": "medium",
@@ -2339,9 +2347,33 @@
           "summary": "subscription:no_cleanup"
         },
         {
-          "fingerprint": "c209c1ebf5a1efbe2b8c9b437d9cd4f3d6d616a3acac906dbb7d7156cdfd17bc",
+          "fingerprint": "63d3d927953934f40988392ee8f58f2552bc70d5966e493029c866119d4bfb12",
           "file": "src/session/task-queue-executor-impl.ts",
           "line": 401,
+          "severity": "medium",
+          "kind": "subscription:no_cleanup",
+          "summary": "subscription:no_cleanup"
+        },
+        {
+          "fingerprint": "6789e29a245be213b5b4ef0de1072ac34a0931dd1d0b68c0d26d58d3ce417084",
+          "file": "src/session/task-queue-executor-impl.ts",
+          "line": 404,
+          "severity": "medium",
+          "kind": "subscription:no_cleanup",
+          "summary": "subscription:no_cleanup"
+        },
+        {
+          "fingerprint": "fcd8b7fd39d01c285429586467224e44d6332718b82c90541c2ecf895204d6bb",
+          "file": "src/session/task-queue-executor-impl.ts",
+          "line": 407,
+          "severity": "medium",
+          "kind": "subscription:no_cleanup",
+          "summary": "subscription:no_cleanup"
+        },
+        {
+          "fingerprint": "88c21e39205a509b208b194570858aacf6cefe416ac8629324c715bc9ca5ae12",
+          "file": "src/session/task-queue-executor-impl.ts",
+          "line": 410,
           "severity": "medium",
           "kind": "subscription:no_cleanup",
           "summary": "subscription:no_cleanup"
@@ -4298,7 +4330,7 @@
         {
           "fingerprint": "94f0410316c064b2f38076cf590848f81737787de73ef33ab845d2ac4e38d488",
           "file": "src/lsp/index-impl.ts",
-          "line": 482,
+          "line": 486,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4306,7 +4338,7 @@
         {
           "fingerprint": "1e7b89d763c8df39ac3d8d5468e0ecfa4843d628d69a4bf4ae4972758e04092a",
           "file": "src/lsp/index-impl.ts",
-          "line": 660,
+          "line": 664,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5602,7 +5634,7 @@
         {
           "fingerprint": "55a3a995c96a1b2691002e4e36ee69f077f26b68ce5f17966893c5ed9864d0c0",
           "file": "src/skill/discovery.ts",
-          "line": 144,
+          "line": 128,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5610,7 +5642,7 @@
         {
           "fingerprint": "b1d1ac2374c94b3fa5ca2dd4cef177224a5efab66c59725eb43c39ffb5d26a1a",
           "file": "src/skill/discovery.ts",
-          "line": 209,
+          "line": 201,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -6583,7 +6615,7 @@
         {
           "fingerprint": "3592e6ec9410825af0200371e65ff921f21bad09f54715b644e58b606aafe4ae",
           "file": "src/provider/loaders.ts",
-          "line": 463,
+          "line": 466,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6591,7 +6623,7 @@
         {
           "fingerprint": "2b5b133e8d32563a80a302afb5229585b447f0ef87e035cdff4c5994893c35fe",
           "file": "src/provider/loaders.ts",
-          "line": 464,
+          "line": 467,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"

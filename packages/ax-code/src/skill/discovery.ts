@@ -172,23 +172,28 @@ export namespace Discovery {
         return null
       }
 
-      const safeFiles = files.filter((file) => {
+      const safeFiles = files.flatMap((file) => {
         if (isExternalFileReference(file.path)) {
           log.warn("skill entry has external file reference", { url: index, skill: skill.name, file })
-          return false
+          return []
         }
         if (file.sha256 && !SHA256_PATTERN.test(file.sha256)) {
           log.warn("skill entry has invalid sha256", { url: index, skill: skill.name, file })
-          return false
+          return []
         }
-        const resolved = path.resolve(root, file.path)
-        return (resolved + path.sep).startsWith(rootPrefix)
+        // Resolve once, validate containment, then use only the validated absolute path.
+        const dest = path.resolve(root, file.path)
+        if (dest !== root && !(dest + path.sep).startsWith(rootPrefix)) {
+          log.warn("skill entry path escapes skill root", { url: index, skill: skill.name, file })
+          return []
+        }
+        return [{ file, dest }]
       })
 
-      const downloads = await mapWithConcurrency(safeFiles, fileConcurrency, (file) =>
+      const downloads = await mapWithConcurrency(safeFiles, fileConcurrency, ({ file, dest }) =>
         // Bound global outbound network fan-out across concurrent skill installs (STAB-04).
         OutboundLimits.network.run(() =>
-          download(new URL(file.path, `${host}/${skill.name}/`).href, path.join(root, file.path), file.sha256),
+          download(new URL(file.path, `${host}/${skill.name}/`).href, dest, file.sha256),
         ),
       )
       if (!downloads.every(Boolean)) return null
