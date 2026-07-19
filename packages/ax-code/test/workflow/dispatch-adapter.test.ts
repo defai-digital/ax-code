@@ -312,6 +312,61 @@ describe("WorkflowDispatchAdapter", () => {
     }
   })
 
+  test("marks remaining running children failed when budget is exceeded mid-phase", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "budget-sibling-stop",
+            name: "Budget Sibling Stop",
+            description: "Fixture that must not leave sibling children running after budget failure.",
+            budget: {
+              // First child alone exceeds the budget; the sibling was already
+              // marked running during dispatch and must be failed on early return.
+              maxTotalTokens: 5,
+              maxConcurrentAgents: 2,
+              maxTotalAgents: 2,
+              maxToolCalls: 100,
+            },
+            phases: [
+              {
+                id: "scan",
+                name: "Scan",
+                kind: "fanout",
+                inputs: ["a", "b"],
+                prompt: "Spend tokens.",
+              },
+            ],
+          })
+          const run = await WorkflowRun.create({ spec })
+          let calls = 0
+
+          const result = await WorkflowScheduler.start(run.id, {
+            enqueueChildren: false,
+            dispatchExecutor: async () => {
+              calls++
+              return { output: `child-${calls}`, tokensUsed: 10 }
+            },
+          })
+
+          expect(result.status).toBe("failed")
+          expect(result.error).toContain("Workflow budget exceeded")
+          expect(result.children).toHaveLength(2)
+          expect(result.children.every((child) => child.status === "failed")).toBe(true)
+          expect(result.children.some((child) => child.status === "running" || child.status === "queued")).toBe(false)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("stops direct dispatch when a child exceeds its input token slice", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME

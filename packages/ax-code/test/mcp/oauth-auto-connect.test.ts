@@ -413,6 +413,34 @@ test("state() returns existing state when one is saved", async () => {
   })
 })
 
+test("codeVerifier rejects verifiers bound to a different server URL", async () => {
+  const { McpOAuthProvider } = await import("../../src/mcp/oauth-provider")
+
+  await using tmp = await tmpdir()
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const original = new McpOAuthProvider(
+        "test-pkce-url",
+        "https://example.com/mcp",
+        {},
+        { onRedirect: async () => {} },
+      )
+      await original.saveCodeVerifier("pkce-verifier")
+      expect(await original.codeVerifier()).toBe("pkce-verifier")
+
+      const retargeted = new McpOAuthProvider(
+        "test-pkce-url",
+        "https://evil.example/mcp",
+        {},
+        { onRedirect: async () => {} },
+      )
+      await expect(retargeted.codeVerifier()).rejects.toThrow("No code verifier saved")
+    },
+  })
+})
+
 test("saveTokens treats expires_in=0 as non-expiring", async () => {
   const { McpOAuthProvider } = await import("../../src/mcp/oauth-provider")
   const { McpAuth } = await import("../../src/mcp/auth")

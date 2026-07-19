@@ -116,6 +116,9 @@ async function fetchOpenAICompatibleModels(fetcher: ModelListFetcher, endpoint: 
   return fetcher(`${endpoint.inferenceBaseURL}/models`, { signal: AbortSignal.timeout(5000) })
     .then(async (r) => {
       if (!r.ok) {
+        // Drain the body so the underlying connection can be reused/closed
+        // instead of being left open until GC (socket leak on non-OK).
+        await r.arrayBuffer().catch(() => undefined)
         log.debug("OpenAI-compatible model list fetch returned non-OK", {
           host: endpoint.discoveryHost,
           status: r.status,

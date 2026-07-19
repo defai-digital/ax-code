@@ -106,6 +106,20 @@ export namespace WorkflowDispatchAdapter {
       })
       const budgetChecked = await WorkflowRun.getDetail(input.runID)
       if (budgetChecked.status === "failed") {
+        // appendBudgetUsage fails the current child/phase/run, but siblings that
+        // were marked "running" during dispatch would otherwise stay running
+        // forever after this early return.
+        const stopError = budgetChecked.error ?? "Workflow budget exceeded"
+        for (const sibling of children) {
+          const live = budgetChecked.children.find((candidate) => candidate.id === sibling.id)
+          const status = live?.status ?? sibling.status
+          if (isTerminalChildStatus(status)) continue
+          await WorkflowRun.setChildStatus({
+            id: sibling.id,
+            status: "failed",
+            error: stopError,
+          })
+        }
         const failedPhase = budgetChecked.phases.find((candidate) => candidate.id === input.phase.id) ?? input.phase
         return { phase: failedPhase, results }
       }
@@ -183,6 +197,10 @@ function childStatus(result: DispatchResult): WorkflowRun.ChildStatus {
   if (result.status === "completed") return "completed"
   if (result.status === "cancelled") return "cancelled"
   return "failed"
+}
+
+function isTerminalChildStatus(status: WorkflowRun.ChildStatus) {
+  return status === "completed" || status === "failed" || status === "cancelled"
 }
 
 function phaseStatusFromResults(

@@ -8,6 +8,26 @@ export namespace Env {
   const SECRET_PATTERN = /KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|AUTH/i
   const CREDENTIAL_URL_NAME = /(?:DATABASE|REDIS|AMQP|MONGODB|POSTGRES|MYSQL|ELASTIC|BROKER)_?(?:URL|URI)/i
   const CREDENTIAL_HELPER_NAMES = new Set(["SSH_AUTH_SOCK", "GIT_ASKPASS", "SUDO_ASKPASS"])
+  // Variables that rewrite process startup/load behavior. Never forward these
+  // to untrusted child processes (MCP servers, shells, formatters, etc.).
+  const PROCESS_INJECTION_NAMES = new Set([
+    "LD_PRELOAD",
+    "LD_LIBRARY_PATH",
+    "DYLD_INSERT_LIBRARIES",
+    "DYLD_LIBRARY_PATH",
+    "NODE_OPTIONS",
+    "NODE_PATH",
+    "NODE_EXTRA_CA_CERTS",
+    "ELECTRON_RUN_AS_NODE",
+    "PYTHONPATH",
+    "PYTHONSTARTUP",
+    "RUBYOPT",
+    "BASH_ENV",
+    "PERL5OPT",
+    "JAVA_TOOL_OPTIONS",
+    "JAVA_OPTIONS",
+    "CLASSPATH",
+  ])
   const SAFE_ALLOWLIST = new Set([
     "PYTHON_KEYRING_BACKEND",
     "XAUTHORITY",
@@ -49,6 +69,7 @@ export namespace Env {
         continue
       }
       if (
+        PROCESS_INJECTION_NAMES.has(k) ||
         CREDENTIAL_HELPER_NAMES.has(k) ||
         isSensitiveName(k) ||
         CREDENTIAL_URL_NAME.test(k) ||
@@ -61,8 +82,29 @@ export namespace Env {
     return out
   }
 
+  /**
+   * Strip process-injection / load-time hijack variables from an env map.
+   * Unlike `sanitize`, this preserves secrets so callers that intentionally
+   * forward credentials (e.g. MCP `environment`) can still do so safely.
+   */
+  export function stripProcessInjection(
+    env: Record<string, string | undefined> | undefined,
+  ): Record<string, string | undefined> {
+    if (!env) return {}
+    const out: Record<string, string | undefined> = {}
+    for (const [k, v] of Object.entries(env)) {
+      if (PROCESS_INJECTION_NAMES.has(k)) continue
+      out[k] = v
+    }
+    return out
+  }
+
   export function isSensitiveName(name: string): boolean {
     return SECRET_PATTERN.test(name)
+  }
+
+  export function isProcessInjectionName(name: string): boolean {
+    return PROCESS_INJECTION_NAMES.has(name)
   }
 
   function containsUrlCredential(value: string | undefined): boolean {

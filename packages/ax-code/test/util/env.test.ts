@@ -72,6 +72,38 @@ describe("Env.sanitize", () => {
     expect(sanitized.PRIVATE_REGISTRY).toBeUndefined()
   })
 
+  test("strips process-injection variables from sanitized environments", () => {
+    const sanitized = Env.sanitize({
+      PATH: "/usr/bin",
+      LD_PRELOAD: "/tmp/evil.so",
+      DYLD_INSERT_LIBRARIES: "/tmp/evil.dylib",
+      NODE_OPTIONS: "--require ./shim.js",
+      PYTHONPATH: "/tmp/evil",
+      SAFE: "ok",
+    })
+
+    expect(sanitized.PATH).toBe("/usr/bin")
+    expect(sanitized.SAFE).toBe("ok")
+    expect(sanitized.LD_PRELOAD).toBeUndefined()
+    expect(sanitized.DYLD_INSERT_LIBRARIES).toBeUndefined()
+    expect(sanitized.NODE_OPTIONS).toBeUndefined()
+    expect(sanitized.PYTHONPATH).toBeUndefined()
+  })
+
+  test("stripProcessInjection removes load-time hijacks but keeps secrets", () => {
+    const stripped = Env.stripProcessInjection({
+      MCP_API_KEY: "secret-from-config",
+      LD_PRELOAD: "/tmp/evil.so",
+      NODE_OPTIONS: "--require ./shim.js",
+      PATH: "/custom/bin",
+    })
+
+    expect(stripped.MCP_API_KEY).toBe("secret-from-config")
+    expect(stripped.PATH).toBe("/custom/bin")
+    expect(stripped.LD_PRELOAD).toBeUndefined()
+    expect(stripped.NODE_OPTIONS).toBeUndefined()
+  })
+
   test("redacts authorization headers, JSON secrets, and URL credentials", () => {
     expect(Env.redactSecrets("Authorization: Bearer abc123")).toBe("Authorization=[redacted]")
     expect(Env.redactSecrets('{"token":"abc123","safe":"yes"}')).toBe('{"token":"[redacted]","safe":"yes"}')

@@ -175,9 +175,14 @@ export namespace McpAuth {
     })
   }
 
-  export async function updateCodeVerifier(mcpName: string, codeVerifier: string): Promise<void> {
+  export async function updateCodeVerifier(mcpName: string, codeVerifier: string, serverUrl?: string): Promise<void> {
     await withFileEntryLock(mcpName, (entry) => {
       entry.codeVerifier = codeVerifier
+      // Bind the verifier to the server URL so a mid-flow URL change cannot
+      // reuse a PKCE verifier issued for a different endpoint (M-02).
+      if (serverUrl) {
+        entry.serverUrl = serverUrl
+      }
     })
   }
 

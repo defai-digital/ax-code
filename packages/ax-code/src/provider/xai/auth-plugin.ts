@@ -90,11 +90,20 @@ const hooks: Hooks = {
                 }
                 if (body.error || !body.access_token) return { type: "failed" as const }
 
+                // Prefer oauth when a refresh token is present. Without one,
+                // store the access token as an API key so downstream refresh
+                // logic is not handed an empty-string refresh token.
+                if (body.refresh_token) {
+                  return {
+                    type: "success" as const,
+                    access: body.access_token,
+                    refresh: body.refresh_token,
+                    expires: body.expires_in ? Date.now() + body.expires_in * 1000 : expiresAt,
+                  }
+                }
                 return {
                   type: "success" as const,
-                  access: body.access_token,
-                  refresh: body.refresh_token ?? "",
-                  expires: body.expires_in ? Date.now() + body.expires_in * 1000 : expiresAt,
+                  key: body.access_token,
                 }
               }
 

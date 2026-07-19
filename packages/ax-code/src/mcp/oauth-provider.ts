@@ -143,11 +143,14 @@ export class McpOAuthProvider implements OAuthClientProvider {
   }
 
   async saveCodeVerifier(codeVerifier: string): Promise<void> {
-    await McpAuth.updateCodeVerifier(this.mcpName, codeVerifier)
+    await McpAuth.updateCodeVerifier(this.mcpName, codeVerifier, this.serverUrl)
   }
 
   async codeVerifier(): Promise<string> {
-    const entry = await McpAuth.get(this.mcpName)
+    // Match tokens()/clientInformation(): reject verifiers bound to a different
+    // server URL so a mid-flow config change cannot complete PKCE against the
+    // wrong endpoint.
+    const entry = await McpAuth.getForUrl(this.mcpName, this.serverUrl)
     if (!entry?.codeVerifier) {
       throw new Error(`No code verifier saved for MCP server: ${this.mcpName}`)
     }

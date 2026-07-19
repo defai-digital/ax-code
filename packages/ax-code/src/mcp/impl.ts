@@ -693,7 +693,9 @@ export namespace MCP {
       // compromised server would otherwise read API keys straight out
       // of its own environment. The bash tool applies the same
       // sanitizer to shell commands for identical reasons. MCP-specific
-      // secrets can still be passed explicitly via `mcp.environment`.
+      // secrets can still be passed explicitly via `mcp.environment`, but
+      // process-injection variables (LD_PRELOAD, NODE_OPTIONS, …) are
+      // always stripped from that overlay.
       const transport = new StdioClientTransport({
         stderr: "pipe",
         command: cmd,
@@ -702,7 +704,7 @@ export namespace MCP {
         env: {
           ...Env.sanitize(process.env),
           ...(cmd === "ax-code" ? { BUN_BE_BUN: "1" } : {}),
-          ...mcp.environment,
+          ...Env.stripProcessInjection(mcp.environment),
         },
       })
       const onStderr = (chunk: Buffer) => {

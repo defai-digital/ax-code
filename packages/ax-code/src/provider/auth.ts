@@ -204,18 +204,29 @@ export namespace ProviderAuth {
     }
     if (!result || result.type !== "success") throw new OauthCallbackFailed({})
 
-    if ("key" in result) {
-      await Auth.set(input.providerID, {
-        type: "api",
-        key: result.key,
-      })
-    }
-
-    if ("refresh" in result) {
+    // Exclusive branches: a result with both `key` and `refresh` must not
+    // silently overwrite API credentials with OAuth (or vice versa). Prefer
+    // the oauth shape when a non-empty refresh token is present.
+    if ("refresh" in result && typeof result.refresh === "string" && result.refresh.length > 0) {
       await Auth.set(input.providerID, {
         type: "oauth",
         access: result.access,
         refresh: result.refresh,
+        expires: result.expires,
+        ...(result.accountId ? { accountId: result.accountId } : {}),
+      })
+    } else if ("key" in result) {
+      await Auth.set(input.providerID, {
+        type: "api",
+        key: result.key,
+      })
+    } else if ("refresh" in result) {
+      // Access token without a usable refresh token — still persist oauth so
+      // the access token can be used until expiry, but do not store "".
+      await Auth.set(input.providerID, {
+        type: "oauth",
+        access: result.access,
+        refresh: result.refresh || "",
         expires: result.expires,
         ...(result.accountId ? { accountId: result.accountId } : {}),
       })
