@@ -8,7 +8,7 @@ mod watcher;
 pub use embedding::*;
 pub use watcher::*;
 
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::LazyLock;
@@ -70,60 +70,34 @@ struct SearchMatch {
 }
 
 // ---------------------------------------------------------------------------
-// Hardcoded ignore patterns (mirrors TS FileIgnore)
+// Ignore patterns — loaded from ignore-patterns.json (shared with TS FileIgnore).
+// Keep crates/ax-code-fs/ignore-patterns.json in sync with
+// packages/ax-code/src/file/ignore-patterns.json (enforced by ignore-drift test).
 // ---------------------------------------------------------------------------
 
-pub(crate) const IGNORE_FOLDERS: &[&str] = &[
-    "node_modules",
-    "bower_components",
-    ".pnpm-store",
-    "vendor",
-    ".npm",
-    "dist",
-    "build",
-    "out",
-    ".next",
-    "target",
-    "bin",
-    "obj",
-    ".git",
-    ".svn",
-    ".hg",
-    ".vscode",
-    ".idea",
-    ".turbo",
-    ".output",
-    "desktop",
-    ".sst",
-    ".cache",
-    ".webkit-cache",
-    "__pycache__",
-    ".pytest_cache",
-    "mypy_cache",
-    ".history",
-    ".gradle",
-];
+#[derive(Deserialize)]
+struct IgnorePatternsFile {
+    folders: Vec<String>,
+    files: Vec<String>,
+}
 
-const IGNORE_FILE_PATTERNS: &[&str] = &[
-    "**/*.swp",
-    "**/*.swo",
-    "**/*.pyc",
-    "**/.DS_Store",
-    "**/Thumbs.db",
-    "**/logs/**",
-    "**/tmp/**",
-    "**/temp/**",
-    "**/*.log",
-    "**/coverage/**",
-    "**/.nyc_output/**",
-];
+static IGNORE_PATTERNS: LazyLock<IgnorePatternsFile> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("../ignore-patterns.json"))
+        .expect("ignore-patterns.json must be valid JSON with folders + files arrays")
+});
+
+/// Folder basenames that should always be ignored during walks.
+pub(crate) static IGNORE_FOLDERS: LazyLock<HashSet<String>> = LazyLock::new(|| {
+    IGNORE_PATTERNS.folders.iter().cloned().collect()
+});
 
 /// Precompiled matchers for hardcoded ignore file patterns. Rebuilding these
 /// on every `is_ignored` call was a measurable CPU cost during directory walks
 /// (PERF-07 / NAT-03). Extra patterns passed by the caller are still compiled
 /// per call because they vary.
 static IGNORE_FILE_MATCHERS: LazyLock<Vec<GlobMatcher>> = LazyLock::new(|| {
-    IGNORE_FILE_PATTERNS
+    IGNORE_PATTERNS
+        .files
         .iter()
         .filter_map(|pat| Glob::new(pat).ok().map(|g| g.compile_matcher()))
         .collect()
@@ -194,7 +168,7 @@ pub fn walk_files(cwd: String, options_json: String) -> napi::Result<Vec<String>
         // Exclude hardcoded ignore folders (node_modules, dist, build, etc.)
         if rel.components().any(|c| {
             let name = c.as_os_str().to_str().unwrap_or("");
-            IGNORE_FOLDERS.contains(&name)
+            IGNORE_FOLDERS.contains(name)
         }) {
             continue;
         }
@@ -479,7 +453,7 @@ pub fn search_content(cwd: String, pattern: String, options_json: String) -> nap
         // Skip hardcoded ignore folders (node_modules, dist, build, etc.)
         if rel.components().any(|c| {
             let name = c.as_os_str().to_str().unwrap_or("");
-            IGNORE_FOLDERS.contains(&name)
+            IGNORE_FOLDERS.contains(name)
         }) {
             continue;
         }
@@ -540,7 +514,7 @@ pub fn is_ignored(path: String, extra_patterns_json: String) -> napi::Result<boo
     // Check folder components against hardcoded ignore list
     for component in filepath.components() {
         let name = component.as_os_str().to_str().unwrap_or("");
-        if IGNORE_FOLDERS.contains(&name) {
+        if IGNORE_FOLDERS.contains(name) {
             return Ok(true);
         }
     }
@@ -793,7 +767,7 @@ pub fn scan_files(cwd: String, config_json: String) -> napi::Result<String> {
         }
         if rel.components().any(|c| {
             let name = c.as_os_str().to_str().unwrap_or("");
-            IGNORE_FOLDERS.contains(&name)
+            IGNORE_FOLDERS.contains(name)
         }) {
             continue;
         }

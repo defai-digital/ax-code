@@ -232,7 +232,28 @@ export namespace Database {
           })
         }
       } catch (e) {
-        errors.push({ index: i, error: e })
+        // One immediate retry for transient post-commit failures (STAB-08).
+        // Effects are meant to be idempotent side-effects (publish, notify);
+        // a second attempt covers brief lock/contention without a full queue.
+        try {
+          const retry = effects[i]() as unknown
+          if (retry instanceof Promise) {
+            asyncReturns.push(i)
+            retry.catch((err) => {
+              log.error("post-commit async effect rejected on retry", {
+                index: i,
+                error: toErrorMessage(err),
+              })
+            })
+          }
+        } catch (retryError) {
+          errors.push({ index: i, error: retryError })
+          log.warn("post-commit effect failed after retry", {
+            index: i,
+            firstError: toErrorMessage(e),
+            retryError: toErrorMessage(retryError),
+          })
+        }
       }
     }
     if (asyncReturns.length > 0) {

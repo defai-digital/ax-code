@@ -2,59 +2,16 @@ import { Glob } from "../util/glob"
 import { NativePerf } from "../perf/native"
 import { Log } from "../util/log"
 import { NativeAddon } from "../native/addon"
+// Single source of truth for JS + Rust (see crates/ax-code-fs + ignore-drift test).
+import ignorePatterns from "./ignore-patterns.json"
 
 export namespace FileIgnore {
-  const FOLDERS = new Set([
-    "node_modules",
-    "bower_components",
-    ".pnpm-store",
-    "vendor",
-    ".npm",
-    "dist",
-    "build",
-    "out",
-    ".next",
-    "target",
-    "bin",
-    "obj",
-    ".git",
-    ".svn",
-    ".hg",
-    ".vscode",
-    ".idea",
-    ".turbo",
-    ".output",
-    "desktop",
-    ".sst",
-    ".cache",
-    ".webkit-cache",
-    "__pycache__",
-    ".pytest_cache",
-    "mypy_cache",
-    ".history",
-    ".gradle",
-  ])
+  const FOLDERS = new Set(ignorePatterns.folders as readonly string[])
+  const FILES = ignorePatterns.files as readonly string[]
 
-  const FILES = [
-    "**/*.swp",
-    "**/*.swo",
-
-    "**/*.pyc",
-
-    // OS
-    "**/.DS_Store",
-    "**/Thumbs.db",
-
-    // Logs & temp
-    "**/logs/**",
-    "**/tmp/**",
-    "**/temp/**",
-    "**/*.log",
-
-    // Coverage/test outputs
-    "**/coverage/**",
-    "**/.nyc_output/**",
-  ]
+  /** Exported for drift tests / native parity checks. */
+  export const FOLDER_NAMES = ignorePatterns.folders as readonly string[]
+  export const FILE_PATTERNS = FILES
 
   export const PATTERNS = [...FILES, ...FOLDERS]
 

@@ -166,36 +166,15 @@ impl IndexStore {
         self.with_conn_mut(|conn| {
       let tx = conn.transaction()?;
 
-      let node_ids: Vec<String> = {
-        let mut stmt = tx.prepare("SELECT id FROM code_node WHERE project_id = ?1 AND file = ?2")?;
-        let ids: Vec<String> = stmt.query_map(params![project_id, file], |row| row.get(0))?
-          .collect::<Result<Vec<_>, _>>()?;
-        ids
-      };
-
-      if node_ids.is_empty() {
-        tx.commit()?;
-        return Ok(());
-      }
-
-      for chunk in node_ids.chunks(500) {
-        let placeholders: String = chunk.iter().enumerate()
-          .map(|(i, _)| format!("?{}", i + 2))
-          .collect::<Vec<_>>()
-          .join(", ");
-
-        let sql = format!(
-          "DELETE FROM code_edge WHERE project_id = ?1 AND (from_node IN ({placeholders}) OR to_node IN ({placeholders}))"
-        );
-
-        let mut params_vec: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(project_id.clone())];
-        for id in chunk {
-          params_vec.push(Box::new(id.clone()));
-        }
-        let params_ref: Vec<&dyn rusqlite::types::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
-
-        tx.execute(&sql, params_ref.as_slice())?;
-      }
+      // Single DELETE with subqueries avoids IN-clause chunking and
+      // keeps from_node/to_node removal atomic (PERF-12).
+      tx.execute(
+        "DELETE FROM code_edge WHERE project_id = ?1 AND (
+           from_node IN (SELECT id FROM code_node WHERE project_id = ?1 AND file = ?2)
+           OR to_node IN (SELECT id FROM code_node WHERE project_id = ?1 AND file = ?2)
+         )",
+        params![project_id, file],
+      )?;
 
       tx.commit()?;
       Ok(())

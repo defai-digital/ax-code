@@ -226,33 +226,29 @@ export namespace CodeGraphQuery {
   // `file` column equals it. This catches imports where `to_node` lives
   // in a different file — useful for reverse-dependency invalidation.
   //
-  // Two failure modes to handle:
-  //   (a) File has more nodes than SQLite's IN-clause parameter limit
-  //       (SQLITE_MAX_VARIABLE_NUMBER, default 999). We chunk to 500 per
-  //       statement to leave headroom for the other WHERE clause params.
-  //   (b) The two directions (from_node, to_node) must delete atomically.
-  //       If the first succeeds and the second throws, we'd leave dangling
-  //       edges. Wrap the whole operation in a transaction.
+  // Uses a correlated subquery so large files never hit SQLite's IN-clause
+  // parameter limit and we pay a single DELETE instead of O(nodes/500)
+  // roundtrips (PERF-12). The two directions (from_node, to_node) stay in
+  // one statement so they remain atomic.
   export function deleteEdgesTouchingFile(projectID: ProjectID, file: string): void {
     if (useNative) return NativeStore.deleteEdgesTouchingFile(projectID, file)
-    const fileNodes = nodesInFile(projectID, file).map((n) => n.id)
-    if (fileNodes.length === 0) return
-    const CHUNK = 500
-    Database.transaction((_tx) => {
-      for (let i = 0; i < fileNodes.length; i += CHUNK) {
-        const chunk = fileNodes.slice(i, i + CHUNK)
-        Database.use((db) =>
-          db
-            .delete(CodeEdgeTable)
-            .where(
-              and(
-                eq(CodeEdgeTable.project_id, projectID),
-                or(inArray(CodeEdgeTable.from_node, chunk), inArray(CodeEdgeTable.to_node, chunk)),
-              ),
+    Database.use((db) => {
+      db.run(sql`
+        DELETE FROM ${CodeEdgeTable}
+        WHERE ${CodeEdgeTable.project_id} = ${projectID}
+          AND (
+            ${CodeEdgeTable.from_node} IN (
+              SELECT ${CodeNodeTable.id} FROM ${CodeNodeTable}
+              WHERE ${CodeNodeTable.project_id} = ${projectID}
+                AND ${CodeNodeTable.file} = ${file}
             )
-            .run(),
-        )
-      }
+            OR ${CodeEdgeTable.to_node} IN (
+              SELECT ${CodeNodeTable.id} FROM ${CodeNodeTable}
+              WHERE ${CodeNodeTable.project_id} = ${projectID}
+                AND ${CodeNodeTable.file} = ${file}
+            )
+          )
+      `)
     })
   }
 
@@ -357,12 +353,32 @@ export namespace CodeGraphQuery {
     scopePrefix: string,
   ): { files: number; nodes: number; edges: number } {
     if (useNative) return NativeStore.pruneOrphanFiles(projectID, [...livePaths], scopePrefix)
-    const rows = Database.use((db) =>
-      db.select({ path: CodeFileTable.path }).from(CodeFileTable).where(eq(CodeFileTable.project_id, projectID)).all(),
-    )
-    const orphans = rows
-      .map((r) => r.path)
-      .filter((p) => (scopePrefix === "" || p.startsWith(scopePrefix)) && !livePaths.has(p))
+    // Scope the path load in SQL so a 50k-file project does not materialize
+    // every path into JS just to filter by prefix (PERF-11).
+    const rows = Database.use((db) => {
+      if (scopePrefix === "") {
+        return db
+          .select({ path: CodeFileTable.path })
+          .from(CodeFileTable)
+          .where(eq(CodeFileTable.project_id, projectID))
+          .all()
+      }
+      // Escape LIKE wildcards in the walk root so a path containing %/_ is
+      // treated literally. drizzle-orm's `like()` has no ESCAPE arg, so
+      // express the clause with a raw SQL fragment.
+      const escaped = scopePrefix.replace(/([%_\\])/g, "\\$1")
+      return db
+        .select({ path: CodeFileTable.path })
+        .from(CodeFileTable)
+        .where(
+          and(
+            eq(CodeFileTable.project_id, projectID),
+            sql`${CodeFileTable.path} LIKE ${escaped + "%"} ESCAPE '\\'`,
+          ),
+        )
+        .all()
+    })
+    const orphans = rows.map((r) => r.path).filter((p) => !livePaths.has(p))
     if (orphans.length === 0) return { files: 0, nodes: 0, edges: 0 }
 
     let filesRemoved = 0
@@ -370,41 +386,42 @@ export namespace CodeGraphQuery {
     let edgesRemoved = 0
     Database.transaction(() => {
       for (const orphan of orphans) {
-        const nodeIds = nodesInFile(projectID, orphan).map((n) => n.id)
-        if (nodeIds.length > 0) {
-          // Count edges touching this file before deletion. `OR` on
-          // from_node and to_node catches both outgoing call edges
-          // and incoming reference edges. Chunked to stay well under
-          // SQLite's 999-parameter limit.
-          const CHUNK = 400
-          for (let i = 0; i < nodeIds.length; i += CHUNK) {
-            const chunk = nodeIds.slice(i, i + CHUNK)
-            const row = Database.use((db) =>
-              db
-                .select({ count: sql<number>`count(*)` })
-                .from(CodeEdgeTable)
-                .where(
-                  and(
-                    eq(CodeEdgeTable.project_id, projectID),
-                    or(inArray(CodeEdgeTable.from_node, chunk), inArray(CodeEdgeTable.to_node, chunk)),
+        const nodeCountRow = Database.use((db) =>
+          db
+            .select({ count: sql<number>`count(*)` })
+            .from(CodeNodeTable)
+            .where(and(eq(CodeNodeTable.project_id, projectID), eq(CodeNodeTable.file, orphan)))
+            .get(),
+        )
+        const nodeCount = nodeCountRow?.count ?? 0
+        if (nodeCount > 0) {
+          // Count + delete edges via subqueries (no ID materialization / chunking).
+          const edgeCountRow = Database.use((db) =>
+            db
+              .select({ count: sql<number>`count(*)` })
+              .from(CodeEdgeTable)
+              .where(
+                and(
+                  eq(CodeEdgeTable.project_id, projectID),
+                  or(
+                    sql`${CodeEdgeTable.from_node} IN (
+                      SELECT ${CodeNodeTable.id} FROM ${CodeNodeTable}
+                      WHERE ${CodeNodeTable.project_id} = ${projectID}
+                        AND ${CodeNodeTable.file} = ${orphan}
+                    )`,
+                    sql`${CodeEdgeTable.to_node} IN (
+                      SELECT ${CodeNodeTable.id} FROM ${CodeNodeTable}
+                      WHERE ${CodeNodeTable.project_id} = ${projectID}
+                        AND ${CodeNodeTable.file} = ${orphan}
+                    )`,
                   ),
-                )
-                .get(),
-            )
-            edgesRemoved += row?.count ?? 0
-            Database.use((db) =>
-              db
-                .delete(CodeEdgeTable)
-                .where(
-                  and(
-                    eq(CodeEdgeTable.project_id, projectID),
-                    or(inArray(CodeEdgeTable.from_node, chunk), inArray(CodeEdgeTable.to_node, chunk)),
-                  ),
-                )
-                .run(),
-            )
-          }
-          nodesRemoved += nodeIds.length
+                ),
+              )
+              .get(),
+          )
+          edgesRemoved += edgeCountRow?.count ?? 0
+          deleteEdgesTouchingFile(projectID, orphan)
+          nodesRemoved += nodeCount
           Database.use((db) =>
             db
               .delete(CodeNodeTable)

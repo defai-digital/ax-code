@@ -80,7 +80,7 @@ impl NativeWatcher {
                 // Skip ignored folders
                 let should_skip = rel.components().any(|c| {
                     let name = c.as_os_str().to_str().unwrap_or("");
-                    IGNORE_FOLDERS.contains(&name)
+                    IGNORE_FOLDERS.contains(name)
                 });
                 if should_skip {
                     continue;

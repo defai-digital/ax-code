@@ -65,6 +65,66 @@ const buildSessionsByDirectory = (sessions: Session[]): Map<string, Session[]> =
   return next
 }
 
+/**
+ * Incremental Map update for a single session change (UI-06). Avoids
+ * rebuilding the full directory index on every upsert/remove.
+ */
+const upsertSessionInDirectoryMap = (
+  prev: Map<string, Session[]>,
+  session: Session,
+  previousDirectory: string | null | undefined,
+): Map<string, Session[]> => {
+  const nextDir = resolveGlobalSessionDirectory(session)
+  if (previousDirectory === nextDir && nextDir) {
+    const list = prev.get(nextDir)
+    if (list) {
+      const index = list.findIndex((item) => item.id === session.id)
+      if (index >= 0 && getSessionSignature(list[index]!) === getSessionSignature(session)) {
+        return prev
+      }
+    }
+  }
+
+  const next = new Map(prev)
+  if (previousDirectory && previousDirectory !== nextDir) {
+    const oldList = next.get(previousDirectory)
+    if (oldList) {
+      const filtered = oldList.filter((item) => item.id !== session.id)
+      if (filtered.length === 0) next.delete(previousDirectory)
+      else next.set(previousDirectory, filtered)
+    }
+  }
+  if (!nextDir) {
+    // Session has no directory — ensure it is not present under any key.
+    if (previousDirectory) return next
+    for (const [dir, list] of next) {
+      if (list.some((item) => item.id === session.id)) {
+        const filtered = list.filter((item) => item.id !== session.id)
+        if (filtered.length === 0) next.delete(dir)
+        else next.set(dir, filtered)
+      }
+    }
+    return next
+  }
+  const existing = next.get(nextDir) ?? []
+  const without = existing.filter((item) => item.id !== session.id)
+  next.set(nextDir, [...without, session])
+  return next
+}
+
+const removeSessionsFromDirectoryMap = (prev: Map<string, Session[]>, ids: Set<string>): Map<string, Session[]> => {
+  if (ids.size === 0) return prev
+  let changed = false
+  const next = new Map<string, Session[]>()
+  for (const [dir, list] of prev) {
+    const filtered = list.filter((session) => !ids.has(session.id))
+    if (filtered.length !== list.length) changed = true
+    if (filtered.length > 0) next.set(dir, filtered)
+    else if (list.length > 0) changed = true
+  }
+  return changed ? next : prev
+}
+
 const getSessionSignature = (session: Session): string => {
   return [
     session.id,
@@ -293,6 +353,8 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         return state
       }
       const isArchived = Boolean(session.time?.archived)
+      const previous = state.activeSessions.find((candidate) => candidate.id === session.id)
+      const previousDirectory = previous ? resolveGlobalSessionDirectory(previous) : undefined
       const nextActiveSessions = isArchived
         ? state.activeSessions.filter((candidate) => candidate.id !== session.id)
         : upsertSessionIntoList(state.activeSessions, session)
@@ -304,13 +366,19 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         return state
       }
 
+      let sessionsByDirectory = state.sessionsByDirectory
+      if (nextActiveSessions !== state.activeSessions) {
+        if (isArchived) {
+          sessionsByDirectory = removeSessionsFromDirectoryMap(state.sessionsByDirectory, new Set([session.id]))
+        } else {
+          sessionsByDirectory = upsertSessionInDirectoryMap(state.sessionsByDirectory, session, previousDirectory)
+        }
+      }
+
       return {
         activeSessions: nextActiveSessions,
         archivedSessions: nextArchivedSessions,
-        sessionsByDirectory:
-          nextActiveSessions === state.activeSessions
-            ? state.sessionsByDirectory
-            : buildSessionsByDirectory(nextActiveSessions),
+        sessionsByDirectory,
       }
     })
   },
@@ -335,7 +403,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       return {
         activeSessions: nextActiveSessions,
         archivedSessions: nextArchivedSessions,
-        sessionsByDirectory: buildSessionsByDirectory(nextActiveSessions),
+        sessionsByDirectory: removeSessionsFromDirectoryMap(state.sessionsByDirectory, idSet),
       }
     })
   },
@@ -372,7 +440,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       return {
         activeSessions: nextActiveSessions,
         archivedSessions: [...movedSessions, ...remainingArchivedSessions],
-        sessionsByDirectory: buildSessionsByDirectory(nextActiveSessions),
+        sessionsByDirectory: removeSessionsFromDirectoryMap(state.sessionsByDirectory, idSet),
       }
     })
   },
@@ -395,7 +463,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         sessionsByDirectory:
           nextActiveSessions.length === state.activeSessions.length
             ? state.sessionsByDirectory
-            : buildSessionsByDirectory(nextActiveSessions),
+            : removeSessionsFromDirectoryMap(state.sessionsByDirectory, ids),
       }
     })
   },
@@ -415,21 +483,20 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       }
       let nextActiveSessions = state.activeSessions
       let nextArchivedSessions = state.archivedSessions
+      let sessionsByDirectory = state.sessionsByDirectory
       for (const session of restored) {
         if (session.time?.archived) {
           nextArchivedSessions = upsertSessionIntoList(nextArchivedSessions, session)
         } else {
           nextActiveSessions = upsertSessionIntoList(nextActiveSessions, session)
+          sessionsByDirectory = upsertSessionInDirectoryMap(sessionsByDirectory, session, undefined)
         }
       }
       return {
         pendingRemoval: nextPending,
         activeSessions: nextActiveSessions,
         archivedSessions: nextArchivedSessions,
-        sessionsByDirectory:
-          nextActiveSessions === state.activeSessions
-            ? state.sessionsByDirectory
-            : buildSessionsByDirectory(nextActiveSessions),
+        sessionsByDirectory,
       }
     })
   },

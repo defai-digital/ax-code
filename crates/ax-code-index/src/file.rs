@@ -122,14 +122,31 @@ impl IndexStore {
         let live_set: std::collections::HashSet<String> = live_paths.into_iter().collect();
 
         self.with_conn_mut(|conn| {
-      // Get all files for this project first
-      let all_files = {
+      // Scope the path load in SQL when a walk root is provided (PERF-11).
+      let all_files = if scope_prefix.is_empty() {
         let sql = format!("SELECT {SELECT_COLS} FROM code_file WHERE project_id = ?1");
         query_files(conn, &sql, &[&project_id as &dyn rusqlite::types::ToSql])?
+      } else {
+        let sql = format!(
+          "SELECT {SELECT_COLS} FROM code_file WHERE project_id = ?1 AND path LIKE ?2 ESCAPE '\\'"
+        );
+        let escaped = scope_prefix
+          .replace('\\', "\\\\")
+          .replace('%', "\\%")
+          .replace('_', "\\_");
+        let pattern = format!("{escaped}%");
+        query_files(
+          conn,
+          &sql,
+          &[
+            &project_id as &dyn rusqlite::types::ToSql,
+            &pattern as &dyn rusqlite::types::ToSql,
+          ],
+        )?
       };
 
       let orphan_paths: Vec<String> = all_files.iter()
-        .filter(|f| f.path.starts_with(&scope_prefix) && !live_set.contains(&f.path))
+        .filter(|f| !live_set.contains(&f.path))
         .map(|f| f.path.clone())
         .collect();
 
@@ -143,30 +160,15 @@ impl IndexStore {
       let mut total_edges = 0u32;
 
       for orphan_path in &orphan_paths {
-        // Get node IDs in this file for edge cleanup
-        let node_ids: Vec<String> = {
-          let mut s = tx.prepare("SELECT id FROM code_node WHERE project_id = ?1 AND file = ?2")?;
-          let ids: Vec<String> = s.query_map(params![project_id, orphan_path], |row| row.get(0))?
-            .collect::<Result<Vec<_>, _>>()?;
-          ids
-        };
-
-        // Delete edges touching these nodes
-        for chunk in node_ids.chunks(500) {
-          if chunk.is_empty() { continue; }
-          let placeholders: String = chunk.iter().enumerate()
-            .map(|(i, _)| format!("?{}", i + 2))
-            .collect::<Vec<_>>()
-            .join(", ");
-          let sql = format!(
-            "DELETE FROM code_edge WHERE project_id = ?1 AND (from_node IN ({placeholders}) OR to_node IN ({placeholders}))"
-          );
-          let mut params_vec: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(project_id.clone())];
-          for id in chunk { params_vec.push(Box::new(id.clone())); }
-          let params_ref: Vec<&dyn rusqlite::types::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
-          let deleted = tx.execute(&sql, params_ref.as_slice())?;
-          total_edges += deleted as u32;
-        }
+        // Single subquery DELETE for edges (PERF-12) — no ID materialization.
+        let deleted_edges = tx.execute(
+          "DELETE FROM code_edge WHERE project_id = ?1 AND (
+             from_node IN (SELECT id FROM code_node WHERE project_id = ?1 AND file = ?2)
+             OR to_node IN (SELECT id FROM code_node WHERE project_id = ?1 AND file = ?2)
+           )",
+          params![project_id, orphan_path],
+        )?;
+        total_edges += deleted_edges as u32;
 
         // Delete nodes
         let deleted_nodes = tx.execute(
