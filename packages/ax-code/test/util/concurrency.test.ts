@@ -45,9 +45,16 @@ describe("createConcurrencyLimiter", () => {
   })
 
   test("release handoff never lets a free-path acquire steal the permit", async () => {
-    // Regression for: release() decremented then woke a waiter who re-incremented;
-    // a synchronous free-path run() between those steps could also acquire → peak=2
-    // on max=1.
+    // Regression for the open-slot race on max=1:
+    //   release: active--; wake waiter
+    //   free-path acquire: active++  (steals the open slot)
+    //   waiter resume: active++      → peak 2
+    //
+    // Free-path steal exists only AFTER the holder's finally/release runs and
+    // BEFORE the woken waiter re-acquires. Calling free-path run() in the same
+    // turn as releaseHold() is too early (holder still owns the permit). Holder
+    // body must finish immediately after releaseHold so finally/release runs in
+    // the next microtask; then free-path races before the waiter resumes.
     const limiter = createConcurrencyLimiter(1)
     let inFlight = 0
     let peak = 0
@@ -65,27 +72,29 @@ describe("createConcurrencyLimiter", () => {
       releaseHold = resolve
     })
 
-    // Holder owns the only permit and waits for an external signal.
+    // Holder: wait only — no async work after the gate so finally/release runs
+    // in the same microtask turn that resumes after hold resolves.
     const holder = limiter.run(async () => {
-      await track(1)
       await hold
     })
 
-    // Waiter is queued while the permit is held.
     const waiter = limiter.run(async () => {
-      await track(5)
+      await track(15)
     })
-    // Ensure the waiter is parked (not free-path).
     await new Promise((r) => setTimeout(r, 5))
     expect(limiter.waiting()).toBe(1)
     expect(limiter.active()).toBe(1)
 
-    // Free the holder. Its release must hand the permit to the waiter without
-    // opening a slot that a concurrent free-path run() can take.
     releaseHold()
-    // Synchronously race a free-path acquire before the waiter microtask runs.
+    // Drain holder completion + finally/release. Waiter's re-acquire is still
+    // a later microtask on the buggy algorithm (active-- then wake).
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // Open-slot window: old algorithm has active=0 here so free-path steals;
+    // handoff keeps active=1 (permit already transferred) so free-path queues.
     const racer = limiter.run(async () => {
-      await track(5)
+      await track(15)
     })
 
     await Promise.all([holder, waiter, racer])
