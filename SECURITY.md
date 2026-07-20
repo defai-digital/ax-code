@@ -15,7 +15,7 @@ minor before reporting a vulnerability against an older line.
 We take security seriously. If you discover a vulnerability, please report it responsibly:
 
 1. **GitHub Advisory** (preferred): Use the ["Report a Vulnerability"](https://github.com/defai-digital/ax-code/security/advisories/new) tab.
-2. **Discord**: Report it in our Discord: https://discord.gg/cTavsMgu
+2. **Discord**: Report it in our Discord: https://discord.gg/gf9UyPxaN2
 
 We will acknowledge your report within **6 business days** and keep you informed of progress toward a fix.
 

@@ -188,7 +188,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onOpenChange }) 
                 <span>ax-code</span>
               </a>
               <a
-                href="https://discord.com/invite/cTavsMgu"
+                href="https://discord.gg/gf9UyPxaN2"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 typography-meta text-muted-foreground hover:text-foreground transition-colors"

@@ -1630,7 +1630,7 @@ const relaunchFromMenu = async () => {
   app.exit(0)
 }
 
-const DISCORD_INVITE_URL = "https://discord.gg/ZYRSdnwwKA"
+const DISCORD_INVITE_URL = "https://discord.gg/gf9UyPxaN2"
 
 const buildMacMenu = () => {
   const dispatchAction = (action) => dispatchMenuAction(action)

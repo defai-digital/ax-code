@@ -109,7 +109,7 @@ export const AboutSettings: React.FC = () => {
           </a>
 
           <a
-            href="https://discord.com/invite/cTavsMgu"
+            href="https://discord.gg/gf9UyPxaN2"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1 typography-meta text-muted-foreground hover:text-foreground transition-colors"
@@ -210,7 +210,7 @@ export const AboutSettings: React.FC = () => {
           </a>
 
           <a
-            href="https://discord.com/invite/cTavsMgu"
+            href="https://discord.gg/gf9UyPxaN2"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground typography-meta transition-colors"
