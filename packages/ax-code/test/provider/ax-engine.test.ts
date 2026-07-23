@@ -610,14 +610,22 @@ describe("ax-engine server lifecycle", () => {
     }
   })
 
-  test("commandLooksLikeAxEngineServer requires binary + serve, not a path substring", () => {
-    expect(commandLooksLikeAxEngineServer("/opt/homebrew/bin/ax-engine serve /models/qwen --port 18181")).toBe(true)
+  test("commandLooksLikeAxEngineServer recognizes launchers and native servers, not path substrings", () => {
+    expect(commandLooksLikeAxEngineServer("/opt/homebrew/bin/ax-engine serve /models/qwen --port 31418")).toBe(true)
+    expect(
+      commandLooksLikeAxEngineServer(
+        "/opt/homebrew/bin/ax-engine-server --host 127.0.0.1 --port 31418 --mlx --mlx-model-artifacts-dir /models/qwen --model-id qwen3.6-35b",
+        "/opt/homebrew/bin/ax-engine",
+      ),
+    ).toBe(true)
     expect(commandLooksLikeAxEngineServer("/tmp/ax-engine serve /models/qwen", "/tmp/ax-engine")).toBe(true)
     // Shell-script servers show the interpreter as argv0 on macOS.
     expect(commandLooksLikeAxEngineServer("/bin/sh /tmp/ax-engine serve /models/qwen", "/tmp/ax-engine")).toBe(true)
     expect(commandLooksLikeAxEngineServer("tail -f /Users/me/.cache/ax-engine/server.log")).toBe(false)
     expect(commandLooksLikeAxEngineServer("rg ax-engine packages/")).toBe(false)
     expect(commandLooksLikeAxEngineServer("vim /Users/me/code/ax-engine/README.md")).toBe(false)
+    expect(commandLooksLikeAxEngineServer("tail -f /tmp/ax-engine-server --port 31418 --model-id qwen")).toBe(false)
+    expect(commandLooksLikeAxEngineServer("/tmp/ax-engine-server --port 31418 --model-id qwen")).toBe(false)
     expect(commandLooksLikeAxEngineServer("sleep 60 ax-engine-not-a-server")).toBe(false)
     expect(commandLooksLikeAxEngineServer("ax-engine")).toBe(false)
     expect(commandLooksLikeAxEngineServer("ax-engine serve")).toBe(false)
@@ -803,6 +811,9 @@ describe("ax-engine server launch args", () => {
       "agentic",
       "--max-batch-tokens",
       "2048",
+      "--disable-ngram-acceleration",
+      "--max-concurrent-requests",
+      "1",
       "--mlx-mtp-disable-ngram-stacking",
     ])
   })
@@ -817,6 +828,9 @@ describe("ax-engine server launch args", () => {
       "agentic",
       "--max-batch-tokens",
       "2048",
+      "--disable-ngram-acceleration",
+      "--max-concurrent-requests",
+      "1",
       "--mlx-mtp-disable-ngram-stacking",
       "--block-size-tokens",
       "16",
@@ -833,6 +847,9 @@ describe("ax-engine server launch args", () => {
       "agentic",
       "--max-batch-tokens",
       "2048",
+      "--disable-ngram-acceleration",
+      "--max-concurrent-requests",
+      "1",
       "--mlx-mtp-disable-ngram-stacking",
       "--block-size-tokens",
       "16",
@@ -843,39 +860,39 @@ describe("ax-engine server launch args", () => {
 })
 
 describe("ax-engine active server base URL rewrite", () => {
-  const assumed = "http://127.0.0.1:18181/v1"
+  const assumed = "http://127.0.0.1:31418/v1"
 
   test("passes requests through untouched when no managed server is tracked", () => {
     expect(rewriteToActiveAxEngineServer(`${assumed}/chat/completions`, assumed)).toBe(`${assumed}/chat/completions`)
   })
 
   test("rewrites requests to the port the managed server actually bound", () => {
-    noteActiveAxEngineServer("http://127.0.0.1:18183/v1")
+    noteActiveAxEngineServer("http://127.0.0.1:31420/v1")
     expect(rewriteToActiveAxEngineServer(`${assumed}/chat/completions`, assumed)).toBe(
-      "http://127.0.0.1:18183/v1/chat/completions",
+      "http://127.0.0.1:31420/v1/chat/completions",
     )
-    expect(rewriteToActiveAxEngineServer(assumed, assumed)).toBe("http://127.0.0.1:18183/v1")
+    expect(rewriteToActiveAxEngineServer(assumed, assumed)).toBe("http://127.0.0.1:31420/v1")
     expect(rewriteToActiveAxEngineServer(new URL(`${assumed}/models`), assumed)).toBe(
-      "http://127.0.0.1:18183/v1/models",
+      "http://127.0.0.1:31420/v1/models",
     )
   })
 
   test("preserves method and headers when rewriting a Request object", () => {
-    noteActiveAxEngineServer("http://127.0.0.1:18183/v1")
+    noteActiveAxEngineServer("http://127.0.0.1:31420/v1")
     const rewritten = rewriteToActiveAxEngineServer(
       new Request(`${assumed}/chat/completions`, { method: "POST", headers: { authorization: "Bearer local" } }),
       assumed,
     )
     expect(rewritten).toBeInstanceOf(Request)
-    expect((rewritten as Request).url).toBe("http://127.0.0.1:18183/v1/chat/completions")
+    expect((rewritten as Request).url).toBe("http://127.0.0.1:31420/v1/chat/completions")
     expect((rewritten as Request).method).toBe("POST")
     expect((rewritten as Request).headers.get("authorization")).toBe("Bearer local")
   })
 
   test("leaves foreign origins and prefix look-alikes untouched", () => {
-    noteActiveAxEngineServer("http://127.0.0.1:18183/v1")
-    expect(rewriteToActiveAxEngineServer("http://127.0.0.1:181812/v1/models", assumed)).toBe(
-      "http://127.0.0.1:181812/v1/models",
+    noteActiveAxEngineServer("http://127.0.0.1:31420/v1")
+    expect(rewriteToActiveAxEngineServer("http://127.0.0.1:314182/v1/models", assumed)).toBe(
+      "http://127.0.0.1:314182/v1/models",
     )
     expect(rewriteToActiveAxEngineServer("https://api.example.com/v1/chat", assumed)).toBe(
       "https://api.example.com/v1/chat",
@@ -899,9 +916,9 @@ describe("ax-engine active server base URL rewrite", () => {
     } as any)
 
     // Simulate ensureServer having fallen back to a non-default port.
-    noteActiveAxEngineServer("http://127.0.0.1:18183/v1")
+    noteActiveAxEngineServer("http://127.0.0.1:31420/v1")
     await loader.options!.fetch(`${assumed}/chat/completions`)
-    expect(seen).toEqual(["http://127.0.0.1:18183/v1/chat/completions"])
+    expect(seen).toEqual(["http://127.0.0.1:31420/v1/chat/completions"])
   })
 })
 
@@ -980,8 +997,8 @@ describe("ax-engine prepare lifecycle", () => {
           expect(input.modelRevision).toBe("abc123")
           return {
             pid: 123,
-            port: 18181,
-            baseURL: "http://127.0.0.1:18181/v1",
+            port: 31418,
+            baseURL: "http://127.0.0.1:31418/v1",
             modelID: AX_ENGINE_QWEN36_27B_MODEL_ID,
             apiModelID: AX_ENGINE_QWEN36_27B_API_MODEL_ID,
             modelPath: input.modelPath,
@@ -995,7 +1012,7 @@ describe("ax-engine prepare lifecycle", () => {
     )
 
     expect(calls).toEqual(["model", "dependency", "server"])
-    expect(result.server?.baseURL).toBe("http://127.0.0.1:18181/v1")
+    expect(result.server?.baseURL).toBe("http://127.0.0.1:31418/v1")
   })
 
   test("download prepare reuses the resolved dependency when starting", async () => {
@@ -1029,8 +1046,8 @@ describe("ax-engine prepare lifecycle", () => {
           calls.push("server")
           return {
             pid: 123,
-            port: 18181,
-            baseURL: "http://127.0.0.1:18181/v1",
+            port: 31418,
+            baseURL: "http://127.0.0.1:31418/v1",
             modelID: AX_ENGINE_QWEN36_27B_MODEL_ID,
             apiModelID: AX_ENGINE_QWEN36_27B_API_MODEL_ID,
             modelPath: "/models/qwen",
@@ -1077,7 +1094,7 @@ describe("ax-engine provider integration", () => {
       65_536, 16_384, 32_768, 32_768, 32_768, 32_768, 32_768,
     ])
     expect(provider.models[AX_ENGINE_QWEN36_27B_MODEL_ID]).toMatchObject({
-      name: "Qwen3.6-27B 6-bit (Local MLX MTP)",
+      name: "Qwen3.6-27B 6-bit (Local MLX Auto)",
       tool_call: true,
       limit: { context: 65_536, input: 63_488, output: 2_048 },
       options: {
@@ -1101,7 +1118,7 @@ describe("ax-engine provider integration", () => {
       experimental: { localRuntime: "ax-engine" },
     })
     expect(provider.models[AX_ENGINE_QWEN36_35B_MODEL_ID]).toMatchObject({
-      name: "Qwen3.6-35B-A3B 6-bit (Local MLX MTP)",
+      name: "Qwen3.6-35B-A3B 6-bit (Local MLX Auto)",
       tool_call: true,
       limit: { context: 32_768, input: 30_720, output: 2_048 },
       status: "beta",
@@ -1113,7 +1130,7 @@ describe("ax-engine provider integration", () => {
       experimental: { localRuntime: "ax-engine" },
     })
     expect(provider.models[AX_ENGINE_GEMMA4_12B_MODEL_ID]).toMatchObject({
-      name: "Gemma 4 12B 6-bit (Local MLX MTP)",
+      name: "Gemma 4 12B 6-bit (Local MLX Auto)",
       tool_call: true,
       limit: { context: 32_768, input: 30_720, output: 2_048 },
       options: {
@@ -1125,7 +1142,7 @@ describe("ax-engine provider integration", () => {
       experimental: { localRuntime: "ax-engine" },
     })
     expect(provider.models[AX_ENGINE_GEMMA4_26B_MODEL_ID]).toMatchObject({
-      name: "Gemma 4 26B 6-bit (Local MLX MTP)",
+      name: "Gemma 4 26B 6-bit (Local MLX Auto)",
       tool_call: true,
       limit: { context: 32_768, input: 30_720, output: 2_048 },
       options: {
@@ -1137,7 +1154,7 @@ describe("ax-engine provider integration", () => {
       experimental: { localRuntime: "ax-engine" },
     })
     expect(provider.models[AX_ENGINE_GLM47_FLASH_MODEL_ID]).toMatchObject({
-      name: "GLM 4.7 Flash 6-bit (Local MLX MTP)",
+      name: "GLM 4.7 Flash 6-bit (Local MLX Auto)",
       tool_call: true,
       limit: { context: 32_768, input: 30_720, output: 2_048 },
       options: {
@@ -1204,6 +1221,34 @@ describe("ax-engine provider integration", () => {
     expect(loader.autoload).toBe(false)
   })
 
+  test("managed default endpoint is not reclassified as an external server", async () => {
+    const seen: string[] = []
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      seen.push(input instanceof Request ? input.url : String(input))
+      throw new Error("managed model discovery must not probe the default endpoint")
+    }) as typeof fetch
+    const provider = {
+      id: AX_ENGINE_PROVIDER_ID,
+      name: "AX Engine",
+      source: "config",
+      env: [],
+      options: {},
+      models: {},
+    } as any
+    const loader = await axEngineLoader()(provider)
+
+    expect(loader.options?.baseURL).toBeUndefined()
+    const models = await loader.discoverModels!({
+      ...provider,
+      // Reproduce provider initialization merging loader options back into the
+      // runtime provider before discovery.
+      options: { ...provider.options, ...loader.options },
+    })
+
+    expect(seen).toEqual([])
+    expect(models[AX_ENGINE_QWEN36_35B_MODEL_ID].api.url).toBe("http://127.0.0.1:31418/v1")
+  })
+
   test("configured provider is available without starting ax-engine during provider list", async () => {
     if (!(await isSupportedHost())) return
 
@@ -1227,7 +1272,8 @@ describe("ax-engine provider integration", () => {
         expect(axEngine).toBeDefined()
         expect(axEngine.models[AX_ENGINE_QWEN36_27B_MODEL_ID]).toBeDefined()
         expect(axEngine.models[AX_ENGINE_QWEN36_35B_MODEL_ID]).toBeDefined()
-        expect(axEngine.options.baseURL).toBe("http://127.0.0.1:18181/v1")
+        expect(axEngine.options.baseURL).toBeUndefined()
+        expect(axEngine.models[AX_ENGINE_QWEN36_35B_MODEL_ID].api.url).toBe("http://127.0.0.1:31418/v1")
       },
     })
   })
@@ -1276,7 +1322,8 @@ describe("ax-engine provider integration", () => {
         expect(axEngine).toBeDefined()
         expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN36_27B_MODEL_ID)
         expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN36_35B_MODEL_ID)
-        expect(axEngine.options.baseURL).toBe("http://127.0.0.1:18181/v1")
+        expect(axEngine.options.baseURL).toBeUndefined()
+        expect(axEngine.models[AX_ENGINE_QWEN36_35B_MODEL_ID].api.url).toBe("http://127.0.0.1:31418/v1")
       },
     })
   })
@@ -1286,13 +1333,13 @@ describe("ax-engine provider integration", () => {
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input)
       seen.push(url)
-      if (url === "http://127.0.0.1:18181/v1/models") {
+      if (url === "http://127.0.0.1:31418/v1/models") {
         return new Response(JSON.stringify({ data: [{ id: AX_ENGINE_QWEN36_27B_MODEL_ID }] }), {
           status: 200,
           headers: { "content-type": "application/json" },
         })
       }
-      if (url === "http://127.0.0.1:18181/v1/chat/completions") {
+      if (url === "http://127.0.0.1:31418/v1/chat/completions") {
         return new Response("{}", { status: 200 })
       }
       throw new Error(`unexpected fetch: ${url}`)
@@ -1303,13 +1350,13 @@ describe("ax-engine provider integration", () => {
       name: "AX Engine",
       source: "config",
       env: [],
-      options: { baseURL: "http://127.0.0.1:18181/v1" },
+      options: { baseURL: "http://127.0.0.1:31418/v1" },
       models: {},
     } as any)
 
-    const res = await loader.options!.fetch("http://127.0.0.1:18181/v1/chat/completions")
+    const res = await loader.options!.fetch("http://127.0.0.1:31418/v1/chat/completions")
     expect(res.status).toBe(200)
-    expect(seen).toEqual(["http://127.0.0.1:18181/v1/chat/completions"])
+    expect(seen).toEqual(["http://127.0.0.1:31418/v1/chat/completions"])
   })
 
   test("maps the public Qwen3.6-27B model id to the ax-engine runtime id", async () => {
@@ -1324,7 +1371,7 @@ describe("ax-engine provider integration", () => {
       name: "AX Engine",
       source: "config",
       env: [],
-      options: { baseURL: "http://127.0.0.1:18181/v1" },
+      options: { baseURL: "http://127.0.0.1:31418/v1" },
       models: {},
     } as any)
 
@@ -1355,7 +1402,7 @@ describe("ax-engine provider integration", () => {
       name: "AX Engine",
       source: "config",
       env: [],
-      options: { baseURL: "http://127.0.0.1:18181/v1" },
+      options: { baseURL: "http://127.0.0.1:31418/v1" },
       models: {},
     } as any)
 
@@ -1387,7 +1434,7 @@ describe("ax-engine provider integration", () => {
       name: "AX Engine",
       source: "config",
       env: [],
-      options: { baseURL: "http://127.0.0.1:18181/v1" },
+      options: { baseURL: "http://127.0.0.1:31418/v1" },
       models: {},
     } as any)
 
@@ -1428,13 +1475,13 @@ describe("ax-engine provider integration", () => {
       name: "AX Engine",
       source: "config",
       env: [],
-      options: { baseURL: "http://127.0.0.1:18181/v1" },
+      options: { baseURL: "http://127.0.0.1:31418/v1" },
       models: {},
     } as any)
 
     const discovered = await loader.discoverModels!({} as any)
     const glm = discovered[AX_ENGINE_GLM47_FLASH_MODEL_ID]
-    expect(glm.name).toBe("GLM 4.7 Flash 6-bit (Local MLX MTP)")
+    expect(glm.name).toBe("GLM 4.7 Flash 6-bit (Local MLX Auto)")
     expect(glm.api.id).toBe(AX_ENGINE_GLM47_FLASH_API_MODEL_ID)
     expect(glm.options).toMatchObject({
       modelID: AX_ENGINE_GLM47_FLASH_MODEL_ID,
@@ -1458,7 +1505,7 @@ describe("ax-engine provider integration", () => {
   })
 
   test("discovers and uses an external ax-engine model with a non-catalog model id", async () => {
-    const endpoint = "http://127.0.0.1:18181/v1"
+    const endpoint = "http://127.0.0.1:31418/v1"
     const provider = {
       id: AX_ENGINE_PROVIDER_ID,
       name: "AX Engine",
@@ -1510,7 +1557,7 @@ describe("ax-engine provider integration", () => {
       name: "AX Engine",
       source: "config",
       env: [],
-      options: { baseURL: "http://127.0.0.1:18181/v1" },
+      options: { baseURL: "http://127.0.0.1:31418/v1" },
       models: {},
     } as any
     globalThis.fetch = (async () =>
@@ -1533,7 +1580,7 @@ describe("ax-engine provider integration", () => {
       name: "AX Engine",
       source: "config",
       env: [],
-      options: { baseURL: "http://127.0.0.1:18181/v1" },
+      options: { baseURL: "http://127.0.0.1:31418/v1" },
       models: {},
     } as any
     globalThis.fetch = (async () =>

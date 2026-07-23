@@ -14,17 +14,19 @@ export const AX_ENGINE_GEMMA4_12B_API_MODEL_ID = "gemma-4-12b"
 export const AX_ENGINE_GEMMA4_26B_API_MODEL_ID = "gemma-4-26b"
 export const AX_ENGINE_GEMMA4_31B_API_MODEL_ID = "gemma-4-31b"
 export const AX_ENGINE_GLM47_FLASH_API_MODEL_ID = "glm-4.7-flash"
-export const AX_ENGINE_QWEN36_27B_MODEL_DISPLAY_NAME = "Qwen3.6-27B 6-bit (Local MLX MTP)"
+export const AX_ENGINE_QWEN36_27B_MODEL_DISPLAY_NAME = "Qwen3.6-27B 6-bit (Local MLX Auto)"
 export const AX_ENGINE_QWEN3_CODER_NEXT_MODEL_DISPLAY_NAME = "Qwen3-Coder-Next 6-bit (Local MLX)"
-export const AX_ENGINE_QWEN36_35B_MODEL_DISPLAY_NAME = "Qwen3.6-35B-A3B 6-bit (Local MLX MTP)"
-export const AX_ENGINE_GEMMA4_12B_MODEL_DISPLAY_NAME = "Gemma 4 12B 6-bit (Local MLX MTP)"
-export const AX_ENGINE_GEMMA4_26B_MODEL_DISPLAY_NAME = "Gemma 4 26B 6-bit (Local MLX MTP)"
-export const AX_ENGINE_GEMMA4_31B_MODEL_DISPLAY_NAME = "Gemma 4 31B 6-bit (Local MLX MTP)"
-export const AX_ENGINE_GLM47_FLASH_MODEL_DISPLAY_NAME = "GLM 4.7 Flash 6-bit (Local MLX MTP)"
-export const AX_ENGINE_DEFAULT_PORT = 18181
+export const AX_ENGINE_QWEN36_35B_MODEL_DISPLAY_NAME = "Qwen3.6-35B-A3B 6-bit (Local MLX Auto)"
+export const AX_ENGINE_GEMMA4_12B_MODEL_DISPLAY_NAME = "Gemma 4 12B 6-bit (Local MLX Auto)"
+export const AX_ENGINE_GEMMA4_26B_MODEL_DISPLAY_NAME = "Gemma 4 26B 6-bit (Local MLX Auto)"
+export const AX_ENGINE_GEMMA4_31B_MODEL_DISPLAY_NAME = "Gemma 4 31B 6-bit (Local MLX Auto)"
+export const AX_ENGINE_GLM47_FLASH_MODEL_DISPLAY_NAME = "GLM 4.7 Flash 6-bit (Local MLX Auto)"
+// Keep the client default aligned with ax-engine-server. Managed lifecycle may
+// still select 31419+ when another process owns the preferred port.
+export const AX_ENGINE_DEFAULT_PORT = 31418
 export const AX_ENGINE_API_KEY = "local"
 export const AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS = 2_048
-export const AX_ENGINE_MIN_VERSION = "6.7.1"
+export const AX_ENGINE_MIN_VERSION = "6.9.0"
 export const AX_ENGINE_SPECULATION_PROFILE = "agentic"
 export const AX_ENGINE_MTP_MODE = "pure"
 export const AX_ENGINE_RECOMMENDED_MEMORY_BYTES = 64 * 1024 ** 3
@@ -73,19 +75,13 @@ export type AxEngineBinaryRelease = {
   teamId?: string
 }
 
-// Pinned official darwin-arm64 release of the ax-engine binary, mirroring the
-// LSP PINNED_* release pins. `sha256` is the archive digest published on the
-// GitHub release (asset `.sha256` and the release manifest); update all fields
-// together when bumping the pinned engine version. Set to `undefined` to
-// disable the managed install and fall back to the manual-install path. A
-// machine can override this via the AX_ENGINE_INSTALL_* env vars without
-// editing here.
-export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease | undefined = {
-  version: "6.9.0",
-  assetName: "ax-engine-v6.9.0-macos-arm64.tar.gz",
-  url: "https://github.com/defai-digital/ax-engine/releases/download/v6.9.0/ax-engine-v6.9.0-macos-arm64.tar.gz",
-  sha256: "4909c3aa7436413720472182d2887e66efa7cc98aec1cdca5825f3b3ab7e5757",
-}
+// Managed installation is intentionally disabled until the release archive is
+// self-contained. The v6.9.0 raw archive omits the matching MLX dylibs and
+// metallib, so it can pass checksum/codesign/doctor checks and still fail on a
+// clean Mac at the first real model load. The Homebrew formula installs the
+// matching runtime and remains the supported macOS path. AX_ENGINE_INSTALL_*
+// overrides stay available for validating a future self-contained artifact.
+export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease | undefined = undefined
 
 export const AX_ENGINE_MODEL_IDS = [
   AX_ENGINE_QWEN36_27B_MODEL_ID,
@@ -118,6 +114,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
         hfRepo: "mlx-community/Qwen3.6-27B-6bit",
         downloadMode: "mtp",
         packageMarker: "ax_mtp_sidecar_manifest.json",
+        directFallback: true,
         mtpSource: "Qwen sidecar from Qwen/Qwen3.6-27B",
         minDiskBytes: 96 * 1024 ** 3,
       },
@@ -140,6 +137,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
         hfRepo: "mlx-community/Qwen3-Coder-Next-6bit",
         downloadMode: "direct",
         packageMarker: undefined,
+        directFallback: true,
         mtpSource: "Direct decode coding specialist (no supported MTP package)",
         minDiskBytes: 96 * 1024 ** 3,
       },
@@ -159,6 +157,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
         hfRepo: "mlx-community/Qwen3.6-35B-A3B-6bit",
         downloadMode: "mtp",
         packageMarker: "ax_mtp_sidecar_manifest.json",
+        directFallback: true,
         mtpSource: "Qwen sidecar from Qwen/Qwen3.6-35B-A3B",
         minDiskBytes: 96 * 1024 ** 3,
       },
@@ -184,6 +183,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
         hfRepo: "mlx-community/gemma-4-12B-it-6bit",
         downloadMode: "mtp",
         packageMarker: "ax_gemma4_assistant_mtp.json",
+        directFallback: true,
         mtpSource: "assistant package from mlx-community/gemma-4-12B-it-assistant-6bit",
         minDiskBytes: 48 * 1024 ** 3,
       },
@@ -203,6 +203,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
         hfRepo: "mlx-community/gemma-4-26b-a4b-it-6bit",
         downloadMode: "mtp",
         packageMarker: "ax_gemma4_assistant_mtp.json",
+        directFallback: true,
         mtpSource: "assistant package from google/gemma-4-26b-a4b-it-assistant",
         minDiskBytes: 96 * 1024 ** 3,
       },
@@ -222,6 +223,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
         hfRepo: "mlx-community/gemma-4-31b-it-6bit",
         downloadMode: "mtp",
         packageMarker: "ax_gemma4_assistant_mtp.json",
+        directFallback: true,
         mtpSource: "assistant package from google/gemma-4-31b-it-assistant",
         minDiskBytes: 96 * 1024 ** 3,
       },
@@ -241,6 +243,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
         hfRepo: "mlx-community/GLM-4.7-Flash-6bit",
         downloadMode: "mtp",
         packageMarker: "ax_glm_mtp_manifest.json",
+        directFallback: true,
         mtpSource: "built-in MTP sidecar extracted from zai-org/GLM-4.7-Flash",
         minDiskBytes: 48 * 1024 ** 3,
       },

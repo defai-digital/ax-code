@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-06-28
+Last reviewed: 2026-07-19
 Owner: ax-code runtime
 
 This page lists the provider presets AX Code exposes in the default setup flows. The source of truth is the runtime provider allowlist in
@@ -53,17 +53,17 @@ For Kimi Code membership, install the local `kimi` binary, run `kimi login`, the
 
 ## AX Engine Local Provider
 
-`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and exposes curated 6-bit MLX models. Qwen3.6, Gemma 4, and GLM-4.7-Flash are prepared as AX MTP packages; Qwen3-Coder-Next uses direct decode.
+`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and exposes curated 6-bit MLX models. Qwen3.6, Gemma 4, and GLM-4.7-Flash prefer packaged MTP acceleration and fall back to direct decode when only complete base weights are present; Qwen3-Coder-Next uses direct decode.
 
-| Provider id | Model id                | Display name                          | Context | Output |
-| ----------- | ----------------------- | ------------------------------------- | ------: | -----: |
-| `ax-engine` | `qwen3.6-27b-6bit`      | Qwen3.6-27B 6-bit (Local MLX MTP)     |  65,536 |  2,048 |
-| `ax-engine` | `qwen3-coder-next-6bit` | Qwen3-Coder-Next 6-bit (Local MLX)    |  16,384 |  2,048 |
-| `ax-engine` | `qwen3.6-35b-a3b`       | Qwen3.6-35B-A3B 6-bit (Local MLX MTP) |  32,768 |  2,048 |
-| `ax-engine` | `gemma-4-12b`           | Gemma 4 12B 6-bit (Local MLX MTP)     |  32,768 |  2,048 |
-| `ax-engine` | `gemma-4-26b`           | Gemma 4 26B 6-bit (Local MLX MTP)     |  32,768 |  2,048 |
-| `ax-engine` | `gemma-4-31b`           | Gemma 4 31B 6-bit (Local MLX MTP)     |  32,768 |  2,048 |
-| `ax-engine` | `glm-4.7-flash`         | GLM 4.7 Flash 6-bit (Local MLX MTP)   |  32,768 |  2,048 |
+| Provider id | Model id                | Display name                           | Context | Output |
+| ----------- | ----------------------- | -------------------------------------- | ------: | -----: |
+| `ax-engine` | `qwen3.6-27b-6bit`      | Qwen3.6-27B 6-bit (Local MLX Auto)     |  65,536 |  2,048 |
+| `ax-engine` | `qwen3-coder-next-6bit` | Qwen3-Coder-Next 6-bit (Local MLX)     |  16,384 |  2,048 |
+| `ax-engine` | `qwen3.6-35b-a3b`       | Qwen3.6-35B-A3B 6-bit (Local MLX Auto) |  32,768 |  2,048 |
+| `ax-engine` | `gemma-4-12b`           | Gemma 4 12B 6-bit (Local MLX Auto)     |  32,768 |  2,048 |
+| `ax-engine` | `gemma-4-26b`           | Gemma 4 26B 6-bit (Local MLX Auto)     |  32,768 |  2,048 |
+| `ax-engine` | `gemma-4-31b`           | Gemma 4 31B 6-bit (Local MLX Auto)     |  32,768 |  2,048 |
+| `ax-engine` | `glm-4.7-flash`         | GLM 4.7 Flash 6-bit (Local MLX Auto)   |  32,768 |  2,048 |
 
 The default local model is `qwen3.6-27b-6bit`. See [AX Engine Model Selection](ax-engine-model-selection.md) for ranking, memory, and disk guidance.
 
@@ -73,24 +73,41 @@ AX Engine uses the compact `core` tool profile by default (`bash`, file discover
 
 ### Installing the engine
 
-Local inference needs the `ax-engine` binary. On an eligible host AX Code can download and install it for you — you do not have to install it by hand. AX Code resolves the binary in this order:
+Local inference needs AX Engine 6.9.0 or later. On Apple Silicon macOS install the Homebrew formula, which includes the matching MLX runtime:
+
+```bash
+brew tap defai-digital/ax-engine
+brew install ax-engine
+ax-engine doctor
+```
+
+AX Code then resolves the binary in this order:
 
 1. `provider.ax-engine.options.binaryPath` in `ax-code.json`
 2. the `AX_ENGINE_BIN` environment variable
 3. `ax-engine` on your `PATH`
-4. an AX Code-managed install (the fallback AX Code downloads and owns)
+4. an existing AX Code-managed install from an older release
 
-AX Code requires AX Engine 6.7.1 or later. It first checks `--version` and falls back to the structured `doctor --json` install version used by the Python wrapper.
+It first checks `--version` and falls back to the structured `doctor --json` install version used by the wrapper. AX Code owns server startup and normally launches `ax-engine serve` on `127.0.0.1:31418`; installing the formula does not require a separate Homebrew service.
 
-If none of the first three is present, AX Code offers a managed install:
+The built-in managed downloader is temporarily disabled because the current raw release archive does not include its matching MLX dylibs and metallib. The Homebrew formula is the supported clean-Mac installation path. A future self-contained archive can re-enable the managed **Install** action without changing provider behavior.
 
-- **Desktop** — open the **Models** page. When the host is eligible and the engine is missing, the **AX Engine** status box shows an **Install** button.
-- **CLI** — run `ax-code providers ax-engine install`. `ax-code providers ax-engine status` reports whether an install is available.
+Installing the engine does not download a model. Pick and download a model afterward from the Desktop **Models** page or with `ax-code providers ax-engine prepare`. A complete compatible base snapshot already in the Hugging Face cache is accepted for direct decode; `prepare --download` uses the catalog's preferred MTP package when available.
 
-The managed binary is downloaded over HTTPS and verified against the SHA-256 checksum published on the AX Engine release; on macOS its embedded code signature is also validated with `codesign`. (AX Engine binaries are ad-hoc signed and distributed with minisign signatures rather than Apple notarization.) It is installed under AX Code's cache and never overrides a binary you configured yourself or one already on your `PATH`. Delete the managed copy any time by removing the `ax-engine/bin` directory in AX Code's cache; AX Code re-resolves on the next check.
+To use an already-running local server instead of AX Code-owned lifecycle, configure:
 
-Installing the engine does not download any model — pick and download a model afterward from the Desktop **Models** page or with `ax-code providers ax-engine prepare`.
+```json
+{
+  "provider": {
+    "ax-engine": {
+      "options": {
+        "baseURL": "http://127.0.0.1:31418/v1"
+      }
+    }
+  }
+}
+```
 
-To point the installer at a specific build (for example a pre-release), set `AX_ENGINE_INSTALL_URL` (and, recommended, `AX_ENGINE_INSTALL_SHA256`) before starting AX Code. This overrides the built-in release without any code change.
+For development validation of a future self-contained build, set `AX_ENGINE_INSTALL_URL`, `AX_ENGINE_INSTALL_SHA256`, and `AX_ENGINE_INSTALL_VERSION` before starting AX Code.
 
 The engine ships for Apple Silicon macOS only. On other hosts, use a hosted provider or an OpenAI-compatible provider gateway; AX Code servers are local-only.

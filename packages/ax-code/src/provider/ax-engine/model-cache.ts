@@ -237,9 +237,19 @@ function packageMarkerFor(modelID: AxEngineModelID, quantization: AxEngineQuanti
   ].packageMarker
 }
 
-async function hasRequiredPackageContract(dir: string, modelID: AxEngineModelID, quantization: AxEngineQuantization) {
+function allowsDirectFallback(modelID: AxEngineModelID, quantization: AxEngineQuantization) {
+  return AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[
+    quantization as keyof (typeof AX_ENGINE_MODEL_DEFINITIONS)[typeof modelID]["quantizations"]
+  ].directFallback
+}
+
+async function hasPackageMarker(dir: string, modelID: AxEngineModelID, quantization: AxEngineQuantization) {
   const marker = packageMarkerFor(modelID, quantization)
   return !marker || (await exists(path.join(dir, marker)))
+}
+
+async function hasRunnablePackageContract(dir: string, modelID: AxEngineModelID, quantization: AxEngineQuantization) {
+  return allowsDirectFallback(modelID, quantization) || (await hasPackageMarker(dir, modelID, quantization))
 }
 
 async function readPrepareState(): Promise<{ state?: AxEnginePrepareState; error?: unknown }> {
@@ -321,7 +331,7 @@ export async function getModelStatus(options: AxEngineModelOptions = {}): Promis
       const complete = HfCache.isInside(candidate)
         ? await HfCache.isCompleteSnapshot(candidate)
         : !!matchingMarker || (await hasManifest(candidate))
-      if (!complete || !(await hasRequiredPackageContract(candidate, modelID, quantization))) continue
+      if (!complete || !(await hasRunnablePackageContract(candidate, modelID, quantization))) continue
       return {
         present: true,
         modelID,
@@ -348,9 +358,7 @@ export async function getModelStatus(options: AxEngineModelOptions = {}): Promis
       modelID,
       quantization,
       complete: false,
-      blockers: [
-        `${AX_ENGINE_ERROR.ModelMissing}: failed to inspect model path (${inspectErrors.join("; ")})`,
-      ],
+      blockers: [`${AX_ENGINE_ERROR.ModelMissing}: failed to inspect model path (${inspectErrors.join("; ")})`],
     }
   }
 
@@ -408,7 +416,7 @@ export async function markPrepared(input: {
   } else if (!(await hasManifest(input.modelPath))) {
     throw new Error(`${AX_ENGINE_ERROR.ModelMissing}: model path is missing model-manifest.json`)
   }
-  if (!(await hasRequiredPackageContract(input.modelPath, modelID, quantization))) {
+  if (!(await hasRunnablePackageContract(input.modelPath, modelID, quantization))) {
     throw new Error(
       `${AX_ENGINE_ERROR.ModelMissing}: model path is missing required ${packageMarkerFor(modelID, quantization)} package contract`,
     )
@@ -496,7 +504,9 @@ export async function downloadModel(input: {
   if (!complete) {
     throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: downloaded model path is incomplete`)
   }
-  if (!(await hasRequiredPackageContract(parsed.dest, modelID, quantization))) {
+  // `download-mtp` promises a packaged assistant/sidecar. Direct fallback is
+  // valid for existing base weights, but must not hide a broken MTP download.
+  if (!(await hasPackageMarker(parsed.dest, modelID, quantization))) {
     throw new Error(
       `${AX_ENGINE_ERROR.DownloadFailed}: downloaded model is missing required ${packageMarkerFor(modelID, quantization)} package contract`,
     )
@@ -540,7 +550,10 @@ export async function reclaimManagedCopy(
   if (
     !snapshotPath ||
     !(await HfCache.isCompleteSnapshot(snapshotPath)) ||
-    !(await hasRequiredPackageContract(snapshotPath, modelID, quantization))
+    // Do not trade an MTP-ready legacy copy for direct-only base weights. The
+    // latter are runnable, but deleting the only sidecar would silently remove
+    // acceleration. Direct-only models have no marker and pass this check.
+    !(await hasPackageMarker(snapshotPath, modelID, quantization))
   )
     return undefined
 

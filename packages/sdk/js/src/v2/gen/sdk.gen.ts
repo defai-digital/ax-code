@@ -5290,7 +5290,7 @@ export class Model extends HeyApiClient {
   /**
    * Download ax-engine local model
    *
-   * Start a server-side download job for a supported AX Engine local MTP model.
+   * Start a server-side download job using the model catalog's preferred Direct or MTP package.
    */
   public download<ThrowOnError extends boolean = false>(
     parameters: {
@@ -5408,7 +5408,7 @@ export class AxEngine extends HeyApiClient {
   /**
    * List ax-engine local models
    *
-   * List supported AX Engine local MTP models with host/model readiness and local cache status.
+   * List supported AX Engine local models with automatic MTP/Direct runtime selection, host readiness, and cache status.
    */
   public models<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -5461,9 +5461,9 @@ export class AxEngine extends HeyApiClient {
   }
 
   /**
-   * Install the managed ax-engine binary
+   * Install a configured self-contained ax-engine binary
    *
-   * Download, verify, and install the AX Engine binary on an eligible host so local inference works without a manual install.
+   * Download and verify an AX Engine build configured through AX_ENGINE_INSTALL_*; normal macOS users install the Homebrew formula.
    */
   public install<ThrowOnError extends boolean = false>(
     parameters?: {

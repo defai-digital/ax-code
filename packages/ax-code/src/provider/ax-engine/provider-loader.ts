@@ -35,7 +35,7 @@ function reclaimManagedCopiesOnce() {
 }
 
 // The OpenAI-compatible SDK is constructed once against the default port, but
-// ensureServer may bind a fallback port (18182+) when the preferred one is
+// ensureServer may bind a fallback port (31419+) when the preferred one is
 // held by a foreign process — the server's real address lives in its state,
 // not in the SDK. Track the base URL of the server this process last verified
 // or started and rewrite outgoing requests to it at fetch time, so a port
@@ -166,7 +166,13 @@ export function axEngineLoader(): CustomLoader {
   return async (provider) => {
     reclaimManagedCopiesOnce()
     let runtimeProvider = provider
-    const baseURL = configuredBaseURL(provider) ?? `http://127.0.0.1:${AX_ENGINE_DEFAULT_PORT}/v1`
+    // Capture whether the endpoint was explicitly configured before returning
+    // loader defaults. Provider initialization merges return.options back into
+    // the runtime provider; if the managed default is returned as `baseURL`, a
+    // later discovery/getModel pass cannot distinguish it from a user-owned
+    // external server and skips ensureManagedReady entirely.
+    const configuredExternalBaseURL = configuredBaseURL(provider)
+    const baseURL = configuredExternalBaseURL ?? `http://127.0.0.1:${AX_ENGINE_DEFAULT_PORT}/v1`
     const apiKey = resolveAxEngineApiKey(provider.options)
     const modelRefs = new Map<string, Provider.Model>()
 
@@ -269,7 +275,10 @@ export function axEngineLoader(): CustomLoader {
     return {
       autoload: false,
       options: {
-        baseURL,
+        // For managed mode model.api.url supplies the SDK endpoint. Only
+        // persist baseURL as a provider option when the user explicitly chose
+        // an external server.
+        ...(configuredExternalBaseURL ? { baseURL: configuredExternalBaseURL } : {}),
         apiKey,
         includeUsage: false,
         fetch: async (input: string | Request | URL, init?: RequestInit) => {
@@ -279,7 +288,7 @@ export function axEngineLoader(): CustomLoader {
       async discoverModels(currentProvider) {
         if (currentProvider?.options) runtimeProvider = currentProvider
         const models: Record<string, Provider.Model> = {}
-        const externalBaseURL = configuredBaseURL(runtimeProvider)
+        const externalBaseURL = configuredExternalBaseURL
         if (externalBaseURL) {
           const contracts = await fetchAxEngineModelContracts({
             baseURL: externalBaseURL,
@@ -302,7 +311,7 @@ export function axEngineLoader(): CustomLoader {
         return models
       },
       async getModel(sdk: any, modelID: string, options?: Record<string, any>) {
-        const externalBaseURL = configuredBaseURL(runtimeProvider)
+        const externalBaseURL = configuredExternalBaseURL
         if (externalBaseURL) {
           const requestedModelID =
             typeof options?.apiModelID === "string" && options.apiModelID.trim()

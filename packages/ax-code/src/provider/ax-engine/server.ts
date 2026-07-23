@@ -88,6 +88,13 @@ export function axEngineServerLaunchArgs(input: {
   const args = ["--model-id", input.apiModelID]
   args.push("--speculation-profile", input.speculationProfile ?? AX_ENGINE_SPECULATION_PROFILE)
   args.push("--max-batch-tokens", String(input.maxOutputTokens ?? AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS))
+  // Match AX Studio's validated posture: packaged MTP remains available, while
+  // the independent n-gram draft path is disabled for stable direct fallback.
+  args.push("--disable-ngram-acceleration")
+  // AX Code currently owns one foreground agent stream at a time. Serializing
+  // engine jobs prevents a cancelled stream from racing a retry against shared
+  // prefix/speculation state.
+  args.push("--max-concurrent-requests", "1")
   if ((input.mtpMode ?? AX_ENGINE_MTP_MODE) === "pure") {
     args.push("--mlx-mtp-disable-ngram-stacking")
   }
@@ -150,6 +157,21 @@ function tokenLooksLikeAxEngineBinary(token: string, binaryPath?: string): boole
 export function commandLooksLikeAxEngineServer(command: string, binaryPath?: string): boolean {
   const tokens = command.trim().split(/\s+/).filter(Boolean)
   if (tokens.length < 2) return false
+
+  // The `ax-engine serve` launcher execs the native sibling binary after it
+  // resolves the model. server.json therefore records a pid whose command is
+  // `ax-engine-server --port … --mlx-model-artifacts-dir …`, not necessarily
+  // the original wrapper command containing the `serve` token. Require the
+  // real server basename in argv0 plus the launch-defining flags so an editor,
+  // grep, or log tail that merely mentions the name cannot be signalled.
+  const first = path.basename(tokens[0]!)
+  if (first === "ax-engine-server" || /^ax-engine-server[-_.]/.test(first)) {
+    return (
+      tokens.includes("--port") &&
+      tokens.includes("--model-id") &&
+      (tokens.includes("--mlx-model-artifacts-dir") || tokens.includes("--llama-model-path"))
+    )
+  }
 
   const serveIndex = tokens.findIndex((token) => token === "serve")
   // Real servers always pass a model path (and usually flags) after `serve`.

@@ -172,7 +172,8 @@ export const ProviderRoutes = lazy(() =>
       "/ax-engine/models",
       describeRoute({
         summary: "List ax-engine local models",
-        description: "List supported AX Engine local MTP models with host/model readiness and local cache status.",
+        description:
+          "List supported AX Engine local models with automatic MTP/Direct runtime selection, host readiness, and cache status.",
         operationId: "provider.axEngine.models",
         responses: {
           200: {
@@ -193,7 +194,7 @@ export const ProviderRoutes = lazy(() =>
       "/ax-engine/models/:modelID/download",
       describeRoute({
         summary: "Download ax-engine local model",
-        description: "Start a server-side download job for a supported AX Engine local MTP model.",
+        description: "Start a server-side download job using the model catalog's preferred Direct or MTP package.",
         operationId: "provider.axEngine.model.download",
         responses: {
           200: {
@@ -318,9 +319,9 @@ export const ProviderRoutes = lazy(() =>
     .post(
       "/ax-engine/install",
       describeRoute({
-        summary: "Install the managed ax-engine binary",
+        summary: "Install a configured self-contained ax-engine binary",
         description:
-          "Download, verify, and install the AX Engine binary on an eligible host so local inference works without a manual install.",
+          "Download and verify an AX Engine build configured through AX_ENGINE_INSTALL_*; normal macOS users install the Homebrew formula.",
         operationId: "provider.axEngine.install",
         responses: {
           200: {

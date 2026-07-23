@@ -202,7 +202,8 @@ export const LocalModelsPage: React.FC = () => {
           <div className="min-w-0 space-y-1">
             <h1 className="typography-ui-header font-semibold text-foreground">Models</h1>
             <p className="typography-meta text-muted-foreground">
-              Download and manage local AX Engine MTP models. AX Engine requires macOS 26+, Apple Silicon M2 or later.
+              Download and manage local AX Engine models with automatic MTP or Direct decode. AX Engine requires macOS
+              26+, Apple Silicon M2 or later.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

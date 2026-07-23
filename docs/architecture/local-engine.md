@@ -12,7 +12,7 @@ AX Code uses the **sidecar HTTP** backend for AX Engine:
 
 ```text
 AX Code (TypeScript)
-  → ensure/install/prepare (provider/ax-engine/*)
+  → ensure/prepare (provider/ax-engine/*)
   → spawn: ax-engine serve <modelPath> --port …
   → OpenAI-compatible HTTP @ http://127.0.0.1:<port>/v1
   → @ai-sdk/openai-compatible language model
@@ -24,13 +24,13 @@ for the `mlx` provider). Both products share lifecycle **phase names** and the
 
 ## Why sidecar (not Studio’s in-process path)
 
-| Factor         | Sidecar choice                                                          |
-| -------------- | ----------------------------------------------------------------------- |
-| Host language  | Node/Bun agent runtime, not a Rust Tauri embed                          |
-| Isolation      | Multi-GB models and native crashes stay out of the agent process        |
-| Upgrade        | Managed binary pin (`AX_ENGINE_MIN_VERSION`) without rebuilding ax-code |
-| Provider model | Same OpenAI-compatible path as other local/cloud providers              |
-| Multi-client   | One server can be health-checked and stopped via `server.json`          |
+| Factor         | Sidecar choice                                                   |
+| -------------- | ---------------------------------------------------------------- |
+| Host language  | Node/Bun agent runtime, not a Rust Tauri embed                   |
+| Isolation      | Multi-GB models and native crashes stay out of the agent process |
+| Upgrade        | Version-gated Homebrew/PATH binary without rebuilding ax-code    |
+| Provider model | Same OpenAI-compatible path as other local/cloud providers       |
+| Multi-client   | One server can be health-checked and stopped via `server.json`   |
 
 ## Lifecycle phases
 

@@ -90,19 +90,11 @@ describe("resolveInstallableRelease", () => {
     ).toBe("TEAM123456")
   })
 
-  test("falls back to the pinned release when there is no env override", () => {
-    expect(AX_ENGINE_BINARY_RELEASE).toEqual({
-      version: "6.9.0",
-      assetName: "ax-engine-v6.9.0-macos-arm64.tar.gz",
-      url: "https://github.com/defai-digital/ax-engine/releases/download/v6.9.0/ax-engine-v6.9.0-macos-arm64.tar.gz",
-      sha256: "4909c3aa7436413720472182d2887e66efa7cc98aec1cdca5825f3b3ab7e5757",
-    })
-    const pinned = resolveInstallableRelease("darwin", "arm64", {})
-    expect(pinned?.version).toBe(AX_ENGINE_BINARY_RELEASE?.version)
-    expect(pinned?.url).toBe(AX_ENGINE_BINARY_RELEASE?.url)
-    expect(pinned?.sha256).toBe(AX_ENGINE_BINARY_RELEASE?.sha256)
-    expect(isAxEngineInstallable("darwin", "arm64", {})).toBe(Boolean(AX_ENGINE_BINARY_RELEASE))
-    // Non-Apple-Silicon-macOS never gets a release, pinned or not.
+  test("keeps managed install disabled until a self-contained release is pinned", () => {
+    expect(AX_ENGINE_BINARY_RELEASE).toBeUndefined()
+    expect(resolveInstallableRelease("darwin", "arm64", {})).toBeUndefined()
+    expect(isAxEngineInstallable("darwin", "arm64", {})).toBe(false)
+    // Non-Apple-Silicon-macOS never gets a release either.
     expect(resolveInstallableRelease("linux", "arm64", {})).toBeUndefined()
     expect(resolveInstallableRelease("win32", "x64", {})).toBeUndefined()
     expect(resolveInstallableRelease("win32", "arm64", {})).toBeUndefined()
@@ -223,14 +215,14 @@ describe("dependency resolution picks up the managed binary", () => {
         [
           "#!/bin/sh",
           'if [ "$1" = "--version" ]; then exit 2; fi',
-          'if [ "$1" = "doctor" ]; then echo \'{"install":{"version":"6.8.0"}}\'; exit 0; fi',
+          'if [ "$1" = "doctor" ]; then echo \'{"install":{"version":"6.9.0"}}\'; exit 0; fi',
           "exit 1",
           "",
         ].join("\n"),
         { mode: 0o755 },
       )
       const status = await getDependencyStatus({ binaryPath: binary })
-      expect(status).toMatchObject({ available: true, mode: "configured", version: "6.8.0", blockers: [] })
+      expect(status).toMatchObject({ available: true, mode: "configured", version: "6.9.0", blockers: [] })
     } finally {
       await fs.rm(dir, { recursive: true, force: true })
     }

@@ -58,11 +58,16 @@ Qwen3-Coder-Next is the strongest coding-specialist choice when the machine can 
 It is not the default because its memory/disk footprint and 16K managed context are less practical for the broad
 installed base than Qwen3.6-27B.
 
-## Acquisition Paths
+## Acquisition and acceleration
 
 AX Code prepares Qwen3.6, Gemma 4, and GLM-4.7-Flash through `ax-engine download-mtp`, including GLM's built-in
 MTP sidecar package. Qwen3-Coder-Next remains on the direct MLX path because it does not have a promoted MTP
-package contract. AX Code validates each family-specific package marker before treating a model as runnable.
+package contract. A successful `download-mtp` must contain the family-specific package marker.
+
+At runtime the policy is automatic: a complete package with a valid assistant/sidecar uses MTP, while a complete
+base snapshot without that marker remains runnable through direct decode. This mirrors AX Studio's `MTP Auto`
+posture and avoids redownloading base weights merely to make an existing local model usable. Standalone n-gram
+drafting is disabled in the AX Code-managed server; it is independent from packaged MTP.
 
 ## Choose By Memory
 

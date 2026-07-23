@@ -132,7 +132,7 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
     blockers: [
       installable
         ? `${AX_ENGINE_ERROR.BinaryMissing}: ax-engine is not installed — install it from AX Code to run local models`
-        : `${AX_ENGINE_ERROR.BinaryMissing}: install ax-engine or configure provider.ax-engine.options.binaryPath`,
+        : `${AX_ENGINE_ERROR.BinaryMissing}: install with \`brew install defai-digital/ax-engine/ax-engine\` or configure provider.ax-engine.options.binaryPath`,
     ],
   }
 }

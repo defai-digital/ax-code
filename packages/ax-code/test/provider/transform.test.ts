@@ -165,7 +165,7 @@ describe("ProviderTransform.providerOptions", () => {
       providerID: "ax-engine",
       api: {
         id: "qwen3",
-        url: "http://127.0.0.1:18181/v1",
+        url: "http://127.0.0.1:31418/v1",
         npm: "@ai-sdk/openai-compatible",
       },
     })
@@ -174,8 +174,8 @@ describe("ProviderTransform.providerOptions", () => {
       quantization: "mlx4bit",
       modelPath: "/models/qwen",
       binaryPath: "/bin/ax-engine",
-      baseURL: "http://127.0.0.1:18181/v1",
-      port: 18181,
+      baseURL: "http://127.0.0.1:31418/v1",
+      port: 31418,
       temperature: 0.2,
     })
 

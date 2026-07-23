@@ -180,21 +180,21 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     const status = await getModelStatus({ modelID: GEMMA.modelID, quantization: GEMMA.quant })
     expect(status.present).toBe(false)
     expect(status.blockers).toEqual([
-      "AX_ENGINE_MODEL_MISSING: prepare Gemma 4 12B 6-bit (Local MLX MTP) before using ax-engine",
+      "AX_ENGINE_MODEL_MISSING: prepare Gemma 4 12B 6-bit (Local MLX Auto) before using ax-engine",
     ])
   })
 
-  test("getModelStatus rejects base weights without the required MTP package", async () => {
+  test("getModelStatus accepts complete base weights for direct fallback", async () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT, { packageMarker: false })
+    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT, { packageMarker: false })
 
     const status = await getModelStatus({ modelID: GEMMA.modelID, quantization: GEMMA.quant })
-    expect(status.present).toBe(false)
-    expect(status.blockers).toEqual([
-      "AX_ENGINE_MODEL_MISSING: prepare Gemma 4 12B 6-bit (Local MLX MTP) before using ax-engine",
-    ])
+    expect(status.present).toBe(true)
+    expect(status.complete).toBe(true)
+    expect(status.path).toBe(snapshot)
+    expect(status.blockers).toEqual([])
   })
 
   test("getModelStatus does not let prepared HF state bypass snapshot completeness checks", async () => {

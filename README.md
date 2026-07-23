@@ -115,7 +115,7 @@ Verifies the downloaded release archive with minisign (bootstraps a pinned minis
 
 Supported CLI install paths are Homebrew (macOS), the Bash release installer (Linux), and the GitHub release installer for Windows PowerShell. The Windows PowerShell installer is CLI-only; use the Windows `.exe` release asset for Desktop. npm packages are no longer a supported channel. See [Installation and Runtime Channels](docs/getting-started/install-runtime.md) for the full matrix.
 
-AX Engine local inference is available only on eligible Apple Silicon Macs. Windows Desktop users should use hosted providers or OpenAI-compatible provider gateways; AX Code itself remains local-only and cannot be used as a remote server. For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `ZHIPU_API_KEY`, Alibaba plan keys, and `GITHUB_TOKEN`.
+AX Engine local inference is available only on eligible Apple Silicon Macs. Install its matching MLX runtime with `brew install defai-digital/ax-engine/ax-engine`; AX Code then starts and manages the local server on demand. Windows Desktop users should use hosted providers or OpenAI-compatible provider gateways; AX Code itself remains local-only and cannot be used as a remote server. For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `ZHIPU_API_KEY`, Alibaba plan keys, and `GITHUB_TOKEN`.
 
 ### Update
 
@@ -223,18 +223,18 @@ Grok defaults to `Grok Build CLI` in `/connect`, using the local `grok` command 
 
 Default setup flows support three provider families:
 
-| Family                   | Providers                                                                                         | Model source                                                      |
-| ------------------------ | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Cloud API providers      | Google, GroqCloud, OpenRouter, Alibaba Coding/Token Plan, GitHub Copilot, and Z.AI Coding Plan    | Hosted provider model catalogs bundled with AX Code               |
-| CLI providers            | Claude Code, Gemini CLI, Codex CLI, Grok Build CLI, Qoder CLI, Antigravity CLI, and Kimi Code CLI | One model id per CLI bridge, using the local vendor CLI session   |
-| AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                        | Curated 6-bit MLX MTP models: Qwen3.6, Gemma 4, and GLM 4.7 Flash |
+| Family                   | Providers                                                                                         | Model source                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Cloud API providers      | Google, GroqCloud, OpenRouter, Alibaba Coding/Token Plan, GitHub Copilot, and Z.AI Coding Plan    | Hosted provider model catalogs bundled with AX Code              |
+| CLI providers            | Claude Code, Gemini CLI, Codex CLI, Grok Build CLI, Qoder CLI, Antigravity CLI, and Kimi Code CLI | One model id per CLI bridge, using the local vendor CLI session  |
+| AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                        | Curated 6-bit MLX Auto models: MTP packages with Direct fallback |
 
 See [Supported Providers and Models](docs/providers/supported-providers.md) for provider ids, credential variables, and the exact supported model ids.
 
 ## Local AX Engine Models
 
 AX Engine local inference is optimized for eligible Apple Silicon Macs. The built-in AX Code provider uses a
-curated 6-bit MLX MTP model set and defaults to Qwen3.6-27B for the best daily balance of offline coding,
+curated 6-bit MLX model set, automatically preferring packaged MTP and falling back to Direct decode, and defaults to Qwen3.6-27B for the best daily balance of offline coding,
 reasoning, and local memory fit. See [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md) for the
 ranking, GLM-4.7-Flash placement, and memory-based recommendations.
 
