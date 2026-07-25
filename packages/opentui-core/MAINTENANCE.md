@@ -42,6 +42,23 @@ The regression test for this guard is:
 pnpm --dir packages/ax-code exec vitest run test/cli/tui/opentui-ffi-coordinate-guard.test.ts
 ```
 
+The vendored core must also preserve the FFI pointer pin. Under Node's
+`--experimental-ffi`, `getRawPointer()` returns a bare address with no
+liveness tie, and V8's precise GC (unlike Bun's conservative JSC scan) may
+free a packed struct buffer — and the encoded chunk text it anchors through
+`retainPointerTarget` — before the native call dereferences it. That
+use-after-free segfaulted the CLI inside Zig's
+`text-buffer.UnifiedTextBuffer.setStyledText` during long streaming sessions.
+Every pointer source handed to `nodeFfi.getRawPointer()` must first be pinned
+via `pinNodePointerSource()` (a fixed-size strong ring) so it stays reachable
+until the synchronous native call returns.
+
+The regression test for the pin is:
+
+```sh
+pnpm --dir packages/ax-code exec vitest run test/cli/tui/opentui-ffi-pointer-pin.test.ts
+```
+
 OpenTUI has one renderer path: the upstream Zig native library. The ADR-046
 `@ax-code/render` N-API overlay and its `yoga` routing scope are retired, and
 the experimental standalone Rust/Ratatui UI (`crates/ax-code-tui`) was removed

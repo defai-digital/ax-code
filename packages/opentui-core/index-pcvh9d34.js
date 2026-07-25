@@ -442,14 +442,35 @@ function toNodePointerArgument(nodeFfi, value) {
   }
   throw new TypeError(NODE_POINTER_ARGUMENT);
 }
+// V8's precise GC frees an ArrayBuffer as soon as its last JS reference is
+// dead — even when its raw address was just taken for a native call that has
+// not run yet. Bun's JSC scans the stack conservatively, so patterns like
+// `symbols.f(ptr(pack(chunks)))` were safe there, but under node:ffi the packed
+// struct buffer (and everything it anchors through retainPointerTarget, such as
+// the encoded chunk text a StyledChunkStruct points at) could be collected
+// between getRawPointer() and the native call dereferencing the address. The
+// Zig side then reads freed memory — observed as a SIGSEGV in
+// text-buffer.UnifiedTextBuffer.setStyledText during long streaming sessions.
+// Pin every pointer source in a fixed-size ring so it stays strongly reachable
+// until well after the synchronous native call consuming its address returned.
+var NODE_POINTER_PIN_SLOTS = 1024;
+var nodePointerPins = new Array(NODE_POINTER_PIN_SLOTS);
+var nodePointerPinIndex = 0;
+function pinNodePointerSource(value) {
+  nodePointerPins[nodePointerPinIndex] = value;
+  nodePointerPinIndex = (nodePointerPinIndex + 1) % NODE_POINTER_PIN_SLOTS;
+  return value;
+}
 function toNodeSourcePointer(nodeFfi, value) {
   if (ArrayBuffer.isView(value)) {
     if (!(value.buffer instanceof ArrayBuffer)) {
       throw new TypeError(NODE_PTR_VALUE);
     }
+    pinNodePointerSource(value);
     return nodeFfi.getRawPointer(value.buffer) + BigInt(value.byteOffset);
   }
   if (value instanceof ArrayBuffer) {
+    pinNodePointerSource(value);
     return nodeFfi.getRawPointer(value);
   }
   throw new TypeError(NODE_PTR_VALUE);
@@ -10827,9 +10848,11 @@ function createNodeBackend2(nodeFfi) {
   return {
     ptr(value) {
       if (ArrayBuffer.isView(value)) {
+        pinNodePointerSource(value);
         return nodeFfi.getRawPointer(value.buffer) + BigInt(value.byteOffset);
       }
       if (value instanceof ArrayBuffer) {
+        pinNodePointerSource(value);
         return nodeFfi.getRawPointer(value);
       }
       throw new TypeError("node:ffi ptr() only supports ArrayBuffer and ArrayBufferView values.");
