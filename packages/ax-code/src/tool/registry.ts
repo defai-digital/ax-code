@@ -47,6 +47,7 @@ import { VerifyProjectTool } from "./verify_project"
 import { ReviewCompleteTool } from "./review_complete"
 import { MemorySaveTool } from "./memory"
 import { GetGoalTool, CreateGoalTool, UpdateGoalTool } from "./goal"
+import { ScheduleTaskTool, ListScheduledTasksTool, ManageScheduledTaskTool } from "./schedule"
 import { BrowserOpenTool } from "./browser/open"
 import { BrowserSnapshotTool } from "./browser/snapshot"
 import { BrowserActionTool } from "./browser/action"
@@ -241,6 +242,9 @@ export namespace ToolRegistry {
       GetGoalTool,
       CreateGoalTool,
       UpdateGoalTool,
+      ScheduleTaskTool,
+      ListScheduledTasksTool,
+      ManageScheduledTaskTool,
       ApplyPatchTool,
       RegisterFindingTool,
       VerifyProjectTool,

@@ -7,6 +7,7 @@ import { commandSetup } from "./prompt-command-setup"
 import { resolveCommandForExecution, validateCommandArguments } from "./prompt-command"
 import { createWorkflowCommandRun, workflowCommandPrompt } from "./prompt-command-workflow"
 import { executeGoalCommand } from "./prompt-goal-command"
+import { executeRecurringCommand } from "./prompt-recurring-command"
 import type { CommandInput, PromptInput } from "./prompt-input"
 
 const log = Log.create({ service: "session.prompt" })
@@ -22,6 +23,9 @@ export async function executePromptCommand(input: CommandInput, prompt: PromptRu
   })
   if (input.command === Command.Default.GOAL) {
     return executeGoalCommand(input, prompt)
+  }
+  if (input.command === Command.Default.LOOP) {
+    return executeRecurringCommand(input)
   }
   let command = await resolveCommandForExecution({ sessionID: input.sessionID, name: input.command })
   validateCommandArguments({ sessionID: input.sessionID, command, arguments: input.arguments })

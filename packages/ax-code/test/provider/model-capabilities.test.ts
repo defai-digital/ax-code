@@ -155,6 +155,29 @@ describe("Model Capability Registry", () => {
       expect(supportsLongAgent("qwen-3-7-max", "alibaba-coding-plan")).toBe(true)
     })
 
+    // Forward-compat (Super-Long audit 2026-07-25): a new flagship minor on
+    // Alibaba's first-party routes must inherit the family capabilities —
+    // a version-pinned pattern silently collapsed future models to
+    // DEFAULT_CAPABILITIES, disabling Super-Long's model-default and the
+    // long-agent profile exactly where they matter most.
+    it("covers future Qwen 3.8/3.9 Max and Plus on Alibaba first-party routes", () => {
+      expect(supportsLongAgent("qwen3.8-max", "alibaba-token-plan")).toBe(true)
+      expect(supportsLongAgent("qwen3.9-max", "alibaba-coding-plan")).toBe(true)
+      expect(supportsLongAgent("qwen3.8-plus", "alibaba-coding-plan-cn")).toBe(true)
+    })
+
+    it("does not over-claim below 3.7 or for gateway routes", () => {
+      // 3.6 ships different capabilities — family-wide matching stops at 3.7.
+      expect(supportsLongAgent("qwen3.6-max-preview", "alibaba-token-plan")).toBe(false)
+      // Gateways stay version-pinned: their support genuinely varies.
+      expect(supportsLongAgent("qwen3.8-max", "llmgateway")).toBe(false)
+    })
+
+    it("covers GLM 5.2 on zai routes, including the [1m] variant", () => {
+      expect(supportsLongAgent("glm-5.2", "zai-coding-plan")).toBe(true)
+      expect(supportsLongAgent("glm-5.2[1m]", "zai-coding-plan")).toBe(true)
+    })
+
     it("should return true for Qwen 3.7 Max on Together AI", () => {
       expect(supportsLongAgent("qwen-3-7-max", "togetherai")).toBe(true)
     })

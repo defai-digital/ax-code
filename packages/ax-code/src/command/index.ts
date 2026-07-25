@@ -107,6 +107,7 @@ export namespace Command {
     IMPACT: "impact",
     PRD: "prd",
     GOAL: "goal",
+    LOOP: "loop",
     COUNCIL: "council",
     ARENA: "arena",
     MODE: "mode",
@@ -187,6 +188,15 @@ export namespace Command {
     commands[Default.GOAL] = {
       name: Default.GOAL,
       description: "set, view, pause, resume, or clear a durable session goal",
+      source: "command",
+      sourceTool: "builtin",
+      scope: "builtin",
+      template: "",
+      hints: ["$ARGUMENTS"],
+    }
+    commands[Default.LOOP] = {
+      name: Default.LOOP,
+      description: "run a prompt on a fixed interval: /loop <interval> <prompt> | status | stop",
       source: "command",
       sourceTool: "builtin",
       scope: "builtin",

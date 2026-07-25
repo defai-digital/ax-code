@@ -142,12 +142,22 @@ const DEFAULT_CAPABILITIES: ModelCapabilities = {
  * More specific registrations (with providerIds) should come before general ones.
  */
 const MODEL_REGISTRY: ModelRegistration[] = [
-  // Qwen 3.7 Max - Alibaba Cloud (official routes)
+  // Qwen 3.7+ Max - Alibaba Cloud (official routes)
   // models-snapshot.json declares limit.context: 991k–1M for this model.
   // The registry value must reflect the true context window so that
   // long-agent profiles and context-packing budgets activate correctly.
+  //
+  // The pattern matches 3.7–3.9 on Alibaba's first-party routes so a new
+  // flagship minor (3.8 Max) inherits the family capabilities instead of
+  // silently collapsing to DEFAULT_CAPABILITIES (32k, non-reasoning) —
+  // which would disable Super-Long's model-default and the long-agent
+  // profile for the exact models they exist for. This mirrors the GLM
+  // family-wide `/glm[.\-_]?5/` pattern (ADR-040). Deliberately NOT
+  // family-wide below 3.7: qwen 3.6-max-preview ships different
+  // capabilities. Gateway/aggregator entries stay 3.7-pinned because
+  // their support genuinely varies per model.
   {
-    pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?max/i,
+    pattern: /qwen[\.\-_]?3[\.\-_]?[789][\.\-_]?max/i,
     providerIds: ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"],
     capabilities: {
       contextWindow: 1_000_000,
@@ -208,11 +218,12 @@ const MODEL_REGISTRY: ModelRegistration[] = [
     },
   },
 
-  // Qwen 3.7 Plus - Alibaba Cloud (official routes)
+  // Qwen 3.7+ Plus - Alibaba Cloud (official routes)
   // Same 1M context window as Max; reasoning supported. webOrBuiltInTools
   // is "blocked" because enable_search evidence is Max-only in the snapshot.
+  // 3.7–3.9 for the same forward-compat reason as the Max entry above.
   {
-    pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?plus/i,
+    pattern: /qwen[\.\-_]?3[\.\-_]?[789][\.\-_]?plus/i,
     providerIds: ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"],
     capabilities: {
       contextWindow: 1_000_000,
