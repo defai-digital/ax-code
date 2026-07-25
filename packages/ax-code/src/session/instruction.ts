@@ -171,6 +171,24 @@ export namespace InstructionPrompt {
     return paths
   }
 
+  // OpenWiki interop (langchain-ai/openwiki): the tool maintains an
+  // `openwiki/` documentation directory at the repository root, normally
+  // referenced from a managed AGENTS.md block. When the directory exists
+  // but none of the loaded instructions mention it (AGENTS.md missing or
+  // hand-edited), surface a one-line pointer so the agent knows the docs
+  // exist — mirroring how ax-wiki advertises its own pages through
+  // AGENTS.md pointers, and never writing to the user's files. Pointer
+  // only, not content: wiki pages can be large and are fetched on demand.
+  async function openwikiPointer(loadedInstructions: string[]) {
+    const index = path.join(Instance.worktree, "openwiki", "index.md")
+    if (!(await Filesystem.exists(index))) return undefined
+    if (loadedInstructions.some((text) => text.toLowerCase().includes("openwiki"))) return undefined
+    return (
+      "This repository has an OpenWiki knowledge base in openwiki/. " +
+      `Read ${index} when you need repository documentation or architecture context.`
+    )
+  }
+
   export async function system() {
     const config = await Config.get()
     const paths = await systemPaths()
@@ -255,7 +273,12 @@ export namespace InstructionPrompt {
         .then((x) => (x ? "Instructions from: " + url + "\n" + x : ""))
     })
 
-    return Promise.all([...files, ...fetches]).then((result) => result.filter(Boolean))
+    return Promise.all([...files, ...fetches]).then(async (result) => {
+      const loadedInstructions = result.filter(Boolean)
+      const pointer = await openwikiPointer(loadedInstructions)
+      if (pointer) loadedInstructions.push(pointer)
+      return loadedInstructions
+    })
   }
 
   export function loaded(messages: MessageV2.WithParts[]) {

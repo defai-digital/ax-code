@@ -477,6 +477,87 @@ export namespace CodeGraphQuery {
     })
   }
 
+  // ─── Graph highlights (degree-based report) ─────────────────────────
+  //
+  // Orientation report over the existing graph, in the spirit of
+  // knowledge-graph tools like Graphify's GRAPH_REPORT: the highest
+  // fan-in nodes ("god nodes" — everything depends on them) and highest
+  // fan-out nodes are the fastest anchors in an unfamiliar codebase.
+  // v1 is plain degree over code_edge — deterministic SQL aggregation,
+  // no clustering; a community-detection pass can build on this shape
+  // later. Returns undefined when the native index store is active:
+  // edges live in the native DB there and it exposes no aggregate API
+  // yet, so reporting main-DB zeros would be misleading.
+  export type GraphHighlight = {
+    node: NodeRow
+    degree: number
+  }
+
+  export type GraphHighlights = {
+    nodeKinds: Record<string, number>
+    edgeKinds: Record<string, number>
+    topFanIn: GraphHighlight[]
+    topFanOut: GraphHighlight[]
+  }
+
+  export function graphHighlights(projectID: ProjectID, limit = 5): GraphHighlights | undefined {
+    if (useNative) return undefined
+    const normalized = Math.max(1, Math.min(50, Math.floor(limit)))
+    return Database.use((db) => {
+      const nodeKindRows = db
+        .select({ kind: CodeNodeTable.kind, count: sql<number>`count(*)` })
+        .from(CodeNodeTable)
+        .where(eq(CodeNodeTable.project_id, projectID))
+        .groupBy(CodeNodeTable.kind)
+        .all()
+      const edgeKindRows = db
+        .select({ kind: CodeEdgeTable.kind, count: sql<number>`count(*)` })
+        .from(CodeEdgeTable)
+        .where(eq(CodeEdgeTable.project_id, projectID))
+        .groupBy(CodeEdgeTable.kind)
+        .all()
+      const fanIn = db
+        .select({ id: CodeEdgeTable.to_node, degree: sql<number>`count(*)` })
+        .from(CodeEdgeTable)
+        .where(eq(CodeEdgeTable.project_id, projectID))
+        .groupBy(CodeEdgeTable.to_node)
+        .orderBy(desc(sql`count(*)`))
+        .limit(normalized)
+        .all()
+      const fanOut = db
+        .select({ id: CodeEdgeTable.from_node, degree: sql<number>`count(*)` })
+        .from(CodeEdgeTable)
+        .where(eq(CodeEdgeTable.project_id, projectID))
+        .groupBy(CodeEdgeTable.from_node)
+        .orderBy(desc(sql`count(*)`))
+        .limit(normalized)
+        .all()
+      const ids = [...new Set([...fanIn, ...fanOut].map((row) => row.id))]
+      const nodes = ids.length
+        ? db
+            .select()
+            .from(CodeNodeTable)
+            .where(and(eq(CodeNodeTable.project_id, projectID), inArray(CodeNodeTable.id, ids as CodeNodeID[])))
+            .all()
+        : []
+      const byId = new Map(nodes.map((node) => [node.id as string, node]))
+      // Edges can point at endpoints that are not graph nodes (an import
+      // edge whose target module was never indexed); those rows are
+      // dropped rather than rendered as blanks.
+      const hydrate = (rows: { id: string; degree: number }[]) =>
+        rows.flatMap((row) => {
+          const node = byId.get(row.id)
+          return node ? [{ node, degree: row.degree }] : []
+        })
+      return {
+        nodeKinds: Object.fromEntries(nodeKindRows.map((row) => [row.kind, row.count])),
+        edgeKinds: Object.fromEntries(edgeKindRows.map((row) => [row.kind, row.count])),
+        topFanIn: hydrate(fanIn),
+        topFanOut: hydrate(fanOut),
+      }
+    })
+  }
+
   // ─── Project-wide delete (used by tests and manual reset) ───────────
 
   export function clearProject(projectID: ProjectID): void {

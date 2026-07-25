@@ -95,6 +95,7 @@ type Report = {
   probe?: Probe
   native?: NativePerfSnapshot
   lspPerf?: Record<string, LSP.PerfRow>
+  highlights?: CodeGraphQuery.GraphHighlights
 }
 
 function zero(): CodeGraphBuilder.IndexFilesResult {
@@ -149,6 +150,7 @@ export function buildIndexReport(input: {
   probeResult?: Probe
   native?: NativePerfSnapshot
   lspPerf?: Record<string, LSP.PerfRow>
+  highlights?: CodeGraphQuery.GraphHighlights
 }): Report {
   return {
     projectID: input.projectID,
@@ -184,7 +186,30 @@ export function buildIndexReport(input: {
     probe: input.probeResult,
     native: input.native,
     lspPerf: input.lspPerf,
+    highlights: input.highlights,
   }
+}
+
+// Render the degree-based graph highlights for human output. Exported
+// for the unit test. Top fan-in nodes are the project's "god nodes" —
+// the symbols everything else depends on — and top fan-out nodes are
+// its busiest orchestrators; both are the fastest orientation anchors
+// in an unfamiliar codebase.
+export function highlightLines(highlights: CodeGraphQuery.GraphHighlights, worktree: string): string[] {
+  const lines: string[] = []
+  const describe = (entry: CodeGraphQuery.GraphHighlight) => {
+    const rel = path.relative(worktree, entry.node.file) || entry.node.file
+    return `${entry.node.kind} ${entry.node.qualified_name} — ${entry.degree.toLocaleString()} edges (${rel})`
+  }
+  if (highlights.topFanIn.length > 0) {
+    lines.push("  most depended-on (fan-in):")
+    for (const entry of highlights.topFanIn) lines.push(`    ${describe(entry)}`)
+  }
+  if (highlights.topFanOut.length > 0) {
+    lines.push("  busiest orchestrators (fan-out):")
+    for (const entry of highlights.topFanOut) lines.push(`    ${describe(entry)}`)
+  }
+  return lines
 }
 
 export function validateIndexConcurrency(concurrency: unknown): number {
@@ -584,6 +609,7 @@ export const IndexCommand = cmd({
         const lspPerf = LSP.perfSnapshot()
         if (args.nativeProfile) NativePerf.reset()
         LSP.perfReset()
+        const highlights = status.nodeCount > 0 ? CodeGraphQuery.graphHighlights(projectID) : undefined
         // Transition to idle now that the run is over. This is the
         // signal the TUI sidebar uses to flip out of its "indexing"
         // state back to the normal "N symbols indexed" display.
@@ -613,6 +639,7 @@ export const IndexCommand = cmd({
                 probeResult,
                 native,
                 lspPerf: isNonEmptyRecord(lspPerf) ? lspPerf : undefined,
+                highlights,
               }),
               null,
               2,
@@ -678,6 +705,12 @@ export const IndexCommand = cmd({
         out(`    db.transaction:     ${fmt(t.dbTransaction).padStart(8)}${pct(t.dbTransaction)}`)
         out(`    symbol.walk:        ${fmt(t.symbolWalk).padStart(8)}${pct(t.symbolWalk)}`)
         out(`    file.read:          ${fmt(t.readFile).padStart(8)}${pct(t.readFile)}`)
+        if (highlights && (highlights.topFanIn.length > 0 || highlights.topFanOut.length > 0)) {
+          out("")
+          out(`  graph highlights:`)
+          for (const line of highlightLines(highlights, Instance.worktree)) out(`  ${line}`)
+        }
+
         const profile = native ? NativePerf.render(native) : ""
         if (profile) {
           out("")

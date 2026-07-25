@@ -472,3 +472,57 @@ describe("InstructionPrompt.system remote instructions", () => {
     }
   })
 })
+
+describe("InstructionPrompt.system openwiki interop", () => {
+  test("adds a pointer when openwiki/index.md exists and nothing mentions it", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, "openwiki"), { recursive: true })
+        await fs.writeFile(path.join(dir, "openwiki", "index.md"), "# Wiki Index")
+        await fs.writeFile(path.join(dir, "AGENTS.md"), "# Project rules, no wiki reference")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const prompts = await InstructionPrompt.system()
+        const pointer = prompts.find((p) => p.includes("OpenWiki knowledge base"))
+        expect(pointer).toBeDefined()
+        expect(pointer).toContain(path.join(tmp.path, "openwiki", "index.md"))
+      },
+    })
+  })
+
+  test("stays silent when AGENTS.md already references the wiki", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, "openwiki"), { recursive: true })
+        await fs.writeFile(path.join(dir, "openwiki", "index.md"), "# Wiki Index")
+        await fs.writeFile(path.join(dir, "AGENTS.md"), "See openwiki/index.md for docs.")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const prompts = await InstructionPrompt.system()
+        expect(prompts.filter((p) => p.includes("OpenWiki knowledge base"))).toEqual([])
+      },
+    })
+  })
+
+  test("stays silent when there is no openwiki index", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        // Directory without an index.md must not trigger the pointer.
+        await fs.mkdir(path.join(dir, "openwiki"), { recursive: true })
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const prompts = await InstructionPrompt.system()
+        expect(prompts.filter((p) => p.includes("OpenWiki knowledge base"))).toEqual([])
+      },
+    })
+  })
+})

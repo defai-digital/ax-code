@@ -7,6 +7,7 @@ import { LANGUAGE_EXTENSIONS } from "../lsp/language"
 import { Database } from "../storage/db"
 import { CodeGraphQuery } from "./query"
 import { CodeNodeID, CodeEdgeID, CodeFileID } from "./id"
+import { SyntacticExtractor } from "./syntactic"
 import { IndexLock } from "./lockfile"
 import { Flag } from "../flag/flag"
 import { NativeStore } from "./native-store"
@@ -728,6 +729,47 @@ export namespace CodeGraphBuilder {
           })
           nodeCount++
         }
+      }
+    }
+
+    // Syntactic fallback: LSP produced no symbols for this file (no
+    // semantic server for the language, or the server is broken/still
+    // warming up). This is the schema's designed-but-never-built tier —
+    // code_file.completeness documents "partial = indexed via tree-sitter
+    // (symbols only, no cross-references)". Extract declarations locally
+    // so the file still contributes nodes (and anchors import edges)
+    // instead of vanishing from the graph. No refBookmarks are created:
+    // references need semantic analysis, so completeness stays "partial",
+    // which also means a later pass upgrades the file to LSP precision as
+    // soon as a server answers (the sha short-circuit only trusts "full").
+    if (nodeCount === 0 && SyntacticExtractor.supported(lang)) {
+      const syntactic = await SyntacticExtractor.extract(lang, text)
+      if (syntactic && syntactic.length > 0) {
+        for (const sym of syntactic) {
+          nodeInserts.push({
+            id: CodeNodeID.ascending(),
+            project_id: projectID,
+            kind: sym.kind,
+            name: sym.name,
+            qualified_name: sym.qualified,
+            file: absPath,
+            range_start_line: sym.startLine,
+            range_start_char: sym.startChar,
+            range_end_line: sym.endLine,
+            range_end_char: sym.endChar,
+            signature: sym.signature,
+            visibility: null,
+            metadata: { source: "tree-sitter", precision: "syntactic" },
+            time_created: now,
+            time_updated: now,
+          })
+          nodeCount++
+        }
+        log.info("indexed syntactically via tree-sitter fallback", {
+          file: absPath,
+          lang,
+          symbols: syntactic.length,
+        })
       }
     }
 

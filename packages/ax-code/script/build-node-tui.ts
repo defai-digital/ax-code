@@ -341,6 +341,10 @@ const distDeps: Record<string, string> = {
   // tool's parser finds them.
   "web-tree-sitter": deps["web-tree-sitter"],
   "tree-sitter-bash": deps["tree-sitter-bash"],
+  // Grammar packages for the code-intelligence syntactic fallback
+  // (SyntacticExtractor) — resolved the same way at runtime.
+  "tree-sitter-javascript": deps["tree-sitter-javascript"],
+  "tree-sitter-typescript": deps["tree-sitter-typescript"],
 }
 // The vendored @ax-code/opentui-core dynamically imports @opentui/core-<platform>
 // for the native .dylib/.so. Ship the matching platform package.
