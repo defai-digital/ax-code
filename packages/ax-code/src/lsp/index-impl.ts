@@ -10,6 +10,7 @@ import type { ChildProcessWithoutNullStreams } from "child_process"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
 import { Global } from "../global"
+import { Filesystem } from "../util/filesystem"
 import { Ripgrep } from "../file/ripgrep"
 import { LspScheduler } from "./scheduler"
 import * as LSPSelection from "./selection"
@@ -711,7 +712,10 @@ export namespace LSP {
     // desktop web UI launches its managed `ax-code serve` with cwd = home). A
     // home directory has no coherent set of language servers to prime, so skip
     // it entirely. See the matching guard in File.scan (src/file/index.ts).
-    if (Instance.directory === Global.Path.home) {
+    // Compare resolved-to-resolved: Instance.directory is realpath'd at
+    // context creation, while Global.Path.home is the raw $HOME — a
+    // symlinked home directory would otherwise dodge the guard.
+    if (Instance.directory === Filesystem.resolve(Global.Path.home)) {
       return { files: [], readyCount: 0, freshSpawnCount: 0 }
     }
 

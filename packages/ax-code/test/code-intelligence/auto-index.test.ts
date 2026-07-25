@@ -6,7 +6,9 @@ import { CodeGraphQuery } from "../../src/code-intelligence/query"
 import { Ripgrep } from "../../src/file/ripgrep"
 import { NativeAddon } from "../../src/native/addon"
 import { Instance } from "../../src/project/instance"
+import { Project } from "../../src/project/project"
 import { ProjectID } from "../../src/project/schema"
+import { Global } from "../../src/global"
 import { tmpdir } from "../fixture/fixture"
 
 let nativeIndexSpy: MockInstance | undefined
@@ -250,5 +252,81 @@ describe("AutoIndex.maybeStart", () => {
       finishedAt: indexedAt,
       error: null,
     })
+  })
+
+  // The desktop web UI launches its managed `ax-code serve` with cwd set to
+  // the home directory. Bulk-indexing there walks the user's entire disk —
+  // one observed database carried 2.57M code_node rows for worktree == $HOME.
+  test("skips the home directory instead of bulk-indexing it", async () => {
+    const projectID = ProjectID.make("proj_auto_index_home")
+    countNodesSpy = vi.spyOn(CodeGraphQuery, "countNodes").mockReturnValue(0)
+    filesSpy = vi.spyOn(Ripgrep, "files").mockImplementation(async function* () {
+      yield "never-scanned.ts"
+    })
+    indexFilesSpy = vi.spyOn(CodeIntelligence, "indexFiles").mockResolvedValue({
+      nodes: 0,
+      edges: 0,
+      files: 0,
+      unchanged: 0,
+      skipped: 0,
+      failed: 0,
+      pruned: { files: 0, nodes: 0, edges: 0 },
+      timings: {
+        readFile: 0,
+        lspTouch: 0,
+        lspDocumentSymbol: 0,
+        symbolWalk: 0,
+        lspReferences: 0,
+        edgeResolve: 0,
+        dbTransaction: 0,
+        total: 0,
+      },
+    })
+
+    await Instance.reload({
+      directory: Global.Path.home,
+      worktree: Global.Path.home,
+      project: {
+        id: projectID,
+        worktree: Global.Path.home,
+        name: "auto-index-home",
+        time: { created: Date.now(), updated: Date.now() },
+        sandboxes: [],
+      },
+    })
+
+    await Instance.provide({
+      directory: Global.Path.home,
+      fn: () => AutoIndex.maybeStart(projectID),
+    })
+    await sleep(30)
+
+    // The guard fires before any graph or filesystem work happens.
+    expect(countNodesSpy).not.toHaveBeenCalled()
+    expect(filesSpy).not.toHaveBeenCalled()
+    expect(indexFilesSpy).not.toHaveBeenCalled()
+    expect(AutoIndex.getState(projectID)).toMatchObject({ state: "idle", completed: 0, total: 0 })
+  })
+
+  test("purgeHomeDirectoryGraphs clears only home-worktree projects that still hold graph rows", () => {
+    const home = Global.Path.home
+    const homeProject = { id: ProjectID.make("proj_home_graph"), worktree: home }
+    const emptyHomeProject = { id: ProjectID.make("proj_home_graph_empty"), worktree: home }
+    const realProject = { id: ProjectID.make("proj_real_graph"), worktree: "/workspace/repo" }
+    const listSpy = vi.spyOn(Project, "list").mockReturnValue([homeProject, emptyHomeProject, realProject] as never)
+    countNodesSpy = vi
+      .spyOn(CodeGraphQuery, "countNodes")
+      .mockImplementation((id) => (id === homeProject.id ? 2_574_301 : id === realProject.id ? 12 : 0))
+    const clearSpy = vi.spyOn(CodeGraphQuery, "clearProject").mockImplementation(() => {})
+    try {
+      expect(AutoIndex.purgeHomeDirectoryGraphs()).toBe(1)
+      // Only the populated home graph is purged: real projects keep their
+      // graphs, and already-empty home projects need no delete.
+      expect(clearSpy).toHaveBeenCalledTimes(1)
+      expect(clearSpy).toHaveBeenCalledWith(homeProject.id)
+    } finally {
+      listSpy.mockRestore()
+      clearSpy.mockRestore()
+    }
   })
 })

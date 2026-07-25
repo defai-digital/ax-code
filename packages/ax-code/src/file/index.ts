@@ -417,7 +417,10 @@ export namespace File {
     // resolved — a plain home directory without a `.git` gets a directory-hash
     // id rather than the "global" id, so gating on the id let the expensive path
     // through and stalled startup.
-    const isHomeDirectory = Instance.directory === Global.Path.home
+    // Compare resolved-to-resolved: Instance.directory is realpath'd at
+    // context creation, while Global.Path.home is the raw $HOME — a
+    // symlinked home directory would otherwise dodge the guard.
+    const isHomeDirectory = Instance.directory === Filesystem.resolve(Global.Path.home)
     const next: Entry = { files: [], dirs: [] }
 
     if (isHomeDirectory) {

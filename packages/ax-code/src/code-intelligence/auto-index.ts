@@ -10,7 +10,10 @@ import { CodeIntelligence } from "./index"
 import { CodeGraphBuilder } from "./builder"
 import { CodeGraphQuery } from "./query"
 import { Instance } from "../project/instance"
+import { Project } from "../project/project"
 import type { ProjectID } from "../project/schema"
+import { Global } from "../global"
+import { Filesystem } from "../util/filesystem"
 import { NativeAddon } from "../native/addon"
 import { toErrorMessage } from "../util/error-message"
 
@@ -170,6 +173,30 @@ export namespace AutoIndex {
   // the endpoint would spin up a new ripgrep scan on every poll.
   const triedProjects = new Set<string>()
 
+  // One-shot janitor for graphs written before the home-directory guard
+  // in maybeStart() existed: the desktop's managed `ax-code serve` runs
+  // with cwd = home, and auto-index used to bulk-walk all of it — one
+  // observed database carried 2.57M code_node rows (several GB with
+  // edges and indexes) for worktree == $HOME, written once and never
+  // read again. The graph is a derived cache, so deleting it is safe:
+  // real projects re-index on demand, and with the guard in place a
+  // home graph cannot regrow. Runs at most once per process, from the
+  // first maybeStart() call.
+  let homePurgeStarted = false
+  export function purgeHomeDirectoryGraphs(): number {
+    const home = Filesystem.resolve(Global.Path.home)
+    let purged = 0
+    for (const project of Project.list()) {
+      if (Filesystem.resolve(project.worktree) !== home) continue
+      const nodes = CodeGraphQuery.countNodes(project.id)
+      if (nodes === 0) continue
+      log.info("purging home-directory code graph", { projectID: project.id, nodes })
+      CodeGraphQuery.clearProject(project.id)
+      purged++
+    }
+    return purged
+  }
+
   function isIndexable(file: string): boolean {
     const ext = path.extname(file)
     const lang = LANGUAGE_EXTENSIONS[ext]
@@ -214,6 +241,39 @@ export namespace AutoIndex {
     // sites planned for future releases and each should be safe
     // on its own.
     if (!Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE) return
+
+    if (!homePurgeStarted) {
+      homePurgeStarted = true
+      // Deferred so the one-time delete of a large legacy graph never
+      // delays the prompt dispatch that happened to trigger it.
+      setImmediate(() => {
+        try {
+          purgeHomeDirectoryGraphs()
+        } catch (err) {
+          log.error("failed to purge home-directory code graphs", { error: toErrorMessage(err) })
+        }
+      })
+    }
+
+    // The home directory is not a real workspace: the desktop web UI
+    // launches its managed `ax-code serve` with cwd = home, and a bulk
+    // index there walks the user's entire disk. Skip it entirely, like
+    // the matching guards in File.scan (src/file/index.ts) and LSP
+    // prewarmWorkspace (src/lsp/index-impl.ts). Instance.directory is
+    // realpath'd at context creation, so resolve the raw $HOME too —
+    // a symlinked home would otherwise dodge the comparison.
+    if (Instance.directory === Filesystem.resolve(Global.Path.home)) {
+      log.info("skipping: home directory is not an indexable workspace", { projectID })
+      setState(projectID, {
+        state: "idle",
+        completed: 0,
+        total: 0,
+        startedAt: null,
+        finishedAt: Date.now(),
+        error: null,
+      })
+      return
+    }
 
     const key = projectID as string
     if (inFlight.has(key)) {

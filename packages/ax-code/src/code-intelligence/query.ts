@@ -480,7 +480,11 @@ export namespace CodeGraphQuery {
   // ─── Project-wide delete (used by tests and manual reset) ───────────
 
   export function clearProject(projectID: ProjectID): void {
-    if (useNative) return NativeStore.clearProject(projectID)
+    // Route to the native store when active, but always clear the main-DB
+    // tables as well: a graph written while the other store was active
+    // (native flag toggled, addon availability changed across upgrades)
+    // would otherwise survive every later clear as orphaned rows.
+    if (useNative) NativeStore.clearProject(projectID)
     Database.transaction((db) => {
       db.delete(CodeEdgeTable).where(eq(CodeEdgeTable.project_id, projectID)).run()
       db.delete(CodeNodeTable).where(eq(CodeNodeTable.project_id, projectID)).run()
