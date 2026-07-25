@@ -15,6 +15,7 @@ import {
   emptyModelTurnDecision,
   globalStepLimitDecision,
   goalContinuationDecision,
+  goalLongRunActive,
   totalStepLimitDecision,
   truncatedModelTurnDecision,
 } from "../../src/session/prompt-autonomous-decisions"
@@ -103,7 +104,7 @@ describe("long-run mode composition", () => {
 
     const ceiling = effectiveTotalStepLimit({
       superLongActive: false,
-      goalActive: true,
+      goalLongRun: true,
       maxTotalSteps: limits.maxTotalSteps,
       maxTotalStepsSuperLong: limits.maxTotalStepsSuperLong,
       maxTotalStepsGoal: limits.maxTotalStepsGoal,
@@ -120,6 +121,52 @@ describe("long-run mode composition", () => {
     expect(totalStepLimitDecision({ totalSteps: ceiling, totalStepLimit: ceiling, continuations: 400 }).action).toBe(
       "stop",
     )
+  })
+
+  test("goal crossing its token budget past the plain ceiling still gets its wrap-up turn", () => {
+    const limits = promptLoopLimits({ session: undefined } as any)
+    // The run is deep into goal territory: past the plain-autonomous ceiling,
+    // under the goal ceiling, when the token budget is exhausted and the goal
+    // flips to budget_limited.
+    const totalSteps = limits.maxTotalSteps + 500
+    const goal = {
+      objective: "finish work",
+      status: "budget_limited" as const,
+      tokenBudget: 100,
+      tokensUsed: 120,
+      timeUsedSeconds: 9,
+    }
+
+    // Ceiling selection must keep the long-run ceiling through the wrap-up
+    // phase; the plain ceiling would stop the loop before the wrap-up turn.
+    for (const budgetWrapUp of ["none", "sent"] as const) {
+      const ceiling = effectiveTotalStepLimit({
+        superLongActive: false,
+        goalLongRun: goalLongRunActive({ goalStatus: goal.status, budgetWrapUp }),
+        maxTotalSteps: limits.maxTotalSteps,
+        maxTotalStepsSuperLong: limits.maxTotalStepsSuperLong,
+        maxTotalStepsGoal: limits.maxTotalStepsGoal,
+      })
+      expect(ceiling).toBe(limits.maxTotalStepsGoal)
+      expect(totalStepLimitDecision({ totalSteps, totalStepLimit: ceiling, continuations: 30 }).action).toBe("ignore")
+    }
+
+    // The wrap-up continuation itself fires as designed at this point.
+    expect(goalContinuationDecision({ goal, continuations: 30, budgetWrapUp: "none" }).action).toBe(
+      "continue_budget_wrapup",
+    )
+
+    // Once the wrap-up has concluded (a later run), the goal is inert and
+    // ordinary prompts get the plain ceiling again.
+    expect(
+      effectiveTotalStepLimit({
+        superLongActive: false,
+        goalLongRun: goalLongRunActive({ goalStatus: goal.status, budgetWrapUp: "concluded" }),
+        maxTotalSteps: limits.maxTotalSteps,
+        maxTotalStepsSuperLong: limits.maxTotalStepsSuperLong,
+        maxTotalStepsGoal: limits.maxTotalStepsGoal,
+      }),
+    ).toBe(limits.maxTotalSteps)
   })
 
   test("active goal + Super-Long compose: cap lifted, total-step still hard-stops", () => {

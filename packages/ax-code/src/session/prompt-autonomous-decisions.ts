@@ -321,23 +321,43 @@ export function resolveTurnToolChoice(input: {
 
 /**
  * Selects which cumulative step ceiling bounds the current iteration.
- * Super-Long and active goals both lift the per-run continuation cap, so both
+ * Super-Long and goal runs both lift the per-run continuation cap, so both
  * get long-run ceilings — the plain-autonomous default (step limit × every
  * permitted continuation) is sized for capped runs and would end legitimate
- * long goal runs with a step-limit error. Super-Long wins over an active goal
+ * long goal runs with a step-limit error. Super-Long wins over a goal run
  * because its ceiling is checked against the durable cross-invocation step
  * counter (with the shipped defaults the two values are identical anyway).
+ *
+ * `goalLongRun` must cover the WHOLE goal run, including the in-run budget
+ * wrap-up phase (status "budget_limited" whose wrap-up has not concluded) —
+ * a goal that crosses its token budget beyond the plain ceiling would
+ * otherwise drop back to that ceiling the moment its status flips and be
+ * step-limit-stopped before the wrap-up turn ever runs. Inert budget-limited
+ * goals from an earlier run (wrap-up concluded) must NOT set it: unrelated
+ * later prompts in that session are ordinary runs.
  */
 export function effectiveTotalStepLimit(input: {
   superLongActive: boolean
-  goalActive: boolean
+  goalLongRun: boolean
   maxTotalSteps: number
   maxTotalStepsSuperLong: number
   maxTotalStepsGoal: number
 }): number {
   if (input.superLongActive) return input.maxTotalStepsSuperLong
-  if (input.goalActive) return input.maxTotalStepsGoal
+  if (input.goalLongRun) return input.maxTotalStepsGoal
   return input.maxTotalSteps
+}
+
+/**
+ * Whether the session is in a goal-driven long run for ceiling selection:
+ * an active goal, or a budget-limited goal whose single wrap-up turn has not
+ * yet concluded (the wrap-up is part of the run and must not be cut short by
+ * the plain-autonomous ceiling the moment the status flips). A concluded
+ * budget-limited goal is inert — later prompts in the session are ordinary.
+ */
+export function goalLongRunActive(input: { goalStatus?: string; budgetWrapUp: GoalBudgetWrapUp }): boolean {
+  if (input.goalStatus === "active") return true
+  return input.goalStatus === "budget_limited" && input.budgetWrapUp !== "concluded"
 }
 
 // The cumulative ceiling across ALL continuations. Unlike the per-continuation

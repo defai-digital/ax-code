@@ -52,6 +52,7 @@ import { addPromptGoalUsage } from "./prompt-goal-usage"
 import {
   effectiveContinuationCap,
   effectiveTotalStepLimit,
+  goalLongRunActive,
   emptyModelTurnIncompleteMessage,
   isEmptyModelTurn,
   isTruncatedModelTurn,
@@ -261,8 +262,10 @@ export namespace SessionPrompt {
       maxTruncatedModelTurnRetries,
     } = promptLoopLimits(cfg)
     // One-shot guard for the goal ceiling-approach convergence warning: warn
-    // once per prompt-loop run, then let the hard ceiling stop the run.
-    let goalCeilingWarned = false
+    // once per goal (keyed by the goal's creation time, so a replacement goal
+    // started later in the same run still gets its own warning), then let the
+    // hard ceiling stop the run.
+    let goalCeilingWarnedFor: number | undefined
     let todoRetries = 0
     let completionGateRetries = 0
     let lastCompletionGateSignature: string | undefined
@@ -420,15 +423,32 @@ export namespace SessionPrompt {
         if (superLongDeadline.invalidatedMessages) cachedMsgs = undefined
         // The deadline ends the long run, not the user's goal. Pause an
         // active goal so it is explicitly resumable instead of being left
-        // "active" forever in a session that will not auto-continue.
+        // "active" forever in a session that will not auto-continue. The
+        // pause can reject (e.g. the goal was cleared concurrently over the
+        // server API between the loop-top fetch and here) — that must not
+        // convert this graceful deadline stop into an error path, and the
+        // "was paused" notice is only published when the pause actually took.
         if (activeGoal?.status === "active") {
-          await SessionGoal.pause(sessionID)
-          Session.publishError({
-            sessionID,
-            message:
-              `The session goal "${activeGoal.objective}" was paused because the Super-Long runtime ceiling was reached. ` +
-              `Resume it with /goal resume in a new supervised run.`,
-          })
+          const paused = await SessionGoal.pause(sessionID).then(
+            () => true,
+            (error) => {
+              log.warn("failed to pause goal at Super-Long deadline", {
+                command: "session.prompt.loop",
+                status: "error",
+                sessionID,
+                error,
+              })
+              return false
+            },
+          )
+          if (paused) {
+            Session.publishError({
+              sessionID,
+              message:
+                `The session goal "${activeGoal.objective}" was paused because the Super-Long runtime ceiling was reached. ` +
+                `Resume it with /goal resume in a new supervised run.`,
+            })
+          }
         }
         reason = superLongDeadline.reason
         break
@@ -445,14 +465,19 @@ export namespace SessionPrompt {
       // cannot bypass. For Super-Long the durable cross-invocation count is
       // used, so a crash/restart cannot reset the budget. The
       // per-continuation limit below governs pacing; this governs the run.
-      // Active goals select the long-run ceiling: they lift the continuation
+      // Goal runs select the long-run ceiling: they lift the continuation
       // cap like Super-Long, and the plain-autonomous default ended
       // legitimate goal runs with a step-limit error (the goal's own budget,
       // verification gate, and the breakers below remain the working bounds).
+      // The in-run budget wrap-up phase (budget_limited, wrap-up not yet
+      // concluded) keeps the long-run ceiling — dropping back to the plain
+      // ceiling when the status flips mid-run would step-limit-stop the run
+      // before the wrap-up turn ever executes.
+      const goalLongRun = goalLongRunActive({ goalStatus: activeGoal?.status, budgetWrapUp: goalBudgetWrapUp })
       const effectiveTotalSteps = superLongActive ? Math.max(totalSteps, durableSuperLongSteps) : totalSteps
       const totalStepCeiling = effectiveTotalStepLimit({
         superLongActive,
-        goalActive: activeGoal?.status === "active",
+        goalLongRun,
         maxTotalSteps,
         maxTotalStepsSuperLong,
         maxTotalStepsGoal,
@@ -520,13 +545,13 @@ export namespace SessionPrompt {
       // the warning there.
       if (
         effectivelyAutonomous &&
-        !goalCeilingWarned &&
         activeGoal?.status === "active" &&
+        goalCeilingWarnedFor !== activeGoal.time.created &&
         Number.isFinite(totalStepCeiling)
       ) {
         const remainingTotalSteps = totalStepCeiling - effectiveTotalSteps
         if (remainingTotalSteps > 0 && remainingTotalSteps <= GOAL_CEILING_CONVERGENCE_STEPS) {
-          goalCeilingWarned = true
+          goalCeilingWarnedFor = activeGoal.time.created
           log.info("goal ceiling convergence warning", {
             command: "session.prompt.loop",
             status: "nudge",

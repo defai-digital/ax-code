@@ -5,6 +5,7 @@ import {
   completionGateRetryDecision,
   effectiveContinuationCap,
   effectiveTotalStepLimit,
+  goalLongRunActive,
   emptyModelTurnDecision,
   globalStepLimitDecision,
   goalContinuationDecision,
@@ -772,22 +773,46 @@ describe("effective total step limit", () => {
   }
 
   test("plain autonomous runs use the ordinary cumulative ceiling", () => {
-    expect(effectiveTotalStepLimit({ superLongActive: false, goalActive: false, ...ceilings })).toBe(2000)
+    expect(effectiveTotalStepLimit({ superLongActive: false, goalLongRun: false, ...ceilings })).toBe(2000)
   })
 
-  test("active goals select the long-run ceiling, not the plain-autonomous one", () => {
-    expect(effectiveTotalStepLimit({ superLongActive: false, goalActive: true, ...ceilings })).toBe(20_000)
+  test("goal runs select the long-run ceiling, not the plain-autonomous one", () => {
+    expect(effectiveTotalStepLimit({ superLongActive: false, goalLongRun: true, ...ceilings })).toBe(20_000)
   })
 
-  test("Super-Long wins over an active goal (its ceiling pairs with the durable counter)", () => {
+  test("Super-Long wins over a goal run (its ceiling pairs with the durable counter)", () => {
     expect(
       effectiveTotalStepLimit({
         superLongActive: true,
-        goalActive: true,
+        goalLongRun: true,
         ...ceilings,
         maxTotalStepsSuperLong: 30_000,
       }),
     ).toBe(30_000)
+  })
+})
+
+describe("goal long-run detection for ceiling selection", () => {
+  test("active goals are long runs", () => {
+    expect(goalLongRunActive({ goalStatus: "active", budgetWrapUp: "none" })).toBe(true)
+  })
+
+  test("the in-run budget wrap-up phase stays a long run so the wrap-up turn is not step-limit-stopped", () => {
+    // Status flipped this run, wrap-up continuation not yet injected.
+    expect(goalLongRunActive({ goalStatus: "budget_limited", budgetWrapUp: "none" })).toBe(true)
+    // Wrap-up continuation injected, wrap-up turn currently running.
+    expect(goalLongRunActive({ goalStatus: "budget_limited", budgetWrapUp: "sent" })).toBe(true)
+  })
+
+  test("a concluded budget-limited goal is inert — later prompts are ordinary runs", () => {
+    expect(goalLongRunActive({ goalStatus: "budget_limited", budgetWrapUp: "concluded" })).toBe(false)
+  })
+
+  test("paused, terminal, and missing goals are not long runs", () => {
+    expect(goalLongRunActive({ goalStatus: "paused", budgetWrapUp: "none" })).toBe(false)
+    expect(goalLongRunActive({ goalStatus: "complete", budgetWrapUp: "none" })).toBe(false)
+    expect(goalLongRunActive({ goalStatus: "blocked", budgetWrapUp: "none" })).toBe(false)
+    expect(goalLongRunActive({ goalStatus: undefined, budgetWrapUp: "none" })).toBe(false)
   })
 })
 
