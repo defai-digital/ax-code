@@ -401,6 +401,15 @@ export function agentStepLimitContinuationDecision(input: {
 
   if (!input.autonomous) return { action: "ignore" }
 
+  // A 1-step agent must run its only step (isLastStep disables tools). Continuing
+  // here would reset the step counter without ever calling the model and livelock
+  // under Super-Long / active-goal infinite continuation caps.
+  if (input.step === input.maxSteps && input.maxSteps <= 1) {
+    return { action: "ignore" }
+  }
+
+  // For multi-step agents at the last permitted step, prefer starting a fresh
+  // continuation (when budget remains) before running the tool-disabled last step.
   const continuation = nextContinuation(input)
   if (continuation !== undefined) {
     return {
@@ -409,7 +418,6 @@ export function agentStepLimitContinuationDecision(input: {
     }
   }
 
-  // When step > maxSteps the agent is definitively past its limit — stop.
   // When step === maxSteps and maxContinuations === 0 (no continuation budget
   // was ever configured), return ignore so the LLM can complete its last
   // permitted step; pendingTodoContinuationDecision will emit the "unfinished

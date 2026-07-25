@@ -218,6 +218,29 @@ describe("autonomous continuation decisions", () => {
     })
   })
 
+  test("runs a 1-step agent's only step instead of livelocking under infinite continuation caps", () => {
+    // Super-Long / active goals lift maxContinuations to Infinity. Continuing
+    // at step===maxSteps===1 would reset the counter without calling the model.
+    expect(
+      agentStepLimitContinuationDecision({
+        step: 1,
+        maxSteps: 1,
+        autonomous: true,
+        continuations: 0,
+        maxContinuations: Number.POSITIVE_INFINITY,
+      }),
+    ).toEqual({ action: "ignore" })
+    expect(
+      agentStepLimitContinuationDecision({
+        step: 1,
+        maxSteps: 1,
+        autonomous: true,
+        continuations: 0,
+        maxContinuations: 0,
+      }),
+    ).toEqual({ action: "ignore" })
+  })
+
   test("ignores agent step continuation when boundary or mode conditions are not met", () => {
     expect(
       agentStepLimitContinuationDecision({
