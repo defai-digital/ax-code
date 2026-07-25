@@ -126,6 +126,13 @@ export function apply(
 }
 
 export async function init(opts: Opts, dep: InitDep = {}) {
+  // ax-code legitimately holds more than Node's default of 10 process "exit"
+  // listeners at startup: our own flush/cleanup hooks (LSP child reaper,
+  // audit queue, native perf, diagnostics, bash tool) plus one per dependency
+  // that uses signal-exit. The tui-backend warned MaxListenersExceededWarning
+  // at 11. Keep a finite documented bound rather than disabling the check, so
+  // an unbounded per-spawn listener leak still trips the warning.
+  process.setMaxListeners(64)
   const argv = dep.argv ?? process.argv
   const local = dep.local ?? Installation.isLocal()
   const version = dep.version ?? Installation.VERSION

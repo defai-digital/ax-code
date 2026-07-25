@@ -60,6 +60,18 @@ export namespace LSP {
   // responsive enough for interactive use without generating log noise.
   const HEALTH_CHECK_INTERVAL_MS = 60_000
   const MAX_ROOT_CACHE_ENTRIES = 2_000
+
+  // Hard ceiling on simultaneously connected clients per language server.
+  // Clients are keyed by (root, serverID), and NearestRoot() mints one root
+  // per nested marker directory — in trees where a marker exists at every
+  // level (CMakeLists.txt throughout a vendored KDE/CMake checkout), every
+  // touched subdirectory otherwise spawns another server. One observed
+  // session accumulated 52 concurrent clangd processes, each indexing C++
+  // independently, until the machine ran out of memory. When a fresh spawn
+  // pushes a server past the cap, its least-recently-used clients are shut
+  // down; an evicted root is not marked broken and simply respawns on next
+  // use.
+  const MAX_CLIENTS_PER_SERVER = 8
   const ROOT_MARKER_FILES = new Set([
     "package.json",
     "tsconfig.json",
@@ -135,6 +147,7 @@ export namespace LSP {
           rootCache: new Map<string, string | null>(),
           spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
           spawningProcesses: new Set<ChildProcessWithoutNullStreams>(),
+          clientLastUse: new WeakMap<LSPClient.Info, number>(),
           healthCheck: undefined,
           rootCacheUnsubscribe: undefined,
           disposed: false,
@@ -158,6 +171,7 @@ export namespace LSP {
         rootCache: new Map<string, string | null>(),
         spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
         spawningProcesses: new Set<ChildProcessWithoutNullStreams>(),
+        clientLastUse: new WeakMap<LSPClient.Info, number>(),
         healthCheck: undefined as ReturnType<typeof setInterval> | undefined,
         rootCacheUnsubscribe: undefined as (() => void) | undefined,
         disposed: false,
@@ -268,6 +282,48 @@ export namespace LSP {
 
   type State = Awaited<ReturnType<typeof state>>
 
+  // Pure LRU selection, exported for tests: returns the clients of the given
+  // server that must be shut down so at most `cap` remain, oldest use first.
+  export function selectClientEvictions<T extends { serverID: string }>(
+    clients: readonly T[],
+    serverID: string,
+    cap: number,
+    lastUse: (client: T) => number,
+  ): T[] {
+    const candidates = clients.filter((client) => client.serverID === serverID)
+    if (candidates.length <= cap) return []
+    return candidates.sort((a, b) => lastUse(a) - lastUse(b)).slice(0, candidates.length - cap)
+  }
+
+  function markClientUsed(s: State, client: LSPClient.Info) {
+    s.clientLastUse.set(client, performance.now())
+  }
+
+  function evictExcessClients(s: State, serverID: string) {
+    const evictions = selectClientEvictions(
+      s.clients,
+      serverID,
+      MAX_CLIENTS_PER_SERVER,
+      (client) => s.clientLastUse.get(client) ?? 0,
+    )
+    for (const client of evictions) {
+      const idx = s.clients.indexOf(client)
+      if (idx >= 0) s.clients.splice(idx, 1)
+      log.info("evicting least-recently-used lsp client", {
+        serverID,
+        root: client.root,
+        cap: MAX_CLIENTS_PER_SERVER,
+      })
+      // Fire-and-forget like the health-check loop: shutdown() suppresses the
+      // onClose callback (closing latch), so eviction never marks the root
+      // broken — a later touch of that root simply respawns the server.
+      client.shutdown().catch((e) => {
+        log.debug("failed to shutdown evicted LSP client", { serverID, root: client.root, error: e })
+      })
+    }
+    if (evictions.length > 0) Bus.publishDetached(Event.Updated, {})
+  }
+
   async function resolveRoot(s: State, server: LSPServer.Info, file: string) {
     const key = `${server.id}:${file}`
     if (s.rootCache.has(key)) {
@@ -364,6 +420,7 @@ export namespace LSP {
       const existing = s.clients.find((x) => x.root === root && x.serverID === server.id)
       if (existing) {
         await stopLSPProcessBestEffort(handle.process, { serverID: server.id, root, phase: "duplicate" })
+        markClientUsed(s, existing)
         return existing
       }
 
@@ -375,6 +432,8 @@ export namespace LSP {
       }
 
       s.clients.push(client)
+      markClientUsed(s, client)
+      evictExcessClients(s, server.id)
       return client
     } finally {
       s.spawningProcesses.delete(handle.process)
@@ -398,6 +457,7 @@ export namespace LSP {
 
     const match = s.clients.find((x) => x.root === root && x.serverID === server.id)
     if (match) {
+      markClientUsed(s, match)
       result.push(match)
       return false
     }
