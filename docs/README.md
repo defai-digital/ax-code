@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: public, current-state
-Last reviewed: 2026-07-19
+Last reviewed: 2026-07-25
 Owner: AX Code maintainers
 
 The root [README](../README.md) is the shortest path to install and launch AX Code. Use this hub when you need to
@@ -17,6 +17,7 @@ configure a workflow, understand a runtime boundary, or integrate AX Code with a
 | Connect a hosted, CLI, custom, or local provider         | [Supported Providers and Models](providers/supported-providers.md)      |
 | Run an agent with safe filesystem and network boundaries | [Sandbox Mode](guides/sandbox.md)                                       |
 | Run unattended or in CI                                  | [Autonomous Mode](guides/autonomous.md)                                 |
+| Run recurring prompts or schedule durable tasks          | [Loop Mode and Scheduled Tasks](guides/loop-mode.md)                    |
 | Choose local, cloud, hybrid, council, or arena execution | [Execution Modes](guides/modes.md)                                      |
 | Connect external tools and data                          | [MCP Integrations](integrations/mcp.md)                                 |
 | Embed AX Code in an application                          | [`@ax-code/sdk`](../packages/sdk/js/README.md)                          |
@@ -33,6 +34,7 @@ configure a workflow, understand a runtime boundary, or integrate AX Code with a
 
 - [Sandbox Mode](guides/sandbox.md) — isolation modes, protected paths, network controls, and precedence.
 - [Autonomous Mode](guides/autonomous.md) — unattended execution, approvals, headless use, and safeguards.
+- [Loop Mode and Scheduled Tasks](guides/loop-mode.md) — recurring prompts, durable schedules, and long-run limits.
 - [Execution Modes](guides/modes.md) — agent, hybrid, council, and arena behavior.
 - [Auto-Route](guides/auto-route.md) — specialist routing and optional complexity routing.
 - [Model Effort](guides/effort.md) — thinking levels and provider-specific behavior.

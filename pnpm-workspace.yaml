@@ -26,6 +26,7 @@ catalog:
   "fast-glob": "3.3.3"
   "drizzle-kit": "1.0.0-rc.3"
   "drizzle-orm": "1.0.0-rc.3"
+  "electron-builder": "26.15.3"
   "fuzzysort": "3.1.0"
   "hono": "4.12.27"
   "hono-openapi": "1.1.2"

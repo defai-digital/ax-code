@@ -4,9 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.2.0] - 2026-07-25
+
+### Added
+
+- Sessions: adds conversational `/loop` scheduled tasks, super-long run controls, and visible run engagement state.
+- Code intelligence: adds the native AX Wiki compiler, tree-sitter syntactic fallback, graph highlights, and OpenWiki interoperability.
+- Providers: adds Grok 4.5, provider-aware effort levels, and AX Engine MTP Auto with Direct fallback.
+- Distribution: generates CLI and Desktop Winget manifests and presents platform-native install commands in Desktop onboarding.
+
 ### Changed
 
 - Release: rotates CLI and Desktop minisign verification to key `CF42FC69BEEF0EA5` and uses the shared `~/signkey/ax.minisign.key` plus `ax.pub` local key layout.
+- Runtime: bounds outbound concurrency, coalesces high-frequency writes, and improves SSE backpressure and error observability.
+- Desktop: refines navigation, retry behavior, typography, accessibility, and platform-specific deployment guidance.
+
+### Fixed
+
+- Sessions: preserves long-run goal ceilings, prevents repeated truncated-output retries, and hardens pause and convergence behavior.
+- Code intelligence: prevents accidental home-directory indexing, purges legacy home graphs, and caps LSP clients with LRU eviction.
+- Desktop: fixes reliability issues across the Electron shell, UI state and synchronization, terminals, permissions, and session recovery.
+- Providers and TUI: hardens CLI model resolution, stream handling, effort restoration, backend loading, and native FFI pointer lifetimes.
+- Security and release: patches dependency advisories and strengthens Minisign, Apple, Windows, Homebrew, and install-matrix verification.
 
 ## [7.1.0] - 2026-07-18
 

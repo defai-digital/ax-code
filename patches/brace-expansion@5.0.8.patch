@@ -1,0 +1,18 @@
+diff --git a/dist/commonjs/index.js b/dist/commonjs/index.js
+--- a/dist/commonjs/index.js
++++ b/dist/commonjs/index.js
+@@ -259,4 +259,14 @@ function expand_(str, max, maxLength, isTop) {
+     }
+     return acc;
+ }
++// Versions before 5 exported the expansion function directly. Some supported
++// transitive consumers (notably minimatch 3-9) still call the CommonJS export
++// as a function. Keep the patched v5 implementation and its named exports while
++// preserving that legacy callable shape until those consumers migrate.
++Object.assign(expand, {
++    EXPANSION_MAX: exports.EXPANSION_MAX,
++    EXPANSION_MAX_LENGTH: exports.EXPANSION_MAX_LENGTH,
++    expand,
++});
++module.exports = expand;
+ //# sourceMappingURL=index.js.map
