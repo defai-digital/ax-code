@@ -1,4 +1,4 @@
-import { supportsLongAgent } from "@/provider/model-capabilities"
+import { getModelCapabilities, supportsLongAgent } from "@/provider/model-capabilities"
 import { Env } from "@/util/env"
 import { isLocalHostname } from "@/util/local-host"
 
@@ -10,9 +10,13 @@ export namespace SuperLongPolicy {
   export type RuntimeConfig = {
     enabled?: boolean
     requestedDurationMs?: number
+    pacingGraceMs?: number
   }
 
-  export type ConfigValue = boolean | { enabled?: boolean; duration_hours?: number } | undefined
+  export type ConfigValue =
+    | boolean
+    | { enabled?: boolean; duration_hours?: number; pacing_grace_minutes?: number }
+    | undefined
 
   /**
    * Normalize the `super_long` config value (legacy boolean or object form)
@@ -25,7 +29,28 @@ export namespace SuperLongPolicy {
     return {
       enabled: value.enabled,
       requestedDurationMs: value.duration_hours === undefined ? undefined : value.duration_hours * 60 * 60 * 1000,
+      pacingGraceMs: value.pacing_grace_minutes === undefined ? undefined : value.pacing_grace_minutes * 60 * 1000,
     }
+  }
+
+  export function maxDurationMs(): number {
+    return MAX_DURATION_MS
+  }
+
+  // Provider pacing exists to protect providers over multi-hour unattended
+  // runs — not to throttle the productive early phase of a session. The
+  // 2026-07 audit found flat pacing (6/min default, 4/min extended) applied
+  // from the very first request, capping agentic burst models (Qwen Max,
+  // GLM 5.x execute tool rounds every few seconds) to a fraction of their
+  // throughput for the entire run. The grace window keeps the first stretch
+  // of a durable run unpaced; pacing engages only for the marathon tail.
+  // Override via `super_long.pacing_grace_minutes` (0 = pace immediately).
+  export const PACING_GRACE_DEFAULT_MS = 2 * 60 * 60 * 1000
+
+  export function pacingGraceMs(config?: RuntimeConfig): number {
+    const requested = config?.pacingGraceMs
+    if (requested === undefined || !Number.isFinite(requested) || requested < 0) return PACING_GRACE_DEFAULT_MS
+    return Math.min(requested, MAX_DURATION_MS)
   }
 
   export type StateDecision = {
@@ -79,7 +104,7 @@ export namespace SuperLongPolicy {
     minDelayMs: 5_000,
   }
 
-  const ALIBABA_PACING: PacingPolicy = {
+  const EXTENDED_PACING: PacingPolicy = {
     windowMs: 60_000,
     maxRequests: 4,
     minDelayMs: 10_000,
@@ -103,10 +128,22 @@ export namespace SuperLongPolicy {
    * protect, and wall-clock throughput is the only resource a local run
    * spends — pacing it would just stall the loop.
    */
-  export function providerPacing(providerID: string, options?: { baseURL?: string }): PacingPolicy | undefined {
+  export function providerPacing(
+    providerID: string,
+    options?: { baseURL?: string; modelID?: string },
+  ): PacingPolicy | undefined {
     if (LOCAL_PROVIDER_IDS.has(providerID)) return undefined
     if (options?.baseURL !== undefined && isLocalBaseURL(options.baseURL)) return undefined
-    const policy = providerID.startsWith("alibaba-") ? ALIBABA_PACING : DEFAULT_PACING
+    // Honor the capability registry's rateLimitTier when the model is known —
+    // it was declared per model/provider but never wired in, leaving this
+    // function to guess from provider-id prefixes alone. The alibaba- prefix
+    // stays as a protective floor for models the registry doesn't know.
+    if (options?.modelID) {
+      const tier = getModelCapabilities(options.modelID, providerID).rateLimitTier
+      if (tier === "unlimited") return undefined
+      if (tier === "extended") return { ...EXTENDED_PACING }
+    }
+    const policy = providerID.startsWith("alibaba-") ? EXTENDED_PACING : DEFAULT_PACING
     return { ...policy }
   }
 

@@ -76,4 +76,8 @@ to 72h), request pacing, and compaction tuning. It auto-enables for models
 whose declared capabilities support long-agent work (1M-context reasoning
 models such as Qwen 3.7+ Max/Plus on Alibaba routes and GLM 5.x on z.ai
 routes) and can be forced per session, per project, or via
-`AX_CODE_SUPER_LONG`.
+`AX_CODE_SUPER_LONG`. Run engagement is logged (`super-long run engaged`),
+and provider pacing only starts after a grace window from run start
+(default 2 hours, `super_long.pacing_grace_minutes`) so the productive
+early phase of an agentic run keeps full tool-call throughput; the
+marathon tail is paced per the model's declared rate-limit tier.

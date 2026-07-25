@@ -103,6 +103,30 @@ describe("SuperLongPolicy.providerPacing", () => {
     expect(SuperLongPolicy.providerPacing("ax-studio")).toBeUndefined()
   })
 
+  test("honors the capability registry's rateLimitTier when the model is known", () => {
+    // Alibaba Qwen Max declares tier "extended" → 4/min regardless of prefix logic.
+    expect(SuperLongPolicy.providerPacing("alibaba-token-plan", { modelID: "qwen3.7-max" })?.maxRequests).toBe(4)
+    // GLM 5.2 on zai declares tier "standard" → default 6/min.
+    expect(SuperLongPolicy.providerPacing("zai-coding-plan", { modelID: "glm-5.2" })?.maxRequests).toBe(6)
+    // Qwen Max via Together AI declares tier "standard" → default 6/min.
+    expect(SuperLongPolicy.providerPacing("togetherai", { modelID: "qwen3.7-max" })?.maxRequests).toBe(6)
+    // Unknown model on an alibaba- provider keeps the protective extended floor.
+    expect(SuperLongPolicy.providerPacing("alibaba-token-plan", { modelID: "mystery-model" })?.maxRequests).toBe(4)
+  })
+
+  test("pacing grace config maps minutes to ms with a 2h default and 72h clamp", () => {
+    expect(SuperLongPolicy.pacingGraceMs(undefined)).toBe(SuperLongPolicy.PACING_GRACE_DEFAULT_MS)
+    expect(SuperLongPolicy.pacingGraceMs({})).toBe(SuperLongPolicy.PACING_GRACE_DEFAULT_MS)
+    expect(SuperLongPolicy.pacingGraceMs(SuperLongPolicy.fromConfig({ pacing_grace_minutes: 0 }))).toBe(0)
+    expect(SuperLongPolicy.pacingGraceMs(SuperLongPolicy.fromConfig({ pacing_grace_minutes: 30 }))).toBe(30 * 60_000)
+    expect(SuperLongPolicy.pacingGraceMs({ pacingGraceMs: Number.POSITIVE_INFINITY })).toBe(
+      SuperLongPolicy.PACING_GRACE_DEFAULT_MS,
+    )
+    expect(SuperLongPolicy.pacingGraceMs({ pacingGraceMs: 100 * 60 * 60 * 1000 })).toBe(
+      SuperLongPolicy.maxDurationMs(),
+    )
+  })
+
   test("skips pacing for self-hosted endpoints on a local hostname", () => {
     expect(SuperLongPolicy.providerPacing("my-vllm", { baseURL: "http://localhost:8000/v1" })).toBeUndefined()
     expect(SuperLongPolicy.providerPacing("my-vllm", { baseURL: "http://127.0.0.1:8080" })).toBeUndefined()

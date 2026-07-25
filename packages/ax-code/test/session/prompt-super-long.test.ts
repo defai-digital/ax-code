@@ -43,7 +43,7 @@ afterEach(() => {
 describe("enforceSuperLongDeadline", () => {
   test("skips durable runtime lookup when super-long is disabled", async () => {
     clearSuperLongEnv()
-    const touchRun = vi.spyOn(SuperLongRuntime, "touchRun").mockResolvedValue({ startedAt: 0, totalSteps: 0 })
+    const touchRun = vi.spyOn(SuperLongRuntime, "touchRun").mockResolvedValue({ startedAt: 0, totalSteps: 0, created: false })
     try {
       await expect(
         enforceSuperLongDeadline({
@@ -62,7 +62,7 @@ describe("enforceSuperLongDeadline", () => {
 
   test("reports enabled=true and durable steps while a run is within its deadline", async () => {
     clearSuperLongEnv()
-    const touchRun = vi.spyOn(SuperLongRuntime, "touchRun").mockResolvedValue({ startedAt: 0, totalSteps: 42 })
+    const touchRun = vi.spyOn(SuperLongRuntime, "touchRun").mockResolvedValue({ startedAt: 0, totalSteps: 42, created: false })
     try {
       await expect(
         enforceSuperLongDeadline({
@@ -83,7 +83,7 @@ describe("enforceSuperLongDeadline", () => {
 
   test("honors a configured duration shorter than the 72h ceiling", async () => {
     clearSuperLongEnv()
-    const touchRun = vi.spyOn(SuperLongRuntime, "touchRun").mockResolvedValue({ startedAt: 0, totalSteps: 0 })
+    const touchRun = vi.spyOn(SuperLongRuntime, "touchRun").mockResolvedValue({ startedAt: 0, totalSteps: 0, created: false })
     const updateMessageWithParts = vi.spyOn(Session, "updateMessageWithParts").mockResolvedValue(undefined as any)
     const publishError = vi.spyOn(Session, "publishError").mockImplementation((() => undefined) as any)
     try {
@@ -124,7 +124,7 @@ describe("enforceSuperLongDeadline", () => {
 
   test("stops expired super-long sessions and records a synthetic assistant when needed", async () => {
     clearSuperLongEnv()
-    const touchRun = vi.spyOn(SuperLongRuntime, "touchRun").mockResolvedValue({ startedAt: 0, totalSteps: 0 })
+    const touchRun = vi.spyOn(SuperLongRuntime, "touchRun").mockResolvedValue({ startedAt: 0, totalSteps: 0, created: false })
     const updateMessageWithParts = vi.spyOn(Session, "updateMessageWithParts").mockResolvedValue(undefined as any)
     const publishError = vi.spyOn(Session, "publishError").mockImplementation((() => undefined) as any)
     try {
@@ -153,12 +153,12 @@ describe("enforceSuperLongDeadline", () => {
 
   test("degrades to non-super-long instead of stopping when the user prompts after expiry", async () => {
     clearSuperLongEnv()
-    const touchRun = vi.spyOn(SuperLongRuntime, "touchRun").mockResolvedValue({ startedAt: 0, totalSteps: 0 })
+    const touchRun = vi.spyOn(SuperLongRuntime, "touchRun").mockResolvedValue({ startedAt: 0, totalSteps: 0, created: false })
     const updateMessageWithParts = vi.spyOn(Session, "updateMessageWithParts").mockResolvedValue(undefined as any)
     const publishError = vi.spyOn(Session, "publishError").mockImplementation((() => undefined) as any)
     try {
       const expiryMs = 72 * 60 * 60 * 1000
-      touchRun.mockResolvedValue({ startedAt: 0, totalSteps: 17 })
+      touchRun.mockResolvedValue({ startedAt: 0, totalSteps: 17, created: false })
       // The user message postdates the deadline: a fresh supervised prompt,
       // not the tail of the long run — the session must not stay bricked.
       const result = await enforceSuperLongDeadline({

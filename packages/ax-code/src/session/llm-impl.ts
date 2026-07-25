@@ -350,6 +350,7 @@ export namespace LLM {
       small: input.small,
       abort: input.abort,
       baseURL: typeof provider.options?.baseURL === "string" ? provider.options.baseURL : undefined,
+      pacingGraceMs: SuperLongPolicy.pacingGraceMs(SuperLongPolicy.fromConfig(cfg.super_long)),
     })
 
     // LiteLLM and some Anthropic proxies require the tools parameter to be present
@@ -488,6 +489,10 @@ export namespace LLM {
     durable: boolean
   }
 
+  // Sessions whose pacing grace window has already elapsed — checked once,
+  // then latched so the durable-store read isn't repeated on every request.
+  const superLongGraceElapsed = new Set<string>()
+
   async function applySuperLongPacing(input: {
     enabled: boolean
     providerID: string
@@ -497,13 +502,30 @@ export namespace LLM {
     abort: AbortSignal
     baseURL?: string
     policy?: SuperLongPolicy.PacingPolicy
+    // Grace window from run start before pacing engages. Applied only when
+    // provided (production always passes it); tests that omit it keep the
+    // historical pace-immediately behavior.
+    pacingGraceMs?: number
     now?: () => number
     sleep?: (ms: number, signal: AbortSignal) => Promise<void>
   }): Promise<SuperLongPacingReservation | undefined> {
     if (!input.enabled || input.small) return
     const key = superLongPacingKey(input)
-    const policy = input.policy ?? SuperLongPolicy.providerPacing(input.providerID, { baseURL: input.baseURL })
+    const policy =
+      input.policy ??
+      SuperLongPolicy.providerPacing(input.providerID, { baseURL: input.baseURL, modelID: input.modelID })
     if (!policy) return
+    if (input.pacingGraceMs !== undefined && input.pacingGraceMs > 0 && !superLongGraceElapsed.has(input.sessionID)) {
+      // peek, never touch: pacing must not start the 72h clock — the prompt
+      // loop's deadline enforcement owns run creation. A session without a
+      // durable run yet is by definition inside its grace window.
+      const startedAt = await SuperLongRuntime.peekSessionStartedAt(input.sessionID).catch(() => undefined)
+      const now = input.now?.() ?? Date.now()
+      if (startedAt === undefined || now - startedAt < input.pacingGraceMs) {
+        return
+      }
+      superLongGraceElapsed.add(input.sessionID)
+    }
     const durablePacingDisabled = isSuperLongDurablePacingDisabled()
     const inMemoryOnly =
       durablePacingDisabled || input.policy !== undefined || input.now !== undefined || input.sleep !== undefined
@@ -908,6 +930,7 @@ export namespace LLM {
   // Reset pacing state between tests; not called in production paths.
   export function clearPacingState() {
     superLongPacing.clear()
+    superLongGraceElapsed.clear()
   }
 
   export function pacingKeyForTest(

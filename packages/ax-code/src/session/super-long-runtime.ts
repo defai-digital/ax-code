@@ -50,7 +50,7 @@ export namespace SuperLongRuntime {
     sessionID: string
     now: number
     stepsDelta?: number
-  }): Promise<{ startedAt: number; totalSteps: number }> {
+  }): Promise<{ startedAt: number; totalSteps: number; created: boolean }> {
     const delta =
       input.stepsDelta !== undefined && Number.isFinite(input.stepsDelta) && input.stepsDelta > 0
         ? Math.floor(input.stepsDelta)
@@ -61,14 +61,18 @@ export namespace SuperLongRuntime {
       if (existing) {
         existing.lastSeenAt = input.now
         existing.totalSteps = (Number.isFinite(existing.totalSteps) ? existing.totalSteps! : 0) + delta
-        return { startedAt: existing.startedAt, totalSteps: existing.totalSteps }
+        return { startedAt: existing.startedAt, totalSteps: existing.totalSteps, created: false }
       }
       runs[input.sessionID] = {
         startedAt: input.now,
         lastSeenAt: input.now,
         totalSteps: delta,
       }
-      return { startedAt: input.now, totalSteps: delta }
+      // `created` lets the caller log run engagement exactly once — the
+      // 2026-07 audit found Super-Long ran completely silently, which
+      // made "is it even working?" unanswerable without digging into the
+      // durable store.
+      return { startedAt: input.now, totalSteps: delta, created: true }
     }, input.now)
   }
 

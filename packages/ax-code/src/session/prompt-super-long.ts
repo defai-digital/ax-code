@@ -40,13 +40,26 @@ export async function enforceSuperLongDeadline(input: {
     sessionID: input.sessionID,
     now,
     stepsDelta: input.stepsSinceLastCheck,
-  }).catch((error): { startedAt: number; totalSteps: number | undefined } => {
+  }).catch((error): { startedAt: number; totalSteps: number | undefined; created: false } => {
     log.warn("failed to load durable super-long session start; using current loop start", {
       sessionID: input.sessionID,
       error,
     })
-    return { startedAt: now, totalSteps: undefined }
+    return { startedAt: now, totalSteps: undefined, created: false }
   })
+  if (run.created) {
+    // One line per run so engagement is visible in the session log —
+    // Super-Long previously activated with zero observable output until a
+    // deadline or pacing event fired.
+    log.info("super-long run engaged", {
+      command: "session.prompt.loop",
+      status: "ok",
+      sessionID: input.sessionID,
+      source: state.source,
+      model: `${input.lastUser.model.providerID}/${input.lastUser.model.modelID}`,
+      durationMs: input.config?.requestedDurationMs ?? SuperLongPolicy.maxDurationMs(),
+    })
+  }
   const startedAt = run.startedAt
   const deadline = SuperLongPolicy.deadline({
     enabled,

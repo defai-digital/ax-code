@@ -734,6 +734,16 @@ export const Info = z
             .max(72)
             .optional()
             .describe("Runtime ceiling for a Super-Long run in hours (default and hard maximum: 72)"),
+          pacing_grace_minutes: z
+            .number()
+            .min(0)
+            .max(72 * 60)
+            .optional()
+            .describe(
+              "Minutes from run start before provider request pacing engages (default 120). " +
+                "The grace window keeps the productive early phase of an agentic run unthrottled; " +
+                "0 paces from the first request.",
+            ),
         }),
       ])
       .optional()

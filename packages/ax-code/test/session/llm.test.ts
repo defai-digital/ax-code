@@ -1789,6 +1789,64 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
     )
   })
 
+  test("super-long pacing grace window skips pacing until the run is old enough", async () => {
+    const base = {
+      sessionID: "session-pacing-grace",
+      providerID: "alibaba-coding-plan",
+      modelID: "qwen3.7-max",
+      enabled: true,
+      abort: new AbortController().signal,
+      policy: { windowMs: 1_000, maxRequests: 1, minDelayMs: 500 },
+      pacingGraceMs: 2 * 60 * 60 * 1000,
+    }
+    const now = 10_000_000
+
+    // Inside the grace window: no reservation, no pacing state recorded.
+    const peekSpy = vi
+      .spyOn(SuperLongRuntime, "peekSessionStartedAt")
+      .mockResolvedValue(now - 60_000)
+    try {
+      const early = await LLM.applySuperLongPacingForTest({ ...base, now: () => now })
+      expect(early).toBeUndefined()
+      expect(LLM.getPacingStateForTest(base)).toBeUndefined()
+
+      // No durable run yet = by definition inside the grace window.
+      peekSpy.mockResolvedValue(undefined)
+      expect(await LLM.applySuperLongPacingForTest({ ...base, now: () => now })).toBeUndefined()
+
+      // Past the grace window: pacing engages, and the latch stops further
+      // durable-store peeks.
+      peekSpy.mockResolvedValue(now - 3 * 60 * 60 * 1000)
+      const paced = await LLM.applySuperLongPacingForTest({ ...base, now: () => now })
+      expect(paced).toBeDefined()
+      const peeksAfterEngage = peekSpy.mock.calls.length
+      await LLM.applySuperLongPacingForTest({ ...base, now: () => now + 1_000 })
+      expect(peekSpy.mock.calls.length).toBe(peeksAfterEngage)
+    } finally {
+      peekSpy.mockRestore()
+    }
+  })
+
+  test("super-long pacing grace of zero paces from the first request without peeking", async () => {
+    const peekSpy = vi.spyOn(SuperLongRuntime, "peekSessionStartedAt")
+    try {
+      const reservation = await LLM.applySuperLongPacingForTest({
+        sessionID: "session-pacing-no-grace",
+        providerID: "alibaba-coding-plan",
+        modelID: "qwen3.7-max",
+        enabled: true,
+        abort: new AbortController().signal,
+        policy: { windowMs: 1_000, maxRequests: 10, minDelayMs: 100 },
+        pacingGraceMs: 0,
+        now: () => 5_000,
+      })
+      expect(reservation).toBeDefined()
+      expect(peekSpy).not.toHaveBeenCalled()
+    } finally {
+      peekSpy.mockRestore()
+    }
+  })
+
   test("super-long pacing state is shared across sessions for the same provider and model", async () => {
     const sessionA = {
       sessionID: "session-pacing-a",
