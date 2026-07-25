@@ -1539,12 +1539,29 @@ function handleEvent(
   switch (payload.type) {
     case "session.created":
     case "session.updated":
-    case "session.deleted":
+    case "session.deleted": {
       draft.session = [...current.session]
       draft.permission = { ...current.permission }
       draft.todo = { ...current.todo }
       draft.part = { ...current.part }
+      // Archive and delete additionally run cleanupSessionCaches, which
+      // deletes from four more slices. Those must be cloned too — deleting
+      // through the un-cloned reference mutates the PREVIOUS state object in
+      // place, so reference-equality memos over these slices (e.g. the
+      // running-session status counts) keep serving stale data after a busy
+      // session is archived or deleted.
+      const lifecycleInfo = (payload.properties as { info?: Session } | undefined)?.info
+      if (
+        payload.type === "session.deleted" ||
+        (payload.type === "session.updated" && lifecycleInfo?.time?.archived)
+      ) {
+        draft.message = { ...current.message }
+        draft.session_diff = { ...current.session_diff }
+        draft.session_status = { ...(current.session_status ?? {}) }
+        draft.question = { ...current.question }
+      }
       break
+    }
     case "session.diff":
       draft.session_diff = { ...current.session_diff }
       break

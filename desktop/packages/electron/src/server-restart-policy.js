@@ -32,6 +32,18 @@ function createServerRestartPolicy(options = {}) {
   }
 }
 
+// Classifies a server utilityProcess exit event: crash recovery must fire
+// only for a server that actually became ready and is still the current
+// process. A start attempt that failed (timeout or error before ready) also
+// reaches the exit handler with its launch promise already settled — its
+// caller owns the retry, and treating that exit as a crash re-enters
+// recovery, which can queue a pending pass that later forks a duplicate
+// server while a healthy replacement is already running (orphaning it).
+function shouldRecoverAfterServerExit({ becameReady = false, wasCurrent = false, quitting = false } = {}) {
+  return becameReady && wasCurrent && !quitting
+}
+
 module.exports = {
   createServerRestartPolicy,
+  shouldRecoverAfterServerExit,
 }

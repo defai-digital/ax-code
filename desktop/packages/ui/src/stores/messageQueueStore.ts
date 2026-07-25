@@ -28,6 +28,8 @@ interface MessageQueueActions {
   removeFromQueue: (sessionId: string, messageId: string) => void
   popToInput: (sessionId: string, messageId: string) => QueuedMessage | null
   clearQueue: (sessionId: string) => void
+  /** Drop queues for deleted sessions so persisted storage stays bounded. */
+  clearSessions: (sessionIds: Iterable<string>) => void
   clearAllQueues: () => void
   setQueueMode: (enabled: boolean) => void
   getQueueForSession: (sessionId: string) => QueuedMessage[]
@@ -128,6 +130,22 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
             const { [sessionId]: _removed, ...rest } = state.queuedMessages
             void _removed
             return { queuedMessages: rest }
+          })
+        },
+
+        clearSessions: (sessionIds) => {
+          const idSet = sessionIds instanceof Set ? sessionIds : new Set(sessionIds)
+          if (idSet.size === 0) return
+          set((state) => {
+            let changed = false
+            const queuedMessages = { ...state.queuedMessages }
+            for (const sessionId of idSet) {
+              if (sessionId in queuedMessages) {
+                delete queuedMessages[sessionId]
+                changed = true
+              }
+            }
+            return changed ? { queuedMessages } : state
           })
         },
 

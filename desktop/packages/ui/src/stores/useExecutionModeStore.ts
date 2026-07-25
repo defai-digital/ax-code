@@ -5,8 +5,11 @@ import { useI18nStore, formatMessage } from "@/lib/i18n/store"
 import { normalizeDirectoryKey } from "@/stores/utils/directoryKey"
 import { withTimeout } from "@/lib/asyncTimeout"
 
-// Bound the flag read so a stalled request can't keep the Autonomous toggle
-// spinning + disabled forever; `pending` always clears and the control stays usable.
+// Bound both the flag read (loadMode) and the flag writes (setMode) so a
+// stalled request can't keep the Autonomous toggle spinning + disabled
+// forever; `pending` always clears and the control stays usable. A write
+// that outlives the bound may still land server-side — the store drops the
+// optimistic value and the next loadMode re-reads server truth.
 const EXECUTION_MODE_REQUEST_TIMEOUT_MS = 12_000
 
 /**
@@ -164,7 +167,15 @@ export const useExecutionModeStore = create<ExecutionModeStore>()((set, get) => 
       pendingByDirectory: { ...s.pendingByDirectory, [key]: true },
     }))
 
-    const result = await applyMode(directory, mode, previous)
+    // applyMode converts rejections to { ok: false }, but a request that
+    // never settles (hung server, sleep/wake) would otherwise latch
+    // `pending` forever and leave the whole selector disabled — the same
+    // bound loadMode applies to its read.
+    const result = await withTimeout(
+      applyMode(directory, mode, previous),
+      EXECUTION_MODE_REQUEST_TIMEOUT_MS,
+      (): ApplyModeResult => ({ ok: false, settled: null }),
+    )
 
     set((s) => {
       const pendingByDirectory = { ...s.pendingByDirectory, [key]: false }

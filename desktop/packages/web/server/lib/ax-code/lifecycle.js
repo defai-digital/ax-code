@@ -146,7 +146,11 @@ export const createAxCodeLifecycleRuntime = (deps) => {
         }
 
         socket.once("connect", () => finish(false))
-        socket.once("timeout", () => finish(true))
+        // A connect timeout is inconclusive — the port may still be bound by
+        // an old, unresponsive process (neither refused nor accepted). Treat
+        // it as still-bound and keep polling until the deadline; reporting
+        // "released" here made a fixed-port respawn hit EADDRINUSE.
+        socket.once("timeout", () => finish(false))
         socket.once("error", (error) => {
           if (error && typeof error === "object" && (error.code === "ECONNREFUSED" || error.code === "EHOSTUNREACH")) {
             finish(true)
@@ -732,35 +736,50 @@ export const createAxCodeLifecycleRuntime = (deps) => {
   }
 
   const startAxCode = async () => {
-    let lastError = null
-    for (let attempt = 1; attempt <= START_AX_CODE_MAX_ATTEMPTS; attempt += 1) {
-      try {
-        return await startAxCodeOnce()
-      } catch (error) {
-        lastError = error
-        if (error?.code === "AX_CODE_BINARY_INVALID") {
-          break
-        }
-        if (state.isShuttingDown) {
-          break
-        }
-        if (attempt >= START_AX_CODE_MAX_ATTEMPTS) {
-          break
-        }
+    // Publish the in-flight start so restartAxCode can await it: bootstrap
+    // calls startAxCode() without the restart mutex, and a config-change
+    // restart racing that window used to see axCodeProcess === null, skip
+    // the close, and spawn a second ax-code child — whichever assignment
+    // lost the race was orphaned with its port still bound.
+    const startPromise = (async () => {
+      let lastError = null
+      for (let attempt = 1; attempt <= START_AX_CODE_MAX_ATTEMPTS; attempt += 1) {
+        try {
+          return await startAxCodeOnce()
+        } catch (error) {
+          lastError = error
+          if (error?.code === "AX_CODE_BINARY_INVALID") {
+            break
+          }
+          if (state.isShuttingDown) {
+            break
+          }
+          if (attempt >= START_AX_CODE_MAX_ATTEMPTS) {
+            break
+          }
 
-        const message = error instanceof Error ? error.message : String(error)
-        console.warn(
-          `[AX Code] Managed server startup failed on attempt ${attempt}/${START_AX_CODE_MAX_ATTEMPTS}; retrying: ${message}`,
-        )
-        state.axCodePort = null
-        state.isAxCodeReady = false
-        state.axCodeNotReadySince = Date.now()
-        syncToHmrState()
-        await delay(750 * attempt)
+          const message = error instanceof Error ? error.message : String(error)
+          console.warn(
+            `[AX Code] Managed server startup failed on attempt ${attempt}/${START_AX_CODE_MAX_ATTEMPTS}; retrying: ${message}`,
+          )
+          state.axCodePort = null
+          state.isAxCodeReady = false
+          state.axCodeNotReadySince = Date.now()
+          syncToHmrState()
+          await delay(750 * attempt)
+        }
+      }
+
+      throw lastError
+    })()
+    state.currentStartPromise = startPromise
+    try {
+      return await startPromise
+    } finally {
+      if (state.currentStartPromise === startPromise) {
+        state.currentStartPromise = null
       }
     }
-
-    throw lastError
   }
 
   const restartAxCode = async () => {
@@ -776,6 +795,17 @@ export const createAxCodeLifecycleRuntime = (deps) => {
       state.axCodeNotReadySince = Date.now()
       lastHealthProbeResult = null
       console.log("Restarting ax-code process...")
+
+      // If bootstrap's startAxCode() is still in flight, wait for it so the
+      // restart sees the assigned process handle and closes it below —
+      // instead of concurrently spawning a duplicate child.
+      if (state.currentStartPromise) {
+        try {
+          await state.currentStartPromise
+        } catch {
+          // The in-flight start failed; restarting with a fresh spawn is fine.
+        }
+      }
 
       if (state.isExternalAxCode) {
         console.log("Re-probing external ax-code server...")
@@ -814,10 +844,25 @@ export const createAxCodeLifecycleRuntime = (deps) => {
 
       if (state.axCodeProcess) {
         console.log("Stopping existing ax-code process...")
+        // Bound close() like the shutdown path does: an SDK close that never
+        // settles would otherwise leave currentRestartPromise pending and
+        // isRestartingAxCode latched forever — health checks early-return on
+        // that flag, so every future self-heal would be permanently disabled.
+        let closeTimeout = null
         try {
-          await state.axCodeProcess.close()
+          await Promise.race([
+            state.axCodeProcess.close(),
+            new Promise((resolve) => {
+              closeTimeout = setTimeout(() => {
+                console.warn("Timed out closing ax-code process during restart; continuing")
+                resolve()
+              }, 5000)
+            }),
+          ])
         } catch (error) {
           console.warn("Error closing ax-code process:", error)
+        } finally {
+          if (closeTimeout) clearTimeout(closeTimeout)
         }
         state.axCodeProcess = null
         syncToHmrState()
@@ -840,6 +885,13 @@ export const createAxCodeLifecycleRuntime = (deps) => {
       if (state.axCodeApiDetectionTimer) {
         clearTimeout(state.axCodeApiDetectionTimer)
         state.axCodeApiDetectionTimer = null
+      }
+
+      // Entry checked isShuttingDown, but a shutdown can begin while this
+      // restart was closing the old process — spawning now would create a
+      // child that outlives the shutdown as an orphan.
+      if (state.isShuttingDown) {
+        throw new Error("Shutdown in progress — not restarting ax-code")
       }
 
       state.lastAxCodeError = null

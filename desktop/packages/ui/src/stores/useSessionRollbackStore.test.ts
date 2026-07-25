@@ -84,6 +84,56 @@ describe("useSessionRollbackStore", () => {
     vi.doUnmock("@/lib/ax-code/client")
     vi.doUnmock("@/stores/useDirectoryStore")
     vi.resetModules()
+    vi.useRealTimers()
+  })
+
+  test("a rollback points request that never settles times out instead of latching the spinner", async () => {
+    vi.useFakeTimers()
+    const { useSessionRollbackStore } = await importStore()
+
+    const refresh = useSessionRollbackStore.getState().refreshPoints("ses_1", { directory: "/repo" })
+    const outcome = refresh.catch((error: unknown) => error)
+    await Promise.resolve()
+    expect(useSessionRollbackStore.getState().isLoading("ses_1", { directory: "/repo" })).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(12_000)
+
+    expect(await outcome).toBeInstanceOf(Error)
+    expect(String(await outcome)).toContain("Timed out")
+    expect(useSessionRollbackStore.getState().isLoading("ses_1", { directory: "/repo" })).toBe(false)
+    expect(useSessionRollbackStore.getState().getError("ses_1", { directory: "/repo" })).toContain("Timed out")
+  })
+
+  test("clearSession prunes loading and error entries alongside cached points", async () => {
+    vi.useFakeTimers()
+    const { rollbackRequests, useSessionRollbackStore } = await importStore()
+
+    // First key reaches a persistent error state via timeout.
+    const failed = useSessionRollbackStore
+      .getState()
+      .refreshPoints("ses_1", { directory: "/repo" })
+      .catch(() => undefined)
+    await vi.advanceTimersByTimeAsync(12_000)
+    await failed
+    expect(useSessionRollbackStore.getState().getError("ses_1", { directory: "/repo" })).not.toBeNull()
+
+    // Second key is mid-flight with the loading flag set.
+    void useSessionRollbackStore
+      .getState()
+      .refreshPoints("ses_1", { directory: "/repo", tool: "edit" })
+      .catch(() => undefined)
+    await Promise.resolve()
+    expect(useSessionRollbackStore.getState().isLoading("ses_1", { directory: "/repo", tool: "edit" })).toBe(true)
+
+    useSessionRollbackStore.getState().clearSession("ses_1", "/repo")
+
+    expect(useSessionRollbackStore.getState().getError("ses_1", { directory: "/repo" })).toBeNull()
+    expect(useSessionRollbackStore.getState().isLoading("ses_1", { directory: "/repo", tool: "edit" })).toBe(false)
+    expect(useSessionRollbackStore.getState().getPoints("ses_1", { directory: "/repo" })).toEqual([])
+    // The untouched maps hold no leftover entries for the cleared session.
+    expect(Object.keys(useSessionRollbackStore.getState().loadingKeys)).toEqual([])
+    expect(Object.keys(useSessionRollbackStore.getState().errorKeys)).toEqual([])
+    rollbackRequests.forEach((request) => request.resolve({ data: [] }))
   })
 
   test("does not let an older rollback refresh overwrite a newer refresh", async () => {

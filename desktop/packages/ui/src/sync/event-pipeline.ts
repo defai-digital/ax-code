@@ -473,15 +473,20 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
     syncDebug.pipeline.flush(events.length)
     try {
       for (const payload of events) {
-        onEvent(directory, payload)
+        // Isolate each event: a reducer throw on one malformed event (e.g.
+        // a version-skewed backend sending an unexpected properties shape)
+        // must not discard the rest of the batch coalesced into this frame —
+        // dropping in-flight streaming deltas corrupts the visible chat.
+        try {
+          onEvent(directory, payload)
+        } catch (error) {
+          console.error("[event-pipeline] event handler threw during flush", error)
+        }
       }
-    } catch (error) {
-      // A reducer/handler throw must not prevent the buffer from being
-      // cleared — otherwise the same events would be re-delivered on the
-      // next flush, and if the throw is deterministic the pipeline enters
-      // an infinite re-delivery loop.
-      console.error("[event-pipeline] event handler threw during flush", error)
     } finally {
+      // Clearing the buffer even on unexpected throws keeps the pipeline
+      // from re-delivering the same events on the next flush — a
+      // deterministic throw would otherwise enter an infinite loop.
       d.buffer.length = 0
     }
   }

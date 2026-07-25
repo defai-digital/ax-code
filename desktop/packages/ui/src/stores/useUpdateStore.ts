@@ -8,6 +8,13 @@ import {
   isDesktopShell,
   isWebRuntime,
 } from "@/lib/desktop"
+import { withTimeout } from "@/lib/asyncTimeout"
+
+// Bound the native update check so a hung updater IPC cannot latch
+// `checking` (the timeout surfaces as a failed check). Downloads are
+// deliberately unbounded — they can legitimately run for minutes and
+// report progress while doing so.
+const UPDATE_CHECK_TIMEOUT_MS = 30_000
 
 export type UpdateState = {
   checking: boolean
@@ -76,7 +83,11 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
         // result is authoritative — do not consult the OpenChamber npm/web
         // update API here, or the dialog would surface OpenChamber's package
         // version and changelog instead of AX Code's.
-        const desktopInfo = await checkForDesktopUpdates()
+        const desktopInfo = await withTimeout(
+          checkForDesktopUpdates(),
+          UPDATE_CHECK_TIMEOUT_MS,
+          (): UpdateInfo => ({ available: false, currentVersion: "", error: "Update check timed out" }),
+        )
         if (!isCurrentRequest()) return null
         if (desktopInfo?.error) {
           console.warn("Desktop update check failed:", desktopInfo.error)

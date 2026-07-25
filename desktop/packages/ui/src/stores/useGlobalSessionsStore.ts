@@ -406,6 +406,22 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         sessionsByDirectory: removeSessionsFromDirectoryMap(state.sessionsByDirectory, idSet),
       }
     })
+
+    // Every delete path funnels through here, so this is the one place to
+    // drop persisted per-session client state (queued messages incl. base64
+    // attachments, auto-accept toggles) — both maps otherwise grow forever
+    // and the auto-accept one re-broadcasts a server POST per dead session
+    // on every startup. Dynamic imports avoid a static cycle
+    // (permissionStore → session-actions → this store). Deliberately not
+    // done for archiveSessions: unarchive must restore a session intact.
+    void Promise.all([import("@/stores/messageQueueStore"), import("@/stores/permissionStore")])
+      .then(([queue, permission]) => {
+        queue.useMessageQueueStore.getState().clearSessions(idSet)
+        permission.usePermissionStore.getState().pruneAutoAccept(idSet)
+      })
+      .catch(() => {
+        // best-effort cleanup — never let it break the removal itself
+      })
   },
 
   archiveSessions: (ids, archivedAt = Date.now()) => {

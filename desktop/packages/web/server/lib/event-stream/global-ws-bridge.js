@@ -137,8 +137,32 @@ export function createGlobalMessageStreamWsBridge({
       return
     }
 
-    if (status.type === "error" && status.error?.type === "stream_error") {
-      console.warn("Message stream WS proxy error:", status.error.error)
+    if (status.type === "error") {
+      if (status.error?.type === "stream_error") {
+        console.warn("Message stream WS proxy error:", status.error.error)
+      }
+      // After the hub's first successful connect, upstream failures surface
+      // as "error" (never "initial-error"). A client that connected while
+      // the upstream was down would otherwise wedge silently: added to
+      // `clients`, never marked ready (accept guards on isConnected), never
+      // sent an error — just pinged forever. For such a client this IS an
+      // initial error, so give it the same error-frame + close treatment;
+      // already-ready clients stay connected and resume on "connect".
+      const error = status.error
+      const message =
+        error?.type === "upstream_unavailable"
+          ? `AX Code event stream unavailable (${error.status})`
+          : "AX Code event stream unavailable"
+      for (const socket of Array.from(clients)) {
+        if (readyClients.has(socket)) {
+          continue
+        }
+        sendMessageStreamWsFrame(socket, { type: "error", message })
+        try {
+          socket.close(1011, "AX Code event stream unavailable")
+        } catch {}
+        removeClient(socket)
+      }
     }
   })
 

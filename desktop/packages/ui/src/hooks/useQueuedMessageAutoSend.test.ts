@@ -58,9 +58,9 @@ vi.doMock("@/sync/session-ui-store", () => ({
   },
 }))
 
-const { buildQueuedAutoSendPayload, sendQueuedAutoSendPayload, shouldDispatchQueuedAutoSend } = await import(
-  "./useQueuedMessageAutoSend"
-)
+const { buildQueuedAutoSendPayload, isQueuedAutoSendHeld, sendQueuedAutoSendPayload, shouldDispatchQueuedAutoSend } =
+  await import("./useQueuedMessageAutoSend")
+const { useNotificationStore } = await import("@/sync/notification-store")
 
 describe("shouldDispatchQueuedAutoSend", () => {
   test("dispatches only after an active session becomes idle", () => {
@@ -71,6 +71,25 @@ describe("shouldDispatchQueuedAutoSend", () => {
   test("does not dispatch when idle is only first seen or status is missing", () => {
     expect(shouldDispatchQueuedAutoSend(undefined, "idle")).toBe(false)
     expect(shouldDispatchQueuedAutoSend("idle", "idle")).toBe(false)
+  })
+})
+
+describe("isQueuedAutoSendHeld", () => {
+  test("holds auto-send while the session has an unseen error, matching the chips' Held label", () => {
+    expect(isQueuedAutoSendHeld("session-err")).toBe(false)
+
+    useNotificationStore.getState().append({
+      type: "error",
+      session: "session-err",
+      time: Date.now(),
+      viewed: false,
+      error: { message: "turn failed" },
+    })
+    expect(isQueuedAutoSendHeld("session-err")).toBe(true)
+
+    // Viewing the session clears the unseen error and releases the hold.
+    useNotificationStore.getState().markSessionViewed("session-err")
+    expect(isQueuedAutoSendHeld("session-err")).toBe(false)
   })
 })
 

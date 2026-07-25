@@ -1080,6 +1080,16 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   },
   scheduledTasksRuntime,
   destroyAllClientConnections: () => {
+    // Stop the shared global event hub first: nothing else ever calls
+    // stop() on it, so without this its upstream reader keeps reconnecting
+    // to the killed ax-code every second after an embedded shutdown
+    // (exitProcess: false) — and every dev HMR reload leaked another live
+    // reader loop.
+    try {
+      globalMessageStreamHub.stop()
+    } catch {
+      /* ignore */
+    }
     // Close all tracked SSE connections
     for (const client of uiNotificationClients) {
       try {

@@ -6,6 +6,7 @@ import { useConfigStore } from "@/stores/useConfigStore"
 import { parseAgentMentions } from "@/lib/messages/agentMentions"
 import { getSyncSessionStatus } from "@/sync/sync-refs"
 import { useDirectorySync } from "@/sync/sync-context"
+import { useNotificationStore } from "@/sync/notification-store"
 
 type SessionStatusType = "idle" | "busy" | "retry"
 
@@ -18,6 +19,15 @@ const hasRecentAbort = (sessionId: string): boolean => {
   }
   return Date.now() - abortRecord.timestamp < RECENT_ABORT_WINDOW_MS
 }
+
+// QueuedMessageChips renders exactly this state as a red "Held" label: an
+// unseen error notification means the queue is being withheld until the user
+// looks at what went wrong. Auto-send must honor the same state — otherwise
+// the next busy→idle edge fires the "held" message into the errored session
+// while the UI claims it is parked. Manual send from the chip stays
+// available, and viewing the session clears the flag (markSessionViewed).
+export const isQueuedAutoSendHeld = (sessionId: string): boolean =>
+  useNotificationStore.getState().sessionHasError(sessionId)
 
 export const buildQueuedAutoSendPayload = (queue: QueuedMessage[]) => {
   const queued = queue[0]
@@ -124,6 +134,9 @@ export function useQueuedMessageAutoSend(enabledOrOptions?: boolean | { enabled?
         return
       }
       if (hasRecentAbort(sessionId)) {
+        return
+      }
+      if (isQueuedAutoSendHeld(sessionId)) {
         return
       }
 

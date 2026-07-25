@@ -29,7 +29,7 @@ const { assertDesktopReadFileAllowed } = require("./desktop-read-file-policy")
 const { sanitizeDesktopWindowTitle } = require("./desktop-window-title")
 const { shouldIncludeNativeSearchEntry, toNativeSearchRelativePath } = require("./desktop-file-search")
 const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support-urls")
-const { createServerRestartPolicy } = require("./server-restart-policy")
+const { createServerRestartPolicy, shouldRecoverAfterServerExit } = require("./server-restart-policy")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
 const { sendUpdateProgressToWindows } = require("./update-progress")
 const { normalizeInstalledAppsCache } = require("./installed-apps-cache")
@@ -228,6 +228,10 @@ function launchServer() {
     })
 
     let settled = false
+    // True only once the child reported "ready". Distinct from `settled`,
+    // which also covers failed starts (timeout / error message) — those
+    // exits belong to the launch attempt's caller, not crash recovery.
+    let becameReady = false
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
@@ -252,6 +256,7 @@ function launchServer() {
       if (settled) return
       if (msg?.type === "ready") {
         settled = true
+        becameReady = true
         clearTimeout(timer)
         serverPort = msg.port
         recordStartupEvent("server.utilityProcess.ready", { port: serverPort }, { once: false })
@@ -265,7 +270,6 @@ function launchServer() {
 
     const child = serverChild
     child.on("exit", (code) => {
-      const wasReady = settled
       const wasCurrent = serverChild === child
       // Only null the module variable if it still points to THIS process.
       // After crash recovery the old process's exit event may fire AFTER
@@ -276,7 +280,7 @@ function launchServer() {
         settled = true
         clearTimeout(timer)
         reject(new Error(`server process exited before ready (code ${code})`))
-      } else if (wasReady && wasCurrent && !isQuitting) {
+      } else if (shouldRecoverAfterServerExit({ becameReady, wasCurrent, quitting: isQuitting })) {
         if (serverStabilityTimer) {
           clearTimeout(serverStabilityTimer)
           serverStabilityTimer = null

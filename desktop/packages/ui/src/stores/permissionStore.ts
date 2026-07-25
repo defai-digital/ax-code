@@ -16,6 +16,12 @@ interface PermissionState {
 interface PermissionActions {
   isSessionAutoAccepting: (sessionId: string) => boolean
   setSessionAutoAccept: (sessionId: string, enabled: boolean) => Promise<void>
+  /**
+   * Drop auto-accept entries for deleted sessions. Without this the persisted
+   * map only ever grows, and every startup re-broadcasts a suppression POST
+   * for each long-gone session (onRehydrateStorage).
+   */
+  pruneAutoAccept: (sessionIds: Iterable<string>) => void
 }
 
 type PermissionStore = PermissionState & PermissionActions
@@ -228,6 +234,22 @@ export const usePermissionStore = create<PermissionStore>()(
       (set, get) => ({
         autoAccept: {},
 
+        pruneAutoAccept: (sessionIds: Iterable<string>) => {
+          const idSet = sessionIds instanceof Set ? sessionIds : new Set(sessionIds)
+          if (idSet.size === 0) return
+          set((state) => {
+            let changed = false
+            const autoAccept = { ...state.autoAccept }
+            for (const sessionId of idSet) {
+              if (sessionId in autoAccept) {
+                delete autoAccept[sessionId]
+                changed = true
+              }
+            }
+            return changed ? { autoAccept } : state
+          })
+        },
+
         isSessionAutoAccepting: (sessionId: string) => {
           if (!sessionId) {
             return false
@@ -326,10 +348,20 @@ export const usePermissionStore = create<PermissionStore>()(
             mergedPending.set(permission.id, { id: permission.id, sessionID: permission.sessionID })
           }
 
+          // The gather above awaits network calls (pending-permission list +
+          // ancestry lookups), so the user may have switched auto-accept back
+          // off while it ran. An enable captured at call time must not keep
+          // auto-approving after that — re-check the live toggle before
+          // responding, per permission, so a mid-flight disable stops the
+          // batch instead of silently granting prompts the user just declined
+          // to auto-grant.
           await Promise.all(
-            Array.from(mergedPending.values()).map((permission) =>
-              respondToPermission(permission.sessionID, permission.id, "once").catch(() => undefined),
-            ),
+            Array.from(mergedPending.values()).map((permission) => {
+              if (get().autoAccept[sessionId] !== true) {
+                return undefined
+              }
+              return respondToPermission(permission.sessionID, permission.id, "once").catch(() => undefined)
+            }),
           )
         },
       }),
