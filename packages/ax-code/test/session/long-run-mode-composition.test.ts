@@ -7,10 +7,11 @@
  */
 import { describe, expect, test } from "vitest"
 import { AutonomousCompletionGate } from "../../src/control-plane/autonomous-completion-gate"
-import { GLOBAL_STEP_LIMIT, SUPER_LONG_TOTAL_STEP_HEADROOM } from "../../src/constants/session"
+import { GLOBAL_STEP_LIMIT, GOAL_TOTAL_STEP_HEADROOM, SUPER_LONG_TOTAL_STEP_HEADROOM } from "../../src/constants/session"
 import { GoalVerification } from "../../src/session/goal-verification"
 import {
   effectiveContinuationCap,
+  effectiveTotalStepLimit,
   emptyModelTurnDecision,
   globalStepLimitDecision,
   goalContinuationDecision,
@@ -94,6 +95,31 @@ describe("long-run mode composition", () => {
     expect(total.action).toBe("stop")
     if (total.action !== "stop") throw new Error("expected stop")
     expect(total.errorCode).toBe("TOTAL_STEP_LIMIT")
+  })
+
+  test("active goal without Super-Long gets the long-run total ceiling, not the plain-autonomous one", () => {
+    const limits = promptLoopLimits({ session: undefined } as any)
+    expect(limits.maxTotalStepsGoal).toBe(GLOBAL_STEP_LIMIT * GOAL_TOTAL_STEP_HEADROOM)
+
+    const ceiling = effectiveTotalStepLimit({
+      superLongActive: false,
+      goalActive: true,
+      maxTotalSteps: limits.maxTotalSteps,
+      maxTotalStepsSuperLong: limits.maxTotalStepsSuperLong,
+      maxTotalStepsGoal: limits.maxTotalStepsGoal,
+    })
+    expect(ceiling).toBe(GLOBAL_STEP_LIMIT * GOAL_TOTAL_STEP_HEADROOM)
+
+    // A goal run at the point where the plain-autonomous default used to kill
+    // it with a step-limit error keeps going under the long-run ceiling...
+    expect(
+      totalStepLimitDecision({ totalSteps: limits.maxTotalSteps, totalStepLimit: ceiling, continuations: 40 }).action,
+    ).toBe("ignore")
+
+    // ...and the long-run backstop itself is still binding.
+    expect(totalStepLimitDecision({ totalSteps: ceiling, totalStepLimit: ceiling, continuations: 400 }).action).toBe(
+      "stop",
+    )
   })
 
   test("active goal + Super-Long compose: cap lifted, total-step still hard-stops", () => {

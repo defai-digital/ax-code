@@ -767,7 +767,8 @@ export const Info = z
           .optional()
           .describe(
             "Hard ceiling on cumulative steps across ALL auto-continuations, including active goals and Super-Long runs " +
-              "(default: max_steps × (max_continuations + 1); Super-Long default: max_steps × 40)",
+              "(default: max_steps × (max_continuations + 1); active-goal and Super-Long runs default: max_steps × 40). " +
+              "When the ceiling ends an active-goal run, the goal is paused and resumable with /goal resume",
           ),
         max_todo_retries: NonNegativeInteger.optional().describe(
           "In autonomous mode, how many times to auto-continue when todos remain pending after the model stops (default: 10, 0 to disable)",

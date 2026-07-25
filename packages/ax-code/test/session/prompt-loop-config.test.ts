@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { GLOBAL_STEP_LIMIT, SUPER_LONG_TOTAL_STEP_HEADROOM } from "../../src/constants/session"
+import { GLOBAL_STEP_LIMIT, GOAL_TOTAL_STEP_HEADROOM, SUPER_LONG_TOTAL_STEP_HEADROOM } from "../../src/constants/session"
 import {
   MAX_EMPTY_MODEL_TURN_RETRIES,
   MAX_TRUNCATED_MODEL_TURN_RETRIES,
@@ -13,6 +13,7 @@ describe("promptLoopLimits", () => {
       maxContinuations: 3,
       maxTotalSteps: GLOBAL_STEP_LIMIT * 4,
       maxTotalStepsSuperLong: GLOBAL_STEP_LIMIT * SUPER_LONG_TOTAL_STEP_HEADROOM,
+      maxTotalStepsGoal: GLOBAL_STEP_LIMIT * GOAL_TOTAL_STEP_HEADROOM,
       maxTodoRetries: 10,
       maxCompletionGateRetries: 2,
       maxEmptyModelTurnRetries: MAX_EMPTY_MODEL_TURN_RETRIES,
@@ -35,6 +36,8 @@ describe("promptLoopLimits", () => {
       // Cumulative ceiling defaults to step limit × (continuations + 1).
       maxTotalSteps: 42 * 6,
       maxTotalStepsSuperLong: 42 * SUPER_LONG_TOTAL_STEP_HEADROOM,
+      // Active goals get the long-run backstop, not the plain-autonomous one.
+      maxTotalStepsGoal: 42 * GOAL_TOTAL_STEP_HEADROOM,
       maxTodoRetries: 1,
       maxCompletionGateRetries: 1,
       maxEmptyModelTurnRetries: MAX_EMPTY_MODEL_TURN_RETRIES,
@@ -42,7 +45,7 @@ describe("promptLoopLimits", () => {
     })
   })
 
-  test("an explicit max_total_steps overrides both derived ceilings", () => {
+  test("an explicit max_total_steps overrides all derived ceilings", () => {
     const limits = promptLoopLimits({
       session: {
         max_total_steps: 777,
@@ -50,5 +53,6 @@ describe("promptLoopLimits", () => {
     } as any)
     expect(limits.maxTotalSteps).toBe(777)
     expect(limits.maxTotalStepsSuperLong).toBe(777)
+    expect(limits.maxTotalStepsGoal).toBe(777)
   })
 })

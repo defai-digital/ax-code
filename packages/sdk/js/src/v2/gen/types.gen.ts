@@ -2282,6 +2282,10 @@ export type Config = {
          * Runtime ceiling for a Super-Long run in hours (default and hard maximum: 72)
          */
         duration_hours?: number
+        /**
+         * Minutes from run start before provider request pacing engages (default 120). The grace window keeps the productive early phase of an agentic run unthrottled; 0 paces from the first request.
+         */
+        pacing_grace_minutes?: number
       }
   isolation?: IsolationConfig
   /**
@@ -2311,7 +2315,7 @@ export type Config = {
      */
     max_continuations?: number
     /**
-     * Hard ceiling on cumulative steps across ALL auto-continuations, including active goals and Super-Long runs (default: max_steps × (max_continuations + 1); Super-Long default: max_steps × 40)
+     * Hard ceiling on cumulative steps across ALL auto-continuations, including active goals and Super-Long runs (default: max_steps × (max_continuations + 1); active-goal and Super-Long runs default: max_steps × 40). When the ceiling ends an active-goal run, the goal is paused and resumable with /goal resume
      */
     max_total_steps?: number
     /**

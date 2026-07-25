@@ -1,5 +1,5 @@
 import type { Config } from "@/config/config"
-import { GLOBAL_STEP_LIMIT, SUPER_LONG_TOTAL_STEP_HEADROOM } from "@/constants/session"
+import { GLOBAL_STEP_LIMIT, GOAL_TOTAL_STEP_HEADROOM, SUPER_LONG_TOTAL_STEP_HEADROOM } from "@/constants/session"
 
 export const MAX_EMPTY_MODEL_TURN_RETRIES = 1
 // Nudge threshold: after this many consecutive tool-only turns, inject a
@@ -43,6 +43,10 @@ export function promptLoopLimits(config: Pick<Config.Info, "session">) {
     // closing the previously unbounded goal/Super-Long paths.
     maxTotalSteps: config.session?.max_total_steps ?? sessionStepLimit * (maxContinuations + 1),
     maxTotalStepsSuperLong: config.session?.max_total_steps ?? sessionStepLimit * SUPER_LONG_TOTAL_STEP_HEADROOM,
+    // Active goals lift the continuation cap like Super-Long, so they get the
+    // same long-run backstop instead of the plain-autonomous ceiling above —
+    // otherwise long goal runs end in a step-limit error instead of completing.
+    maxTotalStepsGoal: config.session?.max_total_steps ?? sessionStepLimit * GOAL_TOTAL_STEP_HEADROOM,
     maxTodoRetries,
     maxCompletionGateRetries: Math.min(maxTodoRetries, 2),
     maxEmptyModelTurnRetries: MAX_EMPTY_MODEL_TURN_RETRIES,

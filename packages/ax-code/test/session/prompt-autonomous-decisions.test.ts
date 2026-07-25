@@ -4,6 +4,7 @@ import {
   completionGateEventState,
   completionGateRetryDecision,
   effectiveContinuationCap,
+  effectiveTotalStepLimit,
   emptyModelTurnDecision,
   globalStepLimitDecision,
   goalContinuationDecision,
@@ -760,6 +761,33 @@ describe("autonomous continuation decisions", () => {
     })
     expect(decision.message).toContain("repeated the same substantial output")
     expect(decision.message).toContain("restart its runtime")
+  })
+})
+
+describe("effective total step limit", () => {
+  const ceilings = {
+    maxTotalSteps: 2000,
+    maxTotalStepsSuperLong: 20_000,
+    maxTotalStepsGoal: 20_000,
+  }
+
+  test("plain autonomous runs use the ordinary cumulative ceiling", () => {
+    expect(effectiveTotalStepLimit({ superLongActive: false, goalActive: false, ...ceilings })).toBe(2000)
+  })
+
+  test("active goals select the long-run ceiling, not the plain-autonomous one", () => {
+    expect(effectiveTotalStepLimit({ superLongActive: false, goalActive: true, ...ceilings })).toBe(20_000)
+  })
+
+  test("Super-Long wins over an active goal (its ceiling pairs with the durable counter)", () => {
+    expect(
+      effectiveTotalStepLimit({
+        superLongActive: true,
+        goalActive: true,
+        ...ceilings,
+        maxTotalStepsSuperLong: 30_000,
+      }),
+    ).toBe(30_000)
   })
 })
 

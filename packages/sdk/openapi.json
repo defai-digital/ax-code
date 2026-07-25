@@ -41513,6 +41513,12 @@
                     "type": "number",
                     "exclusiveMinimum": 0,
                     "maximum": 72
+                  },
+                  "pacing_grace_minutes": {
+                    "description": "Minutes from run start before provider request pacing engages (default 120). The grace window keeps the productive early phase of an agentic run unthrottled; 0 paces from the first request.",
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 4320
                   }
                 }
               }
@@ -41558,7 +41564,7 @@
                 "maximum": 9007199254740991
               },
               "max_total_steps": {
-                "description": "Hard ceiling on cumulative steps across ALL auto-continuations, including active goals and Super-Long runs (default: max_steps × (max_continuations + 1); Super-Long default: max_steps × 40)",
+                "description": "Hard ceiling on cumulative steps across ALL auto-continuations, including active goals and Super-Long runs (default: max_steps × (max_continuations + 1); active-goal and Super-Long runs default: max_steps × 40). When the ceiling ends an active-goal run, the goal is paused and resumable with /goal resume",
                 "type": "integer",
                 "minimum": 10,
                 "maximum": 9007199254740991

@@ -14,6 +14,22 @@ export const DOOM_LOOP_THRESHOLD = 3
 // supervised run, low enough that a stuck loop cannot burn tokens forever.
 // Overridable via `session.max_total_steps`.
 export const SUPER_LONG_TOTAL_STEP_HEADROOM = 40
+// Cumulative step ceiling for active-goal runs, as a multiple of the
+// per-continuation step limit. Goals lift the continuation cap exactly like
+// Super-Long (they run until complete / blocked / budget-limited), but they
+// used to keep the plain-autonomous ceiling (step limit × (continuations + 1)),
+// so legitimate long goal runs died with a step-limit error a few
+// continuations in while the model was still making progress. Aliased to the
+// Super-Long headroom so the two long-run backstops move together.
+// Overridable via `session.max_total_steps`.
+export const GOAL_TOTAL_STEP_HEADROOM = SUPER_LONG_TOTAL_STEP_HEADROOM
+// How close (in remaining total steps) an active-goal run gets to its
+// cumulative ceiling before the prompt loop injects the one-shot convergence
+// warning telling the model to wrap up (verify + complete, or hand off)
+// instead of flying into the hard stop mid-edit. Wide enough for a
+// verification run plus a hand-off summary; narrow enough that a default
+// 20,000-step run spends well under 1% of its budget converging.
+export const GOAL_CEILING_CONVERGENCE_STEPS = 50
 
 // Autonomous mode hardening (ADR-004 / PRD v4.2.0).
 // These bound a single autonomous session. Defaults are wide enough that

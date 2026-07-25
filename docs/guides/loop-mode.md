@@ -54,6 +54,27 @@ a passing verification run.
 /loop 10m check CI status and act on failures
 ```
 
+## Goal budgets and ceilings
+
+An active goal lifts the per-run auto-continuation cap (`session.max_continuations`)
+— the run keeps going until the goal is complete, blocked, paused, or
+budget-limited. What bounds it instead:
+
+- **Token budget** (`/goal --budget N …`): when exhausted, the agent gets one
+  wrap-up turn, then the goal becomes `budget_limited`.
+- **Cumulative step ceiling**: active-goal runs share the Super-Long backstop
+  of `max_steps × 40` total steps (20,000 by default) instead of the ordinary
+  autonomous ceiling of `max_steps × (max_continuations + 1)`. Override with
+  `session.max_total_steps`.
+- Doom-loop detection, blast-radius caps, and the tool-only-turn breaker still
+  apply throughout.
+
+As a goal run approaches the step ceiling the agent receives a one-time
+convergence warning telling it to verify and complete the goal or leave a
+clean hand-off. If the ceiling is reached anyway, the goal is **paused** — not
+failed — and can be picked up again with `/goal resume` (raise
+`session.max_total_steps` first if it needs more headroom).
+
 ## Scheduled tasks — durable, conversational
 
 Ask the agent directly; it uses the `schedule_task`, `list_scheduled_tasks`,

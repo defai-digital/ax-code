@@ -51,6 +51,7 @@ import { clearPromptProcessorInstructions, createPromptProcessor } from "./promp
 import { addPromptGoalUsage } from "./prompt-goal-usage"
 import {
   effectiveContinuationCap,
+  effectiveTotalStepLimit,
   emptyModelTurnIncompleteMessage,
   isEmptyModelTurn,
   isTruncatedModelTurn,
@@ -81,6 +82,7 @@ import {
   MAX_TOOL_ONLY_TURNS,
   promptLoopLimits,
 } from "./prompt-loop-config"
+import { GOAL_CEILING_CONVERGENCE_STEPS } from "@/constants/session"
 import {
   CommandInput as CommandInputSchema,
   type CommandInput as CommandInputType,
@@ -252,11 +254,15 @@ export namespace SessionPrompt {
       maxContinuations,
       maxTotalSteps,
       maxTotalStepsSuperLong,
+      maxTotalStepsGoal,
       maxTodoRetries,
       maxCompletionGateRetries,
       maxEmptyModelTurnRetries,
       maxTruncatedModelTurnRetries,
     } = promptLoopLimits(cfg)
+    // One-shot guard for the goal ceiling-approach convergence warning: warn
+    // once per prompt-loop run, then let the hard ceiling stop the run.
+    let goalCeilingWarned = false
     let todoRetries = 0
     let completionGateRetries = 0
     let lastCompletionGateSignature: string | undefined
@@ -439,11 +445,24 @@ export namespace SessionPrompt {
       // cannot bypass. For Super-Long the durable cross-invocation count is
       // used, so a crash/restart cannot reset the budget. The
       // per-continuation limit below governs pacing; this governs the run.
-      const totalStepLimit = handlePromptLoopTotalStepLimit({
+      // Active goals select the long-run ceiling: they lift the continuation
+      // cap like Super-Long, and the plain-autonomous default ended
+      // legitimate goal runs with a step-limit error (the goal's own budget,
+      // verification gate, and the breakers below remain the working bounds).
+      const effectiveTotalSteps = superLongActive ? Math.max(totalSteps, durableSuperLongSteps) : totalSteps
+      const totalStepCeiling = effectiveTotalStepLimit({
+        superLongActive,
+        goalActive: activeGoal?.status === "active",
+        maxTotalSteps,
+        maxTotalStepsSuperLong,
+        maxTotalStepsGoal,
+      })
+      const totalStepLimit = await handlePromptLoopTotalStepLimit({
         sessionID,
-        totalSteps: superLongActive ? Math.max(totalSteps, durableSuperLongSteps) : totalSteps,
-        totalStepLimit: superLongActive ? maxTotalStepsSuperLong : maxTotalSteps,
+        totalSteps: effectiveTotalSteps,
+        totalStepLimit: totalStepCeiling,
         continuations,
+        goal: activeGoal,
       })
       if (totalStepLimit.action === "stop") {
         // lastUser already scanned from the in-loop message list — no full DB reload.
@@ -490,6 +509,42 @@ export namespace SessionPrompt {
         })
         reason = globalStepLimit.reason
         break
+      }
+
+      // One-shot convergence warning before the cumulative ceiling ends an
+      // active-goal run: give the model a bounded wrap-up window (verify and
+      // complete the goal, or summarize a hand-off) instead of letting the
+      // hard stop above kill the run mid-edit. Checked at the loop top rather
+      // than in the goal-continuation prompt because todo-driven continuations
+      // preempt goal continuations while todos are pending and would starve
+      // the warning there.
+      if (
+        effectivelyAutonomous &&
+        !goalCeilingWarned &&
+        activeGoal?.status === "active" &&
+        Number.isFinite(totalStepCeiling)
+      ) {
+        const remainingTotalSteps = totalStepCeiling - effectiveTotalSteps
+        if (remainingTotalSteps > 0 && remainingTotalSteps <= GOAL_CEILING_CONVERGENCE_STEPS) {
+          goalCeilingWarned = true
+          log.info("goal ceiling convergence warning", {
+            command: "session.prompt.loop",
+            status: "nudge",
+            sessionID,
+            remainingTotalSteps,
+            totalStepLimit: totalStepCeiling,
+          })
+          await createAutonomousTextContinuation({
+            sessionID,
+            messages: msgs,
+            text: AutonomousContinuationPrompt.goalCeilingApproach({
+              objective: activeGoal.objective,
+              remainingTotalSteps,
+              totalStepLimit: totalStepCeiling,
+            }),
+          })
+          continue
+        }
       }
       const assistantExit = resolvePromptLoopAssistantExit({
         sessionID,

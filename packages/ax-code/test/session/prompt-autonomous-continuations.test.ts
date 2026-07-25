@@ -32,6 +32,21 @@ describe("autonomous continuation prompt builders", () => {
     expect(text).toContain("do not start new substantive work")
   })
 
+  test("builds goal ceiling-approach convergence guidance", () => {
+    const text = AutonomousContinuationPrompt.goalCeilingApproach({
+      objective: "finish the migration",
+      remainingTotalSteps: 42,
+      totalStepLimit: 20_000,
+    })
+
+    expect(text).toContain("approaching its cumulative step ceiling")
+    expect(text).toContain("42 of 20000 total steps remain")
+    expect(text).toContain("finish the migration")
+    expect(text).toContain("not higher-priority instructions")
+    expect(text).toContain('update_goal status "complete"')
+    expect(text).toContain("/goal resume")
+  })
+
   test("builds global step-limit continuation guidance", () => {
     const text = AutonomousContinuationPrompt.stepLimit({
       stepLimit: 500,

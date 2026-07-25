@@ -319,6 +319,27 @@ export function resolveTurnToolChoice(input: {
   return { toolChoice: undefined, consumedForceTextOnlyTurn: false }
 }
 
+/**
+ * Selects which cumulative step ceiling bounds the current iteration.
+ * Super-Long and active goals both lift the per-run continuation cap, so both
+ * get long-run ceilings — the plain-autonomous default (step limit × every
+ * permitted continuation) is sized for capped runs and would end legitimate
+ * long goal runs with a step-limit error. Super-Long wins over an active goal
+ * because its ceiling is checked against the durable cross-invocation step
+ * counter (with the shipped defaults the two values are identical anyway).
+ */
+export function effectiveTotalStepLimit(input: {
+  superLongActive: boolean
+  goalActive: boolean
+  maxTotalSteps: number
+  maxTotalStepsSuperLong: number
+  maxTotalStepsGoal: number
+}): number {
+  if (input.superLongActive) return input.maxTotalStepsSuperLong
+  if (input.goalActive) return input.maxTotalStepsGoal
+  return input.maxTotalSteps
+}
+
 // The cumulative ceiling across ALL continuations. Unlike the per-continuation
 // step limit, `totalSteps` is never reset by continueAutonomousLoop, so this
 // bound applies equally to plain autonomous continuations, active goals (which
