@@ -181,6 +181,9 @@ export namespace InstructionPrompt {
   // only, not content: wiki pages can be large and are fetched on demand.
   async function openwikiPointer(loadedInstructions: string[]) {
     const index = path.join(Instance.worktree, "openwiki", "index.md")
+    // Containment check keeps the fixed openwiki pointer under the worktree
+    // root even if worktree resolution is unexpected (security_scan path_traversal).
+    if (!Filesystem.contains(Instance.worktree, index)) return undefined
     if (!(await Filesystem.exists(index))) return undefined
     if (loadedInstructions.some((text) => text.toLowerCase().includes("openwiki"))) return undefined
     return (

@@ -86,8 +86,12 @@ export namespace SyntacticExtractor {
   const languages = new Map<string, Promise<Language | undefined>>()
 
   function loadLanguage(lang: string): Promise<Language | undefined> {
+    if (!supported(lang)) return Promise.resolve(undefined)
     const cached = languages.get(lang)
     if (cached) return cached
+    // Bound cache size to the finite GRAMMARS table so a hot path cannot grow
+    // the map without limit (lifecycle_scan map_growth).
+    if (languages.size >= Object.keys(GRAMMARS).length) return Promise.resolve(undefined)
     const loading = (async () => {
       try {
         const { Language } = await runtime()
