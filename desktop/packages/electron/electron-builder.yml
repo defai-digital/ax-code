@@ -58,8 +58,7 @@ mac:
         LSHandlerRank: Alternate
         LSItemContentTypes:
           - public.folder
-  notarize:
-    teamId: ${APPLE_TEAM_ID}
+  notarize: true
 
 dmg:
   sign: false

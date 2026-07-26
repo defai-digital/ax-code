@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { describe, expect, test } from "vitest"
 import {
   DEFAULT_APPLE_KEYCHAIN_PROFILE,
@@ -6,7 +7,14 @@ import {
   resolveAppleSigningEnv,
 } from "./apple-signing.mjs"
 
+const electronBuilderConfig = readFileSync(new URL("../electron-builder.yml", import.meta.url), "utf8")
+
 describe("local Apple signing configuration", () => {
+  test("uses electron-builder's supported boolean notarization setting", () => {
+    expect(electronBuilderConfig).toMatch(/\n  notarize: true(?:\r?\n|$)/)
+    expect(electronBuilderConfig).not.toMatch(/\n  notarize:\s*\r?\n/)
+  })
+
   test("recognizes macOS packaging arguments", () => {
     expect(isMacPackaging(["--mac", "--arm64"])).toBe(true)
     expect(isMacPackaging(["--mac=dir"])).toBe(true)
