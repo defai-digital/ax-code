@@ -99,15 +99,40 @@ export function createTuiCrashHandler(input: { onError?: (error: unknown) => voi
   }
 }
 
-// Register a crash handler on both fatal process events and return a single
+// Default response for an unhandled promise rejection in a TUI foreground
+// process: log and CONTINUE. Unlike an uncaughtException (which leaves the
+// process in an undefined state and must stay fatal), a rejection typically
+// comes from a fire-and-forget async UI/event handler (keyboard handlers are
+// invoked without awaiting their return value) — tearing down the whole
+// interactive session for one dropped promise is a disproportionate response
+// and was a recurring source of "TUI vanished mid-keystroke" reports.
+export function createTuiRejectionHandler(input: { onError?: (error: unknown) => void } = {}): ProcessHandler {
+  return (error: unknown) => {
+    if (isHarmlessInterrupt(error)) {
+      log.warn("ignored harmless process fault", { error: toErrorMessage(error) })
+      return
+    }
+    input.onError?.(error)
+    log.error("unhandled rejection in tui (session continues)", { error: toErrorMessage(error) })
+  }
+}
+
+// Register a crash handler on fatal process events and return a single
 // unregister for the pair. Shared by thread.ts (passes its own handler that
 // also records diagnostics) and attach.ts (uses createTuiCrashHandler) so both
-// entrypoints restore terminal state on an uncaught error.
-export function registerTuiCrashHandlers(handler: ProcessHandler, input: { namePrefix?: string } = {}) {
+// entrypoints restore terminal state on an uncaught error. uncaughtException
+// stays fatal; unhandledRejection defaults to the log-and-continue handler
+// above unless the caller supplies `onRejection`.
+export function registerTuiCrashHandlers(
+  handler: ProcessHandler,
+  input: { namePrefix?: string; onRejection?: ProcessHandler } = {},
+) {
   const prefix = input.namePrefix ?? "tui"
   const unregister = [
     registerTuiProcessHandler("uncaughtException", handler, { name: `${prefix}-uncaught-exception` }),
-    registerTuiProcessHandler("unhandledRejection", handler, { name: `${prefix}-unhandled-rejection` }),
+    registerTuiProcessHandler("unhandledRejection", input.onRejection ?? createTuiRejectionHandler(), {
+      name: `${prefix}-unhandled-rejection`,
+    }),
   ]
   return () => {
     for (const off of unregister) off()

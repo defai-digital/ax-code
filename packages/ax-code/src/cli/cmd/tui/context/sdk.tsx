@@ -41,6 +41,11 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     let sse: AbortController | undefined
     // Reactive stream health: true once the current event stream is connected.
     const [sseConnected, setSseConnected] = createSignal(props.events?.status?.()?.connected ?? false)
+    // Full stream status (phase/reason/error) so the UI can distinguish a
+    // terminal backend exit from a transient reconnect.
+    const [connectionStatus, setConnectionStatus] = createSignal<StreamConnectionStatus | undefined>(
+      props.events?.status?.(),
+    )
 
     function createSDK() {
       return createAxCodeClient({
@@ -129,6 +134,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
         },
         onStatus: (status) => {
           if (!isCurrentStream()) return
+          setConnectionStatus(status)
           setSseConnected(status.connected)
         },
         onError: (error, status) => {
@@ -153,6 +159,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       if (props.events) {
         const unsub = props.events.on(handleEvent)
         const unsubStatus = props.events.onStatus?.((status) => {
+          setConnectionStatus(status)
           setSseConnected(status.connected)
         })
         if (!props.events.onStatus) setSseConnected(true)
@@ -177,6 +184,9 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       },
       get sseConnected() {
         return sseConnected()
+      },
+      get connectionStatus() {
+        return connectionStatus()
       },
       baseDirectory: props.directory,
       get directory() {

@@ -38,6 +38,7 @@ import { DialogAlert } from "./ui/dialog-alert"
 import { DialogConfirm } from "./ui/dialog-confirm"
 import { ToastProvider, useToast } from "./ui/toast"
 import { ExitProvider, useExit } from "./context/exit"
+import { TUI_BACKEND_EXITED } from "./util/resilient-stream"
 import { Session as SessionApi } from "@/session"
 import { TuiEvent } from "./event"
 import { NotificationEvent } from "@/notification/events"
@@ -202,6 +203,22 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
   onMount(() => {
     recordTuiStartupOnce("tui.startup.appMounted", { route: route.data.type })
+  })
+
+  // Fatal backend exit (internal transport): the wire-death sentinel is
+  // emitted by createEventSource in thread.ts when the backend process dies.
+  // Everything downstream (RPC, streaming) is dead at that point, so surface
+  // a blocking dialog once instead of letting the UI look alive-but-frozen.
+  let backendDeathDialogShown = false
+  createEffect(() => {
+    if (backendDeathDialogShown) return
+    if (sdk.connectionStatus?.error !== TUI_BACKEND_EXITED) return
+    backendDeathDialogShown = true
+    void DialogAlert.show(
+      dialog,
+      "Backend process exited",
+      "The ax-code backend process stopped unexpectedly. Sessions are saved on disk — restart ax-code to continue.",
+    ).then(() => exit())
   })
 
   useResizeInputRecovery(dimensions)

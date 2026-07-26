@@ -22,7 +22,7 @@ import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Global } from "@/global"
 import { Installation } from "@/installation"
 import { internalBaseUrl } from "@/util/internal-url"
-import type { StreamConnectionStatus } from "./util/resilient-stream"
+import { TUI_BACKEND_EXITED, type StreamConnectionStatus } from "./util/resilient-stream"
 import { runtimeMode } from "@/installation/runtime-mode"
 import { spawn } from "node:child_process"
 import { flushTuiStdout, resetTuiTerminalState } from "./terminal-cleanup"
@@ -30,7 +30,11 @@ import { parseIntegerEnv } from "./util/env"
 import { formatWorkerLoadError } from "./util/log-error"
 import { parseTuiJsonPayload } from "./util/json"
 import { hasExplicitNetworkBindFlag } from "./util/network-flags"
-import { registerTuiCrashHandlers, registerTuiProcessHandler } from "./util/lifecycle"
+import {
+  createTuiRejectionHandler,
+  registerTuiCrashHandlers,
+  registerTuiProcessHandler,
+} from "./util/lifecycle"
 import { readOptionalJsonState } from "./util/optional-json-state"
 import { toErrorMessage } from "@/util/error-message"
 import { Shell } from "@/shell/shell"
@@ -459,21 +463,46 @@ function createWorkerFetch(client: RpcClient): typeof fetch {
   return fn as typeof fetch
 }
 
-function createEventSource(client: RpcClient): EventSource {
+export function createEventSource(client: RpcClient, wire?: RpcWireTarget): EventSource {
   let lastStatus: StreamConnectionStatus | undefined
   const statusListeners = new Set<(status: StreamConnectionStatus) => void>()
-  client.on<StreamConnectionStatus>("event.status", (status) => {
+  const emitStatus = (status: StreamConnectionStatus) => {
     lastStatus = status
     for (const handler of statusListeners) handler(status)
+  }
+  client.on<StreamConnectionStatus>("event.status", (status) => {
+    emitStatus(status)
   })
   void client
     .call("eventStatus", undefined)
     .then((status) => {
       if (!status) return
-      lastStatus = status
-      for (const handler of statusListeners) handler(status)
+      emitStatus(status)
     })
     .catch(() => undefined)
+
+  // When the backend wire dies (process transport), the RPC client fast-fails
+  // pending calls but no status event reaches the UI — the transcript looks
+  // alive while every action times out. Chain onto the onWireDeath hook the
+  // RPC client installed (Rpc.client assigns it before this runs) and surface
+  // a terminal status the UI can react to with a fatal dialog.
+  if (wire) {
+    const previous = wire.onWireDeath
+    wire.onWireDeath = () => {
+      previous?.()
+      emitStatus({
+        connected: false,
+        phase: "stopped",
+        attempt: 0,
+        reason: "error",
+        error: TUI_BACKEND_EXITED,
+      })
+    }
+    // The wire can die between Rpc.client creation and this chaining (the
+    // transport nulls the handler after firing). Replay the terminal status
+    // for an already-observed death.
+    if (wire.wireClosed) wire.onWireDeath()
+  }
 
   return {
     on: (handler) => client.on<Event>("event", handler),
@@ -810,7 +839,7 @@ export const TuiThreadCommand = cmd({
         pid: backend.pid,
         timeoutMs: workerReadyTimeoutMs,
       })
-      const internalEvents = createEventSource(client)
+      const internalEvents = createEventSource(client, backend.wire)
       let threadErrorExitScheduled = false
       const error = (e: unknown) => {
         DiagnosticLog.recordProcess("tui.threadError", { error: e })
@@ -834,7 +863,14 @@ export const TuiThreadCommand = cmd({
         })
       }
       const unregisterProcessHandlers = [
-        registerTuiCrashHandlers(error, { namePrefix: "thread" }),
+        registerTuiCrashHandlers(error, {
+          namePrefix: "thread",
+          // Rejections (async event handlers, dropped promises) must not kill
+          // the interactive session — log + record diagnostics and continue.
+          onRejection: createTuiRejectionHandler({
+            onError: (e) => DiagnosticLog.recordProcess("tui.threadUnhandledRejection", { error: e }),
+          }),
+        }),
         registerTuiProcessHandler("SIGUSR2", reload, { name: "thread-sigusr2-reload" }),
       ]
 

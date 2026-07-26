@@ -389,9 +389,20 @@ export function Prompt(props: PromptProps) {
     return isUnmodifiedPromptSubmitKey(event)
   }
 
-  const pasteSubmitGate = createPromptPasteSubmitGate({ submit: () => void submit() })
+  // submit() must never reject unhandled — opentui dispatches keyboard handlers
+  // fire-and-forget, so a dropped rejection lands on the process-level
+  // unhandledRejection path. Surface submission failures as a toast instead.
+  function submitSafely() {
+    void submit().catch((error) => {
+      log.warn("tui.prompt.submit: rejected", { error })
+      toast.show({ variant: "error", message: "Failed to submit prompt" })
+    })
+  }
+
+  const pasteSubmitGate = createPromptPasteSubmitGate({ submit: submitSafely })
 
   useKeyboard((evt) => {
+    if (evt.defaultPrevented) return
     if (!isRenderableAlive(input) || !input.focused) return
     if (!isPromptSubmitKey(evt)) return
     log.info("tui.prompt.useKeyboard: submit key detected", { keyName: evt.name })
@@ -405,7 +416,7 @@ export function Prompt(props: PromptProps) {
     }
     evt.preventDefault()
     evt.stopPropagation()
-    void submit()
+    submitSafely()
   })
 
   const fileStyleId = syntax().getStyleId("extmark.file")!
@@ -1772,7 +1783,7 @@ export function Prompt(props: PromptProps) {
                   }
                   e.preventDefault()
                   e.stopPropagation()
-                  void submit()
+                  submitSafely()
                   return
                 }
                 // Handle clipboard paste (Ctrl+V) - check for images first on Windows
@@ -1803,6 +1814,11 @@ export function Prompt(props: PromptProps) {
                       handledPaste = true
                       return
                     }
+                  } catch (error) {
+                    // This handler is async and opentui invokes it fire-and-forget —
+                    // a clipboard failure must not become an unhandled rejection.
+                    log.warn("tui.prompt.onKeyDown: clipboard paste failed", { error })
+                    toast.show({ variant: "error", message: "Failed to read clipboard" })
                   } finally {
                     pasteSubmitGate.finishPasteHandling({ submitDeferred: handledPaste })
                   }
@@ -1814,7 +1830,11 @@ export function Prompt(props: PromptProps) {
                 }
                 if (keybind.match("app_exit", e)) {
                   if (store.prompt.input === "") {
-                    await exit()
+                    try {
+                      await exit()
+                    } catch (error) {
+                      log.warn("tui.prompt.onKeyDown: exit failed", { error })
+                    }
                     // Don't preventDefault - let textarea potentially handle the event
                     e.preventDefault()
                     return

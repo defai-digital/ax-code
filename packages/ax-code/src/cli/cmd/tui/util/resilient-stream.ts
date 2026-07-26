@@ -4,6 +4,12 @@ import { registerTuiEventListener, runTuiCleanup } from "./lifecycle"
 
 export type StreamDisconnectReason = "connect-timeout" | "watchdog-timeout" | "stream-ended" | "error"
 
+// Sentinel `error` value on a terminal StreamConnectionStatus, emitted when the
+// TUI's internal backend wire dies (process transport). Lets the UI distinguish
+// an unrecoverable backend exit from a transient SSE reconnect — only the
+// former should trigger the fatal "backend exited" dialog.
+export const TUI_BACKEND_EXITED = "tui-backend-exited"
+
 export type StreamConnectionStatus = {
   connected: boolean
   phase: "connecting" | "connected" | "reconnecting" | "stopped"

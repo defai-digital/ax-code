@@ -90,7 +90,16 @@ function init() {
 
   const toast = {
     show(options: ToastOptions) {
-      const parsedOptions = NotificationEvent.ToastShow.properties.parse(options)
+      // Never throw from a toast — show() is called from event/error handlers,
+      // and a synchronous zod failure there becomes an unhandled fault that
+      // masks the original error being reported.
+      const parsed = NotificationEvent.ToastShow.properties.safeParse(options)
+      const parsedOptions: ToastOptions = parsed.success
+        ? parsed.data
+        : {
+            variant: "error",
+            message: typeof (options as { message?: unknown })?.message === "string" ? options.message : "Unknown error",
+          }
       if (store.currentToast) {
         setStore("queue", (queue) => [...queue, parsedOptions])
         return

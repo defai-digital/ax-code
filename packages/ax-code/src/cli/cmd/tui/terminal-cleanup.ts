@@ -1,3 +1,5 @@
+import { Flag } from "@/flag/flag"
+
 type FlushableStream = {
   write: (chunk: string, callback?: () => void) => boolean
   writable?: boolean
@@ -48,12 +50,27 @@ export function restoreTuiStdinMode(stream: RawModeStream = process.stdin) {
   }
 }
 
-export function resetTuiTerminalState(input: { stdout?: FlushableStream; stdin?: RawModeStream } = {}) {
+export function resetTuiTerminalState(
+  input: {
+    stdout?: FlushableStream
+    stdin?: RawModeStream
+    // Injectable for tests. Defaults to the same flag the renderer profile
+    // uses (renderer.ts reads it via getTuiRenderProfile); duplicated here to
+    // avoid a terminal-cleanup -> renderer import cycle.
+    screenMode?: "alternate-screen" | "main-screen"
+  } = {},
+) {
   const stdinRestored = restoreTuiStdinMode(input.stdin)
   const stdout = input.stdout ?? process.stdout
   if (stdout.writable === false || stdout.destroyed) return stdinRestored
+  const screenMode = input.screenMode ?? (Flag.AX_CODE_TUI_ADVANCED_TERMINAL ? "alternate-screen" : "main-screen")
   try {
-    stdout.write(TUI_TERMINAL_CRASH_RESET_SEQUENCE)
+    // Alternate-screen restores the prior shell view via \x1b[?1049l above.
+    // Main-screen paints on the normal buffer, so the crash path must also
+    // erase the last frame — otherwise a dead full-screen TUI lingers above
+    // the shell prompt (the clean-exit path does the same in renderer.ts).
+    const clear = screenMode === "main-screen" ? TUI_MAIN_SCREEN_CLEAR_SEQUENCE : ""
+    stdout.write(TUI_TERMINAL_CRASH_RESET_SEQUENCE + clear)
     return true
   } catch {
     return stdinRestored
