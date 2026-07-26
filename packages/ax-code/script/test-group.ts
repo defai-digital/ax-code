@@ -15,6 +15,7 @@ const e2e = new Set([
   // GitHub Actions Ubuntu runner even for simple echo commands. Tests pass on
   // macOS. Kept in e2e so they run locally but don't block release CI.
   "test/tool/bash.test.ts",
+  "test/tool/bash-background.test.ts",
   // LSP client interop spawns a real child process and is flaky on CI —
   // 30s timeouts when the handshake JSON-RPC message misses its window.
   // The other LSP test files (incremental, launch, orchestrator, server-helpers)

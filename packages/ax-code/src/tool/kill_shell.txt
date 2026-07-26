@@ -1,0 +1,5 @@
+Terminates a shell started with bash run_in_background.
+
+- Kills the entire process group (SIGTERM, then SIGKILL if it does not exit).
+- Returns the shell's final status. Any output produced before termination remains readable via bash_output.
+- Use this to stop dev servers, watchers, or runaway commands you no longer need.

@@ -16,7 +16,7 @@ import { TOAST_DURATION_LONG_MS } from "@/constants/server"
 import { createRequire } from "module"
 import { Flag } from "@/flag/flag.ts"
 import { Shell } from "@/shell/shell"
-import { ToolNumber } from "./schema"
+import { ToolBoolean, ToolNumber } from "./schema"
 import { isLocalHostname } from "@/util/local-host"
 import { uniqueStrings } from "@/util/string-list"
 
@@ -31,6 +31,7 @@ import { OsSandbox } from "@/isolation/os-sandbox"
 import { BlastRadius } from "@/session/blast-radius"
 import { assertSymlinkInsideProject } from "./external-directory"
 import { classifyDestructiveCommand } from "./bash-destructive"
+import { BackgroundShell } from "./bash-background"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 import {
   absolutePathLiterals,
@@ -223,6 +224,9 @@ export const BashTool = Tool.define("bash", async () => {
           `The working directory to run the command in. Defaults to ${Instance.directory}. Use this instead of 'cd' commands.`,
         )
         .optional(),
+      run_in_background: ToolBoolean.describe(
+        "Set to true to run this command in the background. The call returns immediately with a shell ID; use the bash_output tool to read incremental output and kill_shell to terminate it. Use for long-running processes like dev servers, watchers, or slow builds. The timeout parameter is ignored for background commands.",
+      ).optional(),
       description: z
         .string()
         .max(200)
@@ -296,6 +300,9 @@ export const BashTool = Tool.define("bash", async () => {
         throw new Error(`Invalid timeout value: ${params.timeout}. Timeout must be a finite positive number.`)
       }
       const timeout = params.timeout ?? DEFAULT_TIMEOUT
+      // Fail fast before permission prompts and before spawning: a shell
+      // spawned past the capacity limit would leak.
+      if (params.run_in_background) BackgroundShell.assertCapacity(ctx.sessionID)
       const tree = await parser().then((p) => p.parse(params.command))
       if (!tree) {
         throw new Error("Failed to parse command")
@@ -773,6 +780,40 @@ export const BashTool = Tool.define("bash", async () => {
       }
       proc.on("close", cleanupSeatbelt)
       proc.on("error", cleanupSeatbelt)
+
+      if (params.run_in_background) {
+        // Background shells outlive this tool call: no timeout timer, and the
+        // turn's abort signal must not kill them. They stay in trackedPIDs so
+        // process exit still reaps them; BackgroundShell forgets the PID on
+        // its own exit via onExited.
+        const info = BackgroundShell.register({
+          sessionID: ctx.sessionID,
+          command: params.command,
+          description,
+          proc,
+          onExited: () => {
+            if (proc.pid) forgetTrackedPID(proc.pid)
+          },
+        })
+        const msg =
+          `Command running in background with shell ID: ${info.id}\n` +
+          `Use the bash_output tool with shell_id "${info.id}" to read its output, and kill_shell to terminate it.`
+        // Record cast: this branch's metadata carries a `background` key the
+        // foreground branches lack, and the shared inferred metadata type
+        // must accommodate both shapes.
+        const backgroundMetadata: Record<string, any> = {
+          output: msg,
+          exit: null,
+          description,
+          background: { shellID: info.id, pid: proc.pid ?? null },
+          truncated: false as const,
+        }
+        return {
+          title: description,
+          metadata: backgroundMetadata,
+          output: msg,
+        }
+      }
 
       let output = ""
       // Hard cap on raw output to protect process memory against

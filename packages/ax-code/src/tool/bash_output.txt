@@ -1,0 +1,7 @@
+Retrieves output from a shell started with bash run_in_background.
+
+- Each call returns only the output produced since your previous bash_output call for that shell, plus the shell's current status (running / completed / failed / killed).
+- Call without shell_id to list all background shells for this session and their statuses.
+- Use the optional filter parameter (a JavaScript regular expression) to return only matching lines — helpful when tailing verbose logs for errors or specific markers.
+- A finished shell is forgotten once its remaining output has been read.
+- Poll this tool while waiting on long-running commands (builds, servers, test suites) instead of blocking a foreground bash call.

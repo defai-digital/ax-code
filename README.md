@@ -177,7 +177,7 @@ AX Code is designed for agent work that touches real files, shells, sessions, an
 ## Current Capabilities
 
 - **Terminal command center**: prompt editing, provider/model picker, agent picker, session list, MCP status, skill dialog, sandbox/autonomous toggles, and live tool progress.
-- **Controlled execution**: tools such as read, edit, write, grep, glob, bash, web fetch/search, todo, task, and skill execution all pass through permission and isolation boundaries.
+- **Controlled execution**: tools such as read, edit, write, grep, glob, bash (foreground and background shells), web fetch/search, todo, task, and skill execution all pass through permission and isolation boundaries.
 - **Durable sessions**: resume, fork, compact, export/import, replay, compare, rollback, and inspect session risk instead of losing work when a chat closes.
 - **Repository intelligence**: `ax-code init` writes a thin `AGENTS.md`; the native `ax-code wiki` compiler creates source-backed semantic docs; `ax-code index`, `graph`, semantic diff, LSP-backed context, and risk/DRE views provide structural precision on larger codebases.
 - **Provider flexibility**: connect hosted or local providers from `/connect` or `ax-code providers login`; list available models with `ax-code models`.
