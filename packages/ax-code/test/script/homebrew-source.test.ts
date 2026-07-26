@@ -364,6 +364,7 @@ describe("distribution support guardrails", () => {
     expect(homebrewStep).not.toBeNull()
     expect(homebrewStep![0]).toContain("brew update 2>&1 || true")
     expect(homebrewStep![0]).toContain("brew tap defai-digital/tap 2>&1 || true")
+    expect(homebrewStep![0]).toContain("brew trust defai-digital/tap")
     expect(homebrewStep![0]).toContain('BREW_INFO="$(brew info defai-digital/tap/ax-code 2>&1 || true)"')
     expect(homebrewStep![0]).toContain('[[ "$BREW_INFO" == *"stable ${VERSION}"* ]]')
     expect(homebrewStep![0]).not.toContain("brew info defai-digital/tap/ax-code 2>&1 | grep -q")

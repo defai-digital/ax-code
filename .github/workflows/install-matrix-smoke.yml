@@ -84,6 +84,12 @@ jobs:
           echo "Waiting for Homebrew tap formula ax-code ${VERSION}..."
           # Initial update to bring local tap state up to date.
           brew update 2>&1 || true
+          brew tap defai-digital/tap 2>&1 || true
+          # Homebrew's tap-trust enforcement loads every definition in the
+          # tap before `brew info` can inspect the formula. Trust our release
+          # tap explicitly so the sibling Desktop cask does not block the
+          # formula convergence check on fresh runners.
+          brew trust defai-digital/tap
           for attempt in $(seq 1 180); do
             # Re-fetch the tap on each attempt so brew info reflects the
             # latest formula. brew tap on an already-tapped tap runs git pull;
