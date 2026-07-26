@@ -78,6 +78,24 @@ export namespace Skill {
       })
     }
 
+    state.dirs.add(path.dirname(match))
+    state.skills[parsed.data.name] = {
+      name: parsed.data.name,
+      description: parsed.data.description,
+      location: match,
+      content: md.content,
+      ...frontmatterFields(parsed.data, data, match),
+      ...(source?.sourceTool ? { sourceTool: source.sourceTool } : {}),
+      ...(source?.scope ? { scope: source.scope } : {}),
+    }
+  }
+
+  /** Optional frontmatter fields + standard-compliance issues, shared by external and built-in skills. */
+  function frontmatterFields(
+    parsed: { name: string; description: string },
+    data: Record<string, unknown>,
+    location: string,
+  ) {
     const raw = data.paths
     const paths = Array.isArray(raw)
       ? raw.filter((p: unknown) => typeof p === "string")
@@ -100,19 +118,14 @@ export namespace Skill {
         : undefined
     const argumentHint = typeof data["argument-hint"] === "string" ? data["argument-hint"] : undefined
     const standardIssues = validateStandardSkill({
-      name: parsed.data.name,
-      description: parsed.data.description,
-      location: match,
+      name: parsed.name,
+      description: parsed.description,
+      location,
       compatibility,
       hasInvalidMetadata: data.metadata !== undefined && !metadata.success,
     })
 
-    state.dirs.add(path.dirname(match))
-    state.skills[parsed.data.name] = {
-      name: parsed.data.name,
-      description: parsed.data.description,
-      location: match,
-      content: md.content,
+    return {
       ...(agent ? { agent } : {}),
       ...(paths?.length ? { paths } : {}),
       ...(license ? { license } : {}),
@@ -121,8 +134,6 @@ export namespace Skill {
       ...(allowedTools?.length ? { allowedTools } : {}),
       ...(argumentHint ? { argumentHint } : {}),
       ...(standardIssues.length ? { standardIssues } : {}),
-      ...(source?.sourceTool ? { sourceTool: source.sourceTool } : {}),
-      ...(source?.scope ? { scope: source.scope } : {}),
     }
   }
 
@@ -211,15 +222,12 @@ export namespace Skill {
     const data = md.data as Record<string, unknown>
     const parsed = Info.pick({ name: true, description: true }).safeParse(data)
     if (!parsed.success) return
-    const agent = typeof data.agent === "string" ? data.agent : undefined
-    const argumentHint = typeof data["argument-hint"] === "string" ? data["argument-hint"] : undefined
     state.skills[parsed.data.name] = {
       name: parsed.data.name,
       description: parsed.data.description,
       location: entry.location,
       content: md.content,
-      ...(agent ? { agent } : {}),
-      ...(argumentHint ? { argumentHint } : {}),
+      ...frontmatterFields(parsed.data, data, entry.location),
       sourceTool: "builtin",
       scope: "builtin",
       builtin: true,

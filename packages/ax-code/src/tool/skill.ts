@@ -115,6 +115,13 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
         fileCount: sampledFiles.length,
       })
 
+      const allowedToolsNote = skill.allowedTools?.length
+        ? [
+            `While applying this skill, restrict yourself to these tools: ${skill.allowedTools.map(escapePromptMetadata).join(", ")}.`,
+            "",
+          ]
+        : []
+
       return {
         title: `Loaded skill: ${skill.name}`,
         output: [
@@ -123,6 +130,7 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
           "",
           skill.content.trim(),
           "",
+          ...allowedToolsNote,
           `Base directory for this skill: ${base}`,
           "Relative paths in this skill (e.g., scripts/, reference/) are relative to this base directory.",
           "Note: file list is sampled.",
