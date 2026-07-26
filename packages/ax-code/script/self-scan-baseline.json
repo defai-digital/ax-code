@@ -44,8 +44,8 @@
         {
           "fingerprint": "9006ba2cc657da9d057d776ba1689d1af78e015984d4b2fc15816fc1aaeaafd1",
           "file": "src/provider/provider-impl.ts",
-          "line": 1098,
-          "endLine": 1117,
+          "line": 1094,
+          "endLine": 1113,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -53,8 +53,8 @@
         {
           "fingerprint": "9006ba2cc657da9d057d776ba1689d1af78e015984d4b2fc15816fc1aaeaafd1",
           "file": "src/provider/provider-impl.ts",
-          "line": 1098,
-          "endLine": 1127,
+          "line": 1094,
+          "endLine": 1123,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -62,8 +62,8 @@
         {
           "fingerprint": "ebdb937221c5606fbb186bfe077c4934aef737b8aff521521808bb557fd2ba3a",
           "file": "src/provider/provider-impl.ts",
-          "line": 1103,
-          "endLine": 1141,
+          "line": 1099,
+          "endLine": 1137,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -71,8 +71,8 @@
         {
           "fingerprint": "ebdb937221c5606fbb186bfe077c4934aef737b8aff521521808bb557fd2ba3a",
           "file": "src/provider/provider-impl.ts",
-          "line": 1103,
-          "endLine": 1149,
+          "line": 1099,
+          "endLine": 1145,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -704,7 +704,7 @@
         {
           "fingerprint": "7cf5cae2fabb1fd72cabc3f395d6bbb37aeeb17f9f0f31986415aa070960385e",
           "file": "src/tool/bash-impl.ts",
-          "line": 362,
+          "line": 369,
           "severity": "medium",
           "kind": "non_atomic_counter",
           "summary": "non_atomic_counter"
@@ -712,7 +712,7 @@
         {
           "fingerprint": "4ef5f0c251dc147636531b7931f2297d9b40bccf5cc65d7635cbf70b34ac2736",
           "file": "src/tool/bash-impl.ts",
-          "line": 394,
+          "line": 401,
           "severity": "medium",
           "kind": "non_atomic_counter",
           "summary": "non_atomic_counter"
@@ -720,7 +720,7 @@
         {
           "fingerprint": "7cf5cae2fabb1fd72cabc3f395d6bbb37aeeb17f9f0f31986415aa070960385e",
           "file": "src/tool/bash-impl.ts",
-          "line": 404,
+          "line": 411,
           "severity": "medium",
           "kind": "non_atomic_counter",
           "summary": "non_atomic_counter"
@@ -728,7 +728,7 @@
         {
           "fingerprint": "ca93f1cef8a51124444bc28773908c2a7a07d262420085ef9fe9dc6a56735214",
           "file": "src/tool/bash-impl.ts",
-          "line": 446,
+          "line": 453,
           "severity": "medium",
           "kind": "non_atomic_counter",
           "summary": "non_atomic_counter"
@@ -736,7 +736,7 @@
         {
           "fingerprint": "a4623bfd2301bac8c740b18295a9b6618677d77d922fd8a7e1466d6372899ada",
           "file": "src/tool/bash-impl.ts",
-          "line": 518,
+          "line": 525,
           "severity": "medium",
           "kind": "non_atomic_counter",
           "summary": "non_atomic_counter"
@@ -744,7 +744,7 @@
         {
           "fingerprint": "a40e0bc5fead8009f03a4b787b6998c709b84e06ec53970dcef5f9fc4f66dbc7",
           "file": "src/tool/bash-impl.ts",
-          "line": 566,
+          "line": 573,
           "severity": "medium",
           "kind": "non_atomic_counter",
           "summary": "non_atomic_counter"
@@ -752,7 +752,7 @@
         {
           "fingerprint": "ca93f1cef8a51124444bc28773908c2a7a07d262420085ef9fe9dc6a56735214",
           "file": "src/tool/bash-impl.ts",
-          "line": 603,
+          "line": 610,
           "severity": "medium",
           "kind": "non_atomic_counter",
           "summary": "non_atomic_counter"
@@ -760,7 +760,7 @@
         {
           "fingerprint": "616e9a85a1ac74bf4aa42b2a1c21026a7b60731d4a70f92544fded017a54af78",
           "file": "src/tool/bash-impl.ts",
-          "line": 774,
+          "line": 781,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -768,7 +768,7 @@
         {
           "fingerprint": "7ac7861499fb5659192755521a995cb986131131d27df7ee50928f79b8ce6e9e",
           "file": "src/tool/bash-impl.ts",
-          "line": 775,
+          "line": 782,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -776,7 +776,7 @@
         {
           "fingerprint": "47dd40928aebfd8688f22e7371ad500b3ed4a3e9730e6367514a42ec182a98af",
           "file": "src/tool/bash-impl.ts",
-          "line": 839,
+          "line": 896,
           "severity": "medium",
           "kind": "non_atomic_counter",
           "summary": "non_atomic_counter"
@@ -784,7 +784,7 @@
         {
           "fingerprint": "58c9ca32d3401a451d6c61084e3692056db0bffb1741d4f42bef087255069a27",
           "file": "src/tool/bash-impl.ts",
-          "line": 845,
+          "line": 902,
           "severity": "medium",
           "kind": "non_atomic_counter",
           "summary": "non_atomic_counter"
@@ -792,7 +792,7 @@
         {
           "fingerprint": "0b8fbd647b476533829aedd18dd9a40e2fc7ba4180a7502defa0b8cc36658ccc",
           "file": "src/tool/bash-impl.ts",
-          "line": 848,
+          "line": 905,
           "severity": "medium",
           "kind": "non_atomic_counter",
           "summary": "non_atomic_counter"
@@ -800,7 +800,7 @@
         {
           "fingerprint": "b6ccd991efa86426087f6ba13ff4e83712d6ca771983e62f3a71feaca628587b",
           "file": "src/tool/bash-impl.ts",
-          "line": 878,
+          "line": 935,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -808,7 +808,7 @@
         {
           "fingerprint": "6fa902c9ef2e19fef4950c3cb389c828b2c25d063b008fac5c59728669fed0c9",
           "file": "src/tool/bash-impl.ts",
-          "line": 901,
+          "line": 958,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -816,7 +816,7 @@
         {
           "fingerprint": "c07b490b40e828a68cca6bdcd2c78f4c0541794987facbafdaaa5823e50176eb",
           "file": "src/tool/bash-impl.ts",
-          "line": 915,
+          "line": 972,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -824,7 +824,7 @@
         {
           "fingerprint": "d06989df56dc6957119f0a631d5c65722afbd4be54f36afbf614bd98c7ef6fc9",
           "file": "src/tool/bash-impl.ts",
-          "line": 920,
+          "line": 977,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -832,7 +832,7 @@
         {
           "fingerprint": "93d7561899b25fb58ea8a1ea18bcd926f31fe14d7ead3624726473d529cd31c7",
           "file": "src/tool/bash-impl.ts",
-          "line": 947,
+          "line": 1004,
           "severity": "medium",
           "kind": "non_atomic_counter",
           "summary": "non_atomic_counter"
@@ -864,7 +864,7 @@
         {
           "fingerprint": "b9d9a04724b36a10ee233d083096f7cdff3da08fd2d7be1114991c6f1f3628d0",
           "file": "src/tool/task.ts",
-          "line": 127,
+          "line": 142,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -872,7 +872,7 @@
         {
           "fingerprint": "a95f1ba3de560b3ffe2d2d7f53c2aa142aa03cf5ab1a6f97d922360e4adfb23e",
           "file": "src/tool/task.ts",
-          "line": 129,
+          "line": 144,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -880,7 +880,7 @@
         {
           "fingerprint": "9268060b698b62af7ceb5ecc6a168a2833ac61336048bc082d91432bc08a76ae",
           "file": "src/tool/task.ts",
-          "line": 142,
+          "line": 157,
           "severity": "medium",
           "kind": "non_atomic_counter",
           "summary": "non_atomic_counter"
@@ -1381,7 +1381,7 @@
         {
           "fingerprint": "099ffe1ff6961959a830125a5c0a43a27658be53506ea848d32e441fb8300b63",
           "file": "src/tool/bash-impl.ts",
-          "line": 164,
+          "line": 165,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -1573,7 +1573,7 @@
         {
           "fingerprint": "87c7b21f04ac03f6e4b102a847e4dbe099691fc23802528c5c0fbf57cff65be5",
           "file": "src/cli/cmd/providers-impl.ts",
-          "line": 29,
+          "line": 30,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -4146,7 +4146,7 @@
         {
           "fingerprint": "f1fb40c5b94cd87dc4cc61cb254883129e075708330ee750aed8f0b3743194dd",
           "file": "src/hooks/lifecycle.ts",
-          "line": 176,
+          "line": 187,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4154,7 +4154,7 @@
         {
           "fingerprint": "fe23dcbaee42278eb9e8572afb25f7b4720f78a237d4eeb9d69a29c66957521f",
           "file": "src/hooks/lifecycle.ts",
-          "line": 336,
+          "line": 347,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4242,7 +4242,7 @@
         {
           "fingerprint": "3354fff1b1a195df498d32ca4f82bc374ab6f02f3cf33d92ff7e5301187e9ab0",
           "file": "src/installation/index.ts",
-          "line": 184,
+          "line": 185,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf user-controlled"
@@ -4250,7 +4250,7 @@
         {
           "fingerprint": "d802bb65f1328344e5fdd1ae37661ad8a53f4332796428b3f64c62ce3cdfeacb",
           "file": "src/installation/index.ts",
-          "line": 229,
+          "line": 234,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf user-controlled"
@@ -4560,7 +4560,7 @@
           "summary": "path_traversal user-controlled"
         },
         {
-          "fingerprint": "0fcf7099ef5adaecad86743bd9f2e3b4e4cf1aa4ed24ff95455b27ff05155bfb",
+          "fingerprint": "4a2636ced4ebc7742910ff46957202eb061e49861e20637d48ec1428e107e8a1",
           "file": "src/mcp/auth.ts",
           "line": 34,
           "severity": "high",
@@ -4608,7 +4608,7 @@
           "summary": "path_traversal user-controlled"
         },
         {
-          "fingerprint": "2b0c0bd34df836d02b21194dd3bf2451919e48c445a187c9b116808b686f2d78",
+          "fingerprint": "1fa8fb9ec6ea6d161dbeb76e653687b3195f9e82cf3ceb8c3a1d2a273197fc2c",
           "file": "src/mcp/trust.ts",
           "line": 13,
           "severity": "high",
@@ -5154,7 +5154,7 @@
         {
           "fingerprint": "4646941ac5100a540f5fdd578bc92b0d8cf26a35cc265024687dec9829713255",
           "file": "src/provider/provider-impl.ts",
-          "line": 1244,
+          "line": 1261,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5298,7 +5298,7 @@
         {
           "fingerprint": "bf2fb9dca03e9eb7da3691a6fa21eb30538e28d7ca52c7f22af7acfe52f31de2",
           "file": "src/server/routes/app-context-checks.ts",
-          "line": 137,
+          "line": 133,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5306,7 +5306,7 @@
         {
           "fingerprint": "34c39b07b2c256b844736718a4f5da6dd541699b5de0de49329456a48e0b74f7",
           "file": "src/server/routes/app-context-checks.ts",
-          "line": 161,
+          "line": 157,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5314,7 +5314,7 @@
         {
           "fingerprint": "6de82a369d28ab1b274f0890948a94ef7f63706a732ceab110189aaf30cfc37e",
           "file": "src/server/routes/app-context-checks.ts",
-          "line": 177,
+          "line": 173,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5322,7 +5322,7 @@
         {
           "fingerprint": "5382601910ab5a4bf6ceb8dc95e73f709b1d68be5ad2464e7e2695a247d23ee9",
           "file": "src/server/routes/app-context-checks.ts",
-          "line": 178,
+          "line": 174,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5330,7 +5330,7 @@
         {
           "fingerprint": "f5b1914858af93553071c6d7340985f312bdbcebc67db8121bf6f8387fa89a0f",
           "file": "src/server/routes/app-context-checks.ts",
-          "line": 201,
+          "line": 197,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5338,7 +5338,7 @@
         {
           "fingerprint": "abc9496f2eaa8d6ac9cdf09d64df166b8ff40fc6ab60b23ef7b770ba6e673021",
           "file": "src/server/routes/app-context-checks.ts",
-          "line": 216,
+          "line": 212,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5418,7 +5418,7 @@
         {
           "fingerprint": "62e6beb61be55923d30b252530053bee23676ce65982ae9f9302578e5810eb1f",
           "file": "src/session/index.ts",
-          "line": 455,
+          "line": 456,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5650,7 +5650,7 @@
         {
           "fingerprint": "a61026d2650c7f05460dc6a1ec92b03ad0171f1b0e99cf55d50b871502cb0711",
           "file": "src/skill/index.ts",
-          "line": 197,
+          "line": 208,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5658,7 +5658,7 @@
         {
           "fingerprint": "fbb1825953d3eaf2a63a1e9ba64c63fbcf0c561dd846e30651d62dc0ebfcdc52",
           "file": "src/skill/index.ts",
-          "line": 243,
+          "line": 251,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5674,7 +5674,7 @@
         {
           "fingerprint": "51e5e73bbbb70f230671f1e6a0f49ddeb9627b47838f4d5748852d5a636fa747",
           "file": "src/snapshot/index.ts",
-          "line": 180,
+          "line": 176,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5682,7 +5682,7 @@
         {
           "fingerprint": "daf971ff7c54b63913a4d57464b14ab11c7f71096eddf66319e727e8640f5b0a",
           "file": "src/snapshot/index.ts",
-          "line": 229,
+          "line": 225,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5690,7 +5690,7 @@
         {
           "fingerprint": "658406f7998e80fab39f11130218db2ba52d3830a634bdba68768fdd0a9515ba",
           "file": "src/snapshot/index.ts",
-          "line": 230,
+          "line": 226,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5698,7 +5698,7 @@
         {
           "fingerprint": "e5119a6a30ba9c6889cfdcda3a8fa397a53045249560a5963d023c426986523b",
           "file": "src/snapshot/index.ts",
-          "line": 397,
+          "line": 393,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5834,15 +5834,15 @@
         {
           "fingerprint": "7bdadf195a960835fccffa36d9247722ba0ec9a5b1d99613de35f30a32db6f52",
           "file": "src/storage/storage.ts",
-          "line": 237,
+          "line": 248,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
         },
         {
-          "fingerprint": "708a9fcbdb2e027d3b24daa9cb4f42b2bd5ad4f5cb83685b69873c0cb2fc80ed",
+          "fingerprint": "67c75664004f76e68d1c984b4746eae9ee1b7fa18debf449f2a848007fe6f381",
           "file": "src/storage/storage.ts",
-          "line": 246,
+          "line": 263,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5850,7 +5850,7 @@
         {
           "fingerprint": "b91ca7a8dbcd40c84505bf08ed42d01320437c70491ff0e8ab9c9a848b2a0963",
           "file": "src/storage/storage.ts",
-          "line": 269,
+          "line": 286,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5858,7 +5858,7 @@
         {
           "fingerprint": "2f2de1564a4680cba3a7cc8b9788516ffdff10970d3350b0c81d9c778bb5d766",
           "file": "src/storage/storage.ts",
-          "line": 283,
+          "line": 300,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5866,7 +5866,7 @@
         {
           "fingerprint": "52c2c90412d9b009cce8021b9961620da2777859664d8dfa6927c7c67f9afe4e",
           "file": "src/storage/storage.ts",
-          "line": 311,
+          "line": 328,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5874,7 +5874,7 @@
         {
           "fingerprint": "af1b6634af41e0bd1b87d555bea12a3f9d9b821fc690b696edc222440ad4a030",
           "file": "src/storage/storage.ts",
-          "line": 320,
+          "line": 337,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5882,7 +5882,7 @@
         {
           "fingerprint": "bb6bcfb2097d7b0ef8505cf05259667e6075ac72ea3325884410bae259014886",
           "file": "src/storage/storage.ts",
-          "line": 342,
+          "line": 359,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5890,7 +5890,7 @@
         {
           "fingerprint": "6cdc79b49e68745f084121160415a877751b316f4bc960857d92a80a3eeb28aa",
           "file": "src/storage/storage.ts",
-          "line": 356,
+          "line": 373,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5898,7 +5898,7 @@
         {
           "fingerprint": "af1b6634af41e0bd1b87d555bea12a3f9d9b821fc690b696edc222440ad4a030",
           "file": "src/storage/storage.ts",
-          "line": 373,
+          "line": 390,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5906,7 +5906,7 @@
         {
           "fingerprint": "145fd84d63659eba3a2a28e6ac8529128dbd4d2f0fa886269692633b843dd6e4",
           "file": "src/storage/storage.ts",
-          "line": 411,
+          "line": 428,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5938,7 +5938,7 @@
         {
           "fingerprint": "6921e365670991ff5cceebcabac5470d167b806f4b54b7ad34258b15e3435a76",
           "file": "src/tool/bash-impl.ts",
-          "line": 576,
+          "line": 583,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5946,7 +5946,7 @@
         {
           "fingerprint": "e4e092c4a26d5f39ba19c54146367be8beb44617092c2ff9e9ab363dd3a4308f",
           "file": "src/tool/bash-impl.ts",
-          "line": 615,
+          "line": 622,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -6234,7 +6234,7 @@
         {
           "fingerprint": "50359df0b852d36e971767fb7a5b68cf9b992d2dfea8fa9742dcd0ebddcc0da1",
           "file": "src/workflow/template.ts",
-          "line": 209,
+          "line": 205,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -6242,7 +6242,7 @@
         {
           "fingerprint": "bea8b9afcad0fc725c5027cbba692dfccf27729226d46239590cb09b9c161c5c",
           "file": "src/workflow/template.ts",
-          "line": 267,
+          "line": 263,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -6250,7 +6250,7 @@
         {
           "fingerprint": "a1e17ab6fb8da52cb807d8b9d17ebc1d96972405531a3f2b6a05f6f35c4f7845",
           "file": "src/workflow/template.ts",
-          "line": 268,
+          "line": 264,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -6258,7 +6258,7 @@
         {
           "fingerprint": "181f9c2f77bae971bbea48b02c62548b271116ce3e4fa6ecf9e6ccf053681f60",
           "file": "src/workflow/template.ts",
-          "line": 280,
+          "line": 276,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
