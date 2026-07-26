@@ -73,7 +73,7 @@ AX Engine uses the compact `core` tool profile by default (`bash`, file discover
 
 ### Installing the engine
 
-Local inference needs AX Engine 6.9.0 or later. On Apple Silicon macOS install the Homebrew formula, which includes the matching MLX runtime:
+Local inference needs AX Engine 6.11.0 or later. On Apple Silicon macOS install the Homebrew formula, which includes the matching MLX runtime:
 
 ```bash
 brew install defai-digital/ax-engine/ax-engine

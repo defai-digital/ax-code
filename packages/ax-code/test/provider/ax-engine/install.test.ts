@@ -215,14 +215,14 @@ describe("dependency resolution picks up the managed binary", () => {
         [
           "#!/bin/sh",
           'if [ "$1" = "--version" ]; then exit 2; fi',
-          'if [ "$1" = "doctor" ]; then echo \'{"install":{"version":"6.9.0"}}\'; exit 0; fi',
+          'if [ "$1" = "doctor" ]; then echo \'{"install":{"version":"6.11.0"}}\'; exit 0; fi',
           "exit 1",
           "",
         ].join("\n"),
         { mode: 0o755 },
       )
       const status = await getDependencyStatus({ binaryPath: binary })
-      expect(status).toMatchObject({ available: true, mode: "configured", version: "6.9.0", blockers: [] })
+      expect(status).toMatchObject({ available: true, mode: "configured", version: "6.11.0", blockers: [] })
     } finally {
       await fs.rm(dir, { recursive: true, force: true })
     }
