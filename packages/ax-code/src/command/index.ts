@@ -18,6 +18,8 @@ import PROMPT_COUNCIL from "./template/council.txt"
 import PROMPT_ARENA from "./template/arena.txt"
 import PROMPT_MODE from "./template/mode.txt"
 import PROMPT_WIKI from "./template/wiki.txt"
+import PROMPT_COMMIT from "./template/commit.txt"
+import PROMPT_PR from "./template/pr.txt"
 
 export namespace Command {
   export const Event = {
@@ -112,6 +114,8 @@ export namespace Command {
     ARENA: "arena",
     MODE: "mode",
     WIKI: "wiki",
+    COMMIT: "commit",
+    PR: "pr",
   } as const
 
   const state = Instance.state(async () => {
@@ -250,6 +254,28 @@ export namespace Command {
         return PROMPT_WIKI.replace("${path}", () => ctx.worktree)
       },
       hints: hints(PROMPT_WIKI),
+    }
+    commands[Default.COMMIT] = {
+      name: Default.COMMIT,
+      description: "commit current changes with a well-formed message [extra instructions]",
+      source: "command",
+      sourceTool: "builtin",
+      scope: "builtin",
+      get template() {
+        return PROMPT_COMMIT
+      },
+      hints: hints(PROMPT_COMMIT),
+    }
+    commands[Default.PR] = {
+      name: Default.PR,
+      description: "create a GitHub pull request for the current branch [extra instructions]",
+      source: "command",
+      sourceTool: "builtin",
+      scope: "builtin",
+      get template() {
+        return PROMPT_PR
+      },
+      hints: hints(PROMPT_PR),
     }
 
     for (const [name, command] of Object.entries(cfg.command ?? {})) {

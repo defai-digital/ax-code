@@ -1,0 +1,33 @@
+Create a git commit for the current changes.
+
+Input: $ARGUMENTS
+
+If the input contains extra instructions (specific files to include, a message to use, amend intent), follow them. Otherwise apply the default flow below.
+
+---
+
+## 1. Understand the current state
+
+Run these in parallel:
+- `git status --short` — all staged, unstaged, and untracked files
+- `git diff` and `git diff --cached` — the actual changes
+- `git log --oneline -10` — recent commit messages, to match this repository's commit message style
+
+## 2. Draft the commit
+
+- Stage the relevant files. If some changes are clearly unrelated to each other, prefer splitting into multiple focused commits and say so.
+- NEVER stage or commit files that likely contain secrets (.env, credentials.json, private keys). Warn the user if they explicitly request it.
+- Draft a concise commit message (1-2 sentences) focused on the "why" rather than the "what", matching the style observed in `git log` (e.g. conventional commits if the repo uses them).
+
+## 3. Commit and verify
+
+- Create the commit.
+- Run `git status` afterwards to verify it succeeded.
+- If a pre-commit hook fails, fix the underlying issue and create a NEW commit. NEVER use `--no-verify`. NEVER amend a failed or rejected commit.
+- If the pre-commit hook auto-modified files, amending the successful commit to include them is acceptable.
+
+Safety rules:
+- NEVER update git config.
+- NEVER push unless the user explicitly asked.
+- NEVER use destructive commands (force push, hard reset) as part of committing.
+- If there is nothing to commit, say so — do not create an empty commit.
