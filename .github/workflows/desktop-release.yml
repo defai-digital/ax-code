@@ -646,14 +646,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.create-release.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          IS_DRAFT="$(gh release view "$TAG" --json isDraft --jq '.isDraft')"
+          IS_DRAFT="$(gh release view "$TAG" --repo "$REPOSITORY" --json isDraft --jq '.isDraft')"
           if [ "$IS_DRAFT" != "true" ]; then
             echo "::error::release $TAG is no longer a draft; refusing to publish or mutate it"
             exit 1
           fi
-          gh release edit "$TAG" --draft=false
+          gh release edit "$TAG" --repo "$REPOSITORY" --draft=false
 
   # Generate winget Desktop manifests from published NSIS installers and attach
   # them to the desktop-v* release for microsoft/winget-pkgs submission.

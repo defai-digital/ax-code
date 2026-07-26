@@ -117,6 +117,8 @@ describe("desktop release workflow", () => {
     expect(finalizeJob![0]).toContain("verify-release-assets")
     expect(text).toContain("release $TAG is already published; refusing to replace verified assets")
     expect(finalizeJob![0]).toContain("release $TAG is no longer a draft; refusing to publish or mutate it")
+    expect(finalizeJob![0]).toContain('gh release view "$TAG" --repo "$REPOSITORY"')
+    expect(finalizeJob![0]).toContain('gh release edit "$TAG" --repo "$REPOSITORY" --draft=false')
   })
 
   test("signs the Desktop disk image before notarizing and stapling it", async () => {
