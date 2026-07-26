@@ -1,7 +1,7 @@
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
-import { describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { hash as bunCompatHash } from "../../src/bun/node-compat"
 import { NamedError } from "@ax-code/util/error"
 import { fileURLToPath, pathToFileURL } from "url"
@@ -21,6 +21,19 @@ import { CodeGraphQuery } from "../../src/code-intelligence/query"
 import { Isolation } from "../../src/isolation"
 
 Log.init({ print: false })
+
+// Clear both before and after so tests asserting on the resolved isolation mode
+// are not skewed by AX_CODE_ISOLATION_MODE / _NETWORK inherited from the parent
+// shell (e.g. when running the suite from inside an ax-code session in
+// full-access mode — the same hazard isolation.test.ts / os-sandbox.test.ts
+// guard against).
+const clearIsolationEnv = () => {
+  delete process.env.AX_CODE_ISOLATION_MODE
+  delete process.env.AX_CODE_ISOLATION_NETWORK
+}
+
+beforeEach(clearIsolationEnv)
+afterEach(clearIsolationEnv)
 
 describe("session.prompt isolation retry state", () => {
   test("prompt isolation policy can only tighten the base isolation boundary", () => {
