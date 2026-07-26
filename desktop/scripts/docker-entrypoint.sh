@@ -54,6 +54,7 @@ if [ "${OH_MY_AX_CODE:-false}" = "true" ]; then
     OMO_INSTALL_ARGS="--no-tui --claude=no --openai=no --gemini=no --copilot=no --ax-code-zen=no --zai-coding-plan=no --kimi-for-coding=no --skip-auth"
 
     echo "[entrypoint] oh-my-ax-code installing..."
+    # shellcheck disable=SC2086 # intentional word splitting of static flag list
     oh-my-ax-code install ${OMO_INSTALL_ARGS}
   fi
 fi

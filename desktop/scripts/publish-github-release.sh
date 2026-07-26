@@ -21,7 +21,6 @@ ALLOW_BRANCH=false
 ALLOW_UNPUSHED=false
 SKIP_LOCAL_VALIDATION=false
 SKIP_SIGNING=false
-SKIP_SIGNING_KEY_PROBE=false
 WATCH=true
 SIGNATURES_ONLY=false
 
@@ -169,16 +168,6 @@ validate_minisign_key() {
   log "Using minisign public key:"
   awk '/^untrusted comment: minisign public key / { print "    key id: " $NF; found = 1 } END { if (!found) exit 1 }' "$public_key" \
     || fail "could not read minisign public key id from $public_key"
-}
-
-probe_minisign_key() {
-  local probe_dir
-  probe_dir="$(mktemp -d "${TMPDIR:-/tmp}/ax-code-desktop-signing-probe.XXXXXX")"
-  trap 'rm -rf "$probe_dir"' RETURN
-
-  printf 'AX Code Desktop signing key probe for %s\n' "$VERSION" > "$probe_dir/probe.txt"
-  ./desktop/scripts/minisign-artifacts.sh --key-dir "$KEY_DIR" --force "$probe_dir/probe.txt" >/dev/null
-  log "Minisign key probe succeeded"
 }
 
 validate_git_state() {
@@ -432,7 +421,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --skip-signing-key-probe)
-      SKIP_SIGNING_KEY_PROBE=true
+      # Deprecated no-op; accepted so older CI/command history does not break.
       shift
       ;;
     --no-watch)
