@@ -286,6 +286,18 @@ export namespace SessionCompaction {
     }
     inFlight.add(input.sessionID)
     try {
+      // User lifecycle hooks (PreCompact) — observational only; hook
+      // failures never block compaction.
+      try {
+        const { LifecycleHooks } = await import("@/hooks/lifecycle")
+        await LifecycleHooks.runForWorkspace({
+          event: "PreCompact",
+          sessionID: input.sessionID,
+          args: { auto: input.auto, overflow: input.overflow === true },
+        })
+      } catch (error) {
+        log.warn("PreCompact lifecycle hooks failed", { sessionID: input.sessionID, error })
+      }
       return await processInner(input)
     } finally {
       inFlight.delete(input.sessionID)

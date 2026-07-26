@@ -2,20 +2,23 @@
 
 Status: Active  
 Scope: current-state  
-Last reviewed: 2026-07-12  
+Last reviewed: 2026-07-26  
 Owner: ax-code runtime
 
 Lifecycle hooks let you run shell commands on agent events without rebuilding the runtime. They complement permission rules and the isolation sandbox: **hooks are deterministic side effects** (“always format”, “never force-push”), while prompts remain advisory.
 
 ## Events
 
-| Event           | When                                                                 | Can block?                   |
-| --------------- | -------------------------------------------------------------------- | ---------------------------- |
-| **PreToolUse**  | Before a tool executes                                               | Yes (`blockOnFailure: true`) |
-| **PostToolUse** | After a tool completes                                               | No                           |
-| **Stop**        | When a session turn completes (packs may run on stop via automation) | No                           |
+| Event                | When                                                                  | Can block?                   |
+| -------------------- | --------------------------------------------------------------------- | ---------------------------- |
+| **PreToolUse**       | Before a tool executes                                                | Yes (`blockOnFailure: true`) |
+| **PostToolUse**      | After a tool completes                                                | No                           |
+| **Stop**             | When a session turn completes (packs may run on stop via automation)  | No                           |
+| **UserPromptSubmit** | When a user prompt is submitted, before the message is persisted      | Yes (`blockOnFailure: true`) |
+| **PreCompact**       | Before session compaction runs (`args`: `{ auto, overflow }`)         | No                           |
+| **SubagentStop**     | When a `task` subagent finishes (`args`: `{ agent, status }`)         | No                           |
 
-These names map to AX Code’s internal plugin triggers (`tool.execute.before` / `tool.execute.after`) plus session-level stop hooks.
+These names map to AX Code’s internal plugin triggers (`tool.execute.before` / `tool.execute.after`) plus session-level prompt, compaction, subagent, and stop hooks. Synthetic continuation prompts (internal `agentRouting: "preserve"` prompts) do not fire `UserPromptSubmit`.
 
 ## Enable packs
 
@@ -60,7 +63,7 @@ Custom hooks:
 
 Environment variables available to hook commands:
 
-- `HOOK_EVENT` — PreToolUse | PostToolUse | Stop
+- `HOOK_EVENT` — PreToolUse | PostToolUse | Stop | UserPromptSubmit | PreCompact | SubagentStop
 - `HOOK_TOOL` — tool id
 - `HOOK_SESSION_ID`
 - `HOOK_ARGS_JSON` — JSON tool arguments

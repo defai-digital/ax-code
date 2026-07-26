@@ -136,6 +136,39 @@ export namespace SessionPrompt {
     const session = await Session.get(input.sessionID)
     await SessionRevert.cleanup(session)
 
+    // User lifecycle hooks (UserPromptSubmit): a blockOnFailure hook can veto
+    // the prompt before the user message is persisted. Synthetic continuation
+    // prompts (agentRouting: "preserve") and subagent child sessions are
+    // exempt so internal flows cannot be wedged by a misbehaving hook.
+    if (input.agentRouting !== "preserve" && !session.parentID) {
+      let blockedDetail: string | undefined
+      try {
+        const { LifecycleHooks } = await import("@/hooks/lifecycle")
+        const promptText = input.parts
+          .filter((part) => part.type === "text")
+          .map((part) => part.text)
+          .join("\n")
+        const submit = await LifecycleHooks.runForWorkspace({
+          event: "UserPromptSubmit",
+          sessionID: input.sessionID,
+          args: { prompt: promptText },
+        })
+        if (submit.blocked) {
+          blockedDetail =
+            submit.outputs
+              .filter((o) => o.exit !== 0)
+              .map((o) => o.stderr || o.stdout || `exit ${o.exit}`)
+              .join("\n") || "hook failed"
+        }
+      } catch (error) {
+        // Hook load/run failures must not brick prompting.
+        log.warn("UserPromptSubmit lifecycle hooks failed", { sessionID: input.sessionID, error })
+      }
+      if (blockedDetail !== undefined) {
+        throw new Error(`UserPromptSubmit hook blocked prompt: ${blockedDetail}`)
+      }
+    }
+
     const message = await createUserMessage(input)
     await Session.touch(input.sessionID)
 

@@ -1,7 +1,8 @@
 /**
  * User-visible lifecycle hooks (ADR-048 Phase 3).
  *
- * Maps Claude-style PreToolUse / PostToolUse / Stop names onto AX Code's
+ * Maps Claude-style PreToolUse / PostToolUse / Stop / UserPromptSubmit /
+ * PreCompact / SubagentStop names onto AX Code's
  * plugin triggers and session end, and loads shell packs from:
  * - built-in packs under packages/ax-code/hooks/packs
  * - project `.ax-code/hooks.json`
@@ -43,17 +44,27 @@ export namespace LifecycleHooks {
     if (next) next()
     else activeHooks--
   }
-  const EventNameSchema = z.enum(["PreToolUse", "PostToolUse", "Stop"])
+  const EventNameSchema = z.enum([
+    "PreToolUse",
+    "PostToolUse",
+    "Stop",
+    "UserPromptSubmit",
+    "PreCompact",
+    "SubagentStop",
+  ])
   const HookCommandSchema = z.object({
     event: EventNameSchema,
     /** Shell command; receives env HOOK_EVENT, HOOK_TOOL, HOOK_SESSION_ID, HOOK_ARGS_JSON. */
     command: z.string().min(1).max(100_000),
     /** Optional matcher: tool id glob (* = all). */
     matcher: z.string().max(500).optional(),
-    /** When true, non-zero exit blocks the tool (PreToolUse only). */
+    /** When true, non-zero exit blocks the action (PreToolUse and UserPromptSubmit only). */
     blockOnFailure: z.boolean().optional(),
     pack: z.string().max(500).optional(),
   })
+
+  /** Events where a blockOnFailure hook with non-zero exit vetoes the action. */
+  const BLOCKABLE_EVENTS: ReadonlySet<z.infer<typeof EventNameSchema>> = new Set(["PreToolUse", "UserPromptSubmit"])
 
   export type EventName = z.infer<typeof EventNameSchema>
   export type HookCommand = z.infer<typeof HookCommandSchema>
@@ -297,7 +308,7 @@ export namespace LifecycleHooks {
       outputs.push(result)
       if (result.exit !== 0) {
         log.warn("lifecycle hook non-zero", { event: input.event, tool: input.tool, exit: result.exit })
-        if (hook.blockOnFailure && input.event === "PreToolUse") {
+        if (hook.blockOnFailure && BLOCKABLE_EVENTS.has(input.event)) {
           blocked = true
           break
         }

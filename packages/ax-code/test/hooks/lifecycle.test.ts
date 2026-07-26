@@ -83,6 +83,58 @@ describe("LifecycleHooks matcher and run", () => {
     expect(hooks.some((h) => h.pack === "log-bash-commands")).toBe(true)
   })
 
+  test("UserPromptSubmit hooks can block via blockOnFailure", async () => {
+    const hooks = [
+      {
+        event: "UserPromptSubmit" as const,
+        blockOnFailure: true,
+        command:
+          "node -e \"const raw=process.env.HOOK_ARGS_JSON||'{}';const a=JSON.parse(raw);if(String(a.prompt||'').includes('forbidden')){console.error('blocked prompt');process.exit(2)}\"",
+      },
+    ]
+    const blocked = await LifecycleHooks.runHooks(hooks, {
+      event: "UserPromptSubmit",
+      args: { prompt: "do the forbidden thing" },
+      cwd: process.cwd(),
+    })
+    expect(blocked.blocked).toBe(true)
+
+    const allowed = await LifecycleHooks.runHooks(hooks, {
+      event: "UserPromptSubmit",
+      args: { prompt: "do the normal thing" },
+      cwd: process.cwd(),
+    })
+    expect(allowed.blocked).toBe(false)
+  })
+
+  test("non-blockable events never block even with blockOnFailure", async () => {
+    for (const event of ["PreCompact", "SubagentStop", "PostToolUse", "Stop"] as const) {
+      const result = await LifecycleHooks.runHooks(
+        [{ event, blockOnFailure: true, command: "exit 2" }],
+        { event, cwd: process.cwd() },
+      )
+      expect(result.blocked).toBe(false)
+    }
+  })
+
+  test("accepts new lifecycle events in project hooks.json", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-hooks-events-"))
+    await fs.mkdir(path.join(dir, ".ax-code"), { recursive: true })
+    await fs.writeFile(
+      path.join(dir, ".ax-code", "hooks.json"),
+      JSON.stringify({
+        hooks: [
+          { event: "UserPromptSubmit", command: "true" },
+          { event: "PreCompact", command: "true" },
+          { event: "SubagentStop", command: "true" },
+        ],
+      }),
+      "utf8",
+    )
+    const hooks = await LifecycleHooks.loadProjectHooks(dir, true)
+    expect(hooks.map((h) => h.event)).toEqual(["UserPromptSubmit", "PreCompact", "SubagentStop"])
+  })
+
   test("rejects malformed project hook entries instead of trusting parsed JSON", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-hooks-invalid-"))
     await fs.mkdir(path.join(dir, ".ax-code"), { recursive: true })

@@ -25,6 +25,21 @@ const SUBAGENT_TIMEOUT_MS = 10 * 60 * 1000
 const SUBAGENT_FINALIZE_TIMEOUT_MS = 2 * 60 * 1000
 const log = Log.create({ service: "task-tool" })
 
+// User lifecycle hooks (SubagentStop) — observational only; hook failures
+// never affect the task result.
+async function fireSubagentStop(input: { sessionID: string; agent: string; status: "completed" | "failed" }) {
+  try {
+    const { LifecycleHooks } = await import("@/hooks/lifecycle")
+    await LifecycleHooks.runForWorkspace({
+      event: "SubagentStop",
+      sessionID: input.sessionID,
+      args: { agent: input.agent, status: input.status },
+    })
+  } catch (error) {
+    log.warn("SubagentStop lifecycle hooks failed", { sessionID: input.sessionID, error })
+  }
+}
+
 function assistantError(result: Awaited<ReturnType<typeof SessionPrompt.prompt>>) {
   if (result.info.role !== "assistant") return undefined
   return result.info.error
@@ -348,6 +363,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           "Treat this as incomplete evidence: resume the task_id above to continue this subagent, " +
             "retry the task, or explain that no usable subagent result was returned.",
         ].join("\n")
+        await fireSubagentStop({ sessionID: session.id, agent: agent.name, status: "failed" })
         return {
           title: params.description,
           metadata: {
@@ -411,6 +427,12 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         taskResultText,
         "</task_result>",
       ].join("\n")
+
+      await fireSubagentStop({
+        sessionID: session.id,
+        agent: agent.name,
+        status: error || finalizeError ? "failed" : "completed",
+      })
 
       return {
         title: params.description,
