@@ -90,11 +90,15 @@ describe("desktop release workflow", () => {
 
   test("publishes only after independent Apple and Minisign verification", async () => {
     const text = await readFile(desktopReleaseWorkflow, "utf-8")
+    const releaseActionUses = text.match(/uses: softprops\/action-gh-release@/g) ?? []
+    const draftReleaseFlags = text.match(/^\s+draft: true$/gm) ?? []
 
     expect(text).toContain("codesign --verify --deep --strict")
     expect(text).toContain("TeamIdentifier=${APPLE_TEAM_ID}")
     expect(text).toContain("spctl --assess --type install")
     expect(text).toContain("spctl --assess --type execute")
+    expect(releaseActionUses).toHaveLength(5)
+    expect(draftReleaseFlags).toHaveLength(releaseActionUses.length)
 
     const verifyJob = text.match(/  verify-release-assets:[\s\S]*?(?=\n  finalize-release:|$)/)
     expect(verifyJob, "verify-release-assets job should exist").not.toBeNull()
