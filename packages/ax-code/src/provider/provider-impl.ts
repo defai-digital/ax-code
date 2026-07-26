@@ -1204,10 +1204,20 @@ export namespace Provider {
       if (providerID === "anthropic" || providerID.startsWith("anthropic-")) {
         priority = ["claude-haiku-4-5", "claude-3-5-haiku"]
       }
+      // Prefer exact ID, then bare id without a "[Nm]" context-window suffix,
+      // then shortest includes-match. Plain `includes` used to pick
+      // "glm-5.2[1m]" for priority "glm-5.2" (or even "glm-5") depending on
+      // Object.keys order — a 1M-context model for title/summary aux calls.
       for (const item of priority) {
-        for (const model of Object.keys(provider.models)) {
-          if (model.includes(item)) return getModel(providerID, ModelID.make(model))
-        }
+        const keys = Object.keys(provider.models)
+        const exact = keys.find((model) => model === item)
+        if (exact) return getModel(providerID, ModelID.make(exact))
+        const bare = keys.find((model) => stripContextWindowSuffix(model) === item)
+        if (bare) return getModel(providerID, ModelID.make(bare))
+        const includes = keys
+          .filter((model) => model.includes(item))
+          .sort((a, b) => a.length - b.length || a.localeCompare(b))
+        if (includes[0]) return getModel(providerID, ModelID.make(includes[0]))
       }
     }
 

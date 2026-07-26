@@ -8,6 +8,7 @@ import { Database, NotFoundError, and, asc, desc, eq, inArray, sql } from "@/sto
 import { Log } from "@/util/log"
 import { JsonNumber } from "@/util/schema"
 import { Session } from "."
+import { SessionMetadata } from "./metadata"
 import { SessionID, TaskQueueID } from "./schema"
 import { TaskQueueTable } from "./session.sql"
 
@@ -190,6 +191,26 @@ export namespace TaskQueue {
     }
   }
 
+  async function clearSessionQueueMetadataIfCurrent(item: Info) {
+    if (!item.sessionID) return
+    try {
+      const session = await Session.get(item.sessionID)
+      const queue = SessionMetadata.product(session.metadata ?? {}).queue
+      if (queue?.queueItemId !== item.id) return
+      await Session.setProductMetadata({
+        sessionID: item.sessionID,
+        namespace: "queue",
+        value: undefined,
+      })
+    } catch (error) {
+      log.warn("failed to clear session queue metadata", {
+        taskQueueID: item.id,
+        sessionID: item.sessionID,
+        error,
+      })
+    }
+  }
+
   function assertProjectItem(item: Info) {
     if (item.projectID === Instance.project.id) return
     throw new HTTPException(409, {
@@ -297,6 +318,14 @@ export namespace TaskQueue {
     assertProjectItem(item)
     publishUpdated(item)
     await syncWorkflowStatusIfNeeded(item)
+    // Terminal statuses must not leave the session pointing at a finished
+    // queue item (UI/session metadata otherwise looks permanently "queued").
+    if (
+      (input.status === "completed" || input.status === "cancelled" || input.status === "failed") &&
+      item.sessionID
+    ) {
+      await clearSessionQueueMetadataIfCurrent(item)
+    }
     return item
   }
 

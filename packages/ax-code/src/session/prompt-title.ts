@@ -16,6 +16,13 @@ const log = Log.create({ service: "session.prompt" })
 
 const TITLE_CONTEXT_MAX_TOKENS = 3_000
 const TITLE_CONTEXT_MAX_CHARS = TITLE_CONTEXT_MAX_TOKENS * 4
+/** Title generation must not share the prompt-loop abort signal: loop
+ *  completion always cancels that signal, which aborted in-flight titles
+ *  (often mid-request on reasoning models) and left sessions titled
+ *  "New session - …". Use a dedicated short timeout instead. */
+const TITLE_TIMEOUT_MS = 30_000
+const TITLE_MAX_LEN = 100
+const FALLBACK_TITLE_MAX_LEN = 80
 
 export function shouldSkipAutomaticTitle(input: { providerID: ProviderID }) {
   return input.providerID === AX_ENGINE_PROVIDER_ID
@@ -57,11 +64,68 @@ export function titleContextMessages(contextMessages: MessageV2.WithParts[]): Mo
   return [{ role: "user", content }]
 }
 
+/** Normalize model output into a single-line session title, or undefined if unusable. */
+export function cleanGeneratedTitle(text: string): string | undefined {
+  const withoutBlocks = text
+    .replace(/<think>[\s\S]*?<\/think>\s*/gi, "")
+    .replace(/<thinking>[\s\S]*?<\/thinking>\s*/gi, "")
+    .replace(/```[\s\S]*?```/g, "")
+    .trim()
+  if (!withoutBlocks) return undefined
+
+  const line = withoutBlocks
+    .split("\n")
+    .map((raw) =>
+      raw
+        .trim()
+        .replace(/^["'`]+|["'`]+$/g, "")
+        .replace(/^(title|thread title)\s*:\s*/i, "")
+        .trim(),
+    )
+    .find((candidate) => candidate.length > 0 && !/^(here'?s|the)\s+(a\s+)?title\b/i.test(candidate))
+
+  if (!line) return undefined
+  return line.length > TITLE_MAX_LEN ? line.substring(0, TITLE_MAX_LEN - 3) + "..." : line
+}
+
+/** Deterministic fallback when the title model fails or returns empty text. */
+export function fallbackTitleFromUserText(text: string): string | undefined {
+  const line = text
+    .split("\n")
+    .map((raw) => raw.trim())
+    .find((candidate) => candidate.length > 0)
+  if (!line) return undefined
+  const collapsed = line.replace(/\s+/g, " ").trim()
+  if (!collapsed) return undefined
+  return collapsed.length > FALLBACK_TITLE_MAX_LEN
+    ? collapsed.slice(0, FALLBACK_TITLE_MAX_LEN - 3) + "..."
+    : collapsed
+}
+
+function firstUserText(contextMessages: MessageV2.WithParts[]): string {
+  for (const message of contextMessages) {
+    if (message.info.role !== "user") continue
+    for (const part of message.parts) {
+      if (part.type === "text" && !part.ignored && part.text.trim()) return part.text
+      if (part.type === "subtask" && part.prompt.trim()) return part.prompt
+    }
+  }
+  return ""
+}
+
+async function applyTitle(sessionID: Session.Info["id"], title: string) {
+  return Session.setTitle({ sessionID, title }).catch((err) => {
+    if (NotFoundError.isInstance(err)) return
+    throw err
+  })
+}
+
 export async function ensureTitle(input: {
   session: Session.Info
   history: MessageV2.WithParts[]
   providerID: ProviderID
   modelID: ModelID
+  /** @deprecated Ignored. Title uses its own timeout so loop completion cancel cannot abort it. */
   abort?: AbortSignal
 }) {
   if (!Session.isDefaultTitle(input.session.title)) return
@@ -79,59 +143,71 @@ export async function ensureTitle(input: {
 
   const contextMessages = input.history.slice(0, firstRealUserIdx + 1)
   const firstRealUser = contextMessages[firstRealUserIdx]
+  const userText = firstUserText(contextMessages)
 
   const subtaskParts = firstRealUser.parts.filter((p) => p.type === "subtask") as MessageV2.SubtaskPart[]
   const hasOnlySubtaskParts = subtaskParts.length > 0 && firstRealUser.parts.every((p) => p.type === "subtask")
 
-  const agent = await Agent.get("title")
-  if (!agent) return
-  const model = await iife(async () => {
-    if (agent.model) return await Provider.getModel(agent.model.providerID, agent.model.modelID)
-    return (
-      (await Provider.getSmallModel(input.providerID)) ?? (await Provider.getModel(input.providerID, input.modelID))
-    )
-  })
-  const result = await LLM.stream({
-    agent,
-    user: firstRealUser.info as MessageV2.User,
-    system: [],
-    small: true,
-    tools: {},
-    model,
-    abort: input.abort ?? new AbortController().signal,
-    sessionID: input.session.id,
-    // No AI SDK retries for title generation: billing/quota 429s should
-    // not burn 3 attempts. The prompt loop has its own retry logic.
-    retries: 0,
-    messages: [
-      {
-        role: "user",
-        content: "Generate a title for this conversation:\n",
-      },
-      ...(hasOnlySubtaskParts
-        ? [{ role: "user" as const, content: subtaskParts.map((p) => p.prompt).join("\n") }]
-        : titleContextMessages(contextMessages)),
-    ],
-  })
-  // Return undefined explicitly on failure. The previous code relied on
-  // log.error happening to return void, which works today but would silently
-  // break if log.error ever returns something truthy.
-  const text = await Promise.resolve(result.text).catch((err: unknown) => {
-    log.error("failed to generate title", { error: DiagnosticLog.redactForLog(err) })
-    return undefined
-  })
-  if (text) {
-    const cleaned = text
-      .replace(/<think>[\s\S]*?<\/think>\s*/g, "")
-      .split("\n")
-      .map((line: string) => line.trim())
-      .find((line: string) => line.length > 0)
-    if (!cleaned) return
+  let title: string | undefined
 
-    const title = cleaned.length > 100 ? cleaned.substring(0, 97) + "..." : cleaned
-    return Session.setTitle({ sessionID: input.session.id, title }).catch((err) => {
-      if (NotFoundError.isInstance(err)) return
-      throw err
+  try {
+    const agent = await Agent.get("title")
+    if (!agent) {
+      log.warn("title agent missing, using fallback title", { sessionID: input.session.id })
+    } else {
+      const model = await iife(async () => {
+        if (agent.model) return await Provider.getModel(agent.model.providerID, agent.model.modelID)
+        return (
+          (await Provider.getSmallModel(input.providerID)) ?? (await Provider.getModel(input.providerID, input.modelID))
+        )
+      })
+      // Dedicated timeout — do not share the prompt-loop abort controller.
+      const titleAbort = AbortSignal.timeout(TITLE_TIMEOUT_MS)
+      const result = await LLM.stream({
+        agent,
+        user: firstRealUser.info as MessageV2.User,
+        system: [],
+        small: true,
+        tools: {},
+        model,
+        abort: titleAbort,
+        sessionID: input.session.id,
+        // No AI SDK retries for title generation: billing/quota 429s should
+        // not burn 3 attempts. The prompt loop has its own retry logic.
+        retries: 0,
+        messages: [
+          {
+            role: "user",
+            content: "Generate a title for this conversation:\n",
+          },
+          ...(hasOnlySubtaskParts
+            ? [{ role: "user" as const, content: subtaskParts.map((p) => p.prompt).join("\n") }]
+            : titleContextMessages(contextMessages)),
+        ],
+      })
+      const text = await Promise.resolve(result.text)
+      title = text ? cleanGeneratedTitle(text) : undefined
+      if (text && !title) {
+        log.warn("title model returned no usable title text", {
+          sessionID: input.session.id,
+          preview: text.slice(0, 120),
+        })
+      }
+    }
+  } catch (err: unknown) {
+    log.warn("failed to generate title", {
+      sessionID: input.session.id,
+      error: DiagnosticLog.redactForLog(err),
     })
   }
+
+  if (!title) {
+    title = fallbackTitleFromUserText(userText)
+    if (title) {
+      log.info("using fallback session title", { sessionID: input.session.id, title })
+    }
+  }
+
+  if (!title) return
+  return applyTitle(input.session.id, title)
 }
