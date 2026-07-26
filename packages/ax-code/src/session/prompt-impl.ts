@@ -134,12 +134,14 @@ export namespace SessionPrompt {
 
   export const prompt = fn(PromptInput, async (input) => {
     const session = await Session.get(input.sessionID)
-    await SessionRevert.cleanup(session)
 
     // User lifecycle hooks (UserPromptSubmit): a blockOnFailure hook can veto
-    // the prompt before the user message is persisted. Synthetic continuation
-    // prompts (agentRouting: "preserve") and subagent child sessions are
-    // exempt so internal flows cannot be wedged by a misbehaving hook.
+    // the prompt before the user message is persisted. This must run BEFORE
+    // SessionRevert.cleanup — cleanup permanently deletes reverted messages,
+    // and a vetoed prompt must not destroy the user's undo history.
+    // Synthetic continuation prompts (agentRouting: "preserve") and subagent
+    // child sessions are exempt so internal flows cannot be wedged by a
+    // misbehaving hook.
     if (input.agentRouting !== "preserve" && !session.parentID) {
       let blockedDetail: string | undefined
       try {
@@ -168,6 +170,8 @@ export namespace SessionPrompt {
         throw new Error(`UserPromptSubmit hook blocked prompt: ${blockedDetail}`)
       }
     }
+
+    await SessionRevert.cleanup(session)
 
     const message = await createUserMessage(input)
     await Session.touch(input.sessionID)
