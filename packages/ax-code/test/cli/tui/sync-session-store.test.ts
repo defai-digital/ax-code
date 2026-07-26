@@ -4,9 +4,34 @@ import {
   applySessionLeavePrune,
   applySessionSyncEnrichment,
   applySessionSyncSnapshot,
+  capSyncedMessages,
   createSessionSyncSnapshot,
   pruneOrphanSessionRecords,
 } from "../../../src/cli/cmd/tui/context/sync-session-store"
+
+describe("capSyncedMessages", () => {
+  test("passes through results within the cap", () => {
+    const messages = [{ id: "a" }, { id: "b" }]
+    expect(capSyncedMessages(messages, 3)).toEqual({ messages, truncated: false })
+  })
+
+  test("treats exactly-at-cap as not truncated", () => {
+    const messages = [{ id: "a" }, { id: "b" }, { id: "c" }]
+    expect(capSyncedMessages(messages, 3)).toEqual({ messages, truncated: false })
+  })
+
+  test("keeps the newest entries when the overflow probe trips", () => {
+    const messages = [{ id: "oldest" }, { id: "b" }, { id: "c" }, { id: "newest" }]
+    expect(capSyncedMessages(messages, 3)).toEqual({
+      messages: [{ id: "b" }, { id: "c" }, { id: "newest" }],
+      truncated: true,
+    })
+  })
+
+  test("handles undefined input", () => {
+    expect(capSyncedMessages(undefined, 3)).toEqual({ messages: undefined, truncated: false })
+  })
+})
 
 describe("tui sync session store", () => {
   test("does not build a session sync snapshot when session data is missing", () => {

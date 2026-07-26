@@ -5,6 +5,15 @@ export interface SyncedMessageParts<TMessage, TPart> {
   parts: TPart[]
 }
 
+// Overflow probe for capped message fetches: the API returns the most recent
+// N messages, so ask for N+1 — an over-long result means older history exists.
+// Keep the newest `max` entries and report truncation so the UI can say so
+// instead of silently presenting the tail as the whole conversation.
+export function capSyncedMessages<T>(messages: T[] | undefined, max: number) {
+  if (!Array.isArray(messages) || messages.length <= max) return { messages, truncated: false }
+  return { messages: messages.slice(-max), truncated: true }
+}
+
 export function createSessionSyncSnapshot<TSession, TTodo, TMessage, TPart, TDiff, TRisk, TGoal>(input: {
   session: TSession | undefined
   todo: TTodo[] | undefined
@@ -207,6 +216,7 @@ export function pruneOrphanSessionRecords(store: {
   session_diff?: Record<string, unknown>
   todo?: Record<string, unknown>
   message?: Record<string, Array<{ id: string }>>
+  message_truncated?: Record<string, unknown>
   part?: Record<string, unknown>
 }) {
   const live = new Set(store.session.map((session) => session.id))
@@ -220,6 +230,7 @@ export function pruneOrphanSessionRecords(store: {
     store.session_diff,
     store.todo,
     store.message,
+    store.message_truncated,
   ]
 
   for (const bag of bags) {

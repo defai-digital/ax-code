@@ -56,6 +56,10 @@ export interface SyncStoreState {
   session_diff: Record<string, Snapshot.FileDiff[]>
   todo: Record<string, Todo[]>
   message: Record<string, Message[]>
+  // True when a session has more history than the TUI loads (the message
+  // fetch is capped). The transcript shows a truncation notice instead of
+  // silently presenting the tail as the whole conversation.
+  message_truncated: Record<string, boolean>
   part: Record<string, Part[]>
   lsp: LspStatus[]
   debugEngine: {
@@ -125,6 +129,7 @@ export function createInitialSyncState(): SyncStoreState {
     session_diff: {},
     todo: {},
     message: {},
+    message_truncated: {},
     part: {},
     lsp: [],
     debugEngine: {

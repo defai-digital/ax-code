@@ -14,6 +14,7 @@ import { createTuiStartupSpan, recordTuiStartupOnce } from "@tui/util/startup-tr
 import { createBootstrapController } from "./sync-bootstrap-controller"
 import { createStoreBackedRuntimeSyncActions } from "./sync-runtime-adapter"
 import { createStoreBackedSessionSyncController } from "./sync-session-sync"
+import { capSyncedMessages } from "./sync-session-store"
 import { createStoreBackedBootstrapTasks } from "./sync-bootstrap-assembly"
 import {
   applyProviderBootstrapState,
@@ -33,7 +34,9 @@ import { sessionDerivedRequestHeaders, sessionGoalURL, sessionRiskURL } from "./
 
 const BOOTSTRAP_REQUEST_TIMEOUT_MS = 10_000
 const SESSION_SYNC_REQUEST_TIMEOUT_MS = 10_000
-const MAX_SESSION_MESSAGES = 100
+// The transcript only loads the most recent N messages of a session. The
+// fetch below probes with N+1 so truncation is detectable and surfaced.
+export const MAX_SESSION_MESSAGES = 100
 
 function withSyncTimeout<T>(label: string, promise: Promise<T>, timeoutMs = BOOTSTRAP_REQUEST_TIMEOUT_MS) {
   return withTimeout(promise, timeoutMs, `${label} timed out after ${timeoutMs}ms`)
@@ -80,7 +83,19 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       withTimeout: withSyncTimeout,
       setStore,
       fetchSession: (sessionID) => sdk.client.session.get({ sessionID }, { throwOnError: true }),
-      fetchMessages: (sessionID) => sdk.client.session.messages({ sessionID, limit: 100 }, { throwOnError: true }),
+      fetchMessages: async (sessionID) => {
+        // Fetch one extra message as an overflow probe (capSyncedMessages):
+        // older history beyond the cap is recorded as truncation rather than
+        // silently presented as the whole conversation.
+        const result = await sdk.client.session.messages(
+          { sessionID, limit: MAX_SESSION_MESSAGES + 1 },
+          { throwOnError: true },
+        )
+        const { messages, truncated } = capSyncedMessages(result.data, MAX_SESSION_MESSAGES)
+        setStore("message_truncated", sessionID, truncated)
+        if (!truncated) return result
+        return { ...result, data: messages }
+      },
       fetchTodo: (sessionID) => sdk.client.session.todo({ sessionID }, { throwOnError: true }),
       fetchDiff: (sessionID) => sdk.client.session.diff({ sessionID }, { throwOnError: true }),
       fetchRisk: async (sessionID) => {

@@ -51,6 +51,7 @@ export function Toast() {
               <span style={{ fg: theme[current().variant] }}>{VARIANT_ICON[current().variant]}</span>{" "}
             </Show>
             {current().message}
+            {toast.currentRepeat > 1 ? ` (×${toast.currentRepeat})` : ""}
           </text>
         </box>
       )}
@@ -58,16 +59,29 @@ export function Toast() {
   )
 }
 
-function init() {
+type QueuedToast = { options: ToastOptions; repeat: number }
+
+// An error storm (SSE reconnect loops, sync failures) must not replay dozens
+// of stale toasts for minutes: the queue is capped, consecutive duplicates
+// collapse into a ×N counter, and a new error flushes queued info toasts.
+const MAX_QUEUED_TOASTS = 5
+
+export function sameToast(a: ToastOptions, b: ToastOptions) {
+  return a.variant === b.variant && a.title === b.title && a.message === b.message
+}
+
+export function createToastStore() {
   const [store, setStore] = createStore({
     currentToast: null as ToastOptions | null,
-    queue: [] as ToastOptions[],
+    currentRepeat: 1,
+    queue: [] as QueuedToast[],
   })
 
   let cancelToastTimeout: (() => void) | undefined
 
-  function scheduleNextToast(options: ToastOptions) {
-    setStore("currentToast", options)
+  function scheduleNextToast(entry: QueuedToast) {
+    setStore("currentToast", entry.options)
+    setStore("currentRepeat", entry.repeat)
     cancelToastTimeout?.()
     cancelToastTimeout = scheduleTuiTimeout(
       () => {
@@ -79,10 +93,11 @@ function init() {
           return
         }
         setStore("currentToast", null)
+        setStore("currentRepeat", 1)
       },
       {
         name: "toast-auto-dismiss",
-        delayMs: options.duration ?? 5000,
+        delayMs: entry.options.duration ?? 5000,
         unref: true,
       },
     )
@@ -100,11 +115,25 @@ function init() {
             variant: "error",
             message: typeof (options as { message?: unknown })?.message === "string" ? options.message : "Unknown error",
           }
-      if (store.currentToast) {
-        setStore("queue", (queue) => [...queue, parsedOptions])
+      if (store.currentToast && sameToast(store.currentToast, parsedOptions)) {
+        setStore("currentRepeat", (repeat) => repeat + 1)
         return
       }
-      scheduleNextToast(parsedOptions)
+      const lastQueued = store.queue.at(-1)
+      if (lastQueued && sameToast(lastQueued.options, parsedOptions)) {
+        setStore("queue", store.queue.length - 1, "repeat", (repeat) => repeat + 1)
+        return
+      }
+      if (store.currentToast) {
+        setStore("queue", (queue) => {
+          // A fresh error supersedes stale informational toasts.
+          const kept = parsedOptions.variant === "error" ? queue.filter((t) => t.options.variant !== "info") : queue
+          // Cap the backlog: drop the oldest (most stale) entries first.
+          return [...kept, { options: parsedOptions, repeat: 1 }].slice(-MAX_QUEUED_TOASTS)
+        })
+        return
+      }
+      scheduleNextToast({ options: parsedOptions, repeat: 1 })
     },
     error: (err: any) => {
       if (err instanceof Error)
@@ -120,22 +149,26 @@ function init() {
     get currentToast(): ToastOptions | null {
       return store.currentToast
     },
+    get currentRepeat(): number {
+      return store.currentRepeat
+    },
     dispose() {
       cancelToastTimeout?.()
       cancelToastTimeout = undefined
       setStore("currentToast", null)
+      setStore("currentRepeat", 1)
       setStore("queue", [])
     },
   }
   return toast
 }
 
-export type ToastContext = ReturnType<typeof init>
+export type ToastContext = ReturnType<typeof createToastStore>
 
 const ctx = createContext<ToastContext>()
 
 export function ToastProvider(props: ParentProps) {
-  const value = init()
+  const value = createToastStore()
   onCleanup(() => value.dispose())
   return <ctx.Provider value={value}>{props.children}</ctx.Provider>
 }

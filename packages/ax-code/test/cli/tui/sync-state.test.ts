@@ -36,6 +36,7 @@ describe("tui sync state", () => {
       session_diff: {},
       todo: {},
       message: {},
+      message_truncated: {},
       part: {},
       lsp: [],
       debugEngine: {

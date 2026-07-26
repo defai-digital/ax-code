@@ -14,7 +14,7 @@ import {
 } from "solid-js"
 import { Dynamic } from "solid-js/web"
 import { useRoute, useRouteData } from "@tui/context/route"
-import { useSync } from "@tui/context/sync"
+import { MAX_SESSION_MESSAGES, useSync } from "@tui/context/sync"
 import { SplitBorder } from "@tui/component/border"
 import { Spinner } from "@tui/component/spinner"
 import { Chip } from "@tui/ui/primitives/chip"
@@ -1279,6 +1279,13 @@ export function Session() {
                   <text>
                     <span style={{ fg: theme.accent }}>◦</span>
                     <span style={{ fg: theme.textMuted }}> /help for commands</span>
+                  </text>
+                </box>
+              </Show>
+              <Show when={sync.data.message_truncated[route.sessionID]}>
+                <box paddingLeft={2} paddingBottom={1}>
+                  <text fg={theme.textMuted}>
+                    ▲ Showing the most recent {MAX_SESSION_MESSAGES} messages — earlier history is not loaded
                   </text>
                 </box>
               </Show>
