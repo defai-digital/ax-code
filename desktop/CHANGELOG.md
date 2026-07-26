@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.3.0] - 2026-07-26
+
+### Added
+
+- Tools: adds durable background shell execution with output polling and explicit process termination.
+- Hooks: adds `UserPromptSubmit`, `PreCompact`, and `SubagentStop` lifecycle events.
+- Commands: adds built-in `/commit` and `/pr` workflows while preserving user-defined command overrides.
+- Providers: adds Hugging Face and UnoRouter to the default setup experience.
+
+### Changed
+
+- Skills: parses full frontmatter and surfaces declared `allowed-tools` to the runtime.
+- AX Engine: raises the minimum supported local-engine version to 6.11.0.
+- Distribution: consolidates new Homebrew installs in `defai-digital/tap` while dual-publishing legacy taps for upgrade compatibility.
+
+### Fixed
+
+- Providers: aligns Hugging Face and UnoRouter setup, small-model routing, login handling, and OpenRouter attribution.
+- Sessions and storage: improves automatic titles, hook ordering, queue metadata cleanup, and migration-marker parsing.
+- Tools: hardens background shell cleanup against process leaks, corrupt output, and orphaned children.
+- Release: signs and verifies the Desktop disk image with the Apple Developer ID before notarization, uses the correct Gatekeeper disk-image assessment, and refreshes update metadata after stapling.
+
 ## [7.2.0] - 2026-07-25
 
 ### Added

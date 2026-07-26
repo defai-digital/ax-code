@@ -219,6 +219,7 @@ jobs:
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           KEYCHAIN_PATH="$RUNNER_TEMP/electron-signing.keychain-db"
@@ -231,6 +232,18 @@ jobs:
           security import "$CERTIFICATE_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk -F '"' '/Developer ID Application/ { print $2; exit }')"
+          if [ -z "$IDENTITY" ]; then
+            echo "::error::No Developer ID Application identity found in imported Apple certificate."
+            security find-identity -v -p codesigning "$KEYCHAIN_PATH" || true
+            exit 1
+          fi
+          if [[ "$IDENTITY" != *"($APPLE_TEAM_ID)"* ]]; then
+            echo "::error::Developer ID identity does not match APPLE_TEAM_ID."
+            echo "identity: $IDENTITY"
+            exit 1
+          fi
+          echo "AX_CODE_APPLE_CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
 
       # Notarize via the App Store Connect API key (not Apple ID + app password).
       # electron-builder reads APPLE_API_KEY (path) / APPLE_API_KEY_ID /
@@ -262,20 +275,27 @@ jobs:
           pnpm --filter @ax-code/electron run build
           node desktop/packages/electron/scripts/package.mjs --mac --arm64 --publish=never
 
-      # electron-builder notarizes + staples the .app (and .zip), but not the
-      # .dmg wrapper. Notarize the dmg itself and staple so it passes Gatekeeper
-      # offline / before mounting.
-      - name: Notarize and staple the dmg
+      # electron-builder signs and notarizes the .app, but not the outer .dmg
+      # wrapper. Sign the disk image with the same Developer ID Application
+      # identity before notarizing it, then assess it as a disk image (`open`),
+      # not as an installer package (`install`).
+      - name: Sign, notarize, and staple the dmg
         if: ${{ env.HAS_APPLE_CERT == 'true' }}
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           DMG="$(ls desktop/packages/electron/dist/*.dmg)"
+          codesign --force --timestamp --sign "$AX_CODE_APPLE_CODESIGN_IDENTITY" "$DMG"
+          codesign --verify --strict --verbose=2 "$DMG"
+          DMG_SIGNATURE_DETAILS="$(codesign -dv --verbose=4 "$DMG" 2>&1)"
+          printf '%s\n' "$DMG_SIGNATURE_DETAILS"
+          grep -F "Authority=Developer ID Application: DEFAI PRIVATE LIMITED" <<< "$DMG_SIGNATURE_DETAILS"
+          grep -F "TeamIdentifier=${APPLE_TEAM_ID}" <<< "$DMG_SIGNATURE_DETAILS"
           xcrun notarytool submit "$DMG" --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait
           xcrun stapler staple "$DMG"
           xcrun stapler validate "$DMG"
-          spctl --assess --type install --verbose=2 "$DMG"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG"
 
           APP="$(find desktop/packages/electron/dist -maxdepth 2 -type d -name 'AX Code.app' -print -quit)"
           test -n "$APP"
@@ -285,6 +305,13 @@ jobs:
           grep -F "Authority=Developer ID Application: DEFAI PRIVATE LIMITED" <<< "$SIGNATURE_DETAILS"
           grep -F "TeamIdentifier=${APPLE_TEAM_ID}" <<< "$SIGNATURE_DETAILS"
           spctl --assess --type execute --verbose=2 "$APP"
+
+          # Codesigning and stapling mutate the DMG after electron-builder has
+          # generated its differential blockmap and latest-mac.yml hashes.
+          # Refresh both from the final trusted bytes before upload.
+          node desktop/packages/electron/scripts/refresh-macos-update-metadata.mjs \
+            --artifact "$DMG" \
+            --metadata desktop/packages/electron/dist/latest-mac.yml
 
       - name: Packaged app smoke
         run: node desktop/packages/electron/scripts/smoke-packaged-app.mjs --artifacts "$RUNNER_TEMP/desktop-smoke"
@@ -685,14 +712,16 @@ jobs:
       needs.finalize-release.result == 'success'
     runs-on: ubuntu-latest
     env:
-      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' || secrets.TAP_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v7
         if: ${{ env.HAS_TAP_TOKEN == 'true' }}
 
-      - name: Skip Homebrew update when token is absent
+      - name: Require Homebrew tap token
         if: ${{ env.HAS_TAP_TOKEN != 'true' }}
-        run: echo "::notice::HOMEBREW_TAP_TOKEN not configured; skipping Desktop Homebrew cask update."
+        run: |
+          echo "::error::HOMEBREW_TAP_TOKEN or TAP_TOKEN is required; refusing to publish Desktop without updating Homebrew."
+          exit 1
 
       - name: Download and verify release DMG
         if: ${{ env.HAS_TAP_TOKEN == 'true' }}
@@ -715,7 +744,7 @@ jobs:
       - name: Push updated Desktop cask
         if: ${{ env.HAS_TAP_TOKEN == 'true' }}
         env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.TAP_TOKEN }}
           TAG: ${{ needs.create-release.outputs.tag }}
           VERSION: ${{ needs.create-release.outputs.version }}
         run: |

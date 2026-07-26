@@ -107,7 +107,7 @@ One-line remote execution is a convenience path, not the only path. Keep an insp
 
 ```powershell
 # Pin version in CI/images
-$env:AX_CODE_VERSION = "7.2.0"
+$env:AX_CODE_VERSION = "7.3.0"
 irm https://github.com/defai-digital/ax-code/releases/download/v$env:AX_CODE_VERSION/install.ps1 -OutFile install.ps1
 # Optional: verify install.ps1.minisig first (see SECURITY.md)
 .\install.ps1 -Version $env:AX_CODE_VERSION -NoModifyPath

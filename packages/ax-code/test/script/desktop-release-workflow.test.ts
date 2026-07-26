@@ -69,6 +69,10 @@ describe("desktop release workflow", () => {
     expect(text).toContain("'    regex(/^desktop-v?(\\\\d+(?:\\\\.\\\\d+)+)$/i)'")
     expect(text).toContain("git pull --rebase origin main")
     expect(text).toContain("git push origin HEAD:main")
+    expect(text).toContain("secrets.HOMEBREW_TAP_TOKEN != '' || secrets.TAP_TOKEN != ''")
+    expect(text).toContain("secrets.HOMEBREW_TAP_TOKEN || secrets.TAP_TOKEN")
+    expect(text).toContain("refusing to publish Desktop without updating Homebrew")
+    expect(text).not.toContain("skipping Desktop Homebrew cask update")
   })
 
   test("signing job prefers the shared minisign release secrets", async () => {
@@ -95,7 +99,9 @@ describe("desktop release workflow", () => {
 
     expect(text).toContain("codesign --verify --deep --strict")
     expect(text).toContain("TeamIdentifier=${APPLE_TEAM_ID}")
-    expect(text).toContain("spctl --assess --type install")
+    expect(text).toContain('codesign --force --timestamp --sign "$AX_CODE_APPLE_CODESIGN_IDENTITY" "$DMG"')
+    expect(text).toContain("spctl --assess --type open --context context:primary-signature")
+    expect(text).not.toContain("spctl --assess --type install")
     expect(text).toContain("spctl --assess --type execute")
     expect(releaseActionUses).toHaveLength(5)
     expect(draftReleaseFlags).toHaveLength(releaseActionUses.length)
@@ -111,6 +117,27 @@ describe("desktop release workflow", () => {
     expect(finalizeJob![0]).toContain("verify-release-assets")
     expect(text).toContain("release $TAG is already published; refusing to replace verified assets")
     expect(finalizeJob![0]).toContain("release $TAG is no longer a draft; refusing to publish or mutate it")
+  })
+
+  test("signs the Desktop disk image before notarizing and stapling it", async () => {
+    const text = await readFile(desktopReleaseWorkflow, "utf-8")
+    const job = text.match(/  build-macos:[\s\S]*?(?=\n  build-windows:|$)/)
+
+    expect(job, "build-macos job should exist").not.toBeNull()
+    const macosJob = job![0]
+    const sign = macosJob.indexOf('codesign --force --timestamp --sign "$AX_CODE_APPLE_CODESIGN_IDENTITY" "$DMG"')
+    const notarize = macosJob.indexOf('xcrun notarytool submit "$DMG"')
+    const staple = macosJob.indexOf('xcrun stapler staple "$DMG"')
+    const assess = macosJob.indexOf("spctl --assess --type open --context context:primary-signature")
+    const refresh = macosJob.indexOf("refresh-macos-update-metadata.mjs")
+
+    expect(macosJob).toContain("No Developer ID Application identity found in imported Apple certificate.")
+    expect(macosJob).toContain("Developer ID identity does not match APPLE_TEAM_ID.")
+    expect(sign).toBeGreaterThan(-1)
+    expect(notarize).toBeGreaterThan(sign)
+    expect(staple).toBeGreaterThan(notarize)
+    expect(assess).toBeGreaterThan(staple)
+    expect(refresh).toBeGreaterThan(assess)
   })
 
   test("verifies the Minisign signature before trusting the Homebrew DMG", async () => {

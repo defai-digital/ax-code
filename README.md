@@ -10,7 +10,7 @@ AX Code runs coding agents against your actual repositories through AX Code Desk
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
-[![Release v7.2.0](https://img.shields.io/badge/Release-v7.2.0-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v7.2.0)
+[![Release v7.3.0](https://img.shields.io/badge/Release-v7.3.0-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v7.3.0)
 [![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![Windows x64](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![Windows ARM64 CLI](https://img.shields.io/badge/Windows%20ARM64-CLI-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
@@ -132,7 +132,7 @@ hash -r
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
-This updates the Windows CLI. AX Code Desktop updates through the Desktop auto-updater, or by downloading the latest `AX-Code-<version>-win-x64.exe` / `AX-Code-<version>-win-arm64.exe` installer from GitHub Releases. For unattended Desktop installs, run the NSIS installer with `/S` (for example `.\AX-Code-7.2.0-win-x64.exe /S`).
+This updates the Windows CLI. AX Code Desktop updates through the Desktop auto-updater, or by downloading the latest `AX-Code-<version>-win-x64.exe` / `AX-Code-<version>-win-arm64.exe` installer from GitHub Releases. For unattended Desktop installs, run the NSIS installer with `/S` (for example `.\AX-Code-7.3.0-win-x64.exe /S`).
 
 ### From Source (contributors)
 
