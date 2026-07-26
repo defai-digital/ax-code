@@ -127,10 +127,12 @@ jobs:
           dest=".internal/reports/testing/coverage-baseline"
           mkdir -p "$dest"
 
+          # Select the first successful run id inside jq. Avoid `cmd | head`
+          # under pipefail: gh may write multiple lines and get SIGPIPE (exit 141)
+          # when head closes the pipe after the first line.
           run_id="$(
             gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ax-code-ci.yml/runs?branch=${GITHUB_REF_NAME}&event=push&status=completed&per_page=50" \
-              --jq '.workflow_runs[] | select(.conclusion=="success") | .id' \
-              | head -n1
+              --jq '[.workflow_runs[] | select(.conclusion=="success") | .id] | first // empty'
           )"
 
           if [ -z "$run_id" ]; then

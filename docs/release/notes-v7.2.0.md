@@ -1,5 +1,10 @@
 # AX Code v7.2.0
 
+Status: Archived
+Scope: public, historical release notes
+Last reviewed: 2026-07-26
+Owner: AX Code release engineering
+
 Released July 26, 2026 · [Full changelog](https://github.com/defai-digital/ax-code/compare/v7.1.0...v7.2.0)
 
 v7.2.0 broadens model steering, hardens long-running sessions, and adds a native
