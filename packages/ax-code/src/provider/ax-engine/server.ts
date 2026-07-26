@@ -285,8 +285,17 @@ async function waitForReady(
     if (options.signal?.aborted) return { ready: false, reason: "aborted" }
     if (processHasExited(options.process)) return { ready: false, reason: "process-exited" }
     if (await isServerReady(baseURL, options.signal, options.apiKey)) return { ready: true }
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    // A child can exit while the final health probe is waiting on its own
+    // timeout. Re-check before classifying the overall wait as a health
+    // timeout; otherwise fast startup failures race with the deadline and are
+    // intermittently reported as AX_ENGINE_SERVER_HEALTH_FAILED.
+    if (processHasExited(options.process)) return { ready: false, reason: "process-exited" }
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) break
+    await new Promise((resolve) => setTimeout(resolve, Math.min(500, remaining)))
   }
+  if (options.signal?.aborted) return { ready: false, reason: "aborted" }
+  if (processHasExited(options.process)) return { ready: false, reason: "process-exited" }
   return { ready: false, reason: "timeout" }
 }
 
