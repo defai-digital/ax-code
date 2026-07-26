@@ -1,9 +1,21 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, beforeEach, describe, expect, test } from "vitest"
 import { OsSandbox } from "../../src/isolation/os-sandbox"
 import { Isolation } from "../../src/isolation"
 import fs from "fs"
 import os from "os"
 import path from "path"
+
+// Clear both before and after so tests asserting on the default backend/mode
+// are not skewed by AX_CODE_ISOLATION_MODE / _NETWORK inherited from the parent
+// shell (e.g. when running the suite from inside an ax-code session in
+// full-access mode — the same hazard isolation.test.ts guards against).
+const clearIsolationEnv = () => {
+  delete process.env.AX_CODE_ISOLATION_MODE
+  delete process.env.AX_CODE_ISOLATION_NETWORK
+}
+
+beforeEach(clearIsolationEnv)
+afterEach(clearIsolationEnv)
 
 describe("OsSandbox.resolveBackend", () => {
   test("defaults to auto", () => {
