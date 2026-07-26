@@ -30,6 +30,7 @@ const { sanitizeDesktopWindowTitle } = require("./desktop-window-title")
 const { shouldIncludeNativeSearchEntry, toNativeSearchRelativePath } = require("./desktop-file-search")
 const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support-urls")
 const { createServerRestartPolicy, shouldRecoverAfterServerExit } = require("./server-restart-policy")
+const { createRendererCrashPolicy } = require("./renderer-crash-policy")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
 const { sendUpdateProgressToWindows } = require("./update-progress")
 const { normalizeInstalledAppsCache } = require("./installed-apps-cache")
@@ -97,6 +98,7 @@ let isQuitting = false
 let isRelaunchingServer = false
 let serverCrashRecoveryPending = false
 let serverStabilityTimer = null
+let rendererStabilityTimer = null
 let rendererReadyForOpenProject = false
 let externalOpenPathDrainRunning = false
 let externalOpenPathHandlerReady = false
@@ -183,6 +185,19 @@ const MAX_SERVER_CRASH_RESTARTS = 5
 const SERVER_CRASH_RETRY_BASE_MS = 500
 const SERVER_STABILITY_RESET_MS = 60_000
 const serverRestartPolicy = createServerRestartPolicy({ maxRestarts: MAX_SERVER_CRASH_RESTARTS })
+
+const MAX_RENDERER_CRASH_RELOADS = 3
+const RENDERER_STABILITY_RESET_MS = 60_000
+const rendererCrashPolicy = createRendererCrashPolicy({ maxReloads: MAX_RENDERER_CRASH_RELOADS })
+
+function scheduleRendererStabilityReset() {
+  if (rendererStabilityTimer) clearTimeout(rendererStabilityTimer)
+  rendererStabilityTimer = setTimeout(() => {
+    rendererStabilityTimer = null
+    rendererCrashPolicy.markStable()
+  }, RENDERER_STABILITY_RESET_MS)
+  rendererStabilityTimer.unref?.()
+}
 
 function waitForServerRestartBackoff(attempt) {
   return new Promise((resolve) => setTimeout(resolve, Math.min(SERVER_CRASH_RETRY_BASE_MS * 2 ** (attempt - 1), 5_000)))
@@ -473,6 +488,69 @@ async function createWindow() {
     )
   })
 
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    if (isQuitting || details.reason === "clean-exit" || mainWindow.isDestroyed()) return
+    recordStartupEvent(
+      "renderer.render-process-gone",
+      {
+        reason: details.reason,
+        exitCode: details.exitCode,
+      },
+      { once: false },
+    )
+    rendererReadyForOpenProject = false
+    if (rendererStabilityTimer) {
+      clearTimeout(rendererStabilityTimer)
+      rendererStabilityTimer = null
+    }
+    if (rendererCrashPolicy.beginReload()) {
+      console.error("[electron] renderer process gone (%s), reloading window", details.reason)
+      mainWindow.webContents.reload()
+      return
+    }
+    console.error(
+      "[electron] renderer crashed too many times (%d), giving up on auto-reload",
+      rendererCrashPolicy.crashReloads,
+    )
+    dialog
+      .showMessageBox({
+        type: "error",
+        title: "AX Code window crashed",
+        message: "The AX Code window crashed repeatedly.",
+        detail: "Reload to try again, or quit and reopen AX Code. If the problem continues, check the application logs.",
+        buttons: ["Reload", "Quit"],
+      })
+      .then(({ response }) => {
+        if (response === 0) {
+          rendererCrashPolicy.markStable()
+          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.reload()
+        } else {
+          app.exit(1)
+        }
+      })
+      .catch((dialogError) => console.error("[electron] failed to show renderer crash dialog:", dialogError))
+  })
+
+  mainWindow.webContents.on("unresponsive", () => {
+    if (isQuitting || mainWindow.isDestroyed()) return
+    recordStartupEvent("renderer.unresponsive", {}, { once: false })
+    dialog
+      .showMessageBox({
+        type: "warning",
+        title: "AX Code is not responding",
+        message: "The AX Code window is not responding.",
+        detail: "Wait for it to recover, or reload the window.",
+        buttons: ["Wait", "Reload"],
+      })
+      .then(({ response }) => {
+        if (response === 1 && mainWindow && !mainWindow.isDestroyed()) {
+          rendererReadyForOpenProject = false
+          mainWindow.webContents.reload()
+        }
+      })
+      .catch((dialogError) => console.error("[electron] failed to show unresponsive dialog:", dialogError))
+  })
+
   mainWindow.on("closed", () => {
     mainWindow = null
   })
@@ -482,6 +560,7 @@ async function createWindow() {
     devRenderer: Boolean(getDevRendererUrl()),
   })
   await mainWindow.loadURL(rendererUrl)
+  scheduleRendererStabilityReset()
 }
 
 // ── Auto-update ───────────────────────────────────────────────────────────
@@ -2640,6 +2719,10 @@ app.whenReady().then(async () => {
     })
   } catch (err) {
     console.error("[electron] startup failed:", err)
+    dialog.showErrorBox(
+      "AX Code failed to start",
+      `The application could not start.\n\n${err instanceof Error ? err.message : String(err)}\n\nCheck the application logs for details.`,
+    )
     // app.exit() does not fire 'before-quit', so stop the server process
     // (and any ax-code child it spawned) here to avoid orphaning it when the
     // server booted but window creation failed.
