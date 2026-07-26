@@ -1191,6 +1191,17 @@ export namespace Provider {
       if (providerID === "openrouter") {
         priority = ["qwen/qwen3-coder-flash", "google/gemini-3.5-flash", "qwen/qwen3.7-plus"]
       }
+      // UnoRouter and Hugging Face were missing — the default gemini/llama
+      // list never matched their catalogs (unorouter's "gemini-3.5-flash"
+      // doesn't substring-match "gemini-3-flash"; HF ids are repo-prefixed),
+      // so getSmallModel returned undefined: auto-route's LLM tier silently
+      // disabled and title/summary aux calls billed the full main model.
+      if (providerID === "unorouter") {
+        priority = ["gemini-3.5-flash", "deepseek-v4-flash", "glm-5.2"]
+      }
+      if (providerID === "huggingface") {
+        priority = ["Qwen/Qwen3.5-9B", "Qwen/Qwen3.6-27B", "google/gemma-4-26B-A4B-it"]
+      }
       // OpenAI and Anthropic were missing — without overrides they fell through to the
       // gemini/llama default list which never matched their model IDs, returning undefined
       // and silently disabling Auto-route's LLM tier for the majority of users.

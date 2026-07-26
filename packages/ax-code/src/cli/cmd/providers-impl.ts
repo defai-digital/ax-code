@@ -13,6 +13,7 @@ import { Ssrf } from "../../util/ssrf"
 import { toErrorMessage } from "../../util/error-message"
 import { AX_ENGINE_MODEL_IDS, AX_ENGINE_QUANTIZATION_IDS } from "@/provider/ax-engine"
 import { Filesystem } from "@/util/filesystem"
+import { DEFAULT_SETUP_PROVIDER_IDS } from "@/provider/default-setup-providers"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -221,27 +222,7 @@ export function resolvePluginProviders(input: {
   return result
 }
 
-export const DEFAULT_LOGIN_PROVIDER_IDS = new Set([
-  "ax-code",
-  "google",
-  "groq",
-  "openrouter",
-  "huggingface",
-  "unorouter",
-  "zai-coding-plan",
-  "alibaba-coding-plan",
-  "alibaba-coding-plan-cn",
-  "alibaba-token-plan",
-  "alibaba-token-plan-cn",
-  "github-copilot",
-  "claude-code",
-  "gemini-cli",
-  "codex-cli",
-  "grok-build-cli",
-  "qoder-cli",
-  "antigravity-cli",
-  "kimi-cli",
-])
+export const DEFAULT_LOGIN_PROVIDER_IDS = new Set(["ax-code", ...DEFAULT_SETUP_PROVIDER_IDS])
 
 export const ProvidersCommand = cmd({
   command: "providers",
@@ -522,6 +503,26 @@ export const ProvidersLoginCommand = cmd({
     const directProvider = args.url && !isHttpProviderUrl(args.url) ? args.url : undefined
     if (directProvider) {
       const provider = directProvider
+      // Guard against typos ("huggleface"): an unknown id happily stores a
+      // credential that no provider will ever pick up, and the user walks
+      // away believing login succeeded. Suggest close matches instead.
+      const known = await ModelsDev.get()
+        .then((db) => new Set(Object.keys(db)))
+        .catch(() => undefined)
+      if (known && !known.has(provider)) {
+        const lower = provider.toLowerCase()
+        const suggestions = [...known]
+          .filter((id) => id.includes(lower.slice(0, 4)) || lower.includes(id.slice(0, 4)))
+          .slice(0, 3)
+        prompts.log.warn(
+          `"${provider}" is not a known provider id${suggestions.length ? ` — did you mean: ${suggestions.join(", ")}?` : "."}`,
+        )
+        prompts.log.info(
+          `The credential will be stored, but no provider will use it unless you define "${provider}" in ax-code.json.`,
+        )
+        const proceed = await prompts.confirm({ message: `Store credential for "${provider}" anyway?` })
+        if (prompts.isCancel(proceed) || !proceed) throw new UI.CancelledError()
+      }
       const key = await prompts.password({
         message: `Enter API key for ${provider}`,
         validate: (x) => (x && x.length > 0 ? undefined : "Required"),

@@ -64,6 +64,14 @@ describe("isModelSupportedForProvider", () => {
     expect(isModelSupportedForProvider("custom", "openai/gpt-5.5-codex")).toBe(false)
   })
 
+  test("hides embedding models for every provider", () => {
+    expect(isModelSupportedForProvider("huggingface", "Qwen/Qwen3-Embedding-4B")).toBe(false)
+    expect(isModelSupportedForProvider("huggingface", "Qwen/Qwen3-Embedding-8B")).toBe(false)
+    expect(isModelSupportedForProvider("openai", "text-embedding-3-large")).toBe(false)
+    expect(isModelSupportedForProvider("custom", "embed-english-v3")).toBe(false)
+    expect(isModelSupportedForProvider("huggingface", "Qwen/Qwen3.6-27B")).toBe(true)
+  })
+
   test("keeps Gemini filtering scoped to Google providers", () => {
     expect(isModelSupportedForProvider("google", "gemini-3-pro")).toBe(true)
     expect(isModelSupportedForProvider("google-vertex", "Gemini 2.5 Pro")).toBe(false)

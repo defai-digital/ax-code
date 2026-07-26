@@ -96,7 +96,7 @@ test("OpenRouter provider preserves OpenAI-compatible options and curated tool m
       expect(openrouter?.key).toBe("test-openrouter")
       expect(openrouter?.options?.headers).toEqual({
         "HTTP-Referer": "https://github.com/defai-digital/ax-code",
-        "X-OpenRouter-Title": "AX Code",
+        "X-Title": "AX Code",
       })
       expect(openrouter?.models[ModelID.make("openai/gpt-5.2")]?.api.url).toBe("https://openrouter.ai/api/v1")
       expect(openrouter?.models[ModelID.make("openai/gpt-5.2")]?.capabilities.toolcall).toBe(true)

@@ -29,6 +29,7 @@ import { isSupportedHost } from "@/provider/ax-engine/platform"
 import { normalizeModelID, normalizeQuantization } from "@/provider/ax-engine/model-cache"
 import { JsonBoolean, JsonNumber } from "@/util/schema"
 import { toErrorMessage } from "@/util/error-message"
+import { DEFAULT_SETUP_PROVIDER_IDS } from "@/provider/default-setup-providers"
 
 const log = Log.create({ service: "server" })
 
@@ -37,25 +38,7 @@ const log = Log.create({ service: "server" })
 // Note: ollama and ax-studio are intentionally excluded — they are opt-in only
 // because local inference models have inconsistent tool-calling and structured
 // output support. Users must add them to enabled_providers in ax-code.json.
-const NATIVE_PROVIDERS = new Set([
-  "ax-engine",
-  "google",
-  "groq",
-  "openrouter",
-  "alibaba-coding-plan",
-  "alibaba-coding-plan-cn",
-  "alibaba-token-plan",
-  "alibaba-token-plan-cn",
-  "github-copilot",
-  "zai-coding-plan",
-  "claude-code",
-  "gemini-cli",
-  "codex-cli",
-  "grok-build-cli",
-  "qoder-cli",
-  "antigravity-cli",
-  "kimi-cli",
-])
+const NATIVE_PROVIDERS = new Set(["ax-engine", ...DEFAULT_SETUP_PROVIDER_IDS])
 
 export function shouldShowProviderInList(input: {
   key: string

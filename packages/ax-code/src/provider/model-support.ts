@@ -35,6 +35,12 @@ export function isModelSupportedForProvider(providerID: string, modelID: string,
   if (probes.some((probe) => probe.includes("gpt-5.5") || probe.includes("gpt-5-5") || probe.includes("gpt55"))) {
     return false
   }
+  // Embedding models cannot serve chat/agent traffic, but upstream catalogs
+  // (e.g. Hugging Face via models.dev) list them alongside chat models.
+  // Selecting one would fail on the first request, so hide them everywhere.
+  if (probes.some((probe) => probe.includes("embedding") || probe.includes("embed-"))) {
+    return false
+  }
   if (providerID === "google" || providerID === "google-vertex") {
     if (!probes.some((probe) => probe.includes("gemini"))) return true
     return probes.some((probe) => probe.includes("gemini-3"))

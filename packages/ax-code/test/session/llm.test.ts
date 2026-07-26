@@ -326,7 +326,7 @@ describe("session.llm.stream", () => {
         expect(capture.url.pathname.startsWith("/v1/")).toBe(true)
         expect(capture.headers.get("Authorization")).toBe("Bearer test-openrouter-key")
         expect(capture.headers.get("HTTP-Referer")).toBe("https://github.com/defai-digital/ax-code")
-        expect(capture.headers.get("X-OpenRouter-Title")).toBe("AX Code")
+        expect(capture.headers.get("X-Title")).toBe("AX Code")
         expect(capture.body.model).toBe(fixture.model.id)
         expect(capture.body.reasoning).toEqual({ effort: "high" })
         expect(capture.body.reasoningEffort).toBeUndefined()

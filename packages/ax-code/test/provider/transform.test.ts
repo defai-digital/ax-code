@@ -794,7 +794,7 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
         providerID: ProviderID.make("huggingface"),
         api: {
           id: "deepseek-ai/DeepSeek-R1",
-          url: "https://api-inference.huggingface.co/v1",
+          url: "https://router.huggingface.co/v1",
           npm: "@ai-sdk/openai-compatible",
         },
         name: "DeepSeek R1",

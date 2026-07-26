@@ -538,7 +538,7 @@ fetched["openrouter"] = {
   options: {
     headers: {
       "HTTP-Referer": "https://github.com/defai-digital/ax-code",
-      "X-OpenRouter-Title": "AX Code",
+      "X-Title": "AX Code",
     },
   },
   models: {

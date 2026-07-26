@@ -133,7 +133,7 @@ describe("update-models script", () => {
     expect(data.openrouter?.npm).toBe("@ai-sdk/openai-compatible")
     expect(data.openrouter?.options?.headers).toEqual({
       "HTTP-Referer": "https://github.com/defai-digital/ax-code",
-      "X-OpenRouter-Title": "AX Code",
+      "X-Title": "AX Code",
     })
     expect(Object.keys(data.openrouter?.models ?? {})).toEqual([
       "openai/gpt-5.2-codex",
