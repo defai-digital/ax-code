@@ -9,6 +9,15 @@ export const KillShellTool = Tool.define("kill_shell", {
     shell_id: z.string().describe("The background shell ID returned by bash run_in_background."),
   }),
   async execute(params, ctx) {
+    // Same permission name as bash: a ruleset that restricts shell
+    // execution also governs terminating shells the session started.
+    // Default rulesets ("*": allow) approve this without a prompt.
+    await ctx.ask({
+      permission: "bash",
+      patterns: [`kill_shell ${params.shell_id}`],
+      always: [],
+      metadata: { tool: "kill_shell" },
+    })
     const info = await BackgroundShell.kill(params.shell_id, ctx.sessionID)
     if (!info) {
       throw new Error(

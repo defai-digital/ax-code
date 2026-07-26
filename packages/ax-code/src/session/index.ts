@@ -20,6 +20,7 @@ import { Instance } from "../project/instance"
 import { SessionPrompt } from "./prompt"
 import { SelfCorrection } from "./correction"
 import { BlastRadius } from "./blast-radius"
+import { BackgroundShell } from "../tool/bash-background"
 import { SessionStatus } from "./status"
 import { SessionMetadata } from "./metadata"
 import { fn } from "@/util/fn"
@@ -812,6 +813,12 @@ export namespace Session {
       SelfCorrection.reset(item.id)
       BlastRadius.reset(item.id)
       SessionStatus.clear(item.id)
+      // Kill any background shells the session (or a descendant) started —
+      // without this a deleted session's dev server keeps running with no
+      // surviving session able to see or kill it.
+      await BackgroundShell.killForSession(item.id).catch((e) =>
+        log.warn("background shell cleanup failed", { sessionID: item.id, error: e }),
+      )
       // Drop the out-of-band session_diff blob written by revert/summary.
       // CASCADE only covers DB rows, so without this every session that ever
       // recorded a diff would leak its file on delete.

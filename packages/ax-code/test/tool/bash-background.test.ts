@@ -188,6 +188,39 @@ describe("bash run_in_background", () => {
     expect(() => BackgroundShell.assertCapacity("ses_bg_cap_other")).not.toThrow()
   })
 
+  test("multi-byte UTF-8 characters split across chunks are not corrupted", () => {
+    const proc = fakeProc()
+    const info = BackgroundShell.register({ sessionID: "ses_bg_utf8", command: "noop", description: "fake", proc })
+    const bytes = Buffer.from("héllo", "utf8")
+    ;(proc.stdout as unknown as EventEmitter).emit("data", bytes.subarray(0, 2))
+    ;(proc.stdout as unknown as EventEmitter).emit("data", bytes.subarray(2))
+    const read = BackgroundShell.read(info.id, "ses_bg_utf8")
+    expect(read!.output).toBe("héllo")
+  })
+
+  test("evicts oldest unread finished shells beyond the retention cap", () => {
+    const ids: string[] = []
+    for (let i = 0; i < 20; i++) {
+      const proc = fakeProc()
+      const info = BackgroundShell.register({
+        sessionID: "ses_bg_evict",
+        command: `noop ${i}`,
+        description: "fake",
+        proc,
+      })
+      ids.push(info.id)
+      ;(proc as unknown as EventEmitter).emit("close")
+    }
+    const proc = fakeProc()
+    BackgroundShell.register({ sessionID: "ses_bg_evict", command: "trigger", description: "fake", proc })
+    const remaining = BackgroundShell.list("ses_bg_evict")
+    const finished = remaining.filter((s) => s.status !== "running")
+    expect(finished.length).toBeLessThanOrEqual(16)
+    // The oldest finished shells were evicted, the newest retained.
+    expect(remaining.some((s) => s.id === ids[0])).toBe(false)
+    expect(remaining.some((s) => s.id === ids[19])).toBe(true)
+  })
+
   test("unread output is capped and marked dropped", () => {
     const proc = fakeProc()
     const info = BackgroundShell.register({ sessionID: "ses_bg_buf", command: "noop", description: "fake", proc })

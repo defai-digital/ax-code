@@ -786,15 +786,31 @@ export const BashTool = Tool.define("bash", async () => {
         // turn's abort signal must not kill them. They stay in trackedPIDs so
         // process exit still reaps them; BackgroundShell forgets the PID on
         // its own exit via onExited.
-        const info = BackgroundShell.register({
-          sessionID: ctx.sessionID,
-          command: params.command,
-          description,
-          proc,
-          onExited: () => {
-            if (proc.pid) forgetTrackedPID(proc.pid)
-          },
-        })
+        let info: ReturnType<typeof BackgroundShell.register>
+        try {
+          info = BackgroundShell.register({
+            sessionID: ctx.sessionID,
+            command: params.command,
+            description,
+            proc,
+            onExited: () => {
+              if (proc.pid) forgetTrackedPID(proc.pid)
+            },
+          })
+        } catch (error) {
+          // Capacity can fill while this call waited on its permission
+          // prompt (the pre-spawn check passed earlier). An unregistered
+          // process would be invisible to bash_output/kill_shell and run
+          // until app exit — kill it before surfacing the error.
+          void Shell.killTree(proc, { exited: () => proc.exitCode !== null })
+            .then(() => {
+              if (proc.pid) forgetTrackedPID(proc.pid)
+            })
+            .catch((killError) => {
+              log.warn("failed to kill unregistered background shell", { pid: proc.pid, error: killError })
+            })
+          throw error
+        }
         const msg =
           `Command running in background with shell ID: ${info.id}\n` +
           `Use the bash_output tool with shell_id "${info.id}" to read its output, and kill_shell to terminate it.`

@@ -1,4 +1,5 @@
 import type { ChildProcess } from "child_process"
+import { StringDecoder } from "string_decoder"
 import { Log } from "../util/log"
 import { Shell } from "@/shell/shell"
 import { Bus } from "@/bus"
@@ -17,11 +18,16 @@ const log = Log.create({ service: "bash-background" })
 export namespace BackgroundShell {
   export type Status = "running" | "completed" | "failed" | "killed"
 
-  // Per-shell unread output cap. Once the unread portion exceeds this,
-  // the oldest unread bytes are dropped (with a marker) — background
-  // commands can stream logs indefinitely and must not grow RSS unbounded.
+  // Per-shell unread output cap (in string length units). Once the unread
+  // portion exceeds this, the oldest unread output is dropped (with a
+  // marker) — background commands can stream logs indefinitely and must
+  // not grow RSS unbounded.
   const MAX_UNREAD_BYTES = 2 * 1024 * 1024
   const MAX_SHELLS_PER_SESSION = 16
+  // Finished shells whose output was never read are retained so the model
+  // can still fetch their result, but only this many per session — beyond
+  // that the oldest are evicted so an unread pile-up cannot leak memory.
+  const MAX_FINISHED_PER_SESSION = 16
 
   export interface Info {
     id: string
@@ -58,6 +64,17 @@ export namespace BackgroundShell {
     }
   }
 
+  function evictFinished(sessionID: string) {
+    const finished = [...shells.values()]
+      .filter((s) => s.sessionID === sessionID && s.status !== "running")
+      .sort((a, b) => (a.endedAt ?? 0) - (b.endedAt ?? 0))
+    while (finished.length > MAX_FINISHED_PER_SESSION) {
+      const oldest = finished.shift()!
+      shells.delete(oldest.id)
+      log.info("evicted unread finished background shell", { id: oldest.id, sessionID })
+    }
+  }
+
   export function register(input: {
     sessionID: string
     command: string
@@ -66,6 +83,7 @@ export namespace BackgroundShell {
     onExited?: () => void
   }): Info {
     assertCapacity(input.sessionID)
+    evictFinished(input.sessionID)
     counter += 1
     const id = `bash_${counter}`
     const entry: Entry = {
@@ -87,9 +105,10 @@ export namespace BackgroundShell {
     }
     shells.set(id, entry)
 
-    const append = (chunk: Buffer) => {
-      entry.buffer += chunk.toString()
-      // Discard bytes the model has already consumed, then clamp the
+    const appendText = (text: string) => {
+      if (!text) return
+      entry.buffer += text
+      // Discard output the model has already consumed, then clamp the
       // unread remainder so a chatty process cannot grow memory forever.
       if (entry.readOffset > 0 && entry.buffer.length > MAX_UNREAD_BYTES) {
         entry.buffer = entry.buffer.slice(entry.readOffset)
@@ -101,8 +120,13 @@ export namespace BackgroundShell {
         entry.dropped = true
       }
     }
-    input.proc.stdout?.on("data", append)
-    input.proc.stderr?.on("data", append)
+    // Per-stream decoders: a 'data' chunk can split a multi-byte UTF-8
+    // character, and Buffer#toString would emit replacement characters at
+    // the boundary. StringDecoder buffers the partial sequence instead.
+    const stdoutDecoder = new StringDecoder("utf8")
+    const stderrDecoder = new StringDecoder("utf8")
+    input.proc.stdout?.on("data", (chunk: Buffer) => appendText(stdoutDecoder.write(chunk)))
+    input.proc.stderr?.on("data", (chunk: Buffer) => appendText(stderrDecoder.write(chunk)))
 
     input.proc.once("exit", () => {
       entry.exited = true
@@ -116,14 +140,23 @@ export namespace BackgroundShell {
     })
 
     input.proc.once("close", () => {
+      appendText(stdoutDecoder.end())
+      appendText(stderrDecoder.end())
       const status = entry.killRequested ? "killed" : input.proc.exitCode === 0 ? "completed" : "failed"
       finish(entry, status, input.proc.exitCode)
-      Bus.publishDetached(NotificationEvent.ToastShow, {
-        title: `Background command ${entry.status}`,
-        message: `${entry.description} (shell ${id}, exit ${entry.exitCode ?? "?"})`,
-        variant: entry.status === "completed" ? "info" : "warning",
-        duration: TOAST_DURATION_LONG_MS,
-      })
+      // Best-effort UX: the close event can fire outside the Instance async
+      // context (where Bus state is unavailable), and a throw here would be
+      // an uncaught exception inside an EventEmitter handler.
+      try {
+        Bus.publishDetached(NotificationEvent.ToastShow, {
+          title: `Background command ${entry.status}`,
+          message: `${entry.description} (shell ${id}, exit ${entry.exitCode ?? "?"})`,
+          variant: entry.status === "completed" ? "info" : "warning",
+          duration: TOAST_DURATION_LONG_MS,
+        })
+      } catch (error) {
+        log.warn("background shell toast publish failed", { id, error: error instanceof Error ? error.message : error })
+      }
     })
 
     input.proc.once("error", (error) => {
@@ -194,6 +227,19 @@ export namespace BackgroundShell {
       finish(entry, "killed", entry.proc.exitCode)
     }
     return toInfo(entry)
+  }
+
+  /** Kill and forget every shell belonging to a session (used on session removal). */
+  export async function killForSession(sessionID: string): Promise<void> {
+    for (const entry of [...shells.values()]) {
+      if (entry.sessionID !== sessionID) continue
+      if (entry.status === "running") {
+        entry.killRequested = true
+        await Shell.killTree(entry.proc, { exited: () => entry.exited }).catch(() => undefined)
+        finish(entry, "killed", entry.proc.exitCode)
+      }
+      shells.delete(entry.id)
+    }
   }
 
   /** Test-only: forget all shells without killing anything. */
