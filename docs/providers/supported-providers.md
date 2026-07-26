@@ -2,34 +2,50 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-07-19
+Last reviewed: 2026-07-26
 Owner: ax-code runtime
 
 This page lists the provider presets AX Code exposes in the default setup flows. The source of truth is the runtime provider allowlist in
-`packages/ax-code/src/server/routes/provider.ts`, the CLI login allowlist in
-`packages/ax-code/src/cli/cmd/providers-impl.ts`, the bundled model snapshot in
+`packages/ax-code/src/provider/default-setup-providers.ts`, the bundled model snapshot in
 `packages/ax-code/src/provider/models-snapshot.json`, and the AX Engine definitions in
 `packages/ax-code/src/provider/ax-engine/constants.ts`.
 
 Use `/connect` in the terminal UI or `ax-code providers login <provider-id>` for interactive setup. Headless and CI environments can also provide the listed environment variables.
 
+Hosted model catalogs are bundled with each AX Code release and filtered for usable coding-agent capabilities. Run
+`ax-code models <provider-id>` for the authoritative model IDs in your installed release; the raw registry and copied
+web lists can contain models AX Code hides because they lack text output or tool calling. A provider preset does not
+imply that every model is free or available on every account.
+
 ## Cloud API Providers
 
 These providers call hosted APIs or hosted account-plan endpoints.
 
-| Provider id              | Display name                | Credential environment variables                                   | Supported models                                                                                                                                                                                                                                                                                                                                                                  |
-| ------------------------ | --------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `google`                 | Google                      | `GOOGLE_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `GEMINI_API_KEY` | `gemini-3.1-flash-lite`, `gemini-3.5-flash`, `gemma-4-31b-it`, `gemini-embedding-001`, `gemini-3.1-pro-preview-customtools`, `gemini-flash-lite-latest`, `gemini-3-pro-image-preview`, `gemini-3.1-flash-image-preview`, `gemini-3.1-pro-preview`, `gemma-4-26b-a4b-it`, `gemini-3-pro-preview`, `gemini-3-flash-preview`, `gemini-flash-latest`, `gemini-3.1-flash-lite-preview` |
-| `groq`                   | GroqCloud                   | `GROQ_API_KEY`                                                     | `qwen/qwen3.6-27b`, `openai/gpt-oss-120b`                                                                                                                                                                                                                                                                                                                                         |
-| `openrouter`             | OpenRouter                  | `OPENROUTER_API_KEY`                                               | `openai/gpt-5.2-codex`, `openai/gpt-5.2`, `anthropic/claude-fable-5`, `anthropic/claude-sonnet-4.6`, `moonshotai/kimi-k2.7-code`, `qwen/qwen3-coder-plus`, `qwen/qwen3-coder-flash`, `google/gemini-3.5-flash`, `qwen/qwen3.7-plus`, `x-ai/grok-4.5`, `z-ai/glm-5.2`                                                                                                              |
-| `alibaba-coding-plan`    | Alibaba Coding Plan         | `ALIBABA_CODING_PLAN_INTL_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`  | `qwen3.7-max`, `qwen3.7-plus`, `qwen3.6-plus`, `qwen3.6-flash`, `deepseek-v4-pro`, `deepseek-v4-flash`, `kimi-k2.7-code`, `qwen-image-2.0`, `qwen-image-2.0-pro`, `wan2.7-image`, `wan2.7-image-pro`                                                                                                                                                                              |
-| `alibaba-coding-plan-cn` | Alibaba Coding Plan (China) | `ALIBABA_CODING_PLAN_CN_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`    | `qwen3.7-max`, `qwen3.7-plus`, `qwen3.6-plus`, `qwen3.6-flash`, `deepseek-v4-pro`, `deepseek-v4-flash`, `kimi-k2.7-code`, `qwen-image-2.0`, `qwen-image-2.0-pro`, `wan2.7-image`, `wan2.7-image-pro`                                                                                                                                                                              |
-| `alibaba-token-plan`     | Alibaba Token Plan          | `ALIBABA_TOKEN_PLAN_INTL_API_KEY`, `ALIBABA_TOKEN_PLAN_API_KEY`    | `qwen3.7-max`, `qwen3.7-plus`, `qwen3.6-plus`, `qwen3.6-flash`, `deepseek-v4-pro`, `deepseek-v4-flash`, `kimi-k2.7-code`, `qwen-image-2.0`, `qwen-image-2.0-pro`, `wan2.7-image`, `wan2.7-image-pro`                                                                                                                                                                              |
-| `alibaba-token-plan-cn`  | Alibaba Token Plan (China)  | `ALIBABA_TOKEN_PLAN_CN_API_KEY`, `ALIBABA_TOKEN_PLAN_API_KEY`      | `qwen3.7-max`, `qwen3.7-plus`, `qwen3.6-plus`, `qwen3.6-flash`, `deepseek-v4-pro`, `deepseek-v4-flash`, `kimi-k2.7-code`, `qwen-image-2.0`, `qwen-image-2.0-pro`, `wan2.7-image`, `wan2.7-image-pro`                                                                                                                                                                              |
-| `github-copilot`         | GitHub Copilot              | `GITHUB_TOKEN`                                                     | `claude-sonnet-4.5`, `claude-sonnet-4`, `claude-haiku-4.5`, `gemini-3.5-flash`, `gpt-5.4-nano`, `claude-opus-4.7`, `gpt-5.2`, `gpt-5.3-codex`, `claude-opus-4.8`, `claude-fable-5`, `claude-opus-4.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-4.1`, `gemini-3.1-pro-preview`, `claude-sonnet-4.6`, `gpt-5-mini`, `gemini-3-flash-preview`, `claude-opus-4.6`, `gpt-5.2-codex`            |
-| `zai-coding-plan`        | Z.AI Coding Plan            | `ZHIPU_API_KEY`                                                    | `glm-5.2`, `glm-5.2[1m]`                                                                                                                                                                                                                                                                                                                                                          |
+| Provider id              | Display name                | Credential environment variables                                   |
+| ------------------------ | --------------------------- | ------------------------------------------------------------------ |
+| `google`                 | Google                      | `GOOGLE_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `GEMINI_API_KEY` |
+| `groq`                   | GroqCloud                   | `GROQ_API_KEY`                                                     |
+| `openrouter`             | OpenRouter                  | `OPENROUTER_API_KEY`                                               |
+| `huggingface`            | Hugging Face                | `HF_TOKEN`                                                         |
+| `unorouter`              | UnoRouter                   | `UNOROUTER_API_KEY`                                                |
+| `alibaba-coding-plan`    | Alibaba Coding Plan         | `ALIBABA_CODING_PLAN_INTL_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`  |
+| `alibaba-coding-plan-cn` | Alibaba Coding Plan (China) | `ALIBABA_CODING_PLAN_CN_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`    |
+| `alibaba-token-plan`     | Alibaba Token Plan          | `ALIBABA_TOKEN_PLAN_INTL_API_KEY`, `ALIBABA_TOKEN_PLAN_API_KEY`    |
+| `alibaba-token-plan-cn`  | Alibaba Token Plan (China)  | `ALIBABA_TOKEN_PLAN_CN_API_KEY`, `ALIBABA_TOKEN_PLAN_API_KEY`      |
+| `github-copilot`         | GitHub Copilot              | `GITHUB_TOKEN`                                                     |
+| `zai-coding-plan`        | Z.AI Coding Plan            | `ZHIPU_API_KEY`                                                    |
+
+> `huggingface` is the **hosted Serverless Inference Providers router** (`https://router.huggingface.co/v1`).
+> It is unrelated to the local Hugging Face snapshot cache that AX Engine uses to store downloaded
+> local models — connecting `huggingface` never starts or requires the local engine.
+
+For a no-cost first run, see [Free-Tier API Quickstart](free-tier-apis.md). It distinguishes a provider's free
+offering from AX Code's compatibility and explains why an external free-API catalog is not itself a support matrix.
 
 The hosted `xai` provider remains available for explicit configuration or existing credentials, but it is hidden from the default setup list. For Grok, the default setup path is the `grok-build-cli` provider listed below.
+
+`github-copilot` is the GitHub Copilot account bridge. It is not the separate `github-models` API listed by some
+free-API directories.
 
 OpenAI-compatible and Anthropic-compatible gateways are also supported through custom provider configuration. See [Custom and Gateway Providers](custom-provider.md).
 

@@ -101,7 +101,7 @@ Verifies the downloaded release archive with minisign (bootstraps a pinned minis
 
 Supported CLI install paths are Homebrew (macOS) and the GitHub release installer for Windows PowerShell. The Windows PowerShell installer is CLI-only; use the Windows `.exe` release asset for Desktop. Linux and npm packages are not supported release channels. See [Installation and Runtime Channels](docs/getting-started/install-runtime.md) for the full matrix.
 
-AX Engine local inference is available only on eligible Apple Silicon Macs. Install its matching MLX runtime with `brew install defai-digital/ax-engine/ax-engine`; AX Code then starts and manages the local server on demand. Windows Desktop users should use hosted providers or OpenAI-compatible provider gateways; AX Code itself remains local-only and cannot be used as a remote server. For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `ZHIPU_API_KEY`, Alibaba plan keys, and `GITHUB_TOKEN`.
+AX Engine local inference is available only on eligible Apple Silicon Macs. Install its matching MLX runtime with `brew install defai-digital/ax-engine/ax-engine`; AX Code then starts and manages the local server on demand. Windows Desktop users should use hosted providers or OpenAI-compatible provider gateways; AX Code itself remains local-only and cannot be used as a remote server. For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `HF_TOKEN`, `UNOROUTER_API_KEY`, `ZHIPU_API_KEY`, Alibaba plan keys, and `GITHUB_TOKEN`.
 
 ### Update
 
@@ -211,11 +211,15 @@ Default setup flows support three provider families:
 
 | Family                   | Providers                                                                                         | Model source                                                     |
 | ------------------------ | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Cloud API providers      | Google, GroqCloud, OpenRouter, Alibaba Coding/Token Plan, GitHub Copilot, and Z.AI Coding Plan    | Hosted provider model catalogs bundled with AX Code              |
-| CLI providers            | Claude Code, Gemini CLI, Codex CLI, Grok Build CLI, Qoder CLI, Antigravity CLI, and Kimi Code CLI | One model id per CLI bridge, using the local vendor CLI session  |
+| Cloud API providers      | Google, GroqCloud, OpenRouter, Hugging Face, UnoRouter, Alibaba plans, GitHub Copilot, and Z.AI   | Hosted provider model catalogs bundled with AX Code              |
+| CLI providers            | Claude Code, Gemini CLI, Codex CLI, Grok Build CLI, Qoder CLI, Antigravity CLI, and Kimi Code CLI | One model ID per CLI bridge, using the local vendor CLI session  |
 | AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                        | Curated 6-bit MLX Auto models: MTP packages with Direct fallback |
 
-See [Supported Providers and Models](docs/providers/supported-providers.md) for provider ids, credential variables, and the exact supported model ids.
+See [Supported Providers and Models](docs/providers/supported-providers.md) for provider IDs, credential variables, and
+the command that lists the exact model IDs bundled with your installed release.
+
+To evaluate AX Code without purchasing model credits, use the [Free-Tier API Quickstart](docs/providers/free-tier-apis.md);
+free quotas and account terms are controlled by the external provider.
 
 ## Local AX Engine Models
 
@@ -232,7 +236,8 @@ ranking, GLM-4.7-Flash placement, and memory-based recommendations.
 - [Autonomous Mode](docs/guides/autonomous.md): unattended execution behavior and safeguards
 - [MCP Integrations](docs/integrations/mcp.md): trust, permissions, and prompt/resource safety for MCP servers
 - [Auto-Route](docs/guides/auto-route.md): keyword-based specialist routing and optional fast-model complexity routing
-- [Supported Providers and Models](docs/providers/supported-providers.md): Cloud API providers, CLI providers, and AX Engine model ids
+- [Supported Providers and Models](docs/providers/supported-providers.md): Cloud API providers, CLI providers, and AX Engine model IDs
+- [Free-Tier API Quickstart](docs/providers/free-tier-apis.md): test AX Code with compatible free-tier or free-credit providers
 - [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md): local AX Engine model ranking and memory guidance
 - [Semantic Layer](docs/architecture/semantic-layer.md): provenance and replay boundaries for graph and LSP-backed answers
 - [AX Wiki](docs/integrations/wiki.md): native source-backed semantic wiki; complements `ax-code index`

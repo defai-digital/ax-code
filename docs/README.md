@@ -15,6 +15,7 @@ configure a workflow, understand a runtime boundary, or integrate AX Code with a
 | Understand AX Code before installing it                  | [Start Here](getting-started/start-here.md)                             |
 | Choose an install or runtime channel                     | [Installation and Runtime Channels](getting-started/install-runtime.md) |
 | Connect a hosted, CLI, custom, or local provider         | [Supported Providers and Models](providers/supported-providers.md)      |
+| Try AX Code with a free-tier model API                   | [Free-Tier API Quickstart](providers/free-tier-apis.md)                 |
 | Run an agent with safe filesystem and network boundaries | [Sandbox Mode](guides/sandbox.md)                                       |
 | Run unattended or in CI                                  | [Autonomous Mode](guides/autonomous.md)                                 |
 | Run recurring prompts or schedule durable tasks          | [Loop Mode and Scheduled Tasks](guides/loop-mode.md)                    |
@@ -42,7 +43,8 @@ configure a workflow, understand a runtime boundary, or integrate AX Code with a
 
 ## Providers
 
-- [Supported Providers and Models](providers/supported-providers.md) — provider IDs, credentials, and built-in models.
+- [Supported Providers and Models](providers/supported-providers.md) — provider IDs, credentials, and model discovery.
+- [Free-Tier API Quickstart](providers/free-tier-apis.md) — compatible no-cost paths, constraints, and safe evaluation.
 - [Custom and Gateway Providers](providers/custom-provider.md) — OpenAI- and Anthropic-compatible endpoints.
 - [AX Engine Model Selection](providers/ax-engine-model-selection.md) — local model ranking and memory guidance.
 

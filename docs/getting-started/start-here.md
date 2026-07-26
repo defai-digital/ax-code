@@ -50,7 +50,7 @@ The rest of the documentation maps onto those layers.
   - GitHub release installer for Windows PowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"`
 - The Bash installer is not the canonical Windows setup path.
 - npm packages are no longer supported install or upgrade channels. See [Installation and Runtime Channels](install-runtime.md) for platform policy, runtime labels, and the local launcher matrix.
-- Use `/connect` or `ax-code providers login` to set a model. See [Supported Providers and Models](../providers/supported-providers.md) for Cloud API providers including OpenRouter, CLI providers, AX Engine, and model ids.
+- Use `/connect` or `ax-code providers login` to set a model. See [Supported Providers and Models](../providers/supported-providers.md) for Cloud API providers, CLI providers, AX Engine, and model IDs. For a no-cost evaluation path, use the [Free-Tier API Quickstart](../providers/free-tier-apis.md).
 - Run `ax-code init` after opening a real project so `AGENTS.md` captures local conventions.
 - If you want tighter safety boundaries, enable [Sandbox Mode](../guides/sandbox.md) before broader edits.
 
@@ -105,6 +105,7 @@ For Grok, `/connect` defaults to `Grok Build CLI`, which uses the local `grok` c
 | Product overview         | [Start Here](start-here.md)                                           |
 | Install/runtime channels | [Installation and Runtime Channels](install-runtime.md)               |
 | Providers and models     | [Supported Providers and Models](../providers/supported-providers.md) |
+| Free-tier API evaluation | [Free-Tier API Quickstart](../providers/free-tier-apis.md)            |
 | Sandbox and permissions  | [Sandbox Mode](../guides/sandbox.md)                                  |
 | Unattended execution     | [Autonomous Mode](../guides/autonomous.md)                            |
 | Routing and model tier   | [Auto-Route](../guides/auto-route.md)                                 |
