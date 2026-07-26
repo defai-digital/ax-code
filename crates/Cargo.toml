@@ -12,7 +12,12 @@ members = [
 
 [workspace.package]
 edition = "2024"
-license = "MIT"
+# Native crates are part of the AX Code combined work, licensed under the
+# Apache License, Version 2.0 (see /LICENSE and /NOTICE). This matches the
+# root package.json license and the README license badge. Only specifically
+# named MIT-derived portions (OpenCode, OpenChamber, vendored OpenTUI) stay
+# MIT under their own LICENSE files — these crates are not among them.
+license = "Apache-2.0"
 rust-version = "1.85"
 version = "0.1.0"
 
