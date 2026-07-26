@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { ViewLoadingSkeleton } from "@/components/ui/ViewLoadingSkeleton"
 import { Icon } from "@/components/icon/Icon"
 import {
   fetchMagicPromptOverrides,
@@ -316,15 +317,7 @@ export const MagicPromptsPage: React.FC = () => {
   }, [t])
 
   if (loading) {
-    return (
-      <div className="py-6 px-6 flex items-center gap-2 text-muted-foreground">
-        <span
-          className="inline-block h-1.5 w-1.5 rounded-full bg-current animate-busy-pulse"
-          aria-label={t("settings.magicPrompts.page.loading.aria")}
-        />
-        <span className="typography-ui-label">{t("settings.magicPrompts.page.loading.text")}</span>
-      </div>
-    )
+    return <ViewLoadingSkeleton label={t("settings.magicPrompts.page.loading.text")} />
   }
 
   return (

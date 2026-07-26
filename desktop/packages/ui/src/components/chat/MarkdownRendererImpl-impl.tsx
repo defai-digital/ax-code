@@ -34,6 +34,7 @@ import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
 import type { EditorAPI } from "@/lib/api/types"
 import { clearCopyResetTimer, replaceCopyResetTimer } from "./copyResetTimer"
 import { getSafeMarkdownHref } from "./markdownLinks"
+import { sanitizeMermaidSvg } from "./sanitizeSvg"
 import {
   buildFullMarkdownBlock,
   buildLiveMarkdownBlocks,
@@ -409,17 +410,19 @@ const MermaidBlock: React.FC<{ source: string; mode: "svg" | "ascii"; deferRende
   const svg = React.useMemo(() => {
     if (deferRender || mode !== "svg") return ""
     try {
-      return renderMermaidSVG(source, {
-        bg: currentTheme.colors.surface.elevated,
-        fg: currentTheme.colors.surface.foreground,
-        line: currentTheme.colors.interactive.border,
-        accent: currentTheme.colors.primary.base,
-        muted: currentTheme.colors.surface.mutedForeground,
-        surface: currentTheme.colors.surface.muted,
-        border: currentTheme.colors.interactive.border,
-        transparent: true,
-        font: "IBM Plex Sans, sans-serif",
-      })
+      return sanitizeMermaidSvg(
+        renderMermaidSVG(source, {
+          bg: currentTheme.colors.surface.elevated,
+          fg: currentTheme.colors.surface.foreground,
+          line: currentTheme.colors.interactive.border,
+          accent: currentTheme.colors.primary.base,
+          muted: currentTheme.colors.surface.mutedForeground,
+          surface: currentTheme.colors.surface.muted,
+          border: currentTheme.colors.interactive.border,
+          transparent: true,
+          font: "IBM Plex Sans, sans-serif",
+        }),
+      )
     } catch {
       return ""
     }

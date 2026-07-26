@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { MobileOverlayPanel } from "@/components/ui/MobileOverlayPanel"
+import { ViewLoadingSkeleton } from "@/components/ui/ViewLoadingSkeleton"
 import { toast } from "@/components/ui"
 import { useConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { Icon } from "@/components/icon/Icon"
@@ -452,9 +453,7 @@ export function ScheduledTasksDialog() {
 
       <div className="min-h-[280px]">
         {loading ? (
-          <div className="flex items-center gap-2 typography-meta text-muted-foreground">
-            <Icon name="loader-4" className="h-4 w-4 animate-spin" /> {t("sessions.scheduledTasks.dialog.loading")}
-          </div>
+          <ViewLoadingSkeleton rows={4} label={t("sessions.scheduledTasks.dialog.loading")} />
         ) : tasks.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-4 typography-meta text-muted-foreground">
             {selectedProjectID

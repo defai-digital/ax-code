@@ -7,6 +7,7 @@ import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { SettingsPageLayout } from "@/components/sections/shared/SettingsPageLayout"
+import { ViewLoadingSkeleton } from "@/components/ui/ViewLoadingSkeleton"
 import { RegistryBanner } from "./RegistryBanner"
 import {
   usePluginsStore,
@@ -367,11 +368,5 @@ export const PluginsPage: React.FC = () => {
     )
   }
 
-  return (
-    <div className="flex h-full items-center justify-center">
-      <div className="text-center text-muted-foreground">
-        <Icon name="loader-4" className="mx-auto mb-3 h-6 w-6 animate-spin opacity-50" />
-      </div>
-    </div>
-  )
+  return <ViewLoadingSkeleton label={t("common.loading")} />
 }

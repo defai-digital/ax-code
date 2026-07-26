@@ -868,10 +868,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(
               </div>
             ) : null}
             {isLoading && !diffData && !diffLoadError ? (
-              <div className="flex items-center justify-center gap-2 px-4 py-8 typography-ui-label text-muted-foreground">
-                <Icon name="loader-4" className="size-4 animate-spin" />
-                Loading diff…
-              </div>
+              <ViewLoadingSkeleton rows={3} label={t("diffView.state.loadingDiff")} />
             ) : null}
             {diffData && !forceRenderLarge && file.insertions + file.deletions > LARGE_DIFF_CHANGED_LINES ? (
               <div className="flex flex-col items-center gap-2 px-4 py-8 typography-ui-label text-muted-foreground">
@@ -1770,10 +1767,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 </button>
               </div>
             ) : (
-              <>
-                <Icon name="loader-4" className="size-4 animate-spin" />
-                {t("diffView.state.loadingDiff")}
-              </>
+              <ViewLoadingSkeleton label={t("diffView.state.loadingDiff")} />
             )}
           </div>
         )}

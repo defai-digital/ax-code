@@ -2,6 +2,7 @@ import React from "react"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/icon/Icon"
 import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
+import { ViewLoadingSkeleton } from "@/components/ui/ViewLoadingSkeleton"
 import { toast } from "@/components/ui"
 import { useConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { cn } from "@/lib/utils"
@@ -286,10 +287,7 @@ export const LocalModelsPage: React.FC = () => {
               <span className="text-right">Actions</span>
             </div>
             {loading && !data ? (
-              <div className="flex items-center gap-2 px-4 py-8 typography-ui-label text-muted-foreground">
-                <Icon name="loader" className="h-4 w-4 animate-spin" />
-                Loading models...
-              </div>
+              <ViewLoadingSkeleton rows={4} label="Loading models" />
             ) : (
               data?.models.map((model) => {
                 const job = activeJobFor(data.jobs, model)

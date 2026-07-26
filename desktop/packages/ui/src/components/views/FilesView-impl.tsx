@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
+import { ViewLoadingSkeleton } from "@/components/ui/ViewLoadingSkeleton"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -3350,10 +3351,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
             suppressFileLoadingIndicator ? (
               <div className="p-3" />
             ) : (
-              <div className="p-3 flex items-center gap-2 typography-ui-label text-muted-foreground">
-                <Icon name="loader-4" className="size-4 animate-spin" />
-                {t("filesView.state.loading")}
-              </div>
+              <ViewLoadingSkeleton label={t("filesView.state.loading")} />
             )
           ) : fileError ? (
             <div className="p-3 typography-ui-label text-[color:var(--status-error)]">{fileError}</div>
@@ -3682,10 +3680,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
             suppressFileLoadingIndicator ? (
               <div className="p-4" />
             ) : (
-              <div className="p-4 flex items-center gap-2 typography-ui-label text-muted-foreground">
-                <Icon name="loader-4" className="size-4 animate-spin" />
-                Loading…
-              </div>
+              <ViewLoadingSkeleton label={t("filesView.state.loading")} />
             )
           ) : fileError ? (
             <div className="p-4 typography-ui-label text-[color:var(--status-error)]">{fileError}</div>

@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { MobileOverlayPanel } from "@/components/ui/MobileOverlayPanel"
+import { ViewLoadingSkeleton } from "@/components/ui/ViewLoadingSkeleton"
 import { toast } from "@/components/ui"
 import { Icon } from "@/components/icon/Icon"
 import { cn } from "@/lib/utils"
@@ -369,10 +370,7 @@ export function GitHubPrPickerDialog({
         ) : null}
 
         {isLoading ? (
-          <div className="text-center text-muted-foreground py-8 flex items-center justify-center gap-2">
-            <Icon name="loader-4" className="h-4 w-4 animate-spin" />
-            {t("session.githubPrPicker.loading.pullRequests")}
-          </div>
+          <ViewLoadingSkeleton rows={4} label={t("session.githubPrPicker.loading.pullRequests")} />
         ) : null}
 
         {connected === false ? (

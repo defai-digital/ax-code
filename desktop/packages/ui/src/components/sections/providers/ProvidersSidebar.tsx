@@ -6,6 +6,7 @@ import { useConfigStore } from "@/stores/useConfigStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { cn } from "@/lib/utils"
 import { SettingsProjectSelector } from "@/components/sections/shared/SettingsProjectSelector"
+import { ViewLoadingSkeleton } from "@/components/ui/ViewLoadingSkeleton"
 import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
 import type { ProviderSources } from "./types"
@@ -121,10 +122,7 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
             </Button>
           </div>
         ) : providersLoading && providers.length === 0 ? (
-          <div className="py-12 px-4 text-center text-muted-foreground">
-            <Icon name="loader" className="mx-auto mb-3 h-10 w-10 animate-spin opacity-50" />
-            <p className="typography-ui-label font-medium">{t("settings.providers.sidebar.loading.title")}</p>
-          </div>
+          <ViewLoadingSkeleton rows={4} label={t("settings.providers.sidebar.loading.title")} />
         ) : providers.length === 0 ? (
           <div className="py-12 px-4 text-center text-muted-foreground">
             <Icon name="stack" className="mx-auto mb-3 h-10 w-10 opacity-50" />

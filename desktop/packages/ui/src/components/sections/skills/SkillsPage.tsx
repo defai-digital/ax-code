@@ -14,6 +14,7 @@ import {
 } from "@/stores/useSkillsStore"
 import { useShallow } from "zustand/react/shallow"
 import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
+import { ViewLoadingSkeleton } from "@/components/ui/ViewLoadingSkeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import {
   Dialog,
@@ -529,13 +530,7 @@ const SkillsInstalledPage: React.FC = () => {
   }
 
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center px-4">
-        <div className="text-center text-muted-foreground">
-          <p className="typography-markdown">{t("settings.skills.page.loading.details")}</p>
-        </div>
-      </div>
-    )
+    return <ViewLoadingSkeleton label={t("settings.skills.page.loading.details")} />
   }
 
   return (

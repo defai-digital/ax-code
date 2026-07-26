@@ -1,5 +1,6 @@
 import React from "react"
 import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
+import { ViewLoadingSkeleton } from "@/components/ui/ViewLoadingSkeleton"
 import { ProviderLogo } from "@/components/ui/ProviderLogo"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
@@ -498,14 +499,7 @@ export const ProvidersPage: React.FC = () => {
   }
 
   if (!isAddMode && providersLoading && providers.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center text-muted-foreground">
-          <Icon name="loader" className="mx-auto mb-3 h-12 w-12 animate-spin opacity-50" />
-          <p className="typography-markdown">{t("settings.providers.sidebar.loading.title")}</p>
-        </div>
-      </div>
-    )
+    return <ViewLoadingSkeleton label={t("settings.providers.sidebar.loading.title")} />
   }
 
   if (!isAddMode && providers.length === 0) {

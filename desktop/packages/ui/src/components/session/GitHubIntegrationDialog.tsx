@@ -11,6 +11,7 @@ import { useGitHubAuthStore } from "@/stores/useGitHubAuthStore"
 import { validateWorktreeCreate } from "@/lib/worktrees/worktreeManager"
 import { SortableTabsStrip } from "@/components/ui/sortable-tabs-strip"
 import { MobileOverlayPanel } from "@/components/ui/MobileOverlayPanel"
+import { ViewLoadingSkeleton } from "@/components/ui/ViewLoadingSkeleton"
 import { Icon } from "@/components/icon/Icon"
 import type { GitHubIssue, GitHubIssueSummary, GitHubPullRequestSummary } from "@/lib/api/types"
 import type { ProjectRef } from "@/lib/worktrees/worktreeManager"
@@ -381,11 +382,7 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
           <div className="mt-2 h-[300px] overflow-hidden">
             <div className="h-full overflow-y-auto">
               {/* Loading */}
-              {loading && (
-                <div className="flex items-center justify-center h-full">
-                  <Icon name="loader-4" className="h-5 w-5 animate-spin text-muted-foreground" />
-                </div>
-              )}
+              {loading && <ViewLoadingSkeleton rows={4} label={t("common.loading")} />}
 
               {/* Error */}
               {error && (

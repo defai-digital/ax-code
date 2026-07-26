@@ -3,6 +3,7 @@ import React from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
+import { ViewLoadingSkeleton } from "@/components/ui/ViewLoadingSkeleton"
 import { SortableTabsStrip } from "@/components/ui/sortable-tabs-strip"
 import {
   Dialog,
@@ -291,10 +292,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                 </p>
               </div>
             ) : isLoadingSource ? (
-              <div className="py-8 text-center text-muted-foreground">
-                <Icon name="refresh" className="mx-auto mb-3 h-5 w-5 animate-spin opacity-50" />
-                <p className="typography-meta">{t("settings.skills.catalog.page.loading.skills")}</p>
-              </div>
+              <ViewLoadingSkeleton rows={4} label={t("settings.skills.catalog.page.loading.skills")} />
             ) : (
               <div className="divide-y divide-[var(--surface-subtle)]">
                 {filtered.map((item) => {
