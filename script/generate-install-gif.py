@@ -42,17 +42,13 @@ BLUE = "#7AB7FF"
 
 lines: list[tuple[str, str]] = [
     ("title", "Install AX Code on macOS"),
-    ("muted", "Open Terminal, install Homebrew, then install AX Code with Homebrew."),
+    ("muted", "Open Terminal, install Homebrew, then install AX Code from the DefAI Digital tap."),
     ("prompt", 'alex@MacBook-Pro ~ % /bin/bash -c "$(curl -fsSL'),
     ("shell", '  https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'),
     ("muted", "==> Installing Homebrew..."),
     ("success", "==> Installation successful"),
-    ("prompt", "alex@MacBook-Pro ~ % brew tap defai-digital/ax-code"),
-    ("prompt", "alex@MacBook-Pro ~ % brew tap defai-digital/ax-code-desktop"),
-    ("prompt", "alex@MacBook-Pro ~ % brew trust defai-digital/ax-code"),
-    ("prompt", "alex@MacBook-Pro ~ % brew trust defai-digital/ax-code-desktop"),
-    ("prompt", "alex@MacBook-Pro ~ % brew install defai-digital/ax-code/ax-code"),
-    ("prompt", "alex@MacBook-Pro ~ % brew install --cask defai-digital/ax-code-desktop/ax-code-desktop"),
+    ("prompt", "alex@MacBook-Pro ~ % brew install defai-digital/tap/ax-code"),
+    ("prompt", "alex@MacBook-Pro ~ % brew install --cask defai-digital/tap/ax-code-desktop"),
     ("success", "AX Code is installed. Run ax-code to start the terminal UI."),
 ]
 

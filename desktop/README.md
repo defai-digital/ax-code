@@ -11,19 +11,17 @@ source of truth.
 
 Desktop releases use `desktop-v*` tags and publish artifacts to the main
 [`defai-digital/ax-code` Releases page](https://github.com/defai-digital/ax-code/releases).
-The Homebrew cask remains in the separate
-[`defai-digital/homebrew-ax-code-desktop`](https://github.com/defai-digital/homebrew-ax-code-desktop)
-tap because Homebrew taps are distribution indexes, not source-code repositories.
+The Homebrew cask is published in the shared
+[`defai-digital/homebrew-tap`](https://github.com/defai-digital/homebrew-tap)
+distribution repository alongside the CLI formula and other DefAI Digital packages.
 
 ## Install On macOS
 
 The recommended way to install on macOS is via Homebrew:
 
 ```bash
-brew tap defai-digital/ax-code
-brew tap defai-digital/ax-code-desktop
-brew install ax-code                  # CLI/runtime
-brew install --cask ax-code-desktop   # Desktop app
+brew install defai-digital/tap/ax-code                  # CLI/runtime
+brew install --cask defai-digital/tap/ax-code-desktop   # Desktop app
 ```
 
 The Desktop cask token is `ax-code-desktop`. It must differ from the `ax-code` CLI formula name: Homebrew

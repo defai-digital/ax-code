@@ -35,7 +35,8 @@ export const TUI_SCHEMA_URL = `${RAW_MAIN_BASE}/packages/${PACKAGE_NAME}/tui.sch
 /** Shell installer fetched by the curl-based self-upgrade path. */
 export const INSTALL_SCRIPT_URL = `${RAW_MAIN_BASE}/install`
 
-// Homebrew distribution. The tap shares the repo slug; formulae are
-// published as `ax-code` (with a legacy `ax` alias on older taps).
-export const HOMEBREW_TAP = GITHUB_REPO_SLUG
+// Homebrew distribution. All DefAI Digital projects publish into one shared
+// tap; LEGACY_HOMEBREW_TAP keeps upgrades working for pre-migration installs.
+export const HOMEBREW_TAP = `${GITHUB_ORG}/tap`
+export const LEGACY_HOMEBREW_TAP = GITHUB_REPO_SLUG
 export const HOMEBREW_FORMULA_API_URL = `https://formulae.brew.sh/api/formula/${PACKAGE_NAME}.json`

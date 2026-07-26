@@ -2,8 +2,8 @@ name: Install Matrix Smoke
 
 # Validates that ax-code installs and runs end-to-end through supported
 # non-npm distribution channels after the release workflow publishes GitHub
-# release assets. npm packages and source-bundle aliases are not supported
-# install or upgrade channels.
+# release assets. Linux release artifacts, npm packages, and source-bundle
+# aliases are not supported install or upgrade channels.
 #
 # Triggers:
 #   - `workflow_call`: tag-driven release workflow after stable publish
@@ -18,7 +18,7 @@ on:
         required: true
         type: string
       channel:
-        description: "Which channels to smoke-test (all, homebrew, windows, linux)"
+        description: "Which channels to smoke-test (all, homebrew, windows)"
         required: false
         type: string
         default: all
@@ -37,7 +37,6 @@ on:
           - all
           - homebrew
           - windows
-          - linux
 
 permissions:
   contents: read
@@ -90,10 +89,10 @@ jobs:
             # latest formula. brew tap on an already-tapped tap runs git pull;
             # suppress output but allow it to fail (broken-pipe on CI runners
             # can exit non-zero without affecting the formula state).
-            brew tap defai-digital/ax-code 2>&1 || true
+            brew tap defai-digital/tap 2>&1 || true
             # Avoid `grep -q` under pipefail; Homebrew can continue writing
             # after grep matches, turning a real match into a SIGPIPE failure.
-            BREW_INFO="$(brew info defai-digital/ax-code/ax-code 2>&1 || true)"
+            BREW_INFO="$(brew info defai-digital/tap/ax-code 2>&1 || true)"
             if [[ "$BREW_INFO" == *"stable ${VERSION}"* ]]; then
               echo "Homebrew formula ${VERSION} is available (attempt ${attempt})"
               break
@@ -105,7 +104,7 @@ jobs:
             fi
             sleep 10
           done
-          brew install defai-digital/ax-code/ax-code
+          brew install defai-digital/tap/ax-code
 
       - name: ax-code --version
         if: ${{ steps.channel.outputs.enabled == 'true' }}
@@ -131,8 +130,8 @@ jobs:
           # formula's token makes Homebrew skip linking the formula, leaving
           # no ax-code command after upgrades. The cask must install under a
           # distinct token and the CLI must stay resolvable next to it.
-          brew tap defai-digital/ax-code-desktop 2>&1 || true
-          brew install --cask defai-digital/ax-code-desktop/ax-code-desktop
+          brew tap defai-digital/tap 2>&1 || true
+          brew install --cask defai-digital/tap/ax-code-desktop
           # Query the installed-token list directly. `brew list --cask ax-code`
           # follows cask_renames.json, so the intentional ax-code ->
           # ax-code-desktop migration makes that command succeed even though
@@ -218,9 +217,15 @@ jobs:
           New-Item -ItemType Directory -Force -Path $MinisignDir | Out-Null
           Invoke-WebRequest -Uri $MinisignZipUrl -OutFile $MinisignZip -UseBasicParsing
           Expand-Archive -Path $MinisignZip -DestinationPath $MinisignDir -Force
-          $MinisignExe = Get-ChildItem -Path $MinisignDir -Filter "minisign.exe" -Recurse | Select-Object -First 1
+          $MinisignArchitecture = if (
+            [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq
+            [System.Runtime.InteropServices.Architecture]::Arm64
+          ) { "aarch64" } else { "x86_64" }
+          $MinisignExe = Get-ChildItem -Path $MinisignDir -Filter "minisign.exe" -Recurse |
+            Where-Object { $_.Directory.Name -eq $MinisignArchitecture } |
+            Select-Object -First 1
           if (-not $MinisignExe) {
-            throw "minisign.exe not found after extracting $MinisignZipUrl"
+            throw "minisign.exe for $MinisignArchitecture not found after extracting $MinisignZipUrl"
           }
 
           $PublicKeyFile = Join-Path $env:GITHUB_WORKSPACE "docs/release/ax-minisign.pub"
@@ -277,66 +282,3 @@ jobs:
           if ($Output -notmatch 'Runtime: Node .* \(node-bundled\)') {
             throw "Windows install did not report node-bundled runtimeMode"
           }
-
-  linux:
-    name: ${{ matrix.label }} / linux-bash-installer
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            label: linux-x64
-          - os: ubuntu-24.04-arm
-            label: linux-arm64
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Validate manual dispatch inputs
-        shell: bash
-        run: bash .github/scripts/validate-install-matrix-inputs.sh "${{ inputs.version }}" "${{ inputs.channel }}"
-
-      - name: Set isolated home paths
-        shell: bash
-        run: |
-          bash .github/scripts/set-isolated-home-env.sh "$RUNNER_TEMP/ax-code-linux-smoke-home"
-
-      - name: Resolve version under test
-        id: version
-        shell: bash
-        run: bash .github/scripts/resolve-version-for-workflow.sh "$GITHUB_OUTPUT" "${{ inputs.version }}"
-
-      - name: Filter dispatch channel
-        id: channel
-        shell: bash
-        run: bash .github/scripts/filter-dispatch-channel.sh "$GITHUB_OUTPUT" "${{ inputs.channel }}" "linux" "Linux Bash installer"
-
-      - name: Install ax-code from Bash release installer (bootstrap minisign)
-        if: ${{ steps.channel.outputs.enabled == 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
-          # Ensure host minisign is absent so the installer exercises bootstrap.
-          export PATH="/usr/bin:/bin"
-          if command -v minisign >/dev/null 2>&1; then
-            echo "WARN: minisign still on PATH at $(command -v minisign); continuing"
-          fi
-          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/install" -o "$RUNNER_TEMP/install"
-          chmod +x "$RUNNER_TEMP/install"
-          bash "$RUNNER_TEMP/install" --version "$VERSION"
-          echo "$HOME/.ax-code/bin" >> "$GITHUB_PATH"
-          export PATH="$HOME/.ax-code/bin:$PATH"
-          command -v ax-code
-          bash .github/scripts/assert-ax-code-version.sh "$VERSION"
-
-      - name: ax-code doctor - assert Linux runtime is node-bundled
-        if: ${{ steps.channel.outputs.enabled == 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          export PATH="$HOME/.ax-code/bin:$PATH"
-          OUTPUT="$(ax-code doctor 2>&1)"
-          echo "$OUTPUT"
-          echo "$OUTPUT" | bash .github/scripts/assert-runtime-mode.sh "linux" doctor

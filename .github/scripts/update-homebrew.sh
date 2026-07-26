@@ -8,8 +8,8 @@
 # Inputs (env):
 #   GITHUB_REF_NAME — release tag (e.g. v5.5.1)
 #   GH_TOKEN        — read access to the ax-code release assets
-#   TAP_TOKEN       — legacy write token for the Homebrew tap repo.
-#   HOMEBREW_TAP_TOKEN — preferred write token for the Homebrew tap repo.
+#   TAP_TOKEN       — legacy write token for the Homebrew tap repositories.
+#   HOMEBREW_TAP_TOKEN — preferred write token for the shared and legacy taps.
 #                    Local manual runs may fall back to GH_TOKEN when it has
 #                    tap write access.
 set -euo pipefail
@@ -77,7 +77,7 @@ if [ "${#TAP_AUTH_TOKENS[@]}" -eq 0 ]; then
   exit 1
 fi
 # Keep release downloads on the source-repo token. The tap write token may be
-# scoped only to defai-digital/homebrew-ax-code and can fail release reads with
+# scoped only to defai-digital/homebrew-tap and can fail release reads with
 # "Resource not accessible by personal access token".
 export GH_TOKEN="${RELEASE_READ_TOKEN}"
 
@@ -140,15 +140,13 @@ cat > /tmp/ax-code.rb << HEADER
 class AxCode < Formula
   desc "Sovereign AI coding agent — provider-agnostic, LSP-first"
   homepage "https://github.com/defai-digital/ax-code"
+  url "${RELEASE_BASE}/${DARWIN_ARM64_ASSET}"
   version "${VERSION}"
-  license "MIT"
+  sha256 "${DARWIN_ARM64_SHA}"
+  license "Apache-2.0"
 
-  on_macos do
-    depends_on arch: :arm64
-    url "${RELEASE_BASE}/${DARWIN_ARM64_ASSET}"
-    sha256 "${DARWIN_ARM64_SHA}"
-  end
-
+  depends_on arch: :arm64
+  depends_on :macos
   depends_on "node"
   depends_on "ripgrep"
 
@@ -166,7 +164,7 @@ class AxCode < Formula
     libexec.install Dir["*"]
     (bin/"ax-code").write <<~SH
       #!/bin/sh
-      exec "#{Formula["node"].opt_bin}/node" --experimental-ffi --disable-warning=ExperimentalWarning "#{libexec}/lib/index-node-tui.js" "\$@"
+      exec "#{formula_opt_bin("node")}/node" --experimental-ffi --disable-warning=ExperimentalWarning "#{libexec}/lib/index-node-tui.js" "\$@"
     SH
     chmod 0755, bin/"ax-code"
 
@@ -215,11 +213,14 @@ cat /tmp/ax-code.rb
 try_update_tap() {
   local label="$1"
   local token="$2"
+  local repo="$3"
+  local formula_path="$4"
+  local tap_name="$5"
   local tap_dir
   local status
 
   tap_dir="$(mktemp -d)"
-  echo "Updating Homebrew tap with ${label}"
+  echo "Updating ${tap_name} with ${label}"
 
   # Switch to the tap write token only after all source-repo release assets have
   # been downloaded and hashed.
@@ -229,12 +230,13 @@ try_update_tap() {
     rm -rf "${tap_dir}"
     return "${status}"
   }
-  gh repo clone defai-digital/homebrew-ax-code "${tap_dir}" -- --depth 1 || {
+  gh repo clone "${repo}" "${tap_dir}" -- --depth 1 || {
     status=$?
     rm -rf "${tap_dir}"
     return "${status}"
   }
-  cp /tmp/ax-code.rb "${tap_dir}/ax-code.rb" || {
+  mkdir -p "$(dirname "${tap_dir}/${formula_path}")"
+  cp /tmp/ax-code.rb "${tap_dir}/${formula_path}" || {
     status=$?
     rm -rf "${tap_dir}"
     return "${status}"
@@ -243,13 +245,22 @@ try_update_tap() {
     cd "${tap_dir}" || exit
     git config user.name "github-actions[bot]" || exit
     git config user.email "github-actions[bot]@users.noreply.github.com" || exit
-    git add ax-code.rb || exit
+    git add "${formula_path}" || exit
     if git diff --cached --quiet; then
       echo "Formula unchanged, skipping push"
     else
       git commit -m "Update ax-code to v${VERSION}" || exit
-      git push || exit
-      echo "Homebrew tap updated to v${VERSION}"
+      for attempt in 1 2 3 4 5; do
+        git pull --rebase origin main || exit
+        if git push origin HEAD:main; then
+          echo "${tap_name} updated to v${VERSION}"
+          exit 0
+        fi
+        echo "::warning::${tap_name} changed during publish; retrying (${attempt}/5)"
+        sleep $((attempt * 2))
+      done
+      echo "::error::Could not publish ax-code to ${tap_name} after 5 attempts"
+      exit 1
     fi
   )
   status=$?
@@ -257,16 +268,34 @@ try_update_tap() {
   return "${status}"
 }
 
-last_index=$((${#TAP_AUTH_TOKENS[@]} - 1))
-for index in "${!TAP_AUTH_TOKENS[@]}"; do
-  if try_update_tap "${TAP_AUTH_LABELS[$index]}" "${TAP_AUTH_TOKENS[$index]}"; then
-    exit 0
-  fi
+update_tap() {
+  local repo="$1"
+  local formula_path="$2"
+  local tap_name="$3"
+  local index
+  local last_index
 
-  if [ "${index}" -lt "${last_index}" ]; then
-    echo "::warning::Homebrew tap update failed with ${TAP_AUTH_LABELS[$index]}; trying next configured token"
-  fi
-done
+  last_index=$((${#TAP_AUTH_TOKENS[@]} - 1))
+  for index in "${!TAP_AUTH_TOKENS[@]}"; do
+    if try_update_tap \
+      "${TAP_AUTH_LABELS[$index]}" \
+      "${TAP_AUTH_TOKENS[$index]}" \
+      "${repo}" \
+      "${formula_path}" \
+      "${tap_name}"; then
+      return 0
+    fi
 
-echo "::error::All configured Homebrew tap tokens failed to update defai-digital/homebrew-ax-code"
-exit 1
+    if [ "${index}" -lt "${last_index}" ]; then
+      echo "::warning::${tap_name} update failed with ${TAP_AUTH_LABELS[$index]}; trying next configured token"
+    fi
+  done
+
+  echo "::error::All configured Homebrew tap tokens failed to update ${tap_name}"
+  return 1
+}
+
+# Publish the canonical shared tap and keep the former product-specific tap
+# current during the migration so existing installations continue to upgrade.
+update_tap "defai-digital/homebrew-tap" "Formula/ax-code.rb" "shared Homebrew tap"
+update_tap "defai-digital/homebrew-ax-code" "ax-code.rb" "legacy AX Code Homebrew tap"

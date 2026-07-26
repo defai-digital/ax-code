@@ -4,6 +4,7 @@ import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
 import {
   HOMEBREW_TAP,
+  LEGACY_HOMEBREW_TAP,
   HOMEBREW_FORMULA_API_URL,
   INSTALL_SCRIPT_URL,
   GITHUB_LATEST_RELEASE_API_URL,
@@ -202,16 +203,20 @@ export namespace Installation {
   }
 
   async function getBrewFormula() {
-    // The tap historically used both "ax-code" and "ax" as formula
-    // names. Probe both so we work on existing installs regardless
-    // of which name the user's brew has tapped.
-    const tapAxCode = await text(["brew", "list", "--formula", `${HOMEBREW_TAP}/ax-code`])
-    if (tapAxCode.includes("ax-code")) return `${HOMEBREW_TAP}/ax-code`
-    const tapAx = await text(["brew", "list", "--formula", `${HOMEBREW_TAP}/ax`])
-    if (tapAx.includes("ax")) return `${HOMEBREW_TAP}/ax`
+    // Prefer the consolidated tap, then probe the former product-specific tap
+    // so existing installations remain upgradeable during the migration.
+    const canonical = `${HOMEBREW_TAP}/ax-code`
+    const legacyAxCode = `${LEGACY_HOMEBREW_TAP}/ax-code`
+    const legacyAx = `${LEGACY_HOMEBREW_TAP}/ax`
+    const tapAxCode = await text(["brew", "list", "--formula", canonical])
+    if (tapAxCode.includes("ax-code")) return canonical
+    const oldTapAxCode = await text(["brew", "list", "--formula", legacyAxCode])
+    if (oldTapAxCode.includes("ax-code")) return legacyAxCode
+    const oldTapAx = await text(["brew", "list", "--formula", legacyAx])
+    if (oldTapAx.includes("ax")) return legacyAx
     const coreFormula = await text(["brew", "list", "--formula", "ax-code"])
     if (coreFormula.includes("ax-code")) return "ax-code"
-    return `${HOMEBREW_TAP}/ax`
+    return canonical
   }
 
   async function upgradeCurl(target: string) {
@@ -262,7 +267,12 @@ export namespace Installation {
     if (process.execPath.includes(path.join(".ax-code", "bin"))) return "curl"
     if (process.execPath.includes(path.join(".local", "bin"))) return "curl"
 
-    for (const formula of [`${HOMEBREW_TAP}/ax-code`, `${HOMEBREW_TAP}/ax`, "ax-code"]) {
+    for (const formula of [
+      `${HOMEBREW_TAP}/ax-code`,
+      `${LEGACY_HOMEBREW_TAP}/ax-code`,
+      `${LEGACY_HOMEBREW_TAP}/ax`,
+      "ax-code",
+    ]) {
       const out = await text(["brew", "list", "--formula", formula])
       if (out.trim()) return "brew"
     }

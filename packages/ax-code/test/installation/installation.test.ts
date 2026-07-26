@@ -229,7 +229,7 @@ describe("installation", () => {
             calls.push({ cmd, cwd: opts?.cwd })
             if (cmd[0] === "brew" && cmd.includes("--formula")) return { code: 0, stdout: "ax-code\n", stderr: "" }
             if (cmd[0] === "brew" && cmd.includes("--repo")) {
-              return { code: 0, stdout: "/tmp/homebrew-ax-code\n", stderr: "" }
+              return { code: 0, stdout: "/tmp/homebrew-tap\n", stderr: "" }
             }
             return { code: 0, stdout: "", stderr: "" }
           },
@@ -237,9 +237,29 @@ describe("installation", () => {
         () => Installation.upgrade("brew", "5.3.0"),
       )
 
-      expect(calls).toContainEqual({ cmd: ["brew", "tap", "defai-digital/ax-code"], cwd: undefined })
-      expect(calls).toContainEqual({ cmd: ["git", "pull", "--ff-only"], cwd: "/tmp/homebrew-ax-code" })
-      expect(calls).toContainEqual({ cmd: ["brew", "upgrade", "defai-digital/ax-code/ax-code"], cwd: undefined })
+      expect(calls).toContainEqual({ cmd: ["brew", "tap", "defai-digital/tap"], cwd: undefined })
+      expect(calls).toContainEqual({ cmd: ["git", "pull", "--ff-only"], cwd: "/tmp/homebrew-tap" })
+      expect(calls).toContainEqual({ cmd: ["brew", "upgrade", "defai-digital/tap/ax-code"], cwd: undefined })
+    })
+
+    test("keeps product-specific tap installs upgradeable during migration", async () => {
+      const calls: string[][] = []
+
+      await withTestDependencies(
+        {
+          run: (cmd) => {
+            calls.push(cmd)
+            if (cmd[0] === "brew" && cmd[1] === "list" && cmd[3] === "defai-digital/ax-code/ax-code") {
+              return { code: 0, stdout: "ax-code\n", stderr: "" }
+            }
+            return { code: 0, stdout: "", stderr: "" }
+          },
+        },
+        () => Installation.upgrade("brew", "5.3.0"),
+      )
+
+      expect(calls).toContainEqual(["brew", "tap", "defai-digital/ax-code"])
+      expect(calls).toContainEqual(["brew", "upgrade", "defai-digital/ax-code/ax-code"])
     })
 
     test("relinks the formula when brew skips the link because a same-token cask is installed", async () => {
@@ -263,7 +283,7 @@ describe("installation", () => {
         () => Installation.upgrade("brew", "5.3.0"),
       )
 
-      expect(calls).toContainEqual(["brew", "link", "defai-digital/ax-code/ax-code"])
+      expect(calls).toContainEqual(["brew", "link", "defai-digital/tap/ax-code"])
     })
 
     test("does not relink when brew linked the formula normally", async () => {

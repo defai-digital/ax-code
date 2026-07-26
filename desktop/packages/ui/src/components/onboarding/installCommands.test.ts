@@ -26,7 +26,13 @@ describe("installCommands", () => {
 
   test("macOS command uses Homebrew", () => {
     expect(getInstallCommand("macos")).toContain("brew")
-    expect(getInstallCommand("macos")).toContain("defai-digital/ax-code")
+    expect(getInstallCommand("macos")).toContain("defai-digital/tap/ax-code")
+  })
+
+  test("Linux does not advertise an unavailable release artifact", () => {
+    expect(getInstallCommand("linux")).toContain("not available")
+    expect(getInstallCommand("linux")).not.toContain("curl")
+    expect(getInstallCommand("linux")).not.toContain("/download/install")
   })
 
   test("highlights cover the full command text", () => {

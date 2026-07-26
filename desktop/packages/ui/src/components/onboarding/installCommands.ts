@@ -11,11 +11,10 @@ const INSTALL_DOCS_URLS: Record<OnboardingPlatform, string> = {
   unknown: AX_CODE_INSTALL_DOCS_URL,
 }
 
-export const MACOS_INSTALL_COMMAND =
-  "brew tap defai-digital/ax-code && brew install defai-digital/ax-code/ax-code"
+export const MACOS_INSTALL_COMMAND = "brew install defai-digital/tap/ax-code"
 
 export const LINUX_INSTALL_COMMAND =
-  "curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install | bash"
+  "Linux release builds are not available; see the install docs for supported platforms"
 
 export const WINDOWS_INSTALL_COMMAND =
   "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
@@ -26,7 +25,7 @@ export type InstallCommandHighlight =
   | { kind: "muted"; text: string }
 
 /**
- * Return the recommended one-line CLI install command for the host platform.
+ * Return the recommended CLI install command or unsupported-platform notice.
  * Windows uses the native PowerShell installer (not WSL-only).
  */
 export function getInstallCommand(platform: OnboardingPlatform): string {
@@ -61,25 +60,12 @@ export function getInstallCommandHighlights(platform: OnboardingPlatform): Insta
     case "macos":
       return [
         { kind: "keyword", text: "brew" },
-        { kind: "muted", text: " tap " },
-        { kind: "string", text: "defai-digital/ax-code" },
-        { kind: "muted", text: " && " },
-        { kind: "keyword", text: "brew" },
         { kind: "muted", text: " install " },
-        { kind: "string", text: "defai-digital/ax-code/ax-code" },
+        { kind: "string", text: "defai-digital/tap/ax-code" },
       ]
     case "linux":
     default:
-      return [
-        { kind: "keyword", text: "curl" },
-        { kind: "muted", text: " -fsSL " },
-        {
-          kind: "string",
-          text: "https://github.com/defai-digital/ax-code/releases/latest/download/install",
-        },
-        { kind: "muted", text: " | " },
-        { kind: "keyword", text: "bash" },
-      ]
+      return [{ kind: "muted", text: LINUX_INSTALL_COMMAND }]
   }
 }
 

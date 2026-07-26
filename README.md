@@ -28,7 +28,7 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 | macOS Apple Silicon | Active support | Homebrew CLI formula and Desktop cask                  |
 | Windows x64         | Active support | PowerShell CLI installer and Desktop release installer |
 | Windows ARM64       | Active support | PowerShell CLI installer and Desktop release installer |
-| Linux x64 / arm64   | Active support | Bash release installer (`install` script) for CLI      |
+| Linux x64 / arm64   | Not supported  | No release artifact is built                           |
 
 **Recommended: AX Code Desktop**
 
@@ -43,16 +43,12 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 2. Install AX Code CLI and Desktop:
 
 ```bash
-brew tap defai-digital/ax-code
-brew tap defai-digital/ax-code-desktop
-brew trust defai-digital/ax-code
-brew trust defai-digital/ax-code-desktop
-brew install defai-digital/ax-code/ax-code
-brew install --cask defai-digital/ax-code-desktop/ax-code-desktop
+brew install defai-digital/tap/ax-code
+brew install --cask defai-digital/tap/ax-code-desktop
 ```
 
-Already have Homebrew? Start from step 2. The `brew trust` commands support Homebrew setups that require
-explicit trust for third-party taps.
+Already have Homebrew? Start from step 2. The fully qualified commands add the shared DefAI Digital tap
+automatically.
 
 ![Install AX Code with Homebrew](docs/images/install-homebrew-ax-code.gif)
 
@@ -92,18 +88,8 @@ Use this path for terminals, headless tasks, CI jobs, bots, servers, and SDK/int
 **macOS**
 
 ```bash
-brew tap defai-digital/ax-code
-brew trust defai-digital/ax-code
-brew install defai-digital/ax-code/ax-code
+brew install defai-digital/tap/ax-code
 ```
-
-**Linux**
-
-```bash
-curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install | bash
-```
-
-Requires `curl` and `tar`. Release archives are verified with minisign; if minisign is not on PATH the installer bootstraps a pinned official build (or set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only if you intentionally accept an unverifiable download). Installs the node-bundled CLI under `~/.ax-code/bin`. Pin a version with `bash -s -- --version <release>`.
 
 **Windows**
 
@@ -113,7 +99,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/d
 
 Verifies the downloaded release archive with minisign (bootstraps a pinned minisign binary when needed). Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only if you intentionally accept an unverifiable download. Installs the node-bundled CLI under `%USERPROFILE%\.ax-code\bin`. Pin a version with `-Version <release>`. Uninstall with `.\install.ps1 -Uninstall`.
 
-Supported CLI install paths are Homebrew (macOS), the Bash release installer (Linux), and the GitHub release installer for Windows PowerShell. The Windows PowerShell installer is CLI-only; use the Windows `.exe` release asset for Desktop. npm packages are no longer a supported channel. See [Installation and Runtime Channels](docs/getting-started/install-runtime.md) for the full matrix.
+Supported CLI install paths are Homebrew (macOS) and the GitHub release installer for Windows PowerShell. The Windows PowerShell installer is CLI-only; use the Windows `.exe` release asset for Desktop. Linux and npm packages are not supported release channels. See [Installation and Runtime Channels](docs/getting-started/install-runtime.md) for the full matrix.
 
 AX Engine local inference is available only on eligible Apple Silicon Macs. Install its matching MLX runtime with `brew install defai-digital/ax-engine/ax-engine`; AX Code then starts and manages the local server on demand. Windows Desktop users should use hosted providers or OpenAI-compatible provider gateways; AX Code itself remains local-only and cannot be used as a remote server. For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `ZHIPU_API_KEY`, Alibaba plan keys, and `GITHUB_TOKEN`.
 
@@ -128,8 +114,8 @@ ax-code upgrade
 **macOS**
 
 ```bash
-brew upgrade defai-digital/ax-code/ax-code
-brew upgrade --cask defai-digital/ax-code-desktop/ax-code-desktop
+brew upgrade defai-digital/tap/ax-code
+brew upgrade --cask defai-digital/tap/ax-code-desktop
 ```
 
 If `ax-code` is missing after a Homebrew upgrade (older setups installed the Desktop cask under the

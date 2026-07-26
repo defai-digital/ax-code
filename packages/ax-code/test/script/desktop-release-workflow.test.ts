@@ -54,14 +54,20 @@ describe("desktop release workflow", () => {
     // Homebrew refuses to link a formula while an installed cask shares its
     // token, so a cask published as "ax-code" removes the ax-code CLI from
     // PATH on every formula upgrade (issue #342). The Desktop cask must ship
-    // as "ax-code-desktop", delete the colliding cask file, and provide a
-    // cask_renames.json entry so existing installs migrate on brew upgrade.
+    // as "ax-code-desktop" and merge a cask_renames.json entry so existing
+    // installs migrate without overwriting shared-tap metadata.
     expect(text).toContain(`'cask "ax-code-desktop" do'`)
     expect(text).not.toContain(`'cask "ax-code" do'`)
     expect(text).not.toContain("replacement_cask")
-    expect(text).toContain("fs.rmSync('Casks/ax-code.rb', { force: true })")
-    expect(text).toContain(`JSON.stringify({ "ax-code": "ax-code-desktop" }, null, 2)`)
+    expect(text).toContain('"defai-digital/homebrew-tap" "homebrew-tap"')
+    expect(text).toContain('"defai-digital/homebrew-ax-code-desktop" "legacy-homebrew-tap"')
+    expect(text).toContain("renames['ax-code'] = 'ax-code-desktop'")
+    expect(text).toContain("Object.keys(renames).sort()")
     expect(text).toContain("cask_renames.json")
+    expect(text).toContain("'  depends_on arch: :arm64'")
+    expect(text).toContain("'  depends_on :macos'")
+    expect(text).toContain("git pull --rebase origin main")
+    expect(text).toContain("git push origin HEAD:main")
   })
 
   test("signing job prefers the shared minisign release secrets", async () => {

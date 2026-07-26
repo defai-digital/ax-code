@@ -57,7 +57,10 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("github.com/defai-digital/ax-code/releases/download")
     expect(text).toContain('gh release download "${TAG}"')
     expect(text).toContain('--repo "${SOURCE_REPO}"')
-    expect(text).toContain("gh repo clone defai-digital/homebrew-ax-code")
+    expect(text).toContain('gh repo clone "${repo}"')
+    expect(text).toContain('"defai-digital/homebrew-tap" "Formula/ax-code.rb"')
+    expect(text).toContain('"defai-digital/homebrew-ax-code" "ax-code.rb"')
+    expect(text).toContain('"${tap_dir}/${formula_path}"')
     expect(text).toContain("gh auth setup-git")
     expect(text).toContain("mktemp -d")
     expect(text).not.toContain("x-access-token:${TAP_AUTH_TOKEN}")
@@ -66,6 +69,8 @@ describe("distribution support guardrails", () => {
     expect(text).not.toContain("LINUX_")
     expect(text).not.toContain("on_linux")
     expect(text).toContain("depends_on arch: :arm64")
+    expect(text).toContain("depends_on :macos")
+    expect(text).toContain('license "Apache-2.0"')
     // node-bundled: install the whole tree into libexec and depend on node, not
     // a single compiled binary. Bun is gone entirely.
     expect(text).toContain('libexec.install Dir["*"]')
@@ -83,6 +88,7 @@ describe("distribution support guardrails", () => {
     expect(text).toContain('depends_on "node"')
     expect(text).toContain("--experimental-ffi")
     expect(text).toContain("--disable-warning=ExperimentalWarning")
+    expect(text).toContain('formula_opt_bin("node")')
     expect(text).not.toContain('bin.install "ax-code"')
     expect(text).not.toContain('depends_on "bun"')
     expect(text).not.toContain("bundle/index.js")
@@ -109,6 +115,8 @@ describe("distribution support guardrails", () => {
     expect(text).toContain('export GH_TOKEN="${token}"')
     expect(text).toContain("trying next configured token")
     expect(text).toContain("All configured Homebrew tap tokens failed")
+    expect(text).toContain("git pull --rebase origin main")
+    expect(text).toContain("git push origin HEAD:main")
     expect(text.indexOf('export GH_TOKEN="${RELEASE_READ_TOKEN}"')).toBeLessThan(
       text.indexOf('DARWIN_ARM64_SHA="$(download_asset "${DARWIN_ARM64_ASSET}")"'),
     )
@@ -270,30 +278,32 @@ describe("distribution support guardrails", () => {
     expect(text).not.toContain("release workflow dispatches")
   })
 
-  test("install matrix supports Homebrew, Windows, and Linux without npm package installs", async () => {
+  test("install matrix supports Homebrew and Windows without unsupported release channels", async () => {
     const text = await readFile(installMatrixWorkflow, "utf-8")
     const filterDispatchChannel = await readFile(filterDispatchChannelScript, "utf-8")
     const validateInputs = await readFile(validateInstallMatrixInputsScript, "utf-8")
-    // Supported non-npm channels: Homebrew (macOS), Windows install.ps1, Linux bash installer.
+    // Supported non-npm channels: Homebrew (macOS) and Windows install.ps1.
     expect(text).toContain("- homebrew")
     expect(text).toContain("- windows")
-    expect(text).toContain("- linux")
-    expect(text).toContain("ubuntu-latest")
-    expect(text).toContain("ubuntu-24.04-arm")
-    expect(text).toContain("linux-bash-installer")
-    expect(text).toContain("brew install defai-digital/ax-code/ax-code")
+    expect(text).not.toContain("- linux")
+    expect(text).not.toContain("linux-bash-installer")
+    expect(text).toContain("brew install defai-digital/tap/ax-code")
     // Regression guard for issue #342: installing the Desktop cask next to
     // the CLI formula must not unlink the ax-code command. The cask installs
     // under its own token; a cask named plain "ax-code" is a failure.
-    expect(text).toContain("brew install --cask defai-digital/ax-code-desktop/ax-code-desktop")
+    expect(text).toContain("brew install --cask defai-digital/tap/ax-code-desktop")
     expect(text).toContain('brew list --cask | grep -Fx "ax-code"')
     expect(text).not.toContain("brew list --cask ax-code >/dev/null")
     expect(text).toContain("command -v ax-code")
     // Windows leg verifies install.ps1 with a temporary minisign (not left on PATH).
-    expect(text).toContain('minisign-$MinisignVersion-win64.zip')
+    expect(text).toContain("minisign-$MinisignVersion-win64.zip")
     expect(text).toContain('$MinisignVersion = "0.12"')
     expect(text).toContain("install.ps1.minisig")
     expect(text).toContain("docs/release/ax-minisign.pub")
+    expect(text).toContain("[System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture")
+    expect(text).toContain("[System.Runtime.InteropServices.Architecture]::Arm64")
+    expect(text).toContain('{ "aarch64" } else { "x86_64" }')
+    expect(text).toContain("Where-Object { $_.Directory.Name -eq $MinisignArchitecture }")
     expect(text).toContain("& $MinisignExe.FullName -V -p $PublicKeyFile -m $Installer -x $InstallerSig")
     expect(text).toContain("expected minisign to be absent from PATH so installer bootstrap is exercised")
     expect(text).toContain("Invoke-WebRequest -Uri")
@@ -308,20 +318,17 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("Smoke - installed backend stdio handshake")
     expect(text).toContain("tui-backend --stdio")
     expect(text).toContain("id: channel")
-    // Linux leg uses the signed Bash release installer (not a curl|bash pipe).
-    expect(text).toContain('curl -fsSL "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/install"')
-    expect(text).toContain('bash "$RUNNER_TEMP/install" --version "$VERSION"')
     expect(filterDispatchChannel).toContain("enabled=false")
     expect(filterDispatchChannel).toContain('"all"')
-    expect(validateInputs).toContain("all|homebrew|windows|linux")
+    expect(validateInputs).toContain("all|homebrew|windows")
+    expect(validateInputs).not.toContain("|linux")
     expect(text).toContain("steps.channel.outputs.enabled == 'true'")
     expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "homebrew" doctor')
     expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "homebrew" backend')
-    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "linux" doctor')
     // The literal runtimeMode assertion now lives in the shared assert script
     // (invoked above), which maps every non-source channel — Homebrew included —
-    // to the node-bundled runtime. With Bun fully removed, macOS arm64 now ships
-    // the same node-bundled distribution as the Windows and Linux legs.
+    // to the node-bundled runtime. With Bun fully removed, macOS arm64 and both
+    // Windows architectures ship the same node-bundled distribution.
     const assertRuntimeMode = await readFile(assertRuntimeModeScript, "utf-8")
     expect(assertRuntimeMode).toContain("RUNTIME_RE='node-bundled'")
     expect(assertRuntimeMode).toContain('PATTERN="\\"runtimeMode\\":\\"${RUNTIME_RE}\\""')
@@ -356,10 +363,10 @@ describe("distribution support guardrails", () => {
     const homebrewStep = text.match(/Install ax-code from Homebrew tap[\s\S]*?(?=\n      - name: ax-code --version|$)/)
     expect(homebrewStep).not.toBeNull()
     expect(homebrewStep![0]).toContain("brew update 2>&1 || true")
-    expect(homebrewStep![0]).toContain("brew tap defai-digital/ax-code 2>&1 || true")
-    expect(homebrewStep![0]).toContain('BREW_INFO="$(brew info defai-digital/ax-code/ax-code 2>&1 || true)"')
+    expect(homebrewStep![0]).toContain("brew tap defai-digital/tap 2>&1 || true")
+    expect(homebrewStep![0]).toContain('BREW_INFO="$(brew info defai-digital/tap/ax-code 2>&1 || true)"')
     expect(homebrewStep![0]).toContain('[[ "$BREW_INFO" == *"stable ${VERSION}"* ]]')
-    expect(homebrewStep![0]).not.toContain("brew info defai-digital/ax-code/ax-code 2>&1 | grep -q")
+    expect(homebrewStep![0]).not.toContain("brew info defai-digital/tap/ax-code 2>&1 | grep -q")
     expect(homebrewStep![0]).not.toContain("brew update\n")
   })
 

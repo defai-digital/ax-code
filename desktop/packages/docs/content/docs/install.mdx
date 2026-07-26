@@ -13,7 +13,7 @@ There are two supported Desktop install paths:
 Desktop source code lives in the AX Code monorepo under `desktop/`, and Desktop
 release artifacts are published from the main
 [AX Code GitHub releases page](https://github.com/defai-digital/ax-code/releases).
-The Homebrew cask tap remains separate because it is a distribution index.
+The CLI formula and Desktop cask share the DefAI Digital Homebrew tap.
 
 ## Runtime Requirement
 
@@ -33,10 +33,8 @@ coding sessions.
 Homebrew is the recommended macOS path. Install the CLI runtime and Desktop app together on a new machine:
 
 ```bash
-brew tap defai-digital/ax-code
-brew tap defai-digital/ax-code-desktop
-brew install ax-code                  # CLI/runtime
-brew install --cask ax-code-desktop   # Desktop app
+brew install defai-digital/tap/ax-code                  # CLI/runtime
+brew install --cask defai-digital/tap/ax-code-desktop   # Desktop app
 ```
 
 If the CLI is already installed, only run the cask command. The Desktop cask token is `ax-code-desktop` —
