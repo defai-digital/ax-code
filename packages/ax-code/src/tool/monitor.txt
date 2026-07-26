@@ -1,0 +1,16 @@
+Run a background shell command as a live event monitor. Each complete stdout line becomes a real-time notification pushed to the session. Use a selective, line-buffered command because high-rate output is rate-limited and sustained overload stops the monitor.
+
+Parameters:
+- command: Shell command or script. Each stdout line is an event; exit ends the watch.
+- description: Short human-readable description of what is being monitored (shown in notifications).
+- filter: Optional regex pattern. Only lines matching this pattern are emitted as events.
+- timeout_ms: Kill the monitor after this deadline in milliseconds. Default 300000 (5 minutes). Ignored when persistent is true.
+- persistent: Run for the lifetime of the session instead of a timeout. Default false.
+
+Usage notes:
+- The command should be line-buffered (e.g. `cmd | grep --line-buffered pattern`) for timely delivery.
+- High-rate output (>100 lines/sec) may be throttled. Prefer filtering at the source.
+- Use this for watching dev server logs, test runners, deployment status, or file watchers.
+- The monitor runs in the background. This tool returns immediately with a monitor ID.
+- Monitor events are delivered as notifications; you do not need to poll.
+- To stop a monitor, use kill_shell with the monitor's shell ID.

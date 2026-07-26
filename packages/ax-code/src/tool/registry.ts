@@ -3,6 +3,9 @@ import { QuestionTool } from "./question"
 import { BashTool } from "./bash"
 import { BashOutputTool } from "./bash_output"
 import { KillShellTool } from "./kill_shell"
+import { MonitorTool } from "./monitor"
+import { NotebookEditTool } from "./notebook_edit"
+import { ImageGenTool } from "./image_gen"
 import { EditTool } from "./edit"
 import { GlobTool } from "./glob"
 import { GrepTool } from "./grep"
@@ -229,12 +232,14 @@ export namespace ToolRegistry {
       BashTool,
       BashOutputTool,
       KillShellTool,
+      MonitorTool,
       ListTool,
       ReadTool,
       GlobTool,
       GrepTool,
       EditTool,
       WriteTool,
+      NotebookEditTool,
       TaskTool,
       TaskParallelTool,
       CouncilTool,
@@ -243,6 +248,7 @@ export namespace ToolRegistry {
       TodoWriteTool,
       WebSearchTool,
       CodeSearchTool,
+      ImageGenTool,
       SkillTool,
       MemorySaveTool,
       GetGoalTool,

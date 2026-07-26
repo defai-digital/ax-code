@@ -1,0 +1,17 @@
+Replace the contents of a specific cell in a Jupyter notebook (.ipynb file) with new source, or insert/delete cells.
+
+Parameters:
+- notebook_path: The absolute path to the Jupyter notebook file to edit (must be absolute, not relative).
+- new_source: The new source for the cell. For replace and insert modes this is the cell content.
+- cell_id: The ID of the cell to edit (as shown in notebook viewers). When inserting, the new cell is placed after the cell with this ID. If not specified, falls back to cell_index.
+- cell_index: 0-based index of the cell to edit. Used when cell_id is not provided. When inserting without cell_id, the new cell is inserted at this position.
+- cell_type: The type of the cell ("code" or "markdown"). Required when edit_mode is "insert".
+- edit_mode: The type of edit to make. "replace" (default) replaces cell content, "insert" adds a new cell, "delete" removes a cell.
+
+Usage notes:
+- The notebook_path parameter must be an absolute path, not a relative path.
+- Cell identification: cell_id is preferred; cell_index is the fallback when cell_id is not provided.
+- For insert mode, the new cell is placed AFTER the identified cell (or at cell_index position if no cell_id).
+- For delete mode, new_source is ignored.
+- Source content is stored as an array of lines in the .ipynb format (each line ends with \n except the last).
+- Outputs and execution counts are cleared on replace for code cells.

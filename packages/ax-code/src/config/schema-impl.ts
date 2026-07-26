@@ -1037,6 +1037,24 @@ export const Info = z
       .describe(
         "Native source-backed AX Wiki. Complements structural ax-code index; does not replace code_intelligence.",
       ),
+    image_generation: z
+      .object({
+        provider: z
+          .enum(["openai", "stability", "custom"])
+          .optional()
+          .describe("Image generation provider. Defaults to openai if OPENAI_API_KEY is set."),
+        options: z
+          .object({
+            apiKey: z.string().optional().describe("API key for the image generation provider."),
+            baseURL: z.string().optional().describe("Custom base URL for the provider API."),
+            model: z.string().optional().describe("Model to use (e.g. dall-e-3, stable-diffusion-xl)."),
+          })
+          .catchall(z.any())
+          .optional(),
+      })
+      .strict()
+      .optional()
+      .describe("Image generation provider configuration"),
   })
   .strict()
   .meta({

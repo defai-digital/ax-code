@@ -170,7 +170,17 @@ export namespace Skill {
     return target === root || target.startsWith(root + path.sep)
   }
 
-  export const BUILTIN_NAMES = new Set(["debug-only", "debug-n-fix", "improve-overall", "improve-security", "mcp"])
+  export const BUILTIN_NAMES = new Set([
+    "debug-only",
+    "debug-n-fix",
+    "improve-overall",
+    "improve-security",
+    "mcp",
+    "simplify",
+    "verify",
+    "run",
+    "loop",
+  ])
 
   declare const AX_CODE_BUILTIN_SKILLS: unknown
 

@@ -67,6 +67,8 @@ const RISK_PERMISSIONS: ReadonlySet<string> = new Set([
   "webfetch",
   "websearch",
   "codesearch",
+  "monitor",
+  "image_gen",
 ])
 
 export function classify(permission: string): RiskClass {

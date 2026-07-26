@@ -11,4 +11,20 @@ export const NotificationEvent = {
       duration: z.number().optional().describe("Duration in milliseconds"),
     }),
   ),
+  MonitorLine: BusEvent.define(
+    "notification.monitor.line",
+    z.object({
+      monitorID: z.string(),
+      line: z.string(),
+      description: z.string(),
+    }),
+  ),
+  MonitorExit: BusEvent.define(
+    "notification.monitor.exit",
+    z.object({
+      monitorID: z.string(),
+      description: z.string(),
+      exitCode: z.number().nullable(),
+    }),
+  ),
 }
