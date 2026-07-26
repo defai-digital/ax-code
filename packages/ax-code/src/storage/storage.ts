@@ -219,8 +219,19 @@ export namespace Storage {
     status: "ok" | "not_numeric" | "out_of_range"
   }
 
-  export function parseMigrationMarker(value: string, max = MIGRATIONS.length): MigrationMarkerParseResult {
-    const trimmed = value.trim()
+  export function parseMigrationMarker(value: unknown, max = MIGRATIONS.length): MigrationMarkerParseResult {
+    // Marker is written as plain text via Filesystem.write (e.g. "2"), but
+    // historically was also read via readJson, which JSON-decodes bare digits
+    // to a number. Coerce both so value.trim is never called on a non-string.
+    const text =
+      typeof value === "string"
+        ? value
+        : typeof value === "number" && Number.isFinite(value)
+          ? String(value)
+          : null
+    if (text === null) return { value: 0, status: "not_numeric" }
+
+    const trimmed = text.trim()
     if (!/^\d+$/.test(trimmed)) return { value: 0, status: "not_numeric" }
 
     const parsed = Number(trimmed)
@@ -243,7 +254,13 @@ export namespace Storage {
     // off this log line (BUG-105). Also clamp values outside the valid
     // range [0, MIGRATIONS.length] so a downgraded marker doesn't cause
     // an out-of-bounds index access at the loop below.
-    const migration = await Filesystem.readJson<string>(path.join(dir, "migration"))
+    //
+    // Use readText (not readJson): the marker is written with
+    // Filesystem.write as a bare digit string. readJson("2") yields the
+    // number 2, which used to crash parseMigrationMarker with
+    // "value.trim is not a function" and forced every process to replay
+    // migrations from 0.
+    const migration = await Filesystem.readText(path.join(dir, "migration"))
       .then((x) => {
         const parsed = parseMigrationMarker(x)
         if (parsed.status === "not_numeric") {
