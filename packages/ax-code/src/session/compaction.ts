@@ -2,7 +2,6 @@ import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import { Session } from "."
 import { SessionID, MessageID, PartID } from "./schema"
-import { Instance } from "../project/instance"
 import { Provider } from "../provider/provider"
 import { MessageV2 } from "./message-v2"
 import z from "zod"
@@ -18,6 +17,7 @@ import { Database } from "@/storage/db"
 import { MessageTable, PartTable } from "./session.sql"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { ContextTier } from "./context-tier"
+import { sessionAssistantPath, zeroTokenUsage } from "./prompt-message-builders"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -330,16 +330,8 @@ export namespace SessionCompaction {
       agent: "compaction",
       variant: userMessage.variant,
       summary: true,
-      path: {
-        cwd: Instance.directory,
-        root: Instance.worktree,
-      },
-      tokens: {
-        output: 0,
-        input: 0,
-        reasoning: 0,
-        cache: { read: 0, write: 0 },
-      },
+      path: sessionAssistantPath(),
+      tokens: zeroTokenUsage(),
       modelID: model.id,
       providerID: model.providerID,
       time: {

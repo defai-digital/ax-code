@@ -24,6 +24,7 @@ import { Flag } from "@/flag/flag"
 import { ScopedFlag } from "@/flag/scoped"
 import { Permission } from "@/permission"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
+import { Env } from "@/util/env"
 import { withTimeout } from "@/util/timeout"
 import { Recorder } from "@/replay/recorder"
 import { AgentControl } from "@/control-plane/agent-control"
@@ -832,8 +833,8 @@ export namespace LLM {
   }
 
   function isSuperLongDurablePacingDisabled() {
-    const value = (process.env.AX_CODE_SUPER_LONG_DURABLE_PACING ?? "").trim().toLowerCase()
-    return value === "0" || value === "false"
+    // Explicit false disables durable pacing; unset/unknown leaves it enabled.
+    return Env.parseBoolean(process.env.AX_CODE_SUPER_LONG_DURABLE_PACING) === false
   }
 
   async function sleep(ms: number, signal: AbortSignal): Promise<void> {

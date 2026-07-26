@@ -85,10 +85,6 @@ export namespace WorkflowTemplate {
   })
   export type SaveFromRunInput = z.input<typeof SaveFromRunInput>
 
-  function isEnoent(error: unknown): error is { code: "ENOENT" } {
-    return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT"
-  }
-
   const builtins = Object.fromEntries(
     Object.entries(WorkflowFixtureSpecs).map(([, value]) => {
       const spec = parseWorkflowSpecV1(value)
@@ -199,7 +195,7 @@ export namespace WorkflowTemplate {
     const dir = safeTemplateDir(source)
     if (!dir) return []
     const files = await fs.readdir(dir).catch((error) => {
-      if (isEnoent(error)) return []
+      if (Filesystem.isEnoent(error)) return []
       throw error
     })
 
@@ -224,7 +220,7 @@ export namespace WorkflowTemplate {
 
   async function readStoredTemplate(file: string): Promise<Stored | undefined> {
     const value = await Filesystem.readJson<unknown>(file).catch((error) => {
-      if (isEnoent(error)) return undefined
+      if (Filesystem.isEnoent(error)) return undefined
       throw error
     })
     if (value === undefined) return undefined
@@ -233,7 +229,7 @@ export namespace WorkflowTemplate {
 
   async function readStoredTemplateForUpdate(file: string): Promise<Stored | undefined> {
     const value = await Filesystem.readJson<unknown>(file).catch((error) => {
-      if (isEnoent(error)) return undefined
+      if (Filesystem.isEnoent(error)) return undefined
       throw error
     })
     if (value === undefined) return undefined

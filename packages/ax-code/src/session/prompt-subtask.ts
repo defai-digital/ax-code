@@ -11,12 +11,12 @@ import { Log } from "../util/log"
 import { Session } from "."
 import { Provider } from "../provider/provider"
 import { Plugin } from "../plugin"
-import { Instance } from "../project/instance"
 import { TaskTool } from "@/tool/task"
 import { Tool } from "@/tool/tool"
 import { Permission } from "@/permission"
 import { SessionStatus } from "./status"
 import { agentInfo } from "./prompt-agent-model-info"
+import { sessionAssistantPath, zeroTokenUsage } from "./prompt-message-builders"
 
 const log = Log.create({ service: "session.prompt.subtask" })
 
@@ -53,16 +53,8 @@ export async function executeSubtask(task: MessageV2.SubtaskPart, ctx: SubtaskCo
     mode: task.agent,
     agent: task.agent,
     variant: lastUser.variant,
-    path: {
-      cwd: Instance.directory,
-      root: Instance.worktree,
-    },
-    tokens: {
-      input: 0,
-      output: 0,
-      reasoning: 0,
-      cache: { read: 0, write: 0 },
-    },
+    path: sessionAssistantPath(),
+    tokens: zeroTokenUsage(),
     modelID: taskModel.id,
     providerID: taskModel.providerID,
     time: {

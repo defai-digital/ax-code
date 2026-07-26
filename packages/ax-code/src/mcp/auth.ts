@@ -33,17 +33,13 @@ export namespace McpAuth {
 
   const filepath = path.join(Global.Path.data, "mcp-auth.json")
 
-  function isEnoent(error: unknown): error is { code: "ENOENT" } {
-    return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT"
-  }
-
   function isRecord(value: unknown): value is Record<string, unknown> {
     return !!value && typeof value === "object" && !Array.isArray(value)
   }
 
   async function readRawFile(): Promise<Record<string, unknown>> {
     const raw = await Filesystem.readJson<unknown>(filepath).catch((error) => {
-      if (isEnoent(error)) return {}
+      if (Filesystem.isEnoent(error)) return {}
       throw error
     })
     if (!isRecord(raw)) throw new Error(`Invalid MCP auth store in ${filepath}: expected object`)

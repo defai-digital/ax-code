@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { homedir } from "node:os"
+import { Filesystem } from "../../util/filesystem"
 import { parseCliJsonObject, type CliJsonObject } from "./json"
 
 export interface CliModelInfo {
@@ -28,13 +29,9 @@ function homeDir() {
   return process.env.AX_CODE_TEST_HOME || homedir()
 }
 
-function isEnoent(error: unknown): error is NodeJS.ErrnoException {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"
-}
-
 async function readJson(path: string): Promise<JsonLike | null> {
   const text = await readFile(path, "utf-8").catch((error) => {
-    if (isEnoent(error)) return undefined
+    if (Filesystem.isEnoent(error)) return undefined
     throw error
   })
   return text === undefined ? null : parseCliSettingsJson(text)
@@ -42,7 +39,7 @@ async function readJson(path: string): Promise<JsonLike | null> {
 
 async function readText(path: string): Promise<string | null> {
   const text = await readFile(path, "utf-8").catch((error) => {
-    if (isEnoent(error)) return undefined
+    if (Filesystem.isEnoent(error)) return undefined
     throw error
   })
   return text ?? null

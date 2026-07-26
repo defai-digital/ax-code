@@ -137,13 +137,9 @@ export namespace Snapshot {
     return Filesystem.exists(file)
   }
 
-  function isEnoent(error: unknown): error is { code: "ENOENT" } {
-    return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"
-  }
-
   async function read(file: string) {
     return Filesystem.readText(file).catch((error) => {
-      if (isEnoent(error)) return ""
+      if (Filesystem.isEnoent(error)) return ""
       throw error
     })
   }

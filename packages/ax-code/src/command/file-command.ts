@@ -184,7 +184,7 @@ export namespace FileCommand {
       symlink: true,
       dot: true,
     }).catch((error) => {
-      if (isEnoent(error)) return [] as string[]
+      if (Filesystem.isEnoent(error)) return [] as string[]
       throw error
     })
     const parsed = await Promise.all(
@@ -214,13 +214,9 @@ export namespace FileCommand {
     return name.split(path.sep).join("/")
   }
 
-  function isEnoent(error: unknown): error is NodeJS.ErrnoException {
-    return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"
-  }
-
   function isMissingFile(error: unknown) {
-    if (isEnoent(error)) return true
+    if (Filesystem.isEnoent(error)) return true
     if (!ConfigMarkdown.FrontmatterError.isInstance(error)) return false
-    return isEnoent((error as Error).cause)
+    return Filesystem.isEnoent((error as Error).cause)
   }
 }

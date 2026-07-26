@@ -1,3 +1,5 @@
+import { modelIdFinalSegment } from "./model-id"
+
 const GLM_MAJOR_VERSION = /glm-(\d+)/
 const GLM_HIDDEN_FINAL_SEGMENTS = new Set<string>(["glm-5.1", "glm-5-1", "glm-5.1[1m]", "glm-5.1-1m", "glm-5-turbo"])
 const GLM_HIDDEN_FINAL_PATTERN = /(?:^|[^a-z0-9])glm-5[.-]1(?:$|[^0-9])/
@@ -71,14 +73,14 @@ export function supportsOpenAIGptModels(probes: readonly string[]) {
 // reseller-prefixed ids like "x-ai/grok-4.5" still resolve.
 export function supportsGrok41OrAllowedCodingModel(probes: readonly string[]) {
   if (!probes.some((probe) => probe.includes("grok"))) return true
-  return probes.some((probe) => GROK_ALLOWED_FINAL_SEGMENTS.has(probe.split("/").pop() ?? ""))
+  return probes.some((probe) => GROK_ALLOWED_FINAL_SEGMENTS.has(modelIdFinalSegment(probe)))
 }
 
 export function supportsGlmModels(probes: readonly string[]) {
   if (!probes.some((probe) => probe.includes("glm"))) return true
   if (
     probes.some((probe) => {
-      const finalSegment = probe.split("/").pop() ?? ""
+      const finalSegment = modelIdFinalSegment(probe)
       return GLM_HIDDEN_FINAL_SEGMENTS.has(finalSegment) || GLM_HIDDEN_FINAL_PATTERN.test(finalSegment)
     })
   )

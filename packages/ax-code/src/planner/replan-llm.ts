@@ -106,16 +106,14 @@ export interface ProviderReplanOptions {
  */
 export async function configuredArchitectModel(): Promise<{ providerID: ProviderID; modelID: ModelID } | null> {
   const { Config } = await import("../config/config")
+  const { Provider } = await import("../provider/provider")
   const ref = (await Config.get()).experimental?.planner_architect_model
   if (!ref) return null
-  const slash = ref.indexOf("/")
-  if (slash <= 0 || slash === ref.length - 1) {
+  try {
+    return Provider.parseModel(ref)
+  } catch {
     log.warn("ignoring malformed planner_architect_model", { value: ref })
     return null
-  }
-  return {
-    providerID: ref.slice(0, slash) as ProviderID,
-    modelID: ref.slice(slash + 1) as ModelID,
   }
 }
 

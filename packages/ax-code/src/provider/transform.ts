@@ -7,6 +7,7 @@ import { Flag } from "@/flag/flag"
 import { isRecord } from "@/util/record"
 import { buildSearchParameters, type LiveSearchConfig } from "./xai/server-tools"
 import { isQwen37MaxOrPlusModel } from "./model-capabilities"
+import { modelIdFinalSegment } from "./model-id"
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
 import { cliEffortVariants } from "./cli/effort"
 
@@ -280,7 +281,7 @@ export namespace ProviderTransform {
       const next = value[family.length]
       return next === undefined || /[^a-z0-9]/.test(next)
     }
-    const segment = model.id?.toLowerCase().split("/").filter(Boolean).at(-1)
+    const segment = model.id ? modelIdFinalSegment(model.id).toLowerCase() : undefined
     const declared = model.family?.toLowerCase()
     return matches(segment) || matches(declared)
   }
@@ -291,7 +292,7 @@ export namespace ProviderTransform {
   // temperature/topP/topK tuning the dotted variants receive.
   function isMinimaxM2(model: Provider.Model): boolean {
     if (hasFamily(model, "minimax-m2")) return true
-    const segment = model.id.toLowerCase().split("/").filter(Boolean).at(-1) ?? ""
+    const segment = modelIdFinalSegment(model.id).toLowerCase()
     return /^minimax-m2\d/.test(segment)
   }
 

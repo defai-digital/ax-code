@@ -110,24 +110,20 @@ function makeTargets(text: string) {
   return out
 }
 
-function isEnoent(error: unknown): error is { code: "ENOENT" } {
-  return isRecord(error) && error.code === "ENOENT"
-}
-
 function uniqueFiles(files: Array<string | undefined>) {
   return uniqueStrings(files.filter((item): item is string => !!item))
 }
 
 async function readOptionalJson(file: string) {
   return Filesystem.readJson<unknown>(file).catch((error) => {
-    if (isEnoent(error)) return null
+    if (Filesystem.isEnoent(error)) return null
     throw error
   })
 }
 
 async function readOptionalText(file: string) {
   return Filesystem.readText(file).catch((error) => {
-    if (isEnoent(error)) return ""
+    if (Filesystem.isEnoent(error)) return ""
     throw error
   })
 }
