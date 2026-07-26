@@ -186,7 +186,7 @@ main() {
     success "AX Code Desktop installed successfully!"
     echo ""
     echo "  Get started:"
-    echo "    ax-code-desktop              # Start server on port 3000"
+    echo "    ax-code-desktop              # Start server on port 3100"
     echo "    ax-code-desktop --help       # Show all options"
     echo ""
     echo "  Prerequisites:"
