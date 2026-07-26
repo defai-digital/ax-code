@@ -73,6 +73,17 @@ export namespace Command {
   // for some reason zod is inferring `string` for z.promise(z.string()).or(z.string()) so we have to manually override it
   export type Info = Omit<z.infer<typeof Info>, "template"> & { template: Promise<string> | string }
 
+  // Generic-named builtins yield to user-authored commands and skills:
+  // "commit"/"pr" are common names users may already have defined in
+  // .claude/commands, .ax-code/command, or as skills, and the builtin
+  // must not shadow those after an upgrade. Purpose-specific builtins
+  // (/init, /review, ...) keep normal builtin-wins precedence.
+  const OVERRIDABLE_BUILTINS = new Set<string>(["commit", "pr"])
+
+  function isOverridableBuiltin(command: Info) {
+    return command.scope === "builtin" && OVERRIDABLE_BUILTINS.has(command.name)
+  }
+
   export function hints(template: string) {
     const result: string[] = []
     const numbered = template.match(/\$\d+(?![A-Za-z0-9_])/g)
@@ -300,7 +311,7 @@ export namespace Command {
     }
 
     for (const command of await FileCommand.discover({ directory: ctx.directory, worktree: ctx.worktree })) {
-      if (commands[command.name]) continue
+      if (commands[command.name] && !isOverridableBuiltin(commands[command.name])) continue
       commands[command.name] = {
         name: command.name,
         agent: command.agent,
@@ -351,7 +362,7 @@ export namespace Command {
     }
 
     for (const skill of await Skill.all()) {
-      if (commands[skill.name]) continue
+      if (commands[skill.name] && !isOverridableBuiltin(commands[skill.name])) continue
       commands[skill.name] = {
         name: skill.name,
         agent: skill.agent,
