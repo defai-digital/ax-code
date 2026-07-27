@@ -1,13 +1,16 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
 import {
+  buildMentionDropInsertion,
   collectComposerMentionRanges,
   detectMentionQueryAtCursor,
   extractInlineFileMentions,
   getConfirmedMentionsKey,
+  insertMentionAtCursor,
   loadConfirmedMentions,
   pruneConfirmedMentions,
   resolveFileMentionDeletion,
+  resolveFileMentionPath,
   saveConfirmedMentions,
   toProjectRelativeMentionPath,
   toServerFileUrl,
@@ -297,5 +300,89 @@ describe("extractInlineFileMentions", () => {
   test("skips relative mentions when no root directory is available", () => {
     const { attachments } = extractInlineFileMentions("check @src/app.ts", { ...baseOptions, root: "" })
     expect(attachments).toEqual([])
+  })
+})
+
+describe("insertMentionAtCursor", () => {
+  test("replaces an in-progress @query before the cursor", () => {
+    expect(insertMentionAtCursor("hello @sr", 9, "src/app.ts")).toEqual({
+      newMessage: "hello @src/app.ts ",
+      nextCursor: 18,
+    })
+  })
+
+  test("inserts at the cursor when there is no @ trigger", () => {
+    expect(insertMentionAtCursor("hello", 5, "a.ts")).toEqual({
+      newMessage: "hello@a.ts ",
+      nextCursor: 11,
+    })
+  })
+
+  test("inserts mid-text, leaving the remainder untouched", () => {
+    expect(insertMentionAtCursor("hello world", 5, "a.ts")).toEqual({
+      newMessage: "hello@a.ts  world",
+      nextCursor: 11,
+    })
+  })
+
+  test("ignores @ symbols after the cursor", () => {
+    expect(insertMentionAtCursor("hello @later", 5, "a.ts")).toEqual({
+      newMessage: "hello@a.ts  @later",
+      nextCursor: 11,
+    })
+  })
+})
+
+describe("buildMentionDropInsertion", () => {
+  test("pads the mention with spaces between words", () => {
+    expect(buildMentionDropInsertion("helloworld", 5, 5, "@a.ts")).toEqual({
+      nextMessage: "hello @a.ts world",
+      nextCursor: 12,
+    })
+  })
+
+  test("does not double-pad existing whitespace", () => {
+    expect(buildMentionDropInsertion("hello ", 6, 6, "@a.ts")).toEqual({
+      nextMessage: "hello @a.ts",
+      nextCursor: 11,
+    })
+    expect(buildMentionDropInsertion(" world", 0, 0, "@a.ts")).toEqual({
+      nextMessage: "@a.ts world",
+      nextCursor: 5,
+    })
+  })
+
+  test("drops into an empty message without padding", () => {
+    expect(buildMentionDropInsertion("", 0, 0, "@a.ts")).toEqual({
+      nextMessage: "@a.ts",
+      nextCursor: 5,
+    })
+  })
+
+  test("replaces the current selection", () => {
+    expect(buildMentionDropInsertion("helloworld", 2, 4, "@a.ts")).toEqual({
+      nextMessage: "he @a.ts oworld",
+      nextCursor: 9,
+    })
+  })
+})
+
+describe("resolveFileMentionPath", () => {
+  test("prefers a trimmed relativePath when present", () => {
+    expect(resolveFileMentionPath({ name: "app.ts", path: "/repo/src/app.ts", relativePath: " src/app.ts " }, "/repo")).toBe(
+      "src/app.ts",
+    )
+  })
+
+  test("falls back to the project-relative absolute path", () => {
+    expect(resolveFileMentionPath({ name: "app.ts", path: "/repo/src/app.ts" }, "/repo")).toBe("src/app.ts")
+    expect(resolveFileMentionPath({ name: "app.ts", path: "/repo/src/app.ts", relativePath: "  " }, "/repo")).toBe(
+      "src/app.ts",
+    )
+  })
+
+  test("falls back to the file name when the relative path is empty", () => {
+    expect(resolveFileMentionPath({ name: "repo", path: "/repo/", relativePath: "/" }, "/repo")).toBe("/")
+    expect(resolveFileMentionPath({ name: "app.ts", path: "/repo/" }, "/repo")).toBe("app.ts")
   })
 })

@@ -172,6 +172,54 @@ export const toProjectRelativeMentionPath = (absolutePath: string, rootDirectory
   return normalizedAbsolutePath
 }
 
+// Insert "@mentionText " at the cursor. When the cursor sits right after an
+// in-progress @query, the query is replaced; otherwise the mention is inserted
+// at the cursor position.
+export const insertMentionAtCursor = (
+  message: string,
+  cursorPosition: number,
+  mentionText: string,
+): { newMessage: string; nextCursor: number } => {
+  const textBeforeCursor = message.substring(0, cursorPosition)
+  const lastAtSymbol = textBeforeCursor.lastIndexOf("@")
+  if (lastAtSymbol !== -1) {
+    return {
+      newMessage: message.substring(0, lastAtSymbol) + `@${mentionText} ` + message.substring(cursorPosition),
+      nextCursor: lastAtSymbol + mentionText.length + 2,
+    }
+  }
+  return {
+    newMessage: message.substring(0, cursorPosition) + `@${mentionText} ` + message.substring(cursorPosition),
+    nextCursor: cursorPosition + mentionText.length + 2,
+  }
+}
+
+// Drop-insert a "@mention" with padding spaces so it never fuses with the
+// surrounding text. Returns the next message and cursor position.
+export const buildMentionDropInsertion = (
+  currentMessage: string,
+  selectionStart: number,
+  selectionEnd: number,
+  mention: string,
+): { nextMessage: string; nextCursor: number } => {
+  const before = currentMessage.slice(0, selectionStart)
+  const after = currentMessage.slice(selectionEnd)
+  const needSpaceBefore = before.length > 0 && !/\s$/.test(before)
+  const needSpaceAfter = after.length > 0 && !/^\s/.test(after)
+  const insert = `${needSpaceBefore ? " " : ""}${mention}${needSpaceAfter ? " " : ""}`
+  return { nextMessage: `${before}${insert}${after}`, nextCursor: selectionStart + insert.length }
+}
+
+// Pick the mention path for a file picked from the mention autocomplete: the
+// project-relative path when known, otherwise the bare filename.
+export const resolveFileMentionPath = (
+  file: { name: string; path: string; relativePath?: string },
+  rootDirectory: string | null | undefined,
+): string =>
+  file.relativePath && file.relativePath.trim().length > 0
+    ? file.relativePath.trim()
+    : toProjectRelativeMentionPath(file.path, rootDirectory) || file.name
+
 const FILE_URI_PREFIX = "file://"
 
 const encodeFilePath = (filepath: string): string => {

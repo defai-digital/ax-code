@@ -98,18 +98,20 @@ import {
   type HighlightRange,
   type MentionRange,
 } from "./composerHighlight"
-import { CHAT_DRAFT_PERSIST_DEBOUNCE_MS, getDraftKey, getStoredDraft, saveStoredDraft } from "./chatInputDraftPersistence"
+import { getStoredDraft, saveStoredDraft } from "./chatInputDraftPersistence"
 import {
+  buildMentionDropInsertion,
   collectComposerMentionRanges,
   detectMentionQueryAtCursor,
   extractInlineFileMentions as extractInlineFileMentionsFromText,
+  insertMentionAtCursor,
   loadConfirmedMentions,
-  pruneConfirmedMentions,
   resolveFileMentionDeletion,
+  resolveFileMentionPath,
   saveConfirmedMentions,
-  toProjectRelativeMentionPath,
   toServerFileUrl,
 } from "./chatInputMentions"
+import { useChatInputDraftPersistence } from "./hooks/useChatInputDraftPersistence"
 import { importWithChunkRecovery } from "@/lib/chunkLoadRecovery"
 import {
   assignImageAttachmentFilenames,
@@ -836,10 +838,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
   const snippetRef = React.useRef<SnippetAutocompleteHandle>(null)
   // Ref to track current message value without triggering re-renders in effects
   const messageRef = React.useRef(message)
-  const draftPersistTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const skipNextDraftPersistRef = React.useRef(false)
-  const lastPersistedDraftRef = React.useRef<Map<string, string>>(new Map())
-  const currentSessionIdForDraftRef = React.useRef<string | null>(null)
   const pendingPastedAttachmentFilenamesRef = React.useRef<Set<string>>(new Set())
 
   // TODO: port sendMessage to session-actions (complex — creates sessions, handles attachments, etc.)
@@ -1260,92 +1258,18 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
   // Keep this on a narrow hook instead of full session message records.
   const userMessageHistory = useUserMessageHistory(currentSessionId ?? "")
 
-  // Keep messageRef in sync with message state
-  React.useEffect(() => {
-    messageRef.current = message
-  }, [message])
-
-  React.useEffect(() => {
-    currentSessionIdForDraftRef.current = currentSessionId
-  }, [currentSessionId])
-
-  const persistDraftImmediately = React.useCallback((sessionId: string | null, draft: string) => {
-    const key = getDraftKey(sessionId)
-    const lastPersisted = lastPersistedDraftRef.current.get(key)
-    if (lastPersisted === draft) {
-      return
-    }
-
-    saveStoredDraft(sessionId, draft)
-    // Only persist confirmed mentions that are actually present in the draft text
-    const activeMentions = pruneConfirmedMentions(confirmedMentionsRef.current, draft)
-    confirmedMentionsRef.current = activeMentions
-    saveConfirmedMentions(sessionId, activeMentions)
-    lastPersistedDraftRef.current.set(key, draft)
-  }, [])
-
-  const clearPendingDraftPersist = React.useCallback(() => {
-    if (!draftPersistTimerRef.current) {
-      return
-    }
-    clearTimeout(draftPersistTimerRef.current)
-    draftPersistTimerRef.current = null
-  }, [])
-
-  // Handle initial draft restoration and text selection
-  const hasHandledInitialDraftRef = React.useRef(false)
-  React.useEffect(() => {
-    if (hasHandledInitialDraftRef.current) return
-    hasHandledInitialDraftRef.current = true
-
-    const draft = initialDraftRef.current
-    if (!draft) return
-
-    if (!persistChatDraft) {
-      // Setting disabled - clear the restored draft
-      setMessage("")
-      try {
-        localStorage.removeItem(getDraftKey(initialSessionIdRef.current))
-      } catch {
-        // Ignore
-      }
-    } else {
-      // Setting enabled - select all text
-      requestAnimationFrame(() => {
-        textareaRef.current?.select()
-      })
-    }
-  }, [persistChatDraft])
-
-  // Handle session switching: save draft for old session, restore draft for new session
-  const prevSessionIdRef = React.useRef(currentSessionId)
-  React.useEffect(() => {
-    if (prevSessionIdRef.current !== currentSessionId) {
-      const oldSessionId = prevSessionIdRef.current
-      prevSessionIdRef.current = currentSessionId
-      setInputMode("normal")
-      clearPendingDraftPersist()
-      skipNextDraftPersistRef.current = true
-
-      if (persistChatDraft) {
-        // Save current draft for the session we're leaving
-        persistDraftImmediately(oldSessionId, messageRef.current)
-        // Restore draft for the session we're entering
-        const newDraft = getStoredDraft(currentSessionId)
-        setMessage(newDraft)
-        confirmedMentionsRef.current = loadConfirmedMentions(currentSessionId)
-        if (newDraft) {
-          requestAnimationFrame(() => {
-            textareaRef.current?.select()
-          })
-        }
-      } else {
-        // Persist disabled: clear input without saving
-        setMessage("")
-        confirmedMentionsRef.current = new Set()
-      }
-    }
-  }, [clearPendingDraftPersist, currentSessionId, persistChatDraft, persistDraftImmediately])
+  useChatInputDraftPersistence({
+    currentSessionId,
+    persistChatDraft,
+    message,
+    setMessage,
+    setInputMode,
+    messageRef,
+    textareaRef,
+    confirmedMentionsRef,
+    initialDraftRef,
+    initialSessionIdRef,
+  })
 
   // Focus textarea when new session draft is opened
   const prevNewSessionDraftOpenRef = React.useRef(newSessionDraftOpen)
@@ -1363,41 +1287,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     }
     prevNewSessionDraftOpenRef.current = newSessionDraftOpen
   }, [newSessionDraftOpen, isMobile])
-
-  // Persist chat input draft to localStorage per session (only if setting enabled)
-  React.useEffect(() => {
-    if (!persistChatDraft) {
-      clearPendingDraftPersist()
-      persistDraftImmediately(currentSessionId, "")
-      return
-    }
-
-    if (skipNextDraftPersistRef.current) {
-      skipNextDraftPersistRef.current = false
-      return
-    }
-
-    clearPendingDraftPersist()
-    const draftSnapshot = message
-    const sessionSnapshot = currentSessionId
-    draftPersistTimerRef.current = setTimeout(() => {
-      draftPersistTimerRef.current = null
-      persistDraftImmediately(sessionSnapshot, draftSnapshot)
-    }, CHAT_DRAFT_PERSIST_DEBOUNCE_MS)
-
-    return () => {
-      clearPendingDraftPersist()
-    }
-  }, [clearPendingDraftPersist, currentSessionId, message, persistChatDraft, persistDraftImmediately])
-
-  React.useEffect(() => {
-    return () => {
-      clearPendingDraftPersist()
-      if (persistChatDraft) {
-        persistDraftImmediately(currentSessionIdForDraftRef.current, messageRef.current)
-      }
-    }
-  }, [clearPendingDraftPersist, persistChatDraft, persistDraftImmediately])
 
   // Session activity for queue availability and controls
   const { phase: sessionPhase } = useCurrentSessionActivity()
@@ -2764,29 +2653,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const textBeforeCursor = message.substring(0, cursorPosition)
     const lastAtSymbol = textBeforeCursor.lastIndexOf("@")
 
-    const mentionPath =
-      file.relativePath && file.relativePath.trim().length > 0
-        ? file.relativePath.trim()
-        : toProjectRelativeMentionPath(file.path, chatSearchDirectory) || file.name
+    const mentionPath = resolveFileMentionPath(file, chatSearchDirectory)
 
     confirmedMentionsRef.current.add(mentionPath)
 
-    if (lastAtSymbol !== -1) {
-      const newMessage = message.substring(0, lastAtSymbol) + `@${mentionPath} ` + message.substring(cursorPosition)
+    if (lastAtSymbol !== -1 || textareaRef.current) {
+      const { newMessage, nextCursor } = insertMentionAtCursor(message, cursorPosition, mentionPath)
       setMessage(newMessage)
-      const nextCursor = lastAtSymbol + mentionPath.length + 2
-      requestAnimationFrame(() => {
-        if (textareaRef.current) {
-          textareaRef.current.selectionStart = nextCursor
-          textareaRef.current.selectionEnd = nextCursor
-        }
-        adjustTextareaHeight()
-        updateAutocompleteState(newMessage, nextCursor)
-      })
-    } else if (textareaRef.current) {
-      const newMessage = message.substring(0, cursorPosition) + `@${mentionPath} ` + message.substring(cursorPosition)
-      setMessage(newMessage)
-      const nextCursor = cursorPosition + mentionPath.length + 2
       requestAnimationFrame(() => {
         if (textareaRef.current) {
           textareaRef.current.selectionStart = nextCursor
@@ -2809,24 +2682,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const textBeforeCursor = message.substring(0, cursorPosition)
     const lastAtSymbol = textBeforeCursor.lastIndexOf("@")
 
-    if (lastAtSymbol !== -1) {
-      const newMessage = message.substring(0, lastAtSymbol) + `@${agentName} ` + message.substring(cursorPosition)
+    if (lastAtSymbol !== -1 || textareaRef.current) {
+      const { newMessage, nextCursor } = insertMentionAtCursor(message, cursorPosition, agentName)
       setMessage(newMessage)
-
-      const nextCursor = lastAtSymbol + agentName.length + 2
-      requestAnimationFrame(() => {
-        if (textareaRef.current) {
-          textareaRef.current.selectionStart = nextCursor
-          textareaRef.current.selectionEnd = nextCursor
-        }
-        adjustTextareaHeight()
-        updateAutocompleteState(newMessage, nextCursor)
-      })
-    } else if (textareaRef.current) {
-      const newMessage = message.substring(0, cursorPosition) + `@${agentName} ` + message.substring(cursorPosition)
-      setMessage(newMessage)
-
-      const nextCursor = cursorPosition + agentName.length + 2
       requestAnimationFrame(() => {
         if (textareaRef.current) {
           textareaRef.current.selectionStart = nextCursor
@@ -3055,18 +2913,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
       if (textarea) {
         const pos = textarea.selectionStart ?? cursorPosRef.current
         const end = textarea.selectionEnd ?? pos
-        const before = currentMessage.slice(0, pos)
-        const after = currentMessage.slice(end)
-        const needSpaceBefore = before.length > 0 && !/\s$/.test(before)
-        const needSpaceAfter = after.length > 0 && !/^\s/.test(after)
-        const insert = `${needSpaceBefore ? " " : ""}${mention}${needSpaceAfter ? " " : ""}`
-        const nextMessage = `${before}${insert}${after}`
+        const { nextMessage, nextCursor } = buildMentionDropInsertion(currentMessage, pos, end, mention)
         setMessage(nextMessage)
         requestAnimationFrame(() => {
-          const cursorPos = pos + insert.length
-          textarea.selectionStart = cursorPos
-          textarea.selectionEnd = cursorPos
-          cursorPosRef.current = cursorPos
+          textarea.selectionStart = nextCursor
+          textarea.selectionEnd = nextCursor
+          cursorPosRef.current = nextCursor
           textarea.focus()
         })
       } else {
