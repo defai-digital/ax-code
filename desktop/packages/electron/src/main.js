@@ -474,6 +474,11 @@ async function createWindow() {
 
   mainWindow.webContents.on("did-finish-load", () => {
     recordStartupEvent("renderer.did-finish-load")
+    // Every successful load, including an automatic post-crash reload,
+    // starts a fresh stability window. Scheduling this only after the initial
+    // load leaves the crash counter permanently elevated after the first
+    // early renderer crash.
+    scheduleRendererStabilityReset()
   })
 
   mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedUrl) => {
@@ -560,7 +565,6 @@ async function createWindow() {
     devRenderer: Boolean(getDevRendererUrl()),
   })
   await mainWindow.loadURL(rendererUrl)
-  scheduleRendererStabilityReset()
 }
 
 // ── Auto-update ───────────────────────────────────────────────────────────

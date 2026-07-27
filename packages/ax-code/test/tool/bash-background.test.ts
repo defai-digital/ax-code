@@ -109,7 +109,10 @@ describe("bash run_in_background", () => {
       fn: async () => {
         const bash = await BashTool.init()
         const output = await BashOutputTool.init()
-        const result = await bash.execute({ command: "echo first; sleep 1.5; echo second", run_in_background: true }, ctx)
+        const result = await bash.execute(
+          { command: "echo first; sleep 1.5; echo second", run_in_background: true },
+          ctx,
+        )
         const shellID = (result.metadata as any).background.shellID as string
 
         // Poll until the first line has been produced and consumed.
@@ -196,6 +199,29 @@ describe("bash run_in_background", () => {
     ;(proc.stdout as unknown as EventEmitter).emit("data", bytes.subarray(2))
     const read = BackgroundShell.read(info.id, "ses_bg_utf8")
     expect(read!.output).toBe("héllo")
+  })
+
+  test("observer backlog preserves stdout and stderr boundaries", () => {
+    const proc = fakeProc()
+    const info = BackgroundShell.register({
+      sessionID: "ses_bg_observer",
+      command: "noop",
+      description: "fake",
+      proc,
+    })
+    ;(proc.stdout as unknown as EventEmitter).emit("data", Buffer.from("stdout-part"))
+    ;(proc.stderr as unknown as EventEmitter).emit("data", Buffer.from("stderr-part"))
+
+    const chunks: Array<{ stream: BackgroundShell.OutputStream; text: string }> = []
+    const unsubscribe = BackgroundShell.observe(info.id, "ses_bg_observer", {
+      onOutput: (stream, text) => chunks.push({ stream, text }),
+    })
+
+    expect(chunks).toEqual([
+      { stream: "stdout", text: "stdout-part" },
+      { stream: "stderr", text: "stderr-part" },
+    ])
+    unsubscribe?.()
   })
 
   test("evicts oldest unread finished shells beyond the retention cap", () => {

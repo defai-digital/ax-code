@@ -1067,7 +1067,7 @@ export const Info = z
           .object({
             apiKey: z.string().optional().describe("API key for the image generation provider."),
             baseURL: z.string().optional().describe("Custom base URL for the provider API."),
-            model: z.string().optional().describe("Model to use (e.g. dall-e-3, stable-diffusion-xl)."),
+            model: z.string().optional().describe("Model to use (e.g. gpt-image-2, stable-diffusion-xl)."),
           })
           .catchall(z.any())
           .optional(),

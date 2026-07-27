@@ -1,4 +1,5 @@
 import { createRequire } from "node:module"
+import { readFile } from "node:fs/promises"
 import { describe, expect, test } from "vitest"
 
 const require = createRequire(import.meta.url)
@@ -46,5 +47,19 @@ describe("createRendererCrashPolicy", () => {
     expect(policy.beginReload()).toBe(true)
     expect(policy.beginReload()).toBe(true)
     expect(policy.shouldReload()).toBe(false)
+  })
+
+  test("main process starts a new stability window after every successful renderer load", async () => {
+    const mainSource = await readFile(new URL("./main.js", import.meta.url), "utf8")
+    const didFinishLoadHandler = mainSource.match(
+      /webContents\.on\("did-finish-load",\s*\(\)\s*=>\s*\{(?<body>[\s\S]*?)^\s*\}\)/m,
+    )?.groups?.body
+
+    expect(didFinishLoadHandler).toBeDefined()
+    expect(didFinishLoadHandler).toContain("scheduleRendererStabilityReset()")
+
+    const initialLoadTail = mainSource.match(/await mainWindow\.loadURL\(rendererUrl\)(?<tail>[\s\S]{0,100})/)?.groups
+      ?.tail
+    expect(initialLoadTail).not.toContain("scheduleRendererStabilityReset()")
   })
 })

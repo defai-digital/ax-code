@@ -1,169 +1,24 @@
 import z from "zod"
-import { spawn } from "child_process"
-import { StringDecoder } from "string_decoder"
 import { Tool } from "./tool"
 import DESCRIPTION from "./monitor.txt"
 import { Log } from "../util/log"
-import { Instance } from "../project/instance"
 import { Bus } from "@/bus"
 import { NotificationEvent } from "@/notification/events"
-import { Shell } from "@/shell/shell"
 import { ToolBoolean, ToolNumber } from "./schema"
+import { BashTool } from "./bash"
+import { BackgroundShell } from "./bash-background"
 
 const log = Log.create({ service: "tool.monitor" })
 
-const MAX_MONITORS_PER_SESSION = 8
 const MAX_LINES_PER_SECOND = 100
 const DEFAULT_TIMEOUT_MS = 300_000
 
-export namespace MonitorRegistry {
-  export type Status = "running" | "completed" | "failed" | "killed"
-
-  export interface Info {
-    id: string
-    sessionID: string
-    command: string
-    description: string
-    status: Status
-    exitCode: number | null
-    startedAt: number
-    endedAt: number | null
-    linesEmitted: number
-  }
-
-  interface Entry extends Info {
-    pid: number | null
-    killRequested: boolean
-    timer?: ReturnType<typeof setTimeout>
-    lineCount: number
-    windowStart: number
-  }
-
-  const monitors = new Map<string, Entry>()
-  let counter = 0
-
-  export function assertCapacity(sessionID: string) {
-    const active = [...monitors.values()].filter((m) => m.sessionID === sessionID && m.status === "running")
-    if (active.length >= MAX_MONITORS_PER_SESSION) {
-      throw new Error(
-        `Too many running monitors (${active.length}). ` +
-          `Use kill_shell to stop ones you no longer need, or wait for them to finish.`,
-      )
-    }
-  }
-
-  export function register(input: {
-    sessionID: string
-    command: string
-    description: string
-    pid: number | null
-    timer?: ReturnType<typeof setTimeout>
-  }): Info {
-    assertCapacity(input.sessionID)
-    counter += 1
-    const id = `monitor_${counter}`
-    const entry: Entry = {
-      id,
-      sessionID: input.sessionID,
-      command: input.command,
-      description: input.description,
-      status: "running",
-      exitCode: null,
-      startedAt: Date.now(),
-      endedAt: null,
-      linesEmitted: 0,
-      pid: input.pid,
-      killRequested: false,
-      timer: input.timer,
-      lineCount: 0,
-      windowStart: Date.now(),
-    }
-    monitors.set(id, entry)
-    log.info("monitor started", { id, pid: input.pid, sessionID: input.sessionID })
-    return toInfo(entry)
-  }
-
-  export function shouldEmit(entry: Entry): boolean {
-    const now = Date.now()
-    if (now - entry.windowStart >= 1000) {
-      entry.windowStart = now
-      entry.lineCount = 0
-    }
-    entry.lineCount++
-    return entry.lineCount <= MAX_LINES_PER_SECOND
-  }
-
-  export function emitLine(entry: Entry, line: string) {
-    if (!shouldEmit(entry)) return
-    entry.linesEmitted++
-    try {
-      Bus.publishDetached(NotificationEvent.MonitorLine, {
-        monitorID: entry.id,
-        line,
-        description: entry.description,
-      })
-    } catch (error) {
-      log.warn("monitor line publish failed", { id: entry.id, error: error instanceof Error ? error.message : error })
-    }
-  }
-
-  export function finish(id: string, status: Status, exitCode: number | null) {
-    const entry = monitors.get(id)
-    if (!entry || entry.status !== "running") return
-    entry.status = status
-    entry.exitCode = exitCode
-    entry.endedAt = Date.now()
-    if (entry.timer) clearTimeout(entry.timer)
-    try {
-      Bus.publishDetached(NotificationEvent.MonitorExit, {
-        monitorID: entry.id,
-        description: entry.description,
-        exitCode,
-      })
-    } catch (error) {
-      log.warn("monitor exit publish failed", { id, error: error instanceof Error ? error.message : error })
-    }
-    log.info("monitor finished", { id, status, exitCode })
-  }
-
-  export function get(id: string): Entry | undefined {
-    return monitors.get(id)
-  }
-
-  export function kill(id: string): boolean {
-    const entry = monitors.get(id)
-    if (!entry || entry.status !== "running" || !entry.pid) return false
-    entry.killRequested = true
-    try {
-      process.kill(-entry.pid, "SIGTERM")
-    } catch {
-      try {
-        process.kill(entry.pid, "SIGTERM")
-      } catch {}
-    }
-    return true
-  }
-
-  export function killForSession(sessionID: string) {
-    for (const entry of monitors.values()) {
-      if (entry.sessionID === sessionID && entry.status === "running") {
-        kill(entry.id)
-      }
-    }
-  }
-
-  function toInfo(entry: Entry): Info {
-    return {
-      id: entry.id,
-      sessionID: entry.sessionID,
-      command: entry.command,
-      description: entry.description,
-      status: entry.status,
-      exitCode: entry.exitCode,
-      startedAt: entry.startedAt,
-      endedAt: entry.endedAt,
-      linesEmitted: entry.linesEmitted,
-    }
+function compileFilter(pattern: string | undefined): RegExp | undefined {
+  if (pattern === undefined) return undefined
+  try {
+    return new RegExp(pattern)
+  } catch {
+    throw new Error(`Invalid filter regex: ${pattern}`)
   }
 }
 
@@ -187,103 +42,145 @@ export const MonitorTool = Tool.define("monitor", {
     ),
   }),
   async execute(params, ctx) {
-    await ctx.ask({
-      permission: "monitor",
-      patterns: [params.command],
-      always: [],
-      metadata: { description: params.description },
-    })
-
-    MonitorRegistry.assertCapacity(ctx.sessionID)
-
-    const cwd = Instance.directory
-    const shell = process.env["SHELL"] ?? "/bin/sh"
-    const proc = spawn(params.command, {
-      shell,
-      cwd,
-      env: { ...process.env },
-      stdio: ["ignore", "pipe", "pipe"],
-      detached: true,
-      windowsHide: process.platform === "win32",
-    })
-
-    let filterRe: RegExp | undefined
-    if (params.filter) {
-      try {
-        filterRe = new RegExp(params.filter)
-      } catch {
-        throw new Error(`Invalid filter regex: ${params.filter}`)
-      }
-    }
+    // Validate before BashTool can spawn. In particular, an invalid filter
+    // must never leave behind an untracked process.
+    const filterRe = compileFilter(params.filter)
 
     const persistent = params.persistent === true
     const timeoutMs = persistent ? undefined : (params.timeout_ms ?? DEFAULT_TIMEOUT_MS)
 
+    // Reuse the hardened bash launcher instead of maintaining a second shell
+    // execution path. This gives monitors the same path/network isolation,
+    // environment sanitization, destructive-command confirmation, OS sandbox,
+    // kill_shell support, and session cleanup as background bash commands.
+    const bash = await BashTool.init()
+    const bashResult = await bash.execute(
+      {
+        command: params.command,
+        description: params.description,
+        run_in_background: true,
+      },
+      {
+        ...ctx,
+        ask: (request) =>
+          ctx.ask(
+            request.permission === "bash"
+              ? {
+                  ...request,
+                  permission: "monitor",
+                  metadata: { ...request.metadata, description: params.description },
+                }
+              : request,
+          ),
+      },
+    )
+    const background = (bashResult.metadata as { background?: { shellID?: string; pid?: number | null } }).background
+    const shellID = background?.shellID
+    if (!shellID) {
+      throw new Error("Monitor command did not start a background shell.")
+    }
+
+    let linesEmitted = 0
+    let lineCount = 0
+    let windowStart = Date.now()
+    const partial: Record<BackgroundShell.OutputStream, string> = {
+      stdout: "",
+      stderr: "",
+    }
+
+    const emitLine = (line: string) => {
+      const trimmed = line.trimEnd()
+      if (!trimmed || (filterRe && !filterRe.test(trimmed))) return
+      const now = Date.now()
+      if (now - windowStart >= 1000) {
+        windowStart = now
+        lineCount = 0
+      }
+      lineCount += 1
+      if (lineCount > MAX_LINES_PER_SECOND) return
+      linesEmitted += 1
+      try {
+        Bus.publishDetached(NotificationEvent.MonitorLine, {
+          monitorID: shellID,
+          line: trimmed,
+          description: params.description,
+        })
+      } catch (error) {
+        log.warn("monitor line publish failed", {
+          id: shellID,
+          error: error instanceof Error ? error.message : error,
+        })
+      }
+    }
+
+    const appendOutput = (stream: BackgroundShell.OutputStream, text: string) => {
+      partial[stream] += text
+      const lines = partial[stream].split("\n")
+      partial[stream] = lines.pop() ?? ""
+      for (const line of lines) emitLine(line)
+    }
+
     let timer: ReturnType<typeof setTimeout> | undefined
-    if (timeoutMs) {
+    let finished = false
+    const unsubscribe = BackgroundShell.observe(shellID, ctx.sessionID, {
+      onOutput: appendOutput,
+      onExit: (info) => {
+        finished = true
+        if (timer) clearTimeout(timer)
+        for (const stream of ["stdout", "stderr"] as const) {
+          if (partial[stream].trimEnd()) emitLine(partial[stream])
+          partial[stream] = ""
+        }
+        try {
+          Bus.publishDetached(NotificationEvent.MonitorExit, {
+            monitorID: shellID,
+            description: params.description,
+            exitCode: info.exitCode,
+          })
+        } catch (error) {
+          log.warn("monitor exit publish failed", {
+            id: shellID,
+            error: error instanceof Error ? error.message : error,
+          })
+        }
+        log.info("monitor finished", {
+          id: shellID,
+          status: info.status,
+          exitCode: info.exitCode,
+          linesEmitted,
+        })
+      },
+    })
+    if (!unsubscribe) {
+      await BackgroundShell.kill(shellID, ctx.sessionID).catch(() => undefined)
+      throw new Error(`Monitor shell "${shellID}" could not be observed.`)
+    }
+
+    if (!finished && timeoutMs) {
       timer = setTimeout(() => {
-        MonitorRegistry.kill(info.id)
+        void BackgroundShell.kill(shellID, ctx.sessionID).catch((error) => {
+          log.warn("monitor timeout cleanup failed", {
+            id: shellID,
+            error: error instanceof Error ? error.message : error,
+          })
+        })
       }, timeoutMs)
       timer.unref?.()
     }
 
-    const info = MonitorRegistry.register({
-      sessionID: ctx.sessionID,
-      command: params.command,
-      description: params.description,
-      pid: proc.pid ?? null,
-      timer,
-    })
-
-    const decoder = new StringDecoder("utf8")
-    let partial = ""
-
-    const processLine = (line: string) => {
-      const trimmed = line.trimEnd()
-      if (!trimmed) return
-      if (filterRe && !filterRe.test(trimmed)) return
-      const entry = MonitorRegistry.get(info.id)
-      if (entry) MonitorRegistry.emitLine(entry, trimmed)
-    }
-
-    proc.stdout?.on("data", (chunk: Buffer) => {
-      partial += decoder.write(chunk)
-      const lines = partial.split("\n")
-      partial = lines.pop() ?? ""
-      for (const line of lines) processLine(line)
-    })
-
-    proc.stderr?.on("data", (chunk: Buffer) => {
-      partial += decoder.write(chunk)
-      const lines = partial.split("\n")
-      partial = lines.pop() ?? ""
-      for (const line of lines) processLine(line)
-    })
-
-    proc.once("close", () => {
-      if (partial.trimEnd()) processLine(partial)
-      partial = ""
-      const status = proc.exitCode === 0 ? "completed" : "failed"
-      MonitorRegistry.finish(info.id, status, proc.exitCode)
-    })
-
-    proc.once("error", (error) => {
-      log.warn("monitor spawn error", { id: info.id, error: error.message })
-      MonitorRegistry.finish(info.id, "failed", null)
-    })
-
     const output =
-      `Monitor started with ID: ${info.id}\n` +
+      `Monitor started with shell ID: ${shellID}\n` +
       `Description: ${params.description}\n` +
       (filterRe ? `Filter: ${params.filter}\n` : "") +
       (persistent ? `Mode: persistent (runs until session ends or kill_shell)\n` : `Timeout: ${timeoutMs}ms\n`) +
-      `Lines will be delivered as notifications. Use kill_shell with "${info.id}" to stop.`
+      `Lines will be delivered as notifications. Use kill_shell with "${shellID}" to stop.`
 
     return {
       title: params.description,
       metadata: {
-        monitorID: info.id,
-        pid: proc.pid ?? null,
+        monitorID: shellID,
+        shellID,
+        pid: background?.pid ?? null,
         persistent,
         timeoutMs: timeoutMs ?? null,
       },

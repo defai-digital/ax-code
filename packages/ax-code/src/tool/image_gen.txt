@@ -3,10 +3,10 @@ Generate a high-fidelity image based on a text prompt. The image is saved to dis
 Parameters:
 - prompt: Detailed description of the image to generate. Be specific about style, composition, colors, and subject matter for best results.
 - name: The name of the image (used as the filename). Should be descriptive and use kebab-case (e.g. "hero-banner", "login-mockup").
-- size: The size of the generated image. Available options: 1024x1024 (1:1), 1792x1024 (16:9), 1024x1792 (9:16). Default is 1024x1024.
+- size: The size of the generated image. Available options: 1024x1024, 1536x1024, 1024x1536, 1792x1024, and 1024x1792. Default is 1024x1024.
 
 Usage notes:
-- The image is saved to .ax-code/images/{name}.png in the project directory.
+- The image is saved to generated-images/{name}.png in the project directory. Existing files are never overwritten; a numeric suffix is added when needed.
 - After generating, move or copy the image to the appropriate asset directory (e.g. public/images/, src/assets/).
 - Requires an image generation provider to be configured (OPENAI_API_KEY, STABILITY_API_KEY, or image_generation config).
 - Use detailed prompts: describe subject, style, lighting, composition, and mood.

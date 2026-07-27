@@ -17,12 +17,19 @@ const log = Log.create({ service: "bash-background" })
  */
 export namespace BackgroundShell {
   export type Status = "running" | "completed" | "failed" | "killed"
+  export type OutputStream = "stdout" | "stderr"
+
+  export interface Observer {
+    onOutput?(stream: OutputStream, text: string): void
+    onExit?(info: Info): void
+  }
 
   // Per-shell unread output cap (in string length units). Once the unread
   // portion exceeds this, the oldest unread output is dropped (with a
   // marker) — background commands can stream logs indefinitely and must
   // not grow RSS unbounded.
   const MAX_UNREAD_BYTES = 2 * 1024 * 1024
+  const MAX_OBSERVER_BACKLOG_BYTES = 256 * 1024
   const MAX_SHELLS_PER_SESSION = 16
   // Finished shells whose output was never read are retained so the model
   // can still fetch their result, but only this many per session — beyond
@@ -49,6 +56,10 @@ export namespace BackgroundShell {
     exited: boolean
     killRequested: boolean
     onExited?: () => void
+    observers: Set<Observer>
+    observerBacklog: Array<{ stream: OutputStream; text: string }>
+    observerBacklogBytes: number
+    observerBacklogReplayed: boolean
   }
 
   const shells = new Map<string, Entry>()
@@ -102,10 +113,14 @@ export namespace BackgroundShell {
       exited: false,
       killRequested: false,
       onExited: input.onExited,
+      observers: new Set(),
+      observerBacklog: [],
+      observerBacklogBytes: 0,
+      observerBacklogReplayed: false,
     }
     shells.set(id, entry)
 
-    const appendText = (text: string) => {
+    const appendText = (stream: OutputStream, text: string) => {
       if (!text) return
       entry.buffer += text
       // Discard output the model has already consumed, then clamp the
@@ -119,14 +134,36 @@ export namespace BackgroundShell {
         entry.readOffset = 0
         entry.dropped = true
       }
+      if (
+        entry.observers.size === 0 &&
+        !entry.observerBacklogReplayed &&
+        entry.observerBacklogBytes < MAX_OBSERVER_BACKLOG_BYTES
+      ) {
+        const remaining = MAX_OBSERVER_BACKLOG_BYTES - entry.observerBacklogBytes
+        const replayText = text.slice(0, remaining)
+        if (replayText) {
+          entry.observerBacklog.push({ stream, text: replayText })
+          entry.observerBacklogBytes += replayText.length
+        }
+      }
+      for (const observer of entry.observers) {
+        try {
+          observer.onOutput?.(stream, text)
+        } catch (error) {
+          log.warn("background shell observer output failed", {
+            id,
+            error: error instanceof Error ? error.message : error,
+          })
+        }
+      }
     }
     // Per-stream decoders: a 'data' chunk can split a multi-byte UTF-8
     // character, and Buffer#toString would emit replacement characters at
     // the boundary. StringDecoder buffers the partial sequence instead.
     const stdoutDecoder = new StringDecoder("utf8")
     const stderrDecoder = new StringDecoder("utf8")
-    input.proc.stdout?.on("data", (chunk: Buffer) => appendText(stdoutDecoder.write(chunk)))
-    input.proc.stderr?.on("data", (chunk: Buffer) => appendText(stderrDecoder.write(chunk)))
+    input.proc.stdout?.on("data", (chunk: Buffer) => appendText("stdout", stdoutDecoder.write(chunk)))
+    input.proc.stderr?.on("data", (chunk: Buffer) => appendText("stderr", stderrDecoder.write(chunk)))
 
     input.proc.once("exit", () => {
       entry.exited = true
@@ -140,8 +177,8 @@ export namespace BackgroundShell {
     })
 
     input.proc.once("close", () => {
-      appendText(stdoutDecoder.end())
-      appendText(stderrDecoder.end())
+      appendText("stdout", stdoutDecoder.end())
+      appendText("stderr", stderrDecoder.end())
       const status = entry.killRequested ? "killed" : input.proc.exitCode === 0 ? "completed" : "failed"
       finish(entry, status, input.proc.exitCode)
       // Best-effort UX: the close event can fire outside the Instance async
@@ -160,7 +197,7 @@ export namespace BackgroundShell {
     })
 
     input.proc.once("error", (error) => {
-      entry.buffer += `\n[background shell error] ${error instanceof Error ? error.message : String(error)}`
+      appendText("stderr", `\n[background shell error] ${error instanceof Error ? error.message : String(error)}`)
       finish(entry, "failed", input.proc.exitCode)
     })
 
@@ -175,6 +212,18 @@ export namespace BackgroundShell {
     entry.exitCode = exitCode
     entry.endedAt = Date.now()
     entry.onExited?.()
+    const info = toInfo(entry)
+    for (const observer of entry.observers) {
+      try {
+        observer.onExit?.(info)
+      } catch (error) {
+        log.warn("background shell observer exit failed", {
+          id: entry.id,
+          error: error instanceof Error ? error.message : error,
+        })
+      }
+    }
+    entry.observers.clear()
     log.info("background shell finished", { id: entry.id, status, exitCode })
   }
 
@@ -200,6 +249,48 @@ export namespace BackgroundShell {
 
   export function list(sessionID?: string): Info[] {
     return [...shells.values()].filter((s) => sessionID === undefined || s.sessionID === sessionID).map(toInfo)
+  }
+
+  /**
+   * Observe decoded output without consuming the incremental bash_output
+   * cursor. A short backlog is replayed so a fast command cannot finish
+   * between BashTool returning and its caller attaching the observer.
+   */
+  export function observe(id: string, sessionID: string, observer: Observer): (() => void) | undefined {
+    const entry = shells.get(id)
+    if (!entry || entry.sessionID !== sessionID) return undefined
+
+    entry.observers.add(observer)
+    if (!entry.observerBacklogReplayed) {
+      entry.observerBacklogReplayed = true
+      for (const chunk of entry.observerBacklog) {
+        try {
+          observer.onOutput?.(chunk.stream, chunk.text)
+        } catch (error) {
+          log.warn("background shell observer backlog failed", {
+            id,
+            error: error instanceof Error ? error.message : error,
+          })
+        }
+      }
+      entry.observerBacklog = []
+      entry.observerBacklogBytes = 0
+    }
+    if (entry.status !== "running") {
+      try {
+        observer.onExit?.(toInfo(entry))
+      } catch (error) {
+        log.warn("background shell observer initial exit failed", {
+          id,
+          error: error instanceof Error ? error.message : error,
+        })
+      }
+      entry.observers.delete(observer)
+    }
+
+    return () => {
+      entry.observers.delete(observer)
+    }
   }
 
   /** Return output produced since the previous read() for this shell. */

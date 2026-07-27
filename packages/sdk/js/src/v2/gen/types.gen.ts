@@ -2627,7 +2627,7 @@ export type Config = {
        */
       baseURL?: string
       /**
-       * Model to use (e.g. dall-e-3, stable-diffusion-xl).
+       * Model to use (e.g. gpt-image-2, stable-diffusion-xl).
        */
       model?: string
       [key: string]: unknown

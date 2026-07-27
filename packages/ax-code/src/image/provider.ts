@@ -1,4 +1,5 @@
 import { Log } from "@/util/log"
+import { Ssrf } from "@/util/ssrf"
 
 const log = Log.create({ service: "image.provider" })
 
@@ -6,6 +7,7 @@ export interface ImageGenerateInput {
   prompt: string
   size: string
   name: string
+  signal?: AbortSignal
 }
 
 export interface ImageGenerateOutput {
@@ -51,32 +53,40 @@ export class OpenAIImageProvider implements ImageProvider {
       )
     this.apiKey = key
     this.baseURL = config.options?.baseURL ?? "https://api.openai.com/v1"
-    this.model = config.options?.model ?? "dall-e-3"
+    this.model = config.options?.model ?? "gpt-image-2"
   }
 
   async generate(input: ImageGenerateInput): Promise<ImageGenerateOutput> {
+    const isDallE = this.model === "dall-e-2" || this.model === "dall-e-3"
+    const body: Record<string, unknown> = {
+      model: this.model,
+      prompt: input.prompt,
+      n: 1,
+      size: input.size,
+      ...(isDallE ? { response_format: "b64_json" } : { output_format: "png" }),
+    }
     const response = await fetch(`${this.baseURL}/images/generations`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.apiKey}`,
       },
-      body: JSON.stringify({
-        model: this.model,
-        prompt: input.prompt,
-        n: 1,
-        size: input.size,
-        response_format: "b64_json",
-      }),
+      body: JSON.stringify(body),
+      signal: input.signal,
     })
     if (!response.ok) {
       const body = await response.text().catch(() => "")
       throw new Error(`OpenAI image generation failed (${response.status}): ${body}`)
     }
-    const json = (await response.json()) as { data?: Array<{ b64_json?: string }> }
+    const json = (await response.json()) as {
+      data?: Array<{ b64_json?: string }>
+      output_format?: "png" | "jpeg" | "webp"
+    }
     const b64 = json.data?.[0]?.b64_json
     if (!b64) throw new Error("OpenAI image generation returned no image data.")
-    return { data: Buffer.from(b64, "base64"), mimeType: "image/png" }
+    const mimeType =
+      json.output_format === "jpeg" ? "image/jpeg" : json.output_format === "webp" ? "image/webp" : "image/png"
+    return { data: Buffer.from(b64, "base64"), mimeType }
   }
 }
 
@@ -109,6 +119,7 @@ export class StabilityImageProvider implements ImageProvider {
         Accept: "image/*",
       },
       body: form,
+      signal: input.signal,
     })
     if (!response.ok) {
       const body = await response.text().catch(() => "")
@@ -146,6 +157,7 @@ export class CustomImageProvider implements ImageProvider {
         size: input.size,
         response_format: "b64_json",
       }),
+      signal: input.signal,
     })
     if (!response.ok) {
       const body = await response.text().catch(() => "")
@@ -156,9 +168,16 @@ export class CustomImageProvider implements ImageProvider {
     if (b64) return { data: Buffer.from(b64, "base64"), mimeType: "image/png" }
     const url = json.data?.[0]?.url
     if (url) {
-      const imgResponse = await fetch(url)
+      // Treat provider-returned URLs as untrusted. A compromised custom
+      // endpoint must not turn image download into an SSRF primitive.
+      const imgResponse = await Ssrf.pinnedFetch(url, {
+        signal: input.signal,
+        label: "custom image download",
+      })
       if (!imgResponse.ok) throw new Error(`Failed to download generated image from URL (${imgResponse.status}).`)
-      return { data: Buffer.from(await imgResponse.arrayBuffer()), mimeType: "image/png" }
+      const contentType = imgResponse.headers.get("content-type")?.split(";", 1)[0]?.trim()
+      const mimeType = contentType === "image/jpeg" || contentType === "image/webp" ? contentType : "image/png"
+      return { data: Buffer.from(await imgResponse.arrayBuffer()), mimeType }
     }
     throw new Error("Custom image generation returned no image data.")
   }
