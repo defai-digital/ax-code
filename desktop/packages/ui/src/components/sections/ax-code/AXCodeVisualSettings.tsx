@@ -367,10 +367,10 @@ export const AXCodeVisualSettings: React.FC<AXCodeVisualSettingsProps> = ({ visi
         if (useUIStore.getState().wideChatLayoutEnabled === enabled) {
           setWideChatLayoutEnabled(previous)
         }
-        toast.error("Failed to save settings", { id: "settings-save-failed" })
+        toast.error(t("settings.toast.saveFailed"), { id: "settings-save-failed" })
       })
     },
-    [setWideChatLayoutEnabled, wideChatLayoutEnabled],
+    [setWideChatLayoutEnabled, wideChatLayoutEnabled, t],
   )
 
   const handleShowSplitAssistantMessageActionsChange = React.useCallback(
@@ -454,10 +454,10 @@ export const AXCodeVisualSettings: React.FC<AXCodeVisualSettingsProps> = ({ visi
         if (useUIStore.getState().showTurnChangedFiles === enabled) {
           setShowTurnChangedFiles(previous)
         }
-        toast.error("Failed to save settings", { id: "settings-save-failed" })
+        toast.error(t("settings.toast.saveFailed"), { id: "settings-save-failed" })
       })
     },
-    [setShowTurnChangedFiles, showTurnChangedFiles],
+    [setShowTurnChangedFiles, showTurnChangedFiles, t],
   )
 
   const handleTimeFormatPreferenceChange = React.useCallback(

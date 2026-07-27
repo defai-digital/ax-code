@@ -1238,10 +1238,12 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     try {
       await forkFromMessageAction(sessionId, messageId)
 
-      toast.success(`Forked from ${existingSession.title}`)
+      toast.success(
+        formatMessage(useI18nStore.getState().dictionary, "chat.fork.toast.success", { title: existingSession.title }),
+      )
     } catch (error) {
       console.error("Failed to fork session:", error)
-      toast.error("Failed to fork session")
+      toast.error(formatMessage(useI18nStore.getState().dictionary, "chat.fork.toast.failed"))
     }
   },
 

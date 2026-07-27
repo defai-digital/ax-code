@@ -22,6 +22,7 @@ import {
 import { downloadToastTracker } from "@/lib/ax-code/axEngineDownloadToasts"
 import { getCurrentDirectory } from "@/lib/ax-code/providerApi"
 import { formatLocalModelBytes } from "./localModelFormat"
+import { useI18n } from "@/lib/i18n"
 
 const formatElapsed = (ms: number) => {
   if (!Number.isFinite(ms) || ms <= 0) return "0:00"
@@ -58,6 +59,7 @@ export const LocalModelsPage: React.FC = () => {
   const [error, setError] = React.useState<string | null>(null)
   const [busyKey, setBusyKey] = React.useState<string | null>(null)
   const { requestConfirm, confirmDialog } = useConfirmDialog()
+  const { t } = useI18n()
   // Ticks once a second while a download is active so the in-row elapsed timer
   // advances smoothly between the 2s catalog polls.
   const [now, setNow] = React.useState(() => Date.now())
@@ -124,7 +126,7 @@ export const LocalModelsPage: React.FC = () => {
       downloadToastTracker.announce(job, model.name, directory)
       await load()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to start download")
+      toast.error(err instanceof Error ? err.message : t("localModels.toast.downloadStartFailed"))
     } finally {
       setBusyKey(null)
     }
@@ -136,11 +138,11 @@ export const LocalModelsPage: React.FC = () => {
       const result = await cancelAxEngineModelDownload(job.id, directory)
       // The job can finish between the last poll and the click — the server
       // then reports the already-terminal state instead of cancelling.
-      if (result?.status === "complete") toast.success("Download had already finished")
-      else toast.success("Download cancelled")
+      if (result?.status === "complete") toast.success(t("localModels.toast.downloadAlreadyFinished"))
+      else toast.success(t("localModels.toast.downloadCancelled"))
       await load()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Model action failed")
+      toast.error(err instanceof Error ? err.message : t("localModels.toast.actionFailed"))
     } finally {
       setBusyKey(null)
     }
@@ -153,7 +155,7 @@ export const LocalModelsPage: React.FC = () => {
       toast.success(success)
       await load()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Model action failed")
+      toast.error(err instanceof Error ? err.message : t("localModels.toast.actionFailed"))
     } finally {
       setBusyKey(null)
     }
@@ -181,18 +183,22 @@ export const LocalModelsPage: React.FC = () => {
   )
   const installBusy = busyKey === "ax-engine-install"
   const handleInstallEngine = () =>
-    void runAction("ax-engine-install", () => installAxEngine(directory), "AX Engine installed")
+    void runAction("ax-engine-install", () => installAxEngine(directory), t("localModels.toast.engineInstalled"))
   const canStartServer = Boolean(startCandidate) && !hasActiveJob && !loading
   const handleServerToggle = async () => {
     if (data?.server.running) {
-      await runAction("ax-engine-server", () => stopAxEngineServer(directory), "AX Engine stopped")
+      await runAction("ax-engine-server", () => stopAxEngineServer(directory), t("localModels.toast.engineStopped"))
       return
     }
     if (!startCandidate) {
-      toast.error("Download a runnable model before starting AX Engine")
+      toast.error(t("localModels.toast.noRunnableModel"))
       return
     }
-    await runAction("ax-engine-server", () => startAxEngineServer(startCandidate.id, directory), "AX Engine started")
+    await runAction(
+      "ax-engine-server",
+      () => startAxEngineServer(startCandidate.id, directory),
+      t("localModels.toast.engineStarted"),
+    )
   }
 
   return (

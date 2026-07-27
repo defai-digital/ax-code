@@ -1,5 +1,8 @@
 import { toast } from "@/components/ui"
+import { useI18nStore, formatMessage, type I18nKey, type I18nParams } from "@/lib/i18n/store"
 import { fetchAxEngineModels, type AxEngineModelJobSummary } from "./axEngineModelsApi"
+
+const tr = (key: I18nKey, params?: I18nParams): string => formatMessage(useI18nStore.getState().dictionary, key, params)
 
 // Tracks the persistent "Downloading…" toasts for AX Engine model downloads at
 // module level. The downloads run server-side and outlive the models page, so
@@ -41,9 +44,9 @@ export function createDownloadToastTracker(deps: DownloadToastDeps) {
 
   function announce(job: { id: string }, name: string, directory: string | null) {
     announced.set(job.id, { name, directory, announcedAt: deps.now() })
-    deps.toast.loading(`Downloading ${name}…`, {
+    deps.toast.loading(tr("axEngine.download.toast.downloading", { name }), {
       id: toastId(job.id),
-      description: "Large models can take several minutes — you can keep working while it downloads.",
+      description: tr("axEngine.download.toast.downloadingDescription"),
       duration: Infinity,
     })
     ensureTimer()
@@ -54,22 +57,22 @@ export function createDownloadToastTracker(deps: DownloadToastDeps) {
       const job = jobs.find((entry) => entry.id === jobId)
       if (!job) {
         if (deps.now() - info.announcedAt > MISSING_JOB_GRACE_MS) {
-          deps.toast.error(`${info.name} download interrupted`, {
+          deps.toast.error(tr("axEngine.download.toast.interrupted", { name: info.name }), {
             id: toastId(jobId),
-            description: "AX Code restarted while downloading. Check the model list and retry if needed.",
+            description: tr("axEngine.download.toast.interruptedDescription"),
           })
           announced.delete(jobId)
         }
         continue
       }
       if (job.status === "complete") {
-        deps.toast.success(`${info.name} downloaded`, {
+        deps.toast.success(tr("axEngine.download.toast.downloaded", { name: info.name }), {
           id: toastId(jobId),
-          description: "Ready to start.",
+          description: tr("axEngine.download.toast.downloadedDescription"),
         })
         announced.delete(jobId)
       } else if (job.status === "failed") {
-        deps.toast.error(`${info.name} download failed`, {
+        deps.toast.error(tr("axEngine.download.toast.failed", { name: info.name }), {
           id: toastId(jobId),
           description: job.error,
         })

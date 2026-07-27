@@ -186,8 +186,8 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
       onOpenChange(false)
     } catch (error) {
       console.error("[TimelineDialog] Fork failed:", error)
-      toast.error("Fork failed", {
-        description: error instanceof Error ? error.message : "Please try again",
+      toast.error(t("chat.timeline.toast.forkFailed"), {
+        description: error instanceof Error ? error.message : t("chat.timeline.toast.tryAgain"),
       })
     } finally {
       setForkingMessageId(null)
@@ -361,8 +361,9 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
                                   onOpenChange(false)
                                 } catch (error) {
                                   console.error("[TimelineDialog] Revert failed:", error)
-                                  toast.error("Revert failed", {
-                                    description: error instanceof Error ? error.message : "Please try again",
+                                  toast.error(t("chat.timeline.toast.revertFailed"), {
+                                    description:
+                                      error instanceof Error ? error.message : t("chat.timeline.toast.tryAgain"),
                                   })
                                 }
                               }}

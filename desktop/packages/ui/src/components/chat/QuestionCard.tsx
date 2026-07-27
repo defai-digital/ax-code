@@ -200,8 +200,8 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
     } catch (error) {
       console.error("[QuestionCard] Failed to respond to question:", error)
       if (!unmountedRef.current) {
-        toast.error("Question response failed", {
-          description: error instanceof Error ? error.message : "Please try again",
+        toast.error(t("chat.questionCard.toast.respondFailed"), {
+          description: error instanceof Error ? error.message : t("chat.questionCard.toast.tryAgain"),
         })
         // Reset guard on failure so the user can retry.
         submittingRef.current = false
@@ -214,7 +214,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
       submittingRef.current = false
       setIsResponding(false)
     }
-  }, [buildAnswersPayload, question.id, question.sessionID, requiredSatisfied, respondToQuestion])
+  }, [buildAnswersPayload, question.id, question.sessionID, requiredSatisfied, respondToQuestion, t])
 
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -245,8 +245,8 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
     } catch (error) {
       console.error("[QuestionCard] Failed to dismiss question:", error)
       if (!unmountedRef.current) {
-        toast.error("Question dismiss failed", {
-          description: error instanceof Error ? error.message : "Please try again",
+        toast.error(t("chat.questionCard.toast.dismissFailed"), {
+          description: error instanceof Error ? error.message : t("chat.questionCard.toast.tryAgain"),
         })
         submittingRef.current = false
         setIsResponding(false)
@@ -258,7 +258,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
       submittingRef.current = false
       setIsResponding(false)
     }
-  }, [question.id, question.sessionID, rejectQuestion])
+  }, [question.id, question.sessionID, rejectQuestion, t])
 
   const handleCopyMarkdown = React.useCallback(async () => {
     const text = serializeQuestionAsMarkdown(question)

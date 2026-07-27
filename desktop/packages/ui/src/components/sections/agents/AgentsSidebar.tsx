@@ -238,7 +238,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
       // Delete old agent
       const deleteSuccess = await deleteAgent(renameDialogAgent.name)
       if (deleteSuccess) {
-        toast.success(`Agent renamed to "${sanitizedName}"`)
+        toast.success(t("settings.agents.sidebar.toast.renamed", { name: sanitizedName }))
         setSelectedAgent(sanitizedName)
       } else {
         toast.error(t("settings.agents.sidebar.toast.removeOldAfterRenameFailed"))

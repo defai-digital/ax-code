@@ -222,7 +222,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
       // Delete old skill
       const deleteSuccess = await deleteSkill(renameDialogSkill.name)
       if (deleteSuccess) {
-        toast.success(`Skill renamed to "${sanitizedName}"`)
+        toast.success(t("settings.skills.sidebar.toast.renamed", { name: sanitizedName }))
         setSelectedSkill(sanitizedName)
       } else {
         toast.error(t("settings.skills.sidebar.toast.removeOldAfterRenameFailed"))

@@ -8,6 +8,7 @@ import { useAgentGroupsStore } from "@/stores/useAgentGroupsStore"
 import { useMultiRunStore } from "@/stores/useMultiRunStore"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import type { CreateMultiRunParams } from "@/types/multirun"
+import { useI18n } from "@/lib/i18n"
 
 interface AgentManagerViewProps {
   className?: string
@@ -23,6 +24,7 @@ export const AgentManagerView: React.FC<AgentManagerViewProps> = ({ className })
 
   const createMultiRun = useMultiRunStore((s) => s.createMultiRun)
   const isCreatingMultiRun = useMultiRunStore((s) => s.isLoading)
+  const { t } = useI18n()
 
   const selectedGroup = React.useMemo(
     () => (selectedGroupName ? (groups.find((g) => g.name === selectedGroupName) ?? null) : null),
@@ -48,21 +50,21 @@ export const AgentManagerView: React.FC<AgentManagerViewProps> = ({ className })
   const handleCreateGroup = React.useCallback(
     async (params: CreateMultiRunParams) => {
       const totalModels = params.groups.reduce((sum, g) => sum + g.models.length, 0)
-      toast.info(`Creating agent group "${params.name}" with ${totalModels} run(s)...`)
+      toast.info(t("agentManager.view.toast.creatingGroup", { name: params.name, count: totalModels }))
 
       const result = await createMultiRun(params)
 
       if (result) {
-        toast.success(`Agent group "${params.name}" created with ${result.sessionIds.length} session(s)`)
+        toast.success(t("agentManager.view.toast.createdGroup", { name: params.name, count: result.sessionIds.length }))
         // Refresh groups — new worktrees + sessions now exist
         await loadGroups()
         selectGroup(result.groupSlug)
       } else {
         const error = useMultiRunStore.getState().error
-        toast.error(error || "Failed to create agent group")
+        toast.error(error || t("agentManager.empty.toast.failedToCreateGroup"))
       }
     },
-    [createMultiRun, loadGroups, selectGroup],
+    [createMultiRun, loadGroups, selectGroup, t],
   )
 
   return (

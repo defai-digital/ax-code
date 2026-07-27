@@ -139,8 +139,8 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
       onOpenChange(false)
     } catch (error) {
       console.error("[ConflictDialog] Resolve in current session failed:", error)
-      toast.error("Failed to resolve conflict", {
-        description: error instanceof Error ? error.message : "Please try again",
+      toast.error(t("gitView.conflict.toast.resolveFailed"), {
+        description: error instanceof Error ? error.message : t("gitView.conflict.toast.tryAgain"),
       })
     }
   }
@@ -168,8 +168,8 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
       onOpenChange(false)
     } catch (error) {
       console.error("[ConflictDialog] Resolve in new session failed:", error)
-      toast.error("Failed to resolve conflict", {
-        description: error instanceof Error ? error.message : "Please try again",
+      toast.error(t("gitView.conflict.toast.resolveFailed"), {
+        description: error instanceof Error ? error.message : t("gitView.conflict.toast.tryAgain"),
       })
     }
   }

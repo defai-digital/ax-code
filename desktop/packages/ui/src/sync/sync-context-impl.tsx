@@ -11,6 +11,7 @@ import { setActiveMetricsTracker } from "./streaming-metrics"
 import { reduceGlobalEvent, applyGlobalProject, applyDirectoryEvent } from "./event-reducer"
 import { useGlobalSyncStore, type GlobalSyncStore } from "./global-sync-store"
 import { ChildStoreManager, type DirectoryStore } from "./child-store"
+import { useI18nStore, formatMessage } from "@/lib/i18n/store"
 import {
   aggregateLiveSessions,
   aggregateLiveSessionStatuses,
@@ -1152,12 +1153,12 @@ export async function resyncBlockingRequestsForDirectory(
         const description =
           typeof permission.permission === "string" && permission.permission.trim().length > 0
             ? permission.permission
-            : "Agent needs your approval"
-        toast.info("Permission needed", {
+            : formatMessage(useI18nStore.getState().dictionary, "chat.permissionToast.needed.fallbackDescription")
+        toast.info(formatMessage(useI18nStore.getState().dictionary, "chat.permissionToast.needed.title"), {
           id: `permission-${toastKey}`,
           description,
           action: {
-            label: "Open session",
+            label: formatMessage(useI18nStore.getState().dictionary, "chat.permissionToast.needed.openSession"),
             onClick: () => openSessionFromToast(sessionId, directory),
           },
         })
@@ -1435,12 +1436,12 @@ function handleEvent(
       const description =
         typeof permission.permission === "string" && permission.permission.trim().length > 0
           ? permission.permission
-          : "Agent needs your approval"
-      toast.info("Permission needed", {
+          : formatMessage(useI18nStore.getState().dictionary, "chat.permissionToast.needed.fallbackDescription")
+      toast.info(formatMessage(useI18nStore.getState().dictionary, "chat.permissionToast.needed.title"), {
         id: `permission-${toastKey}`,
         description,
         action: {
-          label: "Open session",
+          label: formatMessage(useI18nStore.getState().dictionary, "chat.permissionToast.needed.openSession"),
           onClick: () => openSessionFromToast(permission.sessionID, resolvedDirectory),
         },
       })

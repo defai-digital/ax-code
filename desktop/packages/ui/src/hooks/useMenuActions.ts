@@ -13,6 +13,7 @@ import { showAxCodeStatus } from "@/lib/axCodeStatus"
 import { isDesktopLocalOriginActive } from "@/lib/desktop"
 import { getTauriGlobal } from "@/lib/tauriGlobal"
 import { listenToTauriEvent } from "@/lib/tauriEventListener"
+import { useI18n } from "@/lib/i18n"
 
 const getActiveElementSelectedText = (): string => {
   if (typeof document === "undefined") {
@@ -104,6 +105,7 @@ export const useMenuActions = (onToggleMemoryDebug?: () => void) => {
   const setBottomTerminalExpanded = useUIStore((s) => s.setBottomTerminalExpanded)
   const checkForUpdates = useUpdateStore((state) => state.checkForUpdates)
   const { setThemeMode } = useThemeSystem()
+  const { t } = useI18n()
   const checkUpdatesInFlightRef = React.useRef(false)
 
   const handleCheckForUpdates = React.useCallback(() => {
@@ -121,20 +123,20 @@ export const useMenuActions = (onToggleMemoryDebug?: () => void) => {
       .then(() => {
         const { available, error } = useUpdateStore.getState()
         if (error) {
-          toast.error("Failed to check for updates", {
+          toast.error(t("menuActions.toast.checkUpdatesFailed"), {
             description: error,
           })
           return
         }
 
         if (!available) {
-          toast.success("You are on the latest version")
+          toast.success(t("menuActions.toast.latestVersion"))
         }
       })
       .finally(() => {
         checkUpdatesInFlightRef.current = false
       })
-  }, [checkForUpdates, setAboutDialogOpen])
+  }, [checkForUpdates, setAboutDialogOpen, t])
 
   const handleChangeWorkspace = React.useCallback(() => {
     sessionEvents.requestDirectoryDialog()
@@ -292,7 +294,7 @@ export const useMenuActions = (onToggleMemoryDebug?: () => void) => {
 
         case "download-logs": {
           void showAxCodeStatus().catch(() => {
-            toast.error("Failed to collect ax-code status")
+            toast.error(t("menuActions.toast.collectStatusFailed"))
           })
           break
         }
@@ -313,6 +315,7 @@ export const useMenuActions = (onToggleMemoryDebug?: () => void) => {
       setRightSidebarOpen,
       setRightSidebarTab,
       setThemeMode,
+      t,
       toggleBottomTerminal,
       toggleCommandPalette,
       toggleHelpDialog,

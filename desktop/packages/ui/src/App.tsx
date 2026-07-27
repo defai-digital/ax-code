@@ -219,6 +219,7 @@ const EmbeddedSessionChatContent: React.FC<{
 }
 
 function App({ apis }: AppProps) {
+  const { t } = useI18n()
   const initializeApp = useConfigStore((s) => s.initializeApp)
   const isInitialized = useConfigStore((s) => s.isInitialized)
   const isConnected = useConfigStore((s) => s.isConnected)
@@ -635,8 +636,8 @@ function App({ apis }: AppProps) {
       const { sessionId, id, response } = action
       void sessionActions.respondToPermission(sessionId, id, response).catch((error: unknown) => {
         console.error("[App] tray permission action failed", error)
-        toast.error("Permission response failed", {
-          description: error instanceof Error ? error.message : "Could not respond to permission from tray",
+        toast.error(t("chat.permissionCard.responseFailed.title"), {
+          description: error instanceof Error ? error.message : t("app.tray.permissionResponseFailedDescription"),
         })
       })
     }
@@ -647,7 +648,7 @@ function App({ apis }: AppProps) {
 
     window.addEventListener("openchamber:tray-action", handleTrayAction)
     return () => window.removeEventListener("openchamber:tray-action", handleTrayAction)
-  }, [dedupeTrayPermissionAction])
+  }, [dedupeTrayPermissionAction, t])
 
   // Also listen via the Tauri-compatible event bridge so tray actions work
   // regardless of which delivery path the main process uses.
@@ -664,12 +665,12 @@ function App({ apis }: AppProps) {
       const { sessionId, id, response } = action
       void sessionActions.respondToPermission(sessionId, id, response).catch((error: unknown) => {
         console.error("[App] tray permission action failed", error)
-        toast.error("Permission response failed", {
-          description: error instanceof Error ? error.message : "Could not respond to permission from tray",
+        toast.error(t("chat.permissionCard.responseFailed.title"), {
+          description: error instanceof Error ? error.message : t("app.tray.permissionResponseFailedDescription"),
         })
       })
     })
-  }, [dedupeTrayPermissionAction])
+  }, [dedupeTrayPermissionAction, t])
 
   React.useEffect(() => {
     if (typeof window === "undefined") return
