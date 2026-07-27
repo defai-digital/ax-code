@@ -7,8 +7,9 @@ import { describe, expect, test } from "vitest"
 // falsy (the default), so `.catch()` / try-catch around sdk.client.session.* is
 // dead code for HTTP/network failures. Three handlers used to treat a failed
 // call as success:
-//   - session delete (both dialog-session-list variants) removed the session
-//     locally even though the server delete failed.
+//   - session delete (the shared dialog-session-list implementation used by
+//     both the main and workspace variants) removed the session locally even
+//     though the server delete failed.
 //   - session list search / workspace-list load coerced the undefined `data`
 //     into [] and truthy-replaced the real session list with an empty one.
 //   - session rename fell through to dialog.clear() on a failed update.
@@ -17,7 +18,9 @@ import { describe, expect, test } from "vitest"
 
 const TUI_ROOT = path.join(__dirname, "../../../src/cli/cmd/tui")
 const DIALOG_SESSION_LIST_SRC = path.join(TUI_ROOT, "component/dialog-session-list.tsx")
-const WORKSPACE_SESSION_LIST_SRC = path.join(TUI_ROOT, "component/workspace/dialog-session-list.tsx")
+// Both the main and workspace session-list dialogs share this implementation
+// (component/workspace/dialog-session-list.tsx only re-exports it).
+const WORKSPACE_SESSION_LIST_SRC = DIALOG_SESSION_LIST_SRC
 const DIALOG_SESSION_RENAME_SRC = path.join(TUI_ROOT, "component/dialog-session-rename.tsx")
 
 describe("tui session list/rename SDK-error handling", () => {

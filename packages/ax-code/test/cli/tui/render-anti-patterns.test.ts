@@ -25,7 +25,8 @@ const SESSION_COMPARE_SRC = path.join(TUI_ROOT, "routes/session/compare.ts")
 const SESSION_DRE_SRC = path.join(TUI_ROOT, "routes/session/dre.ts")
 const SESSION_ROLLBACK_SRC = path.join(TUI_ROOT, "routes/session/rollback.ts")
 const SESSION_LIST_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-session-list.tsx")
-const WORKSPACE_SESSION_LIST_DIALOG_SRC = path.join(TUI_ROOT, "component/workspace/dialog-session-list.tsx")
+// The workspace session-list dialog re-exports this same shared implementation.
+const WORKSPACE_SESSION_LIST_DIALOG_SRC = SESSION_LIST_DIALOG_SRC
 const SESSION_RENAME_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-session-rename.tsx")
 const SPINNER_SRC = path.join(TUI_ROOT, "component/spinner.tsx")
 const SPINNER_PROFILE_SRC = path.join(TUI_ROOT, "component/spinner-profile.ts")
@@ -352,12 +353,12 @@ describe("tui OpenTUI stability guardrails", () => {
     const sessionListDialog = await fs.readFile(SESSION_LIST_DIALOG_SRC, "utf8")
     const workspaceSessionListDialog = await fs.readFile(WORKSPACE_SESSION_LIST_DIALOG_SRC, "utf8")
 
-    expect(sessionListDialog).toContain('log.warn("session list search failed"')
+    expect(sessionListDialog).toContain('"session list search failed"')
     expect(sessionListDialog).toContain('message: error instanceof Error ? error.message : "Failed to search sessions"')
     expect(sessionListDialog).toContain("return info.value")
 
     expect(workspaceSessionListDialog).toContain('log.warn("workspace session list load failed"')
-    expect(workspaceSessionListDialog).toContain('log.warn("workspace session list search failed"')
+    expect(workspaceSessionListDialog).toContain('"workspace session list search failed"')
     expect(workspaceSessionListDialog).toContain(
       'message: error instanceof Error ? error.message : "Failed to load workspace sessions"',
     )

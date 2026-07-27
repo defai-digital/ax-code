@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "node:path"
-import { detail, diagnostics, filetype, normalize, workdir } from "../../../src/cli/cmd/tui/routes/session/format"
+import { capLines, detail, diagnostics, filetype, normalize, workdir } from "../../../src/cli/cmd/tui/routes/session/format"
 
 describe("tui session format", () => {
   test("normalizes paths inside and outside cwd", () => {
@@ -51,5 +51,22 @@ describe("tui session format", () => {
     expect(workdir("/repo", "/Users/demo", "apps/web")).toBe("/repo/apps/web")
     expect(workdir("/Users/demo/project", "/Users/demo", "docs")).toBe("~/project/docs")
     expect(workdir("/Users/demo-other", "/Users/demo", "project")).toBe("/Users/demo-other/project")
+  })
+
+  test("caps expanded tool output and reports the full line count", () => {
+    const lines = Array.from({ length: 600 }, (_, i) => `line ${i + 1}`)
+    const capped = capLines(lines, 500)
+    expect(capped.truncated).toBe(true)
+    expect(capped.total).toBe(600)
+    expect(capped.text.split("\n")).toHaveLength(500)
+    expect(capped.text.endsWith("line 500")).toBe(true)
+  })
+
+  test("passes output through when it fits the expanded cap", () => {
+    const small = capLines(["a", "b"], 500)
+    expect(small.truncated).toBe(false)
+    expect(small.total).toBe(2)
+    expect(small.text).toBe("a\nb")
+    expect(capLines([], 500)).toEqual({ text: "", total: 0, truncated: false })
   })
 })

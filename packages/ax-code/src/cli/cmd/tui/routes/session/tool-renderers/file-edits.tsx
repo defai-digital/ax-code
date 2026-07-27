@@ -8,7 +8,7 @@ import type { EditTool } from "@/tool/edit"
 import type { ApplyPatchTool } from "@/tool/apply_patch"
 import { Global } from "@/global"
 import { Locale } from "@/util/locale"
-import { detail, diagnostics, diffSummary, normalize, workdir } from "../format"
+import { detail, diagnostics, diffSummary, capLines, normalize, workdir } from "../format"
 import { codeDisplayView, diffDisplayView } from "../view-model"
 import { SessionCodeRenderer, SessionDiffRenderer } from "../render-adapter"
 import { useSessionRouteContext } from "../context"
@@ -22,8 +22,12 @@ export function Bash(props: ToolProps<typeof BashTool>) {
   const [expanded, setExpanded] = createSignal(false)
   const lines = createMemo(() => output().split("\n"))
   const overflow = createMemo(() => lines().length > 10)
+  // Cap the expanded view: metadata.output is server-truncated but can still
+  // be long, and rendering thousands of lines stalls the transcript.
+  const capped = createMemo(() => capLines(lines()))
   const limited = createMemo(() => {
-    if (expanded() || !overflow()) return output()
+    if (!overflow()) return output()
+    if (expanded()) return capped().text
     return [...lines().slice(0, 10), "…"].join("\n")
   })
 
@@ -53,6 +57,9 @@ export function Bash(props: ToolProps<typeof BashTool>) {
             <Show when={output()}>
               <text fg={theme.text}>{limited()}</text>
             </Show>
+            <Show when={expanded() && capped().truncated}>
+              <text fg={theme.textMuted}>… truncated, {capped().total} lines total</text>
+            </Show>
             <Show when={overflow()}>
               <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
             </Show>
@@ -73,8 +80,12 @@ export function Write(props: ToolProps<typeof WriteTool>) {
   const [expanded, setExpanded] = createSignal(false)
   const lines = createMemo(() => (props.input.content ?? "").split("\n"))
   const overflow = createMemo(() => lines().length > 20)
+  // Cap the expanded view: Write input content is not server-truncated, so a
+  // multi-MB write would otherwise render in full and stall the transcript.
+  const capped = createMemo(() => capLines(lines()))
   const visibleContent = createMemo(() => {
-    if (expanded() || !overflow()) return props.input.content
+    if (!overflow()) return props.input.content
+    if (expanded()) return capped().text
     return lines().slice(0, 20).join("\n") + "\n…"
   })
   const display = createMemo(() => codeDisplayView({ filePath: props.input.filePath, content: visibleContent() }))
@@ -90,6 +101,9 @@ export function Write(props: ToolProps<typeof WriteTool>) {
           <line_number fg={theme.textMuted} minWidth={3} paddingRight={1}>
             <SessionCodeRenderer display={display()} conceal={false} fg={theme.text} syntaxStyle={syntax()} />
           </line_number>
+          <Show when={expanded() && capped().truncated}>
+            <text fg={theme.textMuted}>… truncated, {capped().total} lines total</text>
+          </Show>
           <Show when={overflow()}>
             <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
           </Show>

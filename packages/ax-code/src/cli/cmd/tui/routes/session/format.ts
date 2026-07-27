@@ -82,3 +82,18 @@ export const duration = (ms?: number): string => {
   const min = Math.floor(sec / 60)
   return `${min}m ${sec % 60}s`
 }
+
+// Hard cap for expanded tool-output rendering. Write input content is not
+// server-truncated, so a multi-MB write would otherwise split and render in
+// full and stall the transcript. `total` always reports the full line count
+// so callers can show a "… truncated, N lines total" affordance.
+export const EXPANDED_OUTPUT_MAX_LINES = 500
+
+export const capLines = (
+  lines: string[],
+  max = EXPANDED_OUTPUT_MAX_LINES,
+): { text: string; total: number; truncated: boolean } => {
+  const total = lines.length
+  if (total <= max) return { text: lines.join("\n"), total, truncated: false }
+  return { text: lines.slice(0, max).join("\n"), total, truncated: true }
+}
