@@ -18,6 +18,7 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    setupFiles: [path.resolve(uiSrc, "test/setup.ts")],
     include: ["src/**/*.test.{ts,tsx,js,jsx}"],
   },
 })
