@@ -832,7 +832,11 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(thread).toContain("registerTuiProcessHandler")
     // uncaught/unhandled crash handlers moved into the shared registerTuiCrashHandlers
     // helper (names derived from the "thread" prefix); thread keeps SIGUSR2 directly.
-    expect(thread).toContain('registerTuiCrashHandlers(error, { namePrefix: "thread" })')
+    // Rejections are non-fatal by policy: thread passes an explicit onRejection
+    // that logs + records diagnostics and lets the session continue.
+    expect(thread).toContain("registerTuiCrashHandlers(error, {")
+    expect(thread).toContain('namePrefix: "thread",')
+    expect(thread).toContain("onRejection: createTuiRejectionHandler(")
     expect(thread).toContain('name: "thread-sigusr2-reload"')
     expect(thread).not.toContain('process.on("uncaughtException"')
     expect(thread).not.toContain('process.off("uncaughtException"')
@@ -909,7 +913,8 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).toContain("useKeyboard((evt) => {")
     expect(prompt).toContain("evt.stopPropagation()")
     expect(prompt).toContain("isPromptSubmitKey(e)")
-    expect(prompt).toContain("void submit()")
+    expect(prompt).toContain("submitSafely()")
+    expect(prompt).toContain("function submitSafely()")
     expect(prompt).not.toContain("onSubmit={submit}")
     expect(prompt).toContain("pendingSubmitStatusText(submitStage())")
   })
@@ -951,7 +956,7 @@ describe("tui OpenTUI stability guardrails", () => {
     const textareaSubmitBody = prompt.slice(textareaSubmitStart, textareaSubmitEnd)
     const autocompleteConsume = textareaSubmitBody.indexOf("if (autocomplete.onKeyDown(e)) return")
     const preventDefault = textareaSubmitBody.indexOf("e.preventDefault()")
-    const submitCall = textareaSubmitBody.indexOf("void submit()")
+    const submitCall = textareaSubmitBody.indexOf("submitSafely()")
     expect(autocompleteConsume).toBeGreaterThan(-1)
     expect(preventDefault).toBeGreaterThan(autocompleteConsume)
     expect(submitCall).toBeGreaterThan(preventDefault)
@@ -1239,8 +1244,8 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(dialogHelp).toContain('evt.name === "return" || evt.name === "escape"')
     expect(dialogHelp).toContain('evt.name === "pagedown"')
     expect(route).toContain("function parseInitialRoute(")
-    expect(toast).toContain("queue: [] as ToastOptions[]")
-    expect(toast).toContain("function scheduleNextToast(options: ToastOptions)")
+    expect(toast).toContain("queue: [] as QueuedToast[]")
+    expect(toast).toContain("function scheduleNextToast(entry: QueuedToast)")
   })
 
   test("keeps toast duration defaults under explicit caller control", async () => {

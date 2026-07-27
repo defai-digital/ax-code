@@ -488,6 +488,21 @@ export const Keybinds = z
     terminal_suspend: z.string().optional().default("ctrl+z").describe("Suspend terminal"),
     terminal_title_toggle: z.string().optional().default("none").describe("Toggle terminal title"),
     display_thinking: z.string().optional().default("none").describe("Toggle thinking blocks visibility"),
+    permission_option_previous: z
+      .string()
+      .optional()
+      .default("left,h")
+      .describe("Select previous option in a permission prompt"),
+    permission_option_next: z
+      .string()
+      .optional()
+      .default("right,l")
+      .describe("Select next option in a permission prompt"),
+    permission_fullscreen_toggle: z
+      .string()
+      .optional()
+      .default("ctrl+f")
+      .describe("Toggle permission prompt fullscreen"),
   })
   .strict()
   .meta({

@@ -10,7 +10,6 @@ import { SplitBorder } from "../../component/border"
 import { useSync } from "../../context/sync"
 import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import path from "path"
-import { Keybind } from "@/util/keybind"
 import { Locale } from "@/util/locale"
 import { useDialog } from "../../ui/dialog"
 import { useToast } from "../../ui/toast"
@@ -773,14 +772,13 @@ function Prompt<const T extends Record<string, string>>(props: {
     const current = keys()
     if (!current.includes(store.selected)) setStore("selected", current[0])
   })
-  const diffKey = Keybind.parse("ctrl+f")[0]
   const narrow = createMemo(() => dimensions().width < 80)
   const dialog = useDialog()
 
   useKeyboard((evt) => {
     if (dialog.stack.length > 0) return
 
-    if (evt.name === "left" || evt.name == "h") {
+    if (keybind.match("permission_option_previous", evt)) {
       evt.preventDefault()
       const current = keys()
       const idx = current.indexOf(store.selected)
@@ -788,7 +786,7 @@ function Prompt<const T extends Record<string, string>>(props: {
       setStore("selected", next)
     }
 
-    if (evt.name === "right" || evt.name == "l") {
+    if (keybind.match("permission_option_next", evt)) {
       evt.preventDefault()
       const current = keys()
       const idx = current.indexOf(store.selected)
@@ -806,7 +804,7 @@ function Prompt<const T extends Record<string, string>>(props: {
       props.onSelect(props.escapeKey)
     }
 
-    if (props.fullscreen && diffKey && Keybind.match(diffKey, keybind.parse(evt))) {
+    if (props.fullscreen && keybind.match("permission_fullscreen_toggle", evt)) {
       evt.preventDefault()
       evt.stopPropagation()
       setStore("expanded", (v) => !v)
@@ -883,7 +881,7 @@ function Prompt<const T extends Record<string, string>>(props: {
         <box flexDirection="row" gap={2} flexShrink={0}>
           <Show when={props.fullscreen}>
             <text fg={theme.text}>
-              {"ctrl+f"} <span style={{ fg: theme.textMuted }}>{hint()}</span>
+              {keybind.print("permission_fullscreen_toggle")} <span style={{ fg: theme.textMuted }}>{hint()}</span>
             </text>
           </Show>
           <text fg={theme.text}>
