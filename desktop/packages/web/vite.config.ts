@@ -197,7 +197,10 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, "dist"),
     emptyOutDir: true,
-    chunkSizeWarningLimit: 8000,
+    // Keep this low enough that eager-graph regressions surface. Known
+    // exception: vendor-shiki-langs (~7.4MB) is an intentionally lazy async
+    // chunk, so it may still log a size warning without failing the build.
+    chunkSizeWarningLimit: 2000,
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, "index.html"),
