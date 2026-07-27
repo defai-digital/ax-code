@@ -116,6 +116,10 @@ describe("tui renderer profile", () => {
     const rawModes: boolean[] = []
 
     const restored = resetTuiTerminalState({
+      // Alternate-screen mode: leaving the alt screen restores the shell view,
+      // so the crash reset emits only the mode-reset sequence. Main-screen
+      // clearing is covered in terminal-cleanup.test.ts.
+      screenMode: "alternate-screen",
       stdout: {
         writable: true,
         write(chunk: string) {
