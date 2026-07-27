@@ -17,6 +17,21 @@ import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useInputStore } from "@/sync/input-store"
 import { ContextPanelContent } from "./ContextSidebarTab"
 import { getContextPanelRelativePathLabel } from "./contextPanelPathLabels"
+import {
+  CONTEXT_PANEL_TAB_LABEL_MAX_CHARS as CONTEXT_TAB_LABEL_MAX_CHARS,
+  getContextPanelSessionIDFromDedupeKey as getSessionIDFromDedupeKey,
+  getContextPanelTabLabel as getTabLabel,
+  normalizeContextPanelDirectoryKey as normalizeDirectoryKey,
+  truncateContextPanelTabLabel as truncateTabLabel,
+} from "./contextPanelTabs"
+import {
+  PREVIEW_CONSOLE_EVENT_LIMIT,
+  getContextPanelPreviewConsoleFilterMatch as getPreviewConsoleFilterMatch,
+  normalizeContextPanelBrowserUrl as normalizeBrowserUrl,
+  type PreviewBridgeMessage,
+  type PreviewConsoleEvent,
+  type PreviewConsoleFilter,
+} from "./contextPanelPreview"
 import { handleDesktopBrowserNewWindowEvent, readDesktopBrowserLoadFailure } from "./desktopBrowserEvents"
 import { toast } from "@/components/ui"
 import { Icon } from "@/components/icon/Icon"
@@ -53,66 +68,6 @@ const CONTEXT_PANEL_MAX_WIDTH = 1400
 const CONTEXT_PANEL_DEFAULT_WIDTH = 600
 // The primary chat region must never be squeezed below this width by the panel.
 const CHAT_MIN_WIDTH = 320
-const CONTEXT_TAB_LABEL_MAX_CHARS = 24
-type TranslateFn = ReturnType<typeof useI18n>["t"]
-
-type PreviewConsoleEvent = {
-  id: number
-  level: "log" | "info" | "warn" | "error" | "debug" | "resource" | "runtime"
-  message: string
-  details?: string
-  ts: number
-}
-
-type PreviewConsoleFilter = "all" | "errors" | "warnings" | "logs"
-
-type PreviewBridgeMessage = {
-  source?: string
-  version?: number
-  type?: string
-  level?: PreviewConsoleEvent["level"]
-  args?: unknown[]
-  message?: unknown
-  stack?: unknown
-  filename?: unknown
-  line?: unknown
-  column?: unknown
-  tag?: unknown
-  url?: unknown
-  outerHTML?: unknown
-  title?: unknown
-  ts?: unknown
-  target?: unknown
-  navigation?: unknown
-}
-
-const PREVIEW_CONSOLE_EVENT_LIMIT = 200
-
-const getPreviewConsoleFilterMatch = (event: PreviewConsoleEvent, filter: PreviewConsoleFilter): boolean => {
-  if (filter === "all") return true
-  if (filter === "errors") return event.level === "error" || event.level === "runtime" || event.level === "resource"
-  if (filter === "warnings") return event.level === "warn"
-  return event.level === "log" || event.level === "info" || event.level === "debug"
-}
-
-const normalizeDirectoryKey = (value: string): string => {
-  if (!value) return ""
-
-  const raw = value.replace(/\\/g, "/")
-  const hadUncPrefix = raw.startsWith("//")
-  let normalized = raw.replace(/\/+$/g, "")
-  normalized = normalized.replace(/\/+/g, "/")
-
-  if (hadUncPrefix && !normalized.startsWith("//")) {
-    normalized = `/${normalized}`
-  }
-
-  if (normalized === "") {
-    return raw.startsWith("/") ? "/" : ""
-  }
-
-  return normalized
-}
 
 const clampWidth = (width: number): number => {
   if (!Number.isFinite(width)) {
@@ -140,67 +95,6 @@ const clampWidthToAvailableSpace = (width: number, panel: HTMLElement | null): n
 
   // Reserve room for the primary chat region so the panel can't consume it.
   return Math.min(clampedWidth, Math.max(0, availableWidth - CHAT_MIN_WIDTH))
-}
-
-const getModeLabel = (mode: ContextPanelMode, t: TranslateFn): string => {
-  if (mode === "chat") return t("contextPanel.mode.chat")
-  if (mode === "file") return t("contextPanel.mode.files")
-  if (mode === "diff") return t("contextPanel.mode.diff")
-  if (mode === "plan") return t("contextPanel.mode.plan")
-  if (mode === "preview") return t("contextPanel.mode.preview")
-  if (mode === "browser") return t("contextPanel.mode.browser")
-  if (mode === "dashboard") return "Dashboard"
-  return t("contextPanel.mode.context")
-}
-
-const getFileNameFromPath = (path: string | null): string | null => {
-  if (!path) {
-    return null
-  }
-
-  const normalized = path.replace(/\\/g, "/").trim()
-  if (!normalized) {
-    return null
-  }
-
-  const segments = normalized.split("/").filter(Boolean)
-  if (segments.length === 0) {
-    return normalized
-  }
-
-  return segments[segments.length - 1] || null
-}
-
-const getTabLabel = (
-  tab: { mode: ContextPanelMode; label: string | null; targetPath: string | null; stagedDiff?: boolean },
-  t: TranslateFn,
-): string => {
-  if (tab.label) {
-    return tab.label
-  }
-
-  if (tab.mode === "file") {
-    return getFileNameFromPath(tab.targetPath) || t("contextPanel.mode.files")
-  }
-
-  if (tab.mode === "preview") {
-    const url = tab.targetPath
-    if (url) {
-      try {
-        const parsed = new URL(url)
-        return parsed.host || parsed.hostname || t("contextPanel.mode.preview")
-      } catch {
-        // ignore invalid URL
-      }
-    }
-    return t("contextPanel.mode.preview")
-  }
-
-  if (tab.mode === "diff") {
-    return tab.stagedDiff ? t("contextPanel.mode.stagedDiff") : t("contextPanel.mode.workingDiff")
-  }
-
-  return getModeLabel(tab.mode, t)
 }
 
 const getTabIcon = (tab: { mode: ContextPanelMode; targetPath: string | null }): React.ReactNode | undefined => {
@@ -237,15 +131,6 @@ const getTabIcon = (tab: { mode: ContextPanelMode; targetPath: string | null }):
   }
 
   return undefined
-}
-
-const getSessionIDFromDedupeKey = (dedupeKey: string | undefined): string | null => {
-  if (!dedupeKey || !dedupeKey.startsWith("session:")) {
-    return null
-  }
-
-  const sessionID = dedupeKey.slice("session:".length).trim()
-  return sessionID || null
 }
 
 const DESKTOP_BROWSER_INSPECT_SCRIPT = `new Promise((resolve) => {
@@ -377,18 +262,6 @@ const DESKTOP_BROWSER_SAME_WEBVIEW_NAVIGATION_SCRIPT = `(() => {
   }, true);
 })()`
 
-const normalizeBrowserUrl = (value: string): string => {
-  const trimmed = value.trim()
-  if (!trimmed) return "about:blank"
-  try {
-    const parsed = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`)
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "about:blank"
-    return parsed.toString()
-  } catch {
-    return "about:blank"
-  }
-}
-
 const runIframeScript = async <T,>(iframe: HTMLIFrameElement, script: string): Promise<T> => {
   const frameWindow = iframe.contentWindow
   if (!frameWindow) {
@@ -421,14 +294,6 @@ const buildEmbeddedSessionChatURL = (sessionID: string, directory: string | null
 
   url.hash = ""
   return url.toString()
-}
-
-const truncateTabLabel = (value: string, maxChars: number): string => {
-  if (value.length <= maxChars) {
-    return value
-  }
-
-  return `${value.slice(0, maxChars - 3)}...`
 }
 
 type PreviewPaneProps = {
