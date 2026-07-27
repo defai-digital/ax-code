@@ -1,4 +1,5 @@
 import { Log } from "@/util/log"
+import { withTimeout } from "@/util/timeout"
 
 export namespace State {
   interface Entry {
@@ -8,6 +9,13 @@ export namespace State {
 
   const log = Log.create({ service: "state" })
   const recordsByKey = new Map<string, Map<Function, Entry>>()
+
+  // Cap how long one entry can block Instance.dispose / Config.updateGlobal.
+  // Pending async inits (LSP initialize, MCP connect, provider discovery) can
+  // outlive their bootstrap timeout; without a per-entry budget, disposeAll
+  // waits for them and freezes config writes / attach mode switches for tens
+  // of seconds (seen as 30s vitest timeouts and 400s when the wait throws).
+  const DISPOSE_ENTRY_TIMEOUT_MS = 5_000
 
   // Return type for `create`: the cached getter, plus an `invalidate`
   // method that drops the current entry for the active root key (and
@@ -96,13 +104,15 @@ export namespace State {
     for (const [init, entry] of entries) {
       if (!entry.dispose) continue
 
-      const label = typeof init === "function" ? init.name : String(init)
+      const label = typeof init === "function" ? init.name || "anonymous" : String(init)
 
-      const task = Promise.resolve(entry.state)
-        .then((state) => entry.dispose!(state))
-        .catch((error) => {
-          log.error("Error while disposing state:", { error, key, init: label })
-        })
+      const task = withTimeout(
+        Promise.resolve(entry.state).then((state) => entry.dispose!(state)),
+        DISPOSE_ENTRY_TIMEOUT_MS,
+        `state dispose timed out after ${DISPOSE_ENTRY_TIMEOUT_MS}ms (${label})`,
+      ).catch((error) => {
+        log.error("Error while disposing state:", { error, key, init: label })
+      })
 
       tasks.push(task)
     }

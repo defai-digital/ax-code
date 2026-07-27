@@ -186,3 +186,32 @@ test("state.invalidate on a key that was never initialized is a no-op", async ()
     },
   })
 })
+
+test("Instance.disposeAll does not hang on a stuck dispose hook", async () => {
+  await using tmp = await tmpdir()
+  let disposeStarted = false
+  const state = Instance.state(
+    () => ({ ok: true }),
+    async () => {
+      disposeStarted = true
+      // Simulate LSP/MCP teardown that never finishes. Without a per-entry
+      // budget this would block Config.updateGlobal for the full RPC timeout.
+      await new Promise(() => {})
+    },
+  )
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      state()
+    },
+  })
+
+  const started = Date.now()
+  await Instance.disposeAll()
+  const elapsed = Date.now() - started
+
+  expect(disposeStarted).toBe(true)
+  // Cap is 5s per entry; allow headroom for scheduling under load.
+  expect(elapsed).toBeLessThan(15_000)
+})

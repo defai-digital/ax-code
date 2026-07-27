@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { Auth } from "../../src/auth"
@@ -22,6 +22,13 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 describe("provider routes", () => {
+  // Server middleware bootstraps LSP/plugins for every request directory. OAuth
+  // routes that omit `?directory=` default to process.cwd() (the monorepo) and
+  // leave a heavy instance that Config.updateGlobal must dispose on attach.
+  afterEach(async () => {
+    await Instance.disposeAll().catch(() => undefined)
+  })
+
   test("rejects auth updates before writing when directory is invalid", async () => {
     const providerID = "provider-invalid-dir-test"
     const response = await Server.Default().request(`/auth/${providerID}?directory=relative`, {
@@ -56,27 +63,23 @@ describe("provider routes", () => {
 
   test("shows default API and CLI providers on fresh config while hiding Grok Cloud API", async () => {
     await using tmp = await tmpdir({ git: true })
+    const directory = encodeURIComponent(tmp.path)
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const response = await Server.Default().request("/provider")
-        expect(response.status).toBe(200)
+    const response = await Server.Default().request(`/provider?directory=${directory}`)
+    expect(response.status).toBe(200)
 
-        const body = (await response.json()) as { all: Array<{ id: string }> }
-        const ids = body.all.map((provider) => provider.id)
-        expect(ids).not.toContain("xai")
-        expect(ids).toContain("openrouter")
-        expect(ids).toContain("groq")
-        expect(ids).toContain("huggingface")
-        expect(ids).toContain("unorouter")
-        expect(ids).toContain("zai-coding-plan")
-        expect(ids).toContain("grok-build-cli")
-        expect(ids).toContain("qoder-cli")
-        expect(ids).toContain("antigravity-cli")
-        expect(ids).toContain("kimi-cli")
-      },
-    })
+    const body = (await response.json()) as { all: Array<{ id: string }> }
+    const ids = body.all.map((provider) => provider.id)
+    expect(ids).not.toContain("xai")
+    expect(ids).toContain("openrouter")
+    expect(ids).toContain("groq")
+    expect(ids).toContain("huggingface")
+    expect(ids).toContain("unorouter")
+    expect(ids).toContain("zai-coding-plan")
+    expect(ids).toContain("grok-build-cli")
+    expect(ids).toContain("qoder-cli")
+    expect(ids).toContain("antigravity-cli")
+    expect(ids).toContain("kimi-cli")
   })
 
   test("allows explicitly enabled Grok Cloud API in provider list", () => {
@@ -97,93 +100,73 @@ describe("provider routes", () => {
 
   test("oauth authorize with invalid method index returns 400 not 500", async () => {
     await using tmp = await tmpdir({ git: true })
+    const directory = encodeURIComponent(tmp.path)
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const response = await Server.Default().request(`/provider/xai/oauth/authorize`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ method: 999999 }),
-        })
-        expect(response.status).toBe(400)
-        const body = (await response.json()) as { name: string; details?: { resource?: string } }
-        expect(body.name).toBe("InvalidRequestError")
-        expect(body.details?.resource).toBe("providerAuth")
-      },
+    const response = await Server.Default().request(`/provider/xai/oauth/authorize?directory=${directory}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method: 999999 }),
     })
+    expect(response.status).toBe(400)
+    const body = (await response.json()) as { name: string; details?: { resource?: string } }
+    expect(body.name).toBe("InvalidRequestError")
+    expect(body.details?.resource).toBe("providerAuth")
   })
 
   test("oauth callback without pending auth returns 400 not 500", async () => {
     await using tmp = await tmpdir({ git: true })
+    const directory = encodeURIComponent(tmp.path)
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const response = await Server.Default().request(`/provider/xai/oauth/callback`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ method: 0 }),
-        })
-        expect(response.status).toBe(400)
-        const body = (await response.json()) as { name: string; details?: { resource?: string } }
-        expect(body.name).toBe("InvalidRequestError")
-        expect(body.details?.resource).toBe("providerAuth")
-      },
+    const response = await Server.Default().request(`/provider/xai/oauth/callback?directory=${directory}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method: 0 }),
     })
+    expect(response.status).toBe(400)
+    const body = (await response.json()) as { name: string; details?: { resource?: string } }
+    expect(body.name).toBe("InvalidRequestError")
+    expect(body.details?.resource).toBe("providerAuth")
   })
 
   test("oauth callback coerces method index from string values", async () => {
     await using tmp = await tmpdir({ git: true })
+    const directory = encodeURIComponent(tmp.path)
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const response = await Server.Default().request(`/provider/xai/oauth/callback`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ method: "0" }),
-        })
-        expect(response.status).toBe(400)
-        const body = (await response.json()) as { name: string; details?: { resource?: string } }
-        expect(body.name).toBe("InvalidRequestError")
-        expect(body.details?.resource).toBe("providerAuth")
-      },
+    const response = await Server.Default().request(`/provider/xai/oauth/callback?directory=${directory}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method: "0" }),
     })
+    expect(response.status).toBe(400)
+    const body = (await response.json()) as { name: string; details?: { resource?: string } }
+    expect(body.name).toBe("InvalidRequestError")
+    expect(body.details?.resource).toBe("providerAuth")
   })
 
   test("oauth authorize rejects negative method index at validation", async () => {
     await using tmp = await tmpdir({ git: true })
+    const directory = encodeURIComponent(tmp.path)
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const response = await Server.Default().request(`/provider/xai/oauth/authorize`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ method: -1 }),
-        })
-        expect(response.status).toBe(400)
-      },
+    const response = await Server.Default().request(`/provider/xai/oauth/authorize?directory=${directory}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method: -1 }),
     })
+    expect(response.status).toBe(400)
   })
 
   test("oauth authorize rejects empty method index at validation", async () => {
     await using tmp = await tmpdir({ git: true })
+    const directory = encodeURIComponent(tmp.path)
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const response = await Server.Default().request(`/provider/xai/oauth/authorize`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ method: "" }),
-        })
-        expect(response.status).toBe(400)
-        const body = (await response.json()) as { name: string }
-        expect(body.name).toBe("InvalidRequestError")
-      },
+    const response = await Server.Default().request(`/provider/xai/oauth/authorize?directory=${directory}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method: "" }),
     })
+    expect(response.status).toBe(400)
+    const body = (await response.json()) as { name: string }
+    expect(body.name).toBe("InvalidRequestError")
   })
 
   test("ax-engine request schemas parse string boolean flags from JSON clients", () => {
@@ -220,8 +203,6 @@ describe("provider routes", () => {
     })
   })
 
-  // Both mode changes reload global config and dispose every instance created
-  // earlier in this integration file, which is slower on the two-worker CI shard.
   test("validates attach mode, encrypts its credential, and can switch back to managed", async () => {
     await using tmp = await tmpdir({ git: true })
     const previousConfigPath = Global.Path.config
@@ -248,6 +229,10 @@ describe("provider routes", () => {
       )) as typeof fetch
 
     try {
+      // Drop any leftover instances (e.g. cwd bootstrap from prior tests) so
+      // Config.updateGlobal during attach/managed does not wait on their teardown.
+      await Instance.disposeAll().catch(() => undefined)
+
       const app = Server.Default()
       const connectionURL = `/provider/ax-engine/connection?directory=${encodeURIComponent(tmp.path)}`
       const attach = await app.request(connectionURL, {
@@ -298,80 +283,71 @@ describe("provider routes", () => {
       ;(Global.Path as { config: string }).config = previousConfigPath
       Config.global.reset()
     }
-  }, 120_000)
+  })
 
   test("ax-engine models route returns the supported model catalog", async () => {
     await using tmp = await tmpdir({ git: true })
+    const directory = encodeURIComponent(tmp.path)
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const response = await Server.Default().request("/provider/ax-engine/models")
-        expect(response.status).toBe(200)
-        const body = (await response.json()) as { models: Array<{ id: string }> }
-        expect(body.models.map((model) => model.id)).toEqual([
-          "qwen3.6-27b-6bit",
-          "qwen3-coder-next-6bit",
-          "qwen3.6-35b-a3b",
-          "gemma-4-12b",
-          "gemma-4-26b",
-          "gemma-4-31b",
-          "glm-4.7-flash",
-        ])
-      },
-    })
+    const response = await Server.Default().request(`/provider/ax-engine/models?directory=${directory}`)
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { models: Array<{ id: string }> }
+    expect(body.models.map((model) => model.id)).toEqual([
+      "qwen3.6-27b-6bit",
+      "qwen3-coder-next-6bit",
+      "qwen3.6-35b-a3b",
+      "gemma-4-12b",
+      "gemma-4-26b",
+      "gemma-4-31b",
+      "glm-4.7-flash",
+    ])
   })
 
   test("ax-engine model download route rejects unknown model ids", async () => {
     await using tmp = await tmpdir({ git: true })
+    const directory = encodeURIComponent(tmp.path)
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const response = await Server.Default().request("/provider/ax-engine/models/nope/download", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        })
-        expect(response.status).toBe(400)
-        const body = (await response.json()) as { name: string; details?: { resource?: string } }
-        expect(body.name).toBe("InvalidRequestError")
-        expect(body.details?.resource).toBe("model")
-      },
+    const response = await Server.Default().request(`/provider/ax-engine/models/nope/download?directory=${directory}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
     })
+    expect(response.status).toBe(400)
+    const body = (await response.json()) as { name: string; details?: { resource?: string } }
+    expect(body.name).toBe("InvalidRequestError")
+    expect(body.details?.resource).toBe("model")
   })
 
   test("ax-engine model delete route returns domain errors as 400 responses", async () => {
     await using tmp = await tmpdir({ git: true })
+    const directory = encodeURIComponent(tmp.path)
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const modelPath = path.join(tmp.path, "external-model")
-        const marker = {
-          modelID: AX_ENGINE_QWEN36_27B_MODEL_ID,
-          quantization: "mlx6bit",
-          path: modelPath,
-          preparedAt: Date.now(),
-        }
-        await fs.mkdir(modelPath, { recursive: true })
-        await fs.writeFile(path.join(modelPath, "ax_mtp_sidecar_manifest.json"), "{}")
-        await fs.mkdir(path.dirname(AxEnginePaths.prepareState), { recursive: true })
-        await fs.writeFile(AxEnginePaths.prepareState, JSON.stringify(marker))
-        await fs.writeFile(AxEnginePaths.completionMarker(modelPath), JSON.stringify(marker))
+    const modelPath = path.join(tmp.path, "external-model")
+    const marker = {
+      modelID: AX_ENGINE_QWEN36_27B_MODEL_ID,
+      quantization: "mlx6bit",
+      path: modelPath,
+      preparedAt: Date.now(),
+    }
+    await fs.mkdir(modelPath, { recursive: true })
+    await fs.writeFile(path.join(modelPath, "ax_mtp_sidecar_manifest.json"), "{}")
+    await fs.mkdir(path.dirname(AxEnginePaths.prepareState), { recursive: true })
+    await fs.writeFile(AxEnginePaths.prepareState, JSON.stringify(marker))
+    await fs.writeFile(AxEnginePaths.completionMarker(modelPath), JSON.stringify(marker))
 
-        const response = await Server.Default().request(`/provider/ax-engine/models/${AX_ENGINE_QWEN36_27B_MODEL_ID}`, {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        })
-        expect(response.status).toBe(400)
-        const body = (await response.json()) as { name: string; message: string; details?: { resource?: string } }
-        expect(body.name).toBe("InvalidRequestError")
-        expect(body.message).toContain("AX_ENGINE_MODEL_NOT_PREPARED")
-        expect(body.details?.resource).toBe("axEngine")
+    const response = await Server.Default().request(
+      `/provider/ax-engine/models/${AX_ENGINE_QWEN36_27B_MODEL_ID}?directory=${directory}`,
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
       },
-    })
+    )
+    expect(response.status).toBe(400)
+    const body = (await response.json()) as { name: string; message: string; details?: { resource?: string } }
+    expect(body.name).toBe("InvalidRequestError")
+    expect(body.message).toContain("AX_ENGINE_MODEL_NOT_PREPARED")
+    expect(body.details?.resource).toBe("axEngine")
   })
 
   test("redactProviderInfo drops the key and masks secret-bearing options", () => {

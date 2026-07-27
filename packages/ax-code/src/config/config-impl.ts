@@ -1526,9 +1526,12 @@ export namespace Config {
 
     global.reset()
 
+    // Config is already on disk. Dispose reloads in-memory instance caches so
+    // live processes pick up the change; a stuck dispose (slow LSP/MCP teardown)
+    // must not fail the write that already succeeded — callers such as the
+    // ax-engine connection route would otherwise return 400 after a durable save.
     await Instance.disposeAll().catch((err) => {
       log.error("failed to dispose instances during config reload", { err })
-      throw err
     })
 
     GlobalBus.emit("event", {
