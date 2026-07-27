@@ -746,6 +746,24 @@ export type EventNotificationToastShow = {
   }
 }
 
+export type EventNotificationMonitorLine = {
+  type: "notification.monitor.line"
+  properties: {
+    monitorID: string
+    line: string
+    description: string
+  }
+}
+
+export type EventNotificationMonitorExit = {
+  type: "notification.monitor.exit"
+  properties: {
+    monitorID: string
+    description: string
+    exitCode: number | null
+  }
+}
+
 export type EventFileEdited = {
   type: "file.edited"
   properties: {
@@ -1733,6 +1751,8 @@ export type Event =
   | EventSessionCompacted
   | EventTodoUpdated
   | EventNotificationToastShow
+  | EventNotificationMonitorLine
+  | EventNotificationMonitorExit
   | EventFileEdited
   | EventDebugEngineCorrelatedDiagnostics
   | EventMcpToolsChanged
@@ -2588,6 +2608,30 @@ export type Config = {
       purpose: string
       selectors: Array<string>
     }>
+  }
+  /**
+   * Image generation provider configuration
+   */
+  image_generation?: {
+    /**
+     * Image generation provider. Defaults to openai if OPENAI_API_KEY is set.
+     */
+    provider?: "openai" | "stability" | "custom"
+    options?: {
+      /**
+       * API key for the image generation provider.
+       */
+      apiKey?: string
+      /**
+       * Custom base URL for the provider API.
+       */
+      baseURL?: string
+      /**
+       * Model to use (e.g. dall-e-3, stable-diffusion-xl).
+       */
+      model?: string
+      [key: string]: unknown
+    }
   }
 }
 
@@ -12234,6 +12278,78 @@ export type ProviderListResponses = {
 }
 
 export type ProviderListResponse = ProviderListResponses[keyof ProviderListResponses]
+
+export type ProviderAxEngineConnectionData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/provider/ax-engine/connection"
+}
+
+export type ProviderAxEngineConnectionResponses = {
+  /**
+   * AX Engine connection status
+   */
+  200: {
+    mode: "managed" | "attach"
+    baseURL: string
+    ready: boolean
+    models: Array<string>
+    toolcall: boolean
+    hasApiKey: boolean
+    error?: string
+  }
+}
+
+export type ProviderAxEngineConnectionResponse =
+  ProviderAxEngineConnectionResponses[keyof ProviderAxEngineConnectionResponses]
+
+export type ProviderAxEngineConnectionUpdateData = {
+  body?:
+    | {
+        mode: "managed"
+      }
+    | {
+        mode: "attach"
+        baseURL: string
+        apiKey?: string
+      }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/provider/ax-engine/connection"
+}
+
+export type ProviderAxEngineConnectionUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+export type ProviderAxEngineConnectionUpdateError =
+  ProviderAxEngineConnectionUpdateErrors[keyof ProviderAxEngineConnectionUpdateErrors]
+
+export type ProviderAxEngineConnectionUpdateResponses = {
+  /**
+   * Updated AX Engine connection
+   */
+  200: {
+    mode: "managed" | "attach"
+    baseURL: string
+    ready: boolean
+    models: Array<string>
+    toolcall: boolean
+    hasApiKey: boolean
+    error?: string
+  }
+}
+
+export type ProviderAxEngineConnectionUpdateResponse =
+  ProviderAxEngineConnectionUpdateResponses[keyof ProviderAxEngineConnectionUpdateResponses]
 
 export type ProviderAxEngineModelsData = {
   body?: never

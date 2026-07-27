@@ -124,6 +124,7 @@ export async function fetchAxEngineModelContracts(input: {
   const response = await fetch(`${baseURL}/models`, {
     signal: input.signal ?? AbortSignal.timeout(2_000),
     headers: { authorization: `Bearer ${input.apiKey ?? resolveAxEngineApiKey()}` },
+    redirect: "error",
   })
   if (!response.ok) {
     response.body?.cancel()

@@ -109,6 +109,9 @@ import type {
   PromptHistoryListErrors,
   PromptHistoryListResponses,
   ProviderAuthResponses,
+  ProviderAxEngineConnectionResponses,
+  ProviderAxEngineConnectionUpdateErrors,
+  ProviderAxEngineConnectionUpdateResponses,
   ProviderAxEngineDownloadCancelErrors,
   ProviderAxEngineDownloadCancelResponses,
   ProviderAxEngineDownloadsResponses,
@@ -5405,6 +5408,72 @@ export class Download extends HeyApiClient {
 }
 
 export class AxEngine extends HeyApiClient {
+  /**
+   * Get AX Engine connection
+   *
+   * Inspect whether AX Code manages a local server or attaches to an existing local AX Engine.
+   */
+  public connection<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ProviderAxEngineConnectionResponses, unknown, ThrowOnError>({
+      url: "/provider/ax-engine/connection",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Configure AX Engine connection
+   *
+   * Select managed lifecycle or validate and attach to an existing local AX Engine. Attach credentials are stored in encrypted auth storage.
+   */
+  public connectionUpdate<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      body?:
+        | {
+            mode: "managed"
+          }
+        | {
+            mode: "attach"
+            baseURL: string
+            apiKey?: string
+          }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { key: "body", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<
+      ProviderAxEngineConnectionUpdateResponses,
+      ProviderAxEngineConnectionUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/provider/ax-engine/connection",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
   /**
    * List ax-engine local models
    *

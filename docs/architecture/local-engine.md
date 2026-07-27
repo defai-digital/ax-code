@@ -11,10 +11,10 @@ Related: [ax-engine LOCAL-ENGINE-CLIENTS](https://github.com/defai-digital/ax-en
 AX Code uses the **sidecar HTTP** backend for AX Engine. Two operator modes share
 the same OpenAI-compatible `/v1` chat wire:
 
-| Mode | When | How |
-| --- | --- | --- |
-| **Managed** (default) | AX Code owns lifecycle | prepare model → spawn `ax-engine serve` → health → chat |
-| **Attach** | You already run the server | set `baseURL` + `apiKey` only; no spawn |
+| Mode                  | When                       | How                                                     |
+| --------------------- | -------------------------- | ------------------------------------------------------- |
+| **Managed** (default) | AX Code owns lifecycle     | prepare model → spawn `ax-engine serve` → health → chat |
+| **Attach**            | You already run the server | set `baseURL` + `apiKey` only; no spawn                 |
 
 ```text
 AX Code (TypeScript)
@@ -23,48 +23,52 @@ AX Code (TypeScript)
   → @ai-sdk/openai-compatible language model
 ```
 
-TUI: **Connect provider → AX Engine** offers *Managed local server* or
-*Attach existing server* (endpoint + API key prompts). Connected menus can
-switch modes, change attach credentials, or stop a managed process.
+The TUI and Desktop **AX Engine** settings offer _Managed local server_ or
+_Attach existing server_ (endpoint + API key). Both surfaces validate an attach
+before saving it. They never start, reload, or stop a server in attach mode.
 
 ### Attach configuration
 
-Config (`ax-code.json` / project config):
+Trusted global config records the non-secret connection choice:
 
 ```json
 {
   "provider": {
     "ax-engine": {
       "options": {
-        "baseURL": "http://127.0.0.1:31418/v1",
-        "apiKey": "local"
+        "connectionMode": "attach",
+        "baseURL": "http://127.0.0.1:31418/v1"
       }
     }
   }
 }
 ```
 
-Env equivalents (also select attach mode when set):
+The UI stores the bearer token in AX Code's encrypted auth store, never in
+`ax-code.json`. Project-controlled provider URLs are intentionally ignored by
+the untrusted-config policy. Environment variables remain an advanced,
+backward-compatible attach path:
 
-| Variable | Role |
-| --- | --- |
-| `AX_ENGINE_HOST` | Base URL (with or without `/v1`); local host only |
+| Variable            | Role                                                          |
+| ------------------- | ------------------------------------------------------------- |
+| `AX_ENGINE_HOST`    | Base URL (with or without `/v1`); local host only             |
 | `AX_ENGINE_API_KEY` | Bearer token (must match server `--api-key` / env if enabled) |
 
-Default managed key is `local` when unset. Attach rejects non-local hosts
-(same rule as the provider loader). Clearing `options.baseURL` (and unsetting
-`AX_ENGINE_HOST`) returns to managed spawn.
+Default managed key is `local` when unset. Attach accepts only HTTP(S) loopback
+hosts, rejects URL-embedded credentials/query strings, validates `/v1/models`
+and structured tool calling, and refuses to attach to a process AX Code owns.
+Set `connectionMode` to `managed` to override even a lingering
+`AX_ENGINE_HOST`.
 
-AX Code does **not** link `ax-engine-sdk` in-process (that is AX Studio’s default
-for the `mlx` provider). Both products share lifecycle **phase names** and the
-`/v1` chat contract; they intentionally differ on process model. gRPC and
-in-process SDK are non-goals for AX Code chat.
+AX Code does **not** link `ax-engine-sdk` in-process. AX Code and the current
+AX Studio Electron app both use the `/v1` sidecar contract and share lifecycle
+**phase names**. gRPC and in-process SDK are non-goals for AX Code chat.
 
-## Why sidecar (not Studio’s in-process path)
+## Why sidecar
 
 | Factor         | Sidecar choice                                                   |
 | -------------- | ---------------------------------------------------------------- |
-| Host language  | Node/Bun agent runtime, not a Rust Tauri embed                   |
+| Host language  | Node/Bun agent runtime with an explicit native-process boundary  |
 | Isolation      | Multi-GB models and native crashes stay out of the agent process |
 | Upgrade        | Version-gated Homebrew/PATH binary without rebuilding ax-code    |
 | Provider model | Same OpenAI-compatible path as other local/cloud providers       |
@@ -88,19 +92,18 @@ Severity order matches ax-engine `docs/LOCAL-ENGINE-CLIENTS.md`.
 
 ## Related code
 
-| Area                  | Path                                                                   |
-| --------------------- | ---------------------------------------------------------------------- |
-| Server spawn / health | `packages/ax-code/src/provider/ax-engine/server.ts`                    |
-| Provider loader (managed + attach) | `packages/ax-code/src/provider/ax-engine/provider-loader.ts` |
-| TUI managed / attach  | `packages/ax-code/src/cli/cmd/tui/component/dialog-provider.tsx`        |
-| Connect-mode helpers  | `packages/ax-code/src/cli/cmd/tui/component/dialog-provider-options.ts` |
-| Aggregate status      | `packages/ax-code/src/provider/ax-engine/status.ts`                    |
-| Phase mapping         | `packages/ax-code/src/provider/ax-engine/lifecycle.ts`                 |
-| Model policy          | [AX Engine Model Selection](../providers/ax-engine-model-selection.md) |
+| Area                               | Path                                                                    |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| Server spawn / health              | `packages/ax-code/src/provider/ax-engine/server.ts`                     |
+| Provider loader (managed + attach) | `packages/ax-code/src/provider/ax-engine/provider-loader.ts`            |
+| TUI managed / attach               | `packages/ax-code/src/cli/cmd/tui/component/dialog-provider.tsx`        |
+| Connect-mode helpers               | `packages/ax-code/src/cli/cmd/tui/component/dialog-provider-options.ts` |
+| Aggregate status                   | `packages/ax-code/src/provider/ax-engine/status.ts`                     |
+| Phase mapping                      | `packages/ax-code/src/provider/ax-engine/lifecycle.ts`                  |
+| Model policy                       | [AX Engine Model Selection](../providers/ax-engine-model-selection.md)  |
 
 ## Non-goals
 
 - Replacing sidecar with in-process SDK embedding in AX Code
 - Adopting gRPC as the primary chat transport
-- Forcing AX Studio to abandon in-process MLX
 - Custom Unix-socket or non-OpenAI chat framing for first-party clients

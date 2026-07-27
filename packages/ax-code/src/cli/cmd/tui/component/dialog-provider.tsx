@@ -13,6 +13,7 @@ import type { ProviderAuthAuthorization, ProviderAuthMethod } from "@ax-code/sdk
 import { DialogModel } from "./dialog-model"
 import { useKeyboard } from "@ax-code/opentui-solid"
 import { Clipboard } from "@tui/util/clipboard"
+import { directoryRequestHeaders } from "@tui/util/request-headers"
 import { useToast } from "../ui/toast"
 import { which } from "@/util/which"
 import { Log } from "@/util/log"
@@ -20,11 +21,8 @@ import {
   CLI_BINARIES,
   CLI_PROVIDERS,
   OFFLINE_PROVIDERS,
-  axEngineAttachApiKeyPreset,
   axEngineAttachBaseURLPreset,
-  axEngineAttachProviderConfig,
   axEngineConnectModeFromConfig,
-  axEngineManagedProviderConfig,
   configUpdateParams,
   normalizeAxEngineEndpointBaseURL,
   normalizeConfiguredProvidersPayload,
@@ -47,6 +45,16 @@ type AxEngineTuiStatus = {
   model?: { present?: boolean; modelID?: string; path?: string; blockers?: string[] }
   server?: { running?: boolean; ready?: boolean; state?: { baseURL?: string }; blockers?: string[] }
   capability?: { toolcall?: boolean; reason?: string }
+}
+
+type AxEngineConnectionView = {
+  mode: "managed" | "attach"
+  baseURL: string
+  ready: boolean
+  models: string[]
+  toolcall: boolean
+  hasApiKey: boolean
+  error?: string
 }
 
 function offlineProviderHint() {
@@ -116,7 +124,10 @@ async function axEngineRequest<T>(
 ): Promise<T> {
   const response = await sdk.fetch(new URL(`/provider/ax-engine/${path}`, sdk.url), {
     method: path === "status" ? "GET" : "POST",
-    headers: path === "status" ? undefined : { "content-type": "application/json" },
+    headers: directoryRequestHeaders({
+      directory: sdk.directory,
+      contentType: path === "status" ? undefined : "application/json",
+    }),
     body: path === "status" ? undefined : JSON.stringify(body ?? {}),
   })
   if (!response.ok) {
@@ -124,6 +135,25 @@ async function axEngineRequest<T>(
     throw new Error(text || `AX Engine request failed with HTTP ${response.status}`)
   }
   return (await response.json()) as T
+}
+
+async function axEngineConnectionRequest(
+  sdk: ReturnType<typeof useSDK>,
+  body?: { mode: "managed" } | { mode: "attach"; baseURL: string; apiKey?: string },
+): Promise<AxEngineConnectionView> {
+  const response = await sdk.fetch(new URL("/provider/ax-engine/connection", sdk.url), {
+    method: body ? "PUT" : "GET",
+    headers: directoryRequestHeaders({
+      directory: sdk.directory,
+      contentType: body ? "application/json" : undefined,
+    }),
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => undefined)) as { message?: string } | undefined
+    throw new Error(payload?.message ?? `AX Engine connection failed with HTTP ${response.status}`)
+  }
+  return (await response.json()) as AxEngineConnectionView
 }
 
 function renderAxEngineStatusText(status: AxEngineTuiStatus) {
@@ -171,6 +201,38 @@ function showAxEngineStatusDialog(input: {
   ))
 }
 
+function showAxEngineAttachedStatusDialog(input: {
+  dialog: ReturnType<typeof useDialog>
+  theme: ReturnType<typeof useTheme>["theme"]
+  connection: AxEngineConnectionView
+}) {
+  const lines = [
+    `Mode: attached`,
+    `Endpoint: ${input.connection.baseURL}`,
+    `Health: ${input.connection.ready ? "ready" : "unavailable"}`,
+    `Models: ${input.connection.models.length > 0 ? input.connection.models.join(", ") : "none"}`,
+    `Tool calling: ${input.connection.toolcall ? "supported" : "not verified"}`,
+    input.connection.error,
+  ].filter((line): line is string => !!line)
+  input.dialog.replace(() => (
+    <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
+      <box flexDirection="row" justifyContent="space-between">
+        <text attributes={TextAttributes.BOLD} fg={input.theme.text}>
+          AX Engine status
+        </text>
+        <text fg={input.theme.textMuted} onMouseUp={() => input.dialog.clear()}>
+          esc
+        </text>
+      </box>
+      <box gap={1}>
+        {lines.map((line) => (
+          <text fg={line === input.connection.error ? input.theme.warning : input.theme.textMuted}>{line}</text>
+        ))}
+      </box>
+    </box>
+  ))
+}
+
 export function createDialogProviderOptions() {
   const sync = useSync()
   const dialog = useDialog()
@@ -190,15 +252,6 @@ export function createDialogProviderOptions() {
 
   async function updateConfig(config: Record<string, unknown>) {
     await sdk.client.config.update(configUpdateParams(config) as any, { throwOnError: true })
-  }
-
-  async function persistAxEngineProvider(providerName: string) {
-    await updateConfig({
-      provider: axEngineManagedProviderConfig(providerName),
-    })
-    await sdk.client.instance.dispose()
-    await sync.bootstrap()
-    await refreshConfiguredProviders()
   }
 
   function promptAxEngineAttach(providerName: string) {
@@ -228,12 +281,13 @@ export function createDialogProviderOptions() {
           dialog.replace(() => (
             <DialogPrompt
               title="AX Engine API key"
-              value={axEngineAttachApiKeyPreset(sync.data.config)}
+              value=""
               placeholder="local"
               description={() => (
                 <box gap={1}>
                   <text fg={theme.textMuted}>Bearer token for Authorization. Default for local serve is "local".</text>
                   <text fg={theme.textMuted}>Must match AX_ENGINE_API_KEY / --api-key on the server if set.</text>
+                  <text fg={theme.textMuted}>Leave blank to keep the saved key (or use "local" on first connect).</text>
                 </box>
               )}
               onConfirm={(apiKeyValue) => {
@@ -243,16 +297,19 @@ export function createDialogProviderOptions() {
                   fallbackMessage: "Failed to attach AX Engine server",
                   toast,
                   run: async () => {
-                    await updateConfig({
-                      provider: axEngineAttachProviderConfig({
-                        providerName,
-                        baseURL,
-                        apiKey: apiKeyValue ?? "",
-                      }),
+                    const connection = await axEngineConnectionRequest(sdk, {
+                      mode: "attach",
+                      baseURL,
+                      ...(apiKeyValue?.trim() ? { apiKey: apiKeyValue.trim() } : {}),
                     })
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
-                    toast.show({ variant: "success", message: `Attached AX Engine at ${baseURL}` })
+                    toast.show({
+                      variant: "success",
+                      message: `Attached AX Engine at ${connection.baseURL} (${connection.models.length} model${
+                        connection.models.length === 1 ? "" : "s"
+                      })`,
+                    })
                     await openModelDialogForProvider("ax-engine", providerName)
                   },
                 })
@@ -268,7 +325,13 @@ export function createDialogProviderOptions() {
     await refreshConfiguredProviders()
     let provider = sync.data.provider.find((item) => item.id === providerID)
     if (providerID === "ax-engine" && (!provider || Object.keys(provider.models).length === 0)) {
-      await persistAxEngineProvider(providerName)
+      if (axEngineConnectModeFromConfig(sync.data.config) === "attach") {
+        throw new Error("Attached AX Engine returned no selectable tool-capable models")
+      }
+      await axEngineConnectionRequest(sdk, { mode: "managed" })
+      await sdk.client.instance.dispose()
+      await sync.bootstrap()
+      await refreshConfiguredProviders()
       provider = sync.data.provider.find((item) => item.id === providerID)
     }
     if (!provider || Object.keys(provider.models).length === 0) {
@@ -405,9 +468,7 @@ export function createDialogProviderOptions() {
                           "AX Engine is not supported on this host",
                       )
                     }
-                    await updateConfig({
-                      provider: axEngineManagedProviderConfig(provider.name),
-                    })
+                    await axEngineConnectionRequest(sdk, { mode: "managed" })
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
                     toast.show({
@@ -475,9 +536,7 @@ export function createDialogProviderOptions() {
                     dialog.replace(
                       () => (
                         <DialogSelect
-                          title={
-                            connectMode === "attach" ? "AX Engine — attached" : "AX Engine — managed"
-                          }
+                          title={connectMode === "attach" ? "AX Engine — attached" : "AX Engine — managed"}
                           options={actions}
                           onSelect={(option) => resolve(option.value)}
                         />
@@ -487,6 +546,11 @@ export function createDialogProviderOptions() {
                   })
                   if (action === null) return
                   if (action === "status") {
+                    if (connectMode === "attach") {
+                      const connection = await axEngineConnectionRequest(sdk)
+                      showAxEngineAttachedStatusDialog({ dialog, theme, connection })
+                      return
+                    }
                     showAxEngineStatusDialog({ dialog, theme, status })
                     return
                   }
@@ -510,9 +574,7 @@ export function createDialogProviderOptions() {
                           "AX Engine is not supported on this host",
                       )
                     }
-                    await updateConfig({
-                      provider: axEngineManagedProviderConfig(provider.name),
-                    })
+                    await axEngineConnectionRequest(sdk, { mode: "managed" })
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
                     toast.show({ variant: "success", message: "Switched AX Engine to managed mode" })
@@ -625,7 +687,8 @@ export function createDialogProviderOptions() {
                           </text>
                         </box>
                         <text fg={theme.textMuted}>
-                          Install the CLI and ensure it is available in your PATH, then close this message and select the provider again.
+                          Install the CLI and ensure it is available in your PATH, then close this message and select
+                          the provider again.
                         </text>
                       </box>
                     ))

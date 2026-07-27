@@ -7,6 +7,7 @@ import {
   axEngineAttachBaseURLPreset,
   axEngineAttachProviderConfig,
   axEngineConnectModeFromConfig,
+  axEngineEndpointsMayAlias,
   axEngineManagedProviderConfig,
   configUpdateParams,
   normalizeAxEngineEndpointBaseURL,
@@ -223,6 +224,9 @@ describe("provider dialog options", () => {
     expect(normalizeAxEngineEndpointBaseURL("127.0.0.1:31418")).toBe("http://127.0.0.1:31418/v1")
     expect(normalizeAxEngineEndpointBaseURL("http://localhost:31418/v1")).toBe("http://localhost:31418/v1")
     expect(() => normalizeAxEngineEndpointBaseURL("https://api.example.com/v1")).toThrow(/local host/i)
+    expect(() => normalizeAxEngineEndpointBaseURL("http://0.0.0.0:31418")).toThrow(/local host/i)
+    expect(() => normalizeAxEngineEndpointBaseURL("ftp://localhost/model")).toThrow(/http/i)
+    expect(() => normalizeAxEngineEndpointBaseURL("http://user:secret@localhost:31418")).toThrow(/credentials/i)
     expect(() => normalizeAxEngineEndpointBaseURL("")).toThrow(/required/i)
   })
 
@@ -238,17 +242,35 @@ describe("provider dialog options", () => {
       ).toBe("attach")
       process.env.AX_ENGINE_HOST = "http://127.0.0.1:31419"
       expect(axEngineConnectModeFromConfig({})).toBe("attach")
+      expect(
+        axEngineConnectModeFromConfig({
+          provider: {
+            "ax-engine": {
+              options: {
+                connectionMode: "managed",
+                baseURL: "http://127.0.0.1:31418/v1",
+              },
+            },
+          },
+        }),
+      ).toBe("managed")
     } finally {
       if (previousHost === undefined) delete process.env.AX_ENGINE_HOST
       else process.env.AX_ENGINE_HOST = previousHost
     }
   })
 
+  test("detects common loopback aliases for the same managed endpoint", () => {
+    expect(axEngineEndpointsMayAlias("http://127.0.0.1:31418/v1", "http://localhost:31418")).toBe(true)
+    expect(axEngineEndpointsMayAlias("http://127.0.0.2:31418/v1", "http://localhost:31418/v1")).toBe(false)
+    expect(axEngineEndpointsMayAlias("http://localhost:31418/v1", "http://localhost:31419/v1")).toBe(false)
+  })
+
   test("builds managed and attach ax-engine provider config patches", () => {
     expect(axEngineManagedProviderConfig("AX Engine (Local)")).toEqual({
       "ax-engine": {
         name: "AX Engine (Local)",
-        options: { baseURL: "" },
+        options: { connectionMode: "managed", baseURL: "", apiKey: "" },
       },
     })
     expect(
@@ -261,8 +283,9 @@ describe("provider dialog options", () => {
       "ax-engine": {
         name: "AX Engine (Local)",
         options: {
+          connectionMode: "attach",
           baseURL: "http://127.0.0.1:31418/v1",
-          apiKey: "secret",
+          apiKey: "",
         },
       },
     })
@@ -272,7 +295,7 @@ describe("provider dialog options", () => {
         baseURL: "http://127.0.0.1:31418/v1",
         apiKey: "  ",
       })["ax-engine"].options.apiKey,
-    ).toBe(AX_ENGINE_DEFAULT_ATTACH_API_KEY)
+    ).toBe("")
   })
 
   test("presets attach baseURL and api key from config", () => {

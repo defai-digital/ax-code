@@ -1072,6 +1072,7 @@ describe("ax-engine provider integration", () => {
     try {
       expect(resolveAxEngineApiKey()).toBe("environment-secret")
       expect(resolveAxEngineApiKey({ apiKey: "configured-secret" })).toBe("configured-secret")
+      expect(resolveAxEngineApiKey({ apiKey: "configured-secret" }, "saved-secret")).toBe("saved-secret")
     } finally {
       if (previous === undefined) delete process.env.AX_ENGINE_API_KEY
       else process.env.AX_ENGINE_API_KEY = previous
@@ -1247,6 +1248,26 @@ describe("ax-engine provider integration", () => {
 
     expect(seen).toEqual([])
     expect(models[AX_ENGINE_QWEN36_35B_MODEL_ID].api.url).toBe("http://127.0.0.1:31418/v1")
+  })
+
+  test("explicit managed mode overrides a legacy AX_ENGINE_HOST attach environment", async () => {
+    const previous = process.env.AX_ENGINE_HOST
+    process.env.AX_ENGINE_HOST = "http://127.0.0.1:31419"
+    try {
+      const provider = {
+        id: AX_ENGINE_PROVIDER_ID,
+        name: "AX Engine",
+        source: "config",
+        env: [],
+        options: { connectionMode: "managed" },
+        models: {},
+      } as any
+      const loader = await axEngineLoader()(provider)
+      expect(loader.options?.baseURL).toBeUndefined()
+    } finally {
+      if (previous === undefined) delete process.env.AX_ENGINE_HOST
+      else process.env.AX_ENGINE_HOST = previous
+    }
   })
 
   test("configured provider is available without starting ax-engine during provider list", async () => {
@@ -1549,6 +1570,23 @@ describe("ax-engine provider integration", () => {
       discovered.qwen3.options,
     )
     expect(requested).toEqual(["qwen3"])
+  })
+
+  test("does not replace an unreachable attached endpoint with managed catalog models", async () => {
+    const provider = {
+      id: AX_ENGINE_PROVIDER_ID,
+      name: "AX Engine",
+      source: "config",
+      env: [],
+      options: { connectionMode: "attach", baseURL: "http://127.0.0.1:31418/v1" },
+      models: {},
+    } as any
+    globalThis.fetch = (async () => {
+      throw new Error("connection refused")
+    }) as typeof fetch
+
+    const loader = await axEngineLoader()(provider)
+    await expect(loader.discoverModels!(provider)).rejects.toThrow("connection refused")
   })
 
   test("fails closed when a live ax-engine backend does not support tool calling", async () => {

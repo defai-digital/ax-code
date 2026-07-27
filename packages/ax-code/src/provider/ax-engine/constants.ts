@@ -33,10 +33,11 @@ export const AX_ENGINE_RECOMMENDED_MEMORY_BYTES = 64 * 1024 ** 3
 export const AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES = AX_ENGINE_RECOMMENDED_MEMORY_BYTES
 export const AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES = 96 * 1024 ** 3
 
-export function resolveAxEngineApiKey(options: Record<string, unknown> = {}) {
+export function resolveAxEngineApiKey(options: Record<string, unknown> = {}, savedKey?: unknown) {
+  const saved = typeof savedKey === "string" && savedKey.trim() ? savedKey.trim() : undefined
   const configured = typeof options.apiKey === "string" && options.apiKey.trim() ? options.apiKey.trim() : undefined
   const environment = process.env.AX_ENGINE_API_KEY?.trim()
-  return configured ?? (environment || undefined) ?? AX_ENGINE_API_KEY
+  return saved ?? configured ?? (environment || undefined) ?? AX_ENGINE_API_KEY
 }
 
 // --- Managed binary install ------------------------------------------------

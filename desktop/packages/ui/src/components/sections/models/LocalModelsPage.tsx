@@ -1,5 +1,6 @@
 import React from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Icon } from "@/components/icon/Icon"
 import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
 import { ViewLoadingSkeleton } from "@/components/ui/ViewLoadingSkeleton"
@@ -10,11 +11,14 @@ import { useProjectsStore } from "@/stores/useProjectsStore"
 import {
   cancelAxEngineModelDownload,
   deleteAxEngineModel,
+  fetchAxEngineConnection,
   fetchAxEngineModels,
   installAxEngine,
   startAxEngineServer,
   startAxEngineModelDownload,
   stopAxEngineServer,
+  updateAxEngineConnection,
+  type AxEngineConnectionView,
   type AxEngineModelCatalogEntry,
   type AxEngineModelJobSummary,
   type AxEngineModelsResponse,
@@ -55,6 +59,10 @@ export const LocalModelsPage: React.FC = () => {
     return getCurrentDirectory()
   }, [activeProjectId])
   const [data, setData] = React.useState<AxEngineModelsResponse | null>(null)
+  const [connection, setConnection] = React.useState<AxEngineConnectionView | null>(null)
+  const [showAttachForm, setShowAttachForm] = React.useState(false)
+  const [attachBaseURL, setAttachBaseURL] = React.useState("http://127.0.0.1:31418/v1")
+  const [attachApiKey, setAttachApiKey] = React.useState("")
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [busyKey, setBusyKey] = React.useState<string | null>(null)
@@ -68,15 +76,25 @@ export const LocalModelsPage: React.FC = () => {
   // this guard the 2s poll stacks concurrent requests and an older response can
   // resolve after a newer one, clobbering fresher job state.
   const inFlightRef = React.useRef(false)
+  const connectionInitializedRef = React.useRef(false)
 
   const load = React.useCallback(async () => {
     if (inFlightRef.current) return
     inFlightRef.current = true
     try {
-      const next = await fetchAxEngineModels(directory)
+      const [next, nextConnection] = await Promise.all([
+        fetchAxEngineModels(directory),
+        fetchAxEngineConnection(directory),
+      ])
       if (!mountedRef.current) return
       setError(null)
       setData(next)
+      setConnection(nextConnection)
+      if (!connectionInitializedRef.current) {
+        connectionInitializedRef.current = true
+        setAttachBaseURL(nextConnection.baseURL)
+        setShowAttachForm(nextConnection.mode === "attach")
+      }
     } catch (err) {
       if (!mountedRef.current) return
       const message = err instanceof Error ? err.message : "Failed to load local models"
@@ -201,6 +219,46 @@ export const LocalModelsPage: React.FC = () => {
     )
   }
 
+  const handleManagedConnection = async () => {
+    setBusyKey("ax-engine-connection")
+    try {
+      const next = await updateAxEngineConnection({ mode: "managed" }, directory)
+      setConnection(next)
+      setShowAttachForm(false)
+      setAttachApiKey("")
+      toast.success("AX Engine will start automatically when a local model is used")
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to switch AX Engine to managed mode")
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
+  const handleAttachConnection = async () => {
+    setBusyKey("ax-engine-connection")
+    try {
+      const next = await updateAxEngineConnection(
+        {
+          mode: "attach",
+          baseURL: attachBaseURL,
+          ...(attachApiKey.trim() ? { apiKey: attachApiKey.trim() } : {}),
+        },
+        directory,
+      )
+      setConnection(next)
+      setAttachBaseURL(next.baseURL)
+      setAttachApiKey("")
+      setShowAttachForm(true)
+      toast.success(`Attached AX Engine at ${next.baseURL}`)
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to attach AX Engine")
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
       {confirmDialog}
@@ -214,23 +272,25 @@ export const LocalModelsPage: React.FC = () => {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant={data?.server.running ? "outline" : "default"}
-              size="sm"
-              onClick={() => void handleServerToggle()}
-              disabled={serverBusy || (!data?.server.running && !canStartServer)}
-              title={
-                !data?.server.running && !startCandidate
-                  ? "Download a runnable model before starting AX Engine"
-                  : undefined
-              }
-            >
-              <Icon
-                name={serverBusy ? "loader" : data?.server.running ? "close" : "play"}
-                className={cn("h-4 w-4", serverBusy && "animate-spin")}
-              />
-              {data?.server.running ? "Stop" : "Start"}
-            </Button>
+            {connection?.mode !== "attach" && (
+              <Button
+                variant={data?.server.running ? "outline" : "default"}
+                size="sm"
+                onClick={() => void handleServerToggle()}
+                disabled={serverBusy || (!data?.server.running && !canStartServer)}
+                title={
+                  !data?.server.running && !startCandidate
+                    ? "Download a runnable model before starting AX Engine"
+                    : undefined
+                }
+              >
+                <Icon
+                  name={serverBusy ? "loader" : data?.server.running ? "close" : "play"}
+                  className={cn("h-4 w-4", serverBusy && "animate-spin")}
+                />
+                {data?.server.running ? "Stop" : "Prewarm"}
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
               <Icon name={loading ? "loader" : "refresh"} className={cn("h-4 w-4", loading && "animate-spin")} />
               Refresh
@@ -241,6 +301,94 @@ export const LocalModelsPage: React.FC = () => {
 
       <ScrollableOverlay outerClassName="flex-1 min-h-0" className="p-6">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+          <div className="rounded-lg border border-border bg-[var(--surface-elevated)] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <div className="typography-ui-label font-medium text-foreground">Connection</div>
+                <div className="typography-micro text-muted-foreground">
+                  Managed mode starts automatically when used. Attach mode connects to an AX Engine server you already
+                  run.
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant={connection?.mode === "managed" && !showAttachForm ? "default" : "outline"}
+                  onClick={() => void handleManagedConnection()}
+                  disabled={busyKey === "ax-engine-connection"}
+                >
+                  Managed local
+                </Button>
+                <Button
+                  size="sm"
+                  variant={showAttachForm ? "default" : "outline"}
+                  onClick={() => setShowAttachForm(true)}
+                  disabled={busyKey === "ax-engine-connection"}
+                >
+                  Existing server
+                </Button>
+              </div>
+            </div>
+
+            {showAttachForm && (
+              <div className="mt-4 grid gap-3 border-t border-border pt-4 md:grid-cols-[minmax(240px,1fr)_minmax(180px,0.7fr)_auto]">
+                <label className="space-y-1">
+                  <span className="typography-micro font-medium text-foreground">Endpoint</span>
+                  <Input
+                    value={attachBaseURL}
+                    onChange={(event) => setAttachBaseURL(event.target.value)}
+                    placeholder="http://127.0.0.1:31418/v1"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="typography-micro font-medium text-foreground">API key</span>
+                  <Input
+                    type="password"
+                    value={attachApiKey}
+                    onChange={(event) => setAttachApiKey(event.target.value)}
+                    placeholder={connection?.hasApiKey ? "Saved securely" : "local"}
+                  />
+                </label>
+                <div className="flex items-end">
+                  <Button
+                    size="sm"
+                    onClick={() => void handleAttachConnection()}
+                    disabled={busyKey === "ax-engine-connection" || !attachBaseURL.trim()}
+                  >
+                    <Icon
+                      name={busyKey === "ax-engine-connection" ? "loader" : "link-unlink-m"}
+                      className={cn("h-4 w-4", busyKey === "ax-engine-connection" && "animate-spin")}
+                    />
+                    {connection?.mode === "attach" ? "Update" : "Connect"}
+                  </Button>
+                </div>
+                <div className="typography-micro text-muted-foreground md:col-span-3">
+                  The endpoint is validated before saving. Leave the key blank to keep the saved credential or use the
+                  local default on first connect.
+                </div>
+              </div>
+            )}
+
+            {connection && (
+              <div
+                className={cn(
+                  "mt-3 typography-micro",
+                  connection.ready ? "text-[var(--status-success)]" : "text-muted-foreground",
+                )}
+              >
+                {connection.mode === "attach"
+                  ? connection.ready
+                    ? `Attached · ${connection.baseURL} · ${connection.models.length} model${
+                        connection.models.length === 1 ? "" : "s"
+                      }`
+                    : `Attached endpoint unavailable${connection.error ? ` · ${connection.error}` : ""}`
+                  : connection.ready
+                    ? `Managed server ready · ${connection.baseURL}`
+                    : "Managed local · starts automatically when a downloaded model is used"}
+              </div>
+            )}
+          </div>
+
           <div className="grid gap-3 lg:grid-cols-4">
             <StatusBox title="Host" value={hostSummary} blocked={data ? !data.eligibility.supported : false} />
             <StatusBox
@@ -265,9 +413,19 @@ export const LocalModelsPage: React.FC = () => {
             />
             <StatusBox
               title="Server"
-              value={serverSummary}
+              value={
+                connection?.mode === "attach"
+                  ? connection.ready
+                    ? `Attached · ${connection.models.length} model${connection.models.length === 1 ? "" : "s"}`
+                    : "Attached · unavailable"
+                  : serverSummary
+              }
               blocked={
-                data ? Boolean(data.server.blockers.length) || (data.server.running && !data.server.ready) : false
+                connection?.mode === "attach"
+                  ? !connection.ready
+                  : data
+                    ? Boolean(data.server.blockers.length) || (data.server.running && !data.server.ready)
+                    : false
               }
             />
             <StatusBox

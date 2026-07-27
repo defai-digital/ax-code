@@ -122,6 +122,16 @@ export type AxEngineDeleteModelResponse = {
   preparedStateUpdated: boolean
 }
 
+export type AxEngineConnectionView = {
+  mode: "managed" | "attach"
+  baseURL: string
+  ready: boolean
+  models: string[]
+  toolcall: boolean
+  hasApiKey: boolean
+  error?: string
+}
+
 const jsonHeaders = { "Content-Type": "application/json", Accept: "application/json" }
 
 export const fetchAxEngineModels = async (directory: string | null): Promise<AxEngineModelsResponse> => {
@@ -186,6 +196,24 @@ export const installAxEngine = async (directory: string | null): Promise<AxEngin
     headers: jsonHeaders,
     body: JSON.stringify({}),
   }) as Promise<AxEngineInstallResult>
+}
+
+export const fetchAxEngineConnection = async (directory: string | null): Promise<AxEngineConnectionView> => {
+  return fetchProviderJsonWithRetry(buildDirectoryUrl(API_ENDPOINTS.provider.axEngineConnection, directory), {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  }) as Promise<AxEngineConnectionView>
+}
+
+export const updateAxEngineConnection = async (
+  input: { mode: "managed" } | { mode: "attach"; baseURL: string; apiKey?: string },
+  directory: string | null,
+): Promise<AxEngineConnectionView> => {
+  return fetchProviderJsonWithRetry(buildDirectoryUrl(API_ENDPOINTS.provider.axEngineConnection, directory), {
+    method: "PUT",
+    headers: jsonHeaders,
+    body: JSON.stringify(input),
+  }) as Promise<AxEngineConnectionView>
 }
 
 export const startAxEngineServer = async (modelId: string, directory: string | null) => {

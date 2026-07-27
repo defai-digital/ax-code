@@ -21,7 +21,7 @@ import {
   type AxEngineModelOptions,
 } from "./model-cache"
 import { ensureServer } from "./server"
-import { isLocalHostname } from "@/util/local-host"
+import { resolveAxEngineAttachBaseURL, resolveAxEngineConnectMode } from "./connection"
 import { fetchAxEngineModelContracts, type AxEngineLiveModelContract } from "./model-card"
 
 // Reclaim legacy managed copies once per process. The loader runs whenever the
@@ -60,14 +60,8 @@ export function rewriteToActiveAxEngineServer(
 }
 
 function configuredBaseURL(provider: Provider.Info) {
-  const baseURL = provider.options?.baseURL
-  const raw = typeof baseURL === "string" && baseURL.trim() ? baseURL.trim() : process.env.AX_ENGINE_HOST
-  if (!raw) return
-  const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `http://${raw}`
-  const url = new URL(withProtocol)
-  if (!isLocalHostname(url.hostname)) throw new Error("ax-engine baseURL must point to a local host")
-  const normalized = withProtocol.replace(/\/+$/, "")
-  return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`
+  if (resolveAxEngineConnectMode(provider.options) !== "attach") return
+  return resolveAxEngineAttachBaseURL(provider.options)
 }
 
 function inputLimit(context: number, output: number) {
@@ -150,13 +144,13 @@ async function ensureManagedReady(provider: Provider.Info, options: AxEngineMode
     modelRevision: model.revision,
     preferredPort: AX_ENGINE_DEFAULT_PORT,
     contextTokens: AX_ENGINE_MODEL_DEFINITIONS[modelID].contextTokens,
-    apiKey: resolveAxEngineApiKey(provider.options),
+    apiKey: resolveAxEngineApiKey(provider.options, provider.key),
     signal,
   })
   noteActiveAxEngineServer(state.baseURL)
   const contracts = await fetchAxEngineModelContracts({
     baseURL: state.baseURL,
-    apiKey: resolveAxEngineApiKey(provider.options),
+    apiKey: resolveAxEngineApiKey(provider.options, provider.key),
     signal,
   })
   return requireCodingContract(contracts, apiModelID)
@@ -173,7 +167,10 @@ export function axEngineLoader(): CustomLoader {
     // external server and skips ensureManagedReady entirely.
     const configuredExternalBaseURL = configuredBaseURL(provider)
     const baseURL = configuredExternalBaseURL ?? `http://127.0.0.1:${AX_ENGINE_DEFAULT_PORT}/v1`
-    const apiKey = resolveAxEngineApiKey(provider.options)
+    const configuredApiKey =
+      (typeof provider.options?.apiKey === "string" && provider.options.apiKey.trim()) ||
+      process.env.AX_ENGINE_API_KEY?.trim() ||
+      undefined
     const modelRefs = new Map<string, Provider.Model>()
 
     function remember(model: Provider.Model) {
@@ -279,10 +276,20 @@ export function axEngineLoader(): CustomLoader {
         // persist baseURL as a provider option when the user explicitly chose
         // an external server.
         ...(configuredExternalBaseURL ? { baseURL: configuredExternalBaseURL } : {}),
-        apiKey,
+        // Auth-store credentials are merged into provider.key after the custom
+        // loader runs. Only return config/env credentials here so encrypted
+        // auth can win without being shadowed by the default "local" key.
+        ...(configuredApiKey ? { apiKey: configuredApiKey } : {}),
         includeUsage: false,
         fetch: async (input: string | Request | URL, init?: RequestInit) => {
-          return fetch(rewriteToActiveAxEngineServer(input, baseURL), init)
+          const headers = new Headers(init?.headers)
+          if (!headers.has("authorization")) {
+            headers.set(
+              "authorization",
+              `Bearer ${resolveAxEngineApiKey(runtimeProvider.options, runtimeProvider.key)}`,
+            )
+          }
+          return fetch(rewriteToActiveAxEngineServer(input, baseURL), { ...init, headers })
         },
       },
       async discoverModels(currentProvider) {
@@ -292,16 +299,14 @@ export function axEngineLoader(): CustomLoader {
         if (externalBaseURL) {
           const contracts = await fetchAxEngineModelContracts({
             baseURL: externalBaseURL,
-            apiKey: resolveAxEngineApiKey(runtimeProvider.options),
+            apiKey: resolveAxEngineApiKey(runtimeProvider.options, runtimeProvider.key),
             signal: AbortSignal.timeout(2_000),
-          }).catch(() => [])
-          if (contracts.length > 0) {
-            for (const contract of contracts) {
-              const model = modelFromExternalContract(contract, externalBaseURL)
-              models[model.id] = model
-            }
-            return models
+          })
+          for (const contract of contracts) {
+            const model = modelFromExternalContract(contract, externalBaseURL)
+            models[model.id] = model
           }
+          return models
         }
 
         for (const modelID of AX_ENGINE_MODEL_IDS) {
@@ -324,7 +329,7 @@ export function axEngineLoader(): CustomLoader {
             : requestedModelID
           const contracts = await fetchAxEngineModelContracts({
             baseURL: externalBaseURL,
-            apiKey: resolveAxEngineApiKey(runtimeProvider.options),
+            apiKey: resolveAxEngineApiKey(runtimeProvider.options, runtimeProvider.key),
             signal: undefined,
           })
           const contract = requireCodingContract(contracts, apiModelID)

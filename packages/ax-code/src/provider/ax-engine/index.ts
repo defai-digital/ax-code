@@ -1,5 +1,6 @@
 export * from "./constants"
 export * from "./catalog"
+export * from "./connection"
 export * from "./delete"
 export * from "./dependency"
 export * from "./download-job"

@@ -3,6 +3,7 @@ import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
 import z from "zod"
 import { Config } from "../../config/config"
+import { Auth } from "../../auth"
 import { Provider } from "../../provider/provider"
 import { ModelsDev } from "../../provider/models"
 import { ProviderAuth } from "../../provider/auth"
@@ -14,12 +15,21 @@ import { redactProviderInfo } from "./config"
 import { Log } from "../../util/log"
 import {
   AX_ENGINE_MODEL_IDS,
+  AX_ENGINE_PROVIDER_ID,
+  axEngineAttachProviderConfig,
+  axEngineConnectionApiKey,
+  axEngineEndpointsMayAlias,
+  axEngineManagedProviderConfig,
   deleteAxEngineModel,
   getAxEngineModelsCatalog,
   getAxEngineStatus,
+  getServerStatus,
   installAxEngineBinary,
   isAxEngineModelID,
   prepareAxEngine,
+  probeAxEngineConnection,
+  resolveAxEngineAttachBaseURL,
+  resolveAxEngineConnectMode,
   startDownloadJob,
   cancelDownloadJob,
   listDownloadJobs,
@@ -81,6 +91,25 @@ export const AxEngineModelActionBody = z
   .optional()
   .default({})
 
+export const AxEngineConnectionBody = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("managed") }),
+  z.object({
+    mode: z.literal("attach"),
+    baseURL: z.string().min(1).max(2_048),
+    apiKey: z.string().max(16_384).optional(),
+  }),
+])
+
+const AxEngineConnectionView = z.object({
+  mode: z.enum(["managed", "attach"]),
+  baseURL: z.string(),
+  ready: z.boolean(),
+  models: z.array(z.string()),
+  toolcall: z.boolean(),
+  hasApiKey: z.boolean(),
+  error: z.string().optional(),
+})
+
 function axEngineModelIDParam(c: { req: { param: (name: string) => string } }) {
   const modelID = c.req.param("modelID")
   return isAxEngineModelID(modelID) ? modelID : undefined
@@ -93,6 +122,65 @@ function isAxEngineDomainError(error: unknown) {
 function axEngineInvalidRequest(c: Parameters<typeof invalidRequest>[0], error: unknown) {
   if (!isAxEngineDomainError(error)) throw error
   return invalidRequest(c, { message: toErrorMessage(error), details: { resource: "axEngine" } })
+}
+
+async function savedAxEngineApiKey() {
+  const auth = await Auth.get(AX_ENGINE_PROVIDER_ID)
+  return auth?.type === "api" ? auth.key : undefined
+}
+
+async function axEngineConnectionView() {
+  const config = await Config.get()
+  const provider = config.provider?.[AX_ENGINE_PROVIDER_ID]
+  const options = provider?.options ?? {}
+  const mode = resolveAxEngineConnectMode(options)
+  const savedKey = await savedAxEngineApiKey()
+
+  if (mode === "managed") {
+    const status = await getAxEngineStatus(options)
+    const state = status.server.state
+    return {
+      mode,
+      baseURL: state?.baseURL ?? `http://127.0.0.1:31418/v1`,
+      ready: status.server.ready,
+      models: state ? [state.apiModelID ?? state.modelID].filter(Boolean) : [],
+      toolcall: status.capability.toolcall,
+      hasApiKey: Boolean(savedKey || options.apiKey || process.env.AX_ENGINE_API_KEY),
+      ...(status.server.blockers[0] ? { error: status.server.blockers[0] } : {}),
+    }
+  }
+
+  const baseURL = resolveAxEngineAttachBaseURL(options)
+  const apiKey = axEngineConnectionApiKey({ saved: savedKey, options })
+  try {
+    const probe = await probeAxEngineConnection({ baseURL, apiKey })
+    return {
+      mode,
+      baseURL: probe.baseURL,
+      ready: true,
+      models: probe.models.map((model) => model.id),
+      toolcall: probe.toolcall,
+      hasApiKey: Boolean(savedKey || options.apiKey || process.env.AX_ENGINE_API_KEY),
+    }
+  } catch (error) {
+    return {
+      mode,
+      baseURL,
+      ready: false,
+      models: [],
+      toolcall: false,
+      hasApiKey: Boolean(savedKey || options.apiKey || process.env.AX_ENGINE_API_KEY),
+      error: toErrorMessage(error),
+    }
+  }
+}
+
+async function restoreAxEngineAuth(previous: Awaited<ReturnType<typeof Auth.get>>) {
+  if (previous) {
+    await Auth.set(AX_ENGINE_PROVIDER_ID, previous)
+    return
+  }
+  await Auth.remove(AX_ENGINE_PROVIDER_ID)
 }
 
 export const ProviderRoutes = lazy(() =>
@@ -149,6 +237,118 @@ export const ProviderRoutes = lazy(() =>
           default: mapValues(providers, (item) => Provider.sort(Object.values(item.models))[0]?.id ?? ""),
           connected: Object.keys(connected),
         })
+      },
+    )
+    .get(
+      "/ax-engine/connection",
+      describeRoute({
+        summary: "Get AX Engine connection",
+        description: "Inspect whether AX Code manages a local server or attaches to an existing local AX Engine.",
+        operationId: "provider.axEngine.connection",
+        responses: {
+          200: {
+            description: "AX Engine connection status",
+            content: {
+              "application/json": {
+                schema: resolver(AxEngineConnectionView),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => c.json(await axEngineConnectionView()),
+    )
+    .put(
+      "/ax-engine/connection",
+      describeRoute({
+        summary: "Configure AX Engine connection",
+        description:
+          "Select managed lifecycle or validate and attach to an existing local AX Engine. Attach credentials are stored in encrypted auth storage.",
+        operationId: "provider.axEngine.connectionUpdate",
+        responses: {
+          200: {
+            description: "Updated AX Engine connection",
+            content: {
+              "application/json": {
+                schema: resolver(AxEngineConnectionView),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("json", AxEngineConnectionBody),
+      async (c) => {
+        const body = c.req.valid("json")
+        const config = await Config.get()
+        const providerName = config.provider?.[AX_ENGINE_PROVIDER_ID]?.name ?? "AX Engine (Local)"
+        const previousAuth = await Auth.get(AX_ENGINE_PROVIDER_ID)
+
+        try {
+          if (body.mode === "managed") {
+            await Auth.remove(AX_ENGINE_PROVIDER_ID)
+            try {
+              await Config.updateGlobal({
+                provider: axEngineManagedProviderConfig(providerName),
+              })
+            } catch (error) {
+              await restoreAxEngineAuth(previousAuth)
+              throw error
+            }
+            return c.json(await axEngineConnectionView())
+          }
+
+          const options = config.provider?.[AX_ENGINE_PROVIDER_ID]?.options ?? {}
+          const managedServerStatus =
+            resolveAxEngineConnectMode(options) === "managed"
+              ? await getServerStatus(
+                  axEngineConnectionApiKey({
+                    saved: previousAuth?.type === "api" ? previousAuth.key : undefined,
+                    options,
+                  }),
+                )
+              : undefined
+          const requestedBaseURL = resolveAxEngineAttachBaseURL({ baseURL: body.baseURL })
+          if (
+            managedServerStatus?.state &&
+            axEngineEndpointsMayAlias(managedServerStatus.state.baseURL, requestedBaseURL)
+          ) {
+            throw new Error(
+              "AX Code currently owns the server at this endpoint. Keep Managed mode or attach to a different AX Engine server.",
+            )
+          }
+          const apiKey = axEngineConnectionApiKey({
+            requested: body.apiKey,
+            saved: previousAuth?.type === "api" ? previousAuth.key : undefined,
+            options,
+          })
+          const probe = await probeAxEngineConnection({
+            baseURL: requestedBaseURL,
+            apiKey,
+          })
+
+          await Auth.set(AX_ENGINE_PROVIDER_ID, { type: "api", key: apiKey })
+          try {
+            await Config.updateGlobal({
+              provider: axEngineAttachProviderConfig({
+                providerName,
+                baseURL: probe.baseURL,
+              }),
+            })
+          } catch (error) {
+            await restoreAxEngineAuth(previousAuth)
+            throw error
+          }
+
+          // Attach mode never owns the external process. Release any managed
+          // process AX Code started earlier so it does not keep model memory.
+          if (managedServerStatus?.state) {
+            await stopServer().catch((error) => log.warn("failed to stop managed ax-engine after attach", { error }))
+          }
+          return c.json(await axEngineConnectionView())
+        } catch (error) {
+          return invalidRequest(c, { message: toErrorMessage(error), details: { resource: "axEngineConnection" } })
+        }
       },
     )
     .get(

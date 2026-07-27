@@ -239,7 +239,7 @@ type WaitForReadyResult =
       reason: "aborted" | "process-exited" | "timeout"
     }
 
-type SpawnedServerProcess = Pick<ReturnType<typeof Process.spawn>, "pid" | "exitCode" | "signalCode">
+type SpawnedServerProcess = Pick<ReturnType<typeof Process.spawn>, "pid" | "exitCode" | "signalCode" | "exited">
 
 export async function isServerReady(baseURL: string, signal?: AbortSignal, apiKey = resolveAxEngineApiKey()) {
   // Every probe gets its own 2s timeout even when a caller signal is provided;
@@ -281,21 +281,34 @@ async function waitForReady(
   // that so a slow-but-successful start isn't cut off here first, before the
   // outer envelope ever gets a chance to matter.
   const deadline = Date.now() + (options.timeoutMs ?? 240_000)
+  // Detached/unref'd children do not update exitCode reliably on every
+  // supported Node release. Process.spawn's exited promise is driven by the
+  // child "exit" event, so track it as an authoritative second signal.
+  let observedProcessExit = processHasExited(options.process)
+  void options.process?.exited.then(
+    () => {
+      observedProcessExit = true
+    },
+    () => {
+      observedProcessExit = true
+    },
+  )
+  const processExited = () => observedProcessExit || processHasExited(options.process)
   while (Date.now() < deadline) {
     if (options.signal?.aborted) return { ready: false, reason: "aborted" }
-    if (processHasExited(options.process)) return { ready: false, reason: "process-exited" }
+    if (processExited()) return { ready: false, reason: "process-exited" }
     if (await isServerReady(baseURL, options.signal, options.apiKey)) return { ready: true }
     // A child can exit while the final health probe is waiting on its own
     // timeout. Re-check before classifying the overall wait as a health
     // timeout; otherwise fast startup failures race with the deadline and are
     // intermittently reported as AX_ENGINE_SERVER_HEALTH_FAILED.
-    if (processHasExited(options.process)) return { ready: false, reason: "process-exited" }
+    if (processExited()) return { ready: false, reason: "process-exited" }
     const remaining = deadline - Date.now()
     if (remaining <= 0) break
     await new Promise((resolve) => setTimeout(resolve, Math.min(500, remaining)))
   }
   if (options.signal?.aborted) return { ready: false, reason: "aborted" }
-  if (processHasExited(options.process)) return { ready: false, reason: "process-exited" }
+  if (processExited()) return { ready: false, reason: "process-exited" }
   return { ready: false, reason: "timeout" }
 }
 

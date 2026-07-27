@@ -92,6 +92,7 @@ export const API_ENDPOINTS = {
     axEngineDownloads: `${API_PATHS.base}/provider/ax-engine/downloads`,
     axEngineDownloadCancel: `${API_PATHS.base}/provider/ax-engine/downloads/:jobId/cancel`,
     axEngineModel: `${API_PATHS.base}/provider/ax-engine/models/:modelId`,
+    axEngineConnection: `${API_PATHS.base}/provider/ax-engine/connection`,
     axEngineStart: `${API_PATHS.base}/provider/ax-engine/start`,
     axEngineStop: `${API_PATHS.base}/provider/ax-engine/stop`,
     axEngineInstall: `${API_PATHS.base}/provider/ax-engine/install`,

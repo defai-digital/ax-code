@@ -1,10 +1,26 @@
 import { filter, pipe, sortBy } from "remeda"
+import {
+  AX_ENGINE_CONNECTION_MODES,
+  axEngineAttachProviderConfig as buildAxEngineAttachProviderConfig,
+  axEngineEndpointsMayAlias,
+  axEngineManagedProviderConfig,
+  normalizeAxEngineEndpointBaseURL,
+  resolveAxEngineAttachBaseURL,
+  resolveAxEngineConnectMode,
+  type AxEngineConnectMode,
+} from "@/provider/ax-engine/connection"
 import { modelSelectableForProvider, providerModelSelectable } from "@/provider/model-selectability"
-import { isLocalHostname } from "@/util/local-host"
 import { isRecord } from "@/util/record"
 import type { ProviderListResponse } from "@ax-code/sdk/v2"
 
 export { providerModelSelectable }
+export {
+  AX_ENGINE_CONNECTION_MODES,
+  axEngineEndpointsMayAlias,
+  axEngineManagedProviderConfig,
+  normalizeAxEngineEndpointBaseURL,
+  type AxEngineConnectMode,
+}
 
 export type ProviderDialogProvider = {
   id: string
@@ -121,13 +137,11 @@ export function selectableProviderDefaultModelID(input: {
   return Object.values(input.models).find((model) => modelSelectableForProvider(input.providerID, model))?.id
 }
 
-/** AX Engine connect modes: managed spawn vs attach to an existing local server. */
-export type AxEngineConnectMode = "managed" | "attach"
-
 export const AX_ENGINE_DEFAULT_ATTACH_HOST = "http://127.0.0.1:31418"
 export const AX_ENGINE_DEFAULT_ATTACH_API_KEY = "local"
 
 type AxEngineProviderOptions = {
+  connectionMode?: AxEngineConnectMode
   baseURL?: string
   apiKey?: string
 }
@@ -138,46 +152,21 @@ function axEngineProviderOptions(config: unknown): AxEngineProviderOptions | und
   if (!isRecord(entry) || !isRecord(entry.options)) return undefined
   const options = entry.options as Record<string, unknown>
   return {
+    connectionMode: AX_ENGINE_CONNECTION_MODES.includes(options.connectionMode as AxEngineConnectMode)
+      ? (options.connectionMode as AxEngineConnectMode)
+      : undefined,
     baseURL: typeof options.baseURL === "string" ? options.baseURL : undefined,
     apiKey: typeof options.apiKey === "string" ? options.apiKey : undefined,
   }
 }
 
-/**
- * Normalize a user-entered ax-engine endpoint to `…/v1` and require a local host
- * (matches provider-loader attach rules).
- */
-export function normalizeAxEngineEndpointBaseURL(input: string): string {
-  const trimmed = input.trim()
-  if (!trimmed) throw new Error("Endpoint URL is required")
-  const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`
-  const url = new URL(withProtocol)
-  if (!isLocalHostname(url.hostname)) {
-    throw new Error("ax-engine endpoint must point to a local host (localhost / 127.0.0.0/8)")
-  }
-  const normalized = `${url.protocol}//${url.host}${url.pathname}`.replace(/\/+$/, "")
-  return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`
-}
-
-/** Config or env baseURL means attach mode; otherwise managed start. */
+/** Explicit mode wins; legacy config/env URLs continue to select attach mode. */
 export function axEngineConnectModeFromConfig(config: unknown): AxEngineConnectMode {
-  const options = axEngineProviderOptions(config)
-  if (options?.baseURL?.trim()) return "attach"
-  if (process.env.AX_ENGINE_HOST?.trim()) return "attach"
-  return "managed"
+  return resolveAxEngineConnectMode(axEngineProviderOptions(config))
 }
 
 export function axEngineAttachBaseURLPreset(config: unknown): string {
-  const options = axEngineProviderOptions(config)
-  if (options?.baseURL?.trim()) return options.baseURL.trim()
-  const fromEnv = process.env.AX_ENGINE_HOST?.trim()
-  if (fromEnv) {
-    const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(fromEnv) ? fromEnv : `http://${fromEnv}`
-    return withProtocol.replace(/\/+$/, "").endsWith("/v1")
-      ? withProtocol.replace(/\/+$/, "")
-      : `${withProtocol.replace(/\/+$/, "")}/v1`
-  }
-  return `${AX_ENGINE_DEFAULT_ATTACH_HOST}/v1`
+  return resolveAxEngineAttachBaseURL(axEngineProviderOptions(config))
 }
 
 export function axEngineAttachApiKeyPreset(config: unknown): string {
@@ -186,32 +175,7 @@ export function axEngineAttachApiKeyPreset(config: unknown): string {
   return process.env.AX_ENGINE_API_KEY?.trim() || AX_ENGINE_DEFAULT_ATTACH_API_KEY
 }
 
-/** Provider config patch for managed mode (clears attach baseURL so spawn path wins). */
-export function axEngineManagedProviderConfig(providerName: string) {
-  return {
-    "ax-engine": {
-      name: providerName,
-      options: {
-        // Empty string overwrites a previous attach baseURL under mergeDeep.
-        baseURL: "",
-      },
-    },
-  }
-}
-
-/** Provider config patch for attach mode. */
-export function axEngineAttachProviderConfig(input: {
-  providerName: string
-  baseURL: string
-  apiKey: string
-}) {
-  return {
-    "ax-engine": {
-      name: input.providerName,
-      options: {
-        baseURL: normalizeAxEngineEndpointBaseURL(input.baseURL),
-        apiKey: input.apiKey.trim() || AX_ENGINE_DEFAULT_ATTACH_API_KEY,
-      },
-    },
-  }
+/** Provider config patch for attach mode. API keys are stored via auth.json. */
+export function axEngineAttachProviderConfig(input: { providerName: string; baseURL: string; apiKey?: string }) {
+  return buildAxEngineAttachProviderConfig(input)
 }

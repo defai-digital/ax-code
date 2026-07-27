@@ -29804,6 +29804,202 @@
         ]
       }
     },
+    "/provider/ax-engine/connection": {
+      "get": {
+        "operationId": "provider.axEngine.connection",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Get AX Engine connection",
+        "description": "Inspect whether AX Code manages a local server or attaches to an existing local AX Engine.",
+        "responses": {
+          "200": {
+            "description": "AX Engine connection status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "managed",
+                        "attach"
+                      ]
+                    },
+                    "baseURL": {
+                      "type": "string"
+                    },
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "toolcall": {
+                      "type": "boolean"
+                    },
+                    "hasApiKey": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "mode",
+                    "baseURL",
+                    "ready",
+                    "models",
+                    "toolcall",
+                    "hasApiKey"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.provider.axEngine.connection({\n  ...\n})"
+          }
+        ]
+      },
+      "put": {
+        "operationId": "provider.axEngine.connectionUpdate",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Configure AX Engine connection",
+        "description": "Select managed lifecycle or validate and attach to an existing local AX Engine. Attach credentials are stored in encrypted auth storage.",
+        "responses": {
+          "200": {
+            "description": "Updated AX Engine connection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "managed",
+                        "attach"
+                      ]
+                    },
+                    "baseURL": {
+                      "type": "string"
+                    },
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "toolcall": {
+                      "type": "boolean"
+                    },
+                    "hasApiKey": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "mode",
+                    "baseURL",
+                    "ready",
+                    "models",
+                    "toolcall",
+                    "hasApiKey"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "const": "managed"
+                      }
+                    },
+                    "required": [
+                      "mode"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "const": "attach"
+                      },
+                      "baseURL": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2048
+                      },
+                      "apiKey": {
+                        "type": "string",
+                        "maxLength": 16384
+                      }
+                    },
+                    "required": [
+                      "mode",
+                      "baseURL"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.provider.axEngine.connectionUpdate({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/provider/ax-engine/models": {
       "get": {
         "operationId": "provider.axEngine.models",
@@ -36315,6 +36511,77 @@
           "properties"
         ]
       },
+      "Event.notification.monitor.line": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "notification.monitor.line"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "monitorID": {
+                "type": "string"
+              },
+              "line": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "monitorID",
+              "line",
+              "description"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.notification.monitor.exit": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "notification.monitor.exit"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "monitorID": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "exitCode": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "monitorID",
+              "description",
+              "exitCode"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.file.edited": {
         "type": "object",
         "properties": {
@@ -40197,6 +40464,12 @@
             "$ref": "#/components/schemas/Event.notification.toast.show"
           },
           {
+            "$ref": "#/components/schemas/Event.notification.monitor.line"
+          },
+          {
+            "$ref": "#/components/schemas/Event.notification.monitor.exit"
+          },
+          {
             "$ref": "#/components/schemas/Event.file.edited"
           },
           {
@@ -41967,6 +42240,40 @@
                 }
               }
             }
+          },
+          "image_generation": {
+            "description": "Image generation provider configuration",
+            "type": "object",
+            "properties": {
+              "provider": {
+                "description": "Image generation provider. Defaults to openai if OPENAI_API_KEY is set.",
+                "type": "string",
+                "enum": [
+                  "openai",
+                  "stability",
+                  "custom"
+                ]
+              },
+              "options": {
+                "type": "object",
+                "properties": {
+                  "apiKey": {
+                    "description": "API key for the image generation provider.",
+                    "type": "string"
+                  },
+                  "baseURL": {
+                    "description": "Custom base URL for the provider API.",
+                    "type": "string"
+                  },
+                  "model": {
+                    "description": "Model to use (e.g. dall-e-3, stable-diffusion-xl).",
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": {}
+              }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
