@@ -162,10 +162,9 @@ export const SessionDialogs: React.FC = () => {
       if (payload.sessions.length === 1) {
         const target = payload.sessions[0]
         const success = await deleteSession(target.id)
+        // Failure already surfaces via the action's own error toast.
         if (success) {
           toast.success(t("sessions.sidebar.session.delete.success"))
-        } else {
-          toast.error(t("sessions.sidebar.session.delete.error"))
         }
         return
       }
@@ -431,9 +430,7 @@ export const SessionDialogs: React.FC = () => {
         const target = deleteDialog.sessions[0]
         const success = isWorktreeDelete ? await archiveSession(target.id) : await deleteSession(target.id)
         if (!success) {
-          toast.error(
-            isWorktreeDelete ? t("sessions.sidebar.session.archive.error") : t("sessions.sidebar.session.delete.error"),
-          )
+          // Failure already surfaces via the action's own error toast.
           setIsProcessingDelete(false)
           return
         }

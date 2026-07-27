@@ -1093,7 +1093,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const deletedIds: string[] = []
     const failedIds: string[] = []
     for (const id of ids) {
-      const ok = await deleteSessionAction(id)
+      // Bulk callers surface an aggregate toast — suppress the per-id one.
+      const ok = await deleteSessionAction(id, { notify: false })
       if (ok) deletedIds.push(id)
       else failedIds.push(id)
     }
@@ -1106,7 +1107,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const archivedIds: string[] = []
     const failedIds: string[] = []
     for (const id of ids) {
-      const ok = await archiveSessionAction(id)
+      // Bulk callers surface an aggregate toast — suppress the per-id one.
+      const ok = await archiveSessionAction(id, { notify: false })
       if (ok) archivedIds.push(id)
       else failedIds.push(id)
     }

@@ -175,10 +175,9 @@ export const useSessionActions = (args: Args) => {
   const handleUnarchiveSession = React.useCallback(
     async (sessionId: string) => {
       const restored = await args.unarchiveSession(sessionId)
+      // Failure already surfaces via the action's own error toast.
       if (restored) {
         toast.success(t("sessions.sidebar.session.unarchive.success"))
-      } else {
-        toast.error(t("sessions.sidebar.session.unarchive.error"))
       }
     },
     [args, t],

@@ -37,7 +37,11 @@ function evictStaleProviders(): void {
   }
 }
 
-if (typeof setInterval !== "undefined") {
+let evictionIntervalStarted = false
+
+function ensureEvictionInterval(): void {
+  if (evictionIntervalStarted || typeof setInterval === "undefined") return
+  evictionIntervalStarted = true
   const interval = setInterval(evictStaleProviders, PROVIDER_EVICTION_INTERVAL_MS)
   ;(interval as unknown as { unref?: () => void }).unref?.()
 }
@@ -45,6 +49,7 @@ if (typeof setInterval !== "undefined") {
 function getOrCreateProvider(providerID: string): ProviderState {
   let state = providers.get(providerID)
   if (!state) {
+    ensureEvictionInterval()
     state = {
       consecutiveErrors: 0,
       lastErrorAt: 0,

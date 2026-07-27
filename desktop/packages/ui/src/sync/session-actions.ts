@@ -24,6 +24,8 @@ import { isSyntheticPart } from "@/lib/messages/synthetic"
 import { materializeSessionSnapshots } from "./materialization"
 import { stripMessageDiffSnapshots } from "./sanitize"
 import { sessionEvents } from "@/lib/sessionEvents"
+import { toast } from "@/components/ui"
+import { useI18nStore, formatMessage } from "@/lib/i18n/store"
 
 const MESSAGE_REFETCH_LIMIT = 200
 const MESSAGE_REFETCH_SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
@@ -600,7 +602,19 @@ function rollbackOptimisticRemoval(store: ReturnType<typeof getDirectoryStore>, 
   })
 }
 
-export async function deleteSession(sessionId: string): Promise<boolean> {
+type SessionActionFailureKind = "delete" | "archive" | "unarchive"
+
+// Surface action failures from this layer so no caller can silently drop them.
+// A stable toast id dedups repeats — the same failing action retried in a loop
+// updates one toast instead of stacking.
+function notifySessionActionFailure(kind: SessionActionFailureKind): void {
+  const { dictionary } = useI18nStore.getState()
+  toast.error(formatMessage(dictionary, `sessions.sidebar.session.${kind}.error`), {
+    id: `session-action-${kind}-failed`,
+  })
+}
+
+export async function deleteSession(sessionId: string, options?: { notify?: boolean }): Promise<boolean> {
   const sessionDirectory = getSessionDirectory(sessionId)
   // Remove from UI immediately, rollback on error
   let removed = optimisticRemoveSession(sessionId, sessionDirectory)
@@ -636,6 +650,7 @@ export async function deleteSession(sessionId: string): Promise<boolean> {
     return true
   } catch (error) {
     console.error("[session-actions] deleteSession failed", error)
+    if (options?.notify !== false) notifySessionActionFailure("delete")
     if (removed && removedFromDir) {
       try {
         rollbackOptimisticRemoval(getDirectoryStore(removedFromDir), removed)
@@ -673,7 +688,7 @@ export async function deleteSessionInDirectory(sessionId: string, directory: str
   }
 }
 
-export async function archiveSession(sessionId: string): Promise<boolean> {
+export async function archiveSession(sessionId: string, options?: { notify?: boolean }): Promise<boolean> {
   const sessionDirectory = getSessionDirectory(sessionId)
   const removed = optimisticRemoveSession(sessionId, sessionDirectory)
   const ui = useSessionUIStore.getState()
@@ -691,6 +706,7 @@ export async function archiveSession(sessionId: string): Promise<boolean> {
     return true
   } catch (error) {
     console.error("[session-actions] archiveSession failed", error)
+    if (options?.notify !== false) notifySessionActionFailure("archive")
     if (removed && sessionDirectory) {
       try {
         rollbackOptimisticRemoval(getDirectoryStore(sessionDirectory), removed)
@@ -702,7 +718,7 @@ export async function archiveSession(sessionId: string): Promise<boolean> {
   }
 }
 
-export async function unarchiveSession(sessionId: string): Promise<boolean> {
+export async function unarchiveSession(sessionId: string, options?: { notify?: boolean }): Promise<boolean> {
   const sessionDirectory = getSessionDirectory(sessionId)
   try {
     const result = await scopedClientForDirectory(sessionDirectory).session.update({
@@ -716,6 +732,7 @@ export async function unarchiveSession(sessionId: string): Promise<boolean> {
     return true
   } catch (error) {
     console.error("[session-actions] unarchiveSession failed", error)
+    if (options?.notify !== false) notifySessionActionFailure("unarchive")
     return false
   }
 }

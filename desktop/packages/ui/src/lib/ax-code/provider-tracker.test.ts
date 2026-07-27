@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { recordProviderError, recordProviderSuccess, isCircuitOpen } from "./provider-tracker"
 
 describe("provider-tracker circuit breaker", () => {
@@ -24,5 +24,24 @@ describe("provider-tracker circuit breaker", () => {
     recordProviderError(provider, 400)
     recordProviderError(provider, 400)
     expect(isCircuitOpen(provider)).toBe(false)
+  })
+
+  test("eviction interval starts lazily on the first tracked provider", async () => {
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval")
+    try {
+      // Fresh module instance so import-time side effects can be observed.
+      vi.resetModules()
+      const tracker = await import("./provider-tracker")
+      expect(setIntervalSpy).not.toHaveBeenCalled()
+
+      tracker.recordProviderError("test-provider-lazy-interval", 503)
+      expect(setIntervalSpy).toHaveBeenCalledTimes(1)
+
+      // Tracking another provider must not start a second interval.
+      tracker.recordProviderError("test-provider-lazy-interval-2", 503)
+      expect(setIntervalSpy).toHaveBeenCalledTimes(1)
+    } finally {
+      setIntervalSpy.mockRestore()
+    }
   })
 })
