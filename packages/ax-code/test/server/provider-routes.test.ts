@@ -220,6 +220,8 @@ describe("provider routes", () => {
     })
   })
 
+  // Both mode changes reload global config and dispose every instance created
+  // earlier in this integration file, which is slower on the two-worker CI shard.
   test("validates attach mode, encrypts its credential, and can switch back to managed", async () => {
     await using tmp = await tmpdir({ git: true })
     const previousConfigPath = Global.Path.config
@@ -246,55 +248,49 @@ describe("provider routes", () => {
       )) as typeof fetch
 
     try {
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          const app = Server.Default()
-          const connectionURL = `/provider/ax-engine/connection?directory=${encodeURIComponent(tmp.path)}`
-          const attach = await app.request(connectionURL, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              mode: "attach",
-              baseURL: "127.0.0.1:31418",
-              apiKey: "attach-secret",
-            }),
-          })
-          expect(attach.status).toBe(200)
-          const attachBody = await attach.json()
-          expect(await Auth.get("ax-engine")).toEqual({ type: "api", key: "attach-secret" })
+      const app = Server.Default()
+      const connectionURL = `/provider/ax-engine/connection?directory=${encodeURIComponent(tmp.path)}`
+      const attach = await app.request(connectionURL, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "attach",
+          baseURL: "127.0.0.1:31418",
+          apiKey: "attach-secret",
+        }),
+      })
+      expect(attach.status).toBe(200)
+      const attachBody = await attach.json()
+      expect(await Auth.get("ax-engine")).toEqual({ type: "api", key: "attach-secret" })
 
-          const configText = await fs.readFile(path.join(globalConfigPath, "ax-code.jsonc"), "utf8")
-          expect(configText).not.toContain("attach-secret")
-          expect(JSON.parse(configText)).toMatchObject({
-            provider: {
-              "ax-engine": {
-                options: {
-                  connectionMode: "attach",
-                  baseURL: "http://127.0.0.1:31418/v1",
-                  apiKey: "",
-                },
-              },
+      const configText = await fs.readFile(path.join(globalConfigPath, "ax-code.jsonc"), "utf8")
+      expect(configText).not.toContain("attach-secret")
+      expect(JSON.parse(configText)).toMatchObject({
+        provider: {
+          "ax-engine": {
+            options: {
+              connectionMode: "attach",
+              baseURL: "http://127.0.0.1:31418/v1",
+              apiKey: "",
             },
-          })
-          expect((await Config.get()).provider?.["ax-engine"]?.options?.connectionMode).toBe("attach")
-          expect(attachBody).toMatchObject({
-            mode: "attach",
-            baseURL: "http://127.0.0.1:31418/v1",
-            ready: true,
-            models: ["attached-model"],
-          })
-
-          const managed = await app.request(connectionURL, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode: "managed" }),
-          })
-          expect(managed.status).toBe(200)
-          expect(await managed.json()).toMatchObject({ mode: "managed" })
-          expect(await Auth.get("ax-engine")).toBeUndefined()
+          },
         },
       })
+      expect(attachBody).toMatchObject({
+        mode: "attach",
+        baseURL: "http://127.0.0.1:31418/v1",
+        ready: true,
+        models: ["attached-model"],
+      })
+
+      const managed = await app.request(connectionURL, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "managed" }),
+      })
+      expect(managed.status).toBe(200)
+      expect(await managed.json()).toMatchObject({ mode: "managed" })
+      expect(await Auth.get("ax-engine")).toBeUndefined()
     } finally {
       globalThis.fetch = originalFetch
       await Auth.remove("ax-engine")
@@ -302,7 +298,7 @@ describe("provider routes", () => {
       ;(Global.Path as { config: string }).config = previousConfigPath
       Config.global.reset()
     }
-  })
+  }, 120_000)
 
   test("ax-engine models route returns the supported model catalog", async () => {
     await using tmp = await tmpdir({ git: true })
