@@ -105,47 +105,6 @@ const ALLOWLIST: ReadonlyArray<readonly [a: string, b: string, reason: string]> 
     "history_next",
     "prompt/index.tsx sequences them deliberately: history navigation only triggers at the end of the input buffer, otherwise the cursor moves",
   ],
-  // FIXME(real overlap): session_parent/session_child_cycle* are global
-  // commands enabled while viewing a child session, and global key handlers
-  // run before the focused textarea — so in a child session plain arrow keys
-  // navigate sessions and the prompt's cursor-move/history bindings on the
-  // same keys are unreachable. Inherited upstream behavior; not changed here
-  // because altering user-facing defaults is out of scope.
-  [
-    "input_move_left",
-    "session_child_cycle_reverse",
-    "FIXME: real same-context overlap — in a child session the global command eats 'left' before the prompt textarea can move the cursor (upstream-inherited default)",
-  ],
-  [
-    "input_move_right",
-    "session_child_cycle",
-    "FIXME: real same-context overlap — in a child session the global command eats 'right' before the prompt textarea can move the cursor (upstream-inherited default)",
-  ],
-  [
-    "input_move_up",
-    "session_parent",
-    "FIXME: real same-context overlap — in a child session the global command eats 'up' before the prompt textarea can move the cursor (upstream-inherited default)",
-  ],
-  [
-    "history_previous",
-    "session_parent",
-    "FIXME: real same-context overlap — in a child session the global command eats 'up' before prompt history navigation runs (upstream-inherited default)",
-  ],
-  // FIXME(real overlap): the permission prompt's handler and global command
-  // dispatch are both active with no dialog open, so in a child session with
-  // a pending permission prompt, left/right both navigate sessions and move
-  // the permission selection. Pre-existing (the previous hardcoded
-  // left/right/h/l handling had the same overlap); defaults unchanged.
-  [
-    "session_child_cycle_reverse",
-    "permission_option_previous",
-    "FIXME: real same-context overlap — in a child session with a pending permission prompt, both the child-session command and the permission prompt react to 'left' (pre-existing behavior, defaults unchanged)",
-  ],
-  [
-    "session_child_cycle",
-    "permission_option_next",
-    "FIXME: real same-context overlap — in a child session with a pending permission prompt, both the child-session command and the permission prompt react to 'right' (pre-existing behavior, defaults unchanged)",
-  ],
   [
     "input_move_left",
     "permission_option_previous",

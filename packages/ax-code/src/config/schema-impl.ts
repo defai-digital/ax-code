@@ -482,9 +482,14 @@ export const Keybinds = z
     history_previous: z.string().optional().default("up").describe("Previous history item"),
     history_next: z.string().optional().default("down").describe("Next history item"),
     session_child_first: z.string().optional().default("<leader>down").describe("Go to first child session"),
-    session_child_cycle: z.string().optional().default("right").describe("Go to next child session"),
-    session_child_cycle_reverse: z.string().optional().default("left").describe("Go to previous child session"),
-    session_parent: z.string().optional().default("up").describe("Go to parent session"),
+    // Plain arrows used to be the defaults, but global command handlers run
+    // before the focused textarea — so in a child session they stole cursor
+    // movement, history navigation, and permission-option selection from the
+    // prompt. The <leader>+arrow family keeps tree navigation discoverable
+    // (matching session_child_first) without squatting on single-key arrows.
+    session_child_cycle: z.string().optional().default("<leader>right").describe("Go to next child session"),
+    session_child_cycle_reverse: z.string().optional().default("<leader>left").describe("Go to previous child session"),
+    session_parent: z.string().optional().default("<leader>up").describe("Go to parent session"),
     terminal_suspend: z.string().optional().default("ctrl+z").describe("Suspend terminal"),
     terminal_title_toggle: z.string().optional().default("none").describe("Toggle terminal title"),
     display_thinking: z.string().optional().default("none").describe("Toggle thinking blocks visibility"),
