@@ -80,6 +80,7 @@ import { coalesceParts, type DisplayPart } from "./coalesce"
 import { autonomousActiveView, isAutonomousProducedMessage, isLiveAutonomousText } from "./autonomous-active"
 import { useAutonomousPulse } from "./autonomous-pulse"
 import { footerSessionStatusOrIdle } from "./footer-view-model"
+import { createStreamPaintThrottle } from "./stream-paint"
 import { recoveredAssistantMessageIDs } from "./display"
 import { childAction, firstChildID, nextChildID } from "./child"
 import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
@@ -1826,10 +1827,16 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
     // Some providers send encrypted reasoning data that appears as [REDACTED].
     return props.part.text.replaceAll("[REDACTED]", "").trim()
   })
+  // Throttle the rendered copy while reasoning streams — the renderer
+  // re-processes the full document per paint.
+  const paintedContent = createStreamPaintThrottle({
+    text: content,
+    final: () => props.part.time.end !== undefined,
+  })
   const display = createMemo(() =>
     codeDisplayView({
       filePath: "thinking.md",
-      content: "_Thinking:_ " + content(),
+      content: "_Thinking:_ " + paintedContent(),
     }),
   )
   // Show while streaming even before first delta arrives (time.end undefined = still active)
@@ -1862,40 +1869,12 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
   const { theme, syntax } = useTheme()
   const kv = useKV()
   const [expanded, setExpanded] = createSignal(false)
-  // Throttle rich markdown paint while streaming (~20–30 Hz). Store can update faster;
-  // re-parsing full markdown every delta dominates TUI main-thread cost.
-  const STREAM_PAINT_MS = 40
-  const [paintedText, setPaintedText] = createSignal(props.part.text)
-  let paintCancel: (() => void) | undefined
-  let lastPaintAt = 0
-  createEffect(() => {
-    const next = props.part.text
-    const final = !!props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish)
-    paintCancel?.()
-    paintCancel = undefined
-    if (final) {
-      lastPaintAt = Date.now()
-      setPaintedText(next)
-      return
-    }
-    const now = Date.now()
-    const remaining = Math.max(0, STREAM_PAINT_MS - (now - lastPaintAt))
-    if (remaining === 0) {
-      lastPaintAt = now
-      setPaintedText(next)
-      return
-    }
-    paintCancel = scheduleTuiTimeout(
-      () => {
-        paintCancel = undefined
-        lastPaintAt = Date.now()
-        setPaintedText(props.part.text)
-      },
-      { name: "session.text-part.stream-paint", delayMs: remaining, unref: true },
-    )
-  })
-  onCleanup(() => {
-    paintCancel?.()
+  // Throttle rich markdown paint while streaming. Store can update faster;
+  // re-parsing full markdown every delta dominates TUI main-thread cost, and
+  // the interval scales with document length to keep long streams near-linear.
+  const paintedText = createStreamPaintThrottle({
+    text: () => props.part.text,
+    final: () => !!props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish),
   })
 
   const trimmed = createMemo(() => paintedText().trim())
