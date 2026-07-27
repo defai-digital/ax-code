@@ -1,8 +1,15 @@
 import { describe, expect, test } from "vitest"
 import {
+  AX_ENGINE_DEFAULT_ATTACH_API_KEY,
   CLI_BINARIES,
   CLI_PROVIDERS,
+  axEngineAttachApiKeyPreset,
+  axEngineAttachBaseURLPreset,
+  axEngineAttachProviderConfig,
+  axEngineConnectModeFromConfig,
+  axEngineManagedProviderConfig,
   configUpdateParams,
+  normalizeAxEngineEndpointBaseURL,
   normalizeConfiguredProvidersPayload,
   normalizeProviderListPayload,
   providerDialogCategory,
@@ -210,5 +217,87 @@ describe("provider dialog options", () => {
         },
       }),
     ).toBeUndefined()
+  })
+
+  test("normalizes ax-engine attach endpoints and rejects non-local hosts", () => {
+    expect(normalizeAxEngineEndpointBaseURL("127.0.0.1:31418")).toBe("http://127.0.0.1:31418/v1")
+    expect(normalizeAxEngineEndpointBaseURL("http://localhost:31418/v1")).toBe("http://localhost:31418/v1")
+    expect(() => normalizeAxEngineEndpointBaseURL("https://api.example.com/v1")).toThrow(/local host/i)
+    expect(() => normalizeAxEngineEndpointBaseURL("")).toThrow(/required/i)
+  })
+
+  test("detects ax-engine managed vs attach from config and env", () => {
+    const previousHost = process.env.AX_ENGINE_HOST
+    delete process.env.AX_ENGINE_HOST
+    try {
+      expect(axEngineConnectModeFromConfig({})).toBe("managed")
+      expect(
+        axEngineConnectModeFromConfig({
+          provider: { "ax-engine": { options: { baseURL: "http://127.0.0.1:31418/v1" } } },
+        }),
+      ).toBe("attach")
+      process.env.AX_ENGINE_HOST = "http://127.0.0.1:31419"
+      expect(axEngineConnectModeFromConfig({})).toBe("attach")
+    } finally {
+      if (previousHost === undefined) delete process.env.AX_ENGINE_HOST
+      else process.env.AX_ENGINE_HOST = previousHost
+    }
+  })
+
+  test("builds managed and attach ax-engine provider config patches", () => {
+    expect(axEngineManagedProviderConfig("AX Engine (Local)")).toEqual({
+      "ax-engine": {
+        name: "AX Engine (Local)",
+        options: { baseURL: "" },
+      },
+    })
+    expect(
+      axEngineAttachProviderConfig({
+        providerName: "AX Engine (Local)",
+        baseURL: "http://127.0.0.1:31418",
+        apiKey: "secret",
+      }),
+    ).toEqual({
+      "ax-engine": {
+        name: "AX Engine (Local)",
+        options: {
+          baseURL: "http://127.0.0.1:31418/v1",
+          apiKey: "secret",
+        },
+      },
+    })
+    expect(
+      axEngineAttachProviderConfig({
+        providerName: "AX Engine (Local)",
+        baseURL: "http://127.0.0.1:31418/v1",
+        apiKey: "  ",
+      })["ax-engine"].options.apiKey,
+    ).toBe(AX_ENGINE_DEFAULT_ATTACH_API_KEY)
+  })
+
+  test("presets attach baseURL and api key from config", () => {
+    const previousHost = process.env.AX_ENGINE_HOST
+    const previousKey = process.env.AX_ENGINE_API_KEY
+    delete process.env.AX_ENGINE_HOST
+    delete process.env.AX_ENGINE_API_KEY
+    try {
+      expect(axEngineAttachBaseURLPreset({})).toBe("http://127.0.0.1:31418/v1")
+      expect(axEngineAttachApiKeyPreset({})).toBe(AX_ENGINE_DEFAULT_ATTACH_API_KEY)
+      expect(
+        axEngineAttachBaseURLPreset({
+          provider: { "ax-engine": { options: { baseURL: "http://127.0.0.1:9/v1", apiKey: "k" } } },
+        }),
+      ).toBe("http://127.0.0.1:9/v1")
+      expect(
+        axEngineAttachApiKeyPreset({
+          provider: { "ax-engine": { options: { apiKey: "k" } } },
+        }),
+      ).toBe("k")
+    } finally {
+      if (previousHost === undefined) delete process.env.AX_ENGINE_HOST
+      else process.env.AX_ENGINE_HOST = previousHost
+      if (previousKey === undefined) delete process.env.AX_ENGINE_API_KEY
+      else process.env.AX_ENGINE_API_KEY = previousKey
+    }
   })
 })

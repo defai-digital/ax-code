@@ -20,7 +20,13 @@ import {
   CLI_BINARIES,
   CLI_PROVIDERS,
   OFFLINE_PROVIDERS,
+  axEngineAttachApiKeyPreset,
+  axEngineAttachBaseURLPreset,
+  axEngineAttachProviderConfig,
+  axEngineConnectModeFromConfig,
+  axEngineManagedProviderConfig,
   configUpdateParams,
+  normalizeAxEngineEndpointBaseURL,
   normalizeConfiguredProvidersPayload,
   normalizeProviderListPayload,
   providerDialogCategory,
@@ -188,15 +194,74 @@ export function createDialogProviderOptions() {
 
   async function persistAxEngineProvider(providerName: string) {
     await updateConfig({
-      provider: {
-        "ax-engine": {
-          name: providerName,
-        },
-      },
+      provider: axEngineManagedProviderConfig(providerName),
     })
     await sdk.client.instance.dispose()
     await sync.bootstrap()
     await refreshConfiguredProviders()
+  }
+
+  function promptAxEngineAttach(providerName: string) {
+    dialog.replace(() => (
+      <DialogPrompt
+        title="AX Engine endpoint"
+        value={axEngineAttachBaseURLPreset(sync.data.config)}
+        placeholder="http://127.0.0.1:31418/v1"
+        description={() => (
+          <box gap={1}>
+            <text fg={theme.textMuted}>Attach to a server you already started (ax-engine serve).</text>
+            <text fg={theme.textMuted}>Local hosts only. /v1 is added if omitted.</text>
+          </box>
+        )}
+        onConfirm={(endpointValue) => {
+          if (!endpointValue) return
+          let baseURL: string
+          try {
+            baseURL = normalizeAxEngineEndpointBaseURL(endpointValue)
+          } catch (error) {
+            toast.show({
+              message: error instanceof Error ? error.message : "Invalid endpoint",
+              variant: "error",
+            })
+            return
+          }
+          dialog.replace(() => (
+            <DialogPrompt
+              title="AX Engine API key"
+              value={axEngineAttachApiKeyPreset(sync.data.config)}
+              placeholder="local"
+              description={() => (
+                <box gap={1}>
+                  <text fg={theme.textMuted}>Bearer token for Authorization. Default for local serve is "local".</text>
+                  <text fg={theme.textMuted}>Must match AX_ENGINE_API_KEY / --api-key on the server if set.</text>
+                </box>
+              )}
+              onConfirm={(apiKeyValue) => {
+                return runProviderDialogAction({
+                  providerID: "ax-engine",
+                  action: "ax-engine-attach-confirm",
+                  fallbackMessage: "Failed to attach AX Engine server",
+                  toast,
+                  run: async () => {
+                    await updateConfig({
+                      provider: axEngineAttachProviderConfig({
+                        providerName,
+                        baseURL,
+                        apiKey: apiKeyValue ?? "",
+                      }),
+                    })
+                    await sdk.client.instance.dispose()
+                    await sync.bootstrap()
+                    toast.show({ variant: "success", message: `Attached AX Engine at ${baseURL}` })
+                    await openModelDialogForProvider("ax-engine", providerName)
+                  },
+                })
+              }}
+            />
+          ))
+        }}
+      />
+    ))
   }
 
   async function openModelDialogForProvider(providerID: string, providerName: string) {
@@ -301,11 +366,38 @@ export function createDialogProviderOptions() {
 
                 if (provider.id === "ax-engine") {
                   const status = await axEngineRequest<AxEngineTuiStatus>(sdk, "status")
+                  const connectMode = axEngineConnectModeFromConfig(sync.data.config)
 
-                  // Not connected → connect immediately, like every other
-                  // provider. No intermediate menu / search field to type into;
-                  // the model is chosen afterwards in the model selector.
+                  // Not connected → choose Managed (spawn serve) or Attach (URL + key).
                   if (!isConnected) {
+                    const setup = await new Promise<"managed" | "attach" | null>((resolve) => {
+                      dialog.replace(
+                        () => (
+                          <DialogSelect
+                            title="AX Engine"
+                            options={[
+                              {
+                                title: "Managed local server",
+                                value: "managed" as const,
+                                description: "AX Code prepares models and starts ax-engine serve",
+                              },
+                              {
+                                title: "Attach existing server",
+                                value: "attach" as const,
+                                description: "Use base URL + API key for a server you already run",
+                              },
+                            ]}
+                            onSelect={(option) => resolve(option.value)}
+                          />
+                        ),
+                        () => resolve(null),
+                      )
+                    })
+                    if (setup === null) return
+                    if (setup === "attach") {
+                      promptAxEngineAttach(provider.name)
+                      return
+                    }
                     if (!status.eligibility?.supported) {
                       throw new Error(
                         status.eligibility?.blockers?.[0] ??
@@ -314,53 +406,78 @@ export function createDialogProviderOptions() {
                       )
                     }
                     await updateConfig({
-                      provider: {
-                        [provider.id]: {
-                          name: provider.name,
-                        },
-                      },
+                      provider: axEngineManagedProviderConfig(provider.name),
                     })
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
-                    toast.show({ variant: "success", message: `Connected ${provider.name}` })
+                    toast.show({
+                      variant: "success",
+                      message: `Connected ${provider.name} (managed)`,
+                    })
                     await openModelDialogForProvider(provider.id, provider.name)
                     return
                   }
 
-                  // Connected → offer model selection plus status/stop, matching
-                  // how other connected providers present their options.
+                  // Connected → model selection plus mode-specific actions.
+                  type AxEngineAction = "use" | "status" | "stop" | "attach" | "managed" | "endpoint"
                   const actions: Array<{
                     title: string
-                    value: "use" | "status" | "stop"
+                    value: AxEngineAction
                     description?: string
                   }> = [
                     {
                       title: "Select a model",
                       value: "use",
-                      description: "Choose a local AX Engine model",
+                      description:
+                        connectMode === "attach"
+                          ? "Use models advertised by the attached server"
+                          : "Choose a local AX Engine model (starts server on demand)",
                     },
                     {
                       title: "View status",
                       value: "status",
-                      description: status.server?.ready
-                        ? status.server.state?.baseURL
-                        : (status.model?.blockers?.[0] ?? status.dependency?.blockers?.[0]),
+                      description:
+                        connectMode === "attach"
+                          ? axEngineAttachBaseURLPreset(sync.data.config)
+                          : status.server?.ready
+                            ? status.server.state?.baseURL
+                            : (status.model?.blockers?.[0] ?? status.dependency?.blockers?.[0]),
                     },
                   ]
 
-                  if (status.server?.running) {
+                  if (connectMode === "attach") {
                     actions.push({
-                      title: "Stop local server",
-                      value: "stop",
-                      description: status.server.state?.baseURL,
+                      title: "Change endpoint / API key",
+                      value: "endpoint",
+                      description: axEngineAttachBaseURLPreset(sync.data.config),
                     })
+                    actions.push({
+                      title: "Switch to managed",
+                      value: "managed",
+                      description: "Let AX Code start and stop ax-engine serve",
+                    })
+                  } else {
+                    actions.push({
+                      title: "Attach existing server",
+                      value: "attach",
+                      description: "Point at URL + API key instead of starting locally",
+                    })
+                    if (status.server?.running) {
+                      actions.push({
+                        title: "Stop local server",
+                        value: "stop",
+                        description: status.server.state?.baseURL,
+                      })
+                    }
                   }
 
-                  const action = await new Promise<(typeof actions)[number]["value"] | null>((resolve) => {
+                  const action = await new Promise<AxEngineAction | null>((resolve) => {
                     dialog.replace(
                       () => (
                         <DialogSelect
-                          title="AX Engine"
+                          title={
+                            connectMode === "attach" ? "AX Engine — attached" : "AX Engine — managed"
+                          }
                           options={actions}
                           onSelect={(option) => resolve(option.value)}
                         />
@@ -379,6 +496,27 @@ export function createDialogProviderOptions() {
                     await sync.bootstrap()
                     toast.show({ variant: "success", message: "AX Engine server stopped" })
                     dialog.clear()
+                    return
+                  }
+                  if (action === "attach" || action === "endpoint") {
+                    promptAxEngineAttach(provider.name)
+                    return
+                  }
+                  if (action === "managed") {
+                    if (!status.eligibility?.supported) {
+                      throw new Error(
+                        status.eligibility?.blockers?.[0] ??
+                          status.dependency?.blockers?.[0] ??
+                          "AX Engine is not supported on this host",
+                      )
+                    }
+                    await updateConfig({
+                      provider: axEngineManagedProviderConfig(provider.name),
+                    })
+                    await sdk.client.instance.dispose()
+                    await sync.bootstrap()
+                    toast.show({ variant: "success", message: "Switched AX Engine to managed mode" })
+                    await openModelDialogForProvider(provider.id, provider.name)
                     return
                   }
                   await openModelDialogForProvider(provider.id, provider.name)
