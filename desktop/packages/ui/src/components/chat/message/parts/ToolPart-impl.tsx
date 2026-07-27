@@ -3,7 +3,7 @@ import type { AnimationPlaybackControls } from "motion"
 import { RuntimeAPIContext } from "@/contexts/runtimeAPIContext"
 import { cn } from "@/lib/utils"
 import { SimpleMarkdownRenderer } from "../../MarkdownRenderer"
-import { detectToolOutputLanguage, getToolMetadata } from "@/lib/toolHelpers"
+import { getToolMetadata } from "@/lib/toolHelpers"
 import type { ToolPart as ToolPartType, ToolState as ToolStateUnion } from "@ax-code/sdk/v2"
 import { toolDisplayStyles } from "@/lib/typography"
 import { LazySyntaxHighlighter as SyntaxHighlighter } from "@/components/ui/LazySyntaxHighlighter"
@@ -20,9 +20,8 @@ import { Text } from "@/components/ui/text"
 import { FileTypeIcon } from "@/components/icons/FileTypeIcon"
 import type { ContentChangeReason } from "@/hooks/useChatAutoFollow"
 import type { ToolPopupContent } from "../types"
-import type { MessageRecord } from "@/lib/messageCompletion"
 
-import { formatEditOutput, formatInputForDisplay, tryParseJsonOutput } from "../toolRenderers"
+import { formatInputForDisplay, tryParseJsonOutput } from "../toolRenderers"
 import { JsonTreeViewer } from "@/components/ui/JsonTreeViewer"
 import { Icon } from "@/components/icon/Icon"
 import { DiffViewToggle } from "../DiffViewToggle"
@@ -36,19 +35,39 @@ import { areRenderRelevantPartsEqual } from "../renderCompare"
 import { useI18n } from "@/lib/i18n"
 import { getDiffPatchEntries, getPatchText, isRecord } from "./toolDiffUtils"
 import { LazyToolDiffPreview as DiffPreview } from "./LazyToolDiffPreview"
-import { getToolRelativePath, normalizeToolDisplayPath } from "./toolPathDisplay"
+import { getToolRelativePath } from "./toolPathDisplay"
+import {
+  buildWritePreviewPatch,
+  formatDuration,
+  getFirstChangedLineFromMetadata,
+  getToolDescription,
+  getToolDescriptionPath,
+  getToolDiagnosticSection,
+  getToolOutputLanguage,
+  getToolOutputText,
+  normalizeToolName,
+  parseDiffStats,
+  parseQuestionOutput,
+  parseWriteLineCount,
+  type ToolStateWithMetadata,
+} from "./toolPartFormat"
+import {
+  buildTaskSessionMessagesSignature,
+  buildTaskSummaryEntriesFromSession,
+  getTaskSummaryLabel,
+  normalizeTaskSummaryEntries,
+  parseTaskMetadataBlock,
+  readTaskSessionIdFromOutput,
+  readTaskSessionIdFromRecord,
+  shouldRenderGitPathLabel,
+  stripTaskMetadataFromOutput,
+  type SessionMessageWithParts,
+  type TaskToolSummaryEntry,
+} from "./taskToolSummary"
 
 const TOOL_ROW_TEXT_CLASS = "!text-[length:var(--text-meta)] !leading-4 sm:!leading-6 tracking-normal"
 const TOOL_ROW_TITLE_CLASS = cn("typography-meta font-medium", TOOL_ROW_TEXT_CLASS)
 const TOOL_ROW_DESCRIPTION_CLASS = cn("typography-meta", TOOL_ROW_TEXT_CLASS)
-
-type ToolStateWithMetadata = ToolStateUnion & {
-  metadata?: Record<string, unknown>
-  input?: Record<string, unknown>
-  output?: string
-  error?: string
-  time?: { start: number; end?: number }
-}
 
 interface ToolPartProps {
   part: ToolPartType
@@ -147,26 +166,6 @@ const getMultiFileDescription = (
   )
 }
 
-const normalizeToolName = (toolName: string | undefined | null): string => {
-  if (typeof toolName !== "string") {
-    return ""
-  }
-
-  const trimmed = toolName.trim().toLowerCase()
-  if (!trimmed) {
-    return ""
-  }
-
-  if (trimmed.includes(".")) {
-    const dotParts = trimmed.split(".").filter(Boolean)
-    const last = dotParts[dotParts.length - 1]
-    if (last) return last
-  }
-
-  return trimmed
-}
-
-const MAX_DURATION_MS = 5 * 60 * 1000 // 5 minutes cap
 const TASK_TOOL_POLL_FAST_MS = 1200
 const TASK_TOOL_POLL_IDLE_MS = 3200
 const TASK_TOOL_POLL_HIDDEN_MS = 6000
@@ -177,14 +176,6 @@ const TASK_TOOL_NO_CHANGE_BACKOFF_AFTER_POLLS = 3
 const TASK_TOOL_SETTLE_GRACE_MS = 2500
 const TASK_TOOL_FALLBACK_RETRY_MS = 3000
 const GIT_REFRESH_MUTATING_TOOLS = new Set(["bash", "edit", "write", "apply_patch", "patch", "task"])
-
-const formatDuration = (start: number, end?: number, now: number = Date.now()) => {
-  const duration = Math.min(Math.max(0, (end ?? now) - start), MAX_DURATION_MS)
-  const seconds = duration / 1000
-
-  const displaySeconds = seconds < 0.05 && end !== undefined ? 0.1 : seconds
-  return `${displaySeconds.toFixed(1)}s`
-}
 
 const LiveDuration: React.FC<{ start: number; end?: number; active: boolean }> = ({ start, end, active }) => {
   const now = useDurationTickerNow(active, 250)
@@ -220,375 +211,6 @@ const useAnimatedExpandedContent = (isExpanded: boolean) => {
   return shouldRender
 }
 
-const parseDiffStats = (metadata?: Record<string, unknown>): { added: number; removed: number } | null => {
-  const diffText = getPatchText((metadata as { patch?: unknown } | undefined)?.patch) ?? getPatchText(metadata?.diff)
-  if (!diffText) return null
-
-  let added = 0
-  let removed = 0
-  let lineStart = 0
-
-  for (let index = 0; index <= diffText.length; index += 1) {
-    if (index < diffText.length && diffText.charCodeAt(index) !== 10) {
-      continue
-    }
-
-    const line = diffText.slice(lineStart, index)
-    if (line.startsWith("+") && !line.startsWith("+++")) added++
-    if (line.startsWith("-") && !line.startsWith("---")) removed++
-    lineStart = index + 1
-  }
-
-  if (added === 0 && removed === 0) return null
-  return { added, removed }
-}
-
-const parseWriteLineCount = (input?: Record<string, unknown>): number | null => {
-  if (!input?.content || typeof input.content !== "string") return null
-  let lines = 1
-  for (let index = 0; index < input.content.length; index += 1) {
-    if (input.content.charCodeAt(index) === 10) {
-      lines += 1
-    }
-  }
-  return lines
-}
-
-const extractFirstChangedLineFromDiff = (diffText: string): number | undefined => {
-  if (!diffText || typeof diffText !== "string") {
-    return undefined
-  }
-
-  const lines = diffText.split("\n")
-  let currentNewLine: number | undefined
-  let firstHunkStart: number | undefined
-
-  for (const rawLine of lines) {
-    const line = rawLine.replace(/\r$/, "")
-    const hunkMatch = line.match(/^@@\s+-\d+(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@/)
-    if (hunkMatch) {
-      const parsed = Number.parseInt(hunkMatch[1] ?? "", 10)
-      if (Number.isFinite(parsed)) {
-        currentNewLine = Math.max(1, parsed)
-        if (!Number.isFinite(firstHunkStart)) {
-          firstHunkStart = currentNewLine
-        }
-      }
-      continue
-    }
-
-    if (currentNewLine === undefined || !Number.isFinite(currentNewLine)) {
-      continue
-    }
-
-    if (line.startsWith("+++") || line.startsWith("---") || line.startsWith("diff ")) {
-      continue
-    }
-
-    if (line.startsWith("+")) {
-      return currentNewLine
-    }
-
-    if (line.startsWith(" ")) {
-      currentNewLine += 1
-      continue
-    }
-
-    if (line.startsWith("-") || line.startsWith("\\")) {
-      continue
-    }
-  }
-
-  return firstHunkStart
-}
-
-const buildWritePreviewPatch = (filePath: string | undefined, content: string): string | undefined => {
-  const normalizedContent = content.replace(/\r\n/g, "\n")
-  if (!normalizedContent.trim()) {
-    return undefined
-  }
-
-  const normalizedPath = (() => {
-    const candidate = (filePath ?? "").trim()
-    if (!candidate) {
-      return "new-file"
-    }
-    return candidate.startsWith("/") ? candidate.slice(1) : candidate
-  })()
-
-  const lines = normalizedContent.split("\n")
-  const hunkSize = lines.length
-  const body = lines.map((line) => `+${line}`).join("\n")
-
-  return ["--- /dev/null", `+++ b/${normalizedPath}`, `@@ -0,0 +1,${hunkSize} @@`, body].join("\n")
-}
-
-const getFirstChangedLineFromMetadata = (tool: string, metadata?: Record<string, unknown>): number | undefined => {
-  if (!metadata || (tool !== "edit" && tool !== "multiedit" && tool !== "apply_patch")) {
-    return undefined
-  }
-
-  const topLevelPatch = getPatchText((metadata as { patch?: unknown }).patch) ?? getPatchText(metadata.diff)
-  if (topLevelPatch) {
-    const line = extractFirstChangedLineFromDiff(topLevelPatch)
-    if (Number.isFinite(line)) {
-      return line
-    }
-  }
-
-  const files = Array.isArray(metadata.files) ? metadata.files : []
-  const firstFile = files[0] as { patch?: unknown; diff?: unknown } | undefined
-  const filePatch = getPatchText(firstFile?.patch) ?? getPatchText(firstFile?.diff)
-  if (filePatch) {
-    const line = extractFirstChangedLineFromDiff(filePatch)
-    if (Number.isFinite(line)) {
-      return line
-    }
-  }
-
-  return undefined
-}
-
-type ToolDiagnostic = {
-  message: string
-  line: number
-  character: number
-}
-
-type ToolDiagnosticSection = {
-  displayPath: string
-  diagnostics: ToolDiagnostic[]
-  remaining: number
-}
-
-const TOOL_DIAGNOSTICS_MAX_PER_FILE = 5
-
-const normalizeToolDiagnostic = (value: unknown): ToolDiagnostic | null => {
-  if (!isRecord(value)) {
-    return null
-  }
-
-  const message = typeof value.message === "string" ? value.message.trim() : ""
-  if (!message) {
-    return null
-  }
-
-  const severity =
-    typeof value.severity === "number" && Number.isFinite(value.severity) ? Math.trunc(value.severity) : undefined
-  if (severity !== undefined && severity !== 1) {
-    return null
-  }
-
-  const range = isRecord(value.range) ? value.range : undefined
-  const start = range && isRecord(range.start) ? range.start : undefined
-  const rawLine =
-    typeof start?.line === "number" && Number.isFinite(start.line) ? Math.max(0, Math.trunc(start.line)) : 0
-  const rawCharacter =
-    typeof start?.character === "number" && Number.isFinite(start.character)
-      ? Math.max(0, Math.trunc(start.character))
-      : 0
-
-  return {
-    message,
-    line: rawLine + 1,
-    character: rawCharacter + 1,
-  }
-}
-
-const getPrimaryToolPath = (
-  toolName: string,
-  input: Record<string, unknown> | undefined,
-  metadata: Record<string, unknown> | undefined,
-): string | null => {
-  if (toolName === "apply_patch") {
-    const files = Array.isArray(metadata?.files) ? metadata.files : []
-    const first = files.find((entry) => {
-      if (!isRecord(entry)) {
-        return false
-      }
-      return entry.type !== "delete"
-    })
-    if (!isRecord(first)) {
-      return null
-    }
-    return typeof first.movePath === "string"
-      ? first.movePath
-      : typeof first.filePath === "string"
-        ? first.filePath
-        : typeof first.relativePath === "string"
-          ? first.relativePath
-          : null
-  }
-
-  if (toolName === "edit" || toolName === "multiedit") {
-    const fileDiff = isRecord(metadata?.filediff) ? metadata.filediff : undefined
-    if (isRecord(fileDiff) && typeof fileDiff.file === "string") {
-      return fileDiff.file
-    }
-    return typeof input?.filePath === "string"
-      ? input.filePath
-      : typeof input?.file_path === "string"
-        ? input.file_path
-        : typeof input?.path === "string"
-          ? input.path
-          : null
-  }
-
-  if (toolName === "write") {
-    return typeof input?.filePath === "string"
-      ? input.filePath
-      : typeof input?.file_path === "string"
-        ? input.file_path
-        : typeof input?.path === "string"
-          ? input.path
-          : null
-  }
-
-  return null
-}
-
-const getToolDiagnosticSection = (
-  toolName: string,
-  input: Record<string, unknown> | undefined,
-  metadata: Record<string, unknown> | undefined,
-  currentDirectory: string,
-): ToolDiagnosticSection | null => {
-  if (!["edit", "multiedit", "write", "apply_patch"].includes(toolName)) {
-    return null
-  }
-
-  const primaryPath = getPrimaryToolPath(toolName, input, metadata)
-  if (!primaryPath || !metadata || !isRecord(metadata.diagnostics)) {
-    return null
-  }
-
-  const normalizedPath = normalizeToolDisplayPath(primaryPath)
-  const absolutePath = normalizedPath.startsWith("/")
-    ? normalizedPath
-    : `${normalizeToolDisplayPath(currentDirectory)}/${normalizedPath}`.replace(/\/+/g, "/")
-
-  const rawDiagnostics =
-    (metadata.diagnostics as Record<string, unknown>)[normalizedPath] ??
-    (metadata.diagnostics as Record<string, unknown>)[absolutePath]
-  if (!Array.isArray(rawDiagnostics)) {
-    return null
-  }
-
-  const diagnostics = rawDiagnostics
-    .map((entry) => normalizeToolDiagnostic(entry))
-    .filter((entry): entry is ToolDiagnostic => !!entry)
-  if (diagnostics.length === 0) {
-    return null
-  }
-
-  const visible = diagnostics.slice(0, TOOL_DIAGNOSTICS_MAX_PER_FILE)
-  return {
-    displayPath: normalizedPath.startsWith("/") ? getToolRelativePath(normalizedPath, currentDirectory) : normalizedPath,
-    diagnostics: visible,
-    remaining: Math.max(0, diagnostics.length - visible.length),
-  }
-}
-
-// Parse question tool output: "User has answered your questions: "Q1"="A1", "Q2"="A2". You can now..."
-const parseQuestionOutput = (output: string): Array<{ question: string; answer: string }> | null => {
-  const match = output.match(/^User has answered your questions:\s*(.+?)\.\s*You can now/s)
-  if (!match) return null
-
-  const pairs: Array<{ question: string; answer: string }> = []
-  const content = match[1]
-
-  // Match "question"="answer" pairs, handling multiline answers
-  const pairRegex = /"([^"]+)"="([^"]*(?:[^"\\]|\\.)*)"/g
-  let pairMatch
-  while ((pairMatch = pairRegex.exec(content)) !== null) {
-    pairs.push({
-      question: pairMatch[1],
-      answer: pairMatch[2],
-    })
-  }
-
-  return pairs.length > 0 ? pairs : null
-}
-
-const getToolDescriptionPath = (part: ToolPartType, state: ToolStateUnion, currentDirectory: string): string | null => {
-  const stateWithData = state as ToolStateWithMetadata
-  const metadata = stateWithData.metadata
-  const input = stateWithData.input
-
-  if (part.tool === "apply_patch") {
-    const files = Array.isArray(metadata?.files) ? metadata?.files : []
-    const firstFile = files[0] as { relativePath?: string; filePath?: string } | undefined
-    const filePath = firstFile?.relativePath || firstFile?.filePath
-    if (files.length > 1) return null
-    if (typeof filePath === "string") {
-      return getToolRelativePath(filePath, currentDirectory)
-    }
-    return null
-  }
-
-  if ((part.tool === "edit" || part.tool === "multiedit") && input) {
-    const filePath =
-      input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path
-    if (typeof filePath === "string") {
-      return getToolRelativePath(filePath, currentDirectory)
-    }
-  }
-
-  if (part.tool === "read" && input) {
-    const filePath =
-      input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path
-    if (typeof filePath === "string") {
-      return getToolRelativePath(filePath, currentDirectory)
-    }
-  }
-
-  if (["write", "create", "file_write"].includes(part.tool) && input) {
-    const filePath = input?.filePath || input?.file_path || input?.path
-    if (typeof filePath === "string") {
-      return getToolRelativePath(filePath, currentDirectory)
-    }
-  }
-
-  return null
-}
-
-const getToolDescription = (part: ToolPartType, state: ToolStateUnion, currentDirectory: string): string => {
-  const stateWithData = state as ToolStateWithMetadata
-  const metadata = stateWithData.metadata
-  const input = stateWithData.input
-
-  const filePathLabel = getToolDescriptionPath(part, state, currentDirectory)
-  if (filePathLabel) {
-    return filePathLabel
-  }
-
-  if (part.tool === "apply_patch") {
-    const files = Array.isArray(metadata?.files) ? metadata?.files : []
-    if (files.length > 1) {
-      return `${files.length} files`
-    }
-    return ""
-  }
-
-  // Question tool: show "Asked N question(s)"
-  if (part.tool === "question" && input?.questions && Array.isArray(input.questions)) {
-    const count = input.questions.length
-    return `Asked ${count} question${count !== 1 ? "s" : ""}`
-  }
-
-  if (part.tool === "bash" && input?.command && typeof input.command === "string") {
-    const firstLine = input.command.split("\n")[0]
-    return firstLine.substring(0, 100)
-  }
-
-  if (part.tool === "task" && input?.description && typeof input.description === "string") {
-    return input.description.substring(0, 80)
-  }
-
-  const desc = input?.description || metadata?.description || ("title" in state && state.title) || ""
-  return typeof desc === "string" ? desc : ""
-}
-
 interface ToolScrollableSectionProps {
   children: React.ReactNode
   maxHeightClass?: string
@@ -617,31 +239,6 @@ const ToolScrollableSection: React.FC<ToolScrollableSectionProps> = ({
     </ScrollShadow>
   </div>
 )
-
-const getToolOutputLanguage = (
-  output: string,
-  part: ToolPartType,
-  metadata: Record<string, unknown> | undefined,
-  input: Record<string, unknown> | undefined,
-): string => {
-  if (part.tool === "bash") {
-    return "bash"
-  }
-
-  return detectToolOutputLanguage(part.tool, formatEditOutput(output, part.tool, metadata), input)
-}
-
-const getToolOutputText = (
-  output: string,
-  part: ToolPartType,
-  metadata: Record<string, unknown> | undefined,
-): string => {
-  if (part.tool === "bash") {
-    return output
-  }
-
-  return formatEditOutput(output, part.tool, metadata)
-}
 
 const ToolScrollableTextOutput: React.FC<{
   output: string
@@ -679,274 +276,6 @@ const ToolScrollableTextOutput: React.FC<{
 }
 
 ToolScrollableTextOutput.displayName = "ToolScrollableTextOutput"
-
-type TaskToolSummaryEntry = {
-  id?: string
-  tool?: string
-  state?: {
-    status?: string
-    title?: string
-    input?: Record<string, unknown>
-  }
-}
-
-type SessionMessageWithParts = MessageRecord
-
-const normalizeSessionIdCandidate = (value: unknown): string | undefined => {
-  if (typeof value !== "string") {
-    return undefined
-  }
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : undefined
-}
-
-const readTaskSessionIdFromRecord = (value: unknown): string | undefined => {
-  if (!value || typeof value !== "object") {
-    return undefined
-  }
-
-  const record = value as Record<string, unknown>
-  return normalizeSessionIdCandidate(record.sessionID) ?? normalizeSessionIdCandidate(record.sessionId)
-}
-
-const readTaskSessionIdFromOutput = (output: string | undefined): string | undefined => {
-  if (typeof output !== "string" || output.trim().length === 0) {
-    return undefined
-  }
-  const parsedMetadata = parseTaskMetadataBlock(output)
-  if (parsedMetadata.sessionId) {
-    return parsedMetadata.sessionId
-  }
-  const taskMatch = output.match(/task_id\s*:\s*([^\s<"']+)/i)
-  const sessionMatch = output.match(/session[_\s-]?id\s*:\s*([^\s<"']+)/i)
-  const candidate = taskMatch?.[1] ?? sessionMatch?.[1]
-  return normalizeSessionIdCandidate(candidate)
-}
-
-const buildTaskSummaryEntriesFromSession = (messages: SessionMessageWithParts[]): TaskToolSummaryEntry[] => {
-  const entries: TaskToolSummaryEntry[] = []
-
-  for (const message of messages) {
-    if (message?.info?.role !== "assistant") {
-      continue
-    }
-    const parts = Array.isArray(message.parts) ? message.parts : []
-    for (const part of parts) {
-      if (part?.type !== "tool") {
-        continue
-      }
-      const toolName = normalizeToolName(part.tool)
-      if (!toolName || toolName === "task" || toolName === "todowrite" || toolName === "todoread") {
-        continue
-      }
-      const partState = part.state as { status?: string; title?: string; input?: unknown } | undefined
-      entries.push({
-        id: part.id,
-        tool: part.tool,
-        state: {
-          status: partState?.status,
-          title: partState?.title,
-          input:
-            partState?.input && typeof partState.input === "object"
-              ? (partState.input as Record<string, unknown>)
-              : undefined,
-        },
-      })
-    }
-  }
-
-  return entries
-}
-
-const buildTaskSessionMessagesSignature = (messages: SessionMessageWithParts[]): string => {
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return "0"
-  }
-
-  const lastMessage = messages[messages.length - 1]
-  const lastMessageId = typeof lastMessage?.info?.id === "string" ? lastMessage.info.id : ""
-  const lastMessageUpdated =
-    typeof lastMessage?.info?.time?.completed === "number"
-      ? lastMessage.info.time.completed
-      : typeof lastMessage?.info?.time?.created === "number"
-        ? lastMessage.info.time.created
-        : 0
-  const lastParts = Array.isArray(lastMessage?.parts) ? lastMessage.parts : []
-  const lastPart = lastParts[lastParts.length - 1] as Record<string, unknown> | undefined
-  const tailType = typeof lastPart?.type === "string" ? lastPart.type : ""
-  const tailId = typeof lastPart?.id === "string" ? lastPart.id : ""
-  const tailTextLength = (() => {
-    const textCandidate = lastPart?.text
-    if (typeof textCandidate === "string") {
-      return textCandidate.length
-    }
-    const stateCandidate = lastPart?.state
-    if (stateCandidate && typeof stateCandidate === "object") {
-      const stateStatus = (stateCandidate as Record<string, unknown>).status
-      if (typeof stateStatus === "string") {
-        return stateStatus.length
-      }
-    }
-    return 0
-  })()
-
-  return `${messages.length}:${lastMessageId}:${lastMessageUpdated}:${lastParts.length}:${tailType}:${tailId}:${tailTextLength}`
-}
-
-const getTaskSummaryLabel = (entry: TaskToolSummaryEntry): string => {
-  const title = entry.state?.title
-  if (typeof title === "string" && title.trim().length > 0) {
-    return title
-  }
-
-  const input = entry.state?.input
-  if (input && typeof input === "object") {
-    const pathCandidate = input.filePath ?? input.file_path ?? input.path
-    if (typeof pathCandidate === "string" && pathCandidate.trim().length > 0) {
-      return pathCandidate.trim()
-    }
-
-    const urlCandidate = input.url
-    if (typeof urlCandidate === "string" && urlCandidate.trim().length > 0) {
-      return urlCandidate.trim()
-    }
-  }
-
-  return ""
-}
-
-const FILE_PATH_LABEL_TOOLS = new Set([
-  "read",
-  "view",
-  "file_read",
-  "cat",
-  "write",
-  "create",
-  "file_write",
-  "edit",
-  "multiedit",
-  "apply_patch",
-])
-
-const shouldRenderGitPathLabel = (toolName: string, label: string): boolean => {
-  if (!FILE_PATH_LABEL_TOOLS.has(toolName.toLowerCase())) {
-    return false
-  }
-
-  const trimmed = label.trim()
-  if (!trimmed || trimmed === "Patch" || /^\d+\s+files$/.test(trimmed)) {
-    return false
-  }
-
-  if (trimmed.includes("/") || trimmed.includes("\\")) {
-    return true
-  }
-
-  const baseName = trimmed.split(/[\\/]/).pop() || trimmed
-  if (baseName.startsWith(".") || baseName.includes(".")) {
-    return true
-  }
-
-  return /^[A-Za-z0-9_-]+$/.test(baseName)
-}
-
-const stripTaskMetadataFromOutput = (output: string): string => {
-  // Strip only a trailing <task_metadata>...</task_metadata> block.
-  return output.replace(/\n*<task_metadata>[\s\S]*?<\/task_metadata>\s*$/i, "").trimEnd()
-}
-
-const normalizeTaskSummaryEntries = (value: unknown): TaskToolSummaryEntry[] => {
-  if (!Array.isArray(value)) {
-    return []
-  }
-
-  const normalized: TaskToolSummaryEntry[] = []
-  for (const entry of value) {
-    if (typeof entry === "string") {
-      normalized.push({
-        tool: "tool",
-        state: { status: "completed", title: entry },
-      })
-      continue
-    }
-
-    if (!entry || typeof entry !== "object") {
-      continue
-    }
-
-    const record = entry as {
-      id?: unknown
-      tool?: unknown
-      title?: unknown
-      status?: unknown
-      state?: { status?: unknown; title?: unknown; input?: unknown }
-    }
-
-    const stateStatus = typeof record.state?.status === "string" ? record.state.status : undefined
-    const stateTitle = typeof record.state?.title === "string" ? record.state.title : undefined
-    const status = stateStatus ?? (typeof record.status === "string" ? record.status : undefined)
-    const title = stateTitle ?? (typeof record.title === "string" ? record.title : undefined)
-
-    normalized.push({
-      id: typeof record.id === "string" ? record.id : undefined,
-      tool: typeof record.tool === "string" ? record.tool : "tool",
-      state: {
-        status,
-        title,
-        input:
-          record.state?.input && typeof record.state.input === "object"
-            ? (record.state.input as Record<string, unknown>)
-            : undefined,
-      },
-    })
-  }
-
-  return normalized
-}
-
-const parseTaskMetadataBlock = (
-  output: string | undefined,
-): {
-  sessionId?: string
-  summaryEntries: TaskToolSummaryEntry[]
-} => {
-  if (typeof output !== "string" || output.trim().length === 0) {
-    return { summaryEntries: [] }
-  }
-
-  const blockMatch = output.match(/<task_metadata>\s*([\s\S]*?)\s*<\/task_metadata>/i)
-  if (!blockMatch?.[1]) {
-    return { summaryEntries: [] }
-  }
-
-  const raw = blockMatch[1].trim()
-  if (!raw) {
-    return { summaryEntries: [] }
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as {
-      sessionId?: unknown
-      sessionID?: unknown
-      summary?: unknown
-      entries?: unknown
-      tools?: unknown
-      calls?: unknown
-    }
-
-    const summaryEntries = normalizeTaskSummaryEntries(parsed.summary ?? parsed.entries ?? parsed.tools ?? parsed.calls)
-
-    const sessionId =
-      (typeof parsed.sessionId === "string" && parsed.sessionId.trim().length > 0
-        ? parsed.sessionId.trim()
-        : undefined) ??
-      (typeof parsed.sessionID === "string" && parsed.sessionID.trim().length > 0 ? parsed.sessionID.trim() : undefined)
-
-    return { sessionId, summaryEntries }
-  } catch {
-    return { summaryEntries: [] }
-  }
-}
 
 const TaskToolSummary: React.FC<{
   entries: TaskToolSummaryEntry[]
