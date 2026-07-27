@@ -90,33 +90,27 @@ import {
   showFilesViewAutoSaveSavedStatus,
   type FilesViewAutoSaveStatus,
 } from "./filesViewAutoSaveStatus"
+import {
+  MAX_VIEW_CHARS,
+  detectFileLineEnding,
+  normalizeEditorLineEndings,
+  serializeEditorContent,
+  type FileLineEnding,
+} from "./filesViewEditorContent"
+import {
+  getFilesViewParentDirectoryPath as getParentDirectoryPath,
+  isDirectoryReadError,
+  isFileMissingError,
+  isFilesViewAbsolutePath as isAbsolutePath,
+  shouldIgnoreFilesViewEntryName as shouldIgnoreEntryName,
+  shouldIgnoreFilesViewPath as shouldIgnorePath,
+  sortFilesViewNodes as sortNodes,
+} from "./filesViewTreeUtils"
 
 type FileStatSnapshot = {
   path: string
   size: number
   mtimeMs?: number
-}
-
-const getParentDirectoryPath = (path: string): string => {
-  const normalized = normalizePath(path)
-  if (!normalized) return ""
-  if (normalized === "/" || /^[A-Za-z]:\/$/.test(normalized)) {
-    return normalized
-  }
-
-  const lastSlash = normalized.lastIndexOf("/")
-  if (lastSlash < 0) {
-    return normalized
-  }
-  if (lastSlash === 0) {
-    return "/"
-  }
-
-  const parent = normalized.slice(0, lastSlash)
-  if (/^[A-Za-z]:$/.test(parent)) {
-    return `${parent}/`
-  }
-  return parent
 }
 
 const OpenInAppListIcon = ({ label, iconDataUrl }: { label: string; iconDataUrl?: string }) => {
@@ -138,20 +132,6 @@ const OpenInAppListIcon = ({ label, iconDataUrl }: { label: string; iconDataUrl?
     </span>
   )
 }
-
-const sortNodes = (items: FileNode[]) =>
-  items.slice().sort((a, b) => {
-    if (a.type !== b.type) {
-      return a.type === "directory" ? -1 : 1
-    }
-    return a.name.localeCompare(b.name)
-  })
-
-const isAbsolutePath = (value: string): boolean => {
-  return value.startsWith("/") || value.startsWith("//") || /^[A-Za-z]:\//.test(value)
-}
-
-const DEFAULT_IGNORED_DIR_NAMES = new Set(["node_modules"])
 
 const ScrollingFileName: React.FC<{ name: string }> = ({ name }) => {
   const containerRef = React.useRef<HTMLSpanElement | null>(null)
@@ -198,58 +178,7 @@ const ScrollingFileName: React.FC<{ name: string }> = ({ name }) => {
   )
 }
 
-const shouldIgnoreEntryName = (name: string): boolean => DEFAULT_IGNORED_DIR_NAMES.has(name)
-
-const shouldIgnorePath = (path: string): boolean => {
-  const normalized = normalizePath(path)
-  return normalized === "node_modules" || normalized.endsWith("/node_modules") || normalized.includes("/node_modules/")
-}
-
-const isDirectoryReadError = (error: unknown): boolean => {
-  const message = error instanceof Error ? error.message : String(error ?? "")
-  const normalized = message.toLowerCase()
-  return normalized.includes("is a directory") || normalized.includes("eisdir")
-}
-
-const isFileMissingError = (error: unknown): boolean => {
-  const message = error instanceof Error ? error.message : String(error ?? "")
-  const normalized = message.toLowerCase()
-  return (
-    normalized.includes("file not found") ||
-    normalized.includes("enoent") ||
-    normalized.includes("no such file") ||
-    normalized.includes("does not exist")
-  )
-}
-
-const MAX_VIEW_CHARS = 200_000
 const FILE_EDITOR_AUTO_SAVE_KEY = "openchamber:files:auto-save-enabled"
-type FileLineEnding = "\n" | "\r\n"
-
-const detectFileLineEnding = (content: string): FileLineEnding => {
-  let crlf = 0
-  let lf = 0
-
-  for (let index = 0; index < content.length; index += 1) {
-    if (content.charCodeAt(index) !== 10) {
-      continue
-    }
-    if (index > 0 && content.charCodeAt(index - 1) === 13) {
-      crlf += 1
-    } else {
-      lf += 1
-    }
-  }
-
-  return crlf > lf ? "\r\n" : "\n"
-}
-
-const normalizeEditorLineEndings = (content: string): string => content.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
-
-const serializeEditorContent = (content: string, lineEnding: FileLineEnding): string => {
-  const normalized = normalizeEditorLineEndings(content)
-  return lineEnding === "\r\n" ? normalized.replace(/\n/g, "\r\n") : normalized
-}
 
 const getInitialAutoSaveEnabled = (): boolean => {
   if (typeof window === "undefined") {

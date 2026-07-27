@@ -14450,7 +14450,7 @@
     "models": {
       "thinkingmachines/Inkling:peft:262144": {
         "id": "thinkingmachines/Inkling:peft:262144",
-        "name": "Inkling",
+        "name": "Inkling (256K)",
         "description": "Multimodal MoE reasoning model (975B total, 41B active) for text, image, and audio",
         "family": "ling",
         "attachment": true,
