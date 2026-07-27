@@ -224,9 +224,12 @@ describe("provider routes", () => {
     await using tmp = await tmpdir({ git: true })
     const previousConfigPath = Global.Path.config
     const globalConfigPath = path.join(tmp.path, "global-config")
+    const previousServerState = AxEnginePaths.serverState
+    const serverStatePath = path.join(tmp.path, "ax-engine-state", "server.json")
     const originalFetch = globalThis.fetch
     await fs.mkdir(globalConfigPath, { recursive: true })
     ;(Global.Path as { config: string }).config = globalConfigPath
+    ;(AxEnginePaths as { serverState: string }).serverState = serverStatePath
     Config.global.reset()
     globalThis.fetch = (async () =>
       new Response(
@@ -295,6 +298,7 @@ describe("provider routes", () => {
     } finally {
       globalThis.fetch = originalFetch
       await Auth.remove("ax-engine")
+      ;(AxEnginePaths as { serverState: string }).serverState = previousServerState
       ;(Global.Path as { config: string }).config = previousConfigPath
       Config.global.reset()
     }

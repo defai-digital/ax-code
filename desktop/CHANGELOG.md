@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.4.0] - 2026-07-27
+
+### Added
+
+- Tools: adds image generation, durable process monitoring, and structured Jupyter notebook editing.
+- Skills: adds built-in loop, run, simplify, and verify workflows.
+- AX Engine: adds managed and attach connection modes plus model-management APIs.
+- TUI: generates the help dialog from the keybinding schema and adds clearer connection-state reporting.
+
+### Changed
+
+- Desktop: extracts chat-input, tool-formatting, file-view, context-panel, and synchronization logic into focused tested modules.
+- Performance: scales TUI streaming repaints with document length and loads Desktop file-type icons as a static asset.
+- Sessions: moves child-session navigation away from plain arrow keys and caps expanded tool output.
+
+### Fixed
+
+- Reliability: keeps TUI sessions alive across unhandled rejections, surfaces backend death and truncated sessions, and prevents toast storms.
+- Desktop: recovers from renderer crashes, reports startup and session-action failures, sanitizes Mermaid SVG, and standardizes loading states.
+- Tools: hardens image generation, background process cleanup, monitor polling, and notebook editing against malformed or unsafe input.
+- Release: fixes Desktop release finalization and explicitly trusts the shared Homebrew tap during install smoke tests.
+
 ## [7.3.0] - 2026-07-26
 
 ### Added
