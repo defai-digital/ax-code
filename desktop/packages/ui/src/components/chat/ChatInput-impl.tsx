@@ -98,6 +98,18 @@ import {
   type HighlightRange,
   type MentionRange,
 } from "./composerHighlight"
+import { CHAT_DRAFT_PERSIST_DEBOUNCE_MS, getDraftKey, getStoredDraft, saveStoredDraft } from "./chatInputDraftPersistence"
+import {
+  collectComposerMentionRanges,
+  detectMentionQueryAtCursor,
+  extractInlineFileMentions as extractInlineFileMentionsFromText,
+  loadConfirmedMentions,
+  pruneConfirmedMentions,
+  resolveFileMentionDeletion,
+  saveConfirmedMentions,
+  toProjectRelativeMentionPath,
+  toServerFileUrl,
+} from "./chatInputMentions"
 import { importWithChunkRecovery } from "@/lib/chunkLoadRecovery"
 import {
   assignImageAttachmentFilenames,
@@ -111,11 +123,9 @@ const EMPTY_QUEUE: QueuedMessage[] = []
 const EMPTY_MESSAGES: Message[] = []
 type FencedCodeHighlighter = (text: string) => HighlightRange[]
 const noFencedCodeHighlight: FencedCodeHighlighter = () => []
-const FILE_MENTION_TOKEN = /^@[^\s]+$/
 // Single-line URL pasted over a selection becomes a markdown link.
 const PASTE_LINK_URL_PATTERN = /^(https?:\/\/|mailto:)\S+$/i
 const INLINE_SKILL_TOKEN_PATTERN = /(^|\s)\/([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)/g
-const CHAT_DRAFT_PERSIST_DEBOUNCE_MS = 500
 const COMPACT_CHAT_PLACEHOLDER_MAX_WIDTH = 560
 const renameFileForAttachmentCitation = (file: File, filename: string): File => {
   if (file.name === filename) {
@@ -186,30 +196,6 @@ const getRevertedPreview = (parts: Part[], fallback: string): string => {
   if (text) return text
   const filePart = parts.find((part) => part.type === "file") as (Part & { filename?: string }) | undefined
   return filePart?.filename ? `[${filePart.filename}]` : fallback
-}
-
-const FILE_URI_PREFIX = "file://"
-
-const encodeFilePath = (filepath: string): string => {
-  let normalized = filepath.replace(/\\/g, "/")
-  if (/^[A-Za-z]:/.test(normalized)) {
-    normalized = `/${normalized}`
-  }
-  return normalized
-    .split("/")
-    .map((segment, index) => {
-      if (index === 1 && /^[A-Za-z]:$/.test(segment)) return segment
-      return encodeURIComponent(segment)
-    })
-    .join("/")
-}
-
-const toServerFileUrl = (filepath: string): string => {
-  const normalized = filepath.replace(/\\/g, "/").trim()
-  if (normalized.toLowerCase().startsWith(FILE_URI_PREFIX)) {
-    return normalized
-  }
-  return `file://${encodeFilePath(normalized)}`
 }
 
 const normalizePath = (value?: string | null): string | null => {
@@ -801,62 +787,6 @@ type AutocompleteOverlayPosition = {
   maxHeight: number
 }
 
-// Per-session draft key — preserves in-progress messages across project switches
-const getDraftKey = (sessionId: string | null): string => `openchamber_chat_input_draft_${sessionId ?? "new"}`
-
-// Helper to safely read from localStorage for a given session
-const getStoredDraft = (sessionId: string | null): string => {
-  try {
-    return localStorage.getItem(getDraftKey(sessionId)) ?? ""
-  } catch {
-    return ""
-  }
-}
-
-// Helper to safely write/clear a per-session draft
-const saveStoredDraft = (sessionId: string | null, draft: string): void => {
-  try {
-    if (draft) {
-      localStorage.setItem(getDraftKey(sessionId), draft)
-    } else {
-      localStorage.removeItem(getDraftKey(sessionId))
-    }
-  } catch {
-    // Ignore localStorage errors
-  }
-}
-
-// Per-session confirmed mentions key — tracks which @mentions are confirmed (blue) vs plain text
-const getConfirmedMentionsKey = (sessionId: string | null): string =>
-  `openchamber_chat_confirmed_mentions_${sessionId ?? "new"}`
-
-const saveConfirmedMentions = (sessionId: string | null, mentions: Set<string>): void => {
-  try {
-    if (mentions.size > 0) {
-      localStorage.setItem(getConfirmedMentionsKey(sessionId), JSON.stringify([...mentions]))
-    } else {
-      localStorage.removeItem(getConfirmedMentionsKey(sessionId))
-    }
-  } catch {
-    // Ignore localStorage errors
-  }
-}
-
-const loadConfirmedMentions = (sessionId: string | null): Set<string> => {
-  try {
-    const raw = localStorage.getItem(getConfirmedMentionsKey(sessionId))
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) {
-        return new Set(parsed.filter((v): v is string => typeof v === "string"))
-      }
-    }
-  } catch {
-    // Ignore localStorage errors
-  }
-  return new Set()
-}
-
 const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBottom }) => {
   const { t } = useI18n()
   // Track if we restored a draft on mount (for text selection)
@@ -1150,28 +1080,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     if (!message || !message.includes("@") || inputMode === "shell") {
       return []
     }
-    const ranges: MentionRange[] = []
-    const mentionRegex = /@([^\s]+)/g
-    let match: RegExpExecArray | null
-    while ((match = mentionRegex.exec(message)) !== null) {
-      const full = match[0]
-      const mention = String(match[1] || "")
-        .trim()
-        .replace(/[),.;:!?`"'>]+$/g, "")
-      const start = match.index
-      const end = start + full.length
-      const charBefore = start > 0 ? message[start - 1] : null
-      const isBoundary = !charBefore || /(\s|\(|\)|\[|\]|\{|\}|"|'|`|,|\.|;|:)/.test(charBefore)
-      if (!isBoundary || mention.length === 0) {
-        continue
-      }
-      if (knownAgentNames.has(mention.toLowerCase())) {
-        ranges.push({ start, end, kind: "agent" })
-      } else if (isConfirmedFilePath(mention)) {
-        ranges.push({ start, end, kind: "file" })
-      }
-    }
-    return ranges
+    return collectComposerMentionRanges(message, knownAgentNames, isConfirmedFilePath)
   }, [inputMode, message, knownAgentNames])
 
   const attachmentCitationRanges = React.useMemo<HighlightRange[]>(() => {
@@ -1249,81 +1158,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
   const extractInlineFileMentions = React.useCallback(
     (rawText: string): { sanitizedText: string; attachments: AttachedFile[] } => {
-      if (!rawText || !rawText.includes("@")) {
-        return { sanitizedText: rawText, attachments: [] }
-      }
-
       const clientDirectory = axCodeClient.getDirectory() || ""
       const root = (chatSearchDirectory || clientDirectory).replace(/\\/g, "/").replace(/\/+$/, "")
-      const seenPaths = new Set<string>()
-      const attachments: AttachedFile[] = []
-
-      const mentionRegex = /@([^\s]+)/g
-      let match: RegExpExecArray | null
-      while ((match = mentionRegex.exec(rawText)) !== null) {
-        const rawMentionPath = match[1]
-        const offset = match.index
-        const original = rawText
-        const charBefore = offset > 0 ? original[offset - 1] : null
-        if (charBefore && !/(\s|\(|\)|\[|\]|\{|\}|"|'|`|,|\.|;|:)/.test(charBefore)) {
-          continue
-        }
-
-        const mentionPath = String(rawMentionPath || "")
-          .trim()
-          .replace(/^[`"'<(]+/, "")
-          .replace(/[),.;:!?`"'>]+$/g, "")
-        if (!mentionPath) {
-          continue
-        }
-
-        if (knownAgentNamesRef.current.has(mentionPath.toLowerCase())) {
-          continue
-        }
-
-        const looksLikeFilePath = isConfirmedFilePath(mentionPath)
-        if (!looksLikeFilePath) {
-          continue
-        }
-
-        const normalizedMentionPath = mentionPath.replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "")
-        if (!normalizedMentionPath) {
-          continue
-        }
-
-        const serverPath = mentionPath.startsWith("/")
-          ? mentionPath.replace(/\\/g, "/")
-          : root
-            ? `${root}/${normalizedMentionPath}`
-            : null
-
-        if (!serverPath) {
-          continue
-        }
-
-        const normalizedServerPath = serverPath.replace(/\/+/g, "/")
-        if (seenPaths.has(normalizedServerPath)) {
-          continue
-        }
-        seenPaths.add(normalizedServerPath)
-
-        const filename = normalizedMentionPath.split("/").filter(Boolean).pop() || normalizedMentionPath
-        attachments.push({
-          id: `inline-server-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-          file: new File([], filename, { type: "text/plain" }),
-          filename,
-          mimeType: "text/plain",
-          size: 0,
-          dataUrl: toServerFileUrl(normalizedServerPath),
-          source: "server",
-          serverPath: normalizedServerPath,
-        })
-      }
-
-      return {
-        sanitizedText: rawText,
-        attachments,
-      }
+      return extractInlineFileMentionsFromText(rawText, {
+        root,
+        isKnownAgent: (name) => knownAgentNamesRef.current.has(name),
+        isConfirmedFilePath,
+      })
     },
     [chatSearchDirectory],
   )
@@ -1437,12 +1278,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
     saveStoredDraft(sessionId, draft)
     // Only persist confirmed mentions that are actually present in the draft text
-    const activeMentions = new Set<string>()
-    for (const mention of confirmedMentionsRef.current) {
-      if (draft.includes(`@${mention}`)) {
-        activeMentions.add(mention)
-      }
-    }
+    const activeMentions = pruneConfirmedMentions(confirmedMentionsRef.current, draft)
     confirmedMentionsRef.current = activeMentions
     saveConfirmedMentions(sessionId, activeMentions)
     lastPersistedDraftRef.current.set(key, draft)
@@ -2232,40 +2068,26 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
       if (hasCollapsedSelection) {
         const probeIndex = e.key === "Backspace" ? selectionStart - 1 : selectionStart
-        if (probeIndex >= 0 && probeIndex < message.length) {
-          let tokenStart = probeIndex
-          while (tokenStart > 0 && !/\s/.test(message[tokenStart - 1])) {
-            tokenStart -= 1
-          }
+        const deletion = resolveFileMentionDeletion(
+          message,
+          probeIndex,
+          (name) => knownAgentNamesRef.current.has(name),
+          isConfirmedFilePath,
+        )
 
-          let tokenEnd = probeIndex + 1
-          while (tokenEnd < message.length && !/\s/.test(message[tokenEnd])) {
-            tokenEnd += 1
-          }
-
-          const token = message.slice(tokenStart, tokenEnd)
-          const mentionContent = token.slice(1)
-          const looksLikeFileMention =
-            FILE_MENTION_TOKEN.test(token) &&
-            !knownAgentNamesRef.current.has(mentionContent.toLowerCase()) &&
-            isConfirmedFilePath(mentionContent)
-
-          if (looksLikeFileMention) {
-            confirmedMentionsRef.current.delete(mentionContent)
-            const removeUntil = message[tokenEnd] === " " ? tokenEnd + 1 : tokenEnd
-            const nextMessage = `${message.slice(0, tokenStart)}${message.slice(removeUntil)}`
-            e.preventDefault()
-            setMessage(nextMessage)
-            requestAnimationFrame(() => {
-              if (textareaRef.current) {
-                textareaRef.current.selectionStart = tokenStart
-                textareaRef.current.selectionEnd = tokenStart
-              }
-              adjustTextareaHeight()
-            })
-            updateAutocompleteState(nextMessage, tokenStart)
-            return
-          }
+        if (deletion) {
+          confirmedMentionsRef.current.delete(deletion.mentionContent)
+          e.preventDefault()
+          setMessage(deletion.nextMessage)
+          requestAnimationFrame(() => {
+            if (textareaRef.current) {
+              textareaRef.current.selectionStart = deletion.cursorPosition
+              textareaRef.current.selectionEnd = deletion.cursorPosition
+            }
+            adjustTextareaHeight()
+          })
+          updateAutocompleteState(deletion.nextMessage, deletion.cursorPosition)
+          return
         }
       }
     }
@@ -2746,17 +2568,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
       setShowSnippetAutocomplete(false)
 
-      const lastAtSymbol = textBeforeCursor.lastIndexOf("@")
-      if (lastAtSymbol !== -1) {
-        const charBefore = lastAtSymbol > 0 ? textBeforeCursor[lastAtSymbol - 1] : null
-        const textAfterAt = textBeforeCursor.substring(lastAtSymbol + 1)
-        const isWordBoundary = !charBefore || /\s/.test(charBefore)
-        if (isWordBoundary && !textAfterAt.includes(" ") && !textAfterAt.includes("\n")) {
-          setMentionQuery(textAfterAt)
-          setShowFileMention(true)
-        } else {
-          setShowFileMention(false)
-        }
+      const detectedMentionQuery = detectMentionQueryAtCursor(textBeforeCursor)
+      if (detectedMentionQuery !== null) {
+        setMentionQuery(detectedMentionQuery)
+        setShowFileMention(true)
       } else {
         setShowFileMention(false)
       }
@@ -2952,7 +2767,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const mentionPath =
       file.relativePath && file.relativePath.trim().length > 0
         ? file.relativePath.trim()
-        : toProjectRelativeMentionPath(file.path) || file.name
+        : toProjectRelativeMentionPath(file.path, chatSearchDirectory) || file.name
 
     confirmedMentionsRef.current.add(mentionPath)
 
@@ -3172,25 +2987,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
       }
     }
   }, [])
-
-  const toProjectRelativeMentionPath = React.useCallback(
-    (absolutePath: string): string => {
-      const normalizedAbsolutePath = absolutePath.replace(/\\/g, "/").trim()
-      const normalizedRoot = (chatSearchDirectory || "").replace(/\\/g, "/").replace(/\/+$/, "")
-      if (!normalizedRoot) {
-        return normalizedAbsolutePath
-      }
-      if (normalizedAbsolutePath === normalizedRoot) {
-        return normalizedAbsolutePath
-      }
-      const rootWithSlash = `${normalizedRoot}/`
-      if (normalizedAbsolutePath.startsWith(rootWithSlash)) {
-        return normalizedAbsolutePath.slice(rootWithSlash.length)
-      }
-      return normalizedAbsolutePath
-    },
-    [chatSearchDirectory],
-  )
 
   const handleDragEnter = (e: React.DragEvent) => {
     if (!hasDraggedFiles(e.dataTransfer)) {
