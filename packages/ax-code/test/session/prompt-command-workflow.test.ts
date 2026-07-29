@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
+import { formatWorkflowRuntimeStatus, getWorkflowRuntimeStatus } from "../../src/cli/cmd/workflow"
 import {
   WorkflowCommandRuntimeDisabledError,
   createWorkflowCommandRun,
@@ -45,6 +46,22 @@ test("createWorkflowCommandRun fails clearly when runtime flag is disabled", asy
         sessionID: SessionID.descending(),
       }),
     ).rejects.toBeInstanceOf(WorkflowCommandRuntimeDisabledError)
+  } finally {
+    if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+    else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+  }
+})
+
+test("workflow runtime status gives a directly runnable enable command", () => {
+  const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+  delete process.env.AX_CODE_WORKFLOW_RUNTIME
+  try {
+    const status = getWorkflowRuntimeStatus()
+    expect(status).toEqual({
+      enabled: false,
+      enableCommand: "export AX_CODE_WORKFLOW_RUNTIME=1",
+    })
+    expect(formatWorkflowRuntimeStatus(status)).toContain(status.enableCommand)
   } finally {
     if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
     else process.env.AX_CODE_WORKFLOW_RUNTIME = previous

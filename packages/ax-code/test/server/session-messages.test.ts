@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import { readFile } from "node:fs/promises"
 import { Instance } from "../../src/project/instance"
@@ -6,7 +6,9 @@ import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { MessageV2 } from "../../src/session/message-v2"
 import { MessageID, PartID, type SessionID } from "../../src/session/schema"
+import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import { Log } from "../../src/util/log"
+import { tmpdir } from "../fixture/fixture"
 
 const root = path.join(__dirname, "../..")
 Log.init({ print: false })
@@ -36,6 +38,74 @@ async function fill(sessionID: SessionID, count: number, time = (i: number) => D
   }
   return ids
 }
+
+async function createCompletedAssistantMessage(sessionID: SessionID) {
+  const user = await Session.updateMessage({
+    id: MessageID.ascending(),
+    sessionID,
+    role: "user",
+    time: { created: Date.now() },
+    agent: "test",
+    model: { providerID: "test", modelID: "test" },
+    tools: {},
+    mode: "build",
+  } as unknown as MessageV2.User)
+
+  const assistant = await Session.updateMessage({
+    id: MessageID.ascending(),
+    sessionID,
+    parentID: user.id,
+    role: "assistant",
+    time: { created: Date.now(), completed: Date.now() },
+    modelID: "test",
+    providerID: "test",
+    mode: "build",
+    agent: "build",
+    path: { cwd: root, root },
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  } as unknown as MessageV2.Assistant)
+  return assistant as MessageV2.Assistant
+}
+
+describe("session message feedback endpoint", () => {
+  test("persists, changes, and clears feedback on a completed assistant message", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        const assistant = await createCompletedAssistantMessage(session.id)
+        const app = Server.Default()
+        const request = (messageID: MessageID, value: "up" | "down" | null) =>
+          app.request(`/session/${session.id}/message/${messageID}/feedback`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ value }),
+          })
+
+        const up = await request(assistant.id, "up")
+        expect(up.status).toBe(200)
+        expect(((await up.json()) as MessageV2.Assistant).feedback).toBe("up")
+
+        const down = await request(assistant.id, "down")
+        expect(down.status).toBe(200)
+        expect(((await down.json()) as MessageV2.Assistant).feedback).toBe("down")
+
+        const clear = await request(assistant.id, null)
+        expect(clear.status).toBe(200)
+        expect(((await clear.json()) as MessageV2.Assistant).feedback).toBeUndefined()
+        const stored = await MessageV2.get({ sessionID: session.id, messageID: assistant.id })
+        expect(stored.info.role).toBe("assistant")
+        if (stored.info.role !== "assistant") throw new Error("Expected an assistant message")
+        expect(stored.info.feedback).toBeUndefined()
+
+        const userFeedback = await request(assistant.parentID, "up")
+        expect(userFeedback.status).toBe(400)
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+})
 
 describe("session messages endpoint", () => {
   test("returns cursor headers for older pages", async () => {
@@ -188,12 +258,58 @@ describe("session.prompt_async error handling", () => {
       "function asyncTaskQueueTitle",
     )
     expect(handler).toContain("TaskQueue.enqueue({")
-    expect(handler).toContain("await TaskQueueExecutor.start(queueItem)")
-    expect(handler).toContain("return c.body(null, 202)")
+    expect(handler).toContain("const started = await TaskQueueExecutor.start(queueItem)")
+    expect(handler).toContain("return c.json(started, 202)")
     // The deleted inline implementation must not linger.
     const src = await readFile(path.join(import.meta.dirname, "../../src/server/routes/session-impl.ts"), "utf-8")
     expect(src).not.toContain("function startDetachedSessionTask")
     expect(src).not.toContain("function startObservedAsyncSessionTask")
+  })
+
+  test("prompt_async returns a durable queue handle with restart metadata", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const start = vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+
+        try {
+          const app = Server.Default()
+          const query = new URLSearchParams({
+            directory: tmp.path,
+            executionTimeoutMs: "12345",
+            sourceTaskID: "desktop:task-1",
+            resumeOnRestart: "true",
+          })
+          const response = await app.request(`/session/${session.id}/prompt_async?${query}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              noReply: true,
+              parts: [{ type: "text", text: "Continue the scheduled task." }],
+            }),
+          })
+
+          expect(response.status).toBe(202)
+          expect(await response.json()).toMatchObject({
+            sessionID: session.id,
+            kind: "prompt",
+            status: "queued",
+            sourceTaskID: "desktop:task-1",
+            executionTimeoutMs: 12_345,
+            payload: {
+              kind: "prompt",
+              resumeOnRestart: true,
+            },
+          })
+        } finally {
+          start.mockRestore()
+          await Session.remove(session.id)
+        }
+      },
+    })
   })
 
   test("task queue executor defers detached work to the next tick without unref", async () => {

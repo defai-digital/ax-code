@@ -189,6 +189,8 @@ import type {
   SessionDiffResponses,
   SessionDreErrors,
   SessionDreResponses,
+  SessionFeedbackErrors,
+  SessionFeedbackResponses,
   SessionForkResponses,
   SessionGetErrors,
   SessionGetResponses,
@@ -1350,6 +1352,7 @@ export class TaskQueue extends HeyApiClient {
         [key: string]: unknown
       }
       priority?: number
+      executionTimeoutMs?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1369,6 +1372,7 @@ export class TaskQueue extends HeyApiClient {
             { in: "body", key: "sourceTaskID" },
             { in: "body", key: "payload" },
             { in: "body", key: "priority" },
+            { in: "body", key: "executionTimeoutMs" },
           ],
         },
       ],
@@ -1807,6 +1811,8 @@ export class ScheduledTask extends HeyApiClient {
         durableChildren?: boolean
         enqueueChildren?: boolean
       }
+      catchUpPolicy?: "skip" | "run_once"
+      maxRunDurationMs?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1823,6 +1829,8 @@ export class ScheduledTask extends HeyApiClient {
             { in: "body", key: "model" },
             { in: "body", key: "workflowTemplateID" },
             { in: "body", key: "workflowStartOptions" },
+            { in: "body", key: "catchUpPolicy" },
+            { in: "body", key: "maxRunDurationMs" },
           ],
         },
       ],
@@ -1947,6 +1955,8 @@ export class ScheduledTask extends HeyApiClient {
         durableChildren?: boolean
         enqueueChildren?: boolean
       }
+      catchUpPolicy?: "skip" | "run_once"
+      maxRunDurationMs?: number | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1965,6 +1975,8 @@ export class ScheduledTask extends HeyApiClient {
             { in: "body", key: "model" },
             { in: "body", key: "workflowTemplateID" },
             { in: "body", key: "workflowStartOptions" },
+            { in: "body", key: "catchUpPolicy" },
+            { in: "body", key: "maxRunDurationMs" },
           ],
         },
       ],
@@ -4533,6 +4545,45 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
+   * Set message feedback
+   *
+   * Store or clear a local helpful / needs-improvement signal for a completed assistant message.
+   */
+  public feedback<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      messageID: string
+      directory?: string
+      value: "up" | "down" | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "messageID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "value" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<SessionFeedbackResponses, SessionFeedbackErrors, ThrowOnError>({
+      url: "/session/{sessionID}/message/{messageID}/feedback",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Send async message
    *
    * Create and send a new message to a session asynchronously, starting the session if needed and returning immediately.
@@ -4541,6 +4592,9 @@ export class Session2 extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
+      executionTimeoutMs?: number
+      sourceTaskID?: string
+      resumeOnRestart?: boolean
       messageID?: string
       model?: {
         providerID: string
@@ -4573,6 +4627,9 @@ export class Session2 extends HeyApiClient {
           args: [
             { in: "path", key: "sessionID" },
             { in: "query", key: "directory" },
+            { in: "query", key: "executionTimeoutMs" },
+            { in: "query", key: "sourceTaskID" },
+            { in: "query", key: "resumeOnRestart" },
             { in: "body", key: "messageID" },
             { in: "body", key: "model" },
             { in: "body", key: "agent" },
@@ -4612,6 +4669,9 @@ export class Session2 extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
+      executionTimeoutMs?: number
+      sourceTaskID?: string
+      resumeOnRestart?: boolean
       messageID?: string
       agent?: string
       model?: string
@@ -4629,6 +4689,9 @@ export class Session2 extends HeyApiClient {
           args: [
             { in: "path", key: "sessionID" },
             { in: "query", key: "directory" },
+            { in: "query", key: "executionTimeoutMs" },
+            { in: "query", key: "sourceTaskID" },
+            { in: "query", key: "resumeOnRestart" },
             { in: "body", key: "messageID" },
             { in: "body", key: "agent" },
             { in: "body", key: "model" },
@@ -4712,6 +4775,9 @@ export class Session2 extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
+      executionTimeoutMs?: number
+      sourceTaskID?: string
+      resumeOnRestart?: boolean
       agent: string
       model?: {
         providerID: string
@@ -4728,6 +4794,9 @@ export class Session2 extends HeyApiClient {
           args: [
             { in: "path", key: "sessionID" },
             { in: "query", key: "directory" },
+            { in: "query", key: "executionTimeoutMs" },
+            { in: "query", key: "sourceTaskID" },
+            { in: "query", key: "resumeOnRestart" },
             { in: "body", key: "agent" },
             { in: "body", key: "model" },
             { in: "body", key: "command" },

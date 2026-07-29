@@ -24,9 +24,13 @@ You can run any task immediately with **run now** to check it does what you expe
 
 After a run, the task shows when it last ran, whether it succeeded, and a link to the session it created. If a run fails, the error is shown there too.
 
+Desktop keeps the core task-queue ID for an active run and waits for that queue item to finish. An HTTP 202 response only means the run was accepted; it does not count as success. If Desktop restarts, it reconnects to the same queue item instead of submitting a duplicate.
+
 ## Keep in mind
 
-Tasks only fire while the AX Code Desktop server is running. If you close it, scheduled runs are paused until it's back up.
+Tasks only fire while the AX Code Desktop server is running. If you close it, scheduled runs are paused until it's back up. By default, missed times are coalesced into one catch-up run after restart rather than replaying every missed interval.
+
+If an older Desktop version was interrupted after it marked a task running but before it stored a durable queue ID, the task is shown as failed for inspection. Desktop does not automatically replay work whose external side effects are unknown.
 
 ## Related
 

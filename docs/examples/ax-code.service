@@ -1,0 +1,18 @@
+[Unit]
+Description=AX Code local server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/absolute/path/to/project
+Environment=AX_CODE_PROJECT=/absolute/path/to/project
+EnvironmentFile=-%h/.config/ax-code/server.env
+ExecStart=/absolute/path/to/ax-code serve --hostname=127.0.0.1 --port=4096
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=90
+
+[Install]
+WantedBy=default.target

@@ -58,6 +58,7 @@ type Fetcher = typeof fetch
 
 const log = Log.create({ service: "account" })
 const clientId = "ax-code-cli"
+const TOKEN_REFRESH_SKEW_MS = 30_000
 
 const JsonRecord = z.record(z.string(), z.unknown())
 const DurationFromSeconds = z.number().transform((seconds) => seconds * 1000)
@@ -253,34 +254,64 @@ export namespace Account {
   export function create(options: Options = {}): Interface {
     const fetcher = options.fetch ?? fetch
     const now = options.now ?? Date.now
+    const tokenRefreshes = new Map<AccountIDType, Promise<AccessTokenType>>()
 
     const resolveToken = async (row: AccountRow): Promise<AccessTokenType> => {
       const currentTime = now()
-      if (row.token_expiry && row.token_expiry > currentTime) return row.access_token
+      if (row.token_expiry && row.token_expiry > currentTime + TOKEN_REFRESH_SKEW_MS) return row.access_token
 
-      const response = ok(
-        await request(
-          fetcher,
-          `${row.url}/auth/device/token`,
-          jsonPost({
-            grant_type: "refresh_token",
-            refresh_token: row.refresh_token,
-            client_id: clientId,
-          }),
-        ),
-      )
+      const pending = tokenRefreshes.get(row.id)
+      if (pending) return pending
 
-      const parsed = await jsonBody(response, TokenRefresh)
-      await repo(() =>
-        AccountRepo.persistToken({
-          accountID: row.id,
-          accessToken: parsed.access_token,
-          refreshToken: parsed.refresh_token,
-          expiry: currentTime + parsed.expires_in,
-        }),
-      )
+      // Register before awaiting so concurrent org/config/token calls share a
+      // single refresh. This matters for providers that rotate refresh tokens:
+      // a second request using the old token can otherwise invalidate a
+      // weeks-long unattended process.
+      const refreshing = Promise.resolve().then(async () => {
+        try {
+          const response = ok(
+            await request(
+              fetcher,
+              `${row.url}/auth/device/token`,
+              jsonPost({
+                grant_type: "refresh_token",
+                refresh_token: row.refresh_token,
+                client_id: clientId,
+              }),
+            ),
+          )
 
-      return parsed.access_token
+          const parsed = await jsonBody(response, TokenRefresh)
+          await repo(() =>
+            AccountRepo.persistToken({
+              accountID: row.id,
+              accessToken: parsed.access_token,
+              refreshToken: parsed.refresh_token,
+              expiry: now() + parsed.expires_in,
+            }),
+          )
+
+          return parsed.access_token
+        } catch (error) {
+          // A proactive refresh is best-effort while the current token is
+          // still valid. Preserve availability until its real expiry; once
+          // expired, surface the refresh failure.
+          if (row.token_expiry && row.token_expiry > now()) {
+            log.warn("proactive account token refresh failed; using current token until expiry", {
+              accountID: row.id,
+              error: toErrorMessage(error),
+            })
+            return row.access_token
+          }
+          throw error
+        }
+      })
+      tokenRefreshes.set(row.id, refreshing)
+      try {
+        return await refreshing
+      } finally {
+        if (tokenRefreshes.get(row.id) === refreshing) tokenRefreshes.delete(row.id)
+      }
     }
 
     const resolveAccess = async (accountID: AccountIDType) => {

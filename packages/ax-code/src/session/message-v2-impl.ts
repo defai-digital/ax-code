@@ -445,6 +445,8 @@ export namespace MessageV2 {
     structured: z.any().optional(),
     variant: z.string().optional(),
     finish: z.string().optional(),
+    /** A user-local quality signal recorded from the response action row. */
+    feedback: z.enum(["up", "down"]).optional(),
   }).meta({
     ref: "AssistantMessage",
   })

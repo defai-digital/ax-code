@@ -322,7 +322,11 @@ interface MessageBodyProps {
   agentMention?: AgentMentionInfo
   turnGroupingContext?: TurnGroupingContext
   onRevert?: () => void
+  onEdit?: () => void
   onFork?: () => void
+  feedback?: "up" | "down"
+  onFeedback?: (value: "up" | "down" | undefined) => void | Promise<void>
+  feedbackPending?: boolean
   errorMessage?: string
   errorVariant?: "error" | "info"
   onRetry?: () => void
@@ -362,6 +366,7 @@ const UserMessageBody = React.memo(
     onShowPopup,
     agentMention,
     onRevert,
+    onEdit,
     onFork,
     userActionsMode = "inline",
     stickyUserHeaderEnabled = true,
@@ -378,6 +383,7 @@ const UserMessageBody = React.memo(
     onShowPopup: (content: ToolPopupContent) => void
     agentMention?: AgentMentionInfo
     onRevert?: () => void
+    onEdit?: () => void
     onFork?: () => void
     userActionsMode?: "inline" | "external-content" | "external-actions"
     stickyUserHeaderEnabled?: boolean
@@ -470,7 +476,7 @@ const UserMessageBody = React.memo(
     const effectiveOnFork = chatSurfaceMode === "mini-chat" ? undefined : onFork
     const showTimestampInActionsRow = Boolean(formattedUserTimestamp)
     const actionsBlock =
-      ((canCopyMessage && hasCopyableText) || onRevert || effectiveOnFork || showTimestampInActionsRow) &&
+      ((canCopyMessage && hasCopyableText) || onRevert || onEdit || effectiveOnFork || showTimestampInActionsRow) &&
       showUserActions ? (
         <div
           className={cn(
@@ -525,6 +531,27 @@ const UserMessageBody = React.memo(
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent sideOffset={6}>{t("chat.messageBody.actions.revert")}</TooltipContent>
+              </Tooltip>
+            )}
+            {onEdit && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50"
+                    aria-label={t("chat.messageBody.actions.editAria")}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onEdit()
+                    }}
+                  >
+                    <Icon name="pencil" className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent sideOffset={6}>{t("chat.messageBody.actions.edit")}</TooltipContent>
               </Tooltip>
             )}
             {effectiveOnFork && (
@@ -644,10 +671,21 @@ interface AssistantMessageActionButtonsProps {
   isTouchContext: boolean
   onCopyMessage?: () => void | boolean | Promise<void | boolean>
   onShareImage: (sourceElement?: HTMLElement | null) => Promise<void>
+  feedback?: "up" | "down"
+  onFeedback?: (value: "up" | "down" | undefined) => void | Promise<void>
+  feedbackPending?: boolean
 }
 
 const AssistantMessageActionButtons = React.memo(
-  ({ hasCopyableText, isTouchContext, onCopyMessage, onShareImage }: AssistantMessageActionButtonsProps) => {
+  ({
+    hasCopyableText,
+    isTouchContext,
+    onCopyMessage,
+    onShareImage,
+    feedback,
+    onFeedback,
+    feedbackPending = false,
+  }: AssistantMessageActionButtonsProps) => {
     const { t } = useI18n()
     const chatSurfaceMode = useChatSurfaceMode()
     const [copyHintVisible, setCopyHintVisible] = React.useState(false)
@@ -751,6 +789,16 @@ const AssistantMessageActionButtons = React.memo(
       [hasCopyableText, isSharing, onShareImage],
     )
 
+    const handleFeedbackClick = React.useCallback(
+      (event: React.MouseEvent<HTMLButtonElement>, value: "up" | "down") => {
+        if (!onFeedback || feedbackPending) return
+        event.stopPropagation()
+        event.preventDefault()
+        void onFeedback(feedback === value ? undefined : value)
+      },
+      [feedback, feedbackPending, onFeedback],
+    )
+
     return (
       <>
         {onCopyMessage && (
@@ -822,6 +870,54 @@ const AssistantMessageActionButtons = React.memo(
             </TooltipContent>
           </Tooltip>
         ) : null}
+        {onFeedback ? (
+          <>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  disabled={feedbackPending}
+                  aria-label={t("chat.messageBody.actions.feedbackUpAria")}
+                  aria-pressed={feedback === "up"}
+                  className={cn(
+                    "h-8 w-8 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50",
+                    feedback === "up" && "text-primary",
+                    feedbackPending && "opacity-50",
+                  )}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => handleFeedbackClick(event, "up")}
+                >
+                  <Icon name="thumb-up" className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent sideOffset={6}>{t("chat.messageBody.actions.feedbackUp")}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  disabled={feedbackPending}
+                  aria-label={t("chat.messageBody.actions.feedbackDownAria")}
+                  aria-pressed={feedback === "down"}
+                  className={cn(
+                    "h-8 w-8 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50",
+                    feedback === "down" && "text-primary",
+                    feedbackPending && "opacity-50",
+                  )}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => handleFeedbackClick(event, "down")}
+                >
+                  <Icon name="thumb-down" className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent sideOffset={6}>{t("chat.messageBody.actions.feedbackDown")}</TooltipContent>
+            </Tooltip>
+          </>
+        ) : null}
       </>
     )
   },
@@ -865,6 +961,9 @@ const AssistantMessageBody = React.memo(
     onContentChange,
     hasTextContent = false,
     onCopyMessage,
+    feedback,
+    onFeedback,
+    feedbackPending,
     onAuxiliaryContentComplete,
     showReasoningTraces = false,
     turnGroupingContext,
@@ -1424,9 +1523,12 @@ const AssistantMessageBody = React.memo(
           isTouchContext={isTouchContext}
           onCopyMessage={onCopyMessage}
           onShareImage={shareMessageAsImage}
+          feedback={feedback}
+          onFeedback={onFeedback}
+          feedbackPending={feedbackPending}
         />
       ),
-      [hasCopyableText, isTouchContext, onCopyMessage, shareMessageAsImage],
+      [feedback, feedbackPending, hasCopyableText, isTouchContext, onCopyMessage, onFeedback, shareMessageAsImage],
     )
 
     const renderJustificationActions = React.useCallback(
@@ -1982,6 +2084,7 @@ const MessageBody = React.memo(({ isUser, ...props }: MessageBodyProps) => {
         onShowPopup={props.onShowPopup}
         agentMention={props.agentMention}
         onRevert={props.onRevert}
+        onEdit={props.onEdit}
         onFork={props.onFork}
         userActionsMode={props.userActionsMode}
         stickyUserHeaderEnabled={props.stickyUserHeaderEnabled}

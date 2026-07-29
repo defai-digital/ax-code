@@ -93,6 +93,17 @@ export async function InstanceBootstrap() {
           await TaskQueueExecutor.start(item)
         }
       }
+      // A scheduled occurrence is committed to the durable task queue before
+      // its detached executor is started. If the process exits in that narrow
+      // post-commit window, the row remains queued and must be resumed here;
+      // ordinary manually-queued items intentionally remain user-controlled.
+      const scheduled = await TaskQueue.listRestartableQueued()
+      if (scheduled.length > 0) {
+        const { TaskQueueExecutor } = await import("@/session/task-queue-executor")
+        for (const item of scheduled) {
+          await TaskQueueExecutor.start(item)
+        }
+      }
     },
   })
   background({
@@ -180,5 +191,5 @@ export async function InstanceBootstrap() {
       task: () => Session.pruneExpired(ttlDays),
     })
   }
-  ScheduledTask.initScheduler()
+  ScheduledTask.initScheduler({ keepAlive: true })
 }

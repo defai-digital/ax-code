@@ -9266,7 +9266,7 @@
         "open_weights": true,
         "limit": {
           "context": 524288,
-          "output": 524288
+          "output": 262144
         }
       },
       "zai-org/GLM-5.2": {
@@ -9300,7 +9300,7 @@
         "open_weights": true,
         "limit": {
           "context": 524288,
-          "output": 524288
+          "output": 262144
         }
       },
       "MiniMaxAI/MiniMax-M2.5": {
@@ -9632,6 +9632,61 @@
           "output": 8192
         }
       },
+      "nvidia/cosmos-reason2-8b": {
+        "id": "nvidia/cosmos-reason2-8b",
+        "name": "Cosmos Reason2 8B",
+        "description": "Vision language model for physical-world understanding with structured reasoning on video and images",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2025-12-01",
+        "last_updated": "2025-12-01",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 16384
+        }
+      },
+      "nvidia/nemotron-nano-12b-v2-vl": {
+        "id": "nvidia/nemotron-nano-12b-v2-vl",
+        "name": "Nemotron Nano 12B v2 VL",
+        "description": "Nemotron multimodal model for visual reasoning and agentic AI workflows",
+        "family": "nemotron",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2025-10-28",
+        "last_updated": "2025-10-28",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 128000,
+          "output": 128000
+        }
+      },
       "nvidia/bevformer": {
         "id": "nvidia/bevformer",
         "name": "bevformer",
@@ -9687,6 +9742,36 @@
           "output": 131072
         }
       },
+      "nvidia/llama-3.3-nemotron-super-49b-v1.5": {
+        "id": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+        "name": "Llama 3.3 Nemotron Super 49B v1.5",
+        "description": "Nemotron model for efficient reasoning, coding, and specialized AI agents",
+        "family": "nemotron",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2025-07-25",
+        "last_updated": "2025-07-25",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 65536
+        }
+      },
       "nvidia/cosmos-transfer2_5-2b": {
         "id": "nvidia/cosmos-transfer2_5-2b",
         "name": "cosmos-transfer2.5-2b",
@@ -9711,6 +9796,36 @@
         "limit": {
           "context": 0,
           "output": 4096
+        }
+      },
+      "nvidia/llama-3.1-nemotron-nano-8b-v1": {
+        "id": "nvidia/llama-3.1-nemotron-nano-8b-v1",
+        "name": "Llama 3.1 Nemotron Nano 8B v1",
+        "description": "Nemotron model for efficient reasoning, coding, and specialized AI agents",
+        "family": "nemotron",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2025-03-18",
+        "last_updated": "2025-03-18",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 16384
         }
       },
       "nvidia/active-speaker-detection": {
@@ -9761,8 +9876,8 @@
           "output": 4096
         }
       },
-      "nvidia/llama-3_1-nemotron-safety-guard-8b-v3": {
-        "id": "nvidia/llama-3_1-nemotron-safety-guard-8b-v3",
+      "nvidia/llama-3.1-nemotron-safety-guard-8b-v3": {
+        "id": "nvidia/llama-3.1-nemotron-safety-guard-8b-v3",
         "name": "llama-3.1-nemotron-safety-guard-8b-v3",
         "description": "Safety model for policy screening, moderation, and risk-aware routing workflows",
         "family": "nemotron",
@@ -9784,6 +9899,61 @@
         "limit": {
           "context": 128000,
           "output": 4096
+        }
+      },
+      "nvidia/llama-3.3-nemotron-super-49b-v1": {
+        "id": "nvidia/llama-3.3-nemotron-super-49b-v1",
+        "name": "Llama 3.3 Nemotron Super 49B v1",
+        "description": "Nemotron model for efficient reasoning, coding, and specialized AI agents",
+        "family": "nemotron",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2025-04-07",
+        "last_updated": "2025-04-07",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 65536
+        }
+      },
+      "nvidia/llama-3.1-nemotron-70b-instruct": {
+        "id": "nvidia/llama-3.1-nemotron-70b-instruct",
+        "name": "Llama 3.1 Nemotron 70B Instruct",
+        "description": "Nemotron model for efficient reasoning, coding, and specialized AI agents",
+        "family": "nemotron",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2025-04-15",
+        "last_updated": "2025-04-15",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 128000,
+          "output": 8192
         }
       },
       "nvidia/nemotron-3-super-120b-a12b": {
@@ -9866,6 +10036,36 @@
         "limit": {
           "context": 0,
           "output": 4096
+        }
+      },
+      "nvidia/llama-3.1-nemotron-ultra-253b-v1": {
+        "id": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
+        "name": "Llama 3.1 Nemotron Ultra 253B",
+        "description": "Flagship Nemotron model for high-throughput reasoning and complex agents",
+        "family": "nemotron",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2025-04-07",
+        "last_updated": "2025-04-07",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 128000,
+          "output": 16384
         }
       },
       "nvidia/llama-3_2-nemoretriever-300m-embed-v1": {
@@ -9977,6 +10177,33 @@
         "limit": {
           "context": 128000,
           "output": 4096
+        }
+      },
+      "nvidia/llama-3.1-nemotron-nano-vl-8b-v1": {
+        "id": "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
+        "name": "Llama 3.1 Nemotron Nano VL 8B v1",
+        "description": "Nemotron multimodal model for visual reasoning and agentic AI workflows",
+        "family": "nemotron",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2025-04-10",
+        "last_updated": "2025-04-10",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 32768,
+          "output": 16384
         }
       },
       "nvidia/synthetic-video-detector": {
@@ -10108,6 +10335,30 @@
         "limit": {
           "context": 131072,
           "output": 131072
+        }
+      },
+      "nvidia/riva-translate-4b-instruct-v1.1": {
+        "id": "nvidia/riva-translate-4b-instruct-v1.1",
+        "name": "riva-translate-4b-instruct-v1_1",
+        "description": "Translation model for multilingual conversion, localization, and cross-language workflows",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2025-12-12",
+        "last_updated": "2025-12-12",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 128000,
+          "output": 4096
         }
       },
       "nvidia/nemotron-content-safety-reasoning-4b": {
@@ -10292,30 +10543,6 @@
           "output": 4096
         }
       },
-      "nvidia/riva-translate-4b-instruct-v1_1": {
-        "id": "nvidia/riva-translate-4b-instruct-v1_1",
-        "name": "riva-translate-4b-instruct-v1_1",
-        "description": "Translation model for multilingual conversion, localization, and cross-language workflows",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": false,
-        "release_date": "2025-12-12",
-        "last_updated": "2025-12-12",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 128000,
-          "output": 4096
-        }
-      },
       "google/google-paligemma": {
         "id": "google/google-paligemma",
         "name": "paligemma",
@@ -10341,6 +10568,32 @@
           "output": 8192
         }
       },
+      "google/gemma-3-4b-it": {
+        "id": "google/gemma-3-4b-it",
+        "name": "Gemma 3 4B IT",
+        "description": "Open Gemma instruction model for efficient chat and self-hosted deployments",
+        "family": "gemma",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2025-03-12",
+        "last_updated": "2025-03-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 16384
+        }
+      },
       "google/gemma-2-2b-it": {
         "id": "google/gemma-2-2b-it",
         "name": "Gemma 2 2b It",
@@ -10364,6 +10617,32 @@
         "limit": {
           "context": 128000,
           "output": 4096
+        }
+      },
+      "google/gemma-3-12b-it": {
+        "id": "google/gemma-3-12b-it",
+        "name": "Gemma 3 12B IT",
+        "description": "Open Gemma instruction model for efficient chat and self-hosted deployments",
+        "family": "gemma",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2025-03-12",
+        "last_updated": "2025-03-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 16384
         }
       },
       "google/gemma-4-31b-it": {
@@ -10451,6 +10730,34 @@
         "limit": {
           "context": 128000,
           "output": 4096
+        }
+      },
+      "thinkingmachines/inkling": {
+        "id": "thinkingmachines/inkling",
+        "name": "Inkling",
+        "description": "Multimodal MoE reasoning model (975B total, 41B active) for text, image, and audio",
+        "family": "ling",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-07-15",
+        "last_updated": "2026-07-15",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048576,
+          "output": 16384
         }
       },
       "baai/bge-m3": {
@@ -10676,8 +10983,8 @@
           "output": 16384
         }
       },
-      "abacusai/dracarys-llama-3_1-70b-instruct": {
-        "id": "abacusai/dracarys-llama-3_1-70b-instruct",
+      "abacusai/dracarys-llama-3.1-70b-instruct": {
+        "id": "abacusai/dracarys-llama-3.1-70b-instruct",
         "name": "dracarys-llama-3.1-70b-instruct",
         "description": "Open Llama instruction model for multilingual chat, reasoning, and coding",
         "attachment": false,
@@ -10700,8 +11007,8 @@
           "output": 8192
         }
       },
-      "upstage/solar-10_7b-instruct": {
-        "id": "upstage/solar-10_7b-instruct",
+      "upstage/solar-10.7b-instruct": {
+        "id": "upstage/solar-10.7b-instruct",
         "name": "solar-10.7b-instruct",
         "description": "Open-weight instruction model for adaptable chat and self-hosted production workloads",
         "attachment": false,
@@ -10829,6 +11136,42 @@
           "output": 0
         }
       },
+      "mistralai/mistral-medium-3.5-128b": {
+        "id": "mistralai/mistral-medium-3.5-128b",
+        "name": "Mistral Medium 3.5",
+        "description": "Balanced Mistral model for enterprise assistants, multilingual work, and tools",
+        "family": "mistral-medium",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-29",
+        "last_updated": "2026-04-29",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 32768
+        }
+      },
       "mistralai/mistral-nemotron": {
         "id": "mistralai/mistral-nemotron",
         "name": "mistral-nemotron",
@@ -10944,6 +11287,32 @@
           "output": 262144
         }
       },
+      "mistralai/ministral-14b-instruct-2512": {
+        "id": "mistralai/ministral-14b-instruct-2512",
+        "name": "Ministral 3 14B Instruct 2512",
+        "description": "Compact Mistral VLM for chat and instruction-based workloads",
+        "family": "ministral",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2025-12-02",
+        "last_updated": "2025-12-02",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 16384
+        }
+      },
       "mistralai/mixtral-8x22b-instruct": {
         "id": "mistralai/mixtral-8x22b-instruct",
         "name": "Mistral: Mixtral 8x22B Instruct",
@@ -10966,31 +11335,6 @@
         "limit": {
           "context": 65536,
           "output": 13108
-        }
-      },
-      "mistralai/mistral-7b-instruct-v03": {
-        "id": "mistralai/mistral-7b-instruct-v03",
-        "name": "Mistral-7B-Instruct-v0.3",
-        "description": "Mistral model for multilingual chat, reasoning, and tool-assisted workflows",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2025-04-01",
-        "last_updated": "2025-04-01",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 65536,
-          "output": 65536
         }
       },
       "mistralai/magistral-small-2506": {
@@ -11040,6 +11384,31 @@
         "limit": {
           "context": 32768,
           "output": 16384
+        }
+      },
+      "mistralai/mistral-7b-instruct-v0.3": {
+        "id": "mistralai/mistral-7b-instruct-v0.3",
+        "name": "Mistral-7B-Instruct-v0.3",
+        "description": "Mistral model for multilingual chat, reasoning, and tool-assisted workflows",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2025-04-01",
+        "last_updated": "2025-04-01",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 65536,
+          "output": 65536
         }
       },
       "bytedance/seed-oss-36b-instruct": {
@@ -11349,6 +11718,33 @@
         "limit": {
           "context": 128000,
           "output": 8192
+        }
+      },
+      "poolside/laguna-xs-2.1": {
+        "id": "poolside/laguna-xs-2.1",
+        "name": "Laguna XS 2.1",
+        "description": "Agentic coding model from Poolside in the XS size class for local deployment",
+        "family": "laguna",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-07-02",
+        "last_updated": "2026-07-02",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 16384
         }
       },
       "deepseek-ai/deepseek-v4-flash": {
@@ -32891,17 +33287,73 @@
     "name": "abliteration.ai",
     "doc": "https://docs.abliteration.ai/models",
     "models": {
+      "abliterated-model-large": {
+        "id": "abliterated-model-large",
+        "name": "Abliterated Model Large",
+        "description": "GLM-5.2 model abliterated and finetuned for cyber, ML red teaming, and agent testing",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high",
+              "max"
+            ]
+          },
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-07-25",
+        "last_updated": "2026-07-28",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "input": 1000000,
+          "output": 999990
+        }
+      },
       "abliterated-model": {
         "id": "abliterated-model",
         "name": "Abliterated Model",
         "description": "Multimodal model for analyzing text, images, documents, and rich media",
         "attachment": true,
-        "reasoning": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
         "structured_output": false,
         "temperature": true,
         "release_date": "2026-01-06",
-        "last_updated": "2026-01-06",
+        "last_updated": "2026-07-28",
         "modalities": {
           "input": [
             "text",
@@ -34204,6 +34656,33 @@
         "limit": {
           "context": 1048576,
           "output": 65536
+        }
+      },
+      "gpt-4o-mini-transcribe": {
+        "id": "gpt-4o-mini-transcribe",
+        "name": "GPT-4o Mini Transcribe",
+        "description": "Speech transcription model for accurate audio-to-text and captioning workflows",
+        "family": "gpt",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2025-03-20",
+        "last_updated": "2025-03-20",
+        "modalities": {
+          "input": [
+            "text",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 16000,
+          "output": 16000
         }
       },
       "qwen3-235b-a22b-thinking-2507": {
@@ -37987,6 +38466,33 @@
         "limit": {
           "context": 131072,
           "output": 32768
+        }
+      },
+      "gpt-4o-transcribe": {
+        "id": "gpt-4o-transcribe",
+        "name": "GPT-4o Transcribe",
+        "description": "Speech transcription model for accurate audio-to-text and captioning workflows",
+        "family": "gpt",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2025-03-20",
+        "last_updated": "2025-03-20",
+        "modalities": {
+          "input": [
+            "text",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 16000,
+          "output": 16000
         }
       },
       "hermes-4-70b": {
@@ -53730,6 +54236,32 @@
         },
         "status": "deprecated"
       },
+      "gemini-embedding": {
+        "id": "gemini-embedding",
+        "name": "Gemini Embedding 001",
+        "description": "Embedding model for semantic search, retrieval, clustering, and ranking pipelines",
+        "family": "gemini",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "knowledge": "2025-05",
+        "release_date": "2025-05-20",
+        "last_updated": "2025-05-20",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 2048,
+          "output": 1
+        }
+      },
       "gpt-5-mini": {
         "id": "gpt-5-mini",
         "name": "gpt-5-mini",
@@ -68583,6 +69115,46 @@
           "input": 922000,
           "output": 128000
         }
+      },
+      "duo-chat-opus-5": {
+        "id": "duo-chat-opus-5",
+        "name": "Agentic Chat (Claude Opus 5)",
+        "description": "Strongest Claude Opus model for coding, agents, and professional work",
+        "family": "claude-opus",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2026-05",
+        "release_date": "2026-07-24",
+        "last_updated": "2026-07-24",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
       }
     }
   },
@@ -68787,43 +69359,6 @@
         "open_weights": true,
         "limit": {
           "context": 128000,
-          "output": 32768
-        }
-      },
-      "nvidia-nemotron-cascade-2-30b-a3b": {
-        "id": "nvidia-nemotron-cascade-2-30b-a3b",
-        "name": "Nemotron Cascade 2 30B A3B",
-        "description": "Nemotron model for efficient reasoning, coding, and specialized AI agents",
-        "family": "nemotron",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-03-24",
-        "last_updated": "2026-06-11",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 256000,
           "output": 32768
         }
       },
@@ -76803,6 +77338,50 @@
     "name": "KUAE Cloud Coding Plan",
     "doc": "https://docs.mthreads.com/kuaecloud/kuaecloud-doc-online/coding_plan/",
     "models": {}
+  },
+  "modal": {
+    "id": "modal",
+    "env": [
+      "MODAL_PROXY_TOKEN"
+    ],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "https://inference.us-west.modal.direct/v1",
+    "name": "Modal",
+    "doc": "https://modal.com/docs/guide/endpoints",
+    "models": {
+      "thinkingmachines/Inkling-NVFP4": {
+        "id": "thinkingmachines/Inkling-NVFP4",
+        "name": "Inkling",
+        "description": "Multimodal MoE reasoning model (975B total, 41B active) for text, image, and audio",
+        "family": "ling",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-07-15",
+        "last_updated": "2026-07-15",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048576,
+          "output": 262144
+        }
+      }
+    }
   },
   "qihang-ai": {
     "id": "qihang-ai",
@@ -106417,6 +106996,501 @@
       }
     }
   },
+  "hyper": {
+    "id": "hyper",
+    "env": [
+      "HYPER_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "https://hyper.charm.land/v1",
+    "name": "Charm Hyper",
+    "doc": "https://hyper.charm.land",
+    "models": {
+      "qwen3.7-plus": {
+        "id": "qwen3.7-plus",
+        "name": "Qwen3.7 Plus",
+        "description": "Multimodal Qwen workhorse for long-context agents, visual inputs, and coding",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2026-06-15",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 64000
+        }
+      },
+      "glm-5": {
+        "id": "glm-5",
+        "name": "GLM-5",
+        "description": "General GLM flagship for coding, analysis, and tool-heavy engineering workflows",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-04-13",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 202752,
+          "output": 20275
+        }
+      },
+      "deepseek-v4-flash": {
+        "id": "deepseek-v4-flash",
+        "name": "DeepSeek V4 Flash",
+        "description": "Fast DeepSeek V4 lane for economical reasoning, coding, and long-context work",
+        "family": "deepseek-flash",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-07-06",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        }
+      },
+      "minimax-m2.7": {
+        "id": "minimax-m2.7",
+        "name": "MiniMax-M2.7",
+        "description": "Open MiniMax flagship for coding agents, office automation, and complex environments",
+        "family": "minimax",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-06-05",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 204800,
+          "output": 20480
+        }
+      },
+      "glm-5.2": {
+        "id": "glm-5.2",
+        "name": "GLM-5.2",
+        "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-30",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
+      },
+      "qwen3.7-max": {
+        "id": "qwen3.7-max",
+        "name": "Qwen3.7 Max",
+        "description": "Qwen frontier model tuned for agent frameworks, coding assistants, and long tasks",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-05-28",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 64000
+        }
+      },
+      "qwen3.6-max": {
+        "id": "qwen3.6-max",
+        "name": "Qwen3.6 Max Preview",
+        "description": "Flagship Qwen model for complex reasoning, coding, and agentic workflows",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2026-05-20",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 256000,
+          "output": 64000
+        }
+      },
+      "llama-4-maverick-17b-128e-instruct-fp8": {
+        "id": "llama-4-maverick-17b-128e-instruct-fp8",
+        "name": "Llama 4 Maverick 17B Instruct",
+        "description": "Open multimodal Llama for strong reasoning with efficient everyday serving",
+        "family": "llama",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2024-08",
+        "release_date": "2026-04-30",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 430000,
+          "output": 43000
+        }
+      },
+      "gemma-4-26b-a4b-it": {
+        "id": "gemma-4-26b-a4b-it",
+        "name": "Gemma 4 26B A4B IT",
+        "description": "Open Gemma instruction model for efficient chat and self-hosted deployments",
+        "family": "gemma",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-30",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 256000,
+          "output": 25600
+        }
+      },
+      "llama-3.3-70b-instruct": {
+        "id": "llama-3.3-70b-instruct",
+        "name": "Llama-3.3-70B-Instruct",
+        "description": "Popular open Llama workhorse for multilingual chat, coding, and self-hosting",
+        "family": "llama",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2023-12",
+        "release_date": "2026-04-30",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 128000,
+          "output": 12800
+        }
+      },
+      "deepseek-v4-pro": {
+        "id": "deepseek-v4-pro",
+        "name": "DeepSeek V4 Pro",
+        "description": "Open MoE flagship with million-token context for coding and long agent runs",
+        "family": "deepseek-thinking",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-07-06",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        }
+      },
+      "gpt-oss-120b": {
+        "id": "gpt-oss-120b",
+        "name": "GPT OSS 120B",
+        "description": "Open GPT reasoning model for self-hosted agents and controllable deployments",
+        "family": "gpt-oss",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-13",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 13107
+        }
+      },
+      "kimi-k2.7-code": {
+        "id": "kimi-k2.7-code",
+        "name": "Kimi K2.7 Code",
+        "description": "Coding-focused Kimi model, stronger on long-horizon repo work with less overthinking",
+        "family": "kimi-k2",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2025-01",
+        "release_date": "2026-07-03",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 256000,
+          "output": 16000
+        }
+      },
+      "qwen3.6-flash": {
+        "id": "qwen3.6-flash",
+        "name": "Qwen3.6 Flash",
+        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
+        "family": "qwen3.6",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-05-20",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 64000
+        }
+      },
+      "qwen3-coder-480b-a35b-instruct-int4-mixed-ar": {
+        "id": "qwen3-coder-480b-a35b-instruct-int4-mixed-ar",
+        "name": "Qwen3-Coder 480B-A35B Instruct",
+        "description": "Open Qwen coding heavyweight for repository reasoning and agentic engineering",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2026-04-30",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 106000,
+          "output": 10600
+        }
+      },
+      "qwen3.6-plus": {
+        "id": "qwen3.6-plus",
+        "name": "Qwen3.6 Plus",
+        "description": "Earlier Qwen multimodal workhorse for million-token agent and document tasks",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2026-05-20",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 64000
+        }
+      },
+      "qwen3-next-80b-a3b-instruct": {
+        "id": "qwen3-next-80b-a3b-instruct",
+        "name": "Qwen3-Next 80B-A3B Instruct",
+        "description": "Qwen instruction model for multilingual chat, reasoning, and tool use",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2026-04-30",
+        "last_updated": "2026-07-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 26214
+        }
+      }
+    }
+  },
   "github-models": {
     "id": "github-models",
     "env": [
@@ -108900,46 +109974,8 @@
         "structured_output": true,
         "temperature": true,
         "knowledge": "2025-01",
-        "release_date": "2025-11-18",
+        "release_date": "2026-02-19",
         "last_updated": "2026-02-19",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 64000
-        }
-      },
-      "google/gemini-3-pro-preview": {
-        "id": "google/gemini-3-pro-preview",
-        "name": "Gemini 3 Pro Preview",
-        "description": "Preview Gemini flagship for complex reasoning, coding, and rich multimodal prompts",
-        "family": "gemini-pro",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "knowledge": "2025-01",
-        "release_date": "2025-11-18",
-        "last_updated": "2025-11-18",
         "modalities": {
           "input": [
             "text",
@@ -133119,6 +134155,48 @@
     "name": "Xpersona",
     "doc": "https://www.xpersona.co/docs",
     "models": {
+      "claude-sonnet-4-6": {
+        "id": "claude-sonnet-4-6",
+        "name": "Claude Sonnet 4.6",
+        "description": "Claude workhorse for coding agents, careful analysis, and production cost control",
+        "family": "claude-sonnet",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "knowledge": "2025-08-31",
+        "release_date": "2026-02-17",
+        "last_updated": "2026-03-13",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 200000,
+          "output": 128000
+        }
+      },
       "xpersona-frieren-coder": {
         "id": "xpersona-frieren-coder",
         "name": "Xpersona Frieren 1",
@@ -133156,6 +134234,134 @@
         "limit": {
           "context": 1000000,
           "output": 384000
+        }
+      },
+      "gemini-3.5-flash": {
+        "id": "gemini-3.5-flash",
+        "name": "Gemini 3.5 Flash",
+        "description": "Fast Gemini model balancing multimodal reasoning, tool use, and cost",
+        "family": "gemini-flash",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-01",
+        "release_date": "2026-05-19",
+        "last_updated": "2026-05-19",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
+      },
+      "claude-haiku-4-5": {
+        "id": "claude-haiku-4-5",
+        "name": "Claude Haiku 4.5 (latest)",
+        "description": "Fast Claude lane for lightweight agents, office tasks, and responsive chat",
+        "family": "claude-haiku",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "knowledge": "2025-02-28",
+        "release_date": "2025-10-15",
+        "last_updated": "2025-10-15",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 200000,
+          "output": 128000
+        }
+      },
+      "gpt-5.6-sol": {
+        "id": "gpt-5.6-sol",
+        "name": "GPT-5.6 Sol",
+        "description": "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
+        "family": "gpt-sol",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-02-16",
+        "release_date": "2026-07-09",
+        "last_updated": "2026-07-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 372000,
+          "output": 128000
         }
       },
       "claude-fable-5": {
@@ -133197,6 +134403,220 @@
         "open_weights": false,
         "limit": {
           "context": 1000000,
+          "output": 128000
+        }
+      },
+      "claude-opus-4-8": {
+        "id": "claude-opus-4-8",
+        "name": "Claude Opus 4.8",
+        "description": "Top Claude Opus tier for the hardest reasoning, coding, and long-horizon agents",
+        "family": "claude-opus",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": false,
+        "knowledge": "2026-01",
+        "release_date": "2026-05-28",
+        "last_updated": "2026-05-28",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 200000,
+          "output": 128000
+        }
+      },
+      "gpt-5.4": {
+        "id": "gpt-5.4",
+        "name": "GPT-5.4",
+        "description": "Agent-ready GPT for coding and computer-use workflows at a lower cost",
+        "family": "gpt",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2025-08-31",
+        "release_date": "2026-03-05",
+        "last_updated": "2026-03-05",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "output": 128000
+        }
+      },
+      "gpt-5.4-mini": {
+        "id": "gpt-5.4-mini",
+        "name": "GPT-5.4 mini",
+        "description": "Strong small GPT for coding subagents, quick tool use, and high-volume work",
+        "family": "gpt-mini",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2025-08-31",
+        "release_date": "2026-03-17",
+        "last_updated": "2026-03-17",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 272000,
+          "output": 128000
+        }
+      },
+      "gpt-5.6": {
+        "id": "gpt-5.6",
+        "name": "GPT-5.6",
+        "description": "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
+        "family": "gpt-sol",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-02-16",
+        "release_date": "2026-07-09",
+        "last_updated": "2026-07-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 372000,
+          "output": 128000
+        }
+      },
+      "gpt-5.6-terra": {
+        "id": "gpt-5.6-terra",
+        "name": "GPT-5.6 Terra",
+        "description": "Balanced GPT-5.6 model for capable, cost-efficient everyday work",
+        "family": "gpt-terra",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-02-16",
+        "release_date": "2026-07-09",
+        "last_updated": "2026-07-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 372000,
           "output": 128000
         }
       }

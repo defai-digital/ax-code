@@ -51,6 +51,12 @@ export namespace TaskQueue {
     sourceTaskID: z.string().optional(),
     payload: Payload,
     error: z.string().optional(),
+    executionTimeoutMs: z
+      .number()
+      .int()
+      .min(1_000)
+      .max(72 * 60 * 60 * 1_000)
+      .optional(),
     time: z.object({
       created: z.number(),
       updated: z.number().optional(),
@@ -71,6 +77,13 @@ export namespace TaskQueue {
     sourceTaskID: z.string().optional(),
     payload: Payload.optional().default({}),
     priority: JsonNumber(z.number().int().min(-1000).max(1000)).optional().default(0),
+    executionTimeoutMs: JsonNumber(
+      z
+        .number()
+        .int()
+        .min(1_000)
+        .max(72 * 60 * 60 * 1_000),
+    ).optional(),
   })
   export type EnqueueInput = z.input<typeof EnqueueInput>
 
@@ -135,6 +148,7 @@ export namespace TaskQueue {
       sourceTaskID: row.source_task_id ?? undefined,
       payload: row.payload,
       error: row.error ?? undefined,
+      executionTimeoutMs: row.execution_timeout_ms ?? undefined,
       time: {
         created: row.time_created,
         updated: row.time_updated ?? undefined,
@@ -146,6 +160,10 @@ export namespace TaskQueue {
 
   function publishCreated(item: Info) {
     Bus.publishDetached(Event.Created, { item })
+  }
+
+  export function publishEnqueued(item: Info) {
+    publishCreated(item)
   }
 
   function publishUpdated(item: Info) {
@@ -218,15 +236,53 @@ export namespace TaskQueue {
     })
   }
 
-  function nextPosition(projectID: ProjectID) {
-    return Database.use((db) => {
-      const row = db
+  function nextPosition(projectID: ProjectID, db?: Database.TxOrDb) {
+    const read = (client: Database.TxOrDb) => {
+      const row = client
         .select({ value: sql<number>`coalesce(max(${TaskQueueTable.position}), -1)` })
         .from(TaskQueueTable)
         .where(eq(TaskQueueTable.project_id, projectID))
         .get()
       return Number(row?.value ?? -1) + 1
-    })
+    }
+    return db ? read(db) : Database.use(read)
+  }
+
+  export function enqueueInTransaction(
+    db: Database.TxOrDb,
+    input: EnqueueInput,
+    options: { now?: number; id?: TaskQueueID } = {},
+  ): Info {
+    const parsed = EnqueueInput.parse(input)
+    if (parsed.sessionID) {
+      throw new Error("enqueueInTransaction requires callers to validate session compatibility before the transaction")
+    }
+    const now = options.now ?? Date.now()
+    const projectID = Instance.project.id
+    const row = db
+      .insert(TaskQueueTable)
+      .values({
+        id: options.id ?? TaskQueueID.ascending(),
+        project_id: projectID,
+        directory: Instance.directory,
+        worktree: parsed.worktree,
+        kind: parsed.kind,
+        status: "queued",
+        priority: parsed.priority,
+        position: nextPosition(projectID, db),
+        title: parsed.title,
+        agent: parsed.agent,
+        model: parsed.model,
+        source_message_id: parsed.sourceMessageID,
+        source_task_id: parsed.sourceTaskID,
+        payload: parsed.payload,
+        execution_timeout_ms: parsed.executionTimeoutMs,
+        time_created: now,
+        time_updated: now,
+      })
+      .returning()
+      .get()
+    return fromRow(row)
   }
 
   export async function list(input: Partial<ListInput> = {}): Promise<Info[]> {
@@ -254,6 +310,26 @@ export namespace TaskQueue {
     })
   }
 
+  export async function listRestartableQueued(): Promise<Info[]> {
+    return Database.use((db) =>
+      db
+        .select()
+        .from(TaskQueueTable)
+        .where(and(eq(TaskQueueTable.project_id, Instance.project.id), eq(TaskQueueTable.status, "queued")))
+        .orderBy(asc(TaskQueueTable.position), desc(TaskQueueTable.time_created), desc(TaskQueueTable.id))
+        .all()
+        .flatMap((row) => {
+          try {
+            const item = fromRow(row)
+            return resumesOnRestart(item) ? [item] : []
+          } catch {
+            log.warn("skipping corrupt restartable task queue row", { id: row.id })
+            return []
+          }
+        }),
+    )
+  }
+
   export async function enqueue(input: EnqueueInput): Promise<Info> {
     const parsed = EnqueueInput.parse(input)
     if (parsed.sessionID) await assertSessionCompatible(parsed.sessionID)
@@ -270,13 +346,14 @@ export namespace TaskQueue {
         kind: parsed.kind,
         status: "queued",
         priority: parsed.priority,
-        position: nextPosition(projectID),
+        position: nextPosition(projectID, db),
         title: parsed.title,
         agent: parsed.agent,
         model: parsed.model,
         source_message_id: parsed.sourceMessageID,
         source_task_id: parsed.sourceTaskID,
         payload: parsed.payload,
+        execution_timeout_ms: parsed.executionTimeoutMs,
         time_created: now,
         time_updated: now,
       }
@@ -320,10 +397,7 @@ export namespace TaskQueue {
     await syncWorkflowStatusIfNeeded(item)
     // Terminal statuses must not leave the session pointing at a finished
     // queue item (UI/session metadata otherwise looks permanently "queued").
-    if (
-      (input.status === "completed" || input.status === "cancelled" || input.status === "failed") &&
-      item.sessionID
-    ) {
+    if ((input.status === "completed" || input.status === "cancelled" || input.status === "failed") && item.sessionID) {
       await clearSessionQueueMetadataIfCurrent(item)
     }
     return item
@@ -358,6 +432,41 @@ export namespace TaskQueue {
     publishUpdated(item)
     await syncWorkflowStatusIfNeeded(item)
     return item
+  }
+
+  export async function attachSession(id: TaskQueueID, sessionID: SessionID): Promise<Info> {
+    await assertSessionCompatible(sessionID)
+    const now = Date.now()
+    const item = Database.use((db) => {
+      const row = db
+        .update(TaskQueueTable)
+        .set({ session_id: sessionID, time_updated: now })
+        .where(and(eq(TaskQueueTable.id, id), eq(TaskQueueTable.project_id, Instance.project.id)))
+        .returning()
+        .get()
+      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+      return fromRow(row)
+    })
+    publishUpdated(item)
+    await syncSessionQueueMetadata(item)
+    return item
+  }
+
+  export function heartbeat(id: TaskQueueID, now = Date.now()): boolean {
+    return Database.use((db) => {
+      const result = db
+        .update(TaskQueueTable)
+        .set({ time_updated: now })
+        .where(
+          and(
+            eq(TaskQueueTable.id, id),
+            eq(TaskQueueTable.project_id, Instance.project.id),
+            inArray(TaskQueueTable.status, ["running", "blocked_permission", "blocked_question"]),
+          ),
+        )
+        .run()
+      return result.changes > 0
+    })
   }
 
   export async function pause(id: TaskQueueID): Promise<Info> {
@@ -428,7 +537,13 @@ export namespace TaskQueue {
       const preserved: Info[] = []
       for (const row of rows) {
         const workflowItem = hasWorkflowPayload(row.payload)
-        if (row.status === "waiting_for_idle" || (workflowItem && row.status === "running")) {
+        const scheduledBeforePrompt =
+          row.status === "running" &&
+          row.kind === "automation" &&
+          row.session_id === null &&
+          typeof row.payload["scheduledTaskID"] === "string" &&
+          !row.payload["workflowTemplateID"]
+        if (row.status === "waiting_for_idle" || (workflowItem && row.status === "running") || scheduledBeforePrompt) {
           const updated = db
             .update(TaskQueueTable)
             .set({
@@ -479,6 +594,15 @@ export namespace TaskQueue {
   function hasWorkflowPayload(payload: Payload) {
     const workflow = payload["workflow"]
     return !!workflow && typeof workflow === "object"
+  }
+
+  function resumesOnRestart(item: Info) {
+    return (
+      (item.kind === "automation" &&
+        typeof item.payload["scheduledTaskID"] === "string" &&
+        item.payload["scheduledTaskID"].startsWith("sch_")) ||
+      item.payload["resumeOnRestart"] === true
+    )
   }
 
   export async function edit(input: EditInput): Promise<Info> {

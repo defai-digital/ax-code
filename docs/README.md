@@ -19,6 +19,7 @@ configure a workflow, understand a runtime boundary, or integrate AX Code with a
 | Run an agent with safe filesystem and network boundaries | [Sandbox Mode](guides/sandbox.md)                                       |
 | Run unattended or in CI                                  | [Autonomous Mode](guides/autonomous.md)                                 |
 | Run recurring prompts or schedule durable tasks          | [Loop Mode and Scheduled Tasks](guides/loop-mode.md)                    |
+| Keep scheduled work running across process or host exits | [Long-Running Operations](guides/long-running-operations.md)            |
 | Choose local, cloud, hybrid, council, or arena execution | [Execution Modes](guides/modes.md)                                      |
 | Connect external tools and data                          | [MCP Integrations](integrations/mcp.md)                                 |
 | Embed AX Code in an application                          | [`@ax-code/sdk`](../packages/sdk/js/README.md)                          |
@@ -36,6 +37,8 @@ configure a workflow, understand a runtime boundary, or integrate AX Code with a
 - [Sandbox Mode](guides/sandbox.md) — isolation modes, protected paths, network controls, and precedence.
 - [Autonomous Mode](guides/autonomous.md) — unattended execution, approvals, headless use, and safeguards.
 - [Loop Mode and Scheduled Tasks](guides/loop-mode.md) — recurring prompts, durable schedules, and long-run limits.
+- [Long-Running Operations](guides/long-running-operations.md) — supervised service examples, recovery semantics, and
+  operational checks.
 - [Execution Modes](guides/modes.md) — agent, hybrid, council, and arena behavior.
 - [Auto-Route](guides/auto-route.md) — specialist routing and optional complexity routing.
 - [Model Effort](guides/effort.md) — thinking levels and provider-specific behavior.

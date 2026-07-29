@@ -13,7 +13,7 @@ import { lazy } from "../util/lazy"
 import { SessionPrompt } from "./prompt"
 import { PromptIsolationPolicy, type PromptIsolationPolicy as PromptIsolationPolicyType } from "./prompt-runtime-policy"
 import { TaskQueue } from "./task-queue"
-import type { SessionID, TaskQueueID } from "./schema"
+import { ScheduledTaskID, type SessionID, type TaskQueueID } from "./schema"
 import type {
   WorkflowArtifactID,
   WorkflowChildID,
@@ -33,12 +33,15 @@ const QueueShellBody = lazy(() => SessionPrompt.ShellInput.omit({ sessionID: tru
 type WorkflowRunApi = typeof import("../workflow/run").WorkflowRun
 
 type QueueExecution = {
-  sessionID: SessionID
+  sessionID?: SessionID
   run: () => Promise<unknown>
+  cancel?: () => Promise<unknown>
 }
 
 const activeStatuses = ["running", "blocked_permission", "blocked_question"] as const
 const WORKFLOW_PACING_WINDOW_MS = 60_000
+const DEFAULT_EXECUTION_TIMEOUT_MS = 72 * 60 * 60 * 1_000
+const EXECUTION_HEARTBEAT_MS = 30_000
 const workflowPacingTimers = new Map<TaskQueueID, ReturnType<typeof setTimeout>>()
 const startLocks = Instance.state(
   () => new KeyedSerialQueue(),
@@ -72,9 +75,7 @@ export namespace TaskQueueExecutor {
    * - `"deep"` — forces deep reasoning variant.
    * - `"max-workflow"` — forces maximum depth (xdeep).
    */
-  export function workflowEffortToRequestedDepth(
-    effort: string,
-  ): "fast" | "standard" | "deep" | "xdeep" | undefined {
+  export function workflowEffortToRequestedDepth(effort: string): "fast" | "standard" | "deep" | "xdeep" | undefined {
     return mapEffortToDepth(effort)
   }
 
@@ -101,7 +102,7 @@ export namespace TaskQueueExecutor {
       if (!latestExecution) return latest
       if (latest.status !== "queued" && latest.status !== "waiting_for_idle") return latest
 
-      if (await shouldWaitForIdle(latestExecution.sessionID, latest.id)) {
+      if (latestExecution.sessionID && (await shouldWaitForIdle(latestExecution.sessionID, latest.id))) {
         return latest.status === "waiting_for_idle"
           ? latest
           : TaskQueue.setStatus({ id: latest.id, status: "waiting_for_idle" })
@@ -144,7 +145,9 @@ function withStartLocks<T>(item: TaskQueue.Info, execution: QueueExecution, fn: 
 }
 
 function startLockKeys(item: TaskQueue.Info, execution: QueueExecution): string[] {
-  const keys = [`session:${item.projectID}:${execution.sessionID}`]
+  const keys = execution.sessionID
+    ? [`session:${item.projectID}:${execution.sessionID}`]
+    : [`task:${item.projectID}:${item.id}`]
   const workflow = workflowPayload(item)
   if (workflow) keys.push(`workflow-phase:${item.projectID}:${workflow.runID}:${workflow.phaseID}`)
   return uniqueSortedStrings(keys)
@@ -157,7 +160,7 @@ async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecutio
     // fall into the catch and mark a successfully-run task as "failed".
     let succeeded = false
     try {
-      const result = await execution.run()
+      const result = await runWithExecutionWatchdog(item, execution)
       const failure = replayFailureForQueueExecution(item, result)
       if (failure) throw new Error(failure)
       succeeded = true
@@ -168,16 +171,21 @@ async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecutio
         kind: item.kind,
         error,
       })
-      await finishIfRunning(item, {
+      const finished = await finishIfRunning(item, {
         status: "failed",
         error: NamedError.message(error),
       })
+      await syncScheduledTaskOutcome(finished, error)
       log.error("task queue item execution failed", { taskID: item.id, sessionID: item.sessionID, error })
     }
-    if (succeeded) await finishIfRunning(item, { status: "completed" })
+    if (succeeded) {
+      const finished = await finishIfRunning(item, { status: "completed" })
+      await syncScheduledTaskOutcome(finished)
+    }
   } finally {
-    if (item.sessionID) {
-      await TaskQueueExecutor.drainNextForSession(item.sessionID).catch((error) => {
+    const current = await TaskQueue.get(item.id).catch(() => item)
+    if (current.sessionID) {
+      await TaskQueueExecutor.drainNextForSession(current.sessionID).catch((error) => {
         DiagnosticLog.recordProcess("server.taskQueueDrainFailed", {
           taskID: item.id,
           sessionID: item.sessionID,
@@ -199,6 +207,76 @@ async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecutio
       })
     })
   }
+}
+
+async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueExecution): Promise<unknown> {
+  const timeoutMs = item.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  const heartbeat = setInterval(() => {
+    try {
+      TaskQueue.heartbeat(item.id)
+    } catch (error) {
+      log.warn("task queue heartbeat failed", { taskID: item.id, sessionID: item.sessionID, error })
+    }
+  }, EXECUTION_HEARTBEAT_MS)
+  heartbeat.unref?.()
+
+  const run = Promise.resolve().then(execution.run)
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      const error = new Error(`Task queue execution timed out after ${timeoutMs} ms`)
+      DiagnosticLog.recordProcess("server.taskQueueTaskTimedOut", {
+        taskID: item.id,
+        sessionID: item.sessionID,
+        kind: item.kind,
+        timeoutMs,
+      })
+      const cancellation = execution.cancel ? execution.cancel() : cancelTimedOutExecution(item)
+      void cancellation.catch((cancelError) => {
+        log.warn("failed to cancel timed-out task queue execution", {
+          taskID: item.id,
+          sessionID: item.sessionID,
+          error: cancelError,
+        })
+      })
+      reject(error)
+    }, timeoutMs)
+  })
+
+  try {
+    return await Promise.race([run, deadline])
+  } finally {
+    if (timeout) clearTimeout(timeout)
+    clearInterval(heartbeat)
+  }
+}
+
+async function cancelTimedOutExecution(item: TaskQueue.Info) {
+  const current = await TaskQueue.get(item.id).catch(() => item)
+  if (current.sessionID) await SessionPrompt.cancel(current.sessionID)
+}
+
+async function syncScheduledTaskOutcome(item: TaskQueue.Info, error?: unknown) {
+  const scheduledTaskID = item.payload["scheduledTaskID"]
+  if (typeof scheduledTaskID !== "string" || !scheduledTaskID.startsWith("sch_")) return
+  // Workflow dispatch completion is not workflow completion. The workflow
+  // queue bridge records the terminal outcome after its children settle.
+  if (item.payload["workflowTemplateID"] && item.status === "completed") return
+  await import("./scheduled-task")
+    .then(({ ScheduledTask }) =>
+      ScheduledTask.recordQueueOutcome(
+        ScheduledTaskID.make(scheduledTaskID),
+        item.status === "completed" ? "completed" : "failed",
+        error,
+      ),
+    )
+    .catch((syncError) => {
+      log.warn("failed to sync scheduled task queue outcome", {
+        taskID: item.id,
+        scheduledTaskID,
+        error: syncError,
+      })
+    })
 }
 
 async function finishIfRunning(
@@ -399,7 +477,10 @@ function ensureSessionBlockObservers() {
       voidSafe(() => refreshSessionBlockStatus(event.properties.sessionID), "task-queue.block-refresh.permission-asked")
     }),
     Bus.subscribe(Permission.Event.Replied, (event) => {
-      voidSafe(() => refreshSessionBlockStatus(event.properties.sessionID), "task-queue.block-refresh.permission-replied")
+      voidSafe(
+        () => refreshSessionBlockStatus(event.properties.sessionID),
+        "task-queue.block-refresh.permission-replied",
+      )
     }),
     Bus.subscribe(Question.Event.Asked, (event) => {
       voidSafe(() => refreshSessionBlockStatus(event.properties.sessionID), "task-queue.block-refresh.question-asked")
@@ -408,7 +489,10 @@ function ensureSessionBlockObservers() {
       voidSafe(() => refreshSessionBlockStatus(event.properties.sessionID), "task-queue.block-refresh.question-replied")
     }),
     Bus.subscribe(Question.Event.Rejected, (event) => {
-      voidSafe(() => refreshSessionBlockStatus(event.properties.sessionID), "task-queue.block-refresh.question-rejected")
+      voidSafe(
+        () => refreshSessionBlockStatus(event.properties.sessionID),
+        "task-queue.block-refresh.question-rejected",
+      )
     }),
   )
 }
@@ -449,10 +533,12 @@ function compareQueueItems(a: TaskQueue.Info, b: TaskQueue.Info) {
 }
 
 function queueItemExecution(item: TaskQueue.Info): QueueExecution | undefined {
-  if (!item.sessionID) return undefined
   switch (item.kind) {
+    case "automation":
+      return scheduledAutomationExecution(item)
     case "prompt":
     case "followup": {
+      if (!item.sessionID) return undefined
       const body = promptBodyFromQueueItem(item)
       if (!body) return undefined
       return {
@@ -461,6 +547,7 @@ function queueItemExecution(item: TaskQueue.Info): QueueExecution | undefined {
       }
     }
     case "command": {
+      if (!item.sessionID) return undefined
       const body = commandBodyFromQueueItem(item)
       if (!body) return undefined
       return {
@@ -469,6 +556,7 @@ function queueItemExecution(item: TaskQueue.Info): QueueExecution | undefined {
       }
     }
     case "shell": {
+      if (!item.sessionID) return undefined
       const body = shellBodyFromQueueItem(item)
       if (!body) return undefined
       return {
@@ -479,8 +567,53 @@ function queueItemExecution(item: TaskQueue.Info): QueueExecution | undefined {
     case "subagent":
       return workflowSubagentExecution(item)
     case "review":
-    case "automation":
       return undefined
+  }
+}
+
+function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | undefined {
+  const scheduledTaskID = item.payload["scheduledTaskID"]
+  if (typeof scheduledTaskID !== "string" || !scheduledTaskID.startsWith("sch_")) return undefined
+  let workflowRunID: WorkflowRunID | undefined
+  return {
+    sessionID: item.sessionID,
+    cancel: async () => {
+      if (!workflowRunID) return cancelTimedOutExecution(item)
+      const { WorkflowScheduler } = await import("../workflow/scheduler")
+      return WorkflowScheduler.cancel(workflowRunID)
+    },
+    run: () =>
+      runInQueueItemInstance(item, async () => {
+        const workflowTemplateID = item.payload["workflowTemplateID"]
+        if (typeof workflowTemplateID === "string" && workflowTemplateID.length > 0) {
+          const { WorkflowTemplate } = await import("../workflow/template")
+          const { WorkflowScheduler } = await import("../workflow/scheduler")
+          const run = await WorkflowTemplate.createRun({
+            templateID: workflowTemplateID,
+            sourceTaskID: scheduledTaskID,
+          })
+          workflowRunID = run.id
+          const { ScheduledTask } = await import("./scheduled-task")
+          await ScheduledTask.recordWorkflowRun(ScheduledTaskID.make(scheduledTaskID), run.id)
+          const detail = await WorkflowScheduler.start(run.id, item.payload["workflowStartOptions"] ?? {})
+          if (detail.status === "failed" || detail.status === "cancelled") {
+            throw new Error(detail.error ?? `Scheduled workflow ended with status ${detail.status}`)
+          }
+          return detail
+        }
+
+        let sessionID = item.sessionID
+        if (!sessionID) {
+          const { Session } = await import(".")
+          const session = await Session.create({ title: item.title })
+          sessionID = session.id
+          await TaskQueue.attachSession(item.id, sessionID)
+          item.sessionID = sessionID
+        }
+        const body = promptBodyFromQueueItem(item)
+        if (!body) throw new Error(`Scheduled task ${scheduledTaskID} has no executable prompt`)
+        return SessionPrompt.prompt({ ...body, sessionID })
+      }),
   }
 }
 
@@ -1033,9 +1166,7 @@ function readWorkflowEffort(payload: TaskQueue.Payload): string | undefined {
  * - `"deep"` — forces deep reasoning variant.
  * - `"max-workflow"` — forces maximum depth (xdeep).
  */
-function mapEffortToDepth(
-  effort: string,
-): "fast" | "standard" | "deep" | "xdeep" | undefined {
+function mapEffortToDepth(effort: string): "fast" | "standard" | "deep" | "xdeep" | undefined {
   switch (effort) {
     case "normal":
       return undefined

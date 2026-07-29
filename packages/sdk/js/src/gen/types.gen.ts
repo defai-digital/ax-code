@@ -266,6 +266,7 @@ export type AssistantMessage = {
   structured?: unknown
   variant?: string
   finish?: string
+  feedback?: "up" | "down"
 }
 
 export type Message = UserMessage | AssistantMessage
@@ -865,6 +866,7 @@ export type EventTaskQueueCreated = {
         [key: string]: unknown
       }
       error?: string
+      executionTimeoutMs?: number
       time: {
         created: number
         updated?: number
@@ -906,6 +908,7 @@ export type EventTaskQueueUpdated = {
         [key: string]: unknown
       }
       error?: string
+      executionTimeoutMs?: number
       time: {
         created: number
         updated?: number
@@ -1435,6 +1438,8 @@ export type EventScheduledTaskCreated = {
       error?: string
       nextRunAt?: number
       lastRunAt?: number
+      catchUpPolicy: "skip" | "run_once"
+      maxRunDurationMs?: number
       time: {
         created: number
         updated?: number
@@ -1488,6 +1493,8 @@ export type EventScheduledTaskUpdated = {
       error?: string
       nextRunAt?: number
       lastRunAt?: number
+      catchUpPolicy: "skip" | "run_once"
+      maxRunDurationMs?: number
       time: {
         created: number
         updated?: number
@@ -4824,6 +4831,7 @@ export type TaskQueueListResponses = {
       [key: string]: unknown
     }
     error?: string
+    executionTimeoutMs?: number
     time: {
       created: number
       updated?: number
@@ -4849,6 +4857,7 @@ export type TaskQueueEnqueueData = {
       [key: string]: unknown
     }
     priority?: number
+    executionTimeoutMs?: number
   }
   path?: never
   query?: {
@@ -4902,6 +4911,7 @@ export type TaskQueueEnqueueResponses = {
       [key: string]: unknown
     }
     error?: string
+    executionTimeoutMs?: number
     time: {
       created: number
       updated?: number
@@ -5002,6 +5012,7 @@ export type TaskQueueGetResponses = {
       [key: string]: unknown
     }
     error?: string
+    executionTimeoutMs?: number
     time: {
       created: number
       updated?: number
@@ -5084,6 +5095,7 @@ export type TaskQueueStatusResponses = {
       [key: string]: unknown
     }
     error?: string
+    executionTimeoutMs?: number
     time: {
       created: number
       updated?: number
@@ -5164,6 +5176,7 @@ export type TaskQueueEditResponses = {
       [key: string]: unknown
     }
     error?: string
+    executionTimeoutMs?: number
     time: {
       created: number
       updated?: number
@@ -5231,6 +5244,7 @@ export type TaskQueuePauseResponses = {
       [key: string]: unknown
     }
     error?: string
+    executionTimeoutMs?: number
     time: {
       created: number
       updated?: number
@@ -5298,6 +5312,7 @@ export type TaskQueueResumeResponses = {
       [key: string]: unknown
     }
     error?: string
+    executionTimeoutMs?: number
     time: {
       created: number
       updated?: number
@@ -5365,6 +5380,7 @@ export type TaskQueueCancelResponses = {
       [key: string]: unknown
     }
     error?: string
+    executionTimeoutMs?: number
     time: {
       created: number
       updated?: number
@@ -5432,6 +5448,7 @@ export type TaskQueueRetryResponses = {
       [key: string]: unknown
     }
     error?: string
+    executionTimeoutMs?: number
     time: {
       created: number
       updated?: number
@@ -5499,6 +5516,7 @@ export type TaskQueueSendNowResponses = {
       [key: string]: unknown
     }
     error?: string
+    executionTimeoutMs?: number
     time: {
       created: number
       updated?: number
@@ -5568,6 +5586,7 @@ export type TaskQueueReorderResponses = {
       [key: string]: unknown
     }
     error?: string
+    executionTimeoutMs?: number
     time: {
       created: number
       updated?: number
@@ -5650,6 +5669,8 @@ export type ScheduledTaskListResponses = {
     error?: string
     nextRunAt?: number
     lastRunAt?: number
+    catchUpPolicy: "skip" | "run_once"
+    maxRunDurationMs?: number
     time: {
       created: number
       updated?: number
@@ -5693,6 +5714,8 @@ export type ScheduledTaskCreateData = {
       durableChildren?: boolean
       enqueueChildren?: boolean
     }
+    catchUpPolicy?: "skip" | "run_once"
+    maxRunDurationMs?: number
   }
   path?: never
   query?: {
@@ -5760,6 +5783,8 @@ export type ScheduledTaskCreateResponses = {
     error?: string
     nextRunAt?: number
     lastRunAt?: number
+    catchUpPolicy: "skip" | "run_once"
+    maxRunDurationMs?: number
     time: {
       created: number
       updated?: number
@@ -5872,6 +5897,8 @@ export type ScheduledTaskGetResponses = {
     error?: string
     nextRunAt?: number
     lastRunAt?: number
+    catchUpPolicy: "skip" | "run_once"
+    maxRunDurationMs?: number
     time: {
       created: number
       updated?: number
@@ -5916,6 +5943,8 @@ export type ScheduledTaskUpdateData = {
       durableChildren?: boolean
       enqueueChildren?: boolean
     }
+    catchUpPolicy?: "skip" | "run_once"
+    maxRunDurationMs?: number | null
   }
   path: {
     scheduledTaskID: string
@@ -5985,6 +6014,8 @@ export type ScheduledTaskUpdateResponses = {
     error?: string
     nextRunAt?: number
     lastRunAt?: number
+    catchUpPolicy: "skip" | "run_once"
+    maxRunDurationMs?: number
     time: {
       created: number
       updated?: number
@@ -6064,6 +6095,8 @@ export type ScheduledTaskPauseResponses = {
     error?: string
     nextRunAt?: number
     lastRunAt?: number
+    catchUpPolicy: "skip" | "run_once"
+    maxRunDurationMs?: number
     time: {
       created: number
       updated?: number
@@ -6143,6 +6176,8 @@ export type ScheduledTaskResumeResponses = {
     error?: string
     nextRunAt?: number
     lastRunAt?: number
+    catchUpPolicy: "skip" | "run_once"
+    maxRunDurationMs?: number
     time: {
       created: number
       updated?: number
@@ -6223,6 +6258,8 @@ export type ScheduledTaskRunNowResponses = {
       error?: string
       nextRunAt?: number
       lastRunAt?: number
+      catchUpPolicy: "skip" | "run_once"
+      maxRunDurationMs?: number
       time: {
         created: number
         updated?: number
@@ -6256,6 +6293,7 @@ export type ScheduledTaskRunNowResponses = {
         [key: string]: unknown
       }
       error?: string
+      executionTimeoutMs?: number
       time: {
         created: number
         updated?: number
@@ -6345,6 +6383,8 @@ export type ScheduledTaskRunDueResponses = {
       error?: string
       nextRunAt?: number
       lastRunAt?: number
+      catchUpPolicy: "skip" | "run_once"
+      maxRunDurationMs?: number
       time: {
         created: number
         updated?: number
@@ -6378,6 +6418,7 @@ export type ScheduledTaskRunDueResponses = {
         [key: string]: unknown
       }
       error?: string
+      executionTimeoutMs?: number
       time: {
         created: number
         updated?: number
@@ -11494,6 +11535,42 @@ export type SessionMessageResponses = {
 
 export type SessionMessageResponse = SessionMessageResponses[keyof SessionMessageResponses]
 
+export type SessionFeedbackData = {
+  body?: {
+    value: "up" | "down" | null
+  }
+  path: {
+    sessionID: string
+    messageID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/message/{messageID}/feedback"
+}
+
+export type SessionFeedbackErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+}
+
+export type SessionFeedbackError = SessionFeedbackErrors[keyof SessionFeedbackErrors]
+
+export type SessionFeedbackResponses = {
+  /**
+   * Updated assistant message
+   */
+  200: AssistantMessage
+}
+
+export type SessionFeedbackResponse = SessionFeedbackResponses[keyof SessionFeedbackResponses]
+
 export type PartDeleteData = {
   body?: never
   path: {
@@ -11603,6 +11680,9 @@ export type SessionPromptAsyncData = {
   }
   query?: {
     directory?: string
+    executionTimeoutMs?: number
+    sourceTaskID?: string
+    resumeOnRestart?: boolean
   }
   url: "/session/{sessionID}/prompt_async"
 }
@@ -11624,8 +11704,45 @@ export type SessionPromptAsyncResponses = {
   /**
    * Prompt accepted
    */
-  202: unknown
+  202: {
+    id: string
+    projectID: string
+    directory: string
+    worktree?: string
+    sessionID?: string
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    status:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    priority: number
+    position: number
+    title: string
+    agent?: string
+    model?: unknown
+    sourceMessageID?: string
+    sourceTaskID?: string
+    payload: {
+      [key: string]: unknown
+    }
+    error?: string
+    executionTimeoutMs?: number
+    time: {
+      created: number
+      updated?: number
+      started?: number
+      completed?: number
+    }
+  }
 }
+
+export type SessionPromptAsyncResponse = SessionPromptAsyncResponses[keyof SessionPromptAsyncResponses]
 
 export type SessionCommandAsyncData = {
   body?: {
@@ -11642,6 +11759,9 @@ export type SessionCommandAsyncData = {
   }
   query?: {
     directory?: string
+    executionTimeoutMs?: number
+    sourceTaskID?: string
+    resumeOnRestart?: boolean
   }
   url: "/session/{sessionID}/command_async"
 }
@@ -11663,8 +11783,45 @@ export type SessionCommandAsyncResponses = {
   /**
    * Command accepted
    */
-  202: unknown
+  202: {
+    id: string
+    projectID: string
+    directory: string
+    worktree?: string
+    sessionID?: string
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    status:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    priority: number
+    position: number
+    title: string
+    agent?: string
+    model?: unknown
+    sourceMessageID?: string
+    sourceTaskID?: string
+    payload: {
+      [key: string]: unknown
+    }
+    error?: string
+    executionTimeoutMs?: number
+    time: {
+      created: number
+      updated?: number
+      started?: number
+      completed?: number
+    }
+  }
 }
+
+export type SessionCommandAsyncResponse = SessionCommandAsyncResponses[keyof SessionCommandAsyncResponses]
 
 export type SessionCommandData = {
   body?: {
@@ -11724,6 +11881,9 @@ export type SessionShellAsyncData = {
   }
   query?: {
     directory?: string
+    executionTimeoutMs?: number
+    sourceTaskID?: string
+    resumeOnRestart?: boolean
   }
   url: "/session/{sessionID}/shell_async"
 }
@@ -11745,8 +11905,45 @@ export type SessionShellAsyncResponses = {
   /**
    * Shell command accepted
    */
-  202: unknown
+  202: {
+    id: string
+    projectID: string
+    directory: string
+    worktree?: string
+    sessionID?: string
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    status:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    priority: number
+    position: number
+    title: string
+    agent?: string
+    model?: unknown
+    sourceMessageID?: string
+    sourceTaskID?: string
+    payload: {
+      [key: string]: unknown
+    }
+    error?: string
+    executionTimeoutMs?: number
+    time: {
+      created: number
+      updated?: number
+      started?: number
+      completed?: number
+    }
+  }
 }
+
+export type SessionShellAsyncResponse = SessionShellAsyncResponses[keyof SessionShellAsyncResponses]
 
 export type SessionShellData = {
   body?: {

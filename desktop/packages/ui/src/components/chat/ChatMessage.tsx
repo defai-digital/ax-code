@@ -152,6 +152,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   const getSessionModelSelection = useSelectionStore((s) => s.getSessionModelSelection)
   const revertToMessage = useSessionUIStore((s) => s.revertToMessage)
   const forkFromMessage = useSessionUIStore((s) => s.forkFromMessage)
+  const setMessageFeedback = useSessionUIStore((s) => s.setMessageFeedback)
 
   streamPerfCount("ui.chat_message.render")
   if (isInActiveTurn) {
@@ -681,6 +682,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const childStores = useChildStoreManager()
   const [isRetryingTurn, setIsRetryingTurn] = React.useState(false)
+  const [isSavingFeedback, setIsSavingFeedback] = React.useState(false)
 
   // Retry a failed assistant turn: resend the user message that started it
   // with the same model coordinates (see buildAssistantRetryPayload).
@@ -725,6 +727,26 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       setIsRetryingTurn(false)
     }
   }, [childStores, isRetryingTurn, message.info, sessionId, t])
+
+  const assistantFeedback =
+    !isUser && message.info.role === "assistant" ? (message.info as { feedback?: "up" | "down" }).feedback : undefined
+
+  const handleFeedback = React.useCallback(
+    async (value: "up" | "down" | undefined) => {
+      if (!sessionId || isUser || isSavingFeedback) return
+      setIsSavingFeedback(true)
+      try {
+        await setMessageFeedback(sessionId, message.info.id, value)
+      } catch (error) {
+        toast.error(t("chat.messageBody.actions.feedbackFailed"), {
+          description: error instanceof Error ? error.message : undefined,
+        })
+      } finally {
+        setIsSavingFeedback(false)
+      }
+    },
+    [isSavingFeedback, isUser, message.info.id, sessionId, setMessageFeedback, t],
+  )
 
   const messageTextContent = React.useMemo(() => {
     if (isUser) {
@@ -1075,6 +1097,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
                         agentMention={agentMention}
                         onRevert={handleRevert}
+                        onEdit={handleRevert}
                         onFork={isUser ? handleFork : undefined}
                         errorMessage={assistantErrorText}
                         errorVariant={assistantErrorVariant}
@@ -1112,6 +1135,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
                         agentMention={agentMention}
                         onRevert={handleRevert}
+                        onEdit={handleRevert}
                         onFork={isUser ? handleFork : undefined}
                         errorMessage={assistantErrorText}
                         errorVariant={assistantErrorVariant}
@@ -1172,6 +1196,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 errorVariant={assistantErrorVariant}
                 onRetry={handleRetryTurn}
                 retryPending={isRetryingTurn}
+                feedback={assistantFeedback}
+                onFeedback={isMessageCompleted ? handleFeedback : undefined}
+                feedbackPending={isSavingFeedback}
               />
             </div>
           )}

@@ -19,9 +19,12 @@ type WorkflowStartOptions = import("@/workflow/scheduler").WorkflowScheduler.Sta
 
 export namespace ScheduledTask {
   const log = Log.create({ service: "session.scheduled-task" })
+  const MISSED_RUN_GRACE_MS = 5 * 60 * 1_000
 
   export const Status = z.enum(["active", "paused", "disabled"])
   export type Status = z.infer<typeof Status>
+  export const CatchUpPolicy = z.enum(["skip", "run_once"])
+  export type CatchUpPolicy = z.infer<typeof CatchUpPolicy>
 
   // Thrown when a schedule is syntactically shaped but semantically unusable
   // (bad time-of-day, unparseable cron, or invalid timezone). Mapped to a 400
@@ -93,6 +96,13 @@ export namespace ScheduledTask {
     error: z.string().optional(),
     nextRunAt: z.number().optional(),
     lastRunAt: z.number().optional(),
+    catchUpPolicy: CatchUpPolicy,
+    maxRunDurationMs: z
+      .number()
+      .int()
+      .min(1_000)
+      .max(72 * 60 * 60 * 1_000)
+      .optional(),
     time: z.object({
       created: z.number(),
       updated: z.number().optional(),
@@ -108,6 +118,14 @@ export namespace ScheduledTask {
     model: z.unknown().optional(),
     workflowTemplateID: WorkflowTemplateIDSchema.optional(),
     workflowStartOptions: WorkflowStartOptionsSchema.optional(),
+    catchUpPolicy: CatchUpPolicy.optional().default("run_once"),
+    maxRunDurationMs: JsonNumber(
+      z
+        .number()
+        .int()
+        .min(1_000)
+        .max(72 * 60 * 60 * 1_000),
+    ).optional(),
   })
   export type CreateInput = z.input<typeof CreateInput>
 
@@ -121,6 +139,16 @@ export namespace ScheduledTask {
     model: z.unknown().optional(),
     workflowTemplateID: WorkflowTemplateIDSchema.optional(),
     workflowStartOptions: WorkflowStartOptionsSchema.optional(),
+    catchUpPolicy: CatchUpPolicy.optional(),
+    maxRunDurationMs: JsonNumber(
+      z
+        .number()
+        .int()
+        .min(1_000)
+        .max(72 * 60 * 60 * 1_000),
+    )
+      .nullable()
+      .optional(),
   })
   export type UpdateInput = z.input<typeof UpdateInput>
 
@@ -184,6 +212,8 @@ export namespace ScheduledTask {
       error: row.error ?? undefined,
       nextRunAt: row.next_run_at ?? undefined,
       lastRunAt: row.last_run_at ?? undefined,
+      catchUpPolicy: row.catch_up_policy,
+      maxRunDurationMs: row.max_run_duration_ms ?? undefined,
       time: {
         created: row.time_created,
         updated: row.time_updated ?? undefined,
@@ -261,6 +291,8 @@ export namespace ScheduledTask {
           model: parsed.model,
           workflow_template_id: parsed.workflowTemplateID,
           workflow_start_options: parsed.workflowStartOptions,
+          catch_up_policy: parsed.catchUpPolicy,
+          max_run_duration_ms: parsed.maxRunDurationMs,
           next_run_at: nextRunAt(parsed.schedule, now),
           time_created: now,
           time_updated: now,
@@ -305,6 +337,8 @@ export namespace ScheduledTask {
     if (Object.hasOwn(parsed, "model")) updates.model = parsed.model
     if (Object.hasOwn(parsed, "workflowTemplateID")) updates.workflow_template_id = parsed.workflowTemplateID
     if (Object.hasOwn(parsed, "workflowStartOptions")) updates.workflow_start_options = parsed.workflowStartOptions
+    if (parsed.catchUpPolicy !== undefined) updates.catch_up_policy = parsed.catchUpPolicy
+    if (Object.hasOwn(parsed, "maxRunDurationMs")) updates.max_run_duration_ms = parsed.maxRunDurationMs
 
     const task = Database.use((db) => {
       const row = db
@@ -345,24 +379,13 @@ export namespace ScheduledTask {
     }
     try {
       if (current.workflowTemplateID) return await runWorkflowNow(current)
-      const queueItem = await TaskQueue.enqueue({
-        kind: "automation",
-        title: current.title,
-        agent: current.agent,
-        model: current.model,
-        sourceTaskID: current.id,
-        payload: {
-          scheduledTaskID: current.id,
-          prompt: current.prompt,
-          schedule: current.schedule,
-        },
-      })
+      const queued = await TaskQueue.enqueue(scheduledQueueInput(current, Date.now(), "manual"))
       const now = Date.now()
       const task = Database.use((db) => {
         const row = db
           .update(ScheduledTaskTable)
           .set({
-            last_queue_id: queueItem.id,
+            last_queue_id: queued.id,
             last_run_at: now,
             error: null,
             time_updated: now,
@@ -374,6 +397,11 @@ export namespace ScheduledTask {
         return fromRow(row)
       })
       publishUpdated(task)
+      // Commit the relationship before detached execution begins. Otherwise a
+      // very fast failure can record an error and then have it erased by this
+      // metadata write racing behind the executor.
+      const { TaskQueueExecutor } = await import("./task-queue-executor")
+      const queueItem = await TaskQueueExecutor.start(queued)
       return { task, queueItem }
     } catch (error) {
       await recordRunFailure(id, error).catch((recordError) => {
@@ -437,44 +465,144 @@ export namespace ScheduledTask {
     const results: RunNowResult[] = []
     for (const task of due) {
       if (task.nextRunAt === undefined || task.nextRunAt > now) continue
-      // Atomically claim the task by advancing next_run_at only if it still
-      // matches the value we read. Concurrent runDue() callers that read the
-      // same due task will fail this conditional update and skip it, so the
-      // task is enqueued exactly once per tick.
       const next = nextRunAt(task.schedule, now + 1)
-      const claimed = claimDueTask(task.id, task.nextRunAt, next)
+      const missed = now - task.nextRunAt > MISSED_RUN_GRACE_MS
+      const skip = task.catchUpPolicy === "skip" && missed
+      const claimed = claimDueTask(task, next, skip, now)
       if (!claimed) continue
-      publishUpdated(claimed)
+      publishUpdated(claimed.task)
+      if (skip) {
+        log.info("skipped missed scheduled task occurrence", {
+          taskID: task.id,
+          occurrenceAt: task.nextRunAt,
+          nextRunAt: next,
+        })
+        continue
+      }
+      if (!claimed.queueItem) continue
+      TaskQueue.publishEnqueued(claimed.queueItem)
       try {
-        const result = await runNow(task.id)
-        results.push(result)
+        const { TaskQueueExecutor } = await import("./task-queue-executor")
+        const queueItem = await TaskQueueExecutor.start(claimed.queueItem)
+        results.push({ task: claimed.task, queueItem })
       } catch (error) {
-        log.warn("scheduled task run failed, skipping", { taskID: task.id, error })
+        await recordQueueOutcome(task.id, "failed", error).catch((recordError) => {
+          log.warn("scheduled task dispatch failure record failed", { taskID: task.id, error: recordError })
+        })
+        log.warn("scheduled task dispatch failed", { taskID: task.id, error })
       }
     }
     return results
   }
 
-  // Conditional claim: advance next_run_at only when the row is still active and
-  // still carries the expected next_run_at. Runs inside a single synchronous
-  // Database.use() block, so two callers cannot both observe the pre-claim value.
-  function claimDueTask(id: ScheduledTaskID, expectedNextRunAt: number, next: number | undefined): Info | undefined {
-    const now = Date.now()
-    return Database.use((db) => {
-      const row = db
+  function claimDueTask(task: Info, next: number | undefined, skip: boolean, now: number) {
+    return Database.transaction((db) => {
+      const claimed = db
         .update(ScheduledTaskTable)
-        .set({ next_run_at: next ?? null, time_updated: now })
+        .set({
+          next_run_at: next ?? null,
+          time_updated: now,
+          ...(skip ? {} : { last_run_at: now, error: null }),
+        })
         .where(
           and(
-            eq(ScheduledTaskTable.id, id),
+            eq(ScheduledTaskTable.id, task.id),
             eq(ScheduledTaskTable.status, "active"),
-            eq(ScheduledTaskTable.next_run_at, expectedNextRunAt),
+            eq(ScheduledTaskTable.next_run_at, task.nextRunAt!),
           ),
         )
         .returning()
         .get()
-      return row ? fromRow(row) : undefined
+      if (!claimed) return undefined
+      if (skip) return { task: fromRow(claimed) }
+
+      const queueItem = TaskQueue.enqueueInTransaction(db, scheduledQueueInput(task, task.nextRunAt!, "scheduled"), {
+        now,
+      })
+      const row = db
+        .update(ScheduledTaskTable)
+        .set({ last_queue_id: queueItem.id, time_updated: now })
+        .where(eq(ScheduledTaskTable.id, task.id))
+        .returning()
+        .get()
+      if (!row) throw new Error(`Scheduled task disappeared during queue handoff: ${task.id}`)
+      return { task: fromRow(row), queueItem }
     })
+  }
+
+  function scheduledQueueInput(
+    task: Info,
+    occurrenceAt: number,
+    reason: "manual" | "scheduled",
+  ): TaskQueue.EnqueueInput {
+    return {
+      kind: "automation",
+      title: task.title,
+      agent: task.agent,
+      model: task.model,
+      sourceTaskID: task.id,
+      executionTimeoutMs: task.maxRunDurationMs,
+      payload: {
+        scheduledTaskID: task.id,
+        scheduledOccurrenceAt: occurrenceAt,
+        scheduledReason: reason,
+        prompt: task.prompt,
+        schedule: task.schedule,
+        workflowTemplateID: task.workflowTemplateID,
+        workflowStartOptions: task.workflowStartOptions,
+      },
+    }
+  }
+
+  export async function recordQueueOutcome(
+    id: ScheduledTaskID,
+    status: "completed" | "failed",
+    error?: unknown,
+  ): Promise<Info> {
+    const now = Date.now()
+    const task = Database.use((db) => {
+      const row = db
+        .update(ScheduledTaskTable)
+        .set({
+          error: status === "failed" ? toErrorMessage(error) : null,
+          time_updated: now,
+        })
+        .where(eq(ScheduledTaskTable.id, id))
+        .returning()
+        .get()
+      if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
+      return fromRow(row)
+    })
+    publishUpdated(task)
+    return task
+  }
+
+  export async function recordWorkflowRun(id: ScheduledTaskID, workflowRunID: string): Promise<Info> {
+    const now = Date.now()
+    const task = Database.use((db) => {
+      const row = db
+        .update(ScheduledTaskTable)
+        .set({ last_workflow_run_id: workflowRunID, time_updated: now })
+        .where(eq(ScheduledTaskTable.id, id))
+        .returning()
+        .get()
+      if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
+      return fromRow(row)
+    })
+    publishUpdated(task)
+    return task
+  }
+
+  export async function recordWorkflowOutcome(
+    id: ScheduledTaskID,
+    status: "completed" | "failed" | "cancelled",
+    error?: unknown,
+  ): Promise<Info> {
+    return recordQueueOutcome(
+      id,
+      status === "completed" ? "completed" : "failed",
+      error ?? (status === "cancelled" ? "Scheduled workflow was cancelled." : "Scheduled workflow failed."),
+    )
   }
 
   function normalizeSchedulerPollMs(value: number | undefined) {
@@ -483,7 +611,7 @@ export namespace ScheduledTask {
     return Math.max(10, value)
   }
 
-  export function initScheduler(input: { pollMs?: number } = {}) {
+  export function initScheduler(input: { pollMs?: number; keepAlive?: boolean } = {}) {
     const state = schedulerState()
     if (state.initialized) return
     state.initialized = true
@@ -503,7 +631,10 @@ export namespace ScheduledTask {
         })
     })
     state.interval = setInterval(tick, pollMs)
-    state.interval.unref?.()
+    // Preserve the historical default for callers that run a scheduler only
+    // as part of a short-lived command. Long-running servers opt in from the
+    // project bootstrap so scheduled work can keep their process alive.
+    if (input.keepAlive !== true) state.interval.unref?.()
     tick()
   }
 

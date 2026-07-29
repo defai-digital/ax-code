@@ -44,9 +44,23 @@ const log = Log.create({ service: "server" })
 const DEFAULT_MESSAGE_PAGE_LIMIT = 100
 
 const SESSION_COMPARE_PARAM = z.object({ sessionID: SessionID.zod, otherSessionID: SessionID.zod })
+const ASYNC_EXECUTION_QUERY = z.object({
+  executionTimeoutMs: OptionalQueryNumber(
+    z
+      .number()
+      .int()
+      .min(1_000)
+      .max(72 * 60 * 60 * 1_000),
+  ),
+  sourceTaskID: z.string().trim().min(1).max(200).optional(),
+  resumeOnRestart: QueryBoolean.optional(),
+})
 const SESSION_MESSAGE_PARAM = z.object({
   sessionID: SessionID.zod,
   messageID: MessageID.zod,
+})
+const SESSION_MESSAGE_FEEDBACK_INPUT = z.object({
+  value: z.enum(["up", "down"]).nullable(),
 })
 const SESSION_PART_PARAM = z.object({
   sessionID: SessionID.zod,
@@ -68,6 +82,9 @@ async function startAsyncSessionHandler<TBody>(
   c: Context,
   input: {
     kind: "prompt" | "command" | "shell"
+    executionTimeoutMs?: number
+    sourceTaskID?: string
+    resumeOnRestart?: boolean
   },
 ) {
   const { sessionID, body } = await parseSessionJSONInput<TBody>(c as SessionJSONRouteContext)
@@ -79,10 +96,12 @@ async function startAsyncSessionHandler<TBody>(
     agent: asyncTaskQueueAgent(body),
     model: asyncTaskQueueModel(body),
     sourceMessageID: asyncTaskQueueSourceMessageID(body),
-    payload: asyncTaskQueuePayload(input.kind, body),
+    sourceTaskID: input.sourceTaskID,
+    payload: asyncTaskQueuePayload(input.kind, body, input.resumeOnRestart),
+    executionTimeoutMs: input.executionTimeoutMs,
   })
-  await TaskQueueExecutor.start(queueItem)
-  return c.body(null, 202)
+  const started = await TaskQueueExecutor.start(queueItem)
+  return c.json(started, 202)
 }
 
 function asyncTaskQueueTitle(kind: "prompt" | "command" | "shell", body: unknown) {
@@ -113,10 +132,15 @@ function promptPartsSummary(parts: unknown) {
     .trim()
 }
 
-function asyncTaskQueuePayload(kind: "prompt" | "command" | "shell", body: unknown): Record<string, unknown> {
+function asyncTaskQueuePayload(
+  kind: "prompt" | "command" | "shell",
+  body: unknown,
+  resumeOnRestart?: boolean,
+): Record<string, unknown> {
   return {
     kind,
     body: body && typeof body === "object" ? (body as Record<string, unknown>) : {},
+    ...(resumeOnRestart ? { resumeOnRestart: true } : {}),
   }
 }
 
@@ -1168,6 +1192,47 @@ export const SessionRoutes = lazy(() =>
         return c.json(true)
       },
     )
+    .patch(
+      "/:sessionID/message/:messageID/feedback",
+      describeRoute({
+        summary: "Set message feedback",
+        description: "Store or clear a local helpful / needs-improvement signal for a completed assistant message.",
+        operationId: "session.feedback",
+        responses: {
+          200: {
+            description: "Updated assistant message",
+            content: {
+              "application/json": {
+                schema: resolver(MessageV2.Assistant),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", SESSION_MESSAGE_PARAM),
+      validator("json", SESSION_MESSAGE_FEEDBACK_INPUT),
+      async (c) => {
+        const params = c.req.valid("param")
+        await parseCurrentProjectSessionID(c)
+        const message = await MessageV2.get({
+          sessionID: params.sessionID,
+          messageID: params.messageID,
+        })
+        if (message.info.role !== "assistant") {
+          throw new HTTPException(400, { message: "Feedback is only available for assistant messages" })
+        }
+        if (!message.info.time.completed) {
+          throw new HTTPException(400, { message: "Feedback is only available after the assistant message completes" })
+        }
+        const body = c.req.valid("json")
+        const info = await Session.updateMessage({
+          ...message.info,
+          ...(body.value ? { feedback: body.value } : { feedback: undefined }),
+        })
+        return c.json(info)
+      },
+    )
     .delete(
       "/:sessionID/message/:messageID/part/:partID",
       describeRoute({
@@ -1269,15 +1334,25 @@ export const SessionRoutes = lazy(() =>
         responses: {
           202: {
             description: "Prompt accepted",
+            content: {
+              "application/json": {
+                schema: resolver(TaskQueue.Info),
+              },
+            },
           },
           ...errors(400, 404),
         },
       }),
       validator("param", SESSION_ID_PARAM),
+      validator("query", ASYNC_EXECUTION_QUERY),
       validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
       async (c) => {
+        const query = c.req.valid("query")
         return startAsyncSessionHandler(c, {
           kind: "prompt",
+          executionTimeoutMs: query.executionTimeoutMs,
+          sourceTaskID: query.sourceTaskID,
+          resumeOnRestart: query.resumeOnRestart,
         })
       },
     )
@@ -1290,15 +1365,25 @@ export const SessionRoutes = lazy(() =>
         responses: {
           202: {
             description: "Command accepted",
+            content: {
+              "application/json": {
+                schema: resolver(TaskQueue.Info),
+              },
+            },
           },
           ...errors(400, 404),
         },
       }),
       validator("param", SESSION_ID_PARAM),
+      validator("query", ASYNC_EXECUTION_QUERY),
       validator("json", SessionPrompt.CommandInput.omit({ sessionID: true })),
       async (c) => {
+        const query = c.req.valid("query")
         return startAsyncSessionHandler(c, {
           kind: "command",
+          executionTimeoutMs: query.executionTimeoutMs,
+          sourceTaskID: query.sourceTaskID,
+          resumeOnRestart: query.resumeOnRestart,
         })
       },
     )
@@ -1341,15 +1426,25 @@ export const SessionRoutes = lazy(() =>
         responses: {
           202: {
             description: "Shell command accepted",
+            content: {
+              "application/json": {
+                schema: resolver(TaskQueue.Info),
+              },
+            },
           },
           ...errors(400, 404),
         },
       }),
       validator("param", SESSION_ID_PARAM),
+      validator("query", ASYNC_EXECUTION_QUERY),
       validator("json", SessionPrompt.ShellInput.omit({ sessionID: true })),
       async (c) => {
+        const query = c.req.valid("query")
         return startAsyncSessionHandler(c, {
           kind: "shell",
+          executionTimeoutMs: query.executionTimeoutMs,
+          sourceTaskID: query.sourceTaskID,
+          resumeOnRestart: query.resumeOnRestart,
         })
       },
     )

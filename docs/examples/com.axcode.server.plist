@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.axcode.server</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/absolute/path/to/ax-code</string>
+    <string>serve</string>
+    <string>--hostname=127.0.0.1</string>
+    <string>--port=4096</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/absolute/path/to/project</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>AX_CODE_PROJECT</key>
+    <string>/absolute/path/to/project</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+  <key>ExitTimeOut</key>
+  <integer>90</integer>
+  <key>StandardOutPath</key>
+  <string>/absolute/path/to/logs/ax-code-server.log</string>
+  <key>StandardErrorPath</key>
+  <string>/absolute/path/to/logs/ax-code-server.error.log</string>
+</dict>
+</plist>

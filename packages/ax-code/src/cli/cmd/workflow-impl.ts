@@ -90,6 +90,23 @@ type SaveTemplateOptions = RunIDOptions & {
   scope: "user" | "project"
 }
 
+export type WorkflowRuntimeStatus = {
+  enabled: boolean
+  enableCommand: string
+}
+
+export function getWorkflowRuntimeStatus(): WorkflowRuntimeStatus {
+  return {
+    enabled: isWorkflowRuntimeEnabled(),
+    enableCommand: "export AX_CODE_WORKFLOW_RUNTIME=1",
+  }
+}
+
+export function formatWorkflowRuntimeStatus(status: WorkflowRuntimeStatus): string {
+  if (status.enabled) return `Workflow runtime: enabled${EOL}`
+  return `Workflow runtime: disabled${EOL}Enable for this shell: ${status.enableCommand}${EOL}Then run: ax-code workflow templates${EOL}`
+}
+
 export function formatWorkflowTemplateList(templates: WorkflowTemplate.Info[]) {
   if (templates.length === 0) return `No workflow templates found.${EOL}`
   return templates
@@ -933,12 +950,27 @@ const WorkflowRunRetryCommand = cmd({
   },
 })
 
+const WorkflowRuntimeCommand = cmd({
+  command: "runtime",
+  describe: "show workflow runtime availability and enable instructions",
+  builder: (yargs: Argv) => yargs.option("json", jsonOption()),
+  async handler(args) {
+    const status = getWorkflowRuntimeStatus()
+    if (args.json) {
+      writeJson(status)
+      return
+    }
+    process.stdout.write(formatWorkflowRuntimeStatus(status))
+  },
+})
+
 export const WorkflowCommand = cmd({
   command: "workflow",
   aliases: ["wflow"],
   describe: "manage dynamic workflow runs",
   builder: (yargs: Argv) =>
     yargs
+      .command(WorkflowRuntimeCommand)
       .command(WorkflowTemplateListCommand)
       .command(WorkflowRunListCommand)
       .command(WorkflowRunDashboardCommand)
@@ -998,7 +1030,9 @@ async function withWorkflowRuntime(fn: () => Promise<void> | void) {
 
 function assertWorkflowRuntimeEnabled() {
   if (isWorkflowRuntimeEnabled()) return
-  throw new Error("Workflow runtime is disabled. Set AX_CODE_WORKFLOW_RUNTIME=1 to enable workflow commands.")
+  throw new Error(
+    'Workflow runtime is disabled. Run "ax-code workflow runtime" for status and enable instructions, or set AX_CODE_WORKFLOW_RUNTIME=1.',
+  )
 }
 
 function jsonOption() {

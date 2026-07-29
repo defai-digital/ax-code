@@ -51,6 +51,37 @@ describe("project-config runtime", () => {
       expect(reloaded[0].name).toBe("Nightly digest")
       expect(reloaded[0].schedule.timezone).toBe("UTC")
       expect(reloaded[0].schedule.times).toEqual(["09:30"])
+      expect(reloaded[0].catchUpPolicy).toBe("run_once")
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("persists catch-up policy and active queue recovery state", async () => {
+    const { runtime, cleanup } = await createRuntime()
+    try {
+      const created = await runtime.upsertScheduledTask("project-recovery", {
+        name: "Recoverable task",
+        enabled: true,
+        catchUpPolicy: "skip",
+        schedule: { kind: "daily", time: "09:00", timezone: "UTC" },
+        execution: { prompt: "run", providerID: "openai", modelID: "gpt-4.1" },
+      })
+      await runtime.updateScheduledTaskState("project-recovery", created.task.id, {
+        lastStatus: "running",
+        lastSessionId: "ses_recovery",
+        activeQueueItemId: "que_recovery",
+        activeRunReason: "scheduled",
+      })
+
+      const [reloaded] = await runtime.listScheduledTasks("project-recovery")
+      expect(reloaded.catchUpPolicy).toBe("skip")
+      expect(reloaded.state).toMatchObject({
+        lastStatus: "running",
+        lastSessionId: "ses_recovery",
+        activeQueueItemId: "que_recovery",
+        activeRunReason: "scheduled",
+      })
     } finally {
       await cleanup()
     }

@@ -159,6 +159,64 @@ test("getLanguage registers pending model loads before awaiting them", async () 
   expect(pendingSet).toBeLessThan(promiseAwait)
 })
 
+test("concurrent getLanguage calls share one model loader invocation", async () => {
+  const providerID = ProviderID.make("single-flight-provider")
+  const originalLoader = CUSTOM_LOADERS[providerID]
+  const started = deferred()
+  const release = deferred()
+  const language = { id: "shared-language" } as any
+  let calls = 0
+
+  CUSTOM_LOADERS[providerID] = (async () => ({
+    autoload: false,
+    async getModel() {
+      calls++
+      started.resolve()
+      await release.promise
+      return language
+    },
+  })) satisfies CustomLoader
+
+  try {
+    await using tmp = await tmpdir({
+      config: {
+        provider: {
+          [providerID]: {
+            name: "Single Flight Provider",
+            npm: "cli",
+            env: [],
+            models: {
+              "shared-model": {
+                name: "Shared Model",
+                limit: { context: 8192, output: 1024 },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = await Provider.getModel(providerID, ModelID.make("shared-model"))
+        const pending = Array.from({ length: 20 }, () => Provider.getLanguage(model))
+
+        await started.promise
+        expect(calls).toBe(1)
+        release.resolve()
+
+        const languages = await Promise.all(pending)
+        expect(languages).toEqual(Array.from({ length: 20 }, () => language))
+        expect(calls).toBe(1)
+      },
+    })
+  } finally {
+    if (originalLoader) CUSTOM_LOADERS[providerID] = originalLoader
+    else delete CUSTOM_LOADERS[providerID]
+  }
+})
+
 test("getLanguage retries model load when provider cache invalidates before the loader resolves", async () => {
   const providerID = ProviderID.make("race-provider")
   const originalLoader = CUSTOM_LOADERS[providerID]

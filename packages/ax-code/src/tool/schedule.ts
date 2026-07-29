@@ -21,6 +21,8 @@ function taskSummary(task: ScheduledTask.Info) {
     agent: task.agent,
     nextRunAt: task.nextRunAt,
     lastRunAt: task.lastRunAt,
+    catchUpPolicy: task.catchUpPolicy,
+    maxRunDurationMs: task.maxRunDurationMs,
     error: task.error,
   }
 }
@@ -86,6 +88,16 @@ export const ScheduleTaskTool = Tool.define("schedule_task", {
       .describe("The prompt to run when the task fires. Write it self-contained — it runs without this conversation."),
     schedule: ScheduleParameter,
     agent: z.string().optional().describe("Optional agent to run the prompt with. Defaults to the standard agent."),
+    catchUpPolicy: ScheduledTask.CatchUpPolicy.optional().describe(
+      'What to do after backend downtime: "run_once" (the default) coalesces missed occurrences into one run; "skip" advances without running.',
+    ),
+    maxRunDurationMs: z
+      .number()
+      .int()
+      .min(1_000)
+      .max(72 * 60 * 60 * 1_000)
+      .optional()
+      .describe("Executor deadline in milliseconds for each occurrence (1 second to 72 hours)."),
   }),
   async execute(params) {
     const task = await withReadableScheduleErrors(() =>
@@ -94,6 +106,8 @@ export const ScheduleTaskTool = Tool.define("schedule_task", {
         prompt: params.prompt,
         schedule: params.schedule,
         agent: params.agent,
+        catchUpPolicy: params.catchUpPolicy ?? "run_once",
+        maxRunDurationMs: params.maxRunDurationMs,
       }),
     )
     return {

@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
-import { Database } from "../../src/storage/db"
+import { Database, eq } from "../../src/storage/db"
 import { ScheduledTask } from "../../src/session/scheduled-task"
 import { ScheduledTaskID, TaskQueueID } from "../../src/session/schema"
 import { ScheduledTaskTable } from "../../src/session/session.sql"
 import { TaskQueue } from "../../src/session/task-queue"
+import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
@@ -81,7 +82,7 @@ describe("scheduled task routes", () => {
         expect(runNow.task.lastRunAt).toBeGreaterThan(0)
         expect(runNow.queueItem).toMatchObject({
           kind: "automation",
-          status: "queued",
+          status: "running",
           sourceTaskID: created.id,
         })
         expect(runNow.queueItem.payload.prompt).toBe("Review the current branch and summarize risk.")
@@ -104,28 +105,33 @@ describe("scheduled task routes", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const start = vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
         const task = await ScheduledTask.create({
           title: "Due GUI review",
           prompt: "Review the branch after the scheduler fires.",
           schedule: { type: "once", runAt: Date.now() + 20 },
         })
 
-        ScheduledTask.initScheduler({ pollMs: 10 })
+        try {
+          ScheduledTask.initScheduler({ pollMs: 10 })
 
-        const queueItem = await waitForValue(async () => {
+          const queueItem = await waitForValue(async () => {
+            const refreshed = await ScheduledTask.get(task.id)
+            if (!refreshed.lastQueueID) return undefined
+            return TaskQueue.get(TaskQueueID.make(refreshed.lastQueueID))
+          })
+
+          expect(queueItem).toMatchObject({
+            kind: "automation",
+            status: "queued",
+            sourceTaskID: task.id,
+          })
           const refreshed = await ScheduledTask.get(task.id)
-          if (!refreshed.lastQueueID) return undefined
-          return TaskQueue.get(TaskQueueID.make(refreshed.lastQueueID))
-        })
-
-        expect(queueItem).toMatchObject({
-          kind: "automation",
-          status: "queued",
-          sourceTaskID: task.id,
-        })
-        const refreshed = await ScheduledTask.get(task.id)
-        expect(refreshed.lastRunAt).toBeGreaterThan(0)
-        expect(refreshed.nextRunAt).toBeUndefined()
+          expect(refreshed.lastRunAt).toBeGreaterThan(0)
+          expect(refreshed.nextRunAt).toBeUndefined()
+        } finally {
+          start.mockRestore()
+        }
       },
     })
   })
@@ -133,10 +139,11 @@ describe("scheduled task routes", () => {
   test("scheduler normalizes non-finite poll intervals to the default", async () => {
     await using tmp = await tmpdir({ git: true })
     const setIntervalSpy = vi.spyOn(globalThis, "setInterval")
+    const unref = vi.fn()
     try {
       setIntervalSpy.mockImplementation((handler: TimerHandler, _timeout?: number, ...args: unknown[]) => {
         if (typeof handler === "function") handler(...args)
-        return { unref() {} } as ReturnType<typeof setInterval>
+        return { unref } as unknown as ReturnType<typeof setInterval>
       })
 
       await Instance.provide({
@@ -148,9 +155,36 @@ describe("scheduled task routes", () => {
 
       expect(setIntervalSpy).toHaveBeenCalled()
       expect(setIntervalSpy.mock.calls[0]?.[1]).toBe(60_000)
+      expect(unref).toHaveBeenCalledOnce()
     } finally {
       setIntervalSpy.mockRestore()
     }
+  })
+
+  test("records run-now queue metadata before dispatching detached work", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const task = await ScheduledTask.create({
+          title: "Manual queue ordering",
+          prompt: "Record the queue relationship before execution starts.",
+          schedule: { type: "once", runAt: Date.now() + 86_400_000 },
+        })
+        const start = vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => {
+          expect((await ScheduledTask.get(task.id)).lastQueueID).toBe(item.id)
+          return item
+        })
+
+        try {
+          const result = await ScheduledTask.runNow(task.id)
+          expect(result.task.lastQueueID).toBe(result.queueItem?.id)
+        } finally {
+          start.mockRestore()
+        }
+      },
+    })
   })
 
   test("run-now can create workflow runs for workflow scheduled tasks", async () => {
@@ -306,6 +340,7 @@ describe("scheduled task routes", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const start = vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
         const runAt = Date.now() + 10
         const task = await ScheduledTask.create({
           title: "Due once",
@@ -313,14 +348,118 @@ describe("scheduled task routes", () => {
           schedule: { type: "once", runAt },
         })
 
-        const now = runAt + 1
-        const [a, b] = await Promise.all([ScheduledTask.runDue(now), ScheduledTask.runDue(now)])
-        const total = a.length + b.length
-        expect(total).toBe(1)
+        try {
+          const now = runAt + 1
+          const [a, b] = await Promise.all([ScheduledTask.runDue(now), ScheduledTask.runDue(now)])
+          const total = a.length + b.length
+          expect(total).toBe(1)
 
-        const queue = await TaskQueue.list()
-        const forTask = queue.filter((item) => item.sourceTaskID === task.id)
-        expect(forTask).toHaveLength(1)
+          const queue = await TaskQueue.list()
+          const forTask = queue.filter((item) => item.sourceTaskID === task.id)
+          expect(forTask).toHaveLength(1)
+        } finally {
+          start.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("rolls back schedule advancement when durable queue insertion fails", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runAt = Date.now() + 10
+        const task = await ScheduledTask.create({
+          title: "Atomic handoff",
+          prompt: "Do not lose this occurrence.",
+          schedule: { type: "once", runAt },
+        })
+        const enqueue = vi.spyOn(TaskQueue, "enqueueInTransaction").mockImplementation(() => {
+          throw new Error("simulated queue insert failure")
+        })
+
+        try {
+          await expect(ScheduledTask.runDue(runAt + 1)).rejects.toThrow("simulated queue insert failure")
+          const refreshed = await ScheduledTask.get(task.id)
+          expect(refreshed.nextRunAt).toBe(runAt)
+          expect(refreshed.lastRunAt).toBeUndefined()
+          expect(await TaskQueue.list()).toEqual([])
+        } finally {
+          enqueue.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("coalesces missed occurrences once and propagates the execution deadline", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const occurrenceAt = now - 10 * 60_000
+        const task = await ScheduledTask.create({
+          title: "Catch-up review",
+          prompt: "Review after downtime.",
+          schedule: { type: "daily", time: "09:00", timezone: "UTC" },
+          catchUpPolicy: "run_once",
+          maxRunDurationMs: 12_345,
+        })
+        Database.use((db) => {
+          db.update(ScheduledTaskTable)
+            .set({ next_run_at: occurrenceAt })
+            .where(eq(ScheduledTaskTable.id, task.id))
+            .run()
+        })
+        const start = vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+
+        try {
+          const result = await ScheduledTask.runDue(now)
+          expect(result).toHaveLength(1)
+          const [queueItem] = (await TaskQueue.list()).filter((item) => item.sourceTaskID === task.id)
+          expect(queueItem).toMatchObject({
+            executionTimeoutMs: 12_345,
+            payload: {
+              scheduledOccurrenceAt: occurrenceAt,
+              scheduledReason: "scheduled",
+            },
+          })
+          expect((await ScheduledTask.get(task.id)).nextRunAt).toBeGreaterThan(now)
+        } finally {
+          start.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("skips stale occurrences when catch-up policy is skip", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const task = await ScheduledTask.create({
+          title: "Skip stale review",
+          prompt: "Only review on time.",
+          schedule: { type: "daily", time: "09:00", timezone: "UTC" },
+          catchUpPolicy: "skip",
+        })
+        Database.use((db) => {
+          db.update(ScheduledTaskTable)
+            .set({ next_run_at: now - 10 * 60_000 })
+            .where(eq(ScheduledTaskTable.id, task.id))
+            .run()
+        })
+
+        await expect(ScheduledTask.runDue(now)).resolves.toEqual([])
+        expect(await TaskQueue.list()).toEqual([])
+        const refreshed = await ScheduledTask.get(task.id)
+        expect(refreshed.lastRunAt).toBeUndefined()
+        expect(refreshed.nextRunAt).toBeGreaterThan(now)
       },
     })
   })
@@ -341,9 +480,12 @@ describe("scheduled task routes", () => {
             workflowTemplateID: "builtin:noop-dry-run",
           })
 
-          await expect(ScheduledTask.runDue(runAt + 1)).resolves.toEqual([])
+          await expect(ScheduledTask.runDue(runAt + 1)).resolves.toHaveLength(1)
 
-          const refreshed = await ScheduledTask.get(task.id)
+          const refreshed = await waitForValue(async () => {
+            const candidate = await ScheduledTask.get(task.id)
+            return candidate.error ? candidate : undefined
+          })
           expect(refreshed.error).toContain("Workflow runtime is disabled")
           expect(refreshed.lastRunAt).toBeGreaterThan(0)
           expect(refreshed.nextRunAt).toBeUndefined()

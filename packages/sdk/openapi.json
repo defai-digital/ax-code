@@ -2214,6 +2214,11 @@
                       "error": {
                         "type": "string"
                       },
+                      "executionTimeoutMs": {
+                        "type": "integer",
+                        "minimum": 1000,
+                        "maximum": 259200000
+                      },
                       "time": {
                         "type": "object",
                         "properties": {
@@ -2377,6 +2382,11 @@
                     "error": {
                       "type": "string"
                     },
+                    "executionTimeoutMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
+                    },
                     "time": {
                       "type": "object",
                       "properties": {
@@ -2489,6 +2499,11 @@
                     "type": "integer",
                     "minimum": -1000,
                     "maximum": 1000
+                  },
+                  "executionTimeoutMs": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 259200000
                   }
                 },
                 "required": [
@@ -2613,6 +2628,11 @@
                     },
                     "error": {
                       "type": "string"
+                    },
+                    "executionTimeoutMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
                     },
                     "time": {
                       "type": "object",
@@ -2857,6 +2877,11 @@
                     "error": {
                       "type": "string"
                     },
+                    "executionTimeoutMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
+                    },
                     "time": {
                       "type": "object",
                       "properties": {
@@ -3060,6 +3085,11 @@
                     },
                     "error": {
                       "type": "string"
+                    },
+                    "executionTimeoutMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
                     },
                     "time": {
                       "type": "object",
@@ -3296,6 +3326,11 @@
                     "error": {
                       "type": "string"
                     },
+                    "executionTimeoutMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
+                    },
                     "time": {
                       "type": "object",
                       "properties": {
@@ -3468,6 +3503,11 @@
                     },
                     "error": {
                       "type": "string"
+                    },
+                    "executionTimeoutMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
                     },
                     "time": {
                       "type": "object",
@@ -3642,6 +3682,11 @@
                     "error": {
                       "type": "string"
                     },
+                    "executionTimeoutMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
+                    },
                     "time": {
                       "type": "object",
                       "properties": {
@@ -3814,6 +3859,11 @@
                     },
                     "error": {
                       "type": "string"
+                    },
+                    "executionTimeoutMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
                     },
                     "time": {
                       "type": "object",
@@ -3988,6 +4038,11 @@
                     "error": {
                       "type": "string"
                     },
+                    "executionTimeoutMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
+                    },
                     "time": {
                       "type": "object",
                       "properties": {
@@ -4160,6 +4215,11 @@
                     },
                     "error": {
                       "type": "string"
+                    },
+                    "executionTimeoutMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
                     },
                     "time": {
                       "type": "object",
@@ -4455,6 +4515,18 @@
                       "lastRunAt": {
                         "type": "number"
                       },
+                      "catchUpPolicy": {
+                        "type": "string",
+                        "enum": [
+                          "skip",
+                          "run_once"
+                        ]
+                      },
+                      "maxRunDurationMs": {
+                        "type": "integer",
+                        "minimum": 1000,
+                        "maximum": 259200000
+                      },
                       "time": {
                         "type": "object",
                         "properties": {
@@ -4478,6 +4550,7 @@
                       "prompt",
                       "schedule",
                       "status",
+                      "catchUpPolicy",
                       "time"
                     ]
                   }
@@ -4689,6 +4762,18 @@
                     "lastRunAt": {
                       "type": "number"
                     },
+                    "catchUpPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "skip",
+                        "run_once"
+                      ]
+                    },
+                    "maxRunDurationMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
+                    },
                     "time": {
                       "type": "object",
                       "properties": {
@@ -4712,6 +4797,7 @@
                     "prompt",
                     "schedule",
                     "status",
+                    "catchUpPolicy",
                     "time"
                   ]
                 }
@@ -4870,6 +4956,19 @@
                         "type": "boolean"
                       }
                     }
+                  },
+                  "catchUpPolicy": {
+                    "default": "run_once",
+                    "type": "string",
+                    "enum": [
+                      "skip",
+                      "run_once"
+                    ]
+                  },
+                  "maxRunDurationMs": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 259200000
                   }
                 },
                 "required": [
@@ -5075,6 +5174,18 @@
                     "lastRunAt": {
                       "type": "number"
                     },
+                    "catchUpPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "skip",
+                        "run_once"
+                      ]
+                    },
+                    "maxRunDurationMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
+                    },
                     "time": {
                       "type": "object",
                       "properties": {
@@ -5098,6 +5209,7 @@
                     "prompt",
                     "schedule",
                     "status",
+                    "catchUpPolicy",
                     "time"
                   ]
                 }
@@ -5380,6 +5492,18 @@
                     "lastRunAt": {
                       "type": "number"
                     },
+                    "catchUpPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "skip",
+                        "run_once"
+                      ]
+                    },
+                    "maxRunDurationMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
+                    },
                     "time": {
                       "type": "object",
                       "properties": {
@@ -5403,6 +5527,7 @@
                     "prompt",
                     "schedule",
                     "status",
+                    "catchUpPolicy",
                     "time"
                   ]
                 }
@@ -5569,6 +5694,25 @@
                         "type": "boolean"
                       }
                     }
+                  },
+                  "catchUpPolicy": {
+                    "type": "string",
+                    "enum": [
+                      "skip",
+                      "run_once"
+                    ]
+                  },
+                  "maxRunDurationMs": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1000,
+                        "maximum": 259200000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               }
@@ -5769,6 +5913,18 @@
                     "lastRunAt": {
                       "type": "number"
                     },
+                    "catchUpPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "skip",
+                        "run_once"
+                      ]
+                    },
+                    "maxRunDurationMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
+                    },
                     "time": {
                       "type": "object",
                       "properties": {
@@ -5792,6 +5948,7 @@
                     "prompt",
                     "schedule",
                     "status",
+                    "catchUpPolicy",
                     "time"
                   ]
                 }
@@ -6013,6 +6170,18 @@
                     "lastRunAt": {
                       "type": "number"
                     },
+                    "catchUpPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "skip",
+                        "run_once"
+                      ]
+                    },
+                    "maxRunDurationMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
+                    },
                     "time": {
                       "type": "object",
                       "properties": {
@@ -6036,6 +6205,7 @@
                     "prompt",
                     "schedule",
                     "status",
+                    "catchUpPolicy",
                     "time"
                   ]
                 }
@@ -6260,6 +6430,18 @@
                         "lastRunAt": {
                           "type": "number"
                         },
+                        "catchUpPolicy": {
+                          "type": "string",
+                          "enum": [
+                            "skip",
+                            "run_once"
+                          ]
+                        },
+                        "maxRunDurationMs": {
+                          "type": "integer",
+                          "minimum": 1000,
+                          "maximum": 259200000
+                        },
                         "time": {
                           "type": "object",
                           "properties": {
@@ -6283,6 +6465,7 @@
                         "prompt",
                         "schedule",
                         "status",
+                        "catchUpPolicy",
                         "time"
                       ]
                     },
@@ -6364,6 +6547,11 @@
                         },
                         "error": {
                           "type": "string"
+                        },
+                        "executionTimeoutMs": {
+                          "type": "integer",
+                          "minimum": 1000,
+                          "maximum": 259200000
                         },
                         "time": {
                           "type": "object",
@@ -6659,6 +6847,18 @@
                           "lastRunAt": {
                             "type": "number"
                           },
+                          "catchUpPolicy": {
+                            "type": "string",
+                            "enum": [
+                              "skip",
+                              "run_once"
+                            ]
+                          },
+                          "maxRunDurationMs": {
+                            "type": "integer",
+                            "minimum": 1000,
+                            "maximum": 259200000
+                          },
                           "time": {
                             "type": "object",
                             "properties": {
@@ -6682,6 +6882,7 @@
                           "prompt",
                           "schedule",
                           "status",
+                          "catchUpPolicy",
                           "time"
                         ]
                       },
@@ -6763,6 +6964,11 @@
                           },
                           "error": {
                             "type": "string"
+                          },
+                          "executionTimeoutMs": {
+                            "type": "integer",
+                            "minimum": 1000,
+                            "maximum": 259200000
                           },
                           "time": {
                             "type": "object",
@@ -27838,6 +28044,106 @@
         ]
       }
     },
+    "/session/{sessionID}/message/{messageID}/feedback": {
+      "patch": {
+        "operationId": "session.feedback",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses.*"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "messageID",
+            "schema": {
+              "type": "string",
+              "pattern": "^msg.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Set message feedback",
+        "description": "Store or clear a local helpful / needs-improvement signal for a completed assistant message.",
+        "responses": {
+          "200": {
+            "description": "Updated assistant message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantMessage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "up",
+                          "down"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "value"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.session.feedback({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/session/{sessionID}/message/{messageID}/part/{partID}": {
       "delete": {
         "operationId": "part.delete",
@@ -28024,13 +28330,160 @@
               "pattern": "^ses.*"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "executionTimeoutMs",
+            "schema": {
+              "type": "integer",
+              "minimum": 1000,
+              "maximum": 259200000
+            }
+          },
+          {
+            "in": "query",
+            "name": "sourceTaskID",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "in": "query",
+            "name": "resumeOnRestart",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "summary": "Send async message",
         "description": "Create and send a new message to a session asynchronously, starting the session if needed and returning immediately.",
         "responses": {
           "202": {
-            "description": "Prompt accepted"
+            "description": "Prompt accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^tsk.*"
+                    },
+                    "projectID": {
+                      "type": "string"
+                    },
+                    "directory": {
+                      "type": "string"
+                    },
+                    "worktree": {
+                      "type": "string"
+                    },
+                    "sessionID": {
+                      "type": "string",
+                      "pattern": "^ses.*"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "prompt",
+                        "command",
+                        "shell",
+                        "followup",
+                        "subagent",
+                        "review",
+                        "automation"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "waiting_for_idle",
+                        "running",
+                        "blocked_permission",
+                        "blocked_question",
+                        "paused",
+                        "failed",
+                        "completed",
+                        "cancelled"
+                      ]
+                    },
+                    "priority": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "position": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "agent": {
+                      "type": "string"
+                    },
+                    "model": {},
+                    "sourceMessageID": {
+                      "type": "string"
+                    },
+                    "sourceTaskID": {
+                      "type": "string"
+                    },
+                    "payload": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "executionTimeoutMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
+                    },
+                    "time": {
+                      "type": "object",
+                      "properties": {
+                        "created": {
+                          "type": "number"
+                        },
+                        "updated": {
+                          "type": "number"
+                        },
+                        "started": {
+                          "type": "number"
+                        },
+                        "completed": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "created"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "projectID",
+                    "directory",
+                    "kind",
+                    "status",
+                    "priority",
+                    "position",
+                    "title",
+                    "payload",
+                    "time"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Bad request",
@@ -28202,13 +28655,160 @@
               "pattern": "^ses.*"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "executionTimeoutMs",
+            "schema": {
+              "type": "integer",
+              "minimum": 1000,
+              "maximum": 259200000
+            }
+          },
+          {
+            "in": "query",
+            "name": "sourceTaskID",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "in": "query",
+            "name": "resumeOnRestart",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "summary": "Send async command",
         "description": "Queue a command for a session and return immediately after it is accepted.",
         "responses": {
           "202": {
-            "description": "Command accepted"
+            "description": "Command accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^tsk.*"
+                    },
+                    "projectID": {
+                      "type": "string"
+                    },
+                    "directory": {
+                      "type": "string"
+                    },
+                    "worktree": {
+                      "type": "string"
+                    },
+                    "sessionID": {
+                      "type": "string",
+                      "pattern": "^ses.*"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "prompt",
+                        "command",
+                        "shell",
+                        "followup",
+                        "subagent",
+                        "review",
+                        "automation"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "waiting_for_idle",
+                        "running",
+                        "blocked_permission",
+                        "blocked_question",
+                        "paused",
+                        "failed",
+                        "completed",
+                        "cancelled"
+                      ]
+                    },
+                    "priority": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "position": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "agent": {
+                      "type": "string"
+                    },
+                    "model": {},
+                    "sourceMessageID": {
+                      "type": "string"
+                    },
+                    "sourceTaskID": {
+                      "type": "string"
+                    },
+                    "payload": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "executionTimeoutMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
+                    },
+                    "time": {
+                      "type": "object",
+                      "properties": {
+                        "created": {
+                          "type": "number"
+                        },
+                        "updated": {
+                          "type": "number"
+                        },
+                        "started": {
+                          "type": "number"
+                        },
+                        "completed": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "created"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "projectID",
+                    "directory",
+                    "kind",
+                    "status",
+                    "priority",
+                    "position",
+                    "title",
+                    "payload",
+                    "time"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Bad request",
@@ -28416,13 +29016,160 @@
               "pattern": "^ses.*"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "executionTimeoutMs",
+            "schema": {
+              "type": "integer",
+              "minimum": 1000,
+              "maximum": 259200000
+            }
+          },
+          {
+            "in": "query",
+            "name": "sourceTaskID",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "in": "query",
+            "name": "resumeOnRestart",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "summary": "Run async shell command",
         "description": "Queue a shell command for a session and return immediately after it is accepted.",
         "responses": {
           "202": {
-            "description": "Shell command accepted"
+            "description": "Shell command accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^tsk.*"
+                    },
+                    "projectID": {
+                      "type": "string"
+                    },
+                    "directory": {
+                      "type": "string"
+                    },
+                    "worktree": {
+                      "type": "string"
+                    },
+                    "sessionID": {
+                      "type": "string",
+                      "pattern": "^ses.*"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "prompt",
+                        "command",
+                        "shell",
+                        "followup",
+                        "subagent",
+                        "review",
+                        "automation"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "waiting_for_idle",
+                        "running",
+                        "blocked_permission",
+                        "blocked_question",
+                        "paused",
+                        "failed",
+                        "completed",
+                        "cancelled"
+                      ]
+                    },
+                    "priority": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "position": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "agent": {
+                      "type": "string"
+                    },
+                    "model": {},
+                    "sourceMessageID": {
+                      "type": "string"
+                    },
+                    "sourceTaskID": {
+                      "type": "string"
+                    },
+                    "payload": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "executionTimeoutMs": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 259200000
+                    },
+                    "time": {
+                      "type": "object",
+                      "properties": {
+                        "created": {
+                          "type": "number"
+                        },
+                        "updated": {
+                          "type": "number"
+                        },
+                        "started": {
+                          "type": "number"
+                        },
+                        "completed": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "created"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "projectID",
+                    "directory",
+                    "kind",
+                    "status",
+                    "priority",
+                    "position",
+                    "title",
+                    "payload",
+                    "time"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Bad request",
@@ -34830,6 +35577,13 @@
           },
           "finish": {
             "type": "string"
+          },
+          "feedback": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ]
           }
         },
         "required": [
@@ -36971,6 +37725,11 @@
                   "error": {
                     "type": "string"
                   },
+                  "executionTimeoutMs": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 259200000
+                  },
                   "time": {
                     "type": "object",
                     "properties": {
@@ -37104,6 +37863,11 @@
                   },
                   "error": {
                     "type": "string"
+                  },
+                  "executionTimeoutMs": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 259200000
                   },
                   "time": {
                     "type": "object",
@@ -39374,6 +40138,18 @@
                   "lastRunAt": {
                     "type": "number"
                   },
+                  "catchUpPolicy": {
+                    "type": "string",
+                    "enum": [
+                      "skip",
+                      "run_once"
+                    ]
+                  },
+                  "maxRunDurationMs": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 259200000
+                  },
                   "time": {
                     "type": "object",
                     "properties": {
@@ -39397,6 +40173,7 @@
                   "prompt",
                   "schedule",
                   "status",
+                  "catchUpPolicy",
                   "time"
                 ]
               }
@@ -39579,6 +40356,18 @@
                   "lastRunAt": {
                     "type": "number"
                   },
+                  "catchUpPolicy": {
+                    "type": "string",
+                    "enum": [
+                      "skip",
+                      "run_once"
+                    ]
+                  },
+                  "maxRunDurationMs": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 259200000
+                  },
                   "time": {
                     "type": "object",
                     "properties": {
@@ -39602,6 +40391,7 @@
                   "prompt",
                   "schedule",
                   "status",
+                  "catchUpPolicy",
                   "time"
                 ]
               }

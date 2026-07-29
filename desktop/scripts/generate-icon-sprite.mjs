@@ -8,13 +8,18 @@
  * packages/ui/src/components/icon/sprite.ts.
  */
 
-import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs"
+import { existsSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs"
 import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
-const remixPath = resolve(repoRoot, "node_modules/@remixicon/react/index.mjs")
+const remixCandidates = [
+  resolve(repoRoot, "node_modules/@remixicon/react/index.mjs"),
+  resolve(repoRoot, "packages/ui/node_modules/@remixicon/react/index.mjs"),
+  resolve(repoRoot, "../node_modules/@remixicon/react/index.mjs"),
+]
+const remixPath = remixCandidates.find(existsSync) ?? remixCandidates[0]
 const outPath = resolve(repoRoot, "packages/ui/src/components/icon/sprite.ts")
 
 const source = readFileSync(remixPath, "utf-8")
@@ -326,6 +331,24 @@ for (const file of allSrcFiles) {
   addIconNameFunctionReturns(content)
   addTypedIconNameRecords(content)
   addIconNameVariableAssignments(content)
+}
+
+// Some icon names arrive through external configuration rather than a literal
+// in the UI source. Keep those stable so regenerating the sprite does not
+// leave a valid runtime icon reference without a symbol.
+for (const icon of [
+  "apple",
+  "bar-chart-2",
+  "checkbox-blank-circle-fill",
+  "git-close-pull-request",
+  "git-pr-draft",
+  "mic",
+  "mic-off",
+  "play-list-add",
+  "stop-circle",
+  "volume-up",
+]) {
+  addKebabIcon(icon)
 }
 
 console.log(`Found ${usedIcons.size} unique remixicon names used in source`)

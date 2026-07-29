@@ -63,6 +63,7 @@ import {
   validateSessionMoveTarget as validateSessionMoveTargetAction,
   moveSession as moveSessionAction,
   forkFromMessage as forkFromMessageAction,
+  setMessageFeedback as setMessageFeedbackAction,
 } from "./session-actions"
 import { useInputStore, type SyntheticContextPart } from "./input-store"
 import { useSelectionStore } from "./selection-store"
@@ -374,6 +375,7 @@ export type SessionUIState = {
   revertToMessage: (sessionId: string, messageId: string, options?: { skipRedoPush?: boolean }) => Promise<void>
   applyRollbackPoint: (sessionId: string, input: SessionRollbackApplyInput) => Promise<void>
   forkFromMessage: (sessionId: string, messageId: string) => Promise<void>
+  setMessageFeedback: (sessionId: string, messageId: string, feedback: "up" | "down" | undefined) => Promise<void>
   handleSlashUndo: (sessionId: string) => Promise<void>
   handleSlashRedo: (sessionId: string, options?: { fullUnrevert?: boolean }) => Promise<void>
   createSessionFromAssistantMessage: (sourceMessageId: string) => Promise<void>
@@ -1247,6 +1249,10 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       console.error("Failed to fork session:", error)
       toast.error(formatMessage(useI18nStore.getState().dictionary, "chat.fork.toast.failed"))
     }
+  },
+
+  setMessageFeedback: async (sessionId, messageId, feedback) => {
+    await setMessageFeedbackAction(sessionId, messageId, feedback)
   },
 
   // ---------------------------------------------------------------------------

@@ -153,6 +153,7 @@ export const TaskQueueTable = sqliteTable(
     source_task_id: text(),
     payload: text({ mode: "json" }).notNull().$type<Record<string, unknown>>(),
     error: text(),
+    execution_timeout_ms: integer(),
     time_started: integer(),
     time_completed: integer(),
     ...Timestamps,
@@ -188,6 +189,8 @@ export const ScheduledTaskTable = sqliteTable(
     error: text(),
     next_run_at: integer(),
     last_run_at: integer(),
+    catch_up_policy: text().notNull().default("run_once"),
+    max_run_duration_ms: integer(),
     ...Timestamps,
   },
   (table) => [

@@ -1,5 +1,6 @@
 import z from "zod"
 import type { TaskQueue } from "../session/task-queue"
+import { ScheduledTaskID } from "../session/schema"
 import { WorkflowRun } from "./run"
 import { WorkflowPacing, WorkflowPermissions, WorkflowPhaseBudget } from "./spec"
 import { WorkflowChildID, WorkflowPhaseID, WorkflowRunID, type WorkflowChildRecord } from "./state"
@@ -85,6 +86,13 @@ export namespace WorkflowTaskQueue {
             error: runStatus === "failed" || runStatus === "blocked" ? item.error : undefined,
           })
     if (run.status === "completed") await WorkflowRun.ensureFinalReportArtifact(latest.id)
+    if (run.status === "completed" || run.status === "failed" || run.status === "cancelled") {
+      const sourceTaskID = run.sourceTaskID
+      if (sourceTaskID?.startsWith("sch_")) {
+        const { ScheduledTask } = await import("../session/scheduled-task")
+        await ScheduledTask.recordWorkflowOutcome(ScheduledTaskID.make(sourceTaskID), run.status, run.error)
+      }
+    }
 
     if (phaseStatus === "completed" && runStatus === "running") {
       return WorkflowScheduler.start(latest.id, payload.workflow.startOptions)

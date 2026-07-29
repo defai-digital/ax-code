@@ -204,6 +204,56 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("requeues scheduled automation interrupted before session creation", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const item = await TaskQueue.enqueue({
+          kind: "automation",
+          title: "Scheduled prompt",
+          sourceTaskID: "sch_restart_recovery",
+          payload: {
+            scheduledTaskID: "sch_restart_recovery",
+            prompt: "Continue after restart.",
+          },
+        })
+        await TaskQueue.setStatus({ id: item.id, status: "running" })
+
+        const recovered = await TaskQueue.recoverInterrupted()
+
+        expect(recovered.requeued.map((candidate) => candidate.id)).toContain(item.id)
+        expect((await TaskQueue.get(item.id)).status).toBe("queued")
+      },
+    })
+  })
+
+  test("finds restartable queued work beyond the manual queue window", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        for (let index = 0; index < 501; index++) {
+          await TaskQueue.enqueue({ kind: "review", title: `Manual item ${index}` })
+        }
+        const scheduled = await TaskQueue.enqueue({
+          kind: "automation",
+          title: "Restart scheduled item",
+          payload: { scheduledTaskID: "sch_restartable", prompt: "resume" },
+        })
+        const marked = await TaskQueue.enqueue({
+          kind: "prompt",
+          title: "Restart accepted async item",
+          payload: { text: "resume", resumeOnRestart: true },
+        })
+
+        expect((await TaskQueue.listRestartableQueued()).map((item) => item.id)).toEqual([scheduled.id, marked.id])
+      },
+    })
+  })
+
   test("orders project queue items by server position", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -371,6 +421,41 @@ describe("TaskQueue", () => {
           expect(failed.time.completed).toBeDefined()
         } finally {
           prompt.mockRestore()
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  test("fails and cancels a queue execution that exceeds its configured deadline", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const prompt = vi.spyOn(SessionPrompt, "prompt").mockImplementation(() => new Promise(() => undefined))
+        const cancel = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined)
+
+        try {
+          const item = await TaskQueue.enqueue({
+            sessionID: session.id,
+            kind: "prompt",
+            title: "Bounded prompt",
+            payload: { text: "Do not run forever." },
+            executionTimeoutMs: 1_000,
+          })
+
+          await TaskQueueExecutor.start(item)
+          await waitForQueueStatus(item.id, "failed")
+
+          const failed = await TaskQueue.get(item.id)
+          expect(failed.error).toContain("timed out after 1000 ms")
+          expect(failed.time.completed).toBeDefined()
+          expect(cancel).toHaveBeenCalledWith(session.id)
+        } finally {
+          prompt.mockRestore()
+          cancel.mockRestore()
           await Session.remove(session.id)
         }
       },
@@ -981,7 +1066,7 @@ async function waitForQueueStatus(id: TaskQueue.Info["id"], status: TaskQueue.St
 }
 
 async function waitForValue<T>(label: string, read: () => T | undefined | Promise<T | undefined>): Promise<T> {
-  const deadline = Date.now() + 1_000
+  const deadline = Date.now() + 3_000
   while (Date.now() < deadline) {
     const value = await read()
     if (value !== undefined) return value

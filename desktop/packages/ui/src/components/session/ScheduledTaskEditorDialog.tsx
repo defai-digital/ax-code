@@ -465,6 +465,7 @@ type ScheduledTaskDraft = {
   id?: string
   name: string
   enabled: boolean
+  catchUpPolicy: "run_once" | "skip"
   schedule: {
     kind: "daily" | "weekly" | "once"
     times: string[]
@@ -511,6 +512,7 @@ const toDraft = (
     return {
       name: "",
       enabled: true,
+      catchUpPolicy: "run_once",
       schedule: {
         kind: "daily",
         times: ["09:00"],
@@ -533,6 +535,7 @@ const toDraft = (
     id: task.id,
     name: task.name,
     enabled: task.enabled,
+    catchUpPolicy: task.catchUpPolicy === "skip" ? "skip" : "run_once",
     schedule: {
       kind: task.schedule.kind === "once" ? "once" : task.schedule.kind === "weekly" ? "weekly" : "daily",
       times: normalizeDraftTimes(task),
@@ -1054,6 +1057,7 @@ export function ScheduledTaskEditorDialog(props: {
       ...(draft.id ? { id: draft.id } : {}),
       name: draft.name.trim(),
       enabled: draft.enabled,
+      catchUpPolicy: draft.catchUpPolicy,
       schedule: {
         kind: draft.schedule.kind,
         timezone: draft.schedule.timezone.trim(),

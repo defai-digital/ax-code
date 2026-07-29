@@ -32,6 +32,8 @@ const normalizeStatus = (value) => {
   return "idle"
 }
 
+const normalizeCatchUpPolicy = (value) => (value === "skip" ? "skip" : "run_once")
+
 const normalizeDateValue = (value) => {
   const date = asNonEmptyString(value)
   if (!date) {
@@ -206,6 +208,9 @@ const normalizeState = (value, fallback) => {
       ? Math.max(0, Math.round(source.nextRunAt))
       : undefined
   const lastSessionId = asNonEmptyString(source.lastSessionId)
+  const activeQueueItemId = asNonEmptyString(source.activeQueueItemId)
+  const activeRunReason =
+    source.activeRunReason === "manual" || source.activeRunReason === "scheduled" ? source.activeRunReason : null
   const lastError = asLimitedString(source.lastError, MAX_LAST_ERROR_LENGTH)
 
   return {
@@ -222,6 +227,8 @@ const normalizeState = (value, fallback) => {
     ...(typeof lastDurationMs === "number" ? { lastDurationMs } : {}),
     ...(typeof nextRunAt === "number" ? { nextRunAt } : {}),
     ...(lastSessionId ? { lastSessionId } : {}),
+    ...(activeQueueItemId ? { activeQueueItemId } : {}),
+    ...(activeRunReason ? { activeRunReason } : {}),
     ...(lastError ? { lastError } : {}),
   }
 }
@@ -253,6 +260,7 @@ const normalizeTaskForStorage = (value, options) => {
   }
 
   const enabled = typeof value.enabled === "boolean" ? value.enabled : (existingTask?.enabled ?? true)
+  const catchUpPolicy = normalizeCatchUpPolicy(value.catchUpPolicy ?? existingTask?.catchUpPolicy)
 
   const schedule = normalizeSchedule(value.schedule, existingTask?.schedule)
   const execution = normalizeExecution(value.execution)
@@ -269,6 +277,7 @@ const normalizeTaskForStorage = (value, options) => {
     id,
     name,
     enabled,
+    catchUpPolicy,
     schedule,
     execution,
     state,

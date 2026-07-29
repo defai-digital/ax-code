@@ -11,6 +11,8 @@ const JITTER_MAX_MS = 2_000
 const TASK_TITLE_MAX_LENGTH = 120
 const TASK_DUE_SLACK_MS = 5_000
 const MAX_TIMER_DELAY_MS = 2_147_483_647
+const DEFAULT_QUEUE_POLL_INTERVAL_MS = 1_000
+const TERMINAL_QUEUE_STATUSES = new Set(["completed", "failed", "cancelled"])
 
 const buildTaskKey = (projectID, taskID) => `${projectID}:${taskID}`
 const asNonEmptyString = (value) => {
@@ -38,8 +40,7 @@ const weekdayAsZeroBased = (dateTime) => {
   return dateTime.weekday % 7
 }
 
-const normalizeScheduleTimezone = (schedule) =>
-  asNonEmptyString(schedule?.timezone) || DateTime.local().zoneName
+const normalizeScheduleTimezone = (schedule) => asNonEmptyString(schedule?.timezone) || DateTime.local().zoneName
 
 const safeErrorMessage = (error, maxLength = 2_000) => {
   const raw = error instanceof Error ? error.message || String(error) : String(error ?? "Unknown error")
@@ -196,6 +197,10 @@ export const createScheduledTasksRuntime = (deps) => {
     maxGlobalConcurrency = DEFAULT_GLOBAL_CONCURRENCY,
     maxProjectConcurrency = DEFAULT_PROJECT_CONCURRENCY,
     maxRunDurationMs = DEFAULT_MAX_RUN_MS,
+    createClient = createAxCodeClient,
+    fetchImpl = fetch,
+    queuePollIntervalMs = DEFAULT_QUEUE_POLL_INTERVAL_MS,
+    wait = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)),
   } = deps
 
   let started = false
@@ -287,12 +292,44 @@ export const createScheduledTasksRuntime = (deps) => {
     if (!task) {
       return
     }
-    const nextRunAt = computeNextRunAt(task, Date.now())
+    const now = Date.now()
+    const activeQueueItemID = asNonEmptyString(task.state?.activeQueueItemId)
+    if (activeQueueItemID) {
+      queueTaskRun(projectID, task.id, task.state?.activeRunReason === "manual" ? "manual" : "scheduled")
+      return
+    }
+
+    let latestTask = task
+    if (task.state?.lastStatus === "running") {
+      // Older Desktop versions had no durable queue handle. They cannot be
+      // reconciled safely, so surface the interruption instead of submitting
+      // a duplicate run.
+      const interrupted = await projectConfigRuntime.updateScheduledTaskState(projectID, task.id, {
+        lastStatus: "error",
+        lastError: "Scheduled task was interrupted before a durable queue handle was recorded.",
+        activeQueueItemId: undefined,
+        activeRunReason: undefined,
+        updatedAt: now,
+      })
+      if (interrupted.task) {
+        latestTask = interrupted.task
+        updateInMemoryTask(projectID, interrupted.task)
+      }
+    }
+
+    const persistedNextRunAt = latestTask.state?.nextRunAt
+    const missedOccurrence = latestTask.enabled && Number.isFinite(persistedNextRunAt) && persistedNextRunAt <= now
+    if (missedOccurrence && latestTask.catchUpPolicy !== "skip") {
+      queueTaskRun(projectID, latestTask.id, "scheduled")
+      return
+    }
+
+    const nextRunAt = computeNextRunAt(latestTask, now)
     const statePatch = {
       nextRunAt: Number.isFinite(nextRunAt) ? nextRunAt : undefined,
-      updatedAt: Date.now(),
+      updatedAt: now,
     }
-    const result = await projectConfigRuntime.updateScheduledTaskState(projectID, task.id, statePatch)
+    const result = await projectConfigRuntime.updateScheduledTaskState(projectID, latestTask.id, statePatch)
     if (result.task) {
       updateInMemoryTask(projectID, result.task)
       if (result.task.enabled && Number.isFinite(result.task.state?.nextRunAt)) {
@@ -326,6 +363,9 @@ export const createScheduledTasksRuntime = (deps) => {
 
     for (const task of tasks) {
       await syncTaskSchedule(projectID, task)
+    }
+    if (started) {
+      pumpQueue()
     }
 
     return tasks
@@ -387,29 +427,82 @@ export const createScheduledTasksRuntime = (deps) => {
     ],
   })
 
-  const runPromptAsync = async ({ baseUrl, authHeaders, sessionID, projectPath, task }) => {
-    const promptUrl = new URL(`${baseUrl}/session/${encodeURIComponent(sessionID)}/prompt_async`)
-    promptUrl.searchParams.set("directory", projectPath)
-    const response = await fetch(promptUrl.toString(), {
+  const parseQueueItemResponse = async (response, operation) => {
+    if (!response.ok) {
+      const body = await response.text().catch(() => "")
+      throw new Error(`${operation} failed (${response.status})${body ? `: ${body}` : ""}`)
+    }
+    const item = await response.json().catch(() => null)
+    if (!item || typeof item.id !== "string" || typeof item.status !== "string") {
+      throw new Error(`${operation} returned no durable queue item`)
+    }
+    return item
+  }
+
+  const requestAsyncExecution = async ({ baseUrl, authHeaders, sessionID, projectPath, task, kind, body }) => {
+    const requestUrl = new URL(`${baseUrl}/session/${encodeURIComponent(sessionID)}/${kind}_async`)
+    requestUrl.searchParams.set("directory", projectPath)
+    requestUrl.searchParams.set("executionTimeoutMs", String(maxRunDurationMs))
+    requestUrl.searchParams.set("sourceTaskID", `desktop:${task.id}`)
+    requestUrl.searchParams.set("resumeOnRestart", "true")
+    const response = await fetchImpl(requestUrl.toString(), {
       method: "POST",
       headers: {
         ...authHeaders,
         "content-type": "application/json",
         accept: "application/json",
       },
-      body: JSON.stringify(buildPromptAsyncPayload(task, projectPath)),
+      body: JSON.stringify(body),
     })
-
-    if (!response.ok) {
-      const body = await response.text().catch(() => "")
-      throw new Error(`prompt_async failed (${response.status})${body ? `: ${body}` : ""}`)
-    }
+    return parseQueueItemResponse(response, `${kind}_async`)
   }
 
-  const runScheduledCommandIfApplicable = async ({ client, projectPath, sessionID, task }) => {
+  const runPromptAsync = ({ baseUrl, authHeaders, sessionID, projectPath, task }) => {
+    return requestAsyncExecution({
+      baseUrl,
+      authHeaders,
+      sessionID,
+      projectPath,
+      task,
+      kind: "prompt",
+      body: buildPromptAsyncPayload(task, projectPath),
+    })
+  }
+
+  const readQueueItem = async ({ baseUrl, authHeaders, projectPath, queueItemID }) => {
+    const queueUrl = new URL(`${baseUrl}/task-queue/${encodeURIComponent(queueItemID)}`)
+    queueUrl.searchParams.set("directory", projectPath)
+    const response = await fetchImpl(queueUrl.toString(), {
+      method: "GET",
+      headers: {
+        ...authHeaders,
+        accept: "application/json",
+      },
+    })
+    return parseQueueItemResponse(response, "task queue poll")
+  }
+
+  const waitForQueueTerminal = async ({ baseUrl, authHeaders, projectPath, queueItem }) => {
+    let current = queueItem
+    while (!TERMINAL_QUEUE_STATUSES.has(current.status)) {
+      await wait(queuePollIntervalMs)
+      current = await readQueueItem({
+        baseUrl,
+        authHeaders,
+        projectPath,
+        queueItemID: current.id,
+      })
+    }
+    if (current.status !== "completed") {
+      throw new Error(current.error || `task queue item ended with status ${current.status}`)
+    }
+    return current
+  }
+
+  const runScheduledCommandIfApplicable = async ({ client, baseUrl, authHeaders, projectPath, sessionID, task }) => {
     const parsed = parseScheduledCommandPrompt(task?.execution?.prompt)
     if (!parsed) {
-      return false
+      return null
     }
 
     let commands = []
@@ -417,30 +510,33 @@ export const createScheduledTasksRuntime = (deps) => {
       const response = await client.command.list({ directory: projectPath })
       commands = Array.isArray(response?.data) ? response.data : []
     } catch {
-      return false
+      return null
     }
 
     const hasMatchingCommand = commands.some((command) => command?.name === parsed.command)
     if (!hasMatchingCommand) {
-      return false
+      return null
     }
 
-    await client.session.command({
+    return requestAsyncExecution({
+      baseUrl,
+      authHeaders,
       sessionID,
-      directory: projectPath,
-      command: parsed.command,
-      arguments: parsed.arguments,
-      ...(task.execution.agent ? { agent: task.execution.agent } : {}),
-      model: `${task.execution.providerID}/${task.execution.modelID}`,
-      ...(task.execution.variant ? { variant: task.execution.variant } : {}),
+      projectPath,
+      task,
+      kind: "command",
+      body: {
+        command: parsed.command,
+        arguments: parsed.arguments,
+        ...(task.execution.agent ? { agent: task.execution.agent } : {}),
+        model: `${task.execution.providerID}/${task.execution.modelID}`,
+        ...(task.execution.variant ? { variant: task.execution.variant } : {}),
+      },
     })
-
-    return true
   }
 
   const runTaskWithWatchdog = async (projectID, task, reason) => {
     const startedAt = Date.now()
-    const title = formatScheduledSessionTitle(task, startedAt)
     const projectPath = projectPathByID.get(projectID)
     if (!projectPath) {
       throw new Error("project path is unavailable")
@@ -452,18 +548,76 @@ export const createScheduledTasksRuntime = (deps) => {
 
     const baseUrl = buildAxCodeUrl("/", "").replace(/\/$/, "")
     const authHeaders = getAxCodeAuthHeaders()
-    const client = createAxCodeClient({
+    const client = createClient({
       baseUrl,
       headers: authHeaders,
     })
 
-    const sessionResponse = await client.session.create({
-      directory: projectPath,
-      title,
-    })
-    const sessionID = sessionResponse?.data?.id
-    if (!sessionID) {
-      throw new Error("failed to create session")
+    let sessionID = asNonEmptyString(task.state?.lastSessionId)
+    let queueItem
+    const activeQueueItemID = asNonEmptyString(task.state?.activeQueueItemId)
+    if (activeQueueItemID) {
+      queueItem = await readQueueItem({
+        baseUrl,
+        authHeaders,
+        projectPath,
+        queueItemID: activeQueueItemID,
+      })
+      sessionID = asNonEmptyString(queueItem.sessionID) || sessionID
+    } else {
+      const title = formatScheduledSessionTitle(task, startedAt)
+      const sessionResponse = await client.session.create({
+        directory: projectPath,
+        title,
+      })
+      sessionID = sessionResponse?.data?.id
+      if (!sessionID) {
+        throw new Error("failed to create session")
+      }
+
+      queueItem = await runScheduledCommandIfApplicable({
+        client,
+        baseUrl,
+        authHeaders,
+        projectPath,
+        sessionID,
+        task,
+      })
+      if (!queueItem) {
+        queueItem = await runPromptAsync({
+          baseUrl,
+          authHeaders,
+          sessionID,
+          projectPath,
+          task,
+        })
+      }
+      sessionID = asNonEmptyString(queueItem.sessionID) || sessionID
+
+      // The core queue item is the recovery handle. Persist it as soon as the
+      // 202 response arrives, but keep tracking it even if Desktop state
+      // persistence temporarily fails.
+      await projectConfigRuntime
+        .updateScheduledTaskState(projectID, task.id, {
+          lastStatus: "running",
+          lastSessionId: sessionID,
+          activeQueueItemId: queueItem.id,
+          activeRunReason: reason,
+          updatedAt: Date.now(),
+        })
+        .then((result) => {
+          if (result.task) {
+            updateInMemoryTask(projectID, result.task)
+          }
+        })
+        .catch((error) => {
+          logger.warn?.("[ScheduledTasks] failed to persist active queue handle", {
+            projectID,
+            taskID: task.id,
+            queueItemID: queueItem.id,
+            error: safeErrorMessage(error),
+          })
+        })
     }
 
     try {
@@ -476,21 +630,12 @@ export const createScheduledTasksRuntime = (deps) => {
       })
     } catch {}
 
-    const executedAsCommand = await runScheduledCommandIfApplicable({
-      client,
+    await waitForQueueTerminal({
+      baseUrl,
+      authHeaders,
       projectPath,
-      sessionID,
-      task,
+      queueItem,
     })
-    if (!executedAsCommand) {
-      await runPromptAsync({
-        baseUrl,
-        authHeaders,
-        sessionID,
-        projectPath,
-        task,
-      })
-    }
 
     const finishedAt = Date.now()
     return {
@@ -505,7 +650,8 @@ export const createScheduledTasksRuntime = (deps) => {
   const runTask = async (projectID, taskID, reason) => {
     const taskMap = tasksByProject.get(projectID)
     const task = taskMap?.get(taskID)
-    if (!task || !task.enabled) {
+    const recoveringAcceptedRun = Boolean(asNonEmptyString(task?.state?.activeQueueItemId))
+    if (!task || (!task.enabled && !recoveringAcceptedRun)) {
       return { ok: false, skipped: true }
     }
 
@@ -518,139 +664,143 @@ export const createScheduledTasksRuntime = (deps) => {
     runningGlobalCount += 1
     runningCountByProject.set(projectID, (runningCountByProject.get(projectID) || 0) + 1)
 
-    const runStartedAt = Date.now()
-    await projectConfigRuntime
-      .updateScheduledTaskState(projectID, taskID, {
-        lastRunAt: runStartedAt,
-        lastStatus: "running",
-        lastError: undefined,
-        updatedAt: runStartedAt,
-      })
-      .then((result) => {
-        if (result.task) {
-          updateInMemoryTask(projectID, result.task)
-        }
-      })
-
-    let status = "success"
-    let sessionID
-    let durationMs = 0
-    let errorMessage
-
     try {
-      const runPromise = runTaskWithWatchdog(projectID, task, reason)
-      let timedOut = false
-      let timeoutID
-      const timeoutPromise = new Promise((_, reject) => {
-        timeoutID = setTimeout(() => {
-          timedOut = true
-          reject(new Error("scheduled task run timed out"))
-        }, maxRunDurationMs)
-      })
-
-      // When the timeout wins the race below, runPromise stays pending and its
-      // fetch/SDK calls can still reject afterwards. With no handler attached
-      // that surfaces as an unhandled rejection (can crash the process), so log
-      // and swallow it. Guard on timedOut so a normal rejection (already
-      // surfaced by the race) isn't double-logged.
-      runPromise.catch((err) => {
-        if (timedOut) {
-          logger.warn?.("[ScheduledTasks] run rejected after timeout", {
-            projectID,
-            taskID,
-            error: err?.message ?? String(err),
-          })
-        }
-      })
-
-      const result = await Promise.race([runPromise, timeoutPromise]).finally(() => {
-        if (timeoutID) {
-          clearTimeout(timeoutID)
-        }
-      })
-      sessionID = result.sessionID
-      durationMs = result.durationMs
-      status = "success"
-      logger.info?.("[ScheduledTasks] run completed", { projectID, taskID, status, reason, sessionID, durationMs })
-    } catch (error) {
-      status = "error"
-      errorMessage = safeErrorMessage(error)
-      logger.warn?.("[ScheduledTasks] run failed", {
-        projectID,
-        taskID,
-        reason,
-        status,
-        error: errorMessage,
-      })
-    }
-
-    const finishedAt = Date.now()
-    if (!durationMs) {
-      durationMs = Math.max(0, finishedAt - runStartedAt)
-    }
-    let latestTask = tasksByProject.get(projectID)?.get(taskID) || task
-    const shouldConsumeOneTimeTask = latestTask?.schedule?.kind === "once" && reason === "scheduled"
-    if (shouldConsumeOneTimeTask && latestTask?.enabled) {
-      try {
-        const consumed = await projectConfigRuntime.upsertScheduledTask(projectID, {
-          ...latestTask,
-          enabled: false,
+      const runStartedAt = Date.now()
+      await projectConfigRuntime
+        .updateScheduledTaskState(projectID, taskID, {
+          lastRunAt: runStartedAt,
+          lastStatus: "running",
+          lastError: undefined,
+          updatedAt: runStartedAt,
         })
-        latestTask = consumed.task || latestTask
-        updateInMemoryTask(projectID, latestTask)
-      } catch (consumeError) {
-        logger.warn?.("[ScheduledTasks] failed to consume one-time task", {
+        .then((result) => {
+          if (result.task) {
+            updateInMemoryTask(projectID, result.task)
+          }
+        })
+
+      let status = "success"
+      let sessionID
+      let durationMs = 0
+      let errorMessage
+
+      try {
+        const runPromise = runTaskWithWatchdog(projectID, task, reason)
+        let timedOut = false
+        let timeoutID
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutID = setTimeout(() => {
+            timedOut = true
+            reject(new Error("scheduled task run timed out"))
+          }, maxRunDurationMs)
+        })
+
+        // When the timeout wins the race below, runPromise stays pending and its
+        // fetch/SDK calls can still reject afterwards. With no handler attached
+        // that surfaces as an unhandled rejection (can crash the process), so log
+        // and swallow it. Guard on timedOut so a normal rejection (already
+        // surfaced by the race) isn't double-logged.
+        runPromise.catch((err) => {
+          if (timedOut) {
+            logger.warn?.("[ScheduledTasks] run rejected after timeout", {
+              projectID,
+              taskID,
+              error: err?.message ?? String(err),
+            })
+          }
+        })
+
+        const result = await Promise.race([runPromise, timeoutPromise]).finally(() => {
+          if (timeoutID) {
+            clearTimeout(timeoutID)
+          }
+        })
+        sessionID = result.sessionID
+        durationMs = result.durationMs
+        status = "success"
+        logger.info?.("[ScheduledTasks] run completed", { projectID, taskID, status, reason, sessionID, durationMs })
+      } catch (error) {
+        status = "error"
+        errorMessage = safeErrorMessage(error)
+        logger.warn?.("[ScheduledTasks] run failed", {
           projectID,
           taskID,
-          error: safeErrorMessage(consumeError),
+          reason,
+          status,
+          error: errorMessage,
         })
       }
-    }
 
-    const nextRunAt = computeNextRunAt(latestTask, finishedAt)
-
-    const statePatch = {
-      lastStatus: status,
-      lastDurationMs: durationMs,
-      lastError: status === "error" ? errorMessage : undefined,
-      lastSessionId: status === "success" ? sessionID : undefined,
-      nextRunAt: Number.isFinite(nextRunAt) ? nextRunAt : undefined,
-      updatedAt: finishedAt,
-    }
-
-    const stateResult = await projectConfigRuntime.updateScheduledTaskState(projectID, taskID, statePatch)
-    if (stateResult.task) {
-      updateInMemoryTask(projectID, stateResult.task)
-      if (stateResult.task.enabled && Number.isFinite(stateResult.task.state?.nextRunAt)) {
-        scheduleTask(projectID, taskID, stateResult.task.state.nextRunAt)
+      const finishedAt = Date.now()
+      if (!durationMs) {
+        durationMs = Math.max(0, finishedAt - runStartedAt)
       }
-    }
+      let latestTask = tasksByProject.get(projectID)?.get(taskID) || task
+      const shouldConsumeOneTimeTask = latestTask?.schedule?.kind === "once" && reason === "scheduled"
+      if (shouldConsumeOneTimeTask && latestTask?.enabled) {
+        try {
+          const consumed = await projectConfigRuntime.upsertScheduledTask(projectID, {
+            ...latestTask,
+            enabled: false,
+          })
+          latestTask = consumed.task || latestTask
+          updateInMemoryTask(projectID, latestTask)
+        } catch (consumeError) {
+          logger.warn?.("[ScheduledTasks] failed to consume one-time task", {
+            projectID,
+            taskID,
+            error: safeErrorMessage(consumeError),
+          })
+        }
+      }
 
-    try {
-      emitTaskRunEvent?.({
-        projectID,
-        taskID,
-        ranAt: finishedAt,
+      const nextRunAt = computeNextRunAt(latestTask, finishedAt)
+
+      const statePatch = {
+        lastStatus: status,
+        lastDurationMs: durationMs,
+        lastError: status === "error" ? errorMessage : undefined,
+        lastSessionId: sessionID,
+        activeQueueItemId: undefined,
+        activeRunReason: undefined,
+        nextRunAt: Number.isFinite(nextRunAt) ? nextRunAt : undefined,
+        updatedAt: finishedAt,
+      }
+
+      const stateResult = await projectConfigRuntime.updateScheduledTaskState(projectID, taskID, statePatch)
+      if (stateResult.task) {
+        updateInMemoryTask(projectID, stateResult.task)
+        if (stateResult.task.enabled && Number.isFinite(stateResult.task.state?.nextRunAt)) {
+          scheduleTask(projectID, taskID, stateResult.task.state.nextRunAt)
+        }
+      }
+
+      try {
+        emitTaskRunEvent?.({
+          projectID,
+          taskID,
+          ranAt: finishedAt,
+          status,
+          ...(sessionID ? { sessionID } : {}),
+        })
+      } catch {}
+
+      return {
+        ok: status === "success",
         status,
-        ...(sessionID ? { sessionID } : {}),
-      })
-    } catch {}
-
-    runningTaskKeys.delete(taskKey)
-    runningGlobalCount = Math.max(0, runningGlobalCount - 1)
-    const nextProjectCount = Math.max(0, (runningCountByProject.get(projectID) || 1) - 1)
-    if (nextProjectCount === 0) {
-      runningCountByProject.delete(projectID)
-    } else {
-      runningCountByProject.set(projectID, nextProjectCount)
-    }
-
-    return {
-      ok: status === "success",
-      status,
-      sessionID,
-      task: stateResult.task || null,
-      error: errorMessage,
+        sessionID,
+        task: stateResult.task || null,
+        error: errorMessage,
+      }
+    } finally {
+      runningTaskKeys.delete(taskKey)
+      runningGlobalCount = Math.max(0, runningGlobalCount - 1)
+      const nextProjectCount = Math.max(0, (runningCountByProject.get(projectID) || 1) - 1)
+      if (nextProjectCount === 0) {
+        runningCountByProject.delete(projectID)
+      } else {
+        runningCountByProject.set(projectID, nextProjectCount)
+      }
     }
   }
 
@@ -715,6 +865,7 @@ export const createScheduledTasksRuntime = (deps) => {
     }
     started = true
     await syncAllProjects()
+    pumpQueue()
   }
 
   const stop = () => {

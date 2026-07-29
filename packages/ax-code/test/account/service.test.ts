@@ -162,6 +162,101 @@ test("token refresh persists the new token", async () => {
   expect(value.token_expiry).toBeGreaterThan(Date.now())
 })
 
+test("token refreshes proactively before a near-term expiry", async () => {
+  const id = AccountID.make("user-proactive")
+  const currentTime = 1_000_000
+  await AccountRepo.persistAccount({
+    id,
+    email: "user@example.com",
+    url: "https://one.example.com",
+    accessToken: AccessToken.make("at_old"),
+    refreshToken: RefreshToken.make("rt_old"),
+    expiry: currentTime + 10_000,
+    orgID: undefined,
+  })
+  let refreshes = 0
+  const client = fetchClient((req) => {
+    if (req.url !== "https://one.example.com/auth/device/token") return json({}, 404)
+    refreshes++
+    return json({
+      access_token: "at_new",
+      refresh_token: "rt_new",
+      expires_in: 60,
+    })
+  })
+
+  const token = await Account.create({ fetch: client, now: () => currentTime }).token(id)
+
+  expect(String(token)).toBe("at_new")
+  expect(refreshes).toBe(1)
+})
+
+test("failed proactive refresh keeps a still-valid token but fails after expiry", async () => {
+  const id = AccountID.make("user-proactive-fallback")
+  let currentTime = 1_000_000
+  await AccountRepo.persistAccount({
+    id,
+    email: "user@example.com",
+    url: "https://one.example.com",
+    accessToken: AccessToken.make("at_old"),
+    refreshToken: RefreshToken.make("rt_old"),
+    expiry: currentTime + 10_000,
+    orgID: undefined,
+  })
+  let refreshes = 0
+  const client = fetchClient((req) => {
+    if (req.url !== "https://one.example.com/auth/device/token") return json({}, 404)
+    refreshes++
+    return json({ error: "temporarily_unavailable" }, 503)
+  })
+  const account = Account.create({ fetch: client, now: () => currentTime })
+
+  expect(String(await account.token(id))).toBe("at_old")
+  expect(refreshes).toBe(1)
+
+  currentTime += 10_000
+  await expect(account.token(id)).rejects.toThrow()
+  expect(refreshes).toBe(2)
+})
+
+test("concurrent token consumers share one rotating-token refresh", async () => {
+  const id = AccountID.make("user-concurrent")
+  await AccountRepo.persistAccount({
+    id,
+    email: "user@example.com",
+    url: "https://one.example.com",
+    accessToken: AccessToken.make("at_old"),
+    refreshToken: RefreshToken.make("rt_old"),
+    expiry: Date.now() - 1_000,
+    orgID: undefined,
+  })
+
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let refreshes = 0
+  const client = fetchClient(async (req) => {
+    if (req.url !== "https://one.example.com/auth/device/token") return json({}, 404)
+    refreshes++
+    await gate
+    return json({
+      access_token: "at_shared",
+      refresh_token: "rt_rotated",
+      expires_in: 60,
+    })
+  })
+  const account = Account.create({ fetch: client })
+  const pending = Array.from({ length: 12 }, () => account.token(id))
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(refreshes).toBe(1)
+  release()
+
+  const tokens = await Promise.all(pending)
+  expect(tokens.map(String)).toEqual(Array.from({ length: 12 }, () => "at_shared"))
+  expect(refreshes).toBe(1)
+})
+
 test("config sends the selected org header", async () => {
   const id = AccountID.make("user-1")
 

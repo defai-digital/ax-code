@@ -7,10 +7,10 @@ Owner: ax-code runtime
 
 AX Code has three composable automation primitives:
 
-| Primitive | What it is | Lifetime |
-| --- | --- | --- |
-| `/goal` | A durable objective the session keeps pursuing, with budgets and a verification gate | Persisted per session |
-| `/loop` | A heartbeat that re-runs a prompt on a fixed interval while the session is idle | This backend process |
+| Primitive       | What it is                                                                                         | Lifetime                          |
+| --------------- | -------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `/goal`         | A durable objective the session keeps pursuing, with budgets and a verification gate               | Persisted per session             |
+| `/loop`         | A heartbeat that re-runs a prompt on a fixed interval while the session is idle                    | This backend process              |
 | Scheduled tasks | Durable one-time or recurring runs ("every weekday at 9am…") the agent can set up conversationally | Persisted in the project database |
 
 ## /loop — recurring prompts
@@ -88,7 +88,18 @@ Schedules support one-time runs, daily/weekly times, and 5-field cron
 expressions, each with an optional IANA timezone. Tasks persist in the
 project database and fire while an AX Code backend for the project is
 running (60s scheduler sweep, atomic claiming — a task fires once even with
-several backends open).
+several backends open). Schedule advancement and durable queue insertion share
+one database transaction, so a crash cannot advance an occurrence without
+leaving work to recover.
+
+Missed occurrences default to `catchUpPolicy: "run_once"`: after downtime,
+AX Code coalesces any backlog into one run. Use `"skip"` when stale work should
+be advanced without running. A task can also set `maxRunDurationMs` from one
+second through 72 hours; a timed-out run is cancelled and recorded as failed.
+
+For operation across process and host restarts, run the backend under a
+supervisor. See [Long-Running Operations](long-running-operations.md) for
+systemd, launchd, and PM2 examples plus exact recovery semantics.
 
 ## Long unattended runs
 

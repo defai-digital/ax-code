@@ -6,6 +6,7 @@ export type ScheduledTask = {
   id: string
   name: string
   enabled: boolean
+  catchUpPolicy?: "run_once" | "skip"
   schedule: {
     kind: "daily" | "weekly" | "once" | "cron"
     times?: string[]
@@ -30,6 +31,8 @@ export type ScheduledTask = {
     lastError?: string
     lastDurationMs?: number
     lastSessionId?: string
+    activeQueueItemId?: string
+    activeRunReason?: "manual" | "scheduled"
     nextRunAt?: number
   }
 }

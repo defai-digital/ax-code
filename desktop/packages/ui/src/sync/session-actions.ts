@@ -1108,6 +1108,40 @@ export async function revertToMessage(sessionId: string, messageId: string): Pro
   }
 }
 
+/** Store or clear the local quality signal attached to a completed assistant message. */
+export async function setMessageFeedback(
+  sessionId: string,
+  messageId: string,
+  feedback: "up" | "down" | undefined,
+): Promise<void> {
+  const directory = getSessionDirectory(sessionId)
+  const client = scopedClientForDirectory(directory)
+  const store = getDirectoryStore(directory)
+  const result = await client.session.feedback({
+    sessionID: sessionId,
+    messageID: messageId,
+    directory,
+    value: feedback ?? null,
+  })
+
+  if (!result.data) {
+    throw new Error("Failed to save message feedback")
+  }
+
+  const state = store.getState()
+  const messages = [...(state.message[sessionId] ?? [])]
+  const index = Binary.findIndex(messages, messageId, (message) => message.id)
+  if (index < 0) return
+
+  messages[index] = result.data
+  store.setState({
+    message: {
+      ...state.message,
+      [sessionId]: messages,
+    },
+  })
+}
+
 export async function refetchSessionMessages(sessionId: string): Promise<void> {
   const directory = getSessionDirectory(sessionId)
   const store = getDirectoryStore(directory)
