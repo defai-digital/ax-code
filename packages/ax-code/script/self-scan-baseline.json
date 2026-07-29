@@ -18,7 +18,7 @@
           "fingerprint": "3ff517ec6a8094a17b3ef5599039b544f915b0ad68004143b9c6c30a49037aae",
           "file": "src/debug-engine/prewarm-lsp.ts",
           "line": 40,
-          "endLine": 53,
+          "endLine": 69,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -393,7 +393,7 @@
         {
           "fingerprint": "0c8fb83a73e5f0c8e2c7957476a41bde6606ec38334fd86494ac9a54d315b9d4",
           "file": "src/debug-engine/prewarm-lsp.ts",
-          "line": 61,
+          "line": 66,
           "severity": "medium",
           "kind": "non_atomic_counter",
           "summary": "non_atomic_counter"
@@ -401,7 +401,7 @@
         {
           "fingerprint": "180a65640e683a0cac7c8f0c745acffd3e1e33b2f0137ad6ac4316e070300d78",
           "file": "src/debug-engine/prewarm-lsp.ts",
-          "line": 63,
+          "line": 68,
           "severity": "medium",
           "kind": "non_atomic_counter",
           "summary": "non_atomic_counter"
@@ -3171,7 +3171,7 @@
         {
           "fingerprint": "19d5249ee6b479f574ea2f66ec81202e4d59337925edb6027277aa2ecebdb785",
           "file": "src/cli/cmd/tui/context/local.tsx",
-          "line": 178,
+          "line": 183,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -3179,7 +3179,7 @@
         {
           "fingerprint": "78effd5728d7056ddbb893ecc40b0c8464731dfe024c28ebd508686e0a4e26fa",
           "file": "src/cli/cmd/tui/context/local.tsx",
-          "line": 535,
+          "line": 549,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"

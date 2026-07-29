@@ -47,10 +47,15 @@ export async function prewarmAffectedFiles(impactReport: DebugEngine.ImpactRepor
     return 0
   }
 
+  // Reserve the timestamp synchronously before awaiting so a concurrent call
+  // observing the same empty entry cannot start a duplicate touch within the
+  // interval. The promise below reconciles on failure (deletes the entry) so a
+  // transient LSP error does not poison the window.
+  for (const file of eligibleFiles) lastPrewarmAt.set(file, now)
+
   const results = await Promise.allSettled(
     eligibleFiles.map(async (file) => {
       await LSP.touchFile(file, false)
-      lastPrewarmAt.set(file, now)
     }),
   )
 
@@ -61,6 +66,7 @@ export async function prewarmAffectedFiles(impactReport: DebugEngine.ImpactRepor
       warmed++
     } else {
       failed++
+      lastPrewarmAt.delete(eligibleFiles[i])
       log.warn("prewarm failed", {
         file: eligibleFiles[i],
         error: (results[i] as PromiseRejectedResult).reason,
