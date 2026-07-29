@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.4.1] - 2026-07-29
+
+### Added
+
+- Sessions: adds durable scheduled-task execution with restart recovery, catch-up policies, execution deadlines, and visible task outcomes.
+- Desktop: adds assistant-message feedback plus edit-and-rerun actions, and exposes workflow-runtime status guidance.
+
+### Fixed
+
+- Reliability: prevents scheduled-task failures from being erased by a fast detached execution race and preserves the scheduler's short-lived caller behavior.
+- Providers: refreshes access tokens proactively with single-flight protection for rotating refresh tokens.
+
 ## [7.4.0] - 2026-07-27
 
 ### Added
