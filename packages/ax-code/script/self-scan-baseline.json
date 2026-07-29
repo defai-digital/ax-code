@@ -926,7 +926,7 @@
         {
           "fingerprint": "988fc40c0ae29463c01aa66d00474a79033c16bb47b846775fe9a251acb59cbf",
           "file": "src/account/index.ts",
-          "line": 143,
+          "line": 144,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -1310,7 +1310,7 @@
         {
           "fingerprint": "4a08109fa25222d5cebf4ae916c230108fbdf9f36da4aa2c586890d57f154477",
           "file": "src/server/routes/session-impl.ts",
-          "line": 894,
+          "line": 918,
           "severity": "high",
           "kind": "child_process:no_cleanup",
           "summary": "child_process:no_cleanup"
@@ -1334,7 +1334,7 @@
         {
           "fingerprint": "018c1ffbafa611aed7204e99c38526bd8aaddf6c80ed2251808f63e65357374a",
           "file": "src/session/scheduled-task.ts",
-          "line": 666,
+          "line": 797,
           "severity": "high",
           "kind": "child_process:no_cleanup",
           "summary": "child_process:no_cleanup"
@@ -1342,7 +1342,7 @@
         {
           "fingerprint": "8ac39a134080b8adf35936c4121eca7bf8f13b01b97b22a4bab528dda8f4aa56",
           "file": "src/session/scheduled-task.ts",
-          "line": 675,
+          "line": 806,
           "severity": "high",
           "kind": "child_process:no_cleanup",
           "summary": "child_process:no_cleanup"
@@ -1350,7 +1350,7 @@
         {
           "fingerprint": "cbdb584bc0df78a2b4941e2cc21f0b91e03df74dec3ae981bbb586ed8c8a5e6e",
           "file": "src/session/scheduled-task.ts",
-          "line": 697,
+          "line": 828,
           "severity": "high",
           "kind": "child_process:no_cleanup",
           "summary": "child_process:no_cleanup"
@@ -1358,7 +1358,7 @@
         {
           "fingerprint": "b88b1158c751b385ae4de2d17ace5645e562db422a5645470718b0839f6f4ca5",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 214,
+          "line": 292,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -1366,7 +1366,7 @@
         {
           "fingerprint": "14e895f5b71e65cc9ff5579cf6db87c8318784489d6f563b1e2e9513b9f4a35d",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 217,
+          "line": 295,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -1374,7 +1374,7 @@
         {
           "fingerprint": "545668efcf2713957893c05507526c15a8680d75d4cdeb4d88909cbc440deaf6",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 313,
+          "line": 391,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -2102,7 +2102,7 @@
         {
           "fingerprint": "b262e087dfcc2b8b79d08e2fe761b37f6cfe0615c4ed69a85c5cb7b40921b4e2",
           "file": "src/project/bootstrap.ts",
-          "line": 165,
+          "line": 176,
           "severity": "medium",
           "kind": "subscription:no_cleanup",
           "summary": "subscription:no_cleanup"
@@ -2326,7 +2326,7 @@
         {
           "fingerprint": "fc2496ffb9f48e2c13d8af1ff358bf61130289082962c0cc066c76d1be1e1e16",
           "file": "src/server/routes/session-impl.ts",
-          "line": 1080,
+          "line": 1104,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -2366,15 +2366,15 @@
         {
           "fingerprint": "6053307853041c16c2d09e923b896b28a90b197be35b7d37054232480e76749b",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 398,
+          "line": 476,
           "severity": "medium",
           "kind": "subscription:no_cleanup",
           "summary": "subscription:no_cleanup"
         },
         {
-          "fingerprint": "63d3d927953934f40988392ee8f58f2552bc70d5966e493029c866119d4bfb12",
+          "fingerprint": "038d0d7e9a699f43c2b228dceb5364980f65bf3354d6fe67f0335b8189c65174",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 401,
+          "line": 479,
           "severity": "medium",
           "kind": "subscription:no_cleanup",
           "summary": "subscription:no_cleanup"
@@ -2382,7 +2382,7 @@
         {
           "fingerprint": "6789e29a245be213b5b4ef0de1072ac34a0931dd1d0b68c0d26d58d3ce417084",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 404,
+          "line": 485,
           "severity": "medium",
           "kind": "subscription:no_cleanup",
           "summary": "subscription:no_cleanup"
@@ -2390,15 +2390,15 @@
         {
           "fingerprint": "fcd8b7fd39d01c285429586467224e44d6332718b82c90541c2ecf895204d6bb",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 407,
+          "line": 488,
           "severity": "medium",
           "kind": "subscription:no_cleanup",
           "summary": "subscription:no_cleanup"
         },
         {
-          "fingerprint": "88c21e39205a509b208b194570858aacf6cefe416ac8629324c715bc9ca5ae12",
+          "fingerprint": "3b7d25bdd85a5952a2d17cf551c2d9294236632a24da07cb3dc12611ac235822",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 410,
+          "line": 491,
           "severity": "medium",
           "kind": "subscription:no_cleanup",
           "summary": "subscription:no_cleanup"
