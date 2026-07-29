@@ -73,9 +73,15 @@ export function createPartWriteBatcher<TPart extends { id: string }>(input: {
       arm()
     },
     async forceImmediate(part) {
+      // Drop any coalesced snapshot for this id so a concurrent window flush
+      // cannot rewrite an older mid-stream value after this transition.
       pending.delete(part.id)
-      await chain.catch(() => undefined)
-      await writeOne(part)
+      // Enqueue onto the shared chain (same as flushPending) so concurrent
+      // forceImmediate / flush calls never run writeOne in parallel and part
+      // state transitions stay ordered for Session.updatePart.force.
+      const done = chain.catch(() => undefined).then(() => writeOne(part))
+      chain = done
+      await done
     },
     async flush() {
       if (timer) {
