@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
   RECENT_MODEL_LIMIT,
+  modelPreferenceStatus,
   normalizeModelVariantStore,
   normalizeRecentModels,
   pruneModelPreferences,
@@ -101,7 +102,7 @@ describe("tui local model preferences", () => {
           malformed: "ignored",
         },
       },
-      (item) => valid.has(`${item.providerID}/${item.modelID}`),
+      (item) => (valid.has(`${item.providerID}/${item.modelID}`) ? "valid" : "invalid"),
     )
 
     expect(result.recent).toEqual([model(1), model(3)])
@@ -109,6 +110,44 @@ describe("tui local model preferences", () => {
     expect(result.variant).toEqual({
       "provider/model-1": "high",
       "openrouter/vendor/model": "medium",
+    })
+    expect(result.changed).toBe(true)
+  })
+
+  test("pruneModelPreferences keeps models that are temporarily unavailable during provider discovery", () => {
+    const discovered = { providerID: "codex-cli", modelID: "gpt-5.6-sol" }
+    const invalid = { providerID: "missing", modelID: "removed" }
+    const providers = [
+      {
+        id: "codex-cli",
+        models: {
+          "codex-cli": { capabilities: { toolcall: true } },
+        },
+      },
+      {
+        id: "provider",
+        models: {
+          "model-1": { capabilities: { toolcall: true } },
+        },
+      },
+    ]
+    const result = pruneModelPreferences(
+      {
+        recent: [discovered, invalid, model(1)],
+        favorite: [discovered, invalid],
+        variant: {
+          "codex-cli/gpt-5.6-sol": "high",
+          "missing/removed": "stale",
+        },
+      },
+      (item) => modelPreferenceStatus(providers, item),
+      (item) => modelPreferenceStatus(providers, item),
+    )
+
+    expect(result.recent).toEqual([discovered, model(1)])
+    expect(result.favorite).toEqual([discovered])
+    expect(result.variant).toEqual({
+      "codex-cli/gpt-5.6-sol": "high",
     })
     expect(result.changed).toBe(true)
   })
@@ -129,10 +168,10 @@ describe("tui local model preferences", () => {
           "provider/model-3": "orphaned",
         },
       },
-      (item) => valid.has(`${item.providerID}/${item.modelID}`),
+      (item) => (valid.has(`${item.providerID}/${item.modelID}`) ? "valid" : "invalid"),
       (item, variant) => {
-        if (variant === undefined) return true
-        return validVariants.get(`${item.providerID}/${item.modelID}`)?.has(variant) ?? false
+        if (variant === undefined) return "valid"
+        return validVariants.get(`${item.providerID}/${item.modelID}`)?.has(variant) ? "valid" : "invalid"
       },
     )
 

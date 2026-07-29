@@ -1,6 +1,23 @@
 import { providerModelKey, providerModelList, type ProviderModelKeyInput } from "@/provider/model-key"
+import { modelSelectableForProvider } from "@/provider/model-selectability"
 
 export const RECENT_MODEL_LIMIT = 5
+
+export type ModelPreferenceStatus = "valid" | "invalid" | "unknown"
+
+export function modelPreferenceStatus(
+  providers: readonly {
+    id: string
+    models: Record<string, Parameters<typeof modelSelectableForProvider>[1]>
+  }[],
+  model: ProviderModelKeyInput,
+): ModelPreferenceStatus {
+  const provider = providers.find((item) => item.id === model.providerID)
+  if (!provider) return "invalid"
+  const info = provider.models[model.modelID]
+  if (!info) return "unknown"
+  return modelSelectableForProvider(model.providerID, info) ? "valid" : "invalid"
+}
 
 export type ModelPreferenceStore = {
   recent: ProviderModelKeyInput[]
@@ -70,13 +87,13 @@ function parseProviderModelKey(key: string): ProviderModelKeyInput | undefined {
 
 function filterKnownModels(
   input: readonly ProviderModelKeyInput[],
-  isModelValid: (model: ProviderModelKeyInput) => boolean,
+  modelStatus: (model: ProviderModelKeyInput) => ModelPreferenceStatus,
   limit?: number,
 ) {
   const out: ProviderModelKeyInput[] = []
   const seen = new Set<string>()
   for (const item of providerModelList(input)) {
-    if (!isModelValid(item)) continue
+    if (modelStatus(item) === "invalid") continue
     const key = providerModelKey(item)
     if (seen.has(key)) continue
     seen.add(key)
@@ -103,15 +120,15 @@ function sameVariantStore(left: Record<string, string | undefined>, right: Recor
 
 export function pruneModelPreferences(
   input: ModelPreferenceStore,
-  isModelValid: (model: ProviderModelKeyInput) => boolean,
-  isVariantValid: (model: ProviderModelKeyInput, variant: string | undefined) => boolean = () => true,
+  modelStatus: (model: ProviderModelKeyInput) => ModelPreferenceStatus,
+  variantStatus: (model: ProviderModelKeyInput, variant: string | undefined) => ModelPreferenceStatus = modelStatus,
 ): ModelPreferenceStore & { changed: boolean } {
-  const recent = filterKnownModels(input.recent, isModelValid, RECENT_MODEL_LIMIT)
-  const favorite = filterKnownModels(input.favorite, isModelValid)
+  const recent = filterKnownModels(input.recent, modelStatus, RECENT_MODEL_LIMIT)
+  const favorite = filterKnownModels(input.favorite, modelStatus)
   const variant = Object.fromEntries(
     Object.entries(input.variant).filter(([key, value]) => {
       const model = parseProviderModelKey(key)
-      return model !== undefined && isModelValid(model) && isVariantValid(model, value)
+      return model !== undefined && modelStatus(model) !== "invalid" && variantStatus(model, value) !== "invalid"
     }),
   )
   return {

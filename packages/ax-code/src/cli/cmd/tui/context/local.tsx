@@ -23,11 +23,13 @@ import { Filesystem } from "@/util/filesystem"
 import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
 import {
   modelIdentity,
+  modelPreferenceStatus as resolveModelPreferenceStatus,
   normalizeModelVariantStore,
   normalizeRecentModels,
   pruneModelPreferences,
   rememberRecentModel as rememberRecentModelEntry,
   resolveCurrentAgent,
+  type ModelPreferenceStatus,
 } from "./local-util"
 import { Log } from "@/util/log"
 import { modelDisplayInfo } from "@tui/component/model-vision-label"
@@ -43,9 +45,12 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     const sdk = useSDK()
     const toast = useToast()
 
+    function modelPreferenceStatus(model: { providerID: string; modelID: string }): ModelPreferenceStatus {
+      return resolveModelPreferenceStatus(sync.data.provider, model)
+    }
+
     function isModelValid(model: { providerID: string; modelID: string }) {
-      const provider = sync.data.provider.find((x) => x.id === model.providerID)
-      return modelSelectableForProvider(model.providerID, provider?.models[model.modelID])
+      return modelPreferenceStatus(model) === "valid"
     }
 
     function getFirstValidModel(...modelFns: (() => { providerID: string; modelID: string } | undefined)[]) {
@@ -186,11 +191,20 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         setModelStore("recent", rememberRecentModelEntry(modelStore.recent, model))
       }
 
-      function isVariantValid(model: ProviderModelKeyInput, variant: string | undefined) {
-        if (variant === undefined) return true
+      function variantPreferenceStatus(
+        model: ProviderModelKeyInput,
+        variant: string | undefined,
+      ): ModelPreferenceStatus {
+        const status = modelPreferenceStatus(model)
+        if (status !== "valid") return status
+        if (variant === undefined) return "valid"
         const provider = sync.data.provider.find((x) => x.id === model.providerID)
         const variants = provider?.models[model.modelID]?.variants
-        return !!variants && Object.hasOwn(variants, variant)
+        return variants && Object.hasOwn(variants, variant) ? "valid" : "invalid"
+      }
+
+      function isVariantValid(model: ProviderModelKeyInput, variant: string | undefined) {
+        return variantPreferenceStatus(model, variant) === "valid"
       }
 
       function save() {
@@ -311,7 +325,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         if (!sync.data.provider_loaded) return
         for (const [agentName, storedModel] of Object.entries(modelStore.model)) {
           if (!storedModel) continue
-          if (!isModelValid(storedModel)) {
+          if (modelPreferenceStatus(storedModel) === "invalid") {
             log.info("removing invalid model override after providers loaded", {
               agentName,
               providerID: storedModel.providerID,
@@ -330,8 +344,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             favorite: modelStore.favorite,
             variant: modelStore.variant,
           },
-          isModelValid,
-          isVariantValid,
+          modelPreferenceStatus,
+          variantPreferenceStatus,
         )
         if (pruned.changed) {
           log.info("removing invalid stored model preferences after providers loaded", {
@@ -628,7 +642,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       // Agents can land before providers during bootstrap; validating against
       // an empty provider list would toast a false "not valid" warning.
       if (!sync.data.provider_loaded) return
-      if (!isModelValid(value.model)) {
+      const status = modelPreferenceStatus(value.model)
+      if (status === "unknown") return
+      if (status === "invalid") {
         // Dedupe: the provider store rewrites re-run this effect; only warn
         // once per agent+model combination.
         const warnKey = `${value.name}:${value.model.providerID}/${value.model.modelID}`
