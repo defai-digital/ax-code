@@ -67,8 +67,8 @@ catalogs:
       specifier: 3.1.0
       version: 3.1.0
     hono:
-      specifier: 4.12.27
-      version: 4.12.27
+      specifier: 4.12.34
+      version: 4.12.34
     hono-openapi:
       specifier: 1.1.2
       version: 1.1.2
@@ -827,16 +827,16 @@ importers:
         version: 1.6.0
       '@hono/node-server':
         specifier: 2.0.11
-        version: 2.0.11(hono@4.12.27)
+        version: 2.0.11(hono@4.12.34)
       '@hono/node-ws':
         specifier: ^1.3.1
-        version: 1.3.1(@hono/node-server@2.0.11(hono@4.12.27))(hono@4.12.27)
+        version: 1.3.1(@hono/node-server@2.0.11(hono@4.12.34))(hono@4.12.34)
       '@hono/standard-validator':
         specifier: ^0.2.0
-        version: 0.2.2(@standard-schema/spec@1.0.0)(hono@4.12.27)
+        version: 0.2.2(@standard-schema/spec@1.0.0)(hono@4.12.34)
       '@hono/zod-validator':
         specifier: 'catalog:'
-        version: 0.4.2(hono@4.12.27)(zod@4.3.6)
+        version: 0.4.2(hono@4.12.34)(zod@4.3.6)
       '@modelcontextprotocol/sdk':
         specifier: 1.26.0
         version: 1.26.0(zod@4.3.6)
@@ -923,10 +923,10 @@ importers:
         version: 4.0.3(patch_hash=3754dca03e5459f3f551402ecbeee1cd9588f9fde966158da964ae31a723dee7)
       hono:
         specifier: 'catalog:'
-        version: 4.12.27
+        version: 4.12.34
       hono-openapi:
         specifier: 'catalog:'
-        version: 1.1.2(@hono/standard-validator@0.2.2(@standard-schema/spec@1.0.0)(hono@4.12.27))(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.0.0)(@types/json-schema@7.0.15)(quansync@0.2.11)(zod-to-json-schema@3.24.5(zod@4.3.6))(zod@4.3.6))(@standard-community/standard-openapi@0.2.9(patch_hash=4c6248f000365bd4af943a672532d6bdeb179f46e6831d05d4f2f1ecc4d6e439)(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.0.0)(@types/json-schema@7.0.15)(quansync@0.2.11)(zod-to-json-schema@3.24.5(zod@4.3.6))(zod@4.3.6))(@standard-schema/spec@1.0.0)(openapi-types@12.1.3)(zod@4.3.6))(@types/json-schema@7.0.15)(hono@4.12.27)(openapi-types@12.1.3)
+        version: 1.1.2(@hono/standard-validator@0.2.2(@standard-schema/spec@1.0.0)(hono@4.12.34))(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.0.0)(@types/json-schema@7.0.15)(quansync@0.2.11)(zod-to-json-schema@3.24.5(zod@4.3.6))(zod@4.3.6))(@standard-community/standard-openapi@0.2.9(patch_hash=4c6248f000365bd4af943a672532d6bdeb179f46e6831d05d4f2f1ecc4d6e439)(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.0.0)(@types/json-schema@7.0.15)(quansync@0.2.11)(zod-to-json-schema@3.24.5(zod@4.3.6))(zod@4.3.6))(@standard-schema/spec@1.0.0)(openapi-types@12.1.3)(zod@4.3.6))(@types/json-schema@7.0.15)(hono@4.12.34)(openapi-types@12.1.3)
       ignore:
         specifier: 7.0.5
         version: 7.0.5
@@ -2027,7 +2027,7 @@ packages:
     engines: {node: '>=22.12.0'}
 
   '@electron/node-gyp@https://codeload.github.com/electron/node-gyp/tar.gz/06b29aafb7708acef8b3669835c8a7857ebc92d2':
-    resolution: {gitHosted: true, tarball: https://codeload.github.com/electron/node-gyp/tar.gz/06b29aafb7708acef8b3669835c8a7857ebc92d2}
+    resolution: {gitHosted: true, integrity: sha512-MXgzlTDEEndJB3TBbvd5uFQO/8gaINo1Hfen8vef5rq/VHVPeB63uuv/uO5+8GFsAJ/rauu6XB79S6K4+aXc+w==, tarball: https://codeload.github.com/electron/node-gyp/tar.gz/06b29aafb7708acef8b3669835c8a7857ebc92d2}
     version: 10.2.0-electron.1
     engines: {node: '>=12.13.0'}
     hasBin: true
@@ -3339,24 +3339,28 @@ packages:
     engines: {node: '>= 10.0.0'}
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   '@parcel/watcher-linux-arm64-musl@2.5.1':
     resolution: {integrity: sha512-cFOjABi92pMYRXS7AcQv9/M1YuKRw8SZniCDw0ssQb/noPkRzA+HBDkwmyOJYp5wXcsTrhxO0zq1U11cK9jsFg==}
     engines: {node: '>= 10.0.0'}
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   '@parcel/watcher-linux-x64-glibc@2.5.1':
     resolution: {integrity: sha512-GcESn8NZySmfwlTsIur+49yDqSny2IhPeZfXunQi48DMugKeZ7uy1FX83pO0X22sHntJ4Ub+9k34XQCX+oHt2A==}
     engines: {node: '>= 10.0.0'}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   '@parcel/watcher-linux-x64-musl@2.5.1':
     resolution: {integrity: sha512-n0E2EQbatQ3bXhcH2D1XIAANAcTZkQICBPVaxMeaCVBtOpBZpWJuf7LwyWPSBDITb7In8mqQgJ7gH8CILCURXg==}
     engines: {node: '>= 10.0.0'}
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   '@parcel/watcher-win32-arm64@2.5.1':
     resolution: {integrity: sha512-RFzklRvmc3PkjKjry3hLF9wD7ppR4AKcWNzH7kXR7GUe0Igb3Nz8fyPwtZCSquGrhU5HhUNDr/mKBqj7tqA2Vw==}
@@ -4963,6 +4967,7 @@ packages:
 
   '@zumer/snapdom@2.12.9':
     resolution: {integrity: sha512-Zufl1vEthT931kcZfmAaRSnucAGIRLGi9N6JI8ZsdyHww5hHHLk4t5LU1DxS5pNAPi1MptPHcGON1pkXEBf5iw==}
+    deprecated: Old versions have known fidelity bugs (text re-wrap, width freezing, KaTeX clipping). Upgrade to ^2.22 — drop-in for any 2.x. https://github.com/zumerlab/snapdom/releases
 
   abbrev@1.1.1:
     resolution: {integrity: sha512-nne9/IiQ/hzIhY6pdDnbBtz7DjPTKrY00P/zvPSm5pOFkl6xuGrGnXn/VtTNNfNtAfZ9/1RtehkszU9qcTii0Q==}
@@ -5670,6 +5675,7 @@ packages:
   cron-parser@4.9.0:
     resolution: {integrity: sha512-p0SaNjrHOnQeR8/VnfGbmg9te2kfyYSQ7Sc/j/6DtPL3JQvKxmjO9TSjNFpujqV3vEYYBvNNvXSxzyksBWAx1Q==}
     engines: {node: '>=12.0.0'}
+    deprecated: v4 is no longer maintained, upgrade to v5
 
   cross-dirname@0.1.0:
     resolution: {integrity: sha512-+R08/oI0nl3vfPcqftZRpytksBXDzOUveBq/NBVx0sUp1axwzPQrKinNx5yd5sxPu8j1wIy8AfnVQ+5eFdha6Q==}
@@ -6724,6 +6730,10 @@ packages:
 
   hono@4.12.27:
     resolution: {integrity: sha512-1yrb/+w6HWQJrUCLkJ2IF5jNIPvvFkblV5RNOYl6bV+OA6p9GLcMpHFFGTosSvHvcAUibuUukRqhlYI4z32C7Q==}
+    engines: {node: '>=16.9.0'}
+
+  hono@4.12.34:
+    resolution: {integrity: sha512-GqXJqY/xJkJmuloTrnV1ZEXG3fqte+VjkUqoRNZXcrUidiUOP4fMSIHHY4tsqZBK++kVyWmt/AAfSUuy57/eSA==}
     engines: {node: '>=16.9.0'}
 
   hosted-git-info@4.1.0:
@@ -11069,23 +11079,27 @@ snapshots:
     dependencies:
       hono: 4.12.27
 
-  '@hono/node-ws@1.3.1(@hono/node-server@2.0.11(hono@4.12.27))(hono@4.12.27)':
+  '@hono/node-server@2.0.11(hono@4.12.34)':
     dependencies:
-      '@hono/node-server': 2.0.11(hono@4.12.27)
-      hono: 4.12.27
+      hono: 4.12.34
+
+  '@hono/node-ws@1.3.1(@hono/node-server@2.0.11(hono@4.12.34))(hono@4.12.34)':
+    dependencies:
+      '@hono/node-server': 2.0.11(hono@4.12.34)
+      hono: 4.12.34
       ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@hono/standard-validator@0.2.2(@standard-schema/spec@1.0.0)(hono@4.12.27)':
+  '@hono/standard-validator@0.2.2(@standard-schema/spec@1.0.0)(hono@4.12.34)':
     dependencies:
       '@standard-schema/spec': 1.0.0
-      hono: 4.12.27
+      hono: 4.12.34
 
-  '@hono/zod-validator@0.4.2(hono@4.12.27)(zod@4.3.6)':
+  '@hono/zod-validator@0.4.2(hono@4.12.34)(zod@4.3.6)':
     dependencies:
-      hono: 4.12.27
+      hono: 4.12.34
       zod: 4.3.6
 
   '@humanfs/core@0.19.1': {}
@@ -15719,17 +15733,19 @@ snapshots:
 
   highlightjs-vue@1.0.0: {}
 
-  hono-openapi@1.1.2(@hono/standard-validator@0.2.2(@standard-schema/spec@1.0.0)(hono@4.12.27))(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.0.0)(@types/json-schema@7.0.15)(quansync@0.2.11)(zod-to-json-schema@3.24.5(zod@4.3.6))(zod@4.3.6))(@standard-community/standard-openapi@0.2.9(patch_hash=4c6248f000365bd4af943a672532d6bdeb179f46e6831d05d4f2f1ecc4d6e439)(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.0.0)(@types/json-schema@7.0.15)(quansync@0.2.11)(zod-to-json-schema@3.24.5(zod@4.3.6))(zod@4.3.6))(@standard-schema/spec@1.0.0)(openapi-types@12.1.3)(zod@4.3.6))(@types/json-schema@7.0.15)(hono@4.12.27)(openapi-types@12.1.3):
+  hono-openapi@1.1.2(@hono/standard-validator@0.2.2(@standard-schema/spec@1.0.0)(hono@4.12.34))(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.0.0)(@types/json-schema@7.0.15)(quansync@0.2.11)(zod-to-json-schema@3.24.5(zod@4.3.6))(zod@4.3.6))(@standard-community/standard-openapi@0.2.9(patch_hash=4c6248f000365bd4af943a672532d6bdeb179f46e6831d05d4f2f1ecc4d6e439)(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.0.0)(@types/json-schema@7.0.15)(quansync@0.2.11)(zod-to-json-schema@3.24.5(zod@4.3.6))(zod@4.3.6))(@standard-schema/spec@1.0.0)(openapi-types@12.1.3)(zod@4.3.6))(@types/json-schema@7.0.15)(hono@4.12.34)(openapi-types@12.1.3):
     dependencies:
       '@standard-community/standard-json': 0.3.5(@standard-schema/spec@1.0.0)(@types/json-schema@7.0.15)(quansync@0.2.11)(zod-to-json-schema@3.24.5(zod@4.3.6))(zod@4.3.6)
       '@standard-community/standard-openapi': 0.2.9(patch_hash=4c6248f000365bd4af943a672532d6bdeb179f46e6831d05d4f2f1ecc4d6e439)(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.0.0)(@types/json-schema@7.0.15)(quansync@0.2.11)(zod-to-json-schema@3.24.5(zod@4.3.6))(zod@4.3.6))(@standard-schema/spec@1.0.0)(openapi-types@12.1.3)(zod@4.3.6)
       '@types/json-schema': 7.0.15
       openapi-types: 12.1.3
     optionalDependencies:
-      '@hono/standard-validator': 0.2.2(@standard-schema/spec@1.0.0)(hono@4.12.27)
-      hono: 4.12.27
+      '@hono/standard-validator': 0.2.2(@standard-schema/spec@1.0.0)(hono@4.12.34)
+      hono: 4.12.34
 
   hono@4.12.27: {}
+
+  hono@4.12.34: {}
 
   hosted-git-info@4.1.0:
     dependencies:
