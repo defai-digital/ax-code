@@ -7,6 +7,8 @@ import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useSessionUIStore } from "@/sync/session-ui-store"
 import { Icon } from "@/components/icon/Icon"
 import { ProjectsHome } from "@/components/projects/ProjectsHome"
+import { WorkHome } from "@/components/work/WorkHome"
+import { useDesktopSurfaceStore } from "@/stores/useDesktopSurfaceStore"
 
 /**
  * Empty chat surface — project-first when workspaces exist (Codex-style home),
@@ -16,6 +18,7 @@ const ChatEmptyState: React.FC = () => {
   const { t } = useI18n()
   const initError = useGlobalSyncStore((s) => s.error)
   const projects = useProjectsStore((s) => s.projects)
+  const surface = useDesktopSurfaceStore((s) => s.surface)
   const setActiveMainTab = useUIStore((s) => s.setActiveMainTab)
   const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft)
 
@@ -46,6 +49,16 @@ const ChatEmptyState: React.FC = () => {
             {t("chat.emptyState.axCodeUnreachable")}
           </span>
           <span className="typography-meta text-muted-foreground leading-relaxed">{initError.message}</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (surface === "work") {
+    return (
+      <div className="flex min-h-full w-full justify-center px-6 py-10 sm:py-14">
+        <div className="w-full max-w-2xl">
+          <WorkHome />
         </div>
       </div>
     )

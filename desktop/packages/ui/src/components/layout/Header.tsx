@@ -71,6 +71,8 @@ import { desktopHostsGet, locationMatchesHost, redactSensitiveUrl } from "@/lib/
 import { resolveSessionDiffStats } from "@/components/session/sidebar/utils"
 import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
+import { DesktopSurfaceToggle } from "@/components/layout/DesktopSurfaceToggle"
+import { useDesktopSurfaceStore } from "@/stores/useDesktopSurfaceStore"
 import { SyncStatusIndicator } from "@/components/ui/SyncStatusIndicator"
 import { NotificationCenter } from "@/components/notifications/NotificationCenter"
 import { useNotificationStore } from "@/stores/useNotificationStore"
@@ -758,6 +760,8 @@ function urlRequestsMainView(): boolean {
 
 export const Header: React.FC = () => {
   const { t } = useI18n()
+  const desktopSurface = useDesktopSurfaceStore((state) => state.surface)
+  const isWorkSurface = desktopSurface === "work"
   const toggleSidebar = useUIStore((state) => state.toggleSidebar)
   const toggleBottomTerminal = useUIStore((state) => state.toggleBottomTerminal)
   const toggleSplitPane = useUIStore((state) => state.toggleSplitPane)
@@ -1783,9 +1787,10 @@ export const Header: React.FC = () => {
     handleOpenContextPlan,
   ])
 
+  // Work surface keeps notifications/services; hides IDE chrome (terminal split, plan, GH).
   const desktopSidebarActions = (
     <>
-      {showPlanTab && (
+      {!isWorkSurface && showPlanTab ? (
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -1801,8 +1806,8 @@ export const Header: React.FC = () => {
             <p>{t("header.actions.planWithShortcut", { shortcut: shortcutLabel("toggle_context_plan") })}</p>
           </TooltipContent>
         </Tooltip>
-      )}
-      <OpenInAppButton directory={actionDirectory} className="mr-1" />
+      ) : null}
+      {!isWorkSurface ? <OpenInAppButton directory={actionDirectory} className="mr-1" /> : null}
       <DesktopServicesMenu
         isDesktopApp={isDesktopApp}
         currentInstanceLabel={currentInstanceLabel}
@@ -1849,49 +1854,53 @@ export const Header: React.FC = () => {
         )}
       </span>
       <NotificationCenter />
-      <div className={HEADER_ACTION_SEPARATOR_CLASS} aria-hidden />
-      <HeaderIconActionButton
-        title={t("header.actions.terminalPanelWithShortcut", { shortcut: shortcutLabel("toggle_terminal") })}
-        ariaLabel={t("header.actions.toggleTerminalPanelAria")}
-        onClick={toggleBottomTerminal}
-        Icon={"terminal-box"}
-      />
-      <HeaderIconActionButton
-        title={t("splitPane.toggle.title")}
-        ariaLabel={t("splitPane.toggle.title")}
-        onClick={toggleSplitPane}
-        pressed={splitPaneEnabled}
-        Icon={"layout-column"}
-      />
-      <HeaderIconActionButton
-        title={t("contextPanel.browser.open")}
-        ariaLabel={t("contextPanel.browser.open")}
-        onClick={handleOpenContextBrowser}
-        pressed={isContextBrowserActive}
-        Icon={"global"}
-      />
-      <HeaderIconActionButton
-        title={t("header.actions.openDashboard")}
-        ariaLabel={t("header.actions.openDashboard")}
-        onClick={handleOpenContextDashboard}
-        pressed={isContextDashboardActive}
-        Icon={"bar-chart-box"}
-      />
-      <HeaderIconActionButton
-        title={t("header.actions.rightSidebarWithShortcut", { shortcut: shortcutLabel("toggle_right_sidebar") })}
-        ariaLabel={t("header.actions.toggleRightSidebarAria")}
-        onClick={toggleRightSidebar}
-        Icon={"layout-right"}
-      />
-      <div className={HEADER_ACTION_SEPARATOR_CLASS} aria-hidden />
-      <DesktopGitHubControl
-        githubAuthStatus={githubAuthStatus}
-        githubAccounts={githubAccounts}
-        githubAvatarUrl={githubAvatarUrl}
-        githubLogin={githubLogin}
-        isSwitchingGitHubAccount={isSwitchingGitHubAccount}
-        handleGitHubAccountSwitch={handleGitHubAccountSwitch}
-      />
+      {!isWorkSurface ? (
+        <>
+          <div className={HEADER_ACTION_SEPARATOR_CLASS} aria-hidden />
+          <HeaderIconActionButton
+            title={t("header.actions.terminalPanelWithShortcut", { shortcut: shortcutLabel("toggle_terminal") })}
+            ariaLabel={t("header.actions.toggleTerminalPanelAria")}
+            onClick={toggleBottomTerminal}
+            Icon={"terminal-box"}
+          />
+          <HeaderIconActionButton
+            title={t("splitPane.toggle.title")}
+            ariaLabel={t("splitPane.toggle.title")}
+            onClick={toggleSplitPane}
+            pressed={splitPaneEnabled}
+            Icon={"layout-column"}
+          />
+          <HeaderIconActionButton
+            title={t("contextPanel.browser.open")}
+            ariaLabel={t("contextPanel.browser.open")}
+            onClick={handleOpenContextBrowser}
+            pressed={isContextBrowserActive}
+            Icon={"global"}
+          />
+          <HeaderIconActionButton
+            title={t("header.actions.openDashboard")}
+            ariaLabel={t("header.actions.openDashboard")}
+            onClick={handleOpenContextDashboard}
+            pressed={isContextDashboardActive}
+            Icon={"bar-chart-box"}
+          />
+          <HeaderIconActionButton
+            title={t("header.actions.rightSidebarWithShortcut", { shortcut: shortcutLabel("toggle_right_sidebar") })}
+            ariaLabel={t("header.actions.toggleRightSidebarAria")}
+            onClick={toggleRightSidebar}
+            Icon={"layout-right"}
+          />
+          <div className={HEADER_ACTION_SEPARATOR_CLASS} aria-hidden />
+          <DesktopGitHubControl
+            githubAuthStatus={githubAuthStatus}
+            githubAccounts={githubAccounts}
+            githubAvatarUrl={githubAvatarUrl}
+            githubLogin={githubLogin}
+            isSwitchingGitHubAccount={isSwitchingGitHubAccount}
+            handleGitHubAccountSwitch={handleGitHubAccountSwitch}
+          />
+        </>
+      ) : null}
     </>
   )
 
@@ -1927,13 +1936,13 @@ export const Header: React.FC = () => {
       />
 
       <div className="flex min-w-0 flex-1 items-center pl-3">
-        {projectActionsContext && (
+        {!isWorkSurface && projectActionsContext ? (
           <ProjectActionsButton
             projectRef={projectActionsContext.projectRef}
             directory={projectActionsContext.directory}
             className="mr-2"
           />
-        )}
+        ) : null}
         <SessionSwitcherDropdown>
           <button
             type="button"
@@ -1941,27 +1950,31 @@ export const Header: React.FC = () => {
             className="app-region-no-drag mr-3 flex min-w-0 flex-col items-start rounded-md px-1 py-0.5 -my-0.5 text-left transition-colors hover:bg-interactive-hover/60 focus-visible:outline-none focus-visible:bg-interactive-hover/60"
           >
             <span className="truncate typography-ui-label font-normal leading-tight text-foreground max-w-full">
-              {isNewSessionDraftOpen ? t("sessions.switcher.draftTitle") : currentSessionTitle}
+              {isNewSessionDraftOpen
+                ? isWorkSurface
+                  ? t("sessions.switcher.draftTitleWork")
+                  : t("sessions.switcher.draftTitle")
+                : currentSessionTitle}
             </span>
             {activeProjectLabel ||
             currentBranchLabel ||
             (!isNewSessionDraftOpen && (hasNonZeroSessionChanges || worktreeBadgeKind)) ? (
               <span className="flex min-w-0 max-w-full items-center gap-1.5 truncate typography-micro font-normal leading-tight text-muted-foreground">
                 {activeProjectLabel ? <span className="truncate">{activeProjectLabel}</span> : null}
-                {currentBranchLabel ? (
+                {!isWorkSurface && currentBranchLabel ? (
                   <span className="inline-flex min-w-0 items-center gap-0.5">
                     <Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                     <span className="truncate">{currentBranchLabel}</span>
                   </span>
                 ) : null}
-                {!isNewSessionDraftOpen && hasNonZeroSessionChanges ? (
+                {!isWorkSurface && !isNewSessionDraftOpen && hasNonZeroSessionChanges ? (
                   <span className="inline-flex flex-shrink-0 items-center gap-0 text-[0.92em]">
                     <span className="text-status-success/80">+{currentSessionChanges.additions}</span>
                     <span className="text-muted-foreground">/</span>
                     <span className="text-status-error/65">-{currentSessionChanges.deletions}</span>
                   </span>
                 ) : null}
-                {!isNewSessionDraftOpen && worktreeBadgeKind ? (
+                {!isWorkSurface && !isNewSessionDraftOpen && worktreeBadgeKind ? (
                   <span
                     className={cn(
                       "inline-flex min-w-0 items-center gap-0.5",
@@ -2014,6 +2027,11 @@ export const Header: React.FC = () => {
           {desktopSidebarActions}
           <WindowsWindowControls visible={isWindowsElectronDesktop} />
         </div>
+      </div>
+
+      {/* Codex-style centered Work | Code surface toggle */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex h-12 items-center justify-center">
+        <DesktopSurfaceToggle className="pointer-events-auto" />
       </div>
     </div>
   )

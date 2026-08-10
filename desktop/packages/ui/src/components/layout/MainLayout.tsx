@@ -15,6 +15,7 @@ import { SessionDialogs } from "@/components/session/SessionDialogs"
 import { DiffWorkerProvider } from "@/contexts/DiffWorkerProvider"
 
 import { useUIStore } from "@/stores/useUIStore"
+import { useDesktopSurfaceStore } from "@/stores/useDesktopSurfaceStore"
 import { useUpdateStore } from "@/stores/useUpdateStore"
 import { useDeviceInfo } from "@/lib/device"
 import { isDesktopLocalOriginActive } from "@/lib/desktop"
@@ -72,6 +73,38 @@ export const MainLayout: React.FC = () => {
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab)
   const splitPaneEnabled = useUIStore((state) => state.splitPaneEnabled)
   const splitPaneRightTab = useUIStore((state) => state.splitPaneRightTab)
+  const desktopSurface = useDesktopSurfaceStore((state) => state.surface)
+  const isWorkSurface = desktopSurface === "work"
+  const previousSurfaceRef = React.useRef(desktopSurface)
+
+  // On enter Work: chat-first, collapse IDE chrome once (not continuously).
+  React.useEffect(() => {
+    const previous = previousSurfaceRef.current
+    previousSurfaceRef.current = desktopSurface
+    if (desktopSurface !== "work" || previous === "work") {
+      return
+    }
+    if (useUIStore.getState().activeMainTab !== "chat") {
+      setActiveMainTab("chat")
+    }
+    if (useUIStore.getState().isRightSidebarOpen) {
+      setRightSidebarOpen(false)
+    }
+    if (useUIStore.getState().isBottomTerminalOpen) {
+      setBottomTerminalOpen(false)
+    }
+    if (useUIStore.getState().splitPaneEnabled) {
+      useUIStore.getState().toggleSplitPane()
+    }
+  }, [desktopSurface, setActiveMainTab, setRightSidebarOpen, setBottomTerminalOpen])
+
+  // Keep Work on chat if the user tries to open secondary IDE tabs via shortcuts/deep links.
+  React.useEffect(() => {
+    if (!isWorkSurface) return
+    if (activeMainTab !== "chat") {
+      setActiveMainTab("chat")
+    }
+  }, [isWorkSurface, activeMainTab, setActiveMainTab])
   const setIsMobile = useUIStore((state) => state.setIsMobile)
   const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen)
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen)

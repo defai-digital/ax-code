@@ -246,6 +246,33 @@ export const dict = {
   "sessions.switcher.openAria": "Open session switcher",
   "sessions.switcher.empty": "No recent sessions",
   "sessions.switcher.draftTitle": "New session",
+  "sessions.switcher.draftTitleWork": "New task",
+  "header.surface.aria": "Desktop surface",
+  "header.surface.work": "Work",
+  "header.surface.code": "Code",
+  "work.home.title": "What should I work on?",
+  "work.home.subtitle":
+    "Agentic tasks for everyday work — research, drafts, planning, and multi-step automation. Switch to Code for full repo IDE workflows.",
+  "work.home.actions.newTask": "New task",
+  "work.home.actions.openFolder": "Open folder",
+  "work.home.starters.planDay.title": "Plan my day",
+  "work.home.starters.planDay.prompt":
+    "Help me plan today: prioritize open tasks, block focus time, and list the top 3 outcomes I should hit.",
+  "work.home.starters.draft.title": "Draft a message",
+  "work.home.starters.draft.prompt":
+    "Draft a clear, professional message or email. Ask me for the audience and goal if needed, then produce a ready-to-send version.",
+  "work.home.starters.research.title": "Research a topic",
+  "work.home.starters.research.prompt":
+    "Research this topic thoroughly, cite sources where possible, and give me a concise brief with recommendations.",
+  "work.home.starters.summarize.title": "Summarize files",
+  "work.home.starters.summarize.prompt":
+    "Summarize the key points from the files or notes in this workspace into action items and decisions.",
+  "work.home.starters.automate.title": "Automate a workflow",
+  "work.home.starters.automate.prompt":
+    "Propose and implement a small automation for a repetitive workflow in this workspace. Prefer safe, reversible steps.",
+  "work.home.starters.agent.title": "Run an agent task",
+  "work.home.starters.agent.prompt":
+    "Act as an autonomous agent: break the goal into steps, use tools when needed, and keep going until the outcome is done or blocked.",
   "sessions.sidebar.directory.errorAddProjectTitle": "Failed to add project",
   "sessions.sidebar.directory.errorAddProjectDescription": "Please select a valid directory.",
   "sessions.sidebar.directory.errorSelectDirectoryTitle": "Failed to select directory",
