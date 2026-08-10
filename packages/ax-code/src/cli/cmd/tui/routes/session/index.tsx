@@ -1662,7 +1662,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
   const messages = createMemo(() => sync.data.message[props.message.sessionID] ?? [])
 
   const final = createMemo(() => {
-    return props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish)
+    return Boolean(props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish))
   })
 
   const duration = createMemo(() => {

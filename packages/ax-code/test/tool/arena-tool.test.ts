@@ -18,7 +18,7 @@ vi.mock("@/provider/provider", () => ({
 
 vi.mock("@/mode/ensemble-shared", () => ({
   EnsembleShared: {
-    snapshotSelectableProviders: vi.fn(async () => ({ count: 3, ids: ["a", "b", "c"] })),
+    snapshotSelectableProviders: vi.fn(async () => ({ count: 3, ids: ["a", "b", "c"], excluded: [] })),
     resolveMembers: vi.fn(),
   },
 }))
