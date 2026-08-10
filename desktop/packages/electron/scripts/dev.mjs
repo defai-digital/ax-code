@@ -5,6 +5,7 @@ import net from "node:net"
 import path from "node:path"
 import { createRequire } from "node:module"
 import { fileURLToPath } from "node:url"
+import { resolveDevAxCodeBinary } from "./resolve-dev-ax-code-binary.mjs"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
@@ -117,10 +118,16 @@ process.once("SIGTERM", () => {
 })
 process.once("exit", shutdown)
 
+const devAxCodeBinary = resolveDevAxCodeBinary()
+if (devAxCodeBinary) {
+  console.log(`[electron-dev] AX_CODE_BINARY=${devAxCodeBinary}`)
+}
+
 const sharedEnv = {
   ...process.env,
   AX_CODE_DESKTOP_PORT: String(serverPort),
   AX_CODE_DESKTOP_RENDERER_PORT: String(rendererPort),
+  ...(devAxCodeBinary ? { AX_CODE_BINARY: devAxCodeBinary } : {}),
 }
 
 const vite = spawnManaged(children, "pnpm", ["run", "dev:vite"], {

@@ -515,8 +515,109 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: gh release upload "$TAG" --repo "$REPOSITORY" --clobber "$RUNNER_TEMP/latest.yml"
 
+  # Ubuntu Desktop 24.04 LTS glibc baseline (amd64). Sibling arm64 job below.
+  build-linux:
+    needs: create-release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "24"
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Install Linux packaging dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential python3 \
+            libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 \
+            xdg-utils libatspi2.0-0 libuuid1 \
+            rpm
+
+      - name: Build SDK
+        run: pnpm --dir packages/sdk/js run build
+
+      - name: Build Linux Electron app (x64)
+        env:
+          ELECTRON_BUILDER_ARCH: x64
+        run: |
+          set -euo pipefail
+          pnpm --filter @ax-code/electron run build
+          node desktop/packages/electron/scripts/package.mjs --linux --x64 --publish=never
+
+      - name: Upload Linux x64 installers
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+        with:
+          tag_name: ${{ needs.create-release.outputs.tag }}
+          draft: true
+          files: |
+            desktop/packages/electron/dist/*.AppImage
+            desktop/packages/electron/dist/*.deb
+            desktop/packages/electron/dist/*.blockmap
+            desktop/packages/electron/dist/latest-linux.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-linux-arm64:
+    needs: create-release
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "24"
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Install Linux packaging dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential python3 \
+            libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 \
+            xdg-utils libatspi2.0-0 libuuid1 \
+            rpm
+
+      - name: Build SDK
+        run: pnpm --dir packages/sdk/js run build
+
+      - name: Build Linux Electron app (arm64)
+        env:
+          ELECTRON_BUILDER_ARCH: arm64
+        run: |
+          set -euo pipefail
+          pnpm --filter @ax-code/electron run build
+          node desktop/packages/electron/scripts/package.mjs --linux --arm64 --publish=never
+
+      - name: Upload Linux arm64 installers
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+        with:
+          tag_name: ${{ needs.create-release.outputs.tag }}
+          draft: true
+          files: |
+            desktop/packages/electron/dist/*.AppImage
+            desktop/packages/electron/dist/*.deb
+            desktop/packages/electron/dist/*.blockmap
+            desktop/packages/electron/dist/latest-linux-arm64.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   sign-release-assets:
-    needs: [create-release, package-web, build-macos, build-windows, build-windows-arm64, merge-windows-latest-yml]
+    needs: [create-release, package-web, build-macos, build-windows, build-windows-arm64, build-linux, build-linux-arm64, merge-windows-latest-yml]
     if: >-
       always() &&
       github.event.inputs.dry_run != 'true' &&
@@ -525,6 +626,8 @@ jobs:
       needs.build-macos.result == 'success' &&
       needs.build-windows.result == 'success' &&
       needs.build-windows-arm64.result == 'success' &&
+      needs.build-linux.result == 'success' &&
+      needs.build-linux-arm64.result == 'success' &&
       needs.merge-windows-latest-yml.result == 'success'
     runs-on: ubuntu-latest
     steps:
@@ -625,6 +728,8 @@ jobs:
         build-macos,
         build-windows,
         build-windows-arm64,
+        build-linux,
+        build-linux-arm64,
         merge-windows-latest-yml,
         sign-release-assets,
         verify-release-assets,
@@ -637,6 +742,8 @@ jobs:
       needs.build-macos.result == 'success' &&
       needs.build-windows.result == 'success' &&
       needs.build-windows-arm64.result == 'success' &&
+      needs.build-linux.result == 'success' &&
+      needs.build-linux-arm64.result == 'success' &&
       needs.merge-windows-latest-yml.result == 'success' &&
       needs.sign-release-assets.result == 'success' &&
       needs.verify-release-assets.result == 'success'

@@ -2167,6 +2167,11 @@ handleCommand("desktop_get_installed_apps", async (args) => {
     cache = JSON.parse(await fsp.readFile(cachePath, "utf8"))
   } catch {}
   const cacheState = normalizeInstalledAppsCache(cache, now, INSTALLED_APPS_CACHE_TTL_SECS)
+  // macOS / Windows only: Linux does not enumerate installed apps yet. Return
+  // an empty cache so the UI degrades cleanly instead of throwing over IPC.
+  if (process.platform !== "darwin" && process.platform !== "win32") {
+    return { apps: [], hasCache: true, isCacheStale: false }
+  }
   const refresh = async () => {
     const apps =
       process.platform === "win32"
@@ -2175,9 +2180,6 @@ handleCommand("desktop_get_installed_apps", async (args) => {
     await fsp.mkdir(path.dirname(cachePath), { recursive: true })
     await fsp.writeFile(cachePath, JSON.stringify({ updatedAt: now, apps }, null, 2))
     emitToAllWindows("openchamber:installed-apps-updated", apps)
-  }
-  if (process.platform !== "darwin" && process.platform !== "win32") {
-    throw new Error("desktop_get_installed_apps is only supported on macOS and Windows")
   }
   if (!cacheState.hasCache || cacheState.isCacheStale || args.force === true) {
     void refresh().catch((error) => {
@@ -2192,7 +2194,8 @@ handleCommand("desktop_filter_installed_apps", async (args) => {
     return (await buildWindowsInstalledApps(args.apps)).map((a) => a.name)
   }
   if (process.platform !== "darwin") {
-    throw new Error("desktop_filter_installed_apps is only supported on macOS")
+    // Linux and other platforms: no installed-app enumeration yet.
+    return []
   }
   if (!Array.isArray(args.apps)) return []
   const results = await Promise.all(
@@ -2219,7 +2222,8 @@ handleCommand("desktop_fetch_app_icons", async (args) => {
     return results
   }
   if (process.platform !== "darwin") {
-    throw new Error("desktop_fetch_app_icons is only supported on macOS")
+    // Linux and other platforms: no app-icon extraction yet.
+    return []
   }
   const names = Array.isArray(args.apps) ? args.apps : []
   const results = []

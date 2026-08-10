@@ -50,6 +50,46 @@ If macOS says the app is damaged, run this in Terminal after installing:
 xattr -cr "/Applications/AX Code.app"
 ```
 
+## Install On Linux (Ubuntu Desktop 24.04+)
+
+Install the CLI first (Desktop still uses the local AX Code runtime for sessions):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+```
+
+Then download a Desktop package from the [Releases page](https://github.com/defai-digital/ax-code/releases) under a `desktop-v*` tag:
+
+| Arch  | Recommended (`.deb`) | Portable (AppImage) |
+| ----- | -------------------- | ------------------- |
+| amd64 | `AX-Code-<version>-linux-amd64.deb` | `AX-Code-<version>-linux-x86_64.AppImage` |
+| arm64 | `AX-Code-<version>-linux-arm64.deb` | `AX-Code-<version>-linux-arm64.AppImage` |
+
+**Debian package (Ubuntu):**
+
+```bash
+sudo apt install ./AX-Code-<version>-linux-amd64.deb
+# then launch from the app menu, or:
+ax-code-desktop
+```
+
+**AppImage (portable, auto-update channel):**
+
+```bash
+chmod +x AX-Code-<version>-linux-x86_64.AppImage
+./AX-Code-<version>-linux-x86_64.AppImage
+```
+
+Ubuntu Desktop often lacks FUSE2, which many AppImages need. If launch fails with a FUSE-related error:
+
+```bash
+sudo apt install libfuse2t64   # Ubuntu 24.04+ package name; older releases may use libfuse2
+# or extract without FUSE:
+APPIMAGE_EXTRACT_AND_RUN=1 ./AX-Code-<version>-linux-x86_64.AppImage
+```
+
+Prefer `.deb` for Ubuntu desktop installs when possible. Verify the detached minisign signature when policy requires supply-chain checks (see Security Notes below). Musl-based distros (for example Alpine) are not a supported Desktop target.
+
 ## Install On Windows
 
 ### Installer (recommended)
@@ -107,16 +147,16 @@ Code CLI/server integration.
 
 ## Platform Capabilities
 
-AX Code Desktop targets macOS and Windows first, but local model acceleration is intentionally platform-specific:
+AX Code Desktop targets macOS, Windows, and Linux (Ubuntu 24.04+), but local model acceleration is intentionally platform-specific:
 
-| Capability                     | macOS Apple Silicon                      | Windows x64 / ARM64 |
-| ------------------------------ | ---------------------------------------- | ------------------- |
-| Desktop app                    | Supported                                | Supported           |
-| AX Code CLI/server integration | Supported                                | Supported           |
-| Hosted providers               | Supported                                | Supported           |
-| AX Engine local provider       | Supported on eligible Apple Silicon Macs | Not supported       |
+| Capability                     | macOS Apple Silicon                      | Windows x64 / ARM64 | Linux x64 / arm64 (Ubuntu 24.04+) |
+| ------------------------------ | ---------------------------------------- | ------------------- | --------------------------------- |
+| Desktop app                    | Supported                                | Supported           | Supported                         |
+| AX Code CLI/server integration | Supported                                | Supported           | Supported                         |
+| Hosted providers               | Supported                                | Supported           | Supported                         |
+| AX Engine local provider       | Supported on eligible Apple Silicon Macs | Not supported       | Not supported                     |
 
-AX Engine uses the local MLX/Apple Silicon path. It can be enabled on supported macOS hosts through AX Code provider setup. Windows Desktop users should use hosted providers or OpenAI-compatible provider gateways; remote AX Code servers are intentionally unsupported.
+AX Engine uses the local MLX/Apple Silicon path. It can be enabled on supported macOS hosts through AX Code provider setup. Windows and Linux Desktop users should use hosted providers or OpenAI-compatible provider gateways; remote AX Code servers are intentionally unsupported.
 
 ## First Run
 
@@ -137,7 +177,7 @@ The app runs AX Code sessions on the current machine and can open focused mini-c
 brew upgrade --cask ax-code-desktop
 ```
 
-**Windows / manual installs:** Download the latest installer or archive from the [Releases page](https://github.com/defai-digital/ax-code/releases). When auto-update metadata is available, the app can also check GitHub releases for updates automatically.
+**Windows / Linux / manual installs:** Download the latest installer or archive from the [Releases page](https://github.com/defai-digital/ax-code/releases). When auto-update metadata is available, the app can also check GitHub releases for updates automatically (AppImage on Linux).
 
 ## What You Can Do
 
@@ -166,7 +206,7 @@ brew upgrade --cask ax-code-desktop
 
 ### Desktop
 
-- Native desktop shell for macOS Apple Silicon and Windows x64 / ARM64.
+- Native desktop shell for macOS Apple Silicon, Windows x64 / ARM64, and Linux x64 / arm64 (Ubuntu 24.04+).
 - Multi-window workflows.
 - Deep links and desktop menu actions.
 - Local runtime management for the web UI.
@@ -179,7 +219,8 @@ brew upgrade --cask ax-code-desktop
 | macOS Intel/x64        | Not supported | No artifact is built                                               |
 | Windows x64            | Supported     | Installer or portable ZIP; AX Engine local provider is unavailable |
 | Windows ARM64          | Supported     | Installer or portable ZIP; AX Engine local provider is unavailable |
-| Linux                  | Not supported | No artifact is built                                               |
+| Linux x64              | Supported     | `.deb` or AppImage (Ubuntu 24.04+ glibc); AX Engine unavailable    |
+| Linux arm64            | Supported     | `.deb` or AppImage (Ubuntu 24.04+ glibc); AX Engine unavailable    |
 | Mobile/tablet browsers | Not supported | Blocked to reduce data-leakage risk                                |
 
 ## Security Notes

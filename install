@@ -170,6 +170,7 @@ done
 INSTALL_DIR=$HOME/.ax-code/bin
 INSTALL_ROOT=$(dirname "$INSTALL_DIR")
 INSTALL_LIB_DIR="$INSTALL_ROOT/lib"
+INSTALL_NODE_DIR="$INSTALL_ROOT/node"
 INSTALL_NODE_MODULES_DIR="$INSTALL_ROOT/node_modules"
 INSTALL_PACKAGE_JSON="$INSTALL_ROOT/package.json"
 mkdir -p "$INSTALL_DIR"
@@ -207,8 +208,9 @@ else
 
     combo="$os-$arch"
     # Keep in sync with GitHub release assets from .github/workflows/release.yml
-    # (darwin-arm64, windows-x64, windows-arm64, linux-*). Intel macOS Desktop/CLI
-    # packages are not published; use Apple Silicon or a supported Windows/Linux host.
+    # (darwin-arm64, windows-x64, windows-arm64, linux-x64, linux-arm64). Intel
+    # macOS Desktop/CLI packages are not published; use Apple Silicon or a
+    # supported Windows/Linux (Ubuntu 24.04+ glibc) host.
     case "$combo" in
       linux-x64|linux-arm64|darwin-arm64|windows-x64|windows-arm64)
         ;;
@@ -229,57 +231,27 @@ else
       archive_ext=".tar.gz"
     fi
 
-    is_musl=false
+    # Node-bundled release archives are published for glibc only (Ubuntu 24.04+
+    # class hosts). Do not rewrite the asset name to -baseline / -musl — those
+    # suffixes are residual Bun-era targets and are not published.
     if [ "$os" = "linux" ]; then
+      is_musl=false
       if [ -f /etc/alpine-release ]; then
         is_musl=true
-      fi
-
-      if command -v ldd >/dev/null 2>&1; then
+      elif command -v ldd >/dev/null 2>&1; then
         if ldd --version 2>&1 | grep -qi musl; then
           is_musl=true
         fi
       fi
-    fi
-
-    needs_baseline=false
-    if [ "$arch" = "x64" ]; then
-      if [ "$os" = "linux" ]; then
-        if ! grep -qwi avx2 /proc/cpuinfo 2>/dev/null; then
-          needs_baseline=true
-        fi
-      fi
-
-      if [ "$os" = "darwin" ]; then
-        avx2=$(sysctl -n hw.optional.avx2_0 2>/dev/null || echo 0)
-        if [ "$avx2" != "1" ]; then
-          needs_baseline=true
-        fi
-      fi
-
-      if [ "$os" = "windows" ]; then
-        ps="(Add-Type -MemberDefinition \"[DllImport(\"\"kernel32.dll\"\")] public static extern bool IsProcessorFeaturePresent(int ProcessorFeature);\" -Name Kernel32 -Namespace Win32 -PassThru)::IsProcessorFeaturePresent(40)"
-        out=""
-        if command -v powershell.exe >/dev/null 2>&1; then
-          out=$(powershell.exe -NoProfile -NonInteractive -Command "$ps" 2>/dev/null || true)
-        elif command -v pwsh >/dev/null 2>&1; then
-          out=$(pwsh -NoProfile -NonInteractive -Command "$ps" 2>/dev/null || true)
-        fi
-        out=$(echo "$out" | tr -d '\r' | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
-        if [ "$out" != "true" ] && [ "$out" != "1" ]; then
-          needs_baseline=true
-        fi
+      if [ "$is_musl" = "true" ]; then
+        echo -e "${RED}Unsupported platform: musl/Alpine Linux${NC}"
+        echo -e "${MUTED}AX Code CLI release archives target glibc (Ubuntu 24.04+ amd64/arm64).${NC}"
+        echo -e "${MUTED}Use an Ubuntu 24.04+ (or equivalent glibc) host, or build from source.${NC}"
+        exit 1
       fi
     fi
 
     target="$os-$arch"
-    if [ "$needs_baseline" = "true" ]; then
-      target="$target-baseline"
-    fi
-    if [ "$is_musl" = "true" ]; then
-      target="$target-musl"
-    fi
-
     filename="$APP-$target$archive_ext"
 
 
@@ -558,7 +530,18 @@ download_and_install() {
         unzip -q "$tmp_dir/$filename" -d "$tmp_dir"
     fi
 
-    install_node_bundle_tree "$tmp_dir"
+    # Prefer a nested ax-code-* tree when present; otherwise the archive root
+    # already holds bin/lib/node (current release layout).
+    local bundle_root="$tmp_dir"
+    if [ ! -f "$tmp_dir/bin/ax-code" ]; then
+        local nested
+        nested=$(find "$tmp_dir" -type f -path '*/bin/ax-code' 2>/dev/null | head -n 1 || true)
+        if [ -n "$nested" ]; then
+            bundle_root=$(cd "$(dirname "$nested")/.." && pwd -P)
+        fi
+    fi
+
+    install_node_bundle_tree "$bundle_root"
     rm -rf "$tmp_dir"
 }
 
@@ -601,6 +584,8 @@ install_node_bundle_tree() {
     local bundle_root=$1
     local launcher="$bundle_root/bin/ax-code"
     local lib_dir="$bundle_root/lib"
+    local node_dir="$bundle_root/node"
+    local node_bin="$node_dir/bin/node"
     local node_modules_dir="$bundle_root/node_modules"
     local package_json="$bundle_root/package.json"
 
@@ -616,14 +601,20 @@ install_node_bundle_tree() {
         echo -e "${RED}Error: node-bundled distribution did not contain node_modules${NC}"
         exit 1
     fi
+    if [ ! -x "$node_bin" ] && [ ! -f "$node_bin" ]; then
+        echo -e "${RED}Error: node-bundled distribution did not contain node/bin/node${NC}"
+        exit 1
+    fi
 
     rm -f "${INSTALL_DIR}/ax-code"
-    rm -rf "$INSTALL_LIB_DIR" "$INSTALL_NODE_MODULES_DIR"
+    rm -rf "$INSTALL_LIB_DIR" "$INSTALL_NODE_DIR" "$INSTALL_NODE_MODULES_DIR"
     rm -f "$INSTALL_PACKAGE_JSON"
 
     cp "$launcher" "${INSTALL_DIR}/ax-code"
     chmod 755 "${INSTALL_DIR}/ax-code"
     cp -R "$lib_dir" "$INSTALL_LIB_DIR"
+    cp -R "$node_dir" "$INSTALL_NODE_DIR"
+    chmod 755 "$INSTALL_NODE_DIR/bin/node" 2>/dev/null || true
     cp -R "$node_modules_dir" "$INSTALL_NODE_MODULES_DIR"
     if [ -f "$package_json" ]; then
         cp "$package_json" "$INSTALL_PACKAGE_JSON"

@@ -29,10 +29,11 @@ describe("installCommands", () => {
     expect(getInstallCommand("macos")).toContain("defai-digital/tap/ax-code")
   })
 
-  test("Linux does not advertise an unavailable release artifact", () => {
-    expect(getInstallCommand("linux")).toContain("not available")
-    expect(getInstallCommand("linux")).not.toContain("curl")
-    expect(getInstallCommand("linux")).not.toContain("/download/install")
+  test("Linux command uses the bash release installer", () => {
+    expect(getInstallCommand("linux")).toContain("curl")
+    expect(getInstallCommand("linux")).toContain("raw.githubusercontent.com/defai-digital/ax-code/main/install")
+    expect(getInstallCommand("linux")).toContain("bash")
+    expect(getInstallCommand("linux")).not.toContain("not available")
   })
 
   test("highlights cover the full command text", () => {

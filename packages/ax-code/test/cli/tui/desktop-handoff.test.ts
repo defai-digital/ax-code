@@ -37,14 +37,15 @@ describe("resolveDesktopHandoff", () => {
     }
   })
 
-  test("returns unsupported for Linux platform", () => {
+  test("returns not-installed guidance for Linux without URL", () => {
     const result = resolveDesktopHandoff({
       platform: "linux",
     })
-    expect(result.type).toBe("unsupported")
-    if (result.type === "unsupported") {
-      expect(result.message).toContain("linux")
-      expect(result.message).toContain("not yet available")
+    expect(result.type).toBe("not-installed")
+    if (result.type === "not-installed") {
+      expect(result.message).toContain("Desktop")
+      expect(result.message).toContain("dashboard")
+      expect(result.message).toContain(__internal.DESKTOP_DOCS_URL)
     }
   })
 
@@ -80,10 +81,10 @@ describe("resolveDesktopHandoff", () => {
     }
   })
 
-  test("supported platforms list includes darwin and win32", () => {
+  test("supported platforms list includes darwin, win32, and linux", () => {
     expect(__internal.SUPPORTED_PLATFORMS).toContain("darwin")
     expect(__internal.SUPPORTED_PLATFORMS).toContain("win32")
-    expect(__internal.SUPPORTED_PLATFORMS).not.toContain("linux")
+    expect(__internal.SUPPORTED_PLATFORMS).toContain("linux")
   })
 
   test("docs URL is a valid URL", () => {

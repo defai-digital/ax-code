@@ -13,7 +13,7 @@ export type DesktopHandoffInput = {
 }
 
 // Platforms where AX Code Desktop is available
-const SUPPORTED_PLATFORMS: NodeJS.Platform[] = ["darwin", "win32"]
+const SUPPORTED_PLATFORMS: NodeJS.Platform[] = ["darwin", "win32", "linux"]
 
 // Documentation URL for desktop installation
 const DESKTOP_DOCS_URL = "https://github.com/defai-digital/ax-code#desktop"

@@ -46,11 +46,15 @@ describe("publish-github-release helpers", () => {
       "ax-code-darwin-arm64.zip",
       "ax-code-windows-x64.zip",
       "ax-code-windows-arm64.zip",
+      "ax-code-linux-x64.tar.gz",
+      "ax-code-linux-arm64.tar.gz",
     ])
     expect(expectedReleaseSignatures()).toEqual([
       "ax-code-darwin-arm64.zip.minisig",
       "ax-code-windows-x64.zip.minisig",
       "ax-code-windows-arm64.zip.minisig",
+      "ax-code-linux-x64.tar.gz.minisig",
+      "ax-code-linux-arm64.tar.gz.minisig",
     ])
     expect(expectedReleaseInstallerAssets()).toEqual(["install.ps1"])
     expect(expectedReleaseInstallerSignatures()).toEqual(["install.ps1.minisig"])
@@ -63,12 +67,16 @@ describe("publish-github-release helpers", () => {
         "ax-code-darwin-arm64.zip",
         "ax-code-windows-x64.zip",
         "ax-code-windows-arm64.zip",
+        "ax-code-linux-x64.tar.gz",
+        "ax-code-linux-arm64.tar.gz",
         "ax-code-darwin-arm64.zip.minisig",
         "install.ps1",
       ]),
     ).toEqual([
       "ax-code-windows-x64.zip.minisig",
       "ax-code-windows-arm64.zip.minisig",
+      "ax-code-linux-x64.tar.gz.minisig",
+      "ax-code-linux-arm64.tar.gz.minisig",
       "install.ps1.minisig",
       "ax-minisign.pub",
     ])

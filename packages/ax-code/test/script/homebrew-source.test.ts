@@ -278,15 +278,18 @@ describe("distribution support guardrails", () => {
     expect(text).not.toContain("release workflow dispatches")
   })
 
-  test("install matrix supports Homebrew and Windows without unsupported release channels", async () => {
+  test("install matrix supports Homebrew, Windows, and Linux without npm channels", async () => {
     const text = await readFile(installMatrixWorkflow, "utf-8")
     const filterDispatchChannel = await readFile(filterDispatchChannelScript, "utf-8")
     const validateInputs = await readFile(validateInstallMatrixInputsScript, "utf-8")
-    // Supported non-npm channels: Homebrew (macOS) and Windows install.ps1.
+    // Supported non-npm channels: Homebrew (macOS), Windows install.ps1, Linux bash install.
     expect(text).toContain("- homebrew")
     expect(text).toContain("- windows")
-    expect(text).not.toContain("- linux")
-    expect(text).not.toContain("linux-bash-installer")
+    expect(text).toContain("- linux")
+    expect(text).toContain("bash ./install --version")
+    expect(text).toContain("ubuntu-24.04")
+    expect(text).toContain("ubuntu-24.04-arm")
+    expect(text).toContain("expected bundled Node runtime")
     expect(text).toContain("brew install defai-digital/tap/ax-code")
     // Regression guard for issue #342: installing the Desktop cask next to
     // the CLI formula must not unlink the ax-code command. The cask installs
@@ -320,15 +323,16 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("id: channel")
     expect(filterDispatchChannel).toContain("enabled=false")
     expect(filterDispatchChannel).toContain('"all"')
-    expect(validateInputs).toContain("all|homebrew|windows")
-    expect(validateInputs).not.toContain("|linux")
+    expect(validateInputs).toContain("all|homebrew|windows|linux")
     expect(text).toContain("steps.channel.outputs.enabled == 'true'")
     expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "homebrew" doctor')
     expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "homebrew" backend')
+    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "linux" doctor')
+    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "linux" backend')
     // The literal runtimeMode assertion now lives in the shared assert script
     // (invoked above), which maps every non-source channel — Homebrew included —
-    // to the node-bundled runtime. With Bun fully removed, macOS arm64 and both
-    // Windows architectures ship the same node-bundled distribution.
+    // to the node-bundled runtime. With Bun fully removed, macOS arm64, both
+    // Windows architectures, and Linux glibc builds ship the same node-bundled distribution.
     const assertRuntimeMode = await readFile(assertRuntimeModeScript, "utf-8")
     expect(assertRuntimeMode).toContain("RUNTIME_RE='node-bundled'")
     expect(assertRuntimeMode).toContain('PATTERN="\\"runtimeMode\\":\\"${RUNTIME_RE}\\""')
@@ -345,11 +349,18 @@ describe("distribution support guardrails", () => {
     expect(homebrewJob).not.toBeNull()
     expect(homebrewJob![0]).toContain("set-isolated-home-env.sh")
 
-    const windowsJob = text.match(/windows:[\s\S]*$/)
+    const windowsJob = text.match(/windows:[\s\S]*?(?=\n  linux:|$)/)
     expect(windowsJob).not.toBeNull()
     expect(windowsJob![0]).toContain("set-isolated-home-env.sh")
     expect(windowsJob![0]).toContain("actions/setup-node@v7")
     expect(windowsJob![0]).toContain('node-version: "26"')
+
+    const linuxJob = text.match(/linux:[\s\S]*$/)
+    expect(linuxJob).not.toBeNull()
+    expect(linuxJob![0]).toContain("set-isolated-home-env.sh")
+    expect(linuxJob![0]).toContain("ubuntu-24.04")
+    expect(linuxJob![0]).toContain("ubuntu-24.04-arm")
+    expect(linuxJob![0]).toContain("bash ./install --version")
 
     expect(isolatedHome).toContain("AX_CODE_TEST_HOME")
     expect(isolatedHome).toContain("XDG_CONFIG_HOME")
@@ -382,13 +393,17 @@ describe("distribution support guardrails", () => {
     expect(buildJob![0]).toContain("AX_CODE_DISABLE_MODELS_FETCH")
     // The smoke leg no longer drives a tui-backend stdio handshake; it runs
     // `doctor` and greps the reported runtime against the per-leg matrix value.
-    // With Bun removed, every leg (macOS + Windows) ships node-bundled — verified
-    // by the same generic step.
+    // With Bun removed, every leg (macOS + Windows + Linux) ships node-bundled —
+    // verified by the same generic step.
     expect(buildJob![0]).toContain("Smoke — release runtime")
     expect(buildJob![0]).toContain("build-script: script/build-node-tui.ts")
     expect(buildJob![0]).not.toContain("build-script: script/build-node.ts")
     expect(buildJob![0]).toContain("build-args: --release --arch arm64")
     expect(buildJob![0]).toContain("build-args: --release --arch x64")
+    expect(buildJob![0]).toContain("targets: linux-x64")
+    expect(buildJob![0]).toContain("targets: linux-arm64")
+    expect(buildJob![0]).toContain("ubuntu-24.04")
+    expect(buildJob![0]).toContain("ubuntu-24.04-arm")
     expect(buildJob![0]).toContain("smoke-bin:")
     expect(buildJob![0]).toContain('BIN="${{ matrix.smoke-bin }}"')
     expect(buildJob![0]).toContain("smoke-runtime: node-bundled")
@@ -401,5 +416,11 @@ describe("distribution support guardrails", () => {
     const text = await readFile(axCodeNodeTuiBuildScript, "utf-8")
     expect(text).toContain('"$dir/../node/bin/node"')
     expect(text).toContain('"$dir/../node/bin/node.exe"')
+  })
+
+  test("Linux release builds produce tar.gz archives", async () => {
+    const text = await readFile(axCodeNodeTuiBuildScript, "utf-8")
+    expect(text).toContain('const archiveExt = process.platform === "linux" ? ".tar.gz" : ".zip"')
+    expect(text).toContain('spawnSync("tar", ["-czf", archive, "-C", outRoot, "."]')
   })
 })

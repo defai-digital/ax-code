@@ -526,19 +526,27 @@ if (process.platform === "darwin") {
 
 if (release) {
   // Archive the WHOLE tree (bin + lib + node_modules + node/), not just bin/ —
-  // the node-bundled runtime needs them all beside each other. Zip from the
-  // dist root so the archive expands to the same `ax-code-<os>-<arch>/` layout.
-  const archive = path.join(dir, "dist", `${legacyName}.zip`)
+  // the node-bundled runtime needs them all beside each other. Archive contents
+  // are the tree root (bin/, lib/, …) so installers can extract and find
+  // bin/ax-code without an extra top-level directory.
+  //
+  // Linux ships .tar.gz (matches the curl installer). macOS/Windows ship .zip.
+  const archiveExt = process.platform === "linux" ? ".tar.gz" : ".zip"
+  const archive = path.join(dir, "dist", `${legacyName}${archiveExt}`)
   fs.rmSync(archive, { force: true })
-  const zipper =
-    process.platform === "win32"
-      ? spawnSync(
-          "powershell",
-          ["-Command", `Compress-Archive -Path '${outRoot}/*' -DestinationPath '${archive}' -Force`],
-          { stdio: "inherit" },
-        )
-      : spawnSync("zip", ["-r", "-y", archive, "."], { cwd: outRoot, stdio: "inherit" })
-  if (zipper.status !== 0) {
+  let packer
+  if (process.platform === "win32") {
+    packer = spawnSync(
+      "powershell",
+      ["-Command", `Compress-Archive -Path '${outRoot}/*' -DestinationPath '${archive}' -Force`],
+      { stdio: "inherit" },
+    )
+  } else if (process.platform === "linux") {
+    packer = spawnSync("tar", ["-czf", archive, "-C", outRoot, "."], { stdio: "inherit" })
+  } else {
+    packer = spawnSync("zip", ["-r", "-y", archive, "."], { cwd: outRoot, stdio: "inherit" })
+  }
+  if (packer.status !== 0) {
     console.error(`failed to archive ${legacyName}`)
     process.exit(1)
   }

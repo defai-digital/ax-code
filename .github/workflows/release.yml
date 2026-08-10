@@ -92,6 +92,20 @@ jobs:
             build-args: --release --arch arm64
             smoke-bin: dist/ax-code-windows-arm64/bin/ax-code.cmd
             smoke-runtime: node-bundled
+          # Ubuntu 24.04 LTS glibc baseline for Desktop/server hosts (amd64).
+          - os: ubuntu-24.04
+            targets: linux-x64
+            build-script: script/build-node-tui.ts
+            build-args: --release --arch x64
+            smoke-bin: dist/ax-code-linux-x64/bin/ax-code
+            smoke-runtime: node-bundled
+          # Ubuntu 24.04 LTS arm64 (same glibc baseline as amd64).
+          - os: ubuntu-24.04-arm
+            targets: linux-arm64
+            build-script: script/build-node-tui.ts
+            build-args: --release --arch arm64
+            smoke-bin: dist/ax-code-linux-arm64/bin/ax-code
+            smoke-runtime: node-bundled
     runs-on: ${{ matrix.os }}
     env:
       AX_CODE_DISABLE_AUTOUPDATE: "1"
@@ -124,6 +138,14 @@ jobs:
       # Keep root install the same way here so Windows releases are not blocked
       # by optional native postinstall fallout under new Node/toolchain pairs.
       - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Install Linux native build tools
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          set -euo pipefail
+          # node-pty rebuild (and any gyp addons) need a C toolchain + Python.
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3
 
       - name: Build SDK
         run: pnpm exec tsc

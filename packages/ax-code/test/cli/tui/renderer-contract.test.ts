@@ -153,7 +153,10 @@ describe("tui renderer replacement contract", () => {
     expect(darwin.type).toBe("not-installed")
 
     const linux = resolveDesktopHandoff({ platform: "linux" })
-    expect(linux.type).toBe("unsupported")
+    expect(linux.type).toBe("not-installed")
+    if (linux.type === "not-installed") {
+      expect(linux.message).toContain("Desktop")
+    }
 
     const withUrl = resolveDesktopHandoff({ platform: "darwin", desktopUrl: "http://localhost:3000" })
     expect(withUrl.type).toBe("message")

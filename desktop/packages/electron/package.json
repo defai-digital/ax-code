@@ -4,6 +4,8 @@
   "private": true,
   "description": "AX Code — Electron desktop shell",
   "author": "DEFAI Private Limited",
+  "homepage": "https://github.com/defai-digital/ax-code",
+  "desktopName": "ax-code-desktop.desktop",
   "main": "dist/main.js",
   "type": "commonjs",
   "scripts": {

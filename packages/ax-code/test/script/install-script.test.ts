@@ -36,13 +36,23 @@ describe("install script", () => {
     const text = await readFile(installScript, "utf-8")
     expect(text).toContain('INSTALL_ROOT=$(dirname "$INSTALL_DIR")')
     expect(text).toContain('INSTALL_LIB_DIR="$INSTALL_ROOT/lib"')
+    expect(text).toContain('INSTALL_NODE_DIR="$INSTALL_ROOT/node"')
     expect(text).toContain('INSTALL_NODE_MODULES_DIR="$INSTALL_ROOT/node_modules"')
     expect(text).toContain("install_node_bundle_tree")
     expect(text).toContain("lib/index-node-tui.js")
+    expect(text).toContain("node/bin/node")
     expect(text).toContain("node_modules")
     expect(text).toContain('cp -R "$lib_dir" "$INSTALL_LIB_DIR"')
+    expect(text).toContain('cp -R "$node_dir" "$INSTALL_NODE_DIR"')
     expect(text).toContain('cp -R "$node_modules_dir" "$INSTALL_NODE_MODULES_DIR"')
     expect(text).toContain('install_node_bundle_tree "$bundle_root"')
+    // Linux archives are tar.gz; macOS remains zip.
+    expect(text).toContain('archive_ext=".tar.gz"')
+    expect(text).toContain("linux-x64|linux-arm64|darwin-arm64|windows-x64|windows-arm64")
+    // Node-bundled releases are glibc-only; do not rewrite to unpublished suffixes.
+    expect(text).not.toContain('target="$target-baseline"')
+    expect(text).not.toContain('target="$target-musl"')
+    expect(text).toContain("Unsupported platform: musl/Alpine Linux")
   })
 
   test("warns when the installed binary is not first on PATH", async () => {

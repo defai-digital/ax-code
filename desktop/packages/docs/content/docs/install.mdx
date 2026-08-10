@@ -1,14 +1,15 @@
 ---
 title: Install
-description: Install AX Code Desktop on macOS or Windows.
+description: Install AX Code Desktop on macOS, Windows, or Linux.
 ---
 
 # Install
 
-There are two supported Desktop install paths:
+Supported Desktop install paths:
 
 - macOS Apple Silicon app through Homebrew or DMG
-- Windows x64 app through installer or portable ZIP
+- Windows x64 / ARM64 app through installer or portable ZIP
+- Linux x64 / arm64 app through `.deb` or AppImage (Ubuntu 24.04+ glibc)
 
 Desktop source code lives in the AX Code monorepo under `desktop/`, and Desktop
 release artifacts are published from the main
@@ -49,15 +50,36 @@ You can also download the latest macOS DMG from the [GitHub releases page](https
 
 Download the latest Windows installer from the [GitHub releases page](https://github.com/defai-digital/ax-code/releases) and run it. For portable use, download the Windows ZIP, extract the full folder, and run `AX Code.exe` from the extracted folder.
 
+## Linux (Ubuntu Desktop 24.04+)
+
+Install the paired CLI first, then download a Desktop package from a `desktop-v*` release:
+
+- amd64: `AX-Code-<version>-linux-amd64.deb` or `AX-Code-<version>-linux-x86_64.AppImage`
+- arm64: `AX-Code-<version>-linux-arm64.deb` or `AX-Code-<version>-linux-arm64.AppImage`
+
+```bash
+# CLI
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+
+# Desktop .deb
+sudo apt install ./AX-Code-<version>-linux-amd64.deb
+
+# or portable AppImage
+chmod +x AX-Code-<version>-linux-x86_64.AppImage
+./AX-Code-<version>-linux-x86_64.AppImage
+```
+
+AppImage is the Linux auto-update channel. Musl distros are not supported.
+
 ## Platform capabilities
 
-| Capability               | macOS Apple Silicon                      | Windows x64   |
-| ------------------------ | ---------------------------------------- | ------------- |
-| Desktop app              | Supported                                | Supported     |
-| Hosted providers         | Supported                                | Supported     |
-| AX Engine local provider | Supported on eligible Apple Silicon Macs | Not supported |
+| Capability               | macOS Apple Silicon                      | Windows x64 / ARM64 | Linux x64 / arm64 |
+| ------------------------ | ---------------------------------------- | ------------------- | ----------------- |
+| Desktop app              | Supported                                | Supported           | Supported         |
+| Hosted providers         | Supported                                | Supported           | Supported         |
+| AX Engine local provider | Supported on eligible Apple Silicon Macs | Not supported       | Not supported     |
 
-AX Engine is a local MLX/Apple Silicon provider. On Windows, use hosted providers or an OpenAI-compatible model provider; remote AX Code servers are unavailable.
+AX Engine is a local MLX/Apple Silicon provider. On Windows and Linux, use hosted providers or an OpenAI-compatible model provider; remote AX Code servers are unavailable.
 
 ## Development checkout
 
@@ -66,5 +88,8 @@ Contributor builds run from the monorepo:
 ```bash
 pnpm install
 pnpm run desktop:build
+# macOS
 node desktop/packages/electron/scripts/package.mjs --mac zip --publish=never
+# Linux (on Ubuntu)
+node desktop/packages/electron/scripts/package.mjs --linux --x64 --publish=never
 ```

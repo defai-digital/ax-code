@@ -14,6 +14,7 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 [![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![Windows x64](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![Windows ARM64 CLI](https://img.shields.io/badge/Windows%20ARM64-CLI-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
+[![Linux x64/arm64 CLI](https://img.shields.io/badge/Linux%20x64%2Farm64-CLI-E95420?logo=ubuntu&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/gf9UyPxaN2)
 
@@ -28,7 +29,7 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 | macOS Apple Silicon | Active support | Homebrew CLI formula and Desktop cask                  |
 | Windows x64         | Active support | PowerShell CLI installer and Desktop release installer |
 | Windows ARM64       | Active support | PowerShell CLI installer and Desktop release installer |
-| Linux x64 / arm64   | Not supported  | No release artifact is built                           |
+| Linux x64 / arm64   | Active support | Bash CLI installer + Desktop `.deb`/AppImage (Ubuntu 24.04+ glibc) |
 
 **Recommended: AX Code Desktop**
 
@@ -71,6 +72,18 @@ Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**.
 
 The PowerShell `install.ps1` path installs the CLI only. It does not install the Desktop app.
 
+**Linux (CLI)**
+
+Ubuntu Desktop/Server **24.04 LTS** and newer (glibc) on **amd64** and **arm64**:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+```
+
+Pin a version with `bash -s -- --version <release>`. The installer verifies the downloaded archive with minisign (bootstraps a pinned minisign build when needed). Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only if you intentionally accept an unverifiable download.
+
+Linux CLI archives are `ax-code-linux-x64.tar.gz` / `ax-code-linux-arm64.tar.gz`. AX Code Desktop for Linux ships as `.deb` and AppImage assets on `desktop-v*` releases (for example `AX-Code-<version>-linux-amd64.deb` and `AX-Code-<version>-linux-x86_64.AppImage`). Musl-based distros (for example Alpine) are not a supported install target for current release archives.
+
 AX Code Desktop is the primary graphical workspace. It shares the AX Code runtime and provider setup, and its source lives in this monorepo under [`desktop/`](desktop/). The standalone Desktop source repository has been retired.
 
 **Run**
@@ -99,7 +112,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/d
 
 Verifies the downloaded release archive with minisign (bootstraps a pinned minisign binary when needed). Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only if you intentionally accept an unverifiable download. Installs the node-bundled CLI under `%USERPROFILE%\.ax-code\bin`. Pin a version with `-Version <release>`. Uninstall with `.\install.ps1 -Uninstall`.
 
-Supported CLI install paths are Homebrew (macOS) and the GitHub release installer for Windows PowerShell. The Windows PowerShell installer is CLI-only; use the Windows `.exe` release asset for Desktop. Linux and npm packages are not supported release channels. See [Installation and Runtime Channels](docs/getting-started/install-runtime.md) for the full matrix.
+Supported CLI install paths are Homebrew (macOS), the GitHub release installer for Windows PowerShell, and the bash installer for Linux glibc (Ubuntu 24.04+ amd64/arm64). The Windows PowerShell and Linux bash installers are CLI-only; use the platform Desktop release assets (macOS DMG/cask, Windows `.exe`, Linux `.deb`/AppImage) for the Desktop app. npm packages are not a supported release channel. See [Installation and Runtime Channels](docs/getting-started/install-runtime.md) for the full matrix.
 
 AX Engine local inference is available only on eligible Apple Silicon Macs. Install its matching MLX runtime with `brew install defai-digital/ax-engine/ax-engine`; AX Code then starts and manages the local server on demand. Windows Desktop users should use hosted providers or OpenAI-compatible provider gateways; AX Code itself remains local-only and cannot be used as a remote server. For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `HF_TOKEN`, `UNOROUTER_API_KEY`, `ZHIPU_API_KEY`, Alibaba plan keys, and `GITHUB_TOKEN`.
 

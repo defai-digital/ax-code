@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-07-19
+Last reviewed: 2026-08-10
 Owner: ax-code runtime
 
 The root [README](../../README.md) keeps the primary install path. This page is the source of truth for supported CLI installer channels, `ax-code doctor` runtime labels, local launcher behavior, and how those channels relate to Desktop installers.
@@ -17,6 +17,9 @@ brew install defai-digital/tap/ax-code
 
 # GitHub release installer (Windows PowerShell)
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
+
+# Bash installer (Linux glibc, Ubuntu 24.04+ amd64/arm64)
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 ```
 
 One-line remote execution is a convenience path. The Windows installer verifies the downloaded CLI ZIP with minisign after it starts, but `irm | iex` does not verify `install.ps1` itself before execution.
@@ -44,15 +47,17 @@ Verify the installed runtime:
 ax-code doctor
 ```
 
-Supported user installs should report `Runtime: Node vX.Y.Z (node-bundled)` on both macOS Homebrew and Windows.
+Supported user installs should report `Runtime: Node vX.Y.Z (node-bundled)` on macOS Homebrew, Windows, and Linux (glibc).
 
 Desktop is installed through separate platform-specific channels:
 
 - macOS: `brew install --cask defai-digital/tap/ax-code-desktop`
 - Windows x64: download and run the latest `AX-Code-<version>-win-x64.exe` from GitHub Releases.
 - Windows ARM64: download and run the latest `AX-Code-<version>-win-arm64.exe` from GitHub Releases.
+- Linux amd64: download `AX-Code-<version>-linux-amd64.deb` (Ubuntu) or `AX-Code-<version>-linux-x86_64.AppImage` (portable) from a `desktop-v*` GitHub Release.
+- Linux arm64: download `AX-Code-<version>-linux-arm64.deb` or `AX-Code-<version>-linux-arm64.AppImage` from a `desktop-v*` GitHub Release.
 
-The Windows PowerShell `install.ps1` script installs the CLI only; it does not install the Desktop app.
+The Windows PowerShell `install.ps1` and Linux bash `install` scripts install the CLI only; they do not install the Desktop app.
 
 Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**. SmartScreen may still warn while a new build develops download reputation, but the prompt must identify that expected publisher. Do not run an installer shown as **Unknown publisher**; use `Get-AuthenticodeSignature` as documented in the Desktop README when an explicit signature check is required.
 
@@ -63,6 +68,8 @@ Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**.
 | Homebrew formula                     | `brew install defai-digital/tap/ax-code`                                                                                                            | `node-bundled`         | Supported            | Normal macOS package-manager install path                          |
 | Windows PowerShell release installer | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 \| iex"` | `node-bundled`         | Supported on Windows | Windows user-local install path                                    |
 | Windows release assets               | Download `ax-code-windows-*.zip` from GitHub releases                                                                                               | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
+| Linux bash release installer         | `curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install \| bash`                                                           | `node-bundled`         | Supported on Linux   | Ubuntu 24.04+ (glibc) amd64/arm64 user-local install path          |
+| Linux release assets                 | Download `ax-code-linux-*.tar.gz` from GitHub releases                                                                                              | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
 | Local bundled launcher               | `pnpm install && pnpm run setup:cli`                                                                                                                | `node-bundled`         | Contributor          | Contributor parity with the packaged startup path                  |
 | Local source launcher                | `pnpm run setup:cli -- --source`                                                                                                                    | `source`               | Contributor          | Contributor-only source debugging                                  |
 | Direct checkout run                  | `pnpm cli` or `pnpm dev`                                                                                                                            | `source`               | Contributor          | Short-lived development runs without replacing the global launcher |
@@ -79,7 +86,8 @@ Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**.
 - macOS: use Homebrew as the documented user path. Contributor builds use `pnpm run setup:cli`.
 - Use fully qualified shared-tap commands such as `brew install defai-digital/tap/ax-code`. Homebrew taps
   `defai-digital/tap` automatically, so the same one-line form works for users and CI.
-- Linux: current releases do not publish Linux artifacts. Use a supported macOS or Windows target, or run from source as a contributor.
+- Linux CLI: use the bash installer for Ubuntu Desktop/Server **24.04 LTS** and newer on **amd64** and **arm64** (glibc). Release builds produce `ax-code-linux-x64.tar.gz` and `ax-code-linux-arm64.tar.gz` on Ubuntu 24.04 runners so the glibc baseline stays compatible with 24.04+. Musl (Alpine) is not supported by current release archives.
+- Linux Desktop: `desktop-v*` releases publish `.deb` and AppImage for **amd64/x86_64** and **arm64** (Ubuntu 24.04 glibc baseline). AppImage is the Linux auto-update channel (`latest-linux.yml` / `latest-linux-arm64.yml`). Install the CLI separately; Desktop sessions still require the local AX Code runtime.
 - macOS CLI archives: release builds publish `darwin-arm64` only (Apple Silicon). Intel macOS is not a supported install target for current CLI/Desktop packages.
 - Windows CLI: use the native PowerShell installer. It installs the GitHub release asset into a user-local directory and updates the user PATH unless `-NoModifyPath` is provided. It verifies the downloaded ZIP with the pinned public key before extraction and fails closed unless `AX_CODE_SKIP_MINISIGN_VERIFY=1` is set intentionally. If `minisign` is missing, the installer bootstraps a pinned official build into `%LOCALAPPDATA%\ax-code\tools\minisign`. Use `-Uninstall` to remove the user-local install and PATH entry.
 - Windows Desktop: use the signed Electron installer from GitHub Releases, named `AX-Code-<version>-win-x64.exe` or `AX-Code-<version>-win-arm64.exe`. The expected Authenticode publisher is `DEFAI Private Limited`. Do not describe `install.ps1` as a Desktop installer. Silent install: `.\AX-Code-<version>-win-x64.exe /S` (NSIS).
@@ -137,6 +145,7 @@ For supported packaged channels:
 ax-code upgrade
 brew upgrade ax-code
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 ```
 
 On Windows this updates the CLI. To remove the CLI install and its user PATH entry:

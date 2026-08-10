@@ -2,8 +2,13 @@ name: Install Matrix Smoke
 
 # Validates that ax-code installs and runs end-to-end through supported
 # non-npm distribution channels after the release workflow publishes GitHub
-# release assets. Linux release artifacts, npm packages, and source-bundle
-# aliases are not supported install or upgrade channels.
+# release assets. npm packages and source-bundle aliases are not supported
+# install or upgrade channels.
+#
+# Supported smoke channels:
+#   - homebrew (macOS Apple Silicon)
+#   - windows  (PowerShell install.ps1 on x64 + arm64)
+#   - linux    (bash install script on Ubuntu 24.04 x64 + arm64)
 #
 # Triggers:
 #   - `workflow_call`: tag-driven release workflow after stable publish
@@ -18,7 +23,7 @@ on:
         required: true
         type: string
       channel:
-        description: "Which channels to smoke-test (all, homebrew, windows)"
+        description: "Which channels to smoke-test (all, homebrew, windows, linux)"
         required: false
         type: string
         default: all
@@ -37,6 +42,7 @@ on:
           - all
           - homebrew
           - windows
+          - linux
 
 permissions:
   contents: read
@@ -288,3 +294,92 @@ jobs:
           if ($Output -notmatch 'Runtime: Node .* \(node-bundled\)') {
             throw "Windows install did not report node-bundled runtimeMode"
           }
+
+  linux:
+    name: ${{ matrix.label }} / linux
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            label: linux-x64
+          - os: ubuntu-24.04-arm
+            label: linux-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate manual dispatch inputs
+        shell: bash
+        run: bash .github/scripts/validate-install-matrix-inputs.sh "${{ inputs.version }}" "${{ inputs.channel }}"
+
+      - name: Set isolated home paths
+        shell: bash
+        run: |
+          bash .github/scripts/set-isolated-home-env.sh "$RUNNER_TEMP/ax-code-linux-smoke-home"
+
+      - name: Resolve version under test
+        id: version
+        shell: bash
+        run: bash .github/scripts/resolve-version-for-workflow.sh "$GITHUB_OUTPUT" "${{ inputs.version }}"
+
+      - name: Filter dispatch channel
+        id: channel
+        shell: bash
+        run: bash .github/scripts/filter-dispatch-channel.sh "$GITHUB_OUTPUT" "${{ inputs.channel }}" "linux" "Linux bash installer"
+
+      - name: Install ax-code from bash release installer
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          # Installer is repo-sourced so smoke tracks the current install script.
+          # It downloads the published Linux release archive and verifies with
+          # minisign (bootstraps pinned minisign when missing from PATH).
+          bash ./install --version "$VERSION"
+          RESOLVED="$(command -v ax-code)"
+          echo "Resolved ax-code to $RESOLVED"
+          EXPECTED="$HOME/.ax-code/bin/ax-code"
+          if [ "$RESOLVED" != "$EXPECTED" ]; then
+            # Installer may not be first on PATH until a new shell; force PATH.
+            export PATH="$HOME/.ax-code/bin:$PATH"
+            RESOLVED="$(command -v ax-code)"
+          fi
+          if [ "$RESOLVED" != "$EXPECTED" ]; then
+            echo "FAIL: expected installer-linked ax-code at $EXPECTED, got $RESOLVED"
+            exit 1
+          fi
+          if [ ! -x "$HOME/.ax-code/node/bin/node" ]; then
+            echo "FAIL: expected bundled Node runtime at $HOME/.ax-code/node/bin/node"
+            exit 1
+          fi
+          echo "$HOME/.ax-code/bin" >> "$GITHUB_PATH"
+
+      - name: ax-code --version
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          bash .github/scripts/assert-ax-code-version.sh "$VERSION"
+
+      - name: ax-code doctor - assert Linux runtime is node-bundled
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        run: |
+          OUTPUT="$(ax-code doctor 2>&1)"
+          echo "$OUTPUT"
+          echo "$OUTPUT" | bash .github/scripts/assert-runtime-mode.sh "linux" doctor
+
+      - name: Smoke - installed backend stdio handshake
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        timeout-minutes: 1
+        run: |
+          set -e
+          OUTPUT="$(printf '{"type":"rpc.request","method":"health","id":1}\n' | ax-code tui-backend --stdio 2>&1)"
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep -E '"type":"rpc.result".*"id":1' \
+            || (echo "FAIL: Linux installed backend did not return rpc health result" && exit 1)
+          echo "$OUTPUT" | bash .github/scripts/assert-runtime-mode.sh "linux" backend

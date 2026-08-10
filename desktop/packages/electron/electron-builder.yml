@@ -102,6 +102,48 @@ nsis:
   installerIcon: build/icon.ico
   uninstallerIcon: build/icon.ico
 
+# ── Linux ──────────────────────────────────────────────────────────────────
+# Ubuntu Desktop 24.04+ glibc (amd64 + arm64). Same arch rule as Windows: do
+# NOT list arch here — CI selects --x64 / --arm64 per runner so native modules
+# match the target. AppImage is the portable / auto-update channel
+# (latest-linux.yml / latest-linux-arm64.yml); .deb is the Ubuntu install path.
+linux:
+  target:
+    - target: AppImage
+    - target: deb
+  category: Development
+  icon: build/icon.png
+  maintainer: DEFAI Private Limited <support@defai.digital>
+  vendor: DEFAI Private Limited
+  synopsis: Local-first coding agent desktop workspace
+  description: AX Code Desktop is the graphical workspace for the AX Code agent runtime.
+  # Keep .desktop filename / WM_CLASS aligned with Electron app_id (see package.json desktopName).
+  syncDesktopName: true
+  desktop:
+    entry:
+      Name: AX Code
+      Comment: Local-first agent runtime for software work
+      Categories: Development;IDE;
+      StartupWMClass: ax-code-desktop
+  # Executable name used by AppImage/.desktop files. Keep stable for updates.
+  executableName: ax-code-desktop
+
+deb:
+  # Keep the apt package name distinct from the CLI (formula/binary "ax-code").
+  packageName: ax-code-desktop
+  depends:
+    # Electron runtime deps commonly required on Ubuntu Desktop.
+    # Keep in sync with electron-builder defaults (includes libsecret for keychain).
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
+
 # ── Auto-update ────────────────────────────────────────────────────────────
 publish:
   provider: github

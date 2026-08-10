@@ -14,7 +14,7 @@ const INSTALL_DOCS_URLS: Record<OnboardingPlatform, string> = {
 export const MACOS_INSTALL_COMMAND = "brew install defai-digital/tap/ax-code"
 
 export const LINUX_INSTALL_COMMAND =
-  "Linux release builds are not available; see the install docs for supported platforms"
+  "curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash"
 
 export const WINDOWS_INSTALL_COMMAND =
   "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
@@ -64,6 +64,16 @@ export function getInstallCommandHighlights(platform: OnboardingPlatform): Insta
         { kind: "string", text: "defai-digital/tap/ax-code" },
       ]
     case "linux":
+      return [
+        { kind: "keyword", text: "curl" },
+        { kind: "muted", text: " -fsSL " },
+        {
+          kind: "string",
+          text: "https://raw.githubusercontent.com/defai-digital/ax-code/main/install",
+        },
+        { kind: "muted", text: " | " },
+        { kind: "keyword", text: "bash" },
+      ]
     default:
       return [{ kind: "muted", text: LINUX_INSTALL_COMMAND }]
   }
