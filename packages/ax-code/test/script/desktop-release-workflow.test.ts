@@ -103,7 +103,8 @@ describe("desktop release workflow", () => {
     expect(text).toContain("spctl --assess --type open --context context:primary-signature")
     expect(text).not.toContain("spctl --assess --type install")
     expect(text).toContain("spctl --assess --type execute")
-    expect(releaseActionUses).toHaveLength(5)
+    // One softprops draft upload per publishable desktop artifact job (mac/win + Linux formats).
+    expect(releaseActionUses).toHaveLength(7)
     expect(draftReleaseFlags).toHaveLength(releaseActionUses.length)
 
     const verifyJob = text.match(/  verify-release-assets:[\s\S]*?(?=\n  finalize-release:|$)/)

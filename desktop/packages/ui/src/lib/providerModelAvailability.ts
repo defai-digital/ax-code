@@ -26,7 +26,7 @@ export function usableInputTokensFromModelLimit(limit: {
 
 /**
  * Full-agent fixed budget for every provider, including ax-engine (#379).
- * Provider id is part of the public API for callers; budget is not provider-specific.
+ * `providerID` stays in the public API for call-site compatibility; budget is not provider-specific.
  */
 export function fixedTokensEstimateForProvider(providerID?: string): number {
   void providerID

@@ -3,7 +3,12 @@ import { readFile } from "fs/promises"
 import path from "path"
 
 function extractWorkspaceGlobs(pnpmWorkspaceYaml: string) {
-  return [...pnpmWorkspaceYaml.matchAll(/^  - (.+)$/gm)].map((match) => match[1].replace(/^(["'])(.*)\1$/, "$2"))
+  // Only the `packages:` list is workspace globs. Other list settings
+  // (onlyBuiltDependencies, etc.) also use `  - item` lines and must be ignored.
+  const packagesBlock = pnpmWorkspaceYaml.match(/^packages:\r?\n((?:[ \t]+- .+\r?\n?)*)/m)?.[1] ?? ""
+  return [...packagesBlock.matchAll(/^[ \t]+- (.+)$/gm)].map((match) =>
+    match[1].replace(/^(["'])(.*)\1$/, "$2"),
+  )
 }
 
 describe("script.workspace-metadata", () => {
