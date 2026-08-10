@@ -73,6 +73,8 @@ export namespace ProviderTransform {
       case "@ai-sdk/google":
       case "@ai-sdk/google-vertex":
         return "google"
+      case "@ai-sdk/openai":
+        return "openai"
     }
     return undefined
   }

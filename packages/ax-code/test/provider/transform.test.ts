@@ -184,6 +184,19 @@ describe("ProviderTransform.providerOptions", () => {
       "ax-engine": { temperature: 0.2 },
     })
   })
+
+  test("uses the OpenAI SDK namespace for Meta Model API options", () => {
+    const model = createModel({ providerID: "meta" })
+    const options = {
+      reasoningEffort: "high",
+      reasoningSummary: "auto",
+      include: ["reasoning.encrypted_content"],
+    }
+
+    expect(ProviderTransform.providerOptions(model, options)).toEqual({
+      openai: options,
+    })
+  })
 })
 
 describe("ProviderTransform.schema - gemini array items", () => {
@@ -1571,6 +1584,27 @@ describe("ProviderTransform.variants", () => {
       expect(result.low).toEqual({ reasoningEffort: "low" })
       expect(result.medium).toEqual({ reasoningEffort: "medium" })
       expect(result.high).toEqual({ reasoningEffort: "high" })
+    })
+
+    test("Meta Muse returns reasoning variants with encrypted reasoning continuity", () => {
+      const model = createMockModel({
+        id: "meta/muse-spark-1.2",
+        providerID: "meta",
+        family: "muse",
+        api: {
+          id: "muse-spark-1.2",
+          url: "https://api.meta.ai/v1",
+          npm: "@ai-sdk/openai",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+
+      expect(Object.keys(result)).toEqual(["minimal", "low", "medium", "high", "xhigh"])
+      expect(result.high).toEqual({
+        reasoningEffort: "high",
+        reasoningSummary: "auto",
+        include: ["reasoning.encrypted_content"],
+      })
     })
 
     test("third-party openai-compatible gateways stay empty", () => {
