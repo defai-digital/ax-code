@@ -2459,4 +2459,21 @@ describe("session.llm.streamIdleWatchdog", () => {
       else process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = prev
     }
   })
+
+  test("CLI providers use a longer default stream idle timeout (#382)", () => {
+    const prev = process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
+    try {
+      delete process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
+      expect(LLM.isCliProviderID("qoder-cli")).toBe(true)
+      expect(LLM.isCliProviderID("openai")).toBe(false)
+      expect(LLM.streamIdleTimeoutMs("qoder-cli")).toBe(900_000)
+      expect(LLM.streamIdleTimeoutMs("openai")).toBe(300_000)
+      // Explicit env still wins for CLI providers.
+      process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = "45000"
+      expect(LLM.streamIdleTimeoutMs("qoder-cli")).toBe(45_000)
+    } finally {
+      if (prev === undefined) delete process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
+      else process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = prev
+    }
+  })
 })

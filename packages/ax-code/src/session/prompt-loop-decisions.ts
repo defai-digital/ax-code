@@ -107,19 +107,82 @@ export function shouldScheduleUsageCompaction(input: {
   return input.lastFinished !== undefined && input.lastFinished.summary !== true && input.overflow
 }
 
+/** DNS / connect failures that are retryable at the transport layer (#380). */
+export function isRetryableNetworkErrorMessage(message: string | undefined): boolean {
+  if (!message) return false
+  const lower = message.toLowerCase()
+  return (
+    lower.includes("enotfound") ||
+    lower.includes("econnrefused") ||
+    lower.includes("econnreset") ||
+    lower.includes("etimedout") ||
+    lower.includes("eai_again") ||
+    lower.includes("getaddrinfo") ||
+    lower.includes("network error") ||
+    lower.includes("fetch failed") ||
+    lower.includes("socket hang up") ||
+    lower.includes("cannot connect to api")
+  )
+}
+
+export function consecutiveErrorStopMessage(input: {
+  consecutiveErrors: number
+  step: number
+  errorMessage?: string
+  pendingTodoCount?: number
+}): string {
+  const base =
+    `Agent encountered ${formatDecisionCount(input.consecutiveErrors)} consecutive errors at step ${input.step}. ` +
+    `Stopping to prevent retry loop.`
+  const pending = input.pendingTodoCount ?? 0
+  const network = isRetryableNetworkErrorMessage(input.errorMessage)
+  if (network && pending > 0) {
+    return (
+      `${base} ` +
+      `This looks like a retryable provider DNS/network failure` +
+      (input.errorMessage ? ` (${input.errorMessage.trim().slice(0, 160)})` : "") +
+      ` while ${formatDecisionCount(pending)} unfinished todo(s) remain. ` +
+      `The autonomous run is paused as recoverable: unfinished todos are preserved. ` +
+      `Recovery: fix network/DNS or switch provider, then resume the session (or re-send to continue from the remaining todos). ` +
+      `Do not treat the task itself as failed.`
+    )
+  }
+  if (network) {
+    return (
+      `${base} ` +
+      `This looks like a retryable provider DNS/network failure` +
+      (input.errorMessage ? ` (${input.errorMessage.trim().slice(0, 160)})` : "") +
+      `. Recovery: check connectivity, switch provider, or retry when the provider is reachable.`
+    )
+  }
+  if (pending > 0) {
+    return (
+      `${base} ` +
+      `${formatDecisionCount(pending)} unfinished todo(s) remain — resume after addressing the error, ` +
+      `or switch provider. Try rephrasing your request or breaking it into smaller tasks.`
+    )
+  }
+  return `${base} Try rephrasing your request or breaking it into smaller tasks.`
+}
+
 export function consecutiveErrorDecision(input: {
   consecutiveErrors: number
   maxConsecutiveErrors: number
   step: number
+  errorMessage?: string
+  pendingTodoCount?: number
 }): ConsecutiveErrorDecision {
   if (!retryLimitReached(input.consecutiveErrors, input.maxConsecutiveErrors)) return { action: "continue" }
 
   return {
     action: "stop",
     reason: "error",
-    message:
-      `Agent encountered ${formatDecisionCount(input.consecutiveErrors)} consecutive errors at step ${input.step}. ` +
-      `Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.`,
+    message: consecutiveErrorStopMessage({
+      consecutiveErrors: input.consecutiveErrors,
+      step: input.step,
+      errorMessage: input.errorMessage,
+      pendingTodoCount: input.pendingTodoCount,
+    }),
   }
 }
 

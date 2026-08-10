@@ -452,6 +452,18 @@ export class CliLanguageModel implements LanguageModelV3 {
             fail(new Error(formatCliTimeout(Buffer.from(raw.join("")), Buffer.concat(stderrRaw))))
           })()
         }
+        // Reset the CLI idle ceiling on any process activity (stdout or
+        // stderr). Long-running CLI agents that start a local server often
+        // go quiet on the model stream while the child is still working;
+        // without activity reset the hard CLI_TIMEOUT_MS ceiling aborts a
+        // healthy live-run and can leave orphans if kill races the child (#382).
+        const armCliActivityTimer = () => {
+          clearTimeout(timer)
+          timer = setTimeout(() => {
+            onTimeout()
+          }, CLI_TIMEOUT_MS)
+          timer.unref?.()
+        }
         const onFail = (error: unknown) => {
           if (closed()) return
           endText()
@@ -511,9 +523,7 @@ export class CliLanguageModel implements LanguageModelV3 {
             }
           }
         }
-        timer = setTimeout(() => {
-          onTimeout()
-        }, CLI_TIMEOUT_MS)
+        armCliActivityTimer()
 
         controller.enqueue({ type: "stream-start", warnings: [] })
         controller.enqueue({ type: "text-start", id: textId })
@@ -573,6 +583,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         const stderr = proc.stderr
         onStderrData = (chunk: Buffer) => {
           stderrRaw.push(chunk)
+          if (!closed()) armCliActivityTimer()
         }
         onStderrError = (err: Error) => {
           clearTimeout(timer)
@@ -588,6 +599,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         }
         onStdoutData = (chunk: Buffer) => {
           if (closed()) return
+          armCliActivityTimer()
           processStdoutText(stdoutDecoder.write(chunk))
         }
         onStdoutEnd = () => {

@@ -5,6 +5,7 @@ import {
 } from "./sync-store-event"
 import type { SyncEvent } from "./sync-event"
 import { toErrorMessage } from "@/util/error-message"
+import { createStreamDeltaCoalescer, type StreamEventLike } from "../util/coalesce-stream-events"
 
 interface SyncEventEnvelope<TDetails = unknown> {
   details: TDetails
@@ -132,26 +133,48 @@ export function subscribeStoreBackedSyncEvents<
 }) {
   const dispatch = input.dispatch ?? dispatchStoreBackedSyncEvent
 
-  return input.listen((envelope) => {
+  const applyEvent = (event: SyncEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart>) => {
+    dispatch({
+      event,
+      autonomous: input.getAutonomous(),
+      autoReplyRequests: input.getAutoReplyRequests?.(),
+      setStore: input.setStore,
+      clearSessionSyncState: input.clearSessionSyncState,
+      replyPermission: input.replyPermission,
+      replyQuestion: input.replyQuestion,
+      syncMcpStatus: input.syncMcpStatus,
+      syncLspStatus: input.syncLspStatus,
+      syncDebugEngine: input.syncDebugEngine,
+      syncWorkflowDashboard: input.syncWorkflowDashboard,
+      scheduleRuntimeProbe: input.scheduleRuntimeProbe,
+      bootstrap: input.bootstrap,
+      refreshProviders: input.refreshProviders,
+      onWarn: input.onWarn,
+      maxSessionMessages: input.maxSessionMessages,
+    })
+  }
+
+  // Coalesce high-frequency text deltas (~token stream) so the Solid store
+  // projection pays once per frame window instead of once per token — cuts
+  // full-frame TUI flicker while streaming (#376).
+  const coalescer = createStreamDeltaCoalescer({
+    emit(events) {
+      for (const event of events) {
+        try {
+          applyEvent(event as SyncEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart>)
+        } catch (error) {
+          input.onHandlerError({
+            type: eventType(event),
+            error: toErrorMessage(error),
+          })
+        }
+      }
+    },
+  })
+
+  const unsubscribe = input.listen((envelope) => {
     try {
-      dispatch({
-        event: envelope.details as SyncEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart>,
-        autonomous: input.getAutonomous(),
-        autoReplyRequests: input.getAutoReplyRequests?.(),
-        setStore: input.setStore,
-        clearSessionSyncState: input.clearSessionSyncState,
-        replyPermission: input.replyPermission,
-        replyQuestion: input.replyQuestion,
-        syncMcpStatus: input.syncMcpStatus,
-        syncLspStatus: input.syncLspStatus,
-        syncDebugEngine: input.syncDebugEngine,
-        syncWorkflowDashboard: input.syncWorkflowDashboard,
-        scheduleRuntimeProbe: input.scheduleRuntimeProbe,
-        bootstrap: input.bootstrap,
-        refreshProviders: input.refreshProviders,
-        onWarn: input.onWarn,
-        maxSessionMessages: input.maxSessionMessages,
-      })
+      coalescer.push(envelope.details as StreamEventLike)
     } catch (error) {
       input.onHandlerError({
         type: eventType(envelope.details),
@@ -159,4 +182,9 @@ export function subscribeStoreBackedSyncEvents<
       })
     }
   })
+
+  return () => {
+    coalescer.dispose()
+    unsubscribe()
+  }
 }

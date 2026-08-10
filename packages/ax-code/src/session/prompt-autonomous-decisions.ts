@@ -297,6 +297,52 @@ export function toolOnlyTurnDecision(input: {
   return { action: "ignore" }
 }
 
+type GoalCompleteToolPart = {
+  type?: string
+  tool?: string
+  state?: {
+    status?: string
+    title?: string
+    input?: Record<string, unknown>
+    metadata?: Record<string, unknown>
+  }
+}
+
+/**
+ * Detect a successful `update_goal { status: "complete" }` tool result on the
+ * current assistant turn. Used to force a final user-facing text response
+ * instead of letting the tool-only circuit breaker fire after the goal is done
+ * (see #381).
+ */
+export function hasSuccessfulGoalCompleteTool(parts: readonly GoalCompleteToolPart[] | undefined): boolean {
+  if (!parts?.length) return false
+  for (const part of parts) {
+    if (part.type !== "tool" || part.tool !== "update_goal") continue
+    if (part.state?.status !== "completed") continue
+    if (part.state.input?.status === "complete") return true
+    if (part.state.title === "Completed goal") return true
+    const goalMeta = part.state.metadata?.goal
+    if (goalMeta && typeof goalMeta === "object" && (goalMeta as { status?: unknown }).status === "complete") {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * After a successful goal completion tool call, a tool-only finish must not
+ * keep driving the agent loop toward the tool-call circuit breaker. Force a
+ * text-only final summary turn instead.
+ */
+export function goalCompleteForceTextDecision(input: {
+  modelFinished: boolean
+  goalCompletedThisTurn: boolean
+}): { action: "force_text" } | { action: "ignore" } {
+  if (input.modelFinished) return { action: "ignore" }
+  if (!input.goalCompletedThisTurn) return { action: "ignore" }
+  return { action: "force_text" }
+}
+
 // Resolves the toolChoice for a turn given two independent, possibly
 // conflicting demands: structured output (a schema-forced turn MUST call its
 // output tool) and the tool-only-turn circuit breaker (a forced turn MUST

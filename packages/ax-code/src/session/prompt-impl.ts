@@ -52,8 +52,10 @@ import { addPromptGoalUsage } from "./prompt-goal-usage"
 import {
   effectiveContinuationCap,
   effectiveTotalStepLimit,
+  goalCompleteForceTextDecision,
   goalLongRunActive,
   emptyModelTurnIncompleteMessage,
+  hasSuccessfulGoalCompleteTool,
   isEmptyModelTurn,
   isTruncatedModelTurn,
   modelTurnFinished,
@@ -1199,6 +1201,31 @@ export namespace SessionPrompt {
       // below owns that path, and injecting a nudge on an errored turn
       // would defer error recovery by a turn.
       if (!modelFinished && !processor.message.error) {
+        // #381: a successful update_goal(status=complete) that ends the turn
+        // with tool-calls must force a final text summary, not climb toward
+        // the tool-only circuit breaker after the goal is already done.
+        const currentParts = msgs.find((item) => item.info.id === processor.message.id)?.parts
+        const goalForce = goalCompleteForceTextDecision({
+          modelFinished,
+          goalCompletedThisTurn: hasSuccessfulGoalCompleteTool(currentParts),
+        })
+        if (goalForce.action === "force_text") {
+          forceTextOnlyTurn = true
+          consecutiveToolOnlyTurns = 0
+          toolOnlyNudges = 0
+          log.info("goal complete forces text-only final turn", {
+            command: "session.prompt.loop",
+            status: "force_text",
+            sessionID,
+          })
+          await createAutonomousTextContinuation({
+            sessionID,
+            messages: msgs,
+            text: AutonomousContinuationPrompt.goalCompleteForceText(),
+          })
+          continue
+        }
+
         consecutiveToolOnlyTurns += 1
         const toolOnlyTransition = toolOnlyTurnDecision({
           consecutiveToolOnlyTurns,

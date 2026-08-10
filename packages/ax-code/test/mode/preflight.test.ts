@@ -33,6 +33,22 @@ describe("EnsemblePreflight", () => {
     expect(msg).toContain("/connect")
   })
 
+  test("insufficient providers message lists exclusions and fails closed (#377)", () => {
+    const msg = EnsemblePreflight.arenaInsufficientProvidersMessage({
+      count: 1,
+      ids: ["zai-coding-plan"],
+      excluded: [
+        { providerID: "qoder-cli", reason: "no models discovered yet" },
+        { providerID: "ax-engine", reason: "models present but none selectable" },
+      ],
+    })
+    expect(msg).toContain("**1**")
+    expect(msg).toContain("qoder-cli")
+    expect(msg).toContain("ax-engine")
+    expect(msg).toContain("Do not continue as a single-provider implementation")
+    expect(msg).toContain("not eligible")
+  })
+
   test("forbidsTaskParallelFirst detects council/arena turns", () => {
     expect(EnsemblePreflight.forbidsTaskParallelFirst("Run multi-provider council review")).toBe(true)
     expect(EnsemblePreflight.forbidsTaskParallelFirst("use the arena tool")).toBe(true)

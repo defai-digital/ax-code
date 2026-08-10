@@ -45,6 +45,7 @@ import {
 } from "@tui/util/renderable-safety"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
 import { Header } from "./header"
+import { isAssistantThinkingActive } from "./thinking-status"
 import { useDialog } from "../../ui/dialog"
 import { DialogPrompt } from "../../ui/dialog-prompt"
 import { DialogMessage } from "./dialog-message"
@@ -1673,7 +1674,18 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
   const keybind = useKeybind()
 
   const hasParts = createMemo(() => props.parts.length > 0)
-  const isThinking = createMemo(() => !props.message.error && !hasParts() && !final() && props.last)
+  // Gate the spinner on live session status so idle/stopped/error runs never
+  // leave "Thinking" animating on an incomplete last assistant message (#378).
+  const isThinking = createMemo(() => {
+    const statusType = sync.data.session_status?.[props.message.sessionID]?.type
+    return isAssistantThinkingActive({
+      sessionStatusType: statusType,
+      messageError: props.message.error,
+      hasParts: hasParts(),
+      isFinal: final(),
+      isLast: props.last,
+    })
+  })
   // coalesceParts() fabricates new wrapper objects every run and <For> keys
   // rows by identity, so without caching every streamed part would recreate
   // ALL rows — resetting per-row expanded signals on single-part rows

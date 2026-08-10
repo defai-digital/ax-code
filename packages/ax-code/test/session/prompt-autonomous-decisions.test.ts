@@ -16,6 +16,8 @@ import {
   toolOnlyTurnDecision,
   totalStepLimitDecision,
   truncatedModelTurnDecision,
+  hasSuccessfulGoalCompleteTool,
+  goalCompleteForceTextDecision,
 } from "../../src/session/prompt-autonomous-decisions"
 
 function unfinishedTodosGate() {
@@ -973,6 +975,44 @@ describe("tool-only turn decision", () => {
       finalCheckpointHits: 2,
     })
     expect(decision).toEqual({ action: "nudge", final: false, forced: false })
+  })
+})
+
+describe("goal complete force text (#381)", () => {
+  test("detects successful update_goal complete from tool parts", () => {
+    expect(
+      hasSuccessfulGoalCompleteTool([
+        {
+          type: "tool",
+          tool: "update_goal",
+          state: { status: "completed", title: "Completed goal", input: { status: "complete" } },
+        },
+      ]),
+    ).toBe(true)
+    expect(
+      hasSuccessfulGoalCompleteTool([
+        {
+          type: "tool",
+          tool: "update_goal",
+          state: { status: "completed", input: { status: "blocked" }, title: "Blocked goal" },
+        },
+      ]),
+    ).toBe(false)
+    expect(hasSuccessfulGoalCompleteTool([{ type: "tool", tool: "bash", state: { status: "completed" } }])).toBe(
+      false,
+    )
+  })
+
+  test("forces text when goal completed this tool-only turn", () => {
+    expect(
+      goalCompleteForceTextDecision({ modelFinished: false, goalCompletedThisTurn: true }),
+    ).toEqual({ action: "force_text" })
+    expect(
+      goalCompleteForceTextDecision({ modelFinished: true, goalCompletedThisTurn: true }),
+    ).toEqual({ action: "ignore" })
+    expect(
+      goalCompleteForceTextDecision({ modelFinished: false, goalCompletedThisTurn: false }),
+    ).toEqual({ action: "ignore" })
   })
 })
 

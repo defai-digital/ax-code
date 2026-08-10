@@ -174,6 +174,19 @@ export namespace AutonomousContinuationPrompt {
     )
   }
 
+  /**
+   * Injected after a successful update_goal(status=complete) that ended the
+   * turn with more tool calls instead of a user-facing summary (#381).
+   * Tools are stripped on the next request so the model must produce text.
+   */
+  export function goalCompleteForceText() {
+    return (
+      `The session goal was just marked complete via update_goal. Tools are disabled for your next turn — ` +
+      `respond now with a concise final summary for the user covering: goal achieved, key files changed, ` +
+      `verification results, and any residual notes. Do not call more tools.`
+    )
+  }
+
   export function contextConvergence(input: { pendingTodos: PromptTodo[] }) {
     return (
       `Autonomous mode has reached a large context while ${Locale.pluralize(

@@ -1,14 +1,18 @@
 import { getProviderModelDisabledReason } from "./providerModelAvailability"
 import type { ProviderWithModelList } from "../types/providerModels"
 
-type ModelPickerEntryLike = { model: Record<string, unknown> | null | undefined }
+type ModelPickerEntryLike = {
+  model: Record<string, unknown> | null | undefined
+  providerID?: string
+}
 type FavoriteModelRef = { providerID: string; modelID: string }
 
 export const getNextSelectableModelPickerIndex = <TEntry extends ModelPickerEntryLike>(
   entries: TEntry[],
   currentIndex: number,
   direction: 1 | -1,
-  isDisabled: (entry: TEntry) => boolean = (entry) => Boolean(getProviderModelDisabledReason(entry.model)),
+  isDisabled: (entry: TEntry) => boolean = (entry) =>
+    Boolean(getProviderModelDisabledReason(entry.model, entry.providerID)),
 ) => {
   const total = entries.length
   if (total === 0) return -1
@@ -26,7 +30,8 @@ export const getNextSelectableModelPickerIndex = <TEntry extends ModelPickerEntr
 export const normalizeModelPickerSelectionIndex = <TEntry extends ModelPickerEntryLike>(
   entries: TEntry[],
   currentIndex: number,
-  isDisabled: (entry: TEntry) => boolean = (entry) => Boolean(getProviderModelDisabledReason(entry.model)),
+  isDisabled: (entry: TEntry) => boolean = (entry) =>
+    Boolean(getProviderModelDisabledReason(entry.model, entry.providerID)),
 ) => {
   if (entries.length === 0) return -1
 
@@ -58,7 +63,7 @@ export const getNextSelectableFavoriteModel = (
     favoriteEntries,
     currentIndex,
     direction,
-    (entry) => !entry.model || Boolean(getProviderModelDisabledReason(entry.model)),
+    (entry) => !entry.model || Boolean(getProviderModelDisabledReason(entry.model, entry.providerID)),
   )
   const next = nextIndex >= 0 ? favoriteEntries[nextIndex] : undefined
 

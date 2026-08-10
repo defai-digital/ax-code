@@ -34,7 +34,10 @@ describe("tui sync subscription", () => {
     const [_store, setStore] = createTestStore()
     const dispatched: Array<{ autonomous: boolean; type: string }> = []
     let listener: ((event: { details: unknown }) => void) | undefined
-    const unsubscribe = () => "unsubscribed"
+    let unsubscribed = false
+    const unsubscribe = () => {
+      unsubscribed = true
+    }
     let autonomous = false
 
     const result = subscribeStoreBackedSyncEvents<
@@ -77,11 +80,72 @@ describe("tui sync subscription", () => {
       },
     })
 
-    expect(result).toBe(unsubscribe)
+    expect(typeof result).toBe("function")
+    result()
+    expect(unsubscribed).toBe(true)
     expect(dispatched).toEqual([
       { autonomous: false, type: "session.updated" },
       { autonomous: true, type: "permission.asked" },
     ])
+  })
+
+  test("coalesces high-frequency text deltas before dispatch (#376)", async () => {
+    const [_store, setStore] = createTestStore()
+    const dispatched: string[] = []
+    let listener: ((event: { details: unknown }) => void) | undefined
+
+    subscribeStoreBackedSyncEvents<
+      Session,
+      Todo,
+      Diff,
+      Status,
+      Message,
+      Part,
+      SyncEventStoreState<Session, Todo, Diff, Status, Message, Part>
+    >({
+      listen(handler) {
+        listener = handler
+        return () => undefined
+      },
+      getAutonomous: () => false,
+      setStore,
+      clearSessionSyncState: () => undefined,
+      replyPermission: () => undefined,
+      replyQuestion: () => undefined,
+      syncMcpStatus: () => undefined,
+      syncLspStatus: () => undefined,
+      syncDebugEngine: () => undefined,
+      bootstrap: () => undefined,
+      onWarn: () => undefined,
+      maxSessionMessages: 100,
+      onHandlerError: () => undefined,
+      dispatch(input) {
+        if (input.event.type === "message.part.delta") {
+          const props = (input.event as { properties?: { delta?: string } }).properties
+          dispatched.push(`delta:${props?.delta ?? ""}`)
+        } else {
+          dispatched.push(input.event.type)
+        }
+        return true
+      },
+    })
+
+    listener?.({
+      details: {
+        type: "message.part.delta",
+        properties: { sessionID: "s1", messageID: "m1", partID: "p1", field: "text", delta: "Hel" },
+      },
+    })
+    listener?.({
+      details: {
+        type: "message.part.delta",
+        properties: { sessionID: "s1", messageID: "m1", partID: "p1", field: "text", delta: "lo" },
+      },
+    })
+    // Non-delta flushes the pending buffer immediately.
+    listener?.({ details: { type: "session.status", properties: { sessionID: "s1", status: { type: "busy" } } } })
+
+    expect(dispatched).toEqual(["delta:Hello", "session.status"])
   })
 
   test("forwards the latest auto-reply opt-in so Super-Long runs unsupervised", () => {

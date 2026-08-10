@@ -484,6 +484,23 @@ describe("session.prompt helpers", () => {
     })
   })
 
+  test("DNS/network consecutive errors with unfinished todos are recoverable (#380)", () => {
+    const decision = consecutiveErrorDecision({
+      consecutiveErrors: 3,
+      maxConsecutiveErrors: 3,
+      step: 16,
+      errorMessage: "Cannot connect to API: getaddrinfo ENOTFOUND api.z.ai",
+      pendingTodoCount: 5,
+    })
+    expect(decision.action).toBe("stop")
+    if (decision.action !== "stop") throw new Error("expected stop")
+    expect(decision.message).toContain("retryable provider DNS/network failure")
+    expect(decision.message).toContain("ENOTFOUND")
+    expect(decision.message).toContain("5 unfinished todo")
+    expect(decision.message).toContain("paused as recoverable")
+    expect(decision.message).toContain("switch provider")
+  })
+
   test("stops the prompt loop when consecutive error limits are non-comparable", () => {
     expect(
       consecutiveErrorDecision({

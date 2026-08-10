@@ -473,7 +473,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
 
   const isEntryDisabled = React.useCallback(
     (entry: ModelPickerEntry | undefined) => {
-      return disabled || Boolean(entry && getProviderModelDisabledReason(entry.model))
+      return disabled || Boolean(entry && getProviderModelDisabledReason(entry.model, entry.providerID))
     },
     [disabled],
   )
@@ -559,7 +559,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
     const count = selectionCount?.(entry) ?? 0
     const isSelected = selectedModel?.providerID === entry.providerID && selectedModel.modelID === entry.modelID
     const favorite = isFavorite?.(entry) ?? false
-    const disabledReason = getProviderModelDisabledReason(entry.model)
+    const disabledReason = getProviderModelDisabledReason(entry.model, entry.providerID)
     const rowDisabled = disabled || Boolean(disabledReason)
 
     const handleMouseActivity = (event: React.MouseEvent) => {
@@ -797,7 +797,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
                           <SortableFavoriteModelRow
                             key={`fav-sortable-${entry.providerID}-${entry.modelID}`}
                             id={`${entry.providerID}:${entry.modelID}`}
-                            disabled={disabled || Boolean(getProviderModelDisabledReason(entry.model))}
+                            disabled={disabled || Boolean(getProviderModelDisabledReason(entry.model, entry.providerID))}
                           >
                             {(dragHandleProps) => renderRow(entry, "fav", true, rowIndex, dragHandleProps)}
                           </SortableFavoriteModelRow>

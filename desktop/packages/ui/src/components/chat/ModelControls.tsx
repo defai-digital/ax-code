@@ -596,7 +596,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
       if (!modelExists) {
         return "model-missing"
       }
-      if (!isProviderModelSelectable(modelExists)) {
+      if (!isProviderModelSelectable(modelExists, providerId)) {
         return "model-missing"
       }
 

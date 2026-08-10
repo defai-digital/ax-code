@@ -18,6 +18,13 @@ describe("autonomous continuation prompt builders", () => {
     expect(text).toContain("goal auto-continuation 1")
   })
 
+  test("builds goal-complete force-text guidance (#381)", () => {
+    const text = AutonomousContinuationPrompt.goalCompleteForceText()
+    expect(text).toContain("marked complete")
+    expect(text).toContain("Tools are disabled")
+    expect(text).toContain("final summary")
+  })
+
   test("builds goal budget-limit wrap-up guidance", () => {
     const text = AutonomousContinuationPrompt.goalBudgetLimit({
       objective: "finish the migration",

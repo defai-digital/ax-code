@@ -33,18 +33,50 @@ export namespace EnsembleShared {
     requireDistinctProviders: boolean
   }
 
-  /** List connected providers that have at least one selectable non-embedding model. */
-  export async function snapshotSelectableProviders(): Promise<EnsemblePreflight.ProviderSnapshot> {
+  export type ProviderExclusion = {
+    providerID: string
+    reason: string
+  }
+
+  export type SelectableProviderSnapshot = EnsemblePreflight.ProviderSnapshot & {
+    excluded: ProviderExclusion[]
+  }
+
+  /**
+   * List connected providers that have at least one selectable non-embedding
+   * model. Also returns excluded providers with reasons so arena/council can
+   * explain "fewer than 2" instead of silently looking empty (#377).
+   */
+  export async function snapshotSelectableProviders(): Promise<SelectableProviderSnapshot> {
     await Provider.ready()
     const providers = await Provider.list()
     const ids: string[] = []
+    const excluded: ProviderExclusion[] = []
     for (const provider of Object.values(providers)) {
-      const models = Object.values(provider.models).filter((m) => modelSelectableForProvider(provider.id, m))
-      if (models.length === 0) continue
-      if (models.every((m) => String(m.id).toLowerCase().includes("embed"))) continue
-      ids.push(String(provider.id))
+      const providerID = String(provider.id)
+      const allModels = Object.values(provider.models)
+      if (allModels.length === 0) {
+        excluded.push({
+          providerID,
+          reason: "no models discovered yet (provider may still be probing, or has no configured models)",
+        })
+        continue
+      }
+      const selectable = allModels.filter((m) => modelSelectableForProvider(provider.id, m))
+      if (selectable.length === 0) {
+        excluded.push({
+          providerID,
+          reason: "models present but none selectable (tool-call, memory, or text-output requirements)",
+        })
+        continue
+      }
+      if (selectable.every((m) => String(m.id).toLowerCase().includes("embed"))) {
+        excluded.push({ providerID, reason: "only embedding models available" })
+        continue
+      }
+      ids.push(providerID)
     }
-    return { count: ids.length, ids: ids.sort() }
+    return { count: ids.length, ids: ids.sort(), excluded: excluded.sort((a, b) => a.providerID.localeCompare(b.providerID)) }
   }
 
   /**

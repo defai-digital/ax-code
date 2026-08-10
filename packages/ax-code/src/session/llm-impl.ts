@@ -394,7 +394,7 @@ export namespace LLM {
     // chunk, no error, no finish. The bare `for await` over fullStream then
     // waits forever and the turn hangs until the user aborts. Abort the
     // request ourselves when no chunk arrives within the idle window.
-    const idleTimeoutMs = streamIdleTimeoutMs()
+    const idleTimeoutMs = streamIdleTimeoutMs(input.model.providerID)
     const idleAbort = new AbortController()
     const streamAbort = input.abort ? AbortSignal.any([input.abort, idleAbort.signal]) : idleAbort.signal
     let output: StreamOutput
@@ -599,13 +599,33 @@ export namespace LLM {
   // of an indefinite hang. Override with AX_CODE_STREAM_IDLE_TIMEOUT_MS
   // (0 disables the watchdog).
   const STREAM_IDLE_TIMEOUT_MS = 300_000
+  // CLI providers (qoder-cli, claude-code, …) often start long-running local
+  // commands (dev servers) and go quiet on the model stream while the child
+  // is still healthy. Use a longer default idle window so live-runs are not
+  // aborted as "stalled" mid-server-start (#382). Env override still wins.
+  const CLI_STREAM_IDLE_TIMEOUT_MS = 900_000
 
-  export function streamIdleTimeoutMs(): number {
+  export function isCliProviderID(providerID: string | undefined): boolean {
+    if (!providerID) return false
+    return (
+      providerID.endsWith("-cli") ||
+      providerID === "claude-code" ||
+      providerID === "codex-cli" ||
+      providerID === "gemini-cli" ||
+      providerID === "qoder-cli" ||
+      providerID === "kimi-cli" ||
+      providerID === "antigravity-cli" ||
+      providerID === "grok-build-cli"
+    )
+  }
+
+  export function streamIdleTimeoutMs(providerID?: string): number {
     const raw = process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
     if (raw !== undefined && raw !== "") {
       const parsed = Number(raw)
       if (Number.isFinite(parsed) && parsed >= 0) return parsed
     }
+    if (isCliProviderID(providerID)) return CLI_STREAM_IDLE_TIMEOUT_MS
     return STREAM_IDLE_TIMEOUT_MS
   }
 

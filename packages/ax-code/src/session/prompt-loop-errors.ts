@@ -9,6 +9,7 @@ import {
   providerFallbackSwitchState,
 } from "./prompt-loop-decisions"
 import type { SessionID } from "./schema"
+import { Todo } from "./todo"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -177,10 +178,19 @@ export async function handlePromptLoopError(
     sessionID: input.sessionID,
     error: input.error,
   })
+  let pendingTodoCount = 0
+  try {
+    pendingTodoCount = Todo.active(input.sessionID).length
+  } catch {
+    // Instance/DB may be unavailable in isolated unit tests; guidance still
+    // works with zero pending todos.
+  }
   const errorDecision = consecutiveErrorDecision({
     consecutiveErrors: input.consecutiveErrors,
     maxConsecutiveErrors: MAX_CONSECUTIVE_ERRORS,
     step: input.step,
+    errorMessage: terminalProviderErrorMessage(input.error),
+    pendingTodoCount,
   })
   if (errorDecision.action === "stop") {
     ;(deps.warn ?? log.warn)("too many consecutive errors, stopping", {
@@ -189,6 +199,7 @@ export async function handlePromptLoopError(
       errorCode: "MAX_CONSECUTIVE_ERRORS",
       consecutiveErrors: input.consecutiveErrors,
       sessionID: input.sessionID,
+      pendingTodoCount,
     })
     ;(deps.publishError ?? Session.publishError)({
       sessionID: input.sessionID,

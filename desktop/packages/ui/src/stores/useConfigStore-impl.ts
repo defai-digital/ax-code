@@ -545,7 +545,7 @@ const resolveSettingsDefaultSelection = (
   if (!parsed) return null
   const settingsProvider = providers.find((p) => p.id === parsed.providerId)
   const model = settingsProvider?.models.find((m) => m.id === parsed.modelId)
-  if (!model || !isProviderModelSelectable(model)) return null
+  if (!model || !isProviderModelSelectable(model, parsed.providerId)) return null
   const currentVariant =
     settingsDefaultVariant &&
     (model as { variants?: Record<string, unknown> } | undefined)?.variants?.[settingsDefaultVariant]
@@ -577,7 +577,7 @@ const resolveFirstSelectableSelection = (
       : providers
 
   for (const provider of orderedProviders) {
-    const model = provider.models.find((item) => isProviderModelSelectable(item))
+    const model = provider.models.find((item) => isProviderModelSelectable(item, provider.id))
     if (model?.id) {
       return {
         currentProviderId: provider.id,
@@ -945,7 +945,7 @@ export const useConfigStore = create<ConfigStore>()(
             return
           }
 
-          const firstModel = provider.models.find((model) => isProviderModelSelectable(model))
+          const firstModel = provider.models.find((model) => isProviderModelSelectable(model, providerId))
           const newModelId = firstModel?.id || ""
           const newModelVariants = (firstModel as { variants?: Record<string, unknown> } | undefined)?.variants
 
@@ -997,7 +997,11 @@ export const useConfigStore = create<ConfigStore>()(
               ? state.providers.find((item) => item.id === state.currentProviderId)
               : undefined
             const model = modelId && provider ? provider.models.find((item) => item.id === modelId) : undefined
-            if (modelId && state.currentProviderId && (!model || !isProviderModelSelectable(model))) {
+            if (
+              modelId &&
+              state.currentProviderId &&
+              (!model || !isProviderModelSelectable(model, state.currentProviderId))
+            ) {
               return state
             }
 
@@ -1315,7 +1319,7 @@ export const useConfigStore = create<ConfigStore>()(
 
                 const modelIsSelectable = (providerId: string, modelId: string): boolean => {
                   const model = findModel(providerId, modelId)
-                  return Boolean(model && isProviderModelSelectable(model))
+                  return Boolean(model && isProviderModelSelectable(model, providerId))
                 }
 
                 // --- Agent Selection ---
@@ -1351,7 +1355,7 @@ export const useConfigStore = create<ConfigStore>()(
                 if (openChamberDefaults.defaultModel) {
                   const parsed = parseModelString(openChamberDefaults.defaultModel)
                   const defaultModel = parsed ? findModel(parsed.providerId, parsed.modelId) : undefined
-                  if (parsed && defaultModel && isProviderModelSelectable(defaultModel)) {
+                  if (parsed && defaultModel && isProviderModelSelectable(defaultModel, parsed.providerId)) {
                     resolvedProviderId = parsed.providerId
                     resolvedModelId = parsed.modelId
 
@@ -1611,7 +1615,7 @@ export const useConfigStore = create<ConfigStore>()(
               const agentProvider = providers.find((provider) => provider.id === providerID)
               const agentModel = agentProvider?.models.find((model) => model.id === modelID)
 
-              if (agentModel && isProviderModelSelectable(agentModel)) {
+              if (agentModel && isProviderModelSelectable(agentModel, providerID)) {
                 applyResolvedModelSelection(providerID, modelID, undefined)
                 return
               }
@@ -1650,7 +1654,7 @@ export const useConfigStore = create<ConfigStore>()(
               if (parsed) {
                 const settingsProvider = providers.find((p) => p.id === parsed.providerId)
                 const settingsModel = settingsProvider?.models.find((m) => m.id === parsed.modelId)
-                if (settingsModel && isProviderModelSelectable(settingsModel)) {
+                if (settingsModel && isProviderModelSelectable(settingsModel, parsed.providerId)) {
                   let nextVariant: string | undefined
                   if (settingsDefaultVariant) {
                     const variants = (settingsModel as { variants?: Record<string, unknown> } | undefined)?.variants

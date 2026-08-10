@@ -7,6 +7,7 @@ export namespace EnsemblePreflight {
   export type ProviderSnapshot = {
     count: number
     ids: string[]
+    excluded?: Array<{ providerID: string; reason: string }>
   }
 
   export function formatProviderLine(providers: ProviderSnapshot): string {
@@ -14,6 +15,14 @@ export namespace EnsemblePreflight {
     const shown = providers.ids.slice(0, 8).join(", ")
     const more = providers.ids.length > 8 ? `, +${providers.ids.length - 8} more` : ""
     return `Connected coding providers: **${providers.count}** (${shown}${more}).`
+  }
+
+  export function formatProviderExclusions(providers: ProviderSnapshot): string {
+    const excluded = providers.excluded ?? []
+    if (excluded.length === 0) return ""
+    const lines = excluded.slice(0, 12).map((item) => `- \`${item.providerID}\`: ${item.reason}`)
+    const more = excluded.length > 12 ? `\n- …and ${excluded.length - 12} more` : ""
+    return ["Providers present but not eligible for arena/council:", ...lines].join("\n") + more
   }
 
   export function arenaDisabledMessage(input: {
@@ -57,16 +66,23 @@ export namespace EnsemblePreflight {
   }
 
   export function arenaInsufficientProvidersMessage(providers: ProviderSnapshot): string {
+    const exclusions = formatProviderExclusions(providers)
     return [
       "# Arena: need ≥2 providers",
       "",
       formatProviderLine(providers),
-      "",
-      "Connect at least two coding providers (different families preferred), then re-run.",
-      "Examples: hosted API + CLI provider, or two API providers via `/connect`.",
+      exclusions ? `\n${exclusions}\n` : "",
+      "Arena requires at least **two** eligible coding providers with selectable models.",
+      "Connect another eligible provider via `/connect` or `ax-code providers login`, then re-run arena.",
+      "Examples: hosted API + CLI provider, or two API providers.",
       "",
       "Pass `providers: [{ providerID, modelID? }, ...]` to pick specific contestants once connected.",
-    ].join("\n")
+      "",
+      "**Do not continue as a single-provider implementation.** Arena did not run multi-contestant selection.",
+      "Stop and tell the user which providers were eligible vs excluded, and how to connect another.",
+    ]
+      .filter((line) => line !== undefined)
+      .join("\n")
   }
 
   export function councilDisabledMessage(): string {
