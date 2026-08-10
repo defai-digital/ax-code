@@ -463,6 +463,33 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       options: {},
     }
   },
+  // Official DeepSeek cloud API — OpenAI-compatible (OpenCode: npm
+  // @ai-sdk/openai-compatible + baseURL https://api.deepseek.com[/v1]).
+  // Catalog already defines models + DEEPSEEK_API_KEY; pin baseURL so login
+  // works without a user-authored provider block.
+  deepseek: async () => ({
+    autoload: false,
+    options: {
+      baseURL: "https://api.deepseek.com",
+    },
+  }),
+  // Meta Model API (Muse Spark) — OpenCode recommends @ai-sdk/openai against
+  // https://api.meta.ai/v1 so the Responses surface preserves encrypted
+  // reasoning across tool turns. Accept both META_MODEL_API_KEY (models.dev)
+  // and MODEL_API_KEY (Meta docs) via the catalog env list + process env merge.
+  meta: async () => ({
+    autoload: false,
+    async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
+      // Prefer Responses when the OpenAI SDK exposes it (matches OpenCode /
+      // Meta Muse Spark guidance). Fall back to chat if unavailable.
+      if (typeof sdk.responses === "function") return sdk.responses(modelID)
+      if (typeof sdk.chat === "function") return sdk.chat(modelID)
+      return sdk.languageModel(modelID)
+    },
+    options: {
+      baseURL: "https://api.meta.ai/v1",
+    },
+  }),
   ollama: ollamaCompatibleLoader("ollama", "OLLAMA_HOST", "http://localhost:11434"),
   "ax-studio": openAICompatibleLoader("ax-studio", "AX_STUDIO_HOST", "http://localhost:18080"),
   "ax-engine": axEngineLoader(),

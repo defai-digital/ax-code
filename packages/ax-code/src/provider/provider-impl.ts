@@ -24,6 +24,7 @@ import { isNonEmptyRecord, recordCount } from "@/util/record"
 
 // Direct imports for bundled providers
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
+import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { createXai } from "@ai-sdk/xai"
 import { ProviderTransform } from "./transform"
@@ -280,6 +281,10 @@ export namespace Provider {
 
   const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
     "@ai-sdk/google": createGoogleGenerativeAI,
+    // Meta Muse Spark (and other Responses-API OpenAI-compatible hosts) use
+    // @ai-sdk/openai so encrypted reasoning can carry across agent turns —
+    // same adapter OpenCode documents for Meta Model API.
+    "@ai-sdk/openai": createOpenAI,
     "@ai-sdk/openai-compatible": createOpenAICompatible,
     "@ai-sdk/xai": createXai,
   }
@@ -566,13 +571,21 @@ export namespace Provider {
           const explicitlyEnabled = enabled?.has(providerID) ?? false
           const optInGated =
             OPT_IN_PROVIDERS.has(providerID) && !configured && !providers[providerID] && !explicitlyEnabled
-          if (result && !optInGated && (result.autoload || providers[providerID] || configured)) {
+          // Always register getModel/vars/discover even when the provider is not
+          // yet active (no env key / not configured). Otherwise a later login
+          // that merges credentials into `providers` would miss Responses-API
+          // routing for meta/Muse Spark until a full process restart.
+          if (result && !optInGated) {
             if (result.getModel) modelLoaders[providerID] = result.getModel
             if (result.vars) varsLoaders[providerID] = result.vars
             if (result.discoverModels) discoveryLoaders[providerID] = result.discoverModels
-            const opts = result.options ?? {}
-            const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
-            mergeProvider(providerID, patch)
+            if (result.autoload || providers[providerID] || configured) {
+              const opts = result.options ?? {}
+              const patch: Partial<Info> = providers[providerID]
+                ? { options: opts }
+                : { source: "custom", options: opts }
+              mergeProvider(providerID, patch)
+            }
           }
         } catch (err) {
           initFailures.push({ source: `loader:${id}`, error: err })

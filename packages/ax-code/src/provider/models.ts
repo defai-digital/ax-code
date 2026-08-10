@@ -141,6 +141,43 @@ export namespace ModelsDev {
     }
   }
 
+  /**
+   * Cloud-provider env/API normals that models.dev may lag Meta/DeepSeek docs.
+   * Meta documents MODEL_API_KEY; models.dev ships META_MODEL_API_KEY. Accept both
+   * so login/env discovery matches OpenCode + Meta Muse Spark setup guides.
+   */
+  function withCloudApiKeyAliases(input: Record<string, Provider>): Record<string, Provider> {
+    const out = { ...input }
+    const meta = out["meta"]
+    if (meta) {
+      const env = new Set(meta.env ?? [])
+      env.add("META_MODEL_API_KEY")
+      env.add("MODEL_API_KEY")
+      out["meta"] = {
+        ...meta,
+        name: meta.name || "Meta Model API",
+        npm: meta.npm || "@ai-sdk/openai",
+        api: meta.api || "https://api.meta.ai/v1",
+        env: Array.from(env),
+      }
+    }
+    const deepseek = out["deepseek"]
+    if (deepseek) {
+      const env = new Set(deepseek.env ?? [])
+      env.add("DEEPSEEK_API_KEY")
+      out["deepseek"] = {
+        ...deepseek,
+        name: deepseek.name || "DeepSeek",
+        npm: deepseek.npm || "@ai-sdk/openai-compatible",
+        // OpenAI-compatible hosts accept base without trailing /v1; DeepSeek docs
+        // use https://api.deepseek.com and OpenCode often pins /v1.
+        api: deepseek.api || "https://api.deepseek.com",
+        env: Array.from(env),
+      }
+    }
+    return out
+  }
+
   function parse(input: unknown, source: string) {
     const result = DataSchema.safeParse(input)
     if (!result.success) {
@@ -224,7 +261,9 @@ export namespace ModelsDev {
 
   export async function get() {
     const data = await Data()
-    if (sanitized?.source !== data) sanitized = { source: data, result: sanitize(withBuiltIns(data)) }
+    if (sanitized?.source !== data) {
+      sanitized = { source: data, result: sanitize(withCloudApiKeyAliases(withBuiltIns(data))) }
+    }
     return sanitized.result
   }
 }

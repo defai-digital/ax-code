@@ -447,9 +447,30 @@ export namespace ProviderTransform {
       }
 
       case "@ai-sdk/openai": {
-        // First-party OpenAI only, same rationale as Anthropic above.
-        if (model.providerID !== "openai") return {}
-        return Object.fromEntries(WIDELY_SUPPORTED_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]))
+        // First-party OpenAI and Meta Model API (Muse Spark). Meta's Responses
+        // surface accepts the same reasoningEffort levels as OpenAI; OpenCode
+        // configures Muse with reasoningEffort high/xhigh for agentic coding.
+        if (model.providerID === "openai") {
+          return Object.fromEntries(WIDELY_SUPPORTED_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]))
+        }
+        if (model.providerID === "meta" || hasFamily(model, "muse")) {
+          const efforts = ["minimal", "low", "medium", "high", "xhigh"] as const
+          return Object.fromEntries(
+            efforts.map((effort) => [
+              effort,
+              {
+                reasoningEffort: effort,
+                // Encrypted reasoning must be requested so multi-turn tool
+                // loops retain Muse Spark's prior chain-of-thought (Meta docs /
+                // OpenCode Muse setup). Without include, each turn restarts
+                // reasoning from scratch.
+                reasoningSummary: "auto",
+                include: ["reasoning.encrypted_content"],
+              },
+            ]),
+          )
+        }
+        return {}
       }
     }
     return {}
