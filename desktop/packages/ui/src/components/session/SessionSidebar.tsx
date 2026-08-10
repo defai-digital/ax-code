@@ -38,6 +38,7 @@ import { SidebarHeader } from "./sidebar/SidebarHeader"
 import { SidebarActivitySections } from "./sidebar/SidebarActivitySections"
 import { SidebarFooter } from "./sidebar/SidebarFooter"
 import { SidebarProjectsList } from "./sidebar/SidebarProjectsList"
+import { ProjectsHome } from "@/components/projects/ProjectsHome"
 import { SessionNodeItem } from "./sidebar/SessionNodeItem"
 import { useUpdateStore } from "@/stores/useUpdateStore"
 import { useShallow } from "zustand/react/shallow"
@@ -243,8 +244,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const activeProjectId = useProjectsStore((state) => state.activeProjectId)
   const removeProject = useProjectsStore((state) => state.removeProject)
   const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly)
+  const setProjectPinned = useProjectsStore((state) => state.setProjectPinned)
   const updateProjectMeta = useProjectsStore((state) => state.updateProjectMeta)
   const reorderProjects = useProjectsStore((state) => state.reorderProjects)
+  const reorderProjectById = useProjectsStore((state) => state.reorderProjectById)
 
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab)
   const openContextPanelTab = useUIStore((state) => state.openContextPanelTab)
@@ -492,12 +495,17 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     return map
   }, [sortedSessions, pinnedSessionIds])
 
-  const emptyState = (
-    <div className="py-6 text-center text-muted-foreground">
-      <p className="typography-ui-label font-semibold">{t("sessions.sidebar.empty.noSessions.title")}</p>
-      <p className="typography-meta mt-1">{t("sessions.sidebar.empty.noSessions.description")}</p>
-    </div>
-  )
+  const emptyState =
+    projects.length === 0 ? (
+      <div className="px-1 py-3">
+        <ProjectsHome compact />
+      </div>
+    ) : (
+      <div className="py-6 text-center text-muted-foreground">
+        <p className="typography-ui-label font-semibold">{t("sessions.sidebar.empty.noSessions.title")}</p>
+        <p className="typography-meta mt-1">{t("sessions.sidebar.empty.noSessions.description")}</p>
+      </div>
+    )
 
   const editingProject = React.useMemo(
     () => projects.find((project) => project.id === editingProjectDialogId) ?? null,
@@ -724,9 +732,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   )
 
   const normalizedProjects = React.useMemo(() => {
-    return projects
-      .map((project) => ({
+    const mapped = projects
+      .map((project, orderIndex) => ({
         ...project,
+        orderIndex,
         normalizedPath: normalizePath(project.path),
       }))
       .filter((project) => Boolean(project.normalizedPath)) as Array<{
@@ -738,7 +747,19 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       color?: string
       iconImage?: { mime: string; updatedAt: number; source: "custom" | "auto" }
       iconBackground?: string
+      pinned?: boolean
+      lastOpenedAt?: number
+      orderIndex: number
     }>
+
+    // Pinned first, then preserve store/manual order within each group so
+    // drag-reorder indices stay consistent with the projects array.
+    return mapped.sort((a, b) => {
+      const aPinned = a.pinned === true
+      const bPinned = b.pinned === true
+      if (aPinned !== bPinned) return aPinned ? -1 : 1
+      return a.orderIndex - b.orderIndex
+    })
   }, [projects])
 
   const normalizedProjectPaths = React.useMemo(
@@ -1538,8 +1559,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         openNewWorktreeDialog={openNewWorktreeDialog}
         openProjectEditDialog={setEditingProjectDialogId}
         removeProject={removeProject}
+        setProjectPinned={setProjectPinned}
         projectHeaderSentinelRefs={projectHeaderSentinelRefs}
         reorderProjects={reorderProjects}
+        reorderProjectById={reorderProjectById}
         getOrderedGroups={getOrderedGroups}
         setGroupOrderByProject={setGroupOrderByProject}
         openSidebarMenuKey={openSidebarMenuKey}

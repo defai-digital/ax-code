@@ -17,10 +17,12 @@ export interface SidebarSortableProjectItemProps {
   /** Draw a hairline top divider + margin to separate this project from the one above. */
   showTopDivider?: boolean
   projectDescription: string
+  projectLastUsedLabel?: string | null
   projectIcon?: string
   projectColor?: string
   projectIconImage?: { mime: string; updatedAt: number; source: "custom" | "auto" }
   projectIconBackground?: string
+  isPinned?: boolean
   isCollapsed: boolean
   isActiveProject: boolean
   isRepo: boolean
@@ -32,6 +34,7 @@ export interface SidebarSortableProjectItemProps {
   onNewSession: () => void
   onNewWorktreeSession?: () => void
   onRenameStart: () => void
+  onTogglePin?: () => void
   onClose: () => void
   sentinelRef: (el: HTMLDivElement | null) => void
   children?: React.ReactNode
@@ -52,10 +55,12 @@ export const SortableProjectItem: React.FC<SidebarSortableProjectItemProps> = ({
   isHomeProject,
   showTopDivider,
   projectDescription,
+  projectLastUsedLabel,
   projectIcon,
   projectColor,
   projectIconImage,
   projectIconBackground,
+  isPinned = false,
   isCollapsed,
   isActiveProject,
   isRepo,
@@ -67,6 +72,7 @@ export const SortableProjectItem: React.FC<SidebarSortableProjectItemProps> = ({
   onNewSession,
   onNewWorktreeSession,
   onRenameStart,
+  onTogglePin,
   onClose,
   sentinelRef,
   children,
@@ -242,10 +248,18 @@ export const SortableProjectItem: React.FC<SidebarSortableProjectItemProps> = ({
                     >
                       {projectLabel}
                     </span>
+                    {isPinned ? (
+                      <Icon name="pushpin-2-fill" className="h-3 w-3 shrink-0 text-primary/80" aria-hidden />
+                    ) : null}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>
-                  {projectDescription}
+                  <div className="flex flex-col gap-0.5">
+                    <span>{projectDescription}</span>
+                    {projectLastUsedLabel ? (
+                      <span className="text-muted-foreground">{projectLastUsedLabel}</span>
+                    ) : null}
+                  </div>
                 </TooltipContent>
               </Tooltip>
 
@@ -312,6 +326,17 @@ export const SortableProjectItem: React.FC<SidebarSortableProjectItemProps> = ({
                       <Icon name="pencil-ai" className="mr-1.5 h-4 w-4" />
                       {t("sessions.sidebar.session.menu.rename")}
                     </DropdownMenuItem>
+                    {onTogglePin ? (
+                      <DropdownMenuItem onClick={onTogglePin}>
+                        <Icon
+                          name={isPinned ? "pushpin-2-fill" : "pushpin-2"}
+                          className="mr-1.5 h-4 w-4"
+                        />
+                        {isPinned
+                          ? t("sessions.sidebar.project.actions.unpin")
+                          : t("sessions.sidebar.project.actions.pin")}
+                      </DropdownMenuItem>
+                    ) : null}
                     <DropdownMenuItem onClick={onClose} className="text-destructive focus:text-destructive">
                       <Icon name="close" className="mr-1.5 h-4 w-4" />
                       {t("sessions.sidebar.project.actions.closeProject")}

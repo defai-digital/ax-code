@@ -7,6 +7,7 @@ import { registerSessionFoldersRoutes } from "../session-folders/routes.js"
 import { registerConfigEntityRoutes } from "./config-entity-routes.js"
 import { registerSettingsUtilityRoutes } from "./core-routes.js"
 import { registerProjectIconRoutes } from "./project-icon-routes.js"
+import { registerDiscoverExternalProjectRoutes } from "../projects/discover-external.js"
 import { registerScheduledTaskRoutes } from "../scheduled-tasks/routes.js"
 import { registerSkillRoutes } from "./skill-routes.js"
 import { registerPluginRoutes } from "./plugin-routes.js"
@@ -105,6 +106,14 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       createFsSearchRuntime,
       spawn,
       resolveGitBinaryForSpawn,
+    })
+
+    registerDiscoverExternalProjectRoutes(app, {
+      os,
+      fsPromises,
+      path,
+      readSettingsFromDiskMigrated,
+      sanitizeProjects,
     })
 
     registerScheduledTaskRoutes(app, {

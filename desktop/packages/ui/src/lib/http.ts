@@ -158,6 +158,7 @@ export const API_ENDPOINTS = {
     scheduledTaskRun: `${API_PATHS.projects}/:projectId/scheduled-tasks/:taskId/run`,
     icon: `${API_PATHS.projects}/:projectId/icon`,
     iconDiscover: `${API_PATHS.projects}/:projectId/icon/discover`,
+    discoverExternal: `${API_PATHS.projects}/discover-external`,
     base: API_PATHS.projects,
   },
   session: {

@@ -42,9 +42,15 @@ interface ProjectsStore {
   activeProjectId: string | null
 
   addProject: (path: string, options?: { label?: string; id?: string }) => ProjectEntry | null
+  /** Add many project roots without flipping active project for each. Returns newly added entries. */
+  addProjects: (
+    paths: string[],
+    options?: { labels?: Record<string, string>; activateFirst?: boolean },
+  ) => ProjectEntry[]
   removeProject: (id: string) => void
   setActiveProject: (id: string) => void
   setActiveProjectIdOnly: (id: string) => void
+  setProjectPinned: (id: string, pinned: boolean) => void
   renameProject: (id: string, label: string) => void
   updateProjectMeta: (
     id: string,
@@ -57,6 +63,8 @@ interface ProjectsStore {
     options?: { force?: boolean },
   ) => Promise<{ ok: boolean; skipped?: boolean; reason?: string; error?: string }>
   reorderProjects: (fromIndex: number, toIndex: number) => void
+  /** Reorder by project id so UI sort order can differ safely from the store array. */
+  reorderProjectById: (activeId: string, overId: string) => void
   validateProjectPath: (path: string) => ProjectPathValidationResult
   synchronizeFromSettings: (settings: DesktopSettings) => void
   getActiveProject: () => ProjectEntry | null
@@ -229,6 +237,9 @@ const sanitizeProjects = (value: unknown): ProjectEntry[] => {
     ) {
       project.lastOpenedAt = candidate.lastOpenedAt
     }
+    if (candidate.pinned === true) {
+      project.pinned = true
+    }
     if (typeof candidate.sidebarCollapsed === "boolean") {
       project.sidebarCollapsed = candidate.sidebarCollapsed
     }
@@ -356,6 +367,74 @@ export const useProjectsStore = create<ProjectsStore>()(
         return entry
       },
 
+      addProjects: (paths: string[], options) => {
+        const { validateProjectPath } = get()
+        const labels = options?.labels ?? {}
+        const now = Date.now()
+        let nextProjects = [...get().projects]
+        const added: ProjectEntry[] = []
+
+        for (const rawPath of paths) {
+          const validation = validateProjectPath(rawPath)
+          if (!validation.ok || !validation.normalizedPath) {
+            continue
+          }
+          const normalizedPath = validation.normalizedPath
+          const normalizedPathKey = getProjectPathIdentityKey(normalizedPath)
+          const existing = nextProjects.find((project) => {
+            const projectPathKey = getProjectPathIdentityKey(project.path)
+            return projectPathKey && normalizedPathKey
+              ? projectPathKey === normalizedPathKey
+              : project.path === normalizedPath
+          })
+          if (existing) {
+            continue
+          }
+
+          const id = createProjectIdFromPath(normalizedPath)
+          if (!id) {
+            continue
+          }
+
+          const labelFromMap = labels[normalizedPath]?.trim() || labels[rawPath]?.trim()
+          const entry: ProjectEntry = {
+            id,
+            path: normalizedPath,
+            label: labelFromMap || deriveProjectLabel(normalizedPath),
+            color: pickAutoColor(nextProjects),
+            addedAt: now,
+            lastOpenedAt: now,
+          }
+          nextProjects = [...nextProjects, entry]
+          added.push(entry)
+        }
+
+        if (added.length === 0) {
+          return []
+        }
+
+        const activateFirst = options?.activateFirst !== false
+        const nextActiveId =
+          activateFirst && !get().activeProjectId ? (added[0]?.id ?? get().activeProjectId) : get().activeProjectId
+
+        set({ projects: nextProjects, activeProjectId: nextActiveId })
+        persistProjects(nextProjects, nextActiveId)
+
+        if (activateFirst && nextActiveId) {
+          const active = nextProjects.find((project) => project.id === nextActiveId)
+          if (active) {
+            axCodeClient.setDirectory(active.path)
+            useDirectoryStore.getState().setDirectory(active.path, { showOverlay: false })
+          }
+        }
+
+        for (const entry of added) {
+          void get().discoverProjectIcon(entry.id)
+        }
+
+        return added
+      },
+
       removeProject: (id: string) => {
         const current = get()
         const project = current.projects.find((p) => p.id === id)
@@ -429,6 +508,40 @@ export const useProjectsStore = create<ProjectsStore>()(
 
         set({ projects: nextProjects, activeProjectId: id })
         persistProjects(nextProjects, id)
+      },
+
+      setProjectPinned: (id: string, pinned: boolean) => {
+        const { projects, activeProjectId } = get()
+        const index = projects.findIndex((project) => project.id === id)
+        if (index < 0) {
+          return
+        }
+
+        const current = projects[index]
+        const alreadyPinned = current.pinned === true
+        if (alreadyPinned === pinned && (!pinned || index === 0)) {
+          return
+        }
+
+        const updated: ProjectEntry = pinned
+          ? { ...current, pinned: true }
+          : (() => {
+              const next = { ...current }
+              delete next.pinned
+              return next
+            })()
+
+        let nextProjects = [...projects]
+        nextProjects[index] = updated
+
+        if (pinned) {
+          // Bubble pinned project to the front so it appears with other pins.
+          nextProjects.splice(index, 1)
+          nextProjects = [updated, ...nextProjects]
+        }
+
+        set({ projects: nextProjects })
+        persistProjects(nextProjects, activeProjectId)
       },
 
       renameProject: (id: string, label: string) => {
@@ -602,6 +715,19 @@ export const useProjectsStore = create<ProjectsStore>()(
 
         set({ projects: nextProjects })
         persistProjects(nextProjects, activeProjectId)
+      },
+
+      reorderProjectById: (activeId: string, overId: string) => {
+        if (!activeId || !overId || activeId === overId) {
+          return
+        }
+        const { projects } = get()
+        const fromIndex = projects.findIndex((project) => project.id === activeId)
+        const toIndex = projects.findIndex((project) => project.id === overId)
+        if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+          return
+        }
+        get().reorderProjects(fromIndex, toIndex)
       },
 
       synchronizeFromSettings: (settings: DesktopSettings) => {

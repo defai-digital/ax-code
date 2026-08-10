@@ -209,6 +209,9 @@ const sanitizeProjects = (value: unknown): DesktopSettings["projects"] | undefin
     ) {
       project.lastOpenedAt = candidate.lastOpenedAt
     }
+    if (candidate.pinned === true) {
+      ;(project as unknown as Record<string, unknown>).pinned = true
+    }
     if (typeof candidate.sidebarCollapsed === "boolean") {
       ;(project as unknown as Record<string, unknown>).sidebarCollapsed = candidate.sidebarCollapsed
     }

@@ -36,6 +36,8 @@ export type ProjectItem = {
   color?: string
   iconImage?: { mime: string; updatedAt: number; source: "custom" | "auto" }
   iconBackground?: string
+  pinned?: boolean
+  lastOpenedAt?: number
 }
 
 export type WorktreeMeta = { path: string }

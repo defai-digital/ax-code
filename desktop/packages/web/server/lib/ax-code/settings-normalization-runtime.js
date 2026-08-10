@@ -135,6 +135,7 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
         ...(color ? { color } : {}),
         ...(Number.isFinite(addedAt) && addedAt >= 0 ? { addedAt } : {}),
         ...(Number.isFinite(lastOpenedAt) && lastOpenedAt >= 0 ? { lastOpenedAt } : {}),
+        ...(candidate.pinned === true ? { pinned: true } : {}),
       }
 
       if (candidate.iconImage === null) {

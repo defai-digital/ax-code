@@ -16,6 +16,7 @@ import type { SortableDragHandleProps } from "./sortableItems"
 import { SortableGroupItem, SortableProjectItem } from "./sortableItems"
 import { formatProjectLabel, normalizePath } from "./utils"
 import { useI18n } from "@/lib/i18n"
+import { formatProjectLastUsed } from "@/lib/projectLastUsed"
 import type { MainTab } from "@/stores/useUIStore"
 
 type Props = {
@@ -49,8 +50,10 @@ type Props = {
   openNewWorktreeDialog: () => void
   openProjectEditDialog: (id: string) => void
   removeProject: (id: string) => void
+  setProjectPinned?: (id: string, pinned: boolean) => void
   projectHeaderSentinelRefs: React.MutableRefObject<Map<string, HTMLDivElement | null>>
   reorderProjects: (fromIndex: number, toIndex: number) => void
+  reorderProjectById?: (activeId: string, overId: string) => void
   getOrderedGroups: (projectId: string, groups: SessionGroup[]) => SessionGroup[]
   setGroupOrderByProject: React.Dispatch<React.SetStateAction<Map<string, string[]>>>
   openSidebarMenuKey: string | null
@@ -148,8 +151,14 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
               if (props.isInlineEditing) return
               const { active, over } = event
               if (!over || active.id === over.id) return
-              const oldIndex = props.sectionsForRender.findIndex((section) => section.project.id === active.id)
-              const newIndex = props.sectionsForRender.findIndex((section) => section.project.id === over.id)
+              const activeId = String(active.id)
+              const overId = String(over.id)
+              if (props.reorderProjectById) {
+                props.reorderProjectById(activeId, overId)
+                return
+              }
+              const oldIndex = props.projectSections.findIndex((section) => section.project.id === activeId)
+              const newIndex = props.projectSections.findIndex((section) => section.project.id === overId)
               if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return
               props.reorderProjects(oldIndex, newIndex)
             }}
@@ -170,6 +179,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
                     project.normalizedPath,
                 )
                 const projectDescription = formatPathForDisplay(project.normalizedPath, props.homeDirectory)
+                const projectLastUsedLabel = formatProjectLastUsed(project.lastOpenedAt, t)
                 const isCollapsed = props.collapsedProjects.has(projectKey)
                 const isActiveProject = projectKey === props.activeProjectId
                 const isRepo = props.projectRepoStatus.get(projectKey)
@@ -187,10 +197,12 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
                     isHomeProject={isHomeProject}
                     showTopDivider={index > 0}
                     projectDescription={projectDescription}
+                    projectLastUsedLabel={projectLastUsedLabel}
                     projectIcon={project.icon}
                     projectColor={project.color}
                     projectIconImage={project.iconImage}
                     projectIconBackground={project.iconBackground}
+                    isPinned={project.pinned === true}
                     isCollapsed={isCollapsed}
                     isActiveProject={isActiveProject}
                     isRepo={Boolean(isRepo)}
@@ -210,6 +222,11 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
                       props.openNewWorktreeDialog()
                     }}
                     onRenameStart={() => props.openProjectEditDialog(projectKey)}
+                    onTogglePin={
+                      props.setProjectPinned
+                        ? () => props.setProjectPinned?.(projectKey, project.pinned !== true)
+                        : undefined
+                    }
                     onClose={() => props.removeProject(projectKey)}
                     sentinelRef={(el) => {
                       props.projectHeaderSentinelRefs.current.set(projectKey, el)

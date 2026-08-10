@@ -654,6 +654,8 @@ export interface ProjectEntry {
   color?: string | null
   addedAt?: number
   lastOpenedAt?: number
+  /** When true, project stays near the top of project lists. */
+  pinned?: boolean
   sidebarCollapsed?: boolean
 }
 
