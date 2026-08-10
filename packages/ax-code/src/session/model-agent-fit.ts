@@ -3,10 +3,19 @@
  * and any client that must block unfit local/small-context models before send (#379).
  */
 
-/** Conservative default for the full hosted-agent tool surface + system prompt. */
+/**
+ * Selection-time estimate for the fixed system prompt + tool schemas on the
+ * default build/agent path (matches observed runtime preflight budgets around
+ * ~38.8k; see prompt-loop-compaction FIXED_CONTEXT_BUDGET_EXCEEDED). Rounded up
+ * so borderline local models are blocked before first send (#379).
+ */
 export const DEFAULT_FULL_AGENT_FIXED_TOKENS_ESTIMATE = 40_000
 
-/** Core local/coding tool profile (bash/read/edit/write/skill-focused). */
+/**
+ * Historical core-profile estimate. Not used for selection preflight: even
+ * AX Engine sessions can hit the full-agent fixed budget depending on tool
+ * profile / agent, and underestimating leaves unfit models selectable.
+ */
 export const DEFAULT_CORE_AGENT_FIXED_TOKENS_ESTIMATE = 12_000
 
 export function usableInputTokens(input: {
@@ -47,10 +56,11 @@ export function modelFitsAgentToolSetup(input: {
 }
 
 /**
- * Pick a fixed-token estimate based on provider class. AX Engine local models
- * use the compact core tool profile; everything else assumes the full agent surface.
+ * Fixed-token budget used for selection preflight. Always the full-agent
+ * estimate so Desktop/CLI pickers match the runtime preflight that blocks
+ * unfit models on first send (issue #379: ax-engine Qwen ~14.7k usable vs
+ * ~38.8k fixed). `providerID` is retained for callers/API stability.
  */
-export function fixedTokensEstimateForProvider(providerID: string | undefined): number {
-  if (providerID === "ax-engine") return DEFAULT_CORE_AGENT_FIXED_TOKENS_ESTIMATE
+export function fixedTokensEstimateForProvider(_providerID?: string): number {
   return DEFAULT_FULL_AGENT_FIXED_TOKENS_ESTIMATE
 }

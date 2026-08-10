@@ -27,10 +27,24 @@ describe("provider model availability", () => {
       capabilities: { output: { text: true } },
       limit: { context: 16384, input: 14745, output: 1639 },
     }
-    // Full-agent estimate applies when provider is not ax-engine
     const reason = getProviderModelDisabledReason(small, "openai")
     expect(reason).toContain("cannot fit the current AX Code agent/tool setup")
     expect(isProviderModelSelectable(small, "openai")).toBe(false)
+  })
+
+  test("blocks the reported AX Engine Qwen3.6 27B Local usable budget (#379)", () => {
+    // Issue evidence: fixed ~38799, usable 14745 on AX Engine local. Selection
+    // must use the full-agent estimate (~40k), not a core-profile underestimate.
+    const model = {
+      name: "Qwen3.6 27B (AX Engine Local)",
+      capabilities: { output: { text: true }, toolcall: true },
+      limit: { context: 16384, input: 14745, output: 1639 },
+    }
+    const reason = getProviderModelDisabledReason(model, "ax-engine")
+    expect(reason).toContain("cannot fit the current AX Code agent/tool setup")
+    expect(reason).toContain("14745")
+    expect(reason).toMatch(/~?40000|40000/)
+    expect(isProviderModelSelectable(model, "ax-engine")).toBe(false)
   })
 
   test("allows large-context models for the full agent surface", () => {
@@ -41,5 +55,16 @@ describe("provider model availability", () => {
     }
     expect(getProviderModelDisabledReason(large, "openai")).toBe("")
     expect(isProviderModelSelectable(large, "openai")).toBe(true)
+    // Sufficient ax-engine context remains selectable.
+    expect(
+      isProviderModelSelectable(
+        {
+          name: "Qwen large",
+          capabilities: { output: { text: true } },
+          limit: { context: 65_536, input: 57_000, output: 8_192 },
+        },
+        "ax-engine",
+      ),
+    ).toBe(true)
   })
 })

@@ -38,8 +38,26 @@ describe("model agent/tool fit (#379)", () => {
     ).toBe(true)
   })
 
-  test("uses core estimate for ax-engine and full for others", () => {
-    expect(fixedTokensEstimateForProvider("ax-engine")).toBe(DEFAULT_CORE_AGENT_FIXED_TOKENS_ESTIMATE)
+  test("uses the full-agent fixed estimate for every provider including ax-engine (#379)", () => {
+    // Selection preflight must not under-estimate ax-engine: runtime still
+    // needs ~38.8k fixed tokens for the default agent/tool setup.
+    expect(fixedTokensEstimateForProvider("ax-engine")).toBe(DEFAULT_FULL_AGENT_FIXED_TOKENS_ESTIMATE)
     expect(fixedTokensEstimateForProvider("openai")).toBe(DEFAULT_FULL_AGENT_FIXED_TOKENS_ESTIMATE)
+    expect(fixedTokensEstimateForProvider(undefined)).toBe(DEFAULT_FULL_AGENT_FIXED_TOKENS_ESTIMATE)
+    // Core constant remains documented but is not used for selection preflight.
+    expect(DEFAULT_CORE_AGENT_FIXED_TOKENS_ESTIMATE).toBeLessThan(DEFAULT_FULL_AGENT_FIXED_TOKENS_ESTIMATE)
+  })
+
+  test("blocks the reported AX Engine Qwen usable budget against the full-agent estimate", () => {
+    const usable = usableInputTokens({ context: 16384, input: 14745, output: 1639 })
+    expect(usable).toBe(14745)
+    const fixed = fixedTokensEstimateForProvider("ax-engine")
+    expect(fixed).toBe(DEFAULT_FULL_AGENT_FIXED_TOKENS_ESTIMATE)
+    const decision = modelFitsAgentToolSetup({
+      usableTokens: usable,
+      fixedTokensEstimate: fixed,
+      modelLabel: "Qwen3.6 27B (AX Engine Local)",
+    })
+    expect(decision.fits).toBe(false)
   })
 })

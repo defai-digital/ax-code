@@ -3,8 +3,8 @@ import type { ProviderModel, ProviderWithModelList } from "@/types/providerModel
 // Mirror packages/ax-code/src/session/model-agent-fit.ts — Desktop cannot
 // import the CLI package tree at runtime, so the pure fit logic is duplicated
 // here with the same thresholds (kept in lockstep by unit tests on both sides).
+// ~40k matches runtime default build/agent fixed budget (~38.8k observed in #379).
 const DEFAULT_FULL_AGENT_FIXED_TOKENS_ESTIMATE = 40_000
-const DEFAULT_CORE_AGENT_FIXED_TOKENS_ESTIMATE = 12_000
 
 export function usableInputTokensFromModelLimit(limit: {
   context?: number
@@ -24,8 +24,8 @@ export function usableInputTokensFromModelLimit(limit: {
   return Math.max(0, Math.floor(context - Math.min(context, output)))
 }
 
-export function fixedTokensEstimateForProvider(providerID: string | undefined): number {
-  if (providerID === "ax-engine") return DEFAULT_CORE_AGENT_FIXED_TOKENS_ESTIMATE
+/** Full-agent fixed budget for every provider, including ax-engine (#379). */
+export function fixedTokensEstimateForProvider(_providerID?: string): number {
   return DEFAULT_FULL_AGENT_FIXED_TOKENS_ESTIMATE
 }
 
