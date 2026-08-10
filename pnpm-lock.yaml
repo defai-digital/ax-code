@@ -104,21 +104,21 @@ overrides:
   serialize-javascript: '>=7.0.5'
   seroval: '>=1.5.3'
   diff@<8.0.3: 8.0.3
-  undici@<6.27.0: 6.27.0
-  undici@>=7.0.0 <7.28.0: 7.28.0
+  undici@<6.28.0: 6.28.0
+  undici@>=7.0.0 <7.29.0: 7.29.0
   tar@<7.5.21: 7.5.21
   '@hono/node-server@<2.0.11': 2.0.11
   hono@>=4.0.0 <4.12.34: 4.12.34
-  postcss@<8.5.18: 8.5.18
+  postcss@<8.5.23: 8.5.23
   fast-xml-parser@<5.7.0: 5.7.0
   protobufjs@<7.6.5: 7.6.5
   '@protobufjs/utf8@<1.1.1': 1.1.1
-  fast-uri@<3.1.4: 3.1.4
+  fast-uri@<3.1.5: 3.1.5
   fast-xml-builder@<1.1.7: 1.1.7
   ws@<8.21.0: 8.21.0
   prismjs@<1.30.0: 1.30.0
-  brace-expansion@<5.0.8: 5.0.8
-  ip-address@<10.1.1: 10.1.1
+  brace-expansion@<5.0.9: 5.0.9
+  ip-address@<10.3.1: 10.3.1
   qs@<6.15.2: 6.15.2
   uuid@<14.0.0: 14.0.0
   tmp@<0.2.7: 0.2.7
@@ -126,13 +126,14 @@ overrides:
   markdown-it@<14.2.0: 14.2.0
   '@opentelemetry/core@<2.8.0': 2.8.0
   form-data@<4.0.6: 4.0.6
-  js-yaml@<4.3.0: 4.3.0
+  js-yaml@<4.3.1: 4.3.1
   '@babel/core@<7.29.6': 7.29.6
   linkify-it@<5.0.2: 5.0.2
   shell-quote@<1.9.0: 1.9.0
   body-parser@>=2.0.0 <2.3.0: 2.3.0
-  dompurify@<3.4.12: 3.4.12
+  dompurify@<3.4.13: 3.4.13
   builder-util-runtime@<9.7.0: 9.7.0
+  nanoid@>=3.0.0 <3.3.17: 3.3.17
 
 patchedDependencies:
   '@msgpack/msgpack@3.1.3':
@@ -141,9 +142,9 @@ patchedDependencies:
   '@standard-community/standard-openapi@0.2.9':
     hash: 4c6248f000365bd4af943a672532d6bdeb179f46e6831d05d4f2f1ecc4d6e439
     path: patches/@standard-community%2Fstandard-openapi@0.2.9.patch
-  brace-expansion@5.0.8:
-    hash: f75e0398710ac218a72ce70c81967df004033ed460ff011ccdac6bd48391f1f9
-    path: patches/brace-expansion@5.0.8.patch
+  brace-expansion@5.0.9:
+    hash: 8eead75514ec705dd3efa6ab18e5e270b503436ec4733c4e6e33cdc75312aa0a
+    path: patches/brace-expansion@5.0.9.patch
   gray-matter@4.0.3:
     hash: 3754dca03e5459f3f551402ecbeee1cd9588f9fde966158da964ae31a723dee7
     path: patches/gray-matter@4.0.3.patch
@@ -368,8 +369,8 @@ importers:
         specifier: ^4.0.0
         version: 4.0.1
       dompurify:
-        specifier: 3.4.12
-        version: 3.4.12
+        specifier: 3.4.13
+        version: 3.4.13
       fuse.js:
         specifier: ^7.1.0
         version: 7.4.2
@@ -469,7 +470,7 @@ importers:
         version: 5.2.0(vite@7.3.5(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
       autoprefixer:
         specifier: ^10.4.21
-        version: 10.5.0(postcss@8.5.18)
+        version: 10.5.0(postcss@8.5.23)
       concurrently:
         specifier: ^9.2.1
         version: 9.2.3
@@ -656,7 +657,7 @@ importers:
         version: 5.2.0(vite@7.3.5(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
       autoprefixer:
         specifier: ^10.4.21
-        version: 10.5.0(postcss@8.5.18)
+        version: 10.5.0(postcss@8.5.23)
       babel-plugin-react-compiler:
         specifier: ^1.0.0
         version: 1.0.0
@@ -5139,7 +5140,7 @@ packages:
     engines: {node: ^10 || ^12 || >=14}
     hasBin: true
     peerDependencies:
-      postcss: 8.5.18
+      postcss: 8.5.23
 
   aws4@1.13.2:
     resolution: {integrity: sha512-lHe62zvbTB5eEABUVi/AwVh0ZKY9rMMDhmm+eeyuuUQbQ3+J+fONVQOZyj+DdrvD4BY33uYniyRJ4UJIaSKAfw==}
@@ -5295,8 +5296,8 @@ packages:
   boundary@2.0.0:
     resolution: {integrity: sha512-rJKn5ooC9u8q13IMCrW0RSp31pxBCHE3y9V/tp3TdWSLf8Em3p6Di4NBpfzbJge9YjjFEsD0RtFEjtvHL5VyEA==}
 
-  brace-expansion@5.0.8:
-    resolution: {integrity: sha512-JZyDyq3D4AUifKTPOB7DELf6XsB3WdPuNxCtob1vFXPsSXhdAiHBWJ/tJ8HAc9aH84BK+5JFZLNkJKx3G9kzQg==}
+  brace-expansion@5.0.9:
+    resolution: {integrity: sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg==}
     engines: {node: 20 || >=22}
 
   braces@3.0.3:
@@ -5850,8 +5851,8 @@ packages:
     resolution: {integrity: sha512-cgwlv/1iFQiFnU96XXgROh8xTeetsnJiDsTc7TYCLFd9+/WNkIqPTxiM/8pSd8VIrhXGTf1Ny1q1hquVqDJB5w==}
     engines: {node: '>= 4'}
 
-  dompurify@3.4.12:
-    resolution: {integrity: sha512-zQvGet8Z2sWbQhCmfFz/T5QWH2oBmjnqK3qvOjaqaNLrLEF912WamU+ohnTp0TCep/MFVHpdJuCZEdFOdTnEFg==}
+  dompurify@3.4.13:
+    resolution: {integrity: sha512-2vmYIoqjze2d+kakP8S/nS5shfsl587kzwEjcGlTdiksUVgFHnFCsLYDVj/JNqJVOQZGSYBTmuycv0PodwmnMQ==}
 
   domutils@3.2.2:
     resolution: {integrity: sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==}
@@ -6301,8 +6302,8 @@ packages:
   fast-string-width@3.0.2:
     resolution: {integrity: sha512-gX8LrtNEI5hq8DVUfRQMbr5lpaS4nMIWV+7XEbXk2b8kiQIizgnlr12B4dA3ZEx3308ze0O4Q1R+cHts8kyUJg==}
 
-  fast-uri@3.1.4:
-    resolution: {integrity: sha512-8JnbkQ4juDyvYs4mgFGQqg4yCYtFDtUtmp2QIQq11ZZe5CFQ5wcqm1rqDgAh/QdMySuBnPzMUiJUNZG5N/AiQw==}
+  fast-uri@3.1.5:
+    resolution: {integrity: sha512-gHwA1O9LDIcKunMKhObS/HimwtehO1nPUECKAu5TpKgaO19fcWEl4bliWe1jWxVFvIXztJjjQ4L8XQ1EU9f7Jw==}
 
   fast-wrap-ansi@0.2.2:
     resolution: {integrity: sha512-7F2Fl+TjRSenLqlU3UjSH0iyqopqoZIu7eZVpEirP2g1GtWa2G/ecEmBdgz31+Mxr+ELclgg6sokpSFIQiZ02Q==}
@@ -6857,12 +6858,8 @@ packages:
   inline-style-parser@0.2.7:
     resolution: {integrity: sha512-Nb2ctOyNR8DqQoR0OwRG95uNWIC0C1lCgf5Naz5H6Ji72KZ8OcFZLz2P5sNgwlyoJ8Yif11oMuYs5pBQa86csA==}
 
-  ip-address@10.1.1:
-    resolution: {integrity: sha512-1FMu8/N15Ck1BL551Jf42NYIoin2unWjLQ2Fze/DXryJRl5twqtwNHlO39qERGbIOcKYWHdgRryhOC+NG4eaLw==}
-    engines: {node: '>= 12'}
-
-  ip-address@10.2.0:
-    resolution: {integrity: sha512-/+S6j4E9AHvW9SWMSEY9Xfy66O5PWvVEJ08O0y5JGyEKQpojb0K0GKpz/v5HJ/G0vi3D2sjGK78119oXZeE0qA==}
+  ip-address@10.3.1:
+    resolution: {integrity: sha512-1e9d3kb97NHJTIJDZW9rKqW2h6+dFa50Dy0fpPSMQp2ADje5gvKsXmdiK6dwY5t76TaTt5+P5N1Y/LoToIxP6g==}
     engines: {node: '>= 12'}
 
   ipaddr.js@1.9.1:
@@ -7050,8 +7047,8 @@ packages:
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
-  js-yaml@4.3.0:
-    resolution: {integrity: sha512-1td788aAnnZ5qs7V2QIRl1owjtYpbKt749Y3xauqQgwIIGF/xXWz1wMTEBx5O3LK3lXLVuqXPdPxj2BoFHaW9Q==}
+  js-yaml@4.3.1:
+    resolution: {integrity: sha512-CY6crGq313MX8GkwvB7tzgp99vjQxY1++5y10/BKN/GUfHqWaOGQMNZkBvqSzsZKWk/ijwHlWzzkLulsGHhjWQ==}
     hasBin: true
 
   jsbi@4.3.2:
@@ -7711,8 +7708,8 @@ packages:
   nan@2.27.0:
     resolution: {integrity: sha512-hC+0LidcL3XE4rp1C4H54KujgXKzbfyTngZTwBByQxsOxCEKZT0MPQ4hOKUH2jU1OYstqdDH4onyHPDzcV0XdQ==}
 
-  nanoid@3.3.13:
-    resolution: {integrity: sha512-sPdqC6ByMVVGvF1ynvvMo0/o+oD1VX7DaHhijt1bFgjvBkHBib4t49GoNDhf2NDta4oeUNlaGbSt5K7qjZ955Q==}
+  nanoid@3.3.17:
+    resolution: {integrity: sha512-xQLf0A3HOMlgHq0n247/LRuAOYmB7dXJ/DvAxGvsSBij45XtBSmQycu+F8ODbHwns/XyFZagyL1+J0Offw1E0g==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
@@ -8127,8 +8124,8 @@ packages:
   postcss-value-parser@4.2.0:
     resolution: {integrity: sha512-1NNCs6uurfkVbeXG4S8JFT9t19m45ICnif8zWLd5oPSZ50QnwMfK+H3jv408d4jw/7Bttv5axS5IiHoLaVNHeQ==}
 
-  postcss@8.5.18:
-    resolution: {integrity: sha512-xdB1oSLHbz1vRWgCDalrCqEFTWzFlhqFC5tIHLMOSUIjhm3XXQ1qrFy8S/ESr1JYRRXqM3c1QFiMZUJdUTqyMQ==}
+  postcss@8.5.23:
+    resolution: {integrity: sha512-g50586zr4bZmwFiTlflMu8E0bDTb5I5gertgwAKmsdUlTQIhZtunzUlD1WSzwcVWPoAVpsrA6vlfCD7oXvRwgg==}
     engines: {node: ^10 || ^12 || >=14}
 
   postject@1.0.0-alpha.6:
@@ -9150,12 +9147,12 @@ packages:
   undici-types@8.3.0:
     resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
 
-  undici@6.27.0:
-    resolution: {integrity: sha512-YmfV3YnEDzXRC5lZ2jWtWWHKGUm1zIt8AhesR1tens+HTNv+YZlN/dp6G727LOvMJ8xjP9Be7Y2Sdr96LDm+pg==}
+  undici@6.28.0:
+    resolution: {integrity: sha512-LIY910g9TI13YS95lrMFrs8Rm/u/irgHeTWoKCoteeJ04CUJ92eEfj0rVn+7VKMPBpUPiUoBKfhNyLI23EE/KA==}
     engines: {node: '>=18.17'}
 
-  undici@7.28.0:
-    resolution: {integrity: sha512-cRZYrTDwWznlnRiPjggAGxZXanty6M8RV1ff8Wm4LWXBp7/IG8v5DnOm74DtUBp9OONpK75YlPnIjQqX0dBDtA==}
+  undici@7.29.0:
+    resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
     engines: {node: '>=20.18.1'}
 
   unicorn-magic@0.1.0:
@@ -9728,17 +9725,17 @@ snapshots:
       '@octokit/plugin-rest-endpoint-methods': 10.4.1(@octokit/core@5.2.2)
       '@octokit/request': 8.4.1
       '@octokit/request-error': 5.1.1
-      undici: 6.27.0
+      undici: 6.28.0
 
   '@actions/http-client@2.2.3':
     dependencies:
       tunnel: 0.0.6
-      undici: 6.27.0
+      undici: 6.28.0
 
   '@actions/http-client@3.0.2':
     dependencies:
       tunnel: 0.0.6
-      undici: 6.27.0
+      undici: 6.28.0
 
   '@actions/io@1.1.3': {}
 
@@ -10753,7 +10750,7 @@ snapshots:
       semver: 7.8.5
       sumchecker: 3.0.1
     optionalDependencies:
-      undici: 7.28.0
+      undici: 7.29.0
     transitivePeerDependencies:
       - supports-color
 
@@ -10971,7 +10968,7 @@ snapshots:
       globals: 14.0.0
       ignore: 5.3.2
       import-fresh: 3.3.1
-      js-yaml: 4.3.0
+      js-yaml: 4.3.1
       minimatch: 3.1.5
       strip-json-comments: 3.1.1
     transitivePeerDependencies:
@@ -11028,7 +11025,7 @@ snapshots:
     dependencies:
       '@jsdevtools/ono': 7.1.3
       '@types/json-schema': 7.0.15
-      js-yaml: 4.3.0
+      js-yaml: 4.3.1
 
   '@hey-api/openapi-ts@0.97.3(magicast@0.5.3)(typescript@5.9.3)':
     dependencies:
@@ -11431,7 +11428,7 @@ snapshots:
       colorette: 2.0.20
       debug: 4.4.3(supports-color@5.5.0)
       find-up: 7.0.0
-      js-yaml: 4.3.0
+      js-yaml: 4.3.1
       lodash-es: 4.18.1
       semver: 7.8.5
       typanion: 3.14.0
@@ -13037,7 +13034,7 @@ snapshots:
       '@alloc/quick-lru': 5.2.0
       '@tailwindcss/node': 4.3.1
       '@tailwindcss/oxide': 4.3.1
-      postcss: 8.5.18
+      postcss: 8.5.23
       tailwindcss: 4.3.1
 
   '@tanstack/react-virtual@3.14.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
@@ -13062,7 +13059,7 @@ snapshots:
       '@textlint/types': 15.5.4
       chalk: 4.1.2
       debug: 4.4.3(supports-color@5.5.0)
-      js-yaml: 4.3.0
+      js-yaml: 4.3.1
       lodash: 4.18.1
       pluralize: 2.0.0
       string-width: 4.2.3
@@ -13868,7 +13865,7 @@ snapshots:
   ajv@8.18.0:
     dependencies:
       fast-deep-equal: 3.1.3
-      fast-uri: 3.1.4
+      fast-uri: 3.1.5
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
@@ -13926,7 +13923,7 @@ snapshots:
       hosted-git-info: 4.1.0
       isbinaryfile: 5.0.7
       jiti: 2.7.0
-      js-yaml: 4.3.0
+      js-yaml: 4.3.1
       json5: 2.2.3
       lazy-val: 1.0.5
       minimatch: 10.2.5
@@ -14008,13 +14005,13 @@ snapshots:
 
   atomic-sleep@1.0.0: {}
 
-  autoprefixer@10.5.0(postcss@8.5.18):
+  autoprefixer@10.5.0(postcss@8.5.23):
     dependencies:
       browserslist: 4.28.2
       caniuse-lite: 1.0.30001799
       fraction.js: 5.3.4
       picocolors: 1.1.1
-      postcss: 8.5.18
+      postcss: 8.5.23
       postcss-value-parser: 4.2.0
 
   aws4@1.13.2: {}
@@ -14178,7 +14175,7 @@ snapshots:
 
   boundary@2.0.0: {}
 
-  brace-expansion@5.0.8(patch_hash=f75e0398710ac218a72ce70c81967df004033ed460ff011ccdac6bd48391f1f9):
+  brace-expansion@5.0.9(patch_hash=8eead75514ec705dd3efa6ab18e5e270b503436ec4733c4e6e33cdc75312aa0a):
     dependencies:
       balanced-match: 4.0.4
 
@@ -14231,7 +14228,7 @@ snapshots:
       fs-extra: 10.1.0
       http-proxy-agent: 7.0.2
       https-proxy-agent: 7.0.6
-      js-yaml: 4.3.0
+      js-yaml: 4.3.1
       sanitize-filename: 1.6.4
       source-map-support: 0.5.21
       stat-mode: 1.0.0
@@ -14376,7 +14373,7 @@ snapshots:
       parse5: 7.3.0
       parse5-htmlparser2-tree-adapter: 7.1.0
       parse5-parser-stream: 7.1.2
-      undici: 7.28.0
+      undici: 7.29.0
       whatwg-mimetype: 4.0.0
 
   chokidar@3.6.0:
@@ -14732,7 +14729,7 @@ snapshots:
       app-builder-lib: 26.15.3(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)
       builder-util: 26.15.3
       fs-extra: 10.1.0
-      js-yaml: 4.3.0
+      js-yaml: 4.3.1
     transitivePeerDependencies:
       - electron-builder-squirrel-windows
       - supports-color
@@ -14753,7 +14750,7 @@ snapshots:
     dependencies:
       domelementtype: 2.3.0
 
-  dompurify@3.4.12:
+  dompurify@3.4.13:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
@@ -14859,7 +14856,7 @@ snapshots:
     dependencies:
       builder-util-runtime: 9.7.0
       fs-extra: 10.1.0
-      js-yaml: 4.3.0
+      js-yaml: 4.3.1
       lazy-val: 1.0.5
       lodash.escaperegexp: 4.1.2
       lodash.isequal: 4.5.0
@@ -15120,7 +15117,7 @@ snapshots:
   express-rate-limit@8.3.2(express@5.2.1):
     dependencies:
       express: 5.2.1
-      ip-address: 10.1.1
+      ip-address: 10.3.1
 
   express@5.2.1:
     dependencies:
@@ -15189,7 +15186,7 @@ snapshots:
     dependencies:
       fast-string-truncated-width: 3.0.3
 
-  fast-uri@3.1.4: {}
+  fast-uri@3.1.5: {}
 
   fast-wrap-ansi@0.2.2:
     dependencies:
@@ -15572,7 +15569,7 @@ snapshots:
 
   gray-matter@4.0.3(patch_hash=3754dca03e5459f3f551402ecbeee1cd9588f9fde966158da964ae31a723dee7):
     dependencies:
-      js-yaml: 4.3.0
+      js-yaml: 4.3.1
       kind-of: 6.0.3
       section-matter: 1.0.0
       strip-bom-string: 1.0.0
@@ -15873,9 +15870,7 @@ snapshots:
 
   inline-style-parser@0.2.7: {}
 
-  ip-address@10.1.1: {}
-
-  ip-address@10.2.0: {}
+  ip-address@10.3.1: {}
 
   ipaddr.js@1.9.1: {}
 
@@ -16019,7 +16014,7 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
-  js-yaml@4.3.0:
+  js-yaml@4.3.1:
     dependencies:
       argparse: 2.0.1
 
@@ -16755,27 +16750,27 @@ snapshots:
 
   minimatch@10.2.3:
     dependencies:
-      brace-expansion: 5.0.8(patch_hash=f75e0398710ac218a72ce70c81967df004033ed460ff011ccdac6bd48391f1f9)
+      brace-expansion: 5.0.9(patch_hash=8eead75514ec705dd3efa6ab18e5e270b503436ec4733c4e6e33cdc75312aa0a)
 
   minimatch@10.2.5:
     dependencies:
-      brace-expansion: 5.0.8(patch_hash=f75e0398710ac218a72ce70c81967df004033ed460ff011ccdac6bd48391f1f9)
+      brace-expansion: 5.0.9(patch_hash=8eead75514ec705dd3efa6ab18e5e270b503436ec4733c4e6e33cdc75312aa0a)
 
   minimatch@3.1.5:
     dependencies:
-      brace-expansion: 5.0.8(patch_hash=f75e0398710ac218a72ce70c81967df004033ed460ff011ccdac6bd48391f1f9)
+      brace-expansion: 5.0.9(patch_hash=8eead75514ec705dd3efa6ab18e5e270b503436ec4733c4e6e33cdc75312aa0a)
 
   minimatch@5.1.9:
     dependencies:
-      brace-expansion: 5.0.8(patch_hash=f75e0398710ac218a72ce70c81967df004033ed460ff011ccdac6bd48391f1f9)
+      brace-expansion: 5.0.9(patch_hash=8eead75514ec705dd3efa6ab18e5e270b503436ec4733c4e6e33cdc75312aa0a)
 
   minimatch@8.0.7:
     dependencies:
-      brace-expansion: 5.0.8(patch_hash=f75e0398710ac218a72ce70c81967df004033ed460ff011ccdac6bd48391f1f9)
+      brace-expansion: 5.0.9(patch_hash=8eead75514ec705dd3efa6ab18e5e270b503436ec4733c4e6e33cdc75312aa0a)
 
   minimatch@9.0.9:
     dependencies:
-      brace-expansion: 5.0.8(patch_hash=f75e0398710ac218a72ce70c81967df004033ed460ff011ccdac6bd48391f1f9)
+      brace-expansion: 5.0.9(patch_hash=8eead75514ec705dd3efa6ab18e5e270b503436ec4733c4e6e33cdc75312aa0a)
 
   minimist@1.2.8: {}
 
@@ -16871,7 +16866,7 @@ snapshots:
 
   nan@2.27.0: {}
 
-  nanoid@3.3.13: {}
+  nanoid@3.3.17: {}
 
   napi-build-utils@1.0.2: {}
 
@@ -16941,7 +16936,7 @@ snapshots:
       semver: 7.8.5
       tar: 7.5.21
       tinyglobby: 0.2.17
-      undici: 6.27.0
+      undici: 6.28.0
       which: 6.0.1
 
   node-int64@0.4.0: {}
@@ -17297,9 +17292,9 @@ snapshots:
 
   postcss-value-parser@4.2.0: {}
 
-  postcss@8.5.18:
+  postcss@8.5.23:
     dependencies:
-      nanoid: 3.3.13
+      nanoid: 3.3.17
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
@@ -17439,7 +17434,7 @@ snapshots:
   rc-config-loader@4.1.4:
     dependencies:
       debug: 4.4.3(supports-color@5.5.0)
-      js-yaml: 4.3.0
+      js-yaml: 4.3.1
       json5: 2.2.3
       require-from-string: 2.0.2
     transitivePeerDependencies:
@@ -17982,7 +17977,7 @@ snapshots:
 
   socks@2.8.9:
     dependencies:
-      ip-address: 10.2.0
+      ip-address: 10.3.1
       smart-buffer: 4.2.0
 
   solid-js@1.9.12:
@@ -18506,9 +18501,9 @@ snapshots:
   undici-types@8.3.0:
     optional: true
 
-  undici@6.27.0: {}
+  undici@6.28.0: {}
 
-  undici@7.28.0: {}
+  undici@7.29.0: {}
 
   unicorn-magic@0.1.0: {}
 
@@ -18654,7 +18649,7 @@ snapshots:
       esbuild: 0.28.1
       fdir: 6.5.0(picomatch@4.0.4)
       picomatch: 4.0.4
-      postcss: 8.5.18
+      postcss: 8.5.23
       rollup: 4.62.2
       tinyglobby: 0.2.17
     optionalDependencies:
@@ -18669,7 +18664,7 @@ snapshots:
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
-      postcss: 8.5.18
+      postcss: 8.5.23
       rolldown: 1.0.3
       tinyglobby: 0.2.17
     optionalDependencies:
@@ -18684,7 +18679,7 @@ snapshots:
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
-      postcss: 8.5.18
+      postcss: 8.5.23
       rolldown: 1.0.3
       tinyglobby: 0.2.17
     optionalDependencies:

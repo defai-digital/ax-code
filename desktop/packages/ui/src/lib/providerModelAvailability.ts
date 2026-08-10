@@ -25,7 +25,9 @@ export function usableInputTokensFromModelLimit(limit: {
 }
 
 /** Full-agent fixed budget for every provider, including ax-engine (#379). */
-export function fixedTokensEstimateForProvider(_providerID?: string): number {
+export function fixedTokensEstimateForProvider(providerID?: string): number {
+  // Signature kept for call-site compatibility; budget is provider-independent.
+  void providerID
   return DEFAULT_FULL_AGENT_FIXED_TOKENS_ESTIMATE
 }
 
