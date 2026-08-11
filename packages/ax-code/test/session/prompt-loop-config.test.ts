@@ -3,6 +3,7 @@ import { GLOBAL_STEP_LIMIT, GOAL_TOTAL_STEP_HEADROOM, SUPER_LONG_TOTAL_STEP_HEAD
 import {
   MAX_EMPTY_MODEL_TURN_RETRIES,
   MAX_TRUNCATED_MODEL_TURN_RETRIES,
+  effectivePacingMaxSteps,
   promptLoopLimits,
 } from "../../src/session/prompt-loop-config"
 
@@ -54,5 +55,23 @@ describe("promptLoopLimits", () => {
     expect(limits.maxTotalSteps).toBe(777)
     expect(limits.maxTotalStepsSuperLong).toBe(777)
     expect(limits.maxTotalStepsGoal).toBe(777)
+  })
+})
+
+describe("effectivePacingMaxSteps (ADR-051)", () => {
+  test("unbounded agent uses the session step limit", () => {
+    expect(effectivePacingMaxSteps({ agentSteps: Infinity, sessionStepLimit: 500 })).toBe(500)
+  })
+
+  test("finite agent cap is the chip denominator when below session limit", () => {
+    expect(effectivePacingMaxSteps({ agentSteps: 30, sessionStepLimit: 500 })).toBe(30)
+  })
+
+  test("session limit wins when tighter than the agent cap", () => {
+    expect(effectivePacingMaxSteps({ agentSteps: 200, sessionStepLimit: 50 })).toBe(50)
+  })
+
+  test("non-positive agent steps fall back to session limit", () => {
+    expect(effectivePacingMaxSteps({ agentSteps: 0, sessionStepLimit: 100 })).toBe(100)
   })
 })

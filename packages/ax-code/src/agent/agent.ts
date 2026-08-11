@@ -238,7 +238,9 @@ export namespace Agent {
         options: {},
         mode: "primary",
         native: true,
-        steps: 25,
+        // No built-in steps cap (ADR-051): match build/plan. Session
+        // max_steps / max_total_steps bound the run; users who want a
+        // tighter specialist budget set agent.<name>.steps explicitly.
       },
       security: {
         name: "security",
@@ -255,7 +257,6 @@ export namespace Agent {
         options: {},
         mode: "primary",
         native: true,
-        steps: 30,
       },
       architect: {
         name: "architect",
@@ -269,7 +270,6 @@ export namespace Agent {
         options: {},
         mode: "primary",
         native: true,
-        steps: 25,
       },
       debug: {
         name: "debug",
@@ -282,7 +282,6 @@ export namespace Agent {
         options: {},
         mode: "primary",
         native: true,
-        steps: 30,
       },
       perf: {
         name: "perf",
@@ -296,7 +295,6 @@ export namespace Agent {
         options: {},
         mode: "primary",
         native: true,
-        steps: 25,
       },
       devops: {
         name: "devops",
@@ -309,7 +307,6 @@ export namespace Agent {
         options: {},
         mode: "primary",
         native: true,
-        steps: 30,
       },
       test: {
         name: "test",
@@ -322,7 +319,6 @@ export namespace Agent {
         options: {},
         mode: "primary",
         native: true,
-        steps: 25,
       },
       compaction: {
         name: "compaction",

@@ -1,0 +1,12 @@
+# Architecture Decision Records
+
+Canonical index for local-only architecture decisions. Keep ADR filenames numbered and update this table whenever an
+ADR is added or its status changes.
+
+| ADR | Title | Status | Date |
+| --- | --- | --- | --- |
+| [ADR-047](ADR-047-tui-stability-hardening.md) | TUI Stability Hardening Program | Accepted | 2026-07-10 |
+| [ADR-048](ADR-048-agentic-runtime-excellence.md) | Agentic Runtime Excellence Program | Accepted | 2026-07-12 |
+| [ADR-049](ADR-049-multi-mode-ensemble.md) | Multi-Mode Ensemble Platform | Accepted | 2026-07-12 |
+| [ADR-050](ADR-050-loop-mode-recurring-sessions.md) | Loop Mode — Recurring Session Prompts | Accepted | 2026-07-25 |
+| [ADR-051](ADR-051-autonomous-budget-honesty.md) | Autonomous Budget Honesty | Accepted | 2026-08-11 |

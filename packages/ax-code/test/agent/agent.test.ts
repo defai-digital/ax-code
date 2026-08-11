@@ -281,6 +281,38 @@ test("agent steps/maxSteps config sets steps property", async () => {
   })
 })
 
+// ADR-051: primary specialists no longer ship a hidden 25/30 step wall that
+// auto-routing could impose silently while the TUI still showed /500.
+test("native primary specialists default to unbounded steps", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      for (const name of ["build", "react", "security", "architect", "debug", "perf", "devops", "test"] as const) {
+        const agent = await Agent.get(name)
+        expect(agent?.steps, name).toBeUndefined()
+      }
+    },
+  })
+})
+
+test("config can still set a finite specialist step budget", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      agent: {
+        debug: { steps: 40 },
+      },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const debug = await Agent.get("debug")
+      expect(debug?.steps).toBe(40)
+    },
+  })
+})
+
 test("agent mode can be overridden", async () => {
   await using tmp = await tmpdir({
     config: {
