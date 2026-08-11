@@ -60,3 +60,15 @@ export function promptLoopLimits(config: Pick<Config.Info, "session">) {
     maxTruncatedModelTurnRetries: MAX_TRUNCATED_MODEL_TURN_RETRIES,
   }
 }
+
+/**
+ * Effective per-segment pacing cap shown in SessionStatus / TUI (ADR-051).
+ * When the agent has a finite `steps` budget, the chip must show that
+ * ceiling (bounded by session.max_steps), not always the session default.
+ */
+export function effectivePacingMaxSteps(input: { agentSteps: number; sessionStepLimit: number }): number {
+  const sessionCap =
+    Number.isFinite(input.sessionStepLimit) && input.sessionStepLimit > 0 ? input.sessionStepLimit : GLOBAL_STEP_LIMIT
+  if (!Number.isFinite(input.agentSteps) || input.agentSteps <= 0) return sessionCap
+  return Math.min(input.agentSteps, sessionCap)
+}

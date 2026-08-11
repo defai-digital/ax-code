@@ -385,12 +385,19 @@ export function goalCompleteForceTextDecision(input: {
 export function resolveTurnToolChoice(input: {
   structuredOutputChoice: "required" | undefined
   forceTextOnlyTurn: boolean
+  /** Finite agent budget last step (ADR-051): tools must be disabled on the wire. */
+  isLastStep?: boolean
 }): { toolChoice: "required" | "none" | undefined; consumedForceTextOnlyTurn: boolean } {
   if (input.structuredOutputChoice) {
     return { toolChoice: input.structuredOutputChoice, consumedForceTextOnlyTurn: false }
   }
   if (input.forceTextOnlyTurn) {
     return { toolChoice: "none", consumedForceTextOnlyTurn: true }
+  }
+  // Last agent step is text-only for the whole turn (not a one-shot flag to
+  // consume). Do not mark forceTextOnlyTurn as consumed.
+  if (input.isLastStep) {
+    return { toolChoice: "none", consumedForceTextOnlyTurn: false }
   }
   return { toolChoice: undefined, consumedForceTextOnlyTurn: false }
 }

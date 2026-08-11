@@ -94,6 +94,7 @@ import {
   TOOL_ONLY_TURN_NUDGE,
   TOOL_ONLY_TURN_FINAL_NUDGE,
   MAX_TOOL_ONLY_TURNS,
+  effectivePacingMaxSteps,
   promptLoopLimits,
 } from "./prompt-loop-config"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
@@ -743,6 +744,15 @@ export namespace SessionPrompt {
       const agent = resolvedAgent.value
       cachedAgent = resolvedAgent.cache
       const maxSteps = agent.steps ?? Infinity
+      // Overwrite the loop-top busy emit so the TUI denominator is the
+      // effective pacing cap (min of finite agent.steps and session max),
+      // not always session.max_steps (ADR-051 budget honesty).
+      await markPromptLoopBusy({
+        sessionID,
+        step,
+        maxSteps: effectivePacingMaxSteps({ agentSteps: maxSteps, sessionStepLimit }),
+        consecutiveErrors,
+      })
       const agentStepLimit = handlePromptLoopAgentStepLimit({
         sessionID,
         agentName: agent.name,
@@ -841,11 +851,13 @@ export namespace SessionPrompt {
         ephemeralSystem: pendingInstructionForRequest ? [pendingInstructionForRequest] : undefined,
       })
       msgs = request.messages
-      // Text-only recovery / response-only rewrite turns omit tool schemas on
-      // the provider wire. Preflight must budget the same way — `tools: {}`
-      // means "no overrides" (all tools still counted), not "zero tools".
+      // Text-only recovery / response-only rewrite / last finite agent step
+      // omit tool schemas on the provider wire (ADR-051 D3). Preflight must
+      // budget the same way — `tools: {}` means "no overrides" (all tools
+      // still counted), not "zero tools".
       const omitToolSchemas =
-        Boolean(responseOnlyProfile) || (forceTextOnlyTurn && lastUser.format?.type !== "json_schema")
+        Boolean(responseOnlyProfile) ||
+        ((forceTextOnlyTurn || isLastStep) && lastUser.format?.type !== "json_schema")
       const preflightCompaction = await maybeSchedulePreflightCompaction({
         sessionID,
         agent: lastUser.agent,
@@ -913,6 +925,7 @@ export namespace SessionPrompt {
       const toolChoiceResolution = resolveTurnToolChoice({
         structuredOutputChoice: structuredOutput.toolChoice,
         forceTextOnlyTurn,
+        isLastStep,
       })
       const toolChoice = toolChoiceResolution.toolChoice
       if (toolChoiceResolution.consumedForceTextOnlyTurn) forceTextOnlyTurn = false

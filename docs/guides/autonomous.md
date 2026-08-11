@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-05-16
+Last reviewed: 2026-08-11
 Owner: ax-code runtime
 
 Autonomous mode lets ax-code complete tasks without waiting for human confirmation at each low-risk step. When enabled, permission prompts are auto-approved unless they are explicitly blocked, and question dialogs are auto-answered with a best-practice heuristic that favors recommended, default, common, simple, and minimal choices while avoiding risky or over-engineered options.
@@ -111,6 +111,52 @@ AX_CODE_AUTONOMOUS=false ax-code   # force autonomous off
 ### Precedence
 
 Environment variable > config file > default (on)
+
+## Workload budgets (step limits)
+
+Autonomous mode does **not** mean unlimited execution. Several independent caps apply. Defaults below are the shipped constants; raise or lower them in `ax-code.json` when a workload needs more room.
+
+| Cap | Default | Unit | Config |
+| --- | --- | --- | --- |
+| Per-segment session steps | 500 | Outer loop iterations per continuation segment | `session.max_steps` |
+| Auto-continuations | 3 | Segments after a step ceiling (ordinary autonomous) | `session.max_continuations` (`0` disables) |
+| Cumulative total steps | 2,000 ordinary · 20,000 goal / Super-Long | Sum across continuations | `session.max_total_steps` |
+| Per-agent steps | Unbounded for native agents | Outer iterations for that agent | `agent.<name>.steps` (optional) |
+| Todo auto-retries | 10 | Continuations while todos remain pending | `session.max_todo_retries` |
+| Blast-radius tool calls | 500 / segment | Tool invocations in autonomous mode | `experimental.autonomous_caps.steps` |
+| Blast-radius files / lines | 50 files · 5,000 lines | Change footprint (survives continuations) | `experimental.autonomous_caps.files` / `.lines` |
+| Per-tool flood caps | e.g. bash 50, edit 100 | Calls per model turn | `experimental.autonomous_caps.perTool` |
+| Tool-only streak breaker | Nudge 15 · warn 30 · stop ~36 | Consecutive tool-only model finishes | Runtime constant |
+| Tool-call burst limiter | 30 calls / 10s | Rolling window per processor turn | Runtime constant |
+
+**What the TUI shows:** during a multi-step run the header chip reports `step current/max` where `max` is the **effective pacing cap** for the active agent — `min(agent.steps, session.max_steps)` when the agent is capped, otherwise `session.max_steps`. It is not a total-run counter across auto-continuations.
+
+**Auto-routing:** keyword routing may switch the session to a specialist agent (Debug, Security, DevOps, …). Specialists no longer ship a hidden 25/30-step default (see ADR-051); they share the session budgets above unless you set `agent.<name>.steps`. Disable routing with `"routing": { "disable": true }` if you want the Dev agent only.
+
+**Long runs:** use `/goal` or Super-Long for multi-hour work — they lift ordinary continuation caps and use the larger cumulative ceiling (default 20,000), with verification / pause semantics documented in [Loop Mode](loop-mode.md).
+
+### Example: raise budgets for a large autonomous batch
+
+```json
+{
+  "autonomous": true,
+  "session": {
+    "max_steps": 500,
+    "max_continuations": 10,
+    "max_total_steps": 20000
+  },
+  "agent": {
+    "debug": { "steps": 200 }
+  },
+  "experimental": {
+    "autonomous_caps": {
+      "steps": 1000,
+      "files": 100,
+      "lines": 10000
+    }
+  }
+}
+```
 
 ## When to Turn Autonomous Off
 

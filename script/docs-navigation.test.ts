@@ -5,14 +5,32 @@ import path from "node:path"
 const repoRoot = path.resolve(import.meta.dirname, "..")
 const docsRoot = path.join(repoRoot, "docs")
 
+// Working / planning trees under docs/ that are not the public product hub
+// (docs/README.md). Exclude them from link reachability and lifecycle-metadata
+// gates so large audit corpora do not block CI.
+const PUBLIC_DOCS_EXCLUDED_TOP_LEVEL = new Set(["module-quality-audit", "planning", "prd"])
+
+function isPublicDocsPage(file: string): boolean {
+  const rel = path.relative(docsRoot, file).split(path.sep).join("/")
+  const top = rel.split("/")[0] ?? ""
+  return !PUBLIC_DOCS_EXCLUDED_TOP_LEVEL.has(top)
+}
+
 function walkMarkdown(dir: string): string[] {
   return fs
     .readdirSync(dir, { withFileTypes: true })
     .flatMap((entry) => {
       const absolute = path.join(dir, entry.name)
-      if (entry.isDirectory()) return walkMarkdown(absolute)
+      // Skip excluded trees early so we never load hundreds of audit files.
+      if (entry.isDirectory()) {
+        const rel = path.relative(docsRoot, absolute).split(path.sep).join("/")
+        const top = rel.split("/")[0] ?? ""
+        if (PUBLIC_DOCS_EXCLUDED_TOP_LEVEL.has(top)) return []
+        return walkMarkdown(absolute)
+      }
       return entry.isFile() && entry.name.endsWith(".md") ? [absolute] : []
     })
+    .filter(isPublicDocsPage)
     .sort()
 }
 

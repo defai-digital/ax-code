@@ -1078,4 +1078,24 @@ describe("resolve turn tool choice", () => {
       consumedForceTextOnlyTurn: false,
     })
   })
+
+  // ADR-051 D3: last finite agent step must disable tools on the wire, not
+  // only via max-steps.txt guidance. Do not consume forceTextOnlyTurn.
+  test("isLastStep forces none without consuming forceTextOnlyTurn", () => {
+    expect(
+      resolveTurnToolChoice({ structuredOutputChoice: undefined, forceTextOnlyTurn: false, isLastStep: true }),
+    ).toEqual({
+      toolChoice: "none",
+      consumedForceTextOnlyTurn: false,
+    })
+  })
+
+  test("structured output still wins over isLastStep", () => {
+    expect(
+      resolveTurnToolChoice({ structuredOutputChoice: "required", forceTextOnlyTurn: false, isLastStep: true }),
+    ).toEqual({
+      toolChoice: "required",
+      consumedForceTextOnlyTurn: false,
+    })
+  })
 })
