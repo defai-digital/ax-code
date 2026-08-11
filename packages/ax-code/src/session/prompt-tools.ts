@@ -182,7 +182,15 @@ export async function estimateRegistryToolSchemaTokens(input: {
   model: Provider.Model
   tools?: Record<string, boolean>
   sessionPermission?: Permission.Ruleset
+  /**
+   * When true, the upcoming provider request will not send tool schemas
+   * (forced text-only / response-only synthesis). An empty `tools: {}` map is
+   * NOT enough — that means "no per-tool overrides" and still enables the full
+   * registry for estimation.
+   */
+  omitToolSchemas?: boolean
 }) {
+  if (input.omitToolSchemas) return 0
   const ruleset = Permission.merge(
     input.agent.permission,
     input.sessionPermission ?? [],

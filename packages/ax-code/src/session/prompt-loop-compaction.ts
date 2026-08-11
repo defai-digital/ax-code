@@ -150,6 +150,8 @@ export async function maybeSchedulePreflightCompaction(input: {
   requestMessages: ModelMessage[]
   tools?: Record<string, boolean>
   sessionPermission?: Permission.Ruleset
+  /** Match a text-only provider turn that will not serialize tool schemas. */
+  omitToolSchemas?: boolean
 }): Promise<PreflightCompactionResult> {
   const tokenBudget = await SessionCompaction.budget(input.model)
   if (!tokenBudget || isSyntheticContinuation(input.userParts)) return { action: "continue" }
@@ -171,6 +173,7 @@ export async function maybeSchedulePreflightCompaction(input: {
     model: input.model,
     tools: input.tools,
     sessionPermission: input.sessionPermission,
+    omitToolSchemas: input.omitToolSchemas,
   })
   const estimatedTokens = messageTokens + toolSchemaTokens
   if (estimatedTokens < tokenBudget.usable) return { action: "continue" }

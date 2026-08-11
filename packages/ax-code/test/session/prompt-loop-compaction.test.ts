@@ -151,6 +151,56 @@ describe("session.prompt preflight compaction", () => {
     expect(createSpy).not.toHaveBeenCalled()
   })
 
+  test("omits tool schemas for text-only / response-only turns (not tools: {})", async () => {
+    // Regression: callers used `tools: {}` intending "no tools", but estimation
+    // treats empty maps as "no overrides" and still budgets the full registry.
+    // Forced text-only recovery and response-only rewrites would then be
+    // blocked/compacted even though the wire request has no tool schemas.
+    budgetSpy = vi.spyOn(SessionCompaction, "budget").mockResolvedValue({ cap: 2_000, reserved: 0, usable: 2_000 })
+    createSpy = vi.spyOn(SessionCompaction, "create").mockResolvedValue({} as any)
+    toolsSpy = vi.spyOn(ToolRegistry, "tools").mockResolvedValue([
+      {
+        id: "large_tool",
+        description: "Tool with a large provider schema",
+        parameters: z.object({
+          payload: z.string().describe("x".repeat(12_000)),
+        }),
+        execute: async () => ({ title: "", metadata: {}, output: "" }),
+      },
+    ] as any)
+
+    const emptyMapStillCounts = await maybeSchedulePreflightCompaction({
+      sessionID: "ses_test" as any,
+      agent: "build",
+      agentInfo: agent,
+      userModel,
+      model,
+      userParts: [{ type: "text", text: "small request" } as any],
+      system: ["small system"],
+      requestMessages: [{ role: "user", content: "small request" }],
+      tools: {},
+    })
+    expect(emptyMapStillCounts.action).toBe("block")
+    expect(toolsSpy).toHaveBeenCalled()
+
+    toolsSpy.mockClear()
+    const textOnly = await maybeSchedulePreflightCompaction({
+      sessionID: "ses_test" as any,
+      agent: "build",
+      agentInfo: agent,
+      userModel,
+      model,
+      userParts: [{ type: "text", text: "small request" } as any],
+      system: ["small system"],
+      requestMessages: [{ role: "user", content: "small request" }],
+      tools: {},
+      omitToolSchemas: true,
+    })
+    expect(textOnly).toEqual({ action: "continue" })
+    expect(toolsSpy).not.toHaveBeenCalled()
+    expect(createSpy).not.toHaveBeenCalled()
+  })
+
   test("does not compact before an unanswered media turn even when over budget (#259)", async () => {
     budgetSpy = vi.spyOn(SessionCompaction, "budget").mockResolvedValue({ cap: 2_000, reserved: 0, usable: 2_000 })
     createSpy = vi.spyOn(SessionCompaction, "create").mockResolvedValue({} as any)

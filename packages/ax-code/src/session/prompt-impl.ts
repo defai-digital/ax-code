@@ -841,6 +841,11 @@ export namespace SessionPrompt {
         ephemeralSystem: pendingInstructionForRequest ? [pendingInstructionForRequest] : undefined,
       })
       msgs = request.messages
+      // Text-only recovery / response-only rewrite turns omit tool schemas on
+      // the provider wire. Preflight must budget the same way — `tools: {}`
+      // means "no overrides" (all tools still counted), not "zero tools".
+      const omitToolSchemas =
+        Boolean(responseOnlyProfile) || (forceTextOnlyTurn && lastUser.format?.type !== "json_schema")
       const preflightCompaction = await maybeSchedulePreflightCompaction({
         sessionID,
         agent: lastUser.agent,
@@ -855,7 +860,8 @@ export namespace SessionPrompt {
           userSystem: lastUser.system,
         }),
         requestMessages: request.requestMessages,
-        tools: responseOnlyProfile ? {} : lastUser.tools,
+        tools: lastUser.tools,
+        omitToolSchemas,
         sessionPermission: session.permission,
       })
       if (preflightCompaction.action === "compact") {
