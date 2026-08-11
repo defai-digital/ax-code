@@ -1,0 +1,31 @@
+{
+  "slug": "pkg-ax-code-parser-native",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code-parser-native/index.d.ts",
+    "packages/ax-code-parser-native/package.json",
+    "docs/module-quality-audit/modules/pkg-ax-code-parser-native/MODULE-AUDIT.md",
+    "crates/ax-code-parser/src/lib.rs",
+    "crates/ax-code-parser/Cargo.toml",
+    "packages/ax-code/src/native/addon.ts",
+    "packages/ax-code/src/code-intelligence/syntactic.ts",
+    "packages/ax-code/src/flag/flag.ts",
+    "packages/ax-code/src/cli/cmd/doctor.ts",
+    "script/build-native.ts",
+    "packages/ax-code/script/build-node-tui.ts"
+  ],
+  "stepNotes": {
+    "1": "Confirmed four generated declarations and reconciled them with the package entrypoint and publish allowlist.",
+    "2": "Traced malformed batch JSON, unsupported grammar, parser failure, and per-file error behavior across the N-API boundary.",
+    "3": "Matched every camelCase TypeScript export to its snake_case Rust function and verified the eight-language registry.",
+    "4": "Checked extraction and batch branches; identified that the declared concurrency control is accepted but ignored.",
+    "5": "Reviewed Rayon parser allocation, input materialization, ordering, and the absence of caller-enforced resource bounds.",
+    "6": "Followed native build generation, CommonJS shim creation, centralized loading, and node-bundled distribution assembly.",
+    "7": "Separated generated-file hygiene from runtime reachability and found that internal syntactic parsing still uses the WASM implementation.",
+    "8": "Reconciled nine Rust unit tests with uncovered N-API/batch cases and confirmed that no Critical finding file exists.",
+    "9": "Observed nine passing Rust tests and a passing core TypeScript typecheck, then checked the requested artifact layout."
+  },
+  "date": "2026-08-11"
+}

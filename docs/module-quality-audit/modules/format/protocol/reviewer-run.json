@@ -1,0 +1,19 @@
+{
+  "agentId": "ax-code-glm-format-20260811T204703Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "startedAt": "2026-08-11T20:47:03Z",
+  "finishedAt": "2026-08-11T20:53:00Z",
+  "slug": "format",
+  "filesRead": [
+    "packages/ax-code/src/format/formatter.ts",
+    "packages/ax-code/src/format/index.ts",
+    "packages/ax-code/test/format/format.test.ts",
+    "packages/ax-code/src/util/which.ts",
+    "packages/ax-code/src/flag/flag.ts",
+    "packages/ax-code/src/config/config-impl.ts",
+    "packages/ax-code/src/config/schema-impl.ts",
+    "docs/module-quality-audit/modules/format/MODULE-AUDIT.md"
+  ]
+}

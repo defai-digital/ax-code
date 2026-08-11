@@ -1,0 +1,31 @@
+{
+  "slug": "constants",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/constants/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/constants/lsp.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/constants/network.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/constants/project.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/constants/server.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/constants/session.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/constants/tool.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/constants/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/lsp/server-defs/shared.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/lsp/server-defs/web-servers.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/constants.ts"
+  ],
+  "stepNotes": {
+    "1": "Barrel index.ts:1-5 re-exports tool/session/network/lsp/project but deliberately omits server; server constants surface via src/server/constants.ts:1 instead. Two import paths hand out overlapping surfaces.",
+    "2": "Failure surface is 'wrong value propagates', not runtime crash. project.ts:8-42 identity strings are highest-leverage (schema URL, install path, GH Action ref, brew tap). No credential-shaped literal in any of the 7 files.",
+    "3": "MAX_PATH_LENGTH (server.ts:3) flows correctly into zod .max() at metadata.ts:26,45 and routes/file.ts:14. AUTONOMOUS_BLOCKED_PATHS anchored/** pairs verified complete (session.ts:59-76). GOAL_TOTAL_STEP_HEADROOM alias at session.ts:25 is the correct pattern.",
+    "4": "Only module-init template-literal evaluation (project.ts:12-42, tool.ts:4,6); runs once, interned. NearestRoot spreads allocate per-call but that is the consumer's property, not the constant's. No perf issue.",
+    "5": "JS_LOCKFILES declared twice with divergent membership (constants/lsp.ts:1 vs lsp/server-defs/shared.ts:53). session.ts:4-7 comment claims GLOBAL_STEP_LIMIT/AUTONOMOUS_MAX_STEPS move together but they are independent 500 literals. TOAST_DURATION_LONG_MS mis-shelved in server.ts.",
+    "6": "No empty catches possible (no try/catch). Every exported constant traced to >=1 live consumer this pass; no unused export. Hygiene nit: grep.ts:123,273 uses bare '...' while read.ts:264 uses MAX_LINE_SUFFIX for the same cut.",
+    "7": "Inventory records 'none auto-matched'; no test targets constants/ directly, which is correct for pure literals. Real gap is a missing snapshot/equality assertion that would have caught the JS_LOCKFILES drift at CI time.",
+    "8": "Four findings logged, none Critical: C-1 MEDIUM JS_LOCKFILES divergence; C-2 LOW truncation-suffix drift; C-3 LOW comment/code step-limit drift; C-4 LOW toast-constant cohesion. findings/ dir empty, no reverify.md required.",
+    "9": "Read-only analysis pass; no source bytes mutated so no build re-run needed to validate the review. Implementer follow-ups each need their own verify run; relevant gate is pnpm --dir packages/ax-code run typecheck."
+  }
+}

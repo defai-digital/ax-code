@@ -11,7 +11,7 @@
 | Status | SIGNED OFF |
 | Reviewer | codex-sol |
 | Independent verifier | ax-code-glm |
-| Baseline commit | `cab6c0089e3b7b3410f050bc9d824c06a3c3a814` |
+| Baseline commit | `994f9287e497666e104644eccea299595a35b39a` |
 | Analysis fingerprint | `06ddcb243f38f846` |
 | Protocol marker | agent-protocol.json complete |
 | Source files / LOC | 18 / 1977 |

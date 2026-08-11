@@ -1,0 +1,40 @@
+{
+  "slug": "ui-components-sections",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "desktop/packages/ui/src/components/sections/agents/AgentsPage.tsx",
+    "desktop/packages/ui/src/components/sections/agents/AgentsSidebar.tsx",
+    "desktop/packages/ui/src/components/sections/agents/ModelSelector.tsx",
+    "desktop/packages/ui/src/components/sections/agents/permissionToolIds.test.ts",
+    "desktop/packages/ui/src/components/sections/agents/permissionToolIds.ts",
+    "desktop/packages/ui/src/components/sections/ax-code/AXCodePage.tsx",
+    "desktop/packages/ui/src/components/sections/ax-code/AXCodeVisualSettings.tsx",
+    "desktop/packages/ui/src/components/sections/ax-code/AboutSettings.tsx",
+    "desktop/packages/ui/src/components/sections/ax-code/AxCodeCliSettings.tsx",
+    "desktop/packages/ui/src/components/sections/ax-code/CornerRadiusSettings.tsx",
+    "desktop/packages/ui/src/components/sections/ax-code/DefaultsSettings.tsx",
+    "desktop/packages/ui/src/components/sections/ax-code/DesktopNetworkSettings.tsx",
+    "desktop/packages/ui/src/components/sections/ax-code/GitHubSettings.tsx",
+    "desktop/packages/ui/src/components/sections/ax-code/GitSettings.tsx",
+    "desktop/packages/ui/src/components/sections/ax-code/KeyboardShortcutsSettings.tsx",
+    "desktop/packages/ui/src/components/sections/ax-code/NotificationSettings.tsx",
+    "desktop/packages/ui/src/components/sections/ax-code/PasskeySettings.tsx",
+    "desktop/packages/ui/src/components/sections/ax-code/SessionRetentionSettings.tsx",
+    "desktop/packages/ui/src/components/sections/ax-code/WorktreeSectionContent.tsx",
+    "desktop/packages/ui/src/components/sections/ax-code/axCodeCliSettingsSave.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Read 20 files under sections/{agents,ax-code}; largest bodies are AXCodeVisualSettings.tsx (1751 LOC) and AgentsPage.tsx (1219 LOC). Co-located save/load helpers (axCodeCliSettingsSave.ts, defaultsSettingsLoad.ts, gitSettingsLoad.ts, githubDeviceFlowPoll.ts, passkeySettingsLoad.ts) keep fetch logic out of JSX.",
+    "2": "Boundary is Electron-rendered React issuing fetch to local API_ENDPOINTS and runtime bridges (Tauri dialog, runtimeGitHub). Only credential surface is DesktopNetworkSettings.tsx:177-181 PUT of desktopUiPassword as cleartext JSON to localhost; PasskeySettings defers all WebAuthn work to @/lib/passkeys.",
+    "3": "Defects found: AgentsSidebar.handleRenameAgent (AgentsSidebar.tsx:224-244) is create+delete with no rollback and leaves duplicate agents on partial failure; DefaultsSettings.handleModelChange (DefaultsSettings.tsx:101-109) double-writes defaultModel via two uncoordinated paths; WorktreeSectionContent.findSubsessions (WorktreeSectionContent.tsx:222-233) recurses without a visited-set guard.",
+    "4": "AXCodeVisualSettings.tsx subscribes to ~50 useUIStore selectors in one component (lines 227-295), so any UI-store mutation re-renders the whole 1751-line tree; chat-render-preview RAF loop (302-343) is correctly gated and cancelled. AgentsPage.knownPermissionNames (239-265) is O(agents x sessions) but fine at current scale.",
+    "5": "AXCodePage section router (AXCodePage.tsx:20-46) and the permissionToolIds.ts+test pair are clean boundaries. AXCodeVisualSettings.tsx:1450-1744 and NotificationSettings.tsx:169-428 duplicate a checkbox role-button row pattern 10+/6+ times respectively; a shared CheckboxRow helper is warranted (3+ call sites met).",
+    "6": "Silent failure sites rather than dead code: catch { // ignore } in AxCodeCliSettings.tsx:41,79 and catch { // Ignore errors } in WorktreeSectionContent.tsx:59,76,109,136 hide load/browse errors. AgentsPage.formatPermissionLabel (416-434) hardcodes display overrides bypassing i18n. No TODO markers; no strictly-empty catches.",
+    "7": "Co-located tests cover only the two pure helpers (permissionToolIds.test.ts: trim/dedupe/placeholder/non-string; axCodeCliSettingsSave.test.ts: trim-before-save and reload-failure-as-result). Uncovered higher-risk paths: AgentsPage permission round-trip (98-157), AgentsSidebar rename partial-failure (237-248), DefaultsSettings double-write (100-112).",
+    "8": "Accepted: MEDIUM AgentsSidebar non-atomic rename (AgentsSidebar.tsx:224-244); LOW DefaultsSettings uncoordinated double-write (DefaultsSettings.tsx:101-109); LOW silent catches in AxCodeCliSettings.tsx:41,79 and WorktreeSectionContent.tsx:59,76,109,136; INFO duplicate CheckboxRow pattern in AXCodeVisualSettings.tsx and NotificationSettings.tsx. No Critical, no High.",
+    "9": "No Critical findings so no reverify.md required for this unit. Review is docs-only over read-only source; no mutation, so project typecheck/test gates unaffected and no verify_project run is needed to validate the review itself. Steps 1-9 complete for the ax-code-glm lane; codex-sol may independently confirm."
+  }
+}

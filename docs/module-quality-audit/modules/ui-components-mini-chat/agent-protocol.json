@@ -1,0 +1,29 @@
+{
+  "slug": "ui-components-mini-chat",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "desktop/packages/ui/src/components/mini-chat/MiniChatLayout.tsx",
+    "desktop/packages/ui/src/components/mini-chat/miniChatMainHandoff.test.ts",
+    "desktop/packages/ui/src/components/mini-chat/miniChatMainHandoff.ts",
+    "desktop/packages/ui/src/components/mini-chat/miniChatPath.test.ts",
+    "desktop/packages/ui/src/components/mini-chat/miniChatPath.ts",
+    "desktop/packages/ui/src/components/mini-chat/types.ts",
+    "desktop/packages/ui/src/lib/projectResolution.ts",
+    "desktop/packages/ui/src/lib/utils.ts",
+    "docs/module-quality-audit/modules/ui-components-mini-chat/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Six unit files plus two non-unit libs read; MiniChatLayout.tsx:328-350 is the real export while inline MiniChatHeader at :32-326 carries all logic. Export inventory in MODULE-AUDIT matches source.",
+    "2": "Failure surface is Electron IPC (invokeDesktop at MiniChatLayout.tsx:79,212,218,229) plus window globals __AX_CODE_DESKTOP_MACOS_MAJOR__ (:62) and __AX_CODE_DESKTOP_HOME__ (:93); no secrets, fs, or network paths in the unit.",
+    "3": "buildMiniChatMainHandoffPayload fallback chain (miniChatMainHandoff.ts:31,37) verified against the three test cases; handleTogglePinned rollback at :212-214 and handleOpenMainApp focused-guard at :229-233 are correct fail-safe patterns.",
+    "4": "catalogWorktreeBranch selector (MiniChatLayout.tsx:95-104) iterates availableWorktreesByProject per store tick - hoist to useMemo; stableContextUsage seven-field equality at :184-193 is correct but brittle against new SessionContextUsage fields.",
+    "5": "Pure helpers (miniChatPath.ts, miniChatMainHandoff.ts) are well-extracted and tested; MiniChatHeader is ~295 of 350 lines inline - candidate for MiniChatHeader.tsx split; session structurally cast four times at :72-75,87,133,225.",
+    "6": "Audit-map mismatch: MODULE-AUDIT reports 0 empty catches but MiniChatLayout.tsx:107 and :218 are empty .catch(()=>{}); no TODOs or dead imports in the unit itself.",
+    "7": "miniChatPath.test.ts (5 cases) and miniChatMainHandoff.test.ts (3 cases) cover every exported helper; MODULE-AUDIT 'none auto-matched' note contradicts the two co-located test files; MiniChatHeader has no component test, only hook-tested via helpers.",
+    "8": "No Critical/High findings. Five items logged INFO/LOW: two audit-map mismatches, repeated session casts, expensive selector, inline header - none block sign-off.",
+    "9": "Primary reviewer pass complete; no Critical items so reverify.md gate for codex-sol is not triggered. Recommended next moves: correct audit map, hoist catalogWorktreeBranch, introduce typed session alias."
+  }
+}

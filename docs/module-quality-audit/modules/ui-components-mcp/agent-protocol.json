@@ -1,0 +1,28 @@
+{
+  "slug": "ui-components-mcp",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "desktop/packages/ui/src/components/mcp/McpDropdown.tsx",
+    "desktop/packages/ui/src/components/layout/Header.tsx",
+    "desktop/packages/ui/src/components/ui/switch.tsx",
+    "desktop/packages/ui/src/stores/useMcpStore.ts",
+    "desktop/packages/ui/src/stores/useMcpConfigStore.ts",
+    "desktop/packages/ui/src/stores/useMcpStore.test.ts",
+    "desktop/packages/ui/src/stores/useMcpConfigStore.test.ts",
+    "docs/module-quality-audit/modules/ui-components-mcp/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Scoped the review to McpDropdown.tsx and traced its two exports; Header.tsx:32,480-482 is the only repository consumer and uses McpDropdownContent.",
+    "2": "Established MCP connect/disconnect as the mutation boundary at McpDropdown.tsx:179-195 and useMcpStore.ts:230-257; rendered status and names remain escaped React text.",
+    "3": "Checked status mapping, merged server-name behavior, and async toggles; the single busyName permits overlapping operations to clear or replace one another and rejected mutations are not surfaced.",
+    "4": "Found duplicate mount/active refreshes at McpDropdown.tsx:83-94 and additional standalone-shell refreshes at 246-256; store request IDs prevent stale commits but not redundant IO.",
+    "5": "Confirmed SDK ownership stays in useMcpStore while row markup and toggle logic are duplicated at McpDropdown.tsx:143-204 and 283-359; the full McpDropdown export has no external consumer.",
+    "6": "Verified accessible names on open/refresh buttons, but server switches at McpDropdown.tsx:179-195 and 333-349 have no label; switch.tsx:6-24 only forwards caller props.",
+    "7": "Reviewed store race and path tests at useMcpStore.test.ts:84-143 and forced-config ordering tests at useMcpConfigStore.test.ts:88-160; no component interaction test covers this unit.",
+    "8": "The existing ledger at MODULE-AUDIT.md:61-65 and findings directory contain no entries; recorded two Medium concerns and one Low concern, with no Critical item requiring reverify.md.",
+    "9": "Ran focused Vitest (2 files, 6 tests), the @openchamber/ui TypeScript check, and ESLint on McpDropdown.tsx; all successful while component-specific behavioral gaps remain explicit."
+  },
+  "date": "2026-08-11"
+}

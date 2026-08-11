@@ -1,0 +1,35 @@
+{
+  "slug": "ui-components-notifications",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/notifications/NotificationCenter.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/notifications/PermissionNotifications.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/notifications/permissionNotificationSync.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/notifications/permissionNotificationSync.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/ui-components-notifications/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/stores/useNotificationStore.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/types/permission.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/sync/session-actions.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/chat/PermissionCard.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/App.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/layout/Header.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/i18n/messages/en.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/package.json",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/vitest.config.ts",
+    "/Users/akiralam/code/ax-code/desktop/vitest.config.ts"
+  ],
+  "stepNotes": {
+    "1": "The two React exports, one pure diff export, and its test are wired through App.tsx:953-965 and Header.tsx:1788-1804, connecting synchronized sessions to native, badge, and in-app notification surfaces.",
+    "2": "Permission tool names and patterns are untrusted request data but render only as escaped React text; fixed response literals and captured IDs flow through session-actions.ts:922-937 with directory ownership resolution.",
+    "3": "The Set-based diff adds unseen request IDs and removes mappings absent from the live list; the watcher applies both halves and clears all mapped notifications during unmount.",
+    "4": "Medium defect: NotificationCenter removes an item immediately while the response promise runs; on rejection the request stays pending but its mirror-map entry blocks re-creation, unlike PermissionCard's await-and-retry lifecycle.",
+    "5": "Native delivery rechecks focused-session state after a cancellable two-second delay, one notification covers a continuous waiting episode, and attention counts are cleared from both web and desktop state on unmount.",
+    "6": "Store history is capped at 100 and reconciliation is linear, but the memoized relative-time label has no clock dependency and can remain stale throughout an idle open-panel interval.",
+    "7": "Pure reconciliation is isolated from React effects and all displayed copy is localized; the dialog restores focus and handles Escape, but lacks aria-modal and focus containment despite using a backdrop.",
+    "8": "Four tests cover diff additions, stale removal, preservation, and empty input; component behavior, debounce cleanup, badge cleanup, rejected responses, and dialog keyboard boundaries have no direct tests.",
+    "9": "Package-local Vitest passed 1 file and 4 tests and package type-check passed; the review accepts one Medium and two Low issues, finds no Critical evidence, and therefore creates no reverify.md."
+  },
+  "date": "2026-08-11"
+}

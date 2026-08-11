@@ -1,0 +1,28 @@
+{
+  "slug": "format",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "packages/ax-code/src/format/formatter.ts",
+    "packages/ax-code/src/format/index.ts",
+    "packages/ax-code/test/format/format.test.ts",
+    "packages/ax-code/src/util/which.ts",
+    "packages/ax-code/src/flag/flag.ts",
+    "packages/ax-code/src/config/config-impl.ts",
+    "packages/ax-code/src/config/schema-impl.ts",
+    "docs/module-quality-audit/modules/format/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Scoped format as a 2-file registry module: formatter.ts holds 25 Info descriptors (gofmt:64 -> dfmt:426), index.ts owns the Format namespace with init/status as the only public surface.",
+    "2": "Traced two execution-injection vectors: project-config command injection is blocked by restrictUntrustedConfig (config-impl.ts:192-200); filename injection is mitigated because Process.spawn takes an argv array (index.ts:124), so no shell is invoked.",
+    "3": "Confirmed matching formatters run sequentially (index.ts:121 for-of) and verified the chain semantics by the xAB test at format.test.ts:209; flagged a latent String.replace $-special-pattern bug at index.ts:125.",
+    "4": "Verified enabled() results are memoized per instance (index.ts:87-94) and which() caches for 5 min (which.ts:19-20), so the Filesystem.findUp and which probes fire at most once per session, not per save.",
+    "5": "The mergeDeep array-replace workaround at index.ts:68-73 is fragile: it seeds command/extensions from built-ins so an extensions-only override is not silently dropped (guard at index.ts:75), but a future Info field would need the same seeding.",
+    "6": "No empty catches / TODOs. Found real triplication: the 28-entry web extension list is byte-identical in prettier (formatter.ts:86-113) and biome (formatter.ts:152-179), and manifest-dependency detection is near-identical across prettier/oxfmt/pint.",
+    "7": "format.test.ts covers the key contracts (sequential run, mergeDeep regression, kill-wait race) but has a coverage gap: no regression test asserts that restrictUntrustedConfig strips command/environment from untrusted project formatter config.",
+    "8": "No Critical or High findings; findings/ is empty. Dispositions are 3x LOW (replace bug, duplicated extension list, triplicated dep detection) and 2x INFO (forced enabled=true, ignored stdio) - none meet the bar for a tracked finding file.",
+    "9": "Read-only review, no source modified, so no verify_project run is cited for a change; behavioral claims were validated by mapping each test assertion back to the cited implementation lines. reverify.md skipped because no Critical items exist."
+  }
+}

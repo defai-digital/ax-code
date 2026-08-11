@@ -1,0 +1,25 @@
+{
+  "agentId": "codex-sol-ui-components-desktop-20260811T202722Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T20:27:22Z",
+  "finishedAt": "2026-08-11T20:31:55Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/AGENTS.md",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/package.json",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/desktop/DesktopHostSwitcher.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/desktop/OpenInAppButton.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/layout/Header.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/clipboard.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/desktop.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/desktopHosts.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/desktopHosts.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/desktopSsh.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/openInApps.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/singleFlightInterval.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/stores/useOpenInAppsStore.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/stores/useOpenInAppsStore.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/ui-components-desktop/MODULE-AUDIT.md"
+  ],
+  "slug": "ui-components-desktop"
+}

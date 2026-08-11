@@ -1,0 +1,37 @@
+# Nine-step review protocol: pkg-ax-code-diff-native
+
+## Step 1 Scope and public surface
+
+The reviewed unit is the generated TypeScript contract at `packages/ax-code-diff-native/index.d.ts`, with package and implementation files followed only far enough to validate that contract. Contrary to the older extract in `docs/module-quality-audit/modules/pkg-ax-code-diff-native/MODULE-AUDIT.md:24-29`, the declaration has seven public functions: `applyChunks`, `diffStats`, `editReplace`, `levenshtein`, `seekSequence`, `similarity`, and `unifiedDiff` (`packages/ax-code-diff-native/index.d.ts:3-46`). Package wiring selects this declaration through `types` and the native loader through `main` (`packages/ax-code-diff-native/package.json:5-6`), while the build script regenerates both from the Rust crate (`packages/ax-code-diff-native/package.json:22-24`).
+
+## Step 2 Inputs, trust boundaries, and failures
+
+All declared inputs are strings, string arrays, numbers, or a boolean; no callback, handle, or mutable host object crosses the N-API boundary (`packages/ax-code-diff-native/index.d.ts:10-46`). The apparent `filePath` parameter is a label, not filesystem authority: `unified_diff` forwards it to formatting (`crates/ax-code-diff/src/lib.rs:203-207`), and `apply_chunks` uses it in diagnostics and diff headers after parsing caller-supplied JSON (`crates/ax-code-diff/src/lib.rs:265-271`, `crates/ax-code-diff/src/lib.rs:330-366`). Malformed chunk JSON and impossible edits become N-API errors rather than partial results. Native loading failures are caught centrally and return `undefined`, enabling slower TypeScript paths (`packages/ax-code/src/native/addon.ts:47-64`).
+
+## Step 3 Contract and correctness trace
+
+The camel-cased declarations correspond to the seven `#[napi]` Rust exports. `editReplace` rejects empty or identical search text, requires uniqueness unless `replaceAll` is true, and serializes the fields promised by the declaration comments (`crates/ax-code-diff/src/lib.rs:19-55`, `crates/ax-code-diff/src/lib.rs:58-102`). `seekSequence` performs exact, right-trimmed, fully trimmed, then Unicode-normalized matching and clamps a negative starting index to zero (`crates/ax-code-diff/src/lib.rs:149-200`). `applyChunks` accumulates replacements, applies them in reverse index order, and computes its diff and counters from the final content (`crates/ax-code-diff/src/lib.rs:283-366`). `levenshtein` deliberately returns `f64`, which is compatible with TypeScript `number` (`crates/ax-code-diff/src/lib.rs:228-238`; `packages/ax-code-diff-native/index.d.ts:25-29`).
+
+## Step 4 Resource and performance review
+
+The public operations are CPU- and memory-bound over caller-provided text. The matching helper scans candidate line windows and may compare multiple candidates with Levenshtein distance (`crates/ax-code-diff/src/helpers.rs:168-283`), while unified diff and statistics each construct a `similar::TextDiff` (`crates/ax-code-diff/src/helpers.rs:546-574`). No unbounded process spawn, network call, or file read is present in the implementation read. Runtime call sites wrap native operations with byte/line metadata for profiling (`packages/ax-code/src/patch/index.ts:502-510`, `packages/ax-code/src/tool/edit-impl.ts:745-758`). These costs are consistent with an acceleration addon; callers should still enforce input limits, as the edit tool does at 500,000/1,000,000 characters (`packages/ax-code/src/tool/edit-impl.ts:45-49`).
+
+## Step 5 API and architectural fit
+
+The package is a narrow generated bridge: `package.json` points at one native binary name and enumerates five supported targets (`packages/ax-code-diff-native/package.json:7-20`). Core code preserves ownership of feature flags, logging, caching, and fallback selection in the central adapter (`packages/ax-code/src/native/addon.ts:23-41`, `packages/ax-code/src/native/addon.ts:67-76`). Consumers do not import the binary directly. A design limitation is that structured results are returned as JSON strings, so the declaration cannot statically express result fields; the edit consumer compensates with a Zod decoder (`packages/ax-code/src/tool/edit-impl.ts:32-40`). That is an explicit bridge convention, not an unchecked cast at the use site.
+
+## Step 6 Maintainability and code hygiene
+
+The declaration is marked NAPI-RS generated and disables linting (`packages/ax-code-diff-native/index.d.ts:1-2`), so edits belong in Rust/build generation rather than the `.d.ts` by hand. Comments describe every export and match the Rust return shapes (`packages/ax-code-diff-native/index.d.ts:3-46`; `crates/ax-code-diff/src/lib.rs:10-17`, `crates/ax-code-diff/src/lib.rs:251-263`). The helper strategy table keeps nine names aligned with nine function pointers (`crates/ax-code-diff/src/helpers.rs:516-542`). Production unwraps at `crates/ax-code-diff/src/lib.rs:68-69` are dominated by successful `find` checks on the same candidate and therefore do not expose a reachable panic under immutable string input. No TODO, unsafe block, silent catch, or dead declaration fragment appeared in the reviewed unit and implementation.
+
+## Step 7 Test evidence and residual gaps
+
+The Rust module contains focused cases for edit success/error paths, four seek passes including EOF and negative-one behavior, unified diff, distance/similarity, statistics, normalization, offsets, and strategy helpers (`crates/ax-code-diff/src/lib.rs:377-620`). `cargo test --manifest-path crates/Cargo.toml -p ax-code-diff` passed 25 tests with zero failures on 2026-08-11. `pnpm --dir packages/ax-code run typecheck` also passed, exercising the declaration as imported by `DiffBinding` at `packages/ax-code/src/native/addon.ts:28`. Residual coverage is that the public `applyChunks` serializer is not directly named by a Rust unit test, and the performance test validates bridge accounting rather than diff semantics (`packages/ax-code/test/perf/native.test.ts:29-45`). Existing lower-level tests cover its matching and diff helpers, so this is a non-blocking coverage opportunity.
+
+## Step 8 Findings and severity disposition
+
+The unit finding directory was inspected and contains no files; the audit register likewise records no accepted entry (`docs/module-quality-audit/modules/pkg-ax-code-diff-native/MODULE-AUDIT.md:60-64`). Independent source tracing found no Critical, High, Medium, or Low defect requiring a new finding artifact. The stale export count in the audit (`MODULE-AUDIT.md:24-29`) is corrected by Step 1's direct declaration inventory and is protocol metadata, not a product defect. The missing direct `applyChunks` test noted in Step 7 remains test-hardening advice because the implementation has explicit error returns, reverse-order replacement logic, and tested constituent helpers rather than evidence of incorrect behavior.
+
+## Step 9 Exit verification and handoff
+
+The required roles for this run are reviewer `codex-sol` and verifier `ax-code-glm`; this supersedes the older pending role table at `docs/module-quality-audit/modules/pkg-ax-code-diff-native/MODULE-AUDIT.md:11-16`. All seven declarations were matched to Rust exports, package loading and consumer fallback paths were checked, the finding directory was empty, the core typecheck passed, and the corrected crate test command passed 25/25. Because there is no Critical finding, `protocol/reverify.md` is not required. The review therefore completes all nine protocol steps for `pkg-ax-code-diff-native`, with the verifier lane able to reproduce the two successful commands above.

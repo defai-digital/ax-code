@@ -1,0 +1,37 @@
+{
+  "slug": "ui-components-comments",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "docs/module-quality-audit/modules/ui-components-comments/MODULE-AUDIT.md",
+    "desktop/packages/ui/src/components/comments/CodeMirrorCommentWidgets.tsx",
+    "desktop/packages/ui/src/components/comments/InlineCommentCard.tsx",
+    "desktop/packages/ui/src/components/comments/InlineCommentInput.tsx",
+    "desktop/packages/ui/src/components/comments/PierreDiffCommentOverlays.tsx",
+    "desktop/packages/ui/src/components/comments/PierreDiffCommentUtils.ts",
+    "desktop/packages/ui/src/components/comments/index.ts",
+    "desktop/packages/ui/src/components/comments/useInlineCommentController.ts",
+    "desktop/packages/ui/src/stores/useInlineCommentDraftStore.ts",
+    "desktop/packages/ui/src/stores/useInlineCommentDraftStore.test.ts",
+    "desktop/packages/ui/src/components/views/PlanView.tsx",
+    "desktop/packages/ui/src/components/views/FilesView-impl.tsx",
+    "desktop/packages/ui/src/components/views/PierreDiffViewer.tsx",
+    "desktop/packages/ui/src/components/views/DiffView.tsx",
+    "desktop/packages/ui/src/components/icon/Icon.tsx",
+    "desktop/packages/ui/src/components/ui/textarea.tsx",
+    "desktop/packages/ui/src/components/ui/dropdown-menu.tsx"
+  ],
+  "stepNotes": {
+    "1": "The barrel exposes shared card/input UI, a session-aware controller, and separate CodeMirror and Pierre renderer adapters.",
+    "2": "React safely renders comment text, while persisted draft IDs cross into an unescaped Pierre query selector and create a local malformed-state failure edge.",
+    "3": "Save normalization is sound, but edit state can survive a session or file identity change and silently target an absent draft in the new bucket.",
+    "4": "Draft transforms are linear, Pierre retries stop after twelve frames, and observer/listener cleanup is paired; whole-map store subscription is the main scaling advisory.",
+    "5": "Persistence, range adaptation, editor placement, annotation metadata, and third-party portal behavior have distinct owners with consistent side conversion.",
+    "6": "Focus and pointer races are guarded, but the icon-only menu trigger and placeholder-only textarea need explicit translated accessible names.",
+    "7": "Four store tests and the UI typecheck pass, while controller state changes, widget layout, portal lookup, malformed IDs, and accessibility remain directly untested.",
+    "8": "The empty ledger has no Critical item; this review notes one Medium stale-context candidate and two Low robustness/accessibility issues.",
+    "9": "The focused Vitest file passed all four cases and the UI TypeScript check completed without errors; no Critical confirmation file was warranted."
+  },
+  "date": "2026-08-11"
+}

@@ -1,0 +1,21 @@
+{
+  "agentId": "codex-sol-pkg-ax-code-parser-native-20260811T204231Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T20:42:31Z",
+  "finishedAt": "2026-08-11T20:45:33Z",
+  "filesRead": [
+    "packages/ax-code-parser-native/index.d.ts",
+    "packages/ax-code-parser-native/package.json",
+    "docs/module-quality-audit/modules/pkg-ax-code-parser-native/MODULE-AUDIT.md",
+    "crates/ax-code-parser/src/lib.rs",
+    "crates/ax-code-parser/Cargo.toml",
+    "packages/ax-code/src/native/addon.ts",
+    "packages/ax-code/src/code-intelligence/syntactic.ts",
+    "packages/ax-code/src/flag/flag.ts",
+    "packages/ax-code/src/cli/cmd/doctor.ts",
+    "script/build-native.ts",
+    "packages/ax-code/script/build-node-tui.ts"
+  ],
+  "slug": "pkg-ax-code-parser-native"
+}

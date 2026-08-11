@@ -1,0 +1,18 @@
+{
+  "agentId": "codex-sol-ui-components-mcp-20260811T202854Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T20:28:54Z",
+  "finishedAt": "2026-08-11T20:32:43Z",
+  "filesRead": [
+    "desktop/packages/ui/src/components/mcp/McpDropdown.tsx",
+    "desktop/packages/ui/src/components/layout/Header.tsx",
+    "desktop/packages/ui/src/components/ui/switch.tsx",
+    "desktop/packages/ui/src/stores/useMcpStore.ts",
+    "desktop/packages/ui/src/stores/useMcpConfigStore.ts",
+    "desktop/packages/ui/src/stores/useMcpStore.test.ts",
+    "desktop/packages/ui/src/stores/useMcpConfigStore.test.ts",
+    "docs/module-quality-audit/modules/ui-components-mcp/MODULE-AUDIT.md"
+  ],
+  "slug": "ui-components-mcp"
+}

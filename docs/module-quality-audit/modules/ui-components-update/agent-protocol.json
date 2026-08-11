@@ -1,0 +1,28 @@
+{
+  "slug": "ui-components-update",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "desktop/packages/ui/src/components/update/AxCodeUpdateToast.tsx",
+    "desktop/packages/ui/src/components/update/__tests__/axCodeUpdateDedup.test.ts",
+    "desktop/packages/ui/src/components/update/axCodeUpdateDedup.ts",
+    "desktop/packages/ui/src/stores/utils/safeStorage.ts",
+    "desktop/packages/ui/src/lib/http.ts",
+    "desktop/packages/ui/src/stores/useUIStore-impl.ts",
+    "desktop/packages/ui/src/App.tsx",
+    "docs/module-quality-audit/modules/ui-components-update/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Confirmed exactly 3 files in scope; traced both mount sites in App.tsx (line 214 embedded-only via ocPanel query param, line 965 main) and verified they are mutually exclusive, so no real double-mount.",
+    "2": "Public surface is 7 dedup exports + 1 React.FC; side effects are confined to the component, matching the module header contract at axCodeUpdateDedup.ts:1-11.",
+    "3": "Cancellation is correct: cancelled flag set on teardown (AxCodeUpdateToast.tsx:203) and checked post-await (:172); all setTimeout handles accumulated in timeoutIds and cleared together (:204), so no retry fires after unmount.",
+    "4": "shouldShowAxCodeUpdateToast ordering (empty -> seen -> dismissed) is right; both server coercions trim and the dismiss handler stores the already-trimmed version, so literal equality at axCodeUpdateDedup.ts:33 is safe across whitespace variants.",
+    "5": "Retries use CHECK_RETRY_DELAYS_MS=[10000,60000] and stop cleanly when attempt index exceeds the array (:184-185); JSON-parse guards at :66 and :171 swallow to null; noted no AbortController/timeout on either fetch as a low-severity robustness gap.",
+    "6": "Pure/effect split is the unit's main strength — dedup module is import-free and side-effect-free, which is what makes the 28-case suite possible; AxCodeUpgradeStatusLike is a correctly permissive mirror of untrusted server JSON.",
+    "7": "Timing values and toast/storage IDs are all named module-level constants (:17-22); getSafeStorage degrades to an in-memory Storage when window.localStorage is absent or throws, so dismiss persistence works in jsdom/non-browser contexts.",
+    "8": "Pure helpers are exhaustively covered (28 tests across all four functions), but the 210-line component effect — retry schedule, unmount cancellation, event wiring, upgrade POST branches, incompatible-version dedup — has zero component tests; this is the largest quality lift.",
+    "9": "No Critical or High findings; findings/ is empty and this pass added none, so no reverify gate triggers; two non-blocking follow-ups recorded (component test coverage + AbortController on the upgrade POST) for the module owner."
+  },
+  "date": "2026-08-11"
+}

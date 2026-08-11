@@ -1,0 +1,41 @@
+{
+  "slug": "ui-lib",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "desktop/packages/ui/src/lib/agentColors.ts",
+    "desktop/packages/ui/src/lib/api/types.ts",
+    "desktop/packages/ui/src/lib/appOpenEvents.ts",
+    "desktop/packages/ui/src/lib/appOpenEvents.test.ts",
+    "desktop/packages/ui/src/lib/appearanceAutoSave.ts",
+    "desktop/packages/ui/src/lib/appearancePersistence.ts",
+    "desktop/packages/ui/src/lib/asyncTimeout.ts",
+    "desktop/packages/ui/src/lib/asyncTimeout.test.ts",
+    "desktop/packages/ui/src/lib/ax-code/ascending-id.test.ts",
+    "desktop/packages/ui/src/lib/ax-code/axEngineDownloadToasts.ts",
+    "desktop/packages/ui/src/lib/ax-code/axEngineDownloadToasts.test.ts",
+    "desktop/packages/ui/src/lib/ax-code/axEngineModelsApi.ts",
+    "desktop/packages/ui/src/lib/ax-code/baseUrl.ts",
+    "desktop/packages/ui/src/lib/ax-code/baseUrl.test.ts",
+    "desktop/packages/ui/src/lib/ax-code/client.ts",
+    "desktop/packages/ui/src/lib/ax-code/client.test.ts",
+    "desktop/packages/ui/src/lib/ax-code/currentDirectory.ts",
+    "desktop/packages/ui/src/lib/ax-code/currentDirectory.test.ts",
+    "desktop/packages/ui/src/lib/ax-code/provider-tracker.ts",
+    "desktop/packages/ui/src/lib/ax-code/provider-tracker.test.ts",
+    "docs/module-quality-audit/modules/ui-lib/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Scope confirmed to desktop/packages/ui/src/lib; client.ts (2023 lines) is the structural outlier, api/types.ts is logic-free type contract.",
+    "2": "Module lives inside UI trust boundary; no secrets/process IO. Failure modes are silent persistence divergence (appearanceAutoSave.ts:93) and best-effort read swallowing (client.ts:655,1273).",
+    "3": "Verified withTimeout settled-flag guard, ascendingId server-encoding parity, formatPromptSendError's three stale-model envelope branches, and circuit-breaker immediate-close-on-success logic.",
+    "4": "Debounce (150ms) + pending merge for appearance saves; listDirectory 400ms TTL cache with generation-based invalidation; withDirectory queue has 15s safety timeout proven by client.test.ts:153-179.",
+    "5": "AxCodeService is a god-class but decomposition would duplicate currentDirectory/scoped-client wiring; createDownloadToastTracker deps object is the exemplar DI pattern; appOpenEvents adapter ports are narrow and testable.",
+    "6": "Real duplication: the 27-field AppearanceSlice is enumerated in three places in appearanceAutoSave.ts (55-83, 111-139, 143-226); a new field silently fails to persist. No cross-file dead exports found.",
+    "7": "Strong regression guards on id ordering (issue #325) and toast state machine; gaps are agentColors (no test), appearanceAutoSave/appearancePersistence (no test), and sendMessage retry + HEIC normalization paths.",
+    "8": "Six findings accepted, all LOW/MEDIUM/INFO; no Critical or High, so the reverify gate is not triggered for ui-lib.",
+    "9": "No reverify.md written (no Critical findings). reviewer-run.json and this file capture the completed 9-step pass; verifier codex-sol pending."
+  }
+}

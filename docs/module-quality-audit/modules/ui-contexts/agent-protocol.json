@@ -1,0 +1,37 @@
+{
+  "slug": "ui-contexts",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "desktop/packages/ui/src/contexts/DiffWorkerProvider.tsx",
+    "desktop/packages/ui/src/contexts/RuntimeAPIProvider.tsx",
+    "desktop/packages/ui/src/contexts/ThemeSystemContext.tsx",
+    "desktop/packages/ui/src/contexts/runtimeAPIContext.ts",
+    "desktop/packages/ui/src/contexts/runtimeAPIRegistry.ts",
+    "desktop/packages/ui/src/contexts/theme-system-context.ts",
+    "desktop/packages/ui/src/contexts/useThemeSystem.ts",
+    "desktop/packages/ui/src/sync/content-cache.ts",
+    "desktop/packages/ui/src/App.tsx",
+    "desktop/packages/ui/src/main.tsx",
+    "desktop/packages/ui/src/components/layout/MainLayout.tsx",
+    "desktop/packages/ui/src/components/views/PierreDiffViewer.tsx",
+    "desktop/packages/ui/src/apps/ElectronMiniChatApp.tsx",
+    "desktop/packages/ui/src/apps/renderElectronMiniChatApp.tsx",
+    "desktop/packages/ui/src/lib/persistence.test.ts",
+    "desktop/packages/ui/src/stores/useQuotaStore.test.ts",
+    "docs/module-quality-audit/modules/ui-contexts/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Scoped seven files into three concerns (theme system, runtime API + cache, diff worker pool); consumers traced to App.tsx:913/956, main.tsx:96, MainLayout.tsx:403, PierreDiffViewer.tsx:23, and the registry escape hatch exercised by persistence.test.ts:25,73,91.",
+    "2": "RuntimeAPIProvider mediates file content with a stat->read->stat TOCTOU guard at RuntimeAPIProvider.tsx:64-101; ThemeSystemProvider omits creds for local origin at ThemeSystemContext.tsx:269 and re-validates theme payloads via isValidCustomTheme (:73-135); the message listener is origin-checked (:484) while the __openchamberApplyThemeSync global (:465-475) is same-page only.",
+    "3": "withContentCache rebuilds its Map when the apis prop identity churns (RuntimeAPIProvider.tsx:14,162-168) but orphaned entries linger in the shared module-level LRU at content-cache.ts:14-15 because removeContentBytes lives on the discarded closure and resetContentLru (:66) is never invoked; the theme preference triple is migrated idempotently from legacy localStorage keys (:137-196).",
+    "4": "DiffWorkerProvider defers pool creation off cold start via requestIdleCallback with a 2s timeout / 1s setTimeout fallback (:150-173) and memoizes pools per style at module scope; ThemeSystemProvider runs several O(1) effects together on each toggle (cssGenerator.apply + DOM chrome at :329-342, sync localStorage at :359-380, desktop IPC at :504-526).",
+    "5": "Concerns are cleanly separated with one deliberate cross-dependency (DiffWorkerProvider.tsx:184 reading theme ids via useOptionalThemeSystem); the context/hook split is idiomatic; splash-key writes (:359-380) and updateDesktopSettings IPC (:504-526) are mild duplication serving different sinks rather than a defect.",
+    "6": "No dead code across the seven files; the comment-only catch at ThemeSystemContext.tsx:288-290 inside reloadCustomThemes swallows all custom-theme fetch failures with no telemetry — the scanner counted this as 0 empty catches because the body is comment-only.",
+    "7": "No direct unit tests for any of the three providers; the only coverage is indirect via getRegisteredRuntimeAPIs stubs in persistence.test.ts and useQuotaStore.test.ts; specific gaps include the TOCTOU retry path (:82-97), isValidCustomTheme's ~50-path allowlist, applyIncomingThemeSync origin checking, and pool memoization/idle warmup.",
+    "8": "No Critical/High items; recorded one Medium (shared-LRU orphan entries via RuntimeAPIProvider.tsx:14,162-168 + content-cache.ts:14-15) and two Low (comment-only catch at ThemeSystemContext.tsx:288, unguarded __openchamberApplyThemeSync global at :465-475); findings/ stays empty and no reverify.md is required by the gate.",
+    "9": "All file:line refs resolve to opened files; documentation-only pass made no code changes so no live checks were executed; recommended follow-up checks are pnpm --dir desktop exec vitest run src/lib/persistence.test.ts src/stores/useQuotaStore.test.ts and pnpm run desktop:typecheck."
+  }
+}

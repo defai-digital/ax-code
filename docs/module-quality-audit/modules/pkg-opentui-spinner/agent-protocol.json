@@ -1,0 +1,31 @@
+{
+  "slug": "pkg-opentui-spinner",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/opentui-spinner/src/index.ts",
+    "/Users/akiralam/code/ax-code/packages/opentui-spinner/src/presets.ts",
+    "/Users/akiralam/code/ax-code/packages/opentui-spinner/src/solid.ts",
+    "/Users/akiralam/code/ax-code/packages/opentui-spinner/src/utils.ts",
+    "/Users/akiralam/code/ax-code/packages/opentui-spinner/package.json",
+    "/Users/akiralam/code/ax-code/packages/opentui-spinner/README.md",
+    "/Users/akiralam/code/ax-code/packages/opentui-spinner/tsconfig.json",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/tui/opentui-spinner.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/tui/spinner.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/tui/spinner-profile.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/pkg-opentui-spinner/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Barrel at packages/opentui-spinner/src/index.ts:1-11 exposes 12 symbols; two workspace deps declared at package.json:28-31; tsconfig.json:11 enforces strict mode.",
+    "2": "Only FFI touchpoint is resolveRenderLib() at index.ts:44; the setInterval closure at index.ts:192-196 retains `this` until destroySelf()->stop() at index.ts:234-238; zero empty catches.",
+    "3": "Constructor throws on bad preset/interval (index.ts:61-63, 73-75) but setters silently no-op (index.ts:120, 134, 156); _computeWidth uses frame.length while renderSelf advances by glyph.width.",
+    "4": "Frame encoding cached per string in _encodedFrames (index.ts:88-95); parseColor(this._backgroundColor) re-evaluated per glyph at index.ts:229 and could be hoisted; typeof color===function check at line 226 also per-glyph.",
+    "5": "SpinnerRenderable co-located with barrel re-exports in index.ts:35-238; solid.ts:10 mutates a shared registry at module load as the documented SolidJS integration path.",
+    "6": "_defaultOptions at index.ts:47-54 is never read by the constructor (which inlines defaults at index.ts:67-79) — dead field; for...in at index.ts:98 over an object with no prototype is cosmetic.",
+    "7": "opentui-spinner.test.ts covers presets and utils only; SpinnerRenderable start/stop/reset/destroySelf and all setters have zero coverage; tests bypass the package exports map via relative import at line 6.",
+    "8": "No findings/*.md files exist; surfaced 2 MEDIUM (setter/throw asymmetry, width computation divergence) and 4 LOW (dead field, createPulse ignores charIndex, per-glyph parseColor, missing lifecycle tests); no Critical.",
+    "9": "Typecheck via `pnpm --dir packages/opentui-spinner run typecheck`; dedicated tests via AX_TEST_FILES=test/cli/tui/opentui-spinner.test.ts pnpm --dir packages/ax-code exec vitest run; package.json has no scripts block so dist is produced by the workspace pipeline."
+  },
+  "date": "2026-08-11"
+}

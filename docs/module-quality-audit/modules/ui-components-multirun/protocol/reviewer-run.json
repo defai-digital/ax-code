@@ -1,0 +1,17 @@
+{
+  "agentId": "ax-code-glm-ui-components-multirun-20260811T203024Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T20:30:24Z",
+  "finishedAt": "2026-08-11T20:41:07Z",
+  "slug": "ui-components-multirun",
+  "filesRead": [
+    "desktop/packages/ui/src/components/multirun/AgentSelector.tsx",
+    "desktop/packages/ui/src/components/multirun/BranchSelector.tsx",
+    "desktop/packages/ui/src/components/multirun/ModelMultiSelect.tsx",
+    "desktop/packages/ui/src/components/multirun/MultiRunFusionDialog.tsx",
+    "desktop/packages/ui/src/components/multirun/MultiRunLauncher.tsx",
+    "desktop/packages/ui/src/components/multirun/index.ts",
+    "docs/module-quality-audit/modules/ui-components-multirun/MODULE-AUDIT.md"
+  ]
+}

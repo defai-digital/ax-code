@@ -1,0 +1,24 @@
+{
+  "slug": "ui-components-terminal",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/terminal/TerminalViewport.tsx",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/ui-components-terminal/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/views/terminal-view-source.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/views/TerminalView.tsx"
+  ],
+  "stepNotes": {
+    "1": "Single-file unit: TerminalViewport.tsx (1734 lines), exports TerminalViewport + TerminalController; sole consumer is TerminalView.tsx:1231.",
+    "2": "Trust boundaries are clipboard paste (1573-1586) into PTY, clipboard copy (448-459), and aggressive DOM mutation of sibling textareas (158-224); no secrets/network/IO.",
+    "3": "Init-effect cleanup (1176-1202) fully disposes terminal, observers, listeners, RAFs, and restores patched scrollToBottom and container.focus; chunk-replay fallback at 1271 re-writes without reset if lastProcessedId drifts (latent under append-only store).",
+    "4": "SSR/null guards in findScrollableViewport (22-50) and fitTerminal (498-520) are correct; only true dead code is the unreachable ?? false at 790/945 and void no-ops at 1324-1325.",
+    "5": "Write batching via RAF (522-579) and ResizeObserver short-circuit (512-516) are healthy; MutationObserver at 1105-1114 runs disableTerminalTextareas on every subtree mutation and is the likely jank source (MEDIUM).",
+    "6": "God component with ~25 refs and duplicated kinetic-scroll branches (785-805 vs 940-958); candidate for useKineticTouchScroll hook extraction only if touch code keeps changing.",
+    "7": "Many catch { /* ignored */ } blocks are intentional defensive DOM guards; physics tuning literals (609-615) are correctly local constants, not config; no hardcoded URLs/paths or TODOs.",
+    "8": "No Critical/High; accepted LOW dead-code (790/945/1324-1325), MEDIUM perf (1105-1114), LOW test gap, LOW chunk-replay robustness, INFO design debt.",
+    "9": "No Critical findings and empty findings/ dir mean no reverify.md required; recommended checks for an implementer are desktop vitest source-guard suite and desktop:typecheck; this review was read-only."
+  },
+  "date": "2026-08-11"
+}

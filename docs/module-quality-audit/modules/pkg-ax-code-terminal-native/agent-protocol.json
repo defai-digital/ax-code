@@ -1,0 +1,26 @@
+{
+  "slug": "pkg-ax-code-terminal-native",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code-terminal-native/package.json",
+    "/Users/akiralam/code/ax-code/crates/ax-code-terminal/Cargo.toml",
+    "/Users/akiralam/code/ax-code/crates/ax-code-terminal/build.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-terminal/src/lib.rs",
+    "/Users/akiralam/code/ax-code/script/build-native.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/pkg-ax-code-terminal-native/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Unit = thin N-API wrapper (packages/ax-code-terminal-native/package.json:23-24) + Rust crate crates/ax-code-terminal/src/lib.rs; public surface = 4 #[napi] fns at lib.rs:588,594,600,609; no in-tree TS consumer yet.",
+    "2": "No unsafe in lib.rs; no env/fs/net/process; only input is serde_json-deserialized String args mapped to napi::Error (lib.rs:589-590,605,611,613); memory bounded by Viewport clamp 1..=1000 (lib.rs:7-8,32-34).",
+    "3": "Traced every parser branch: bracketed paste (119-127), SGR mouse (244-281), SS3 (144-161), repeat-count (223-227), ANSI non-SGR skip (311-334) all correct; gaps are CSI ~ codes 2/5/6 (214-219) and final Z (198) dropped to Escape+text.",
+    "4": "Single-pass O(n) parsers; hotspots are per-key to_string (183-190), per-color format! (376-380), Style clone per TextRun flush (317-322); napi JSON-string boundary double-encodes per call (588-606).",
+    "5": "Value-oriented Clone data model, no interior mutability; TerminalError Result for lifecycle (46-77) vs napi::Result for FFI; #[napi] fns are thin serde wrappers so pure fns are testable but FFI layer itself is untested.",
+    "6": "No dead exports (wired via package.json:5-6 + build-native.ts:75-80); no TODO/FIXME/panic; unwrap_or(u16::MAX) at 601-602 are intentional saturating casts; re-clamp at 551-552 is redundant but harmless.",
+    "7": "24 deterministic I/O-free inline tests at lib.rs:618-936, including CJK supplementary planes and documented prior-bug regressions (886-887,911-912); gap = no negative tests pinning the missing Insert/PageUp/PageDown/shift-Tab behavior.",
+    "8": "No Critical items; findings/ empty. Accepted: MEDIUM CSI ~ 2/5/6 (214-219), LOW-MED final Z (198), LOW unterminated paste (119-127), LOW untested FFI + undocumented JSON contract (588-616), LOW hot-loop allocs (183-190).",
+    "9": "Gates: cargo test -p ax-code-terminal, cargo clippy -D warnings, pnpm build:native (script/build-native.ts:76-80 asserts .node emit + shim); read-path verification of all 5 source files performed; no Critical so codex-sol reverify is non-blocking."
+  },
+  "date": "2026-08-11"
+}

@@ -1,0 +1,28 @@
+{
+  "slug": "ui-components-icon",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/icon/Icon.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/icon/icons.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/icon/sprite.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/icon/README.md",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/ui-components-icon/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/desktop/scripts/generate-icon-sprite.mjs",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/package.json",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/vitest.config.ts"
+  ],
+  "stepNotes": {
+    "1": "The unit exposes IconProps and a memoized Icon component from Icon.tsx, projects IconName directly from the generated sprite keys, and exports the 227-entry iconSpriteData constant.",
+    "2": "sprite.ts is generated from the installed Remixicon bundle; inspection found 227 non-empty, path-only entries with no duplicate keys, and the generator builds currentColor path fragments before writing the table.",
+    "3": "ensureSpriteOnce handles SSR, absent body, and pre-existing sprite nodes, but its module boolean can stay true after the node is removed or the active document is replaced; recorded as Low.",
+    "4": "Icon merges the remixicon class, forwards ordinary SVG props after its defaults, and renders a single use node; render-time sprite insertion is an idempotent but impure React-render advisory.",
+    "5": "The innerHTML sink receives only statically imported generated path markup; runtime name values flow to React's href attribute and TypeScript constrains them to IconName, leaving no user-controlled HTML source.",
+    "6": "The 109,438-byte sprite is parsed once through Object.entries/map/join and then shared by lightweight svg/use instances; the latch and React.memo bound repeat work.",
+    "7": "Runtime ownership is clean and marker-free, but README.md names two different bun regeneration scripts and package.json defines neither; the generator's own node invocation is the working instruction.",
+    "8": "UI TypeScript checking passed, while Vitest has no icon-specific file; SSR, adoption of an existing sprite, prop overrides, and stale-latch recovery therefore lack focused regression coverage.",
+    "9": "Two Low findings were accepted (stale document latch and unusable regeneration commands), with render purity and missing tests advisory-only; no Critical item exists, so no reverify.md was created."
+  },
+  "date": "2026-08-11"
+}

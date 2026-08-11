@@ -1,0 +1,29 @@
+{
+  "agentId": "ax-code-glm-ui-components-onboarding-20260811T203024Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T20:30:24Z",
+  "finishedAt": "2026-08-11T20:41:07Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/onboarding/ChooserScreen.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/onboarding/DesktopConnectionRecovery.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/onboarding/LocalSetupScreen.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/onboarding/OnboardingScreen.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/onboarding/RecoveryScreen.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/onboarding/RemoteConnectionForm.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/onboarding/desktopRecoveryConfig.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/onboarding/desktopRecoveryConfig.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/onboarding/desktopRecoveryRouting.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/onboarding/desktopRecoveryRouting.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/onboarding/installCommands.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/onboarding/installCommands.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/onboarding/onboardingTimers.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/onboarding/onboardingTimers.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/onboarding/types.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/desktopHosts.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/http.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/desktop.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/ui-components-onboarding/MODULE-AUDIT.md"
+  ],
+  "slug": "ui-components-onboarding"
+}

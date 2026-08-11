@@ -1,0 +1,40 @@
+{
+  "slug": "pkg-ax-code-index-core",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code-index-core/index.d.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/pkg-ax-code-index-core/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code-index-core/package.json",
+    "/Users/akiralam/code/ax-code/crates/ax-code-index/Cargo.toml",
+    "/Users/akiralam/code/ax-code/crates/ax-code-index/build.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-index/src/lib.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-index/src/store.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-index/src/cursor.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-index/src/edge.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-index/src/file.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-index/src/node.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-index/src/schema.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-index/src/lock.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-index/src/interval_tree.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-index/src/hasher.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-index/src/id.rs",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/native/addon.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/code-intelligence/native-store.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/code-intelligence/lockfile.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/code-intelligence/native-store.test.ts"
+  ],
+  "stepNotes": {
+    "1": "The generated declaration exposes AdvisoryLock, IndexStore, IntervalTree, and three free functions; package metadata points types to index.d.ts and regeneration to the Rust crate.",
+    "2": "Native boundaries include caller-selected lock, database, and hash-file paths; SQL values are parameterized and JSON writes deserialize before mutation, with no network or subprocess behavior.",
+    "3": "Close consumes the optional SQLite connection and blocks reuse, while clear and ingest are transactional; ingest does not cross-check payload project/file identity against its explicit arguments.",
+    "4": "Prepared transactional bulk writes and scoped pruning are efficient, but IntervalTree lookup scans the full pre-partition prefix and is worst-case linear despite its O(log n) description.",
+    "5": "NAPI-RS owns declaration generation, Rust owns implementation, the centralized native loader owns availability, and NativeStore contains JSON/fallback adaptation for product callers.",
+    "6": "Nullable and optional signatures match runtime behavior, release operations are idempotent, and malformed query-options JSON uniquely falls back to unfiltered options instead of rejecting.",
+    "7": "Rust coverage spans 30 passing hash, ID, interval, lock, and SQLite tests; three adapter tests pass, with residual gaps around incoherent ingest payloads and malformed options.",
+    "8": "The ledger and findings directory contain no accepted item; this pass found no Critical or High defect and retained three bounded robustness/performance follow-ups in the protocol narrative.",
+    "9": "cargo test passed 30 tests, the targeted native-store Vitest file passed three tests, and the core TypeScript typecheck passed; no Critical-triggered reverify artifact is needed."
+  },
+  "date": "2026-08-11"
+}

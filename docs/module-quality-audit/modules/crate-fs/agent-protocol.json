@@ -1,0 +1,29 @@
+{
+  "slug": "crate-fs",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "crates/ax-code-fs/build.rs",
+    "crates/ax-code-fs/examples/bench.rs",
+    "crates/ax-code-fs/src/detect.rs",
+    "crates/ax-code-fs/src/embedding.rs",
+    "crates/ax-code-fs/src/lib.rs",
+    "crates/ax-code-fs/src/watcher.rs",
+    "crates/ax-code-fs/Cargo.toml",
+    "crates/ax-code-fs/ignore-patterns.json",
+    "docs/module-quality-audit/modules/crate-fs/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Mapped NAPI surface across lib.rs (walk_files:110, glob_files:204, search_content:402, is_ignored:508, scan_files:709, read_files_batch:834, FileTree class:1020, detect_* wrappers:1140-1153), embedding.rs (chunk_file:22, normalize_for_embedding:81, estimate_tokens:137, content_hash:143), watcher.rs (NativeWatcher:29); detect.rs is private with detect_*_native free functions invoked only from lib.rs wrappers at 888/952/1009.",
+    "2": "Every JS->Rust boundary deserializes a JSON string via serde_json::from_str and propagates errors as napi::Error (never panics). Dominant runtime risks are unbounded watcher mpsc channel growth (watcher.rs:48) and cross-tool contract drift on ignore-patterns.json; secrets/IO exposure is indirect since the crate only reads files the agent is already authorized to see.",
+    "3": "chunk_file's BUG-302 overlap clamp (embedding.rs:31-35) plus the zero-max guard (:41-43) are locked by chunk_file_zero_max_returns_empty and chunk_file_overlap tests. find_function_scopes' byte scanner correctly skips block comments (test at detect.rs:1166-1180) but its line-comment shortcut at detect.rs:371-372 (b'/' => break) fires inside string literals like \"https://...\", a real scope-depth false-negative. The truncated flag at detect.rs:901/965/1022 is off-by-one: files.len() >= max_files reports file-cap-hit even when nothing was dropped.",
+    "4": "Walker config is uniform: .git_ignore(true)+.git_global(true)+.git_exclude(true) at lib.rs:125-127, 212-214, 422-424, 747-749, detect.rs:1080-1084, lib.rs:892-895. Hot-path regex/glob hoisted into LazyLock (SECURITY_PATTERNS detect.rs:78, LIFECYCLE_RULES:269, HARDCODE_PATTERNS:534, IGNORE_FILE_MATCHERS lib.rs:98) with inline PERF-07/NAT-03 rationale at lib.rs:94-97. Rayon par_iter drives batch scans. One gap: scan_files rebuilds a grep Searcher per (file,pattern) pair at lib.rs:792-797, so P patterns cost files x P searcher allocations; reuse one searcher per pattern outside the file loop. before_buf uses pop_front (BUG-284, lib.rs:363-365) so VecDeque stays O(1).",
+    "5": "Thin JSON-in/JSON-out accelerator with clean boundaries; detect.rs is highly cohesive (shared DetectResult, is_suppressed, collect_scan_files). Ownership smell: FileTreeInner behind a single Arc<Mutex<...>> (lib.rs:1022, 868-873) serializes all readers (glob/file_count/has_file/file_meta at 1061/1080/1112/1122) against each other AND against watcher-driven update_file; acceptable for current single-consumer usage, but a RwLock is the proportional upgrade if concurrent globs land. NativeWatcher.root is #[allow(dead_code)] (watcher.rs:32-34) and could back a debug-assert path containment check.",
+    "6": "Legitimate #[allow(dead_code)] on FunctionScope::end (detect.rs:336) and NativeWatcher.root (watcher.rs:32-34). No empty error swallows; every Err(_) discard is deliberate (continue on stat failure, return Vec::new() on read failure). Notable drift hazard: examples/bench.rs:17-46 re-declares IGNORE_FOLDERS as a frozen copy of ignore-patterns.json that has already diverged (missing __pycache__, .pytest_cache, mypy_cache, .webkit-cache) - dev-only but a third source of truth the lib.rs:73-76 sync warning doesn't cover.",
+    "7": "Substantive inline coverage: lib.rs has 14 #[test] functions across is_ignored folder/file/extra/normal cases (1175-1252), walk_files basic/limit/hidden/ignore (1256-1355), glob_files basic/limit/mtime ordering (1359-1416). embedding.rs has 9 tests covering chunking, overlap, zero-max guard, unicode quote/dash/ellipsis normalization, hash determinism (154-227). detect.rs has 3 regression tests for UTF-8 truncation boundaries, per-variable map growth detection, and block-comment brace handling (1131-1180). Gaps: scan_files, ContentSink's pending/after_remaining context-flush state machine (lib.rs:296-345), read_files_batch, the FileTree class, and NativeWatcher have no direct unit tests - exercised only via JS wrappers.",
+    "8": "Primary pass raised 8 findings F1-F8, no Critical, nothing yet in findings/: F1 MEDIUM DefaultHasher (embedding.rs:54-56,143-148) not stable across Rust versions - unsafe as persisted cache key, switch to blake3/sha2 or document session scope; F2 MEDIUM filesScanned counts attempted not successfully-read files (detect.rs:906-924,970-981,1027-1038; lib.rs:783-817) skewing findings/filesScanned ratios; F3 MEDIUM truncated off-by-one reports file-cap-hit at exactly max_files (detect.rs:901,965,1022); F4 LOW glob_files skips .git but not IGNORE_FOLDERS (lib.rs:203-269); F5 LOW watcher mpsc channel unbounded (watcher.rs:48); F6 LOW line-comment-in-string brace miss (detect.rs:371-372); F7 INFO bench IGNORE_FOLDERS drift; F8 INFO is_active swallows poison as false while siblings propagate (watcher.rs:147-150). codex-sol to independently confirm F1-F3.",
+    "9": "No Critical findings and findings/ is empty so no reverify.md from this lane (reverify.md only triggers on Critical). Native verification for crate-fs means pnpm build:native (or build:native:debug) plus cargo test -p ax-code-fs exercising the #[test] suites cited in Step 7; because this is a N-API cdylib, the JS-side contract tests under packages/ax-code/test/ are the real end-to-end gate but belong to other units. Primary 9-step complete; awaiting codex-sol independent verification of F1-F3 in particular."
+  }
+}

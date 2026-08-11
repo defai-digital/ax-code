@@ -1,0 +1,30 @@
+{
+  "slug": "ui-components-model-picker",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/model-picker/ModelPickerList.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/modelPickerSelection.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/modelPickerSelection.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/providerModelAvailability.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/providerModelAvailability.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/modelMetadata.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/multirun/ModelMultiSelect.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/chat/ModelControls.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/sections/agents/ModelSelector.tsx",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/ui-components-model-picker/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Scoped ModelPickerList.tsx and traced its four exported data types, component prop contract, and three production consumers in chat, multirun, and agent settings.",
+    "2": "Confirmed this presentation module has no direct secret, file, process, network, or storage access; React text rendering handles model labels and guarded callbacks are its only outward action boundary.",
+    "3": "Followed filters into the expanded-only flat list, normalization into the first selectable row, wrapped keyboard traversal, Enter availability checks, collapse reindexing, and drag lookup validation.",
+    "4": "Reviewed memoized catalogs and the targeted index-subscription store; the only scaling note is the hiddenModels.some scan repeated across each candidate entry, while tooltip work is delayed and conditional.",
+    "5": "Verified ownership seams: selection, availability, and metadata policy live in pure lib modules; chat owns variants/reordering, multirun owns capacity/counts, and agent settings owns provider restrictions and none selection.",
+    "6": "Found no TODO/FIXME/HACK markers or catch blocks; the cost formatter and tooltip branch are intentionally dormant behind MODEL_COST_DISPLAY_ENABLED=false, and repeated disabled checks share one policy helper.",
+    "7": "Read the 9 helper tests covering blocked navigation and availability rules; direct component tests are absent for filtering, collapse/reindex, pointer-keyboard handoff, drag, tooltip delay, and none selection.",
+    "8": "The audit ledger and findings directory contain no accepted item, and the independent pass found no Critical issue; observed search, scaling, feature-gate, and coverage edges remain non-Critical follow-ups.",
+    "9": "Focused Vitest verification passed 2 files and 9 tests, the UI TypeScript check passed, all evidence paths resolve, and no reverify.md is needed because no Critical finding exists."
+  },
+  "date": "2026-08-11"
+}

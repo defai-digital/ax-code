@@ -1,0 +1,35 @@
+{
+  "slug": "ui-components-projects",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/projects/ImportProjectsDialog.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/projects/ProjectsHome.tsx",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/ui-components-projects/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/stores/useProjectsStore.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/stores/useProjectsStore.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/http.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/projectOrdering.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/projectOrdering.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/chat/ChatEmptyState.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/work/WorkHome.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/projects/discover-external.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/projects/discover-external.test.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/package.json",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/vitest.config.ts",
+    "/Users/akiralam/code/ax-code/desktop/vitest.config.ts"
+  ],
+  "stepNotes": {
+    "1": "Confirmed both exported project components and traced compact and full home call sites.",
+    "2": "Followed external-project roots from the GET endpoint through server-side settings and directory checks.",
+    "3": "Checked success, malformed payload, error reset, default selection, retry, and open-triggered loading states.",
+    "4": "Verified selected roots are re-filtered, normalized, deduplicated, persisted once, and counted from actual additions.",
+    "5": "Reviewed open, new-session, and pin propagation plus keyboard behavior and nested interactive semantics.",
+    "6": "Assessed memoized sorting, immutable icon-error tracking, candidate scans, and absence of runaway work.",
+    "7": "Separated transient UI state from durable store ownership and identified the missing direct component-test layer.",
+    "8": "Reconciled the empty accepted-finding register with the absent findings directory and found no Critical item.",
+    "9": "Passed UI type-check, ten related UI unit tests, and five external-discovery server tests."
+  },
+  "date": "2026-08-11"
+}

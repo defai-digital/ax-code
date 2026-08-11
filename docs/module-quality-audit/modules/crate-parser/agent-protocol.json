@@ -1,0 +1,24 @@
+{
+  "slug": "crate-parser",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/crates/ax-code-parser/build.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-parser/src/lib.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-parser/Cargo.toml",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/crate-parser/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Two source files only: build.rs is a 5-line napi_build::setup() shim and src/lib.rs is 901 lines. Corrected the audit's false 'greet@lib.rs:615' export claim — line 615 is inside a test fixture string literal; the real exports are the four #[napi] fns at lines 550/560/588/602.",
+    "2": "Pure compute crate, no fs/net/process/env. All failure paths (unsupported language, set_language error, parse None, bad batch JSON) are converted to napi::Error or per-file FileSymbols.error; no unwrap on caller data.",
+    "3": "Three latent correctness bugs found: export_statement emits both a wrapper symbol and a duplicated inner child (lib.rs:212-216 + recursion at :101); TS const detection via find_child_by_kind(node,\"const\") never matches anonymous keyword tokens so everything is labeled 'variable' (lib.rs:204); Rust impl_item is fabricated as kind 'module' duplicating the struct/enum name (lib.rs:343-350).",
+    "4": "Batch path is well-shaped: par_iter().map_init(Parser::new, ...) gives one reused Parser per rayon thread with no locking. Single-shot extract_symbols rebuilds a Parser per call (lib.rs:519) which is acceptable for a one-shot entry point. No quadratic traversal.",
+    "5": "Flat lang-string dispatch across classify_node (lib.rs:125), inner classify_* arms, and detect_visibility (lib.rs:434) is appropriate for five languages — a trait abstraction here would be over-engineering. Symbol uses camelCase serde for the JS consumer; '::' qualified-name separator is an internal key, not user-facing.",
+    "6": "thiserror is listed in Cargo.toml:16 but never used in src/lib.rs (errors are Result<_, String>). parse_batch's _concurrency parameter (lib.rs:560) is silently dropped — misleading NAPI surface. Only unwraps are under #[cfg(test)].",
+    "7": "Eight inline tests cover language happy paths but miss every Step-3 defect: no parse_batch test, no assertion that const -> kind 'constant', no export_statement child assertion, no Rust impl parse, no supported_languages() value assertion. The MODULE-AUDIT reference to packages/ax-code/test/provider/cli/parser.test.ts is a mislabel of the unrelated CLI provider parser.",
+    "8": "Accepted five findings F1-F5 (three MEDIUM correctness, two LOW hygiene/api). findings/ directory is empty — no prior items. No High or Critical findings.",
+    "9": "Verification path is pnpm build:native:debug plus cargo test -p ax-code-parser. Because findings/ contains no Critical items, no reverify.md cross-lane file is required for crate-parser; status is REVIEWED by ax-code-glm pending codex-sol confirmation of F1-F5."
+  },
+  "date": "2026-08-11"
+}

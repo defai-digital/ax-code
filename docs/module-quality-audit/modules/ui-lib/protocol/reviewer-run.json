@@ -1,0 +1,31 @@
+{
+  "agentId": "ax-code-glm-ui-lib-20260811T203456Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T20:34:56Z",
+  "finishedAt": "2026-08-11T20:52:18Z",
+  "slug": "ui-lib",
+  "filesRead": [
+    "desktop/packages/ui/src/lib/agentColors.ts",
+    "desktop/packages/ui/src/lib/api/types.ts",
+    "desktop/packages/ui/src/lib/appOpenEvents.ts",
+    "desktop/packages/ui/src/lib/appOpenEvents.test.ts",
+    "desktop/packages/ui/src/lib/appearanceAutoSave.ts",
+    "desktop/packages/ui/src/lib/appearancePersistence.ts",
+    "desktop/packages/ui/src/lib/asyncTimeout.ts",
+    "desktop/packages/ui/src/lib/asyncTimeout.test.ts",
+    "desktop/packages/ui/src/lib/ax-code/ascending-id.test.ts",
+    "desktop/packages/ui/src/lib/ax-code/axEngineDownloadToasts.ts",
+    "desktop/packages/ui/src/lib/ax-code/axEngineDownloadToasts.test.ts",
+    "desktop/packages/ui/src/lib/ax-code/axEngineModelsApi.ts",
+    "desktop/packages/ui/src/lib/ax-code/baseUrl.ts",
+    "desktop/packages/ui/src/lib/ax-code/baseUrl.test.ts",
+    "desktop/packages/ui/src/lib/ax-code/client.ts",
+    "desktop/packages/ui/src/lib/ax-code/client.test.ts",
+    "desktop/packages/ui/src/lib/ax-code/currentDirectory.ts",
+    "desktop/packages/ui/src/lib/ax-code/currentDirectory.test.ts",
+    "desktop/packages/ui/src/lib/ax-code/provider-tracker.ts",
+    "desktop/packages/ui/src/lib/ax-code/provider-tracker.test.ts",
+    "docs/module-quality-audit/modules/ui-lib/MODULE-AUDIT.md"
+  ]
+}

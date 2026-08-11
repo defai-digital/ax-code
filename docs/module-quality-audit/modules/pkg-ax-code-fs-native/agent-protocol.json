@@ -1,0 +1,29 @@
+{
+  "slug": "pkg-ax-code-fs-native",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code-fs-native/index.d.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code-fs-native/package.json",
+    "/Users/akiralam/code/ax-code/crates/ax-code-fs/Cargo.toml",
+    "/Users/akiralam/code/ax-code/crates/ax-code-fs/src/lib.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-fs/src/watcher.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-fs/src/embedding.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-fs/src/detect.rs",
+    "/Users/akiralam/code/ax-code/crates/ax-code-fs/ignore-patterns.json",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/pkg-ax-code-fs-native/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Unit maps to @ax-code/fs (package.json:2); index.d.ts declares 2 classes + 12 functions, all backed by crates/ax-code-fs across lib.rs/watcher.rs/embedding.rs/detect.rs.",
+    "2": "Filesystem+regex+watcher native engine; no secrets/network/spawn. Reads are defensive (flatten() at lib.rs:147, continue on metadata err at 244-247, per-file search errors ignored at 490); only read_files_batch intentionally propagates the first read failure (lib.rs:838-846).",
+    "3": "Found MEDIUM contract drift: index.d.ts:72-77 says readFilesBatch silently skips failures and returns an object map, but lib.rs:834-850 throws on first failure and serializes Vec<(String,String)> as a pair array; also two LOW doc gaps (chunkFile boundary claim at embedding.rs:19-20 vs line-only impl, isIgnored extraPatternsJson shape at lib.rs:508-510).",
+    "4": "Perf design holds: process-wide LazyLock matchers at lib.rs:98-104, rayon par_iter in scan_files at 786, mtime-indexed BTreeSet (u64::MAX-mtime) for O(limit) cached glob at lib.rs:948/957-976; BUG-284 fixed VecDeque pop_front at 364-366.",
+    "5": "Single-responsibility crate split into 4 cohesive modules; collect_scan_files at detect.rs:1067-1118 collapses prior walk duplication; ignore-patterns.json dual-source contract relies on a drift test referenced at lib.rs:73-76 (not independently located this pass).",
+    "6": "No empty catches, no TODO/FIXME; errors propagated via ? or discarded with comments (lib.rs:490,812); #[allow(dead_code)] on watcher.rs:32 and detect.rs:336 is justified; BUG-284/285/302 markers are traceable regression notes.",
+    "7": "Co-located #[cfg(test)] blocks: 15 in lib.rs (is_ignored/walk_files/glob_files), 8 in embedding.rs (chunk/normalize/hash), 3 regression tests in detect.rs:1132/1149/1167; gaps: read_files_batch has no test (drift uncaught), NativeWatcher untested, FileTree cache-consistency untested.",
+    "8": "Zero Critical/High; one MEDIUM (stale readFilesBatch typings) + two LOW (chunkFile doc, isIgnored shape); findings/ correctly empty — no per-finding files needed below MEDIUM.",
+    "9": "Read-only review, no source mutation; drift corroborated across index.d.ts:72-77, lib.rs:830-832 doc, and lib.rs:849 serialize call; no blockers for codex-sol verifier pass, recommend follow-up typings rebuild for the MEDIUM item."
+  },
+  "date": "2026-08-11"
+}

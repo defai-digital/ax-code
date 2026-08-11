@@ -1,0 +1,20 @@
+{
+  "agentId": "codex-sol-ui-components-model-picker-20260811T203024Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T20:30:24Z",
+  "finishedAt": "2026-08-11T20:34:14Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/model-picker/ModelPickerList.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/modelPickerSelection.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/modelPickerSelection.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/providerModelAvailability.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/providerModelAvailability.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/modelMetadata.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/multirun/ModelMultiSelect.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/chat/ModelControls.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/sections/agents/ModelSelector.tsx",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/ui-components-model-picker/MODULE-AUDIT.md"
+  ],
+  "slug": "ui-components-model-picker"
+}

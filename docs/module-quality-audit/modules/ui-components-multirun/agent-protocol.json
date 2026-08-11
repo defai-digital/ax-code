@@ -1,0 +1,27 @@
+{
+  "slug": "ui-components-multirun",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "desktop/packages/ui/src/components/multirun/AgentSelector.tsx",
+    "desktop/packages/ui/src/components/multirun/BranchSelector.tsx",
+    "desktop/packages/ui/src/components/multirun/ModelMultiSelect.tsx",
+    "desktop/packages/ui/src/components/multirun/MultiRunFusionDialog.tsx",
+    "desktop/packages/ui/src/components/multirun/MultiRunLauncher.tsx",
+    "desktop/packages/ui/src/components/multirun/index.ts",
+    "docs/module-quality-audit/modules/ui-components-multirun/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Inventory confirmed against MODULE-AUDIT: 6 files, ~2116 LOC read (audit states 2122), barrel index.ts is the sole public surface, no co-located tests.",
+    "2": "5 components + useBranchOptions hook + generateInstanceId utility exported; generateInstanceId now imported cross-file by MultiRunFusionDialog.tsx:27 and MultiRunLauncher.tsx:24, so the react-refresh disable at ModelMultiSelect.tsx:37 is stale.",
+    "3": "AgentSelector.tsx:47-69 lists onChange in deps (safe only because call sites pass stable setters); MultiRunFusionDialog.tsx:114-134 refires on every allSessions array identity change.",
+    "4": "MultiRunFusionDialog.tsx:175-198 promotes fusion session to current before sendMessage, so a send rejection orphans an empty session — the most material finding of the pass (MEDIUM, not Critical).",
+    "5": "Repeated as-casts bypass SDK types: MultiRunFusionDialog.tsx:137-139 and 59, ModelMultiSelect.tsx:322-325 — a shared ProviderModel type would restore compile-time safety.",
+    "6": "Implicit cross-module localStorage key at BranchSelector.tsx:24 (oc:lastWorktreeSourceBranch mirrors NewWorktreeDialog by comment); runtime parentElement DOM walk in ModelMultiSelect.tsx:164-179 couples to ancestor dialog/overflow structure.",
+    "7": "AgentSelector.tsx:38 getVisibleAgents() called per-render without useMemo (bounded by downstream memo); RunGroupCard declared at module scope so it does not remount; all hot counts memoized.",
+    "8": "Full t() i18n coverage; two icon-only close buttons lack aria-label — ModelMultiSelect.tsx:64-66 and MultiRunFusionDialog.tsx:284-290.",
+    "9": "No tests for any file; autocomplete trigger/splice handlers at MultiRunLauncher.tsx:776-940 are near-duplicated across handleFileSelect/handleAgentSelect/handleSnippetSelect and are the best extraction+unit-test target."
+  }
+}
