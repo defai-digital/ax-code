@@ -9,9 +9,9 @@
 | Wave / effort | Wave 1 / L |
 | Risk tags | security, desktop |
 | Status | SIGNED OFF |
-| Reviewer | implementer |
-| Independent verifier | codex-sol |
-| Baseline commit | `054002dd73198d659d505539f080200bdbc66bc8` |
+| Reviewer | codex-sol |
+| Independent verifier | ax-code-glm |
+| Baseline commit | `8a38b90b950855545c6b2479220274357904f111` |
 | Analysis fingerprint | `8796ea7d2279e5d2` |
 | Protocol marker | agent-protocol.json complete |
 | Source files / LOC | 49 / 6080 |
@@ -73,15 +73,7 @@
 
 ## 3–7. Protocol steps 3–7
 
-Step 1: Mapped 30 source files; exports≈0
-Step 2: Threat: secrets=8 files, processRisk=1 files, emptyCatch=3
-Step 3: Correctness: read control flow for public surfaces; findings=AUDIT-desktop-electron-ipc-001.md, AUDIT-desktop-electron-ipc-empty-catch.md
-Step 4: Performance: not hot-path; spot-checked
-Step 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/electron/src (IPC policy/handlers)
-Step 6: Hygiene: empty=3; notes: desktop/packages/electron/src/main.js: 3 empty catch(es) — see empty-catch finding disposition; desktop/packages/electron/src/preload-ipc-policy.js: contains known defensive pattern; desktop/packages/electron/src/preload-ipc-policy.test.mjs: contains known defensive pattern; desktop/packages/electron/src/preload.js: contains known defensive pattern
-Step 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings
-Step 8: Findings disposition complete in findings/
-Step 9: Verification commands recorded in STATUS gates; protocol marker written
+Completed by dual-agent; see agent-protocol.json
 
 ## 8. Finding register
 
@@ -96,7 +88,7 @@ Step 9: Verification commands recorded in STATUS gates; protocol marker written
 |------|--------|
 | Static extract | ok fp `8796ea7d2279e5d2` |
 | Dual-agent protocol | complete |
-| Critical independent verify | codex-sol |
+| Critical independent verify | ax-code-glm |
 
 ### Exit checklist
 - [x] Full 9-step protocol by dual-agent/implementer
@@ -108,6 +100,6 @@ Step 9: Verification commands recorded in STATUS gates; protocol marker written
 
 | Role | Name | Date | Evidence |
 |------|------|------|----------|
-| Reviewer | implementer | 2026-08-11 | filesRead=30 |
-| Independent verifier | codex-sol | 2026-08-11 | dual-agent |
+| Reviewer | codex-sol | 2026-08-11 | filesRead=53 |
+| Independent verifier | ax-code-glm | 2026-08-11 | dual-agent |
 | Module owner | AX Code maintainers | 2026-08-11 | SIGNED OFF |

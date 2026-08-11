@@ -1,23 +1,25 @@
 {
   "slug": "desktop-electron-preload",
   "completedSteps": 9,
-  "reviewer": "implementer",
+  "reviewer": "ax-code-glm",
   "verifier": "codex-sol",
   "filesRead": [
-    "desktop/packages/electron/src/preload.js"
+    "desktop/packages/electron/src/preload.js",
+    "desktop/packages/electron/src/preload-ipc-policy.js",
+    "desktop/packages/electron/src/desktop-boot-outcome.js",
+    "docs/module-quality-audit/modules/desktop-electron-preload/MODULE-AUDIT.md"
   ],
-  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
+  "baseline": "8a38b90b950855545c6b2479220274357904f111",
   "date": "2026-08-11",
   "stepNotes": {
-    "1": "Mapped 1 source files; exports≈0",
-    "2": "Threat: secrets=0 files, processRisk=0 files, emptyCatch=0",
-    "3": "Correctness: read control flow for public surfaces; findings=none",
-    "4": "Performance: not hot-path; spot-checked",
-    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/electron/src/preload.js",
-    "6": "Hygiene: empty=0; notes: desktop/packages/electron/src/preload.js: contains known defensive pattern",
-    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
-    "8": "Findings disposition complete in findings/",
-    "9": "Verification commands recorded in STATUS gates; protocol marker written"
-  },
-  "notes": "Step 1: Mapped 1 source files; exports≈0\nStep 2: Threat: secrets=0 files, processRisk=0 files, emptyCatch=0\nStep 3: Correctness: read control flow for public surfaces; findings=none\nStep 4: Performance: not hot-path; spot-checked\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/electron/src/preload.js\nStep 6: Hygiene: empty=0; notes: desktop/packages/electron/src/preload.js: contains known defensive pattern\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+    "1": "74-LOC contextBridge preload exposing __AX_CODE_DESKTOP_ELECTRON__ (startup events), __AX_CODE_DESKTOP_DESKTOP_BOOT_OUTCOME__, and a Tauri-compatible __TAURI__ shim (core.invoke/dialog.open/event.listen) plus an ax-code:dom-event to openchamber: CustomEvent bridge.",
+    "2": "Preload is the sole privileged main<->renderer bridge; dominant boundary is IPC invoke allowlist (core.invoke gated by isAllowedDesktopInvokeCommand, fail-closed reject); event scoping enforces openchamber: prefix on both inbound dom-event (line 15) and outbound event.listen (line 66); app-ready uses { once: true }.",
+    "3": "IPC fail-closed (reject before invoke); bidirectional openchamber: namespace scoping; try/catch around dom-event dispatch is documented best-effort for pre-window-ready window; event.listen returns Promise<unlisten> with removeListener to prevent leaks; recordStartupEvent defaults details to {}.",
+    "4": "One-time registration at renderer load; dom-event listener fires per main event with O(1) startsWith + dispatchEvent; event.listen subscriptions bounded by UI channel count with matching unlisten; no sync IO, no timers, no caching.",
+    "5": "Correct Electron pattern: contextBridge-based (not direct window assignment), capability-scoped, fail-closed; Tauri shim enables shared @openchamber/ui reuse across shells; openchamber: namespace applied consistently; plain CommonJS required for preload; imports only electron + two local modules.",
+    "6": "0 empty catches / 0 TODOs per inventory; the one try/catch (line 16-20) has inline comment explaining best-effort window-not-ready suppression; dialog.open maps to fixed desktop_dialog_open with main-side validation; no dead exports (side-effect-only file); _event param unused by ipcRenderer convention.",
+    "7": "5 test files (doctor-preload, desktop-handoff, webui, preload.ts helper, desktop-release-workflow) plus desktop-boot-outcome.test.mjs companion; gaps are dedicated negative tests for core.invoke unknown-command reject, event.listen namespace reject returning no-op unlisten, and dom-event non-openchamber ignore.",
+    "8": "No findings registered; no new Critical/High found; contextBridge exposure, fail-closed IPC allowlist, bidirectional namespace scoping, idempotent app-ready, and documented best-effort catch all satisfy Electron security invariants; no reverify.md needed.",
+    "9": "Desktop vitest for desktop-boot-outcome.test.mjs plus AX_TEST_FILES for webui/doctor-preload/desktop-handoff; check:desktop-boundaries + desktop:typecheck cover the JS preload; not executed here for budget; desktop:build runs at wave gate not unit sign-off."
+  }
 }

@@ -1,23 +1,20 @@
 {
   "slug": "plugin",
   "completedSteps": 9,
-  "reviewer": "implementer",
+  "reviewer": "ax-code-glm",
   "verifier": "codex-sol",
-  "filesRead": [
-    "packages/ax-code/src/plugin/index.ts"
-  ],
-  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
+  "filesRead": ["packages/ax-code/src/plugin/index.ts", "docs/module-quality-audit/modules/plugin/MODULE-AUDIT.md"],
+  "baseline": "8a38b90b950855545c6b2479220274357904f111",
   "date": "2026-08-11",
   "stepNotes": {
-    "1": "Mapped 1 source files; exports≈4",
-    "2": "Threat: secrets=0 files, processRisk=0 files, emptyCatch=0",
-    "3": "Correctness: read control flow for public surfaces; findings=none",
-    "4": "Performance: not hot-path; spot-checked",
-    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/plugin",
-    "6": "Hygiene: empty=0; notes: clean",
-    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
-    "8": "Findings disposition complete in findings/",
-    "9": "Verification commands recorded in STATUS gates; protocol marker written"
-  },
-  "notes": "Step 1: Mapped 1 source files; exports≈4\nStep 2: Threat: secrets=0 files, processRisk=0 files, emptyCatch=0\nStep 3: Correctness: read control flow for public surfaces; findings=none\nStep 4: Performance: not hot-path; spot-checked\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/plugin\nStep 6: Hygiene: empty=0; notes: clean\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+    "1": "Plugin namespace loads INTERNAL_PLUGINS [xaiAuthPlugin] plus config plugins (npm pkg@version via BunProc.install, or file:// URLs gated by Filesystem.contains trust check) and fans events via Bus.subscribeAll.",
+    "2": "Asset is the host shell and code-exec surface; file-URL boundary is Filesystem.contains over Instance.directory/worktree/Global.Path.config; npm path trusts BunProc.install resolution; Env.sanitize strips dangerous env from the $ helper; all init bounded by 15s timeout.",
+    "3": "Trust-containment check short-circuits before import; failing plugins do not abort siblings (catch+log/publishError); config-hook loop iterates [...hooks] snapshot to allow safe splice; event fanout uses Promise.allSettled so one rejection does not stop others.",
+    "4": "Startup-only path bounded by PLUGIN_TIMEOUT_MS=15s on init/import/config; event fanout is O(events x hooks) fire-and-forget with no per-call timeout on event handlers (stability note, not perf defect); no unbounded collections.",
+    "5": "Clean separation of PluginInput capability bag, loader, and trigger runtime; INTERNAL_PLUGINS array is right for built-ins; DEPRECATED_PLUGIN_PACKAGES bare continue is a minor discoverability smell; Instance.state pairs setup with unsubscribe teardown.",
+    "6": "DEPRECATED_PLUGIN_PACKAGES skip has no log (silent config swallow); npm-install branch lacks dedicated withTimeout; no TODO/empty-catch; the catch->return empty-string->continue install-failure path is logged via Session.publishError so observable.",
+    "7": "auth-override, plugin-auth-picker, and xai auth-plugin tests cover the internal path; gaps are dedicated negative tests for file-URL trust containment, deprecated-skip, config-hook splice, and Bus.subscribeAll fanout ordering.",
+    "8": "No findings registered (MODULE-AUDIT: none accepted); no new Critical/High found; observations are hygiene/test-gap notes because the trust-containment check is present and correct; plugin shell access is documented design.",
+    "9": "AX_TEST_FILES for plugin/auth-override, provider/xai/auth-plugin, cli/plugin-auth-picker plus core typecheck are the proof; full suite skipped per README; no Desktop/SDK/native/script gates apply."
+  }
 }

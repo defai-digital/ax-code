@@ -8,12 +8,12 @@
 | XL filter | no |
 | Wave / effort | Wave 9 / M |
 | Risk tags | native |
-| Status | SIGNED OFF |
-| Reviewer | implementer |
+| Status | NOT STARTED |
+| Reviewer | ax-code-glm |
 | Independent verifier | codex-sol |
-| Baseline commit | `054002dd73198d659d505539f080200bdbc66bc8` |
+| Baseline commit | `8a38b90b950855545c6b2479220274357904f111` |
 | Analysis fingerprint | `ea8d047cf34a15b0` |
-| Protocol marker | agent-protocol.json complete |
+| Protocol marker | pending dual-agent 9-step |
 | Source files / LOC | 0 / 0 |
 | Inventory ID | W9-14 |
 
@@ -55,7 +55,7 @@
 
 ## 3–7. Protocol steps 3–7
 
-Thin N-API wrapper package; binaries built from crates/ax-code-daemon. Reviewed package.json napi triples and build scripts.
+**Pending dual-agent PRD §6 steps 3–7** (correctness, performance, design, dead-code, tests). Static map above is Wave-0/extract only — not full sign-off.
 
 ## 8. Finding register
 
@@ -68,19 +68,19 @@ Thin N-API wrapper package; binaries built from crates/ax-code-daemon. Reviewed 
 | Item | Result |
 |------|--------|
 | Static extract | ok fp `ea8d047cf34a15b0` |
-| Dual-agent protocol | complete |
-| Critical independent verify | codex-sol |
+| Dual-agent protocol | PENDING |
+| Critical independent verify | pending |
 
 ### Exit checklist
-- [x] Full 9-step protocol by dual-agent/implementer
+- [ ] Full 9-step protocol by dual-agent/implementer
 - [x] Map with unit-scoped files (XL filters applied when configured)
 - [x] Findings ledger consistent with findings/ files
-- [x] Sign-off roles complete
+- [ ] Sign-off roles complete
 
 ### Sign-off
 
 | Role | Name | Date | Evidence |
 |------|------|------|----------|
-| Reviewer | implementer | 2026-08-11 | filesRead=1 |
-| Independent verifier | codex-sol | 2026-08-11 | dual-agent |
-| Module owner | AX Code maintainers | 2026-08-11 | SIGNED OFF |
+| Reviewer | — | — | protocol pending |
+| Independent verifier | — | — | pending |
+| Module owner | — | — | NOT STARTED |

@@ -8,12 +8,12 @@
 | XL filter | no |
 | Wave / effort | Wave 7 / M |
 | Risk tags | desktop, security |
-| Status | SIGNED OFF |
-| Reviewer | implementer |
+| Status | REVIEWING |
+| Reviewer | ax-code-glm |
 | Independent verifier | codex-sol |
-| Baseline commit | `054002dd73198d659d505539f080200bdbc66bc8` |
+| Baseline commit | `8a38b90b950855545c6b2479220274357904f111` |
 | Analysis fingerprint | `fb8dac3b5be4143a` |
-| Protocol marker | agent-protocol.json complete |
+| Protocol marker | pending dual-agent 9-step |
 | Source files / LOC | 2 / 1903 |
 | Inventory ID | W7-14 |
 
@@ -51,15 +51,7 @@
 
 ## 3–7. Protocol steps 3–7
 
-Step 1: Mapped 2 source files; exports≈7
-Step 2: Threat: secrets=2 files, processRisk=0 files, emptyCatch=9
-Step 3: Correctness: read control flow for public surfaces; findings=AUDIT-desktop-web-preview-empty-catch.md
-Step 4: Performance: not hot-path; spot-checked
-Step 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/web/server/lib/preview
-Step 6: Hygiene: empty=9; notes: desktop/packages/web/server/lib/preview/proxy-runtime.js: 9 empty catch(es) — see empty-catch finding disposition
-Step 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings
-Step 8: Findings disposition complete in findings/
-Step 9: Verification commands recorded in STATUS gates; protocol marker written
+**Pending dual-agent PRD §6 steps 3–7** (correctness, performance, design, dead-code, tests). Static map above is Wave-0/extract only — not full sign-off.
 
 ## 8. Finding register
 
@@ -72,19 +64,19 @@ Step 9: Verification commands recorded in STATUS gates; protocol marker written
 | Item | Result |
 |------|--------|
 | Static extract | ok fp `fb8dac3b5be4143a` |
-| Dual-agent protocol | complete |
-| Critical independent verify | codex-sol |
+| Dual-agent protocol | PENDING |
+| Critical independent verify | pending |
 
 ### Exit checklist
-- [x] Full 9-step protocol by dual-agent/implementer
+- [ ] Full 9-step protocol by dual-agent/implementer
 - [x] Map with unit-scoped files (XL filters applied when configured)
 - [x] Findings ledger consistent with findings/ files
-- [x] Sign-off roles complete
+- [ ] Sign-off roles complete
 
 ### Sign-off
 
 | Role | Name | Date | Evidence |
 |------|------|------|----------|
-| Reviewer | implementer | 2026-08-11 | filesRead=2 |
-| Independent verifier | codex-sol | 2026-08-11 | dual-agent |
-| Module owner | AX Code maintainers | 2026-08-11 | SIGNED OFF |
+| Reviewer | — | — | protocol pending |
+| Independent verifier | — | — | pending |
+| Module owner | — | — | REVIEWING |

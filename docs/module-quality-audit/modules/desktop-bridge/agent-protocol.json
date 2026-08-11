@@ -1,23 +1,25 @@
 {
   "slug": "desktop-bridge",
   "completedSteps": 9,
-  "reviewer": "implementer",
-  "verifier": "codex-sol",
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
   "filesRead": [
-    "packages/ax-code/src/desktop/webui.ts"
+    "docs/module-quality-audit/modules/desktop-bridge/MODULE-AUDIT.md",
+    "packages/ax-code/src/desktop/webui.ts",
+    "packages/ax-code/test/desktop/webui.test.ts",
+    "packages/ax-code/test/cli/tui/desktop-handoff.test.ts",
+    "packages/ax-code/test/script/desktop-release-workflow.test.ts"
   ],
-  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
-  "date": "2026-08-11",
   "stepNotes": {
-    "1": "Mapped 1 source files; exports≈8",
-    "2": "Threat: secrets=1 files, processRisk=1 files, emptyCatch=0",
-    "3": "Correctness: read control flow for public surfaces; findings=none",
-    "4": "Performance: not hot-path; spot-checked",
-    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/desktop",
-    "6": "Hygiene: empty=0; notes: clean",
-    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
-    "8": "Findings disposition complete in findings/",
-    "9": "Verification commands recorded in STATUS gates; protocol marker written"
+    "1": "The bridge resolves five runtime locations, performs JSON status/serve calls, optionally opens a browser, and forwards status/stop/log commands.",
+    "2": "Executable selection, inherited environment, child output, UI-password arguments, and the external runtime's JSON are the trust boundaries.",
+    "3": "Discovery precedence and ENOENT diagnostics are deterministic, errors fail explicitly, an existing server is reused, and missing ports are rejected.",
+    "4": "At most status plus serve processes are spawned, but stdout/stderr capture has no explicit byte limit.",
+    "5": "Discovery is testable through injected dependencies; process execution is not injected and leaves exported orchestration hard to isolate.",
+    "6": "No TODOs or empty catches exist; browser failure is an explicit best-effort branch and __internal is an exercised test seam.",
+    "7": "Discovery and handoff tests pass, while launch JSON, process failure, port, password, browser, and command-forwarding paths lack direct tests.",
+    "8": "No finding was accepted; output bounds, argv visibility, and launch coverage are hardening/test notes under the local threat model.",
+    "9": "The two focused files passed 14 tests and core typechecking passed."
   },
-  "notes": "Step 1: Mapped 1 source files; exports≈8\nStep 2: Threat: secrets=1 files, processRisk=1 files, emptyCatch=0\nStep 3: Correctness: read control flow for public surfaces; findings=none\nStep 4: Performance: not hot-path; spot-checked\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/desktop\nStep 6: Hygiene: empty=0; notes: clean\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+  "date": "2026-08-11"
 }

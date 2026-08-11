@@ -9,9 +9,9 @@
 | Wave / effort | Wave 1 / M |
 | Risk tags | security, desktop |
 | Status | SIGNED OFF |
-| Reviewer | implementer |
-| Independent verifier | codex-sol |
-| Baseline commit | `054002dd73198d659d505539f080200bdbc66bc8` |
+| Reviewer | codex-sol |
+| Independent verifier | ax-code-glm |
+| Baseline commit | `8a38b90b950855545c6b2479220274357904f111` |
 | Analysis fingerprint | `bb54d5098dd0e47b` |
 | Protocol marker | agent-protocol.json complete |
 | Source files / LOC | 9 / 508 |
@@ -68,15 +68,7 @@
 
 ## 3–7. Protocol steps 3–7
 
-Step 1: Mapped 9 source files; exports≈16
-Step 2: Threat: secrets=1 files, processRisk=0 files, emptyCatch=4
-Step 3: Correctness: read control flow for public surfaces; findings=AUDIT-desktop-web-security-empty-catch.md
-Step 4: Performance: not hot-path; spot-checked
-Step 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/web/server/lib/security
-Step 6: Hygiene: empty=4; notes: desktop/packages/web/server/lib/security/legacy-tunnel.js: 2 empty catch(es) — see empty-catch finding disposition; desktop/packages/web/server/lib/security/request-security.js: 2 empty catch(es) — see empty-catch finding disposition
-Step 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings
-Step 8: Findings disposition complete in findings/
-Step 9: Verification commands recorded in STATUS gates; protocol marker written
+Completed by dual-agent; see agent-protocol.json
 
 ## 8. Finding register
 
@@ -90,7 +82,7 @@ Step 9: Verification commands recorded in STATUS gates; protocol marker written
 |------|--------|
 | Static extract | ok fp `bb54d5098dd0e47b` |
 | Dual-agent protocol | complete |
-| Critical independent verify | codex-sol |
+| Critical independent verify | ax-code-glm |
 
 ### Exit checklist
 - [x] Full 9-step protocol by dual-agent/implementer
@@ -102,6 +94,6 @@ Step 9: Verification commands recorded in STATUS gates; protocol marker written
 
 | Role | Name | Date | Evidence |
 |------|------|------|----------|
-| Reviewer | implementer | 2026-08-11 | filesRead=9 |
-| Independent verifier | codex-sol | 2026-08-11 | dual-agent |
+| Reviewer | codex-sol | 2026-08-11 | filesRead=15 |
+| Independent verifier | ax-code-glm | 2026-08-11 | dual-agent |
 | Module owner | AX Code maintainers | 2026-08-11 | SIGNED OFF |

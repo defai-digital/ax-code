@@ -1,26 +1,25 @@
 {
   "slug": "desktop-web-ui-auth",
   "completedSteps": 9,
-  "reviewer": "implementer",
+  "reviewer": "ax-code-glm",
   "verifier": "codex-sol",
   "filesRead": [
     "desktop/packages/web/server/lib/ui-auth/ui-auth.js",
-    "desktop/packages/web/server/lib/ui-auth/ui-auth.test.js",
     "desktop/packages/web/server/lib/ui-auth/ui-passkeys.js",
-    "desktop/packages/web/server/lib/ui-auth/ui-passkeys.test.js"
+    "docs/module-quality-audit/modules/desktop-web-ui-auth/MODULE-AUDIT.md",
+    "docs/module-quality-audit/modules/desktop-web-ui-auth/findings/AUDIT-desktop-web-ui-auth-empty-catch.md"
   ],
-  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
+  "baseline": "8a38b90b950855545c6b2479220274357904f111",
   "date": "2026-08-11",
   "stepNotes": {
-    "1": "Mapped 4 source files; exports≈3",
-    "2": "Threat: secrets=4 files, processRisk=0 files, emptyCatch=4",
-    "3": "Correctness: read control flow for public surfaces; findings=AUDIT-desktop-web-ui-auth-empty-catch.md",
-    "4": "Performance: not hot-path; spot-checked",
-    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/web/server/lib/ui-auth",
-    "6": "Hygiene: empty=4; notes: desktop/packages/web/server/lib/ui-auth/ui-passkeys.js: 4 empty catch(es) — see empty-catch finding disposition",
-    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
-    "8": "Findings disposition complete in findings/",
-    "9": "Verification commands recorded in STATUS gates; protocol marker written"
-  },
-  "notes": "Step 1: Mapped 4 source files; exports≈3\nStep 2: Threat: secrets=4 files, processRisk=0 files, emptyCatch=4\nStep 3: Correctness: read control flow for public surfaces; findings=AUDIT-desktop-web-ui-auth-empty-catch.md\nStep 4: Performance: not hot-path; spot-checked\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/web/server/lib/ui-auth\nStep 6: Hygiene: empty=4; notes: desktop/packages/web/server/lib/ui-auth/ui-passkeys.js: 4 empty catch(es) — see empty-catch finding disposition\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+    "1": "createUiAuth factory (ui-auth.js:309) returning requireAuth/session/passkey/reset handlers; JWT HS256 via jose; scryptSync+timingSafeEqual password verify; per-IP rate limit (10/5min, no-IP tier 3/5min, 15min lockout); HttpOnly+SameSite=Strict cookies; disabled-mode null-object when no password; createUiPasskeys delegation.",
+    "2": "Asset is unauthorized loopback server access; defenses are password+JWT-session, rate-limiter with serialized per-key locks (thundering-herd prevention), JWT secret from env/file/generated(mode 0o600), cookie HttpOnly/CSRF/Secure-conditional, handleResetAuth env-pinned guard against destructive-before-failing race, isSecureRequest trusts x-forwarded-proto (acceptable for loopback).",
+    "3": "Password verify constant-time (scryptSync+timingSafeEqual); JWT signed with expiry, validated per-request; requireAuth handles OPTIONS preflight; rate-limit lock chain serializes concurrent attempts per key; disabled-mode pass-through requireAuth with 400 on mutation handlers; dispose clears all state; handleResetAuth guards env-pinned case before clearing passkeys.",
+    "4": "requireAuth->jwtVerify is fast HS256 (~us, negligible per-request); scryptSync only on login/rate-limited/rotation (not per-request); rate-limiter Map O(1) per key with hourly unref'd cleanup bounded by distinct IPs; no caching of JWT validation (correct for immediate revocation); no unbounded growth.",
+    "5": "Factory closure encapsulation clean; disabled-mode null-object pattern sound; rate-limiter factored into check/record/clear/cleanup with tier split; mild smell: rate-limit state is module-level not enclosed (single-instance assumption); JWT-secret lifecycle handles env-pin vs file-persist; cookie builder explicit and complete.",
+    "6": "AUDIT-desktop-web-ui-auth-empty-catch (Low, deferred 2026-09-11) tracks 4 review-needed sites in ui-passkeys.js (86,101,105,109); ui-auth.js itself has NO empty catches (every catch console.errors or returns defined fallback); getClientIp strips ::ffff:; parseCookies tolerant of malformed segments; normalizePassword NFC+trim; no TODO/FIXME.",
+    "7": "In-unit ui-auth.test.js + ui-passkeys.test.js plus broad cross-cutting auth coverage (auth/auth, auth/encryption, desktop/webui, mcp/auth, mcp/oauth-*, plugin/auth-override); gaps are handleResetAuth env-pinned guard test, rate-limit fail-open injection test, acquireRateLimitLock concurrency test, and the 4 deferred ui-passkeys empty-catch sites needing comments/logging.",
+    "8": "One finding (empty-catch, Low, deferred, codex-sol verifier) is policy-compliant; no new Critical/High found; constant-time password verify, HS256 JWT sessions, tiered rate limiting with serialized locks, strong cookie attrs, 0o600 secret persistence, and handleResetAuth race guard all sound; no reverify.md (deferral re-verification belongs to verifier lane at expiry).",
+    "9": "Desktop vitest for ui-auth.test.js/ui-passkeys.test.js plus AX_TEST_FILES for auth/auth+encryption+desktop/webui; check:desktop-boundaries/desktop:typecheck/desktop:lint/desktop:test gates; not executed here for budget; in-unit tests are authoritative proof."
+  }
 }

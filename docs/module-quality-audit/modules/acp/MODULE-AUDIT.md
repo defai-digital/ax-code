@@ -8,12 +8,12 @@
 | XL filter | no |
 | Wave / effort | Wave 5 / M |
 | Risk tags | api |
-| Status | SIGNED OFF |
-| Reviewer | implementer |
+| Status | REVIEWING |
+| Reviewer | ax-code-glm |
 | Independent verifier | codex-sol |
-| Baseline commit | `054002dd73198d659d505539f080200bdbc66bc8` |
+| Baseline commit | `8a38b90b950855545c6b2479220274357904f111` |
 | Analysis fingerprint | `50eb2d2387f5864c` |
-| Protocol marker | agent-protocol.json complete |
+| Protocol marker | pending dual-agent 9-step |
 | Source files / LOC | 8 / 1747 |
 | Inventory ID | W5-10 |
 
@@ -74,15 +74,7 @@
 
 ## 3–7. Protocol steps 3–7
 
-Step 1: Mapped 8 source files; exports≈37
-Step 2: Threat: secrets=2 files, processRisk=0 files, emptyCatch=0
-Step 3: Correctness: read control flow for public surfaces; findings=none
-Step 4: Performance: not hot-path; spot-checked
-Step 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/acp
-Step 6: Hygiene: empty=0; notes: clean
-Step 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings
-Step 8: Findings disposition complete in findings/
-Step 9: Verification commands recorded in STATUS gates; protocol marker written
+**Pending dual-agent PRD §6 steps 3–7** (correctness, performance, design, dead-code, tests). Static map above is Wave-0/extract only — not full sign-off.
 
 ## 8. Finding register
 
@@ -95,19 +87,19 @@ Step 9: Verification commands recorded in STATUS gates; protocol marker written
 | Item | Result |
 |------|--------|
 | Static extract | ok fp `50eb2d2387f5864c` |
-| Dual-agent protocol | complete |
-| Critical independent verify | codex-sol |
+| Dual-agent protocol | PENDING |
+| Critical independent verify | pending |
 
 ### Exit checklist
-- [x] Full 9-step protocol by dual-agent/implementer
+- [ ] Full 9-step protocol by dual-agent/implementer
 - [x] Map with unit-scoped files (XL filters applied when configured)
 - [x] Findings ledger consistent with findings/ files
-- [x] Sign-off roles complete
+- [ ] Sign-off roles complete
 
 ### Sign-off
 
 | Role | Name | Date | Evidence |
 |------|------|------|----------|
-| Reviewer | implementer | 2026-08-11 | filesRead=8 |
-| Independent verifier | codex-sol | 2026-08-11 | dual-agent |
-| Module owner | AX Code maintainers | 2026-08-11 | SIGNED OFF |
+| Reviewer | — | — | protocol pending |
+| Independent verifier | — | — | pending |
+| Module owner | — | — | REVIEWING |

@@ -8,7 +8,7 @@
 | Origin | new |
 | Status | deferred |
 | Module | desktop-web-fs |
-| Owner | implementer |
+| Owner | ax-code-glm |
 | Expiry | 2026-09-11 |
 | Independent verifier | codex-sol |
 

@@ -1,9 +1,10 @@
 {
   "slug": "desktop-web-security",
   "completedSteps": 9,
-  "reviewer": "implementer",
-  "verifier": "codex-sol",
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
   "filesRead": [
+    "docs/module-quality-audit/modules/desktop-web-security/MODULE-AUDIT.md",
     "desktop/packages/web/server/lib/security/legacy-tunnel.js",
     "desktop/packages/web/server/lib/security/legacy-tunnel.test.js",
     "desktop/packages/web/server/lib/security/local-only.js",
@@ -12,20 +13,23 @@
     "desktop/packages/web/server/lib/security/request-security.js",
     "desktop/packages/web/server/lib/security/request-security.test.js",
     "desktop/packages/web/server/lib/security/response-headers.js",
-    "desktop/packages/web/server/lib/security/response-headers.test.js"
+    "desktop/packages/web/server/lib/security/response-headers.test.js",
+    "desktop/packages/web/server/index.js",
+    "desktop/packages/web/server/lib/ui-auth/ui-passkeys.js",
+    "desktop/packages/web/server/lib/ax-code/server-startup-runtime.js",
+    "desktop/packages/web/server/lib/ax-code/cli-options.js",
+    "docs/module-quality-audit/modules/desktop-web-security/findings/AUDIT-desktop-web-security-empty-catch.md"
   ],
-  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
-  "date": "2026-08-11",
   "stepNotes": {
-    "1": "Mapped 9 source files; exports≈16",
-    "2": "Threat: secrets=1 files, processRisk=0 files, emptyCatch=4",
-    "3": "Correctness: read control flow for public surfaces; findings=AUDIT-desktop-web-security-empty-catch.md",
-    "4": "Performance: not hot-path; spot-checked",
-    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/web/server/lib/security",
-    "6": "Hygiene: empty=4; notes: desktop/packages/web/server/lib/security/legacy-tunnel.js: 2 empty catch(es) — see empty-catch finding disposition; desktop/packages/web/server/lib/security/request-security.js: 2 empty catch(es) — see empty-catch finding disposition",
-    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
-    "8": "Findings disposition complete in findings/",
-    "9": "Verification commands recorded in STATUS gates; protocol marker written"
+    "1": "The unit divides loopback binding/origins, Host/RP derivation, Origin/cookie/WebSocket checks, stale tunnel blocking, and response headers.",
+    "2": "Local browser and process attackers motivate DNS-rebinding, proxy spoofing, cross-site WebSocket, UI-session, stale-tunnel, and framing defenses.",
+    "3": "Only loopback binds and matching Host-derived loopback Origins pass; forwarded headers are ignored and WebSocket/passkey consumers reuse the same policy.",
+    "4": "Per-request work is fixed-size parsing/header setting, and tunnel scanning is one startup pass over a small run directory.",
+    "5": "Bind, identity, authorization, response, and legacy-process responsibilities are cohesive and integrated through narrow functions.",
+    "6": "Four catches are malformed-state cleanup or rejected-socket teardown; they are fail-closed/best-effort and already tracked as Low.",
+    "7": "Nineteen direct tests cover spoofing, aliases, stale public origins, tunnels, and framing; cookie/socket/local-host and real WebSocket rebinding cases remain gaps.",
+    "8": "Only the deferred Low catch finding applies, no new finding was accepted, and no Critical re-verification file is required.",
+    "9": "All four security test files passed 19 tests; listening-server adversarial integration remains the next meaningful gate."
   },
-  "notes": "Step 1: Mapped 9 source files; exports≈16\nStep 2: Threat: secrets=1 files, processRisk=0 files, emptyCatch=4\nStep 3: Correctness: read control flow for public surfaces; findings=AUDIT-desktop-web-security-empty-catch.md\nStep 4: Performance: not hot-path; spot-checked\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/web/server/lib/security\nStep 6: Hygiene: empty=4; notes: desktop/packages/web/server/lib/security/legacy-tunnel.js: 2 empty catch(es) — see empty-catch finding disposition; desktop/packages/web/server/lib/security/request-security.js: 2 empty catch(es) — see empty-catch finding disposition\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+  "date": "2026-08-11"
 }

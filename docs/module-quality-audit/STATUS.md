@@ -1,5 +1,3 @@
-> Canonical tracked location: `docs/module-quality-audit/` (`.internal/` remains local/gitignored).
-
 # Status: Module-by-Module Quality Audit
 
 | Field | Value |
@@ -8,9 +6,9 @@
 | Active wave | Dual-agent 9-step reviews (static extract complete) |
 | Overall | Wave 0 frozen; sign-off only via agent-protocol.json |
 | Inventory | **Frozen leaf denominator: 255** |
-| Baseline commit | `054002dd73198d659d505539f080200bdbc66bc8` |
-| Signed off | **255** / 255 |
-| Reviewing (mapped, protocol pending) | **0** |
+| Baseline commit | `8a38b90b950855545c6b2479220274357904f111` |
+| Signed off | **16** / 255 |
+| Reviewing (mapped, protocol pending) | **236** |
 
 ## Dual-agent ownership
 
@@ -19,15 +17,15 @@
 | Codex | sol very-high | Even waves primary; Critical re-verify for odd |
 | ax-code | zai-coding-plan/glm-5.2[1m] | Odd waves primary; Critical re-verify for even |
 
-Sign-off rule: `modules/<slug>/agent-protocol.json` must record `completedSteps: 9`, distinct reviewer/verifier, and `filesRead[]`.
+Sign-off rule (non-forgeable): reviewer∈{codex-sol,ax-code-glm}; verifier=other lane; protocol/steps.md + reviewer-run.json; non-template stepNotes; Critical needs protocol/reverify.md. Enforced by scripts/check-protocol-integrity.mjs.
 
 ## Program metrics (baselines published)
 
 | Metric | Baseline | Current | Target | Measured |
 |--------|----------|---------|--------|----------|
 | Frozen denominator | 255 | 255 | frozen | 2026-08-11 |
-| Units signed off (protocol-complete) | 0 | 255 | 100% | 2026-08-11 |
-| Units reviewing (extract only) | — | 0 | → signed via agents | 2026-08-11 |
+| Units signed off (protocol-complete) | 0 | 16 | 100% | 2026-08-11 |
+| Units reviewing (extract only) | — | 236 | → signed via agents | 2026-08-11 |
 | Empty-catch scan (static) | 107 | 107 | disposition 100% | 2026-08-11 |
 | Unhandled-rejection / empty-.catch patterns | 203 | 203 | downward / no Crit | 2026-08-11 |
 | Coverage proxy (ax-code test file count) | 822 | 822 | + on fixed gaps | 2026-08-11 |
@@ -41,15 +39,15 @@ Sign-off rule: `modules/<slug>/agent-protocol.json` must record `completedSteps:
 | Wave | Total | Signed | Reviewing | Status |
 |------|------:|-------:|----------:|--------|
 | 1 | 16 | 16 | 0 | GATE PASSED |
-| 2 | 17 | 17 | 0 | GATE PASSED |
-| 3 | 18 | 18 | 0 | GATE PASSED |
-| 4 | 46 | 46 | 0 | GATE PASSED |
-| 5 | 26 | 26 | 0 | GATE PASSED |
-| 6 | 51 | 51 | 0 | GATE PASSED |
-| 7 | 22 | 22 | 0 | GATE PASSED |
-| 8 | 32 | 32 | 0 | GATE PASSED |
-| 9 | 22 | 22 | 0 | GATE PASSED |
-| 10 | 5 | 5 | 0 | GATE PASSED |
+| 2 | 17 | 0 | 17 | IN PROGRESS |
+| 3 | 18 | 0 | 18 | IN PROGRESS |
+| 4 | 46 | 0 | 46 | IN PROGRESS |
+| 5 | 26 | 0 | 26 | IN PROGRESS |
+| 6 | 51 | 0 | 51 | IN PROGRESS |
+| 7 | 22 | 0 | 22 | IN PROGRESS |
+| 8 | 32 | 0 | 32 | IN PROGRESS |
+| 9 | 22 | 0 | 19 | IN PROGRESS |
+| 10 | 5 | 0 | 5 | IN PROGRESS |
 
 ## Finding ledger notes
 

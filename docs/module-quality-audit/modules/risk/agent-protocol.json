@@ -1,23 +1,20 @@
 {
   "slug": "risk",
   "completedSteps": 9,
-  "reviewer": "implementer",
+  "reviewer": "ax-code-glm",
   "verifier": "codex-sol",
-  "filesRead": [
-    "packages/ax-code/src/risk/score.ts"
-  ],
-  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
+  "filesRead": ["packages/ax-code/src/risk/score.ts", "docs/module-quality-audit/modules/risk/MODULE-AUDIT.md"],
+  "baseline": "8a38b90b950855545c6b2479220274357904f111",
   "date": "2026-08-11",
   "stepNotes": {
-    "1": "Mapped 1 source files; exports≈19",
-    "2": "Threat: secrets=1 files, processRisk=0 files, emptyCatch=0",
-    "3": "Correctness: read control flow for public surfaces; findings=none",
-    "4": "Performance: not hot-path; spot-checked",
-    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/risk",
-    "6": "Hygiene: empty=0; notes: clean",
-    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
-    "8": "Findings disposition complete in findings/",
-    "9": "Verification commands recorded in STATUS gates; protocol marker written"
-  },
-  "notes": "Step 1: Mapped 1 source files; exports≈19\nStep 2: Threat: secrets=1 files, processRisk=0 files, emptyCatch=0\nStep 3: Correctness: read control flow for public surfaces; findings=none\nStep 4: Performance: not hot-path; spot-checked\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/risk\nStep 6: Hygiene: empty=0; notes: clean\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+    "1": "Risk namespace (19 exports) over score.ts: assess(signals)->Assessment, fromSession(sessionID) replaying EventQuery + persisted diff, levelForScore/top/explain/render helpers, plus decodeSessionDiffJson/Value Zod decoders.",
+    "2": "Scoring/heuristic module driving review prioritization not authorization; consumes two untrusted inputs (disk diff JSON, session events) both defended by parseJsonResult + Zod safeParse; worst case is conservative low-confidence output (confidence floor 0.1); no network/shell/persistence-writes.",
+    "3": "Scores bounded [0,100] via Math.min and levelForScore monotonic; confidence clamped [0.1,0.99]; normalize fills optional fields deterministically; readiness precedence sensible; fromSession pairs tool.call/result via validationMap[callID]; isCrossModule fix documented inline.",
+    "4": "assess is pure O(1) over normalized signals; fromSession is O(events) single pass with bounded accumulators; diffs() is one synchronous readFileSync + Zod parse (minor blocking, appropriate for CLI/TUI); no caching but stateless.",
+    "5": "Strong cohesion: types, normalize, assess (pure), fromSession (impure aggregation), render clearly sectioned; assess/fromSession seam makes scoring independently testable; magic-number thresholds inline are a mild smell; clean @/ imports.",
+    "6": "No TODO/empty-catch; catch(err) at 229 logs risk diff read failed and returns undefined (correct treat-as-missing); patch() skips +++/--- headers correctly; SECURITY_PATTERNS is classification signal not enforcement; recoveredSubagent and completionGate factors are well-documented recent additions.",
+    "7": "8 test files span unit (session/risk, permission/risk-classes), CLI, TUI sync, server route, visual, DRE graph; gaps are negative tests for diffs() read-fail and decodeSessionDiffJson malformed paths, validationFailed text-heuristic edge cases, and confidence boundary assertions.",
+    "8": "No findings registered; no new Critical/High found; module is pure consumer with no trust-enforcement surface; observations (magic-number thresholds, sync readFileSync, heuristic edge cases) are quality notes not invariant violations.",
+    "9": "AX_TEST_FILES for session/risk, permission/risk-classes, cli/risk-view, visual/risk-summary, server/session-risk plus core typecheck; full suite skipped per README; core-only module with no Desktop/SDK/native/script gates."
+  }
 }

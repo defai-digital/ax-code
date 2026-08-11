@@ -14,7 +14,7 @@
 | Source | `packages/ax-code/src/isolation/os-sandbox.ts:160-213` |
 | Impacted units | bash execution on macOS with OS/auto backend |
 | Target / expiry | immediate / n/a |
-| Fix / test | working tree / `packages/ax-code/test/isolation/os-sandbox.test.ts` and integration test |
+| Fix / test | `8a38b90b950855545c6b2479220274357904f111` / `packages/ax-code/test/isolation/os-sandbox.test.ts` and integration test |
 | Independent verifier | codex-sol (independent re-verification of the prior review) |
 
 ## Summary

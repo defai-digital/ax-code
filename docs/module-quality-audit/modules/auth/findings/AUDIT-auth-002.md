@@ -14,7 +14,7 @@
 | Source | `packages/ax-code/src/auth/index.ts:97-211` |
 | Impacted units | auth, provider credential loading |
 | Target / expiry | 2026-08-14 / n/a |
-| Fix / test | working tree / `packages/ax-code/test/auth/auth.test.ts` |
+| Fix / test | `8a38b90b950855545c6b2479220274357904f111` / `packages/ax-code/test/auth/auth.test.ts` |
 | Independent verifier | n/a (recommended, not required for non-Critical) |
 
 ## Summary

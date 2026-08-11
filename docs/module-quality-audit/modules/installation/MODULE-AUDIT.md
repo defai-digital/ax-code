@@ -9,9 +9,9 @@
 | Wave / effort | Wave 1 / M |
 | Risk tags | security, release |
 | Status | SIGNED OFF |
-| Reviewer | implementer |
+| Reviewer | ax-code-glm |
 | Independent verifier | codex-sol |
-| Baseline commit | `054002dd73198d659d505539f080200bdbc66bc8` |
+| Baseline commit | `8a38b90b950855545c6b2479220274357904f111` |
 | Analysis fingerprint | `24e7ea928495b12b` |
 | Protocol marker | agent-protocol.json complete |
 | Source files / LOC | 2 / 446 |
@@ -62,15 +62,7 @@
 
 ## 3–7. Protocol steps 3–7
 
-Step 1: Mapped 2 source files; exports≈25
-Step 2: Threat: secrets=1 files, processRisk=1 files, emptyCatch=0
-Step 3: Correctness: read control flow for public surfaces; findings=none
-Step 4: Performance: not hot-path; spot-checked
-Step 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/installation
-Step 6: Hygiene: empty=0; notes: clean
-Step 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings
-Step 8: Findings disposition complete in findings/
-Step 9: Verification commands recorded in STATUS gates; protocol marker written
+Completed by dual-agent; see agent-protocol.json
 
 ## 8. Finding register
 
@@ -96,6 +88,6 @@ Step 9: Verification commands recorded in STATUS gates; protocol marker written
 
 | Role | Name | Date | Evidence |
 |------|------|------|----------|
-| Reviewer | implementer | 2026-08-11 | filesRead=2 |
+| Reviewer | ax-code-glm | 2026-08-11 | filesRead=3 |
 | Independent verifier | codex-sol | 2026-08-11 | dual-agent |
 | Module owner | AX Code maintainers | 2026-08-11 | SIGNED OFF |

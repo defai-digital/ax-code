@@ -1,24 +1,24 @@
 {
   "slug": "installation",
   "completedSteps": 9,
-  "reviewer": "implementer",
+  "reviewer": "ax-code-glm",
   "verifier": "codex-sol",
   "filesRead": [
     "packages/ax-code/src/installation/index.ts",
-    "packages/ax-code/src/installation/runtime-mode.ts"
+    "packages/ax-code/src/installation/runtime-mode.ts",
+    "docs/module-quality-audit/modules/installation/MODULE-AUDIT.md"
   ],
-  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
+  "baseline": "8a38b90b950855545c6b2479220274357904f111",
   "date": "2026-08-11",
   "stepNotes": {
-    "1": "Mapped 2 source files; exports≈25",
-    "2": "Threat: secrets=1 files, processRisk=1 files, emptyCatch=0",
-    "3": "Correctness: read control flow for public surfaces; findings=none",
-    "4": "Performance: not hot-path; spot-checked",
-    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/installation",
-    "6": "Hygiene: empty=0; notes: clean",
-    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
-    "8": "Findings disposition complete in findings/",
-    "9": "Verification commands recorded in STATUS gates; protocol marker written"
-  },
-  "notes": "Step 1: Mapped 2 source files; exports≈25\nStep 2: Threat: secrets=1 files, processRisk=1 files, emptyCatch=0\nStep 3: Correctness: read control flow for public surfaces; findings=none\nStep 4: Performance: not hot-path; spot-checked\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/installation\nStep 6: Hygiene: empty=0; notes: clean\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+    "1": "Installation namespace (index.ts) + runtime-mode.ts: version constants from build globals, semver compare/getReleaseType, method detection via execPath + brew probes, latest() via GitHub/brew APIs, upgrade(curl SHA256-verified|brew tap+pull+upgrade), verifyActiveLauncher PATH-shadow check, withDependencies DI harness.",
+    "2": "Asset is the upgrade pipeline: upgradeCurl fetches INSTALL_SCRIPT_URL and pipes to bash, defended by SHA-256 sidecar computed over the exact executed bytes (bodyBytes reused); mismatch is fatal throw, missing sidecar is logged fail-open for availability; external API responses Zod-parsed.",
+    "3": "SHA-256 hashes the exact executed bytes (comment-documented); compareVersions returns undefined for non-semver; brew cask-skip-link relink handled with logging; UpgradeFailedError on non-zero exit; withDependencies try/finally restores deps; parseJson surfaces contextual errors.",
+    "4": "User-initiated not hot-path; cost dominated by external IO (fetch script + sidecar, sequential brew list/info probes); getBrewFormula does up to 4 short-circuiting probes; no event-loop blocking sync IO; VERSION/CHANNEL computed once at module load.",
+    "5": "Clean separation of version/method/latest/upgrade sections; runtime-mode.ts correctly split (distinct concern); Dependencies+withDependencies DI pattern enables test doubles; LauncherCheck encodes post-upgrade safety; duplicated brew formula candidate lists across getBrewFormula/method is a mild drift risk.",
+    "6": "Event.UpdateAvailable defined but no producer in this file (possibly unwired); no TODO/empty-catch; text() catch->empty is documented best-effort probe; require(package.json) in ESM is a style inconsistency (bundled-transformed); SHA-256 catch distinguishes fatal mismatch from recoverable sidecar error.",
+    "7": "installation.test.ts (withDependencies injection for fetch/run/which) + runtime-mode.test.ts (execPath classification); gaps are brew cask-relink path, sidecar-missing fail-open, sidecar-network-error recovery, and verifyActiveLauncher stale-version shadow as dedicated negative tests.",
+    "8": "No findings registered; no new Critical/High found; SHA-256 integrity check present and correct over executed bytes; external parsing Zod-defended; probe-swallow and sidecar-fail-open are deliberate logged availability tradeoffs; observations are hygiene notes.",
+    "9": "AX_TEST_FILES for installation/installation + installation/runtime-mode plus core typecheck; module core-only, upgrade path invokes brew/bash/git via Process.spawn exercised by DI tests not real subprocesses; no Desktop/SDK/native/script gates."
+  }
 }

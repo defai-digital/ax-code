@@ -1,24 +1,29 @@
 {
   "slug": "auth",
   "completedSteps": 9,
-  "reviewer": "implementer",
-  "verifier": "codex-sol",
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
   "filesRead": [
+    "docs/module-quality-audit/modules/auth/MODULE-AUDIT.md",
     "packages/ax-code/src/auth/encryption.ts",
-    "packages/ax-code/src/auth/index.ts"
+    "packages/ax-code/src/auth/index.ts",
+    "packages/ax-code/src/project/instance.ts",
+    "packages/ax-code/test/auth/encryption.test.ts",
+    "packages/ax-code/test/auth/auth.test.ts",
+    "docs/module-quality-audit/modules/auth/findings/AUDIT-auth-001.md",
+    "docs/module-quality-audit/modules/auth/findings/AUDIT-auth-002.md",
+    "docs/module-quality-audit/modules/auth/findings/AUDIT-auth-003.md"
   ],
-  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
-  "date": "2026-08-11",
   "stepNotes": {
-    "1": "Mapped 2 source files; exports≈26",
-    "2": "Threat: secrets=2 files, processRisk=0 files, emptyCatch=0",
-    "3": "Correctness: read control flow for public surfaces; findings=AUDIT-auth-001.md",
-    "4": "Performance: not hot-path; spot-checked",
-    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/auth",
-    "6": "Hygiene: empty=0; notes: clean",
-    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
-    "8": "Findings disposition complete in findings/",
-    "9": "Verification commands recorded in STATUS gates; protocol marker written"
+    "1": "Auth owns schema-checked credential CRUD in index.ts and versioned field encryption plus canaries in encryption.ts.",
+    "2": "The material boundaries are plaintext-to-disk encryption, installation-secret availability, corrupt records, and cross-process lock ownership.",
+    "3": "Mutations fail closed on corrupt JSON, migration compares a fresh locked read byte-for-byte, and stale lock deletion revalidates its claimed snapshot.",
+    "4": "PBKDF2 cost is amortized by installation-secret caching and coalesced all() reads; whole-file mutation is suitable for a small credential map.",
+    "5": "Crypto and persistence/locking responsibilities are separated, with Instance supplying lifecycle-scoped cache ownership.",
+    "6": "No implementation TODOs or empty catches were found; the only reset export is explicitly test-only and exercised.",
+    "7": "Encryption and auth tests cover fallback warnings, corruption, canaries, fresh/stale locks, and concurrent migration; true multi-process contention remains a gap.",
+    "8": "AUTH-001/002/003 remain verified-fixed, no new finding was accepted, and no Critical re-verification file applies.",
+    "9": "The combined auth/config run passed 186 tests and the core TypeScript check passed."
   },
-  "notes": "Step 1: Mapped 2 source files; exports≈26\nStep 2: Threat: secrets=2 files, processRisk=0 files, emptyCatch=0\nStep 3: Correctness: read control flow for public surfaces; findings=AUDIT-auth-001.md\nStep 4: Performance: not hot-path; spot-checked\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/auth\nStep 6: Hygiene: empty=0; notes: clean\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+  "date": "2026-08-11"
 }

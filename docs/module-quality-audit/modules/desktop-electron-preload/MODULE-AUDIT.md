@@ -9,9 +9,9 @@
 | Wave / effort | Wave 1 / M |
 | Risk tags | security, desktop |
 | Status | SIGNED OFF |
-| Reviewer | implementer |
+| Reviewer | ax-code-glm |
 | Independent verifier | codex-sol |
-| Baseline commit | `054002dd73198d659d505539f080200bdbc66bc8` |
+| Baseline commit | `8a38b90b950855545c6b2479220274357904f111` |
 | Analysis fingerprint | `e4c0032a7a67f60e` |
 | Protocol marker | agent-protocol.json complete |
 | Source files / LOC | 1 / 75 |
@@ -45,15 +45,7 @@
 
 ## 3–7. Protocol steps 3–7
 
-Step 1: Mapped 1 source files; exports≈0
-Step 2: Threat: secrets=0 files, processRisk=0 files, emptyCatch=0
-Step 3: Correctness: read control flow for public surfaces; findings=none
-Step 4: Performance: not hot-path; spot-checked
-Step 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/electron/src/preload.js
-Step 6: Hygiene: empty=0; notes: desktop/packages/electron/src/preload.js: contains known defensive pattern
-Step 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings
-Step 8: Findings disposition complete in findings/
-Step 9: Verification commands recorded in STATUS gates; protocol marker written
+Completed by dual-agent; see agent-protocol.json
 
 ## 8. Finding register
 
@@ -79,6 +71,6 @@ Step 9: Verification commands recorded in STATUS gates; protocol marker written
 
 | Role | Name | Date | Evidence |
 |------|------|------|----------|
-| Reviewer | implementer | 2026-08-11 | filesRead=1 |
+| Reviewer | ax-code-glm | 2026-08-11 | filesRead=4 |
 | Independent verifier | codex-sol | 2026-08-11 | dual-agent |
 | Module owner | AX Code maintainers | 2026-08-11 | SIGNED OFF |

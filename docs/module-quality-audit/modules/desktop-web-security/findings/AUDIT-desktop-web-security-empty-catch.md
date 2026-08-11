@@ -8,9 +8,9 @@
 | Origin | new |
 | Status | deferred |
 | Module | desktop-web-security |
-| Owner | implementer |
+| Owner | codex-sol |
 | Expiry | 2026-09-11 |
-| Independent verifier | codex-sol |
+| Independent verifier | ax-code-glm |
 
 ## Per-site disposition
 

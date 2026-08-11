@@ -1,0 +1,13 @@
+{
+  "agentId": "ax-code-glm-session-installation-2026-08-11T09-27",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T09-27:00Z",
+  "finishedAt": "2026-08-11T09:28:00Z",
+  "filesRead": [
+    "packages/ax-code/src/installation/index.ts",
+    "packages/ax-code/src/installation/runtime-mode.ts",
+    "docs/module-quality-audit/modules/installation/MODULE-AUDIT.md"
+  ],
+  "slug": "installation"
+}

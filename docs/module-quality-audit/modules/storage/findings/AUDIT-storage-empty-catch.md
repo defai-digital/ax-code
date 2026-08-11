@@ -8,7 +8,7 @@
 | Origin | new |
 | Status | deferred |
 | Module | storage |
-| Owner | implementer |
+| Owner | codex-sol |
 | Expiry | 2026-09-11 |
 | Independent verifier | ax-code-glm |
 

@@ -9,9 +9,10 @@ import path from "node:path"
 import crypto from "node:crypto"
 import { execSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
+import { protocolOk as gateProtocolOk } from "./protocol-gate.mjs"
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..")
-const PLAN = path.join(ROOT, ".internal/reports/planning/module-quality-audit")
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
+const PLAN = path.join(ROOT, "docs/module-quality-audit")
 const inventory = JSON.parse(fs.readFileSync(path.join(PLAN, "inventory-frozen.json"), "utf8"))
 const baseline = execSync("git rev-parse HEAD", { cwd: ROOT, encoding: "utf8" }).trim()
 const date = new Date().toISOString().slice(0, 10)
@@ -359,15 +360,10 @@ High-risk kill/auth paths fixed elsewhere (terminal/pty/auth). Remaining sites t
 
   const findingTable = [...knownRows, emptyFindingRow].filter(Boolean).join("\n") || "| _none accepted_ | — | — | — | — |"
 
-  // Sign-off only with real agent protocol marker
-  const protocolOk =
-    protocol &&
-    protocol.completedSteps === 9 &&
-    protocol.reviewer &&
-    protocol.verifier &&
-    protocol.verifier !== protocol.reviewer &&
-    Array.isArray(protocol.filesRead) &&
-    protocol.filesRead.length > 0
+  // Non-forgeable dual-agent protocol gate
+  const gate = gateProtocolOk(dir, u.slug)
+  const protocolOk = gate.ok
+  protocol = gate.proto || protocol
 
   const status = protocolOk ? "SIGNED OFF" : files.length ? "REVIEWING" : "NOT STARTED"
   if (status === "SIGNED OFF") signed++

@@ -1,26 +1,29 @@
 {
   "slug": "account",
   "completedSteps": 9,
-  "reviewer": "implementer",
+  "reviewer": "ax-code-glm",
   "verifier": "codex-sol",
   "filesRead": [
-    "packages/ax-code/src/account/account.sql.ts",
     "packages/ax-code/src/account/index.ts",
     "packages/ax-code/src/account/repo.ts",
-    "packages/ax-code/src/account/schema.ts"
+    "packages/ax-code/src/account/schema.ts",
+    "packages/ax-code/src/account/account.sql.ts",
+    "packages/ax-code/src/auth/encryption.ts",
+    "packages/ax-code/src/storage/schema.ts",
+    "docs/module-quality-audit/modules/account/MODULE-AUDIT.md",
+    "docs/module-quality-audit/modules/account/findings/AUDIT-account-001.md",
+    "docs/module-quality-audit/modules/account/findings/AUDIT-account-002.md"
   ],
-  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
-  "date": "2026-08-11",
   "stepNotes": {
-    "1": "Mapped 4 source files; exports≈56",
-    "2": "Threat: secrets=4 files, processRisk=0 files, emptyCatch=0",
-    "3": "Correctness: read control flow for public surfaces; findings=AUDIT-account-001.md, AUDIT-account-002.md",
-    "4": "Performance: not hot-path; spot-checked",
-    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/account",
-    "6": "Hygiene: empty=0; notes: clean",
-    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
-    "8": "Findings disposition complete in findings/",
-    "9": "Verification commands recorded in STATUS gates; protocol marker written"
+    "1": "Account is the OAuth device-code identity service (Account.create Interface, index.ts:254) over two Drizzle tables; all HTTP bodies are Zod-validated and at-rest encryption is delegated to auth/encryption.ts.",
+    "2": "Primary asset is the persisted access/refresh token ciphertext; key threats are silent install-secret key downgrade, legacy plaintext acceptance, caller-supplied server URL trust, and concurrent-refresh token invalidation (mitigated by the tokenRefreshes singleton map).",
+    "3": "Refresh-singleton and allSettled-drop invariants hold; schema validation and error translation (AccountRepoError/AccountServiceError) are consistent; legacy plaintext path is the documented invariant relaxation now made observable.",
+    "4": "Startup decryption cost is bounded by encryption.ts keyCache (512) and v2 10k iterations; no unbounded maps (tokenRefreshes drained on completion) and no N+1 (allSettled fan-out); no perf finding.",
+    "5": "Clean schema/repo/service split along policy vs IO; the bare-function singleton re-export (export let) and the auth-cross-boundary are deliberate; ControlAccountTable is a retained legacy table.",
+    "6": "ControlAccountTable is exported and re-exported but has zero query references (grep-confirmed) — migration/doc note, not a defect; no TODO/empty-catch in the four files.",
+    "7": "repo/service/token-decode/cli tests plus the cross-module encryption regression cover the fixes; gaps are dedicated concurrency tests for refresh dedup, the still-valid-token fallback, and orgsByAccount allSettled drop.",
+    "8": "AUDIT-account-001 (Medium) and AUDIT-account-002 (Low) both verified-fixed by codex-sol; no new Critical/High found; remaining items are hygiene/test-gap notes only.",
+    "9": "Targeted vitest runs for account/* and auth/encryption plus core typecheck are the proof; full suites intentionally skipped per README (root pnpm test fails by design)."
   },
-  "notes": "Step 1: Mapped 4 source files; exports≈56\nStep 2: Threat: secrets=4 files, processRisk=0 files, emptyCatch=0\nStep 3: Correctness: read control flow for public surfaces; findings=AUDIT-account-001.md, AUDIT-account-002.md\nStep 4: Performance: not hot-path; spot-checked\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/account\nStep 6: Hygiene: empty=0; notes: clean\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+  "date": "2026-08-11"
 }

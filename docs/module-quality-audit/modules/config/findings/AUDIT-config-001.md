@@ -14,7 +14,7 @@
 | Source | `packages/ax-code/src/config/config-impl.ts:158-200, 1272-1330, 1434-1449` |
 | Impacted units | format, LSP, provider, config HTTP route |
 | Target / expiry | 2026-08-14 / n/a |
-| Fix / test | working tree / `packages/ax-code/test/config/config.test.ts` |
+| Fix / test | `8a38b90b950855545c6b2479220274357904f111` / `packages/ax-code/test/config/config.test.ts` |
 | Independent verifier | n/a (recommended for High security) |
 
 ## Summary

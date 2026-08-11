@@ -1,9 +1,10 @@
 {
   "slug": "control-plane",
   "completedSteps": 9,
-  "reviewer": "implementer",
-  "verifier": "codex-sol",
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
   "filesRead": [
+    "docs/module-quality-audit/modules/control-plane/MODULE-AUDIT.md",
     "packages/ax-code/src/control-plane/abort.ts",
     "packages/ax-code/src/control-plane/adaptors.ts",
     "packages/ax-code/src/control-plane/agent-control-events.ts",
@@ -20,20 +21,28 @@
     "packages/ax-code/src/control-plane/workspace-router-middleware.ts",
     "packages/ax-code/src/control-plane/workspace-server/server.ts",
     "packages/ax-code/src/control-plane/workspace.sql.ts",
-    "packages/ax-code/src/control-plane/workspace.ts"
+    "packages/ax-code/src/control-plane/workspace.ts",
+    "packages/ax-code/test/control-plane/agent-control.test.ts",
+    "packages/ax-code/test/control-plane/execution-controller.test.ts",
+    "packages/ax-code/test/control-plane/autonomous-completion-gate.test.ts",
+    "packages/ax-code/test/control-plane/safety-policy.test.ts",
+    "packages/ax-code/test/control-plane/sse.test.ts",
+    "packages/ax-code/test/control-plane/session-proxy-middleware.test.ts",
+    "packages/ax-code/test/control-plane/workspace-sync.test.ts",
+    "packages/ax-code/test/control-plane/workspace-remove.test.ts",
+    "packages/ax-code/test/control-plane/workspace-recovery.test.ts",
+    "packages/ax-code/test/control-plane/workspace-server-sse.test.ts"
   ],
-  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
-  "date": "2026-08-11",
   "stepNotes": {
-    "1": "Mapped 17 source files; exports≈105",
-    "2": "Threat: secrets=2 files, processRisk=1 files, emptyCatch=0",
-    "3": "Correctness: read control flow for public surfaces; findings=none",
-    "4": "Performance: not hot-path; spot-checked",
-    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/control-plane",
-    "6": "Hygiene: empty=0; notes: clean",
-    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
-    "8": "Findings disposition complete in findings/",
-    "9": "Verification commands recorded in STATUS gates; protocol marker written"
+    "1": "The directory combines agent state/policy/events with workspace CRUD, adaptor proxying, SSE sync, and a loopback workspace server.",
+    "2": "Threats span premature completion and unsafe actions plus adaptor SSRF, credential forwarding, oversized SSE, retry storms, and cleanup failure.",
+    "3": "Explicit transitions and completion assertions fail closed; proxy paths/headers are sanitized, cleanup preserves rows on failure, and reconnect is abort-aware.",
+    "4": "SSE messages, subscriber queues, forwarded headers, and retry delay all have explicit bounds; policy scans remain turn-sized linear work.",
+    "5": "Agent and workspace subdomains are internally cohesive, but ExecutionController and workspace router/context currently have only test call sites.",
+    "6": "No TODOs or empty catches exist; dormant integration surfaces and test-only adaptor installation are the specific hygiene concerns.",
+    "7": "Direct policy and transport tests are broad; a production wiring test for controller/router installation is the central missing proof.",
+    "8": "No finding was accepted because the observed issue is inactive wiring rather than a violated active runtime invariant.",
+    "9": "The selected audit/control-plane run passed 104 tests and core typechecking passed."
   },
-  "notes": "Step 1: Mapped 17 source files; exports≈105\nStep 2: Threat: secrets=2 files, processRisk=1 files, emptyCatch=0\nStep 3: Correctness: read control flow for public surfaces; findings=none\nStep 4: Performance: not hot-path; spot-checked\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/control-plane\nStep 6: Hygiene: empty=0; notes: clean\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+  "date": "2026-08-11"
 }
