@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Title | SS3 parse_input panic across napi |
+| Title | SS3 unknown finals non-panicking |
 | Category | stability |
 | Severity | Critical |
 | Origin | prior-review |
@@ -10,17 +10,16 @@
 | Module | crate-terminal |
 | Evidence | crates/ax-code-terminal/src/lib.rs:parse_input |
 | Independent verifier | codex-sol |
-| Regression test | source re-verify / existing suite |
+| Regression test | crates/ax-code-terminal (cargo test) |
+| Owner | ax-code-glm |
+| Expiry | n/a |
 
 ## Proof
-SS3 unknown finals consumed without panic; unit tests present
+Consumes SS3 without panic; rust tests for OP-OS and unknown
 
 ## Impact
-Trust/stability defect on crates/ax-code-terminal surface.
-
-## Fix
-See proof. Minimal invariant restoration already present or applied this program.
+Affects `crates/ax-code-terminal` (native, stability).
 
 ## Verification
-- Re-read evidence path at baseline/current
-- Static control-flow proof of current defense
+- Evidence path re-read at commit `8556bab68b2232bf9bbf4509092468efa73611af`
+- crates/ax-code-terminal (cargo test)

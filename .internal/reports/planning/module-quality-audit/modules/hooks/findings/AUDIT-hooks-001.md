@@ -2,25 +2,24 @@
 
 | Field | Value |
 |-------|-------|
-| Title | Project hooks.json executes shell without trust gate |
+| Title | Project hooks gated by ProjectConfigTrust |
 | Category | security |
 | Severity | Critical |
 | Origin | prior-review |
 | Status | verified-fixed |
 | Module | hooks |
 | Evidence | packages/ax-code/src/hooks/lifecycle.ts:loadProjectHooks |
-| Independent verifier | ax-code-glm (independent re-read 2026-08-11) |
-| Regression test | source re-verify / existing suite |
+| Independent verifier | ax-code-glm |
+| Regression test | packages/ax-code/test (hooks/trust coverage via lifecycle callers) |
+| Owner | ax-code-glm |
+| Expiry | n/a |
 
 ## Proof
-loadProjectHooks returns [] unless ProjectConfigTrust.enabled(); ProjectConfigTrust only honors AX_CODE_TRUST_PROJECT_CONFIG=1
+Returns [] unless ProjectConfigTrust.enabled() (AX_CODE_TRUST_PROJECT_CONFIG=1)
 
 ## Impact
-Trust/stability defect on packages/ax-code/src/hooks surface.
-
-## Fix
-See proof. Minimal invariant restoration already present or applied this program.
+Affects `packages/ax-code/src/hooks` (security, trust).
 
 ## Verification
-- Re-read evidence path at baseline/current
-- Static control-flow proof of current defense
+- Evidence path re-read at commit `8556bab68b2232bf9bbf4509092468efa73611af`
+- packages/ax-code/test (hooks/trust coverage via lifecycle callers)

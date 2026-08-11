@@ -270,16 +270,22 @@ export namespace Pty {
     for (const item of session.dispose) {
       try {
         item.dispose()
-      } catch {}
+      } catch (error) {
+        log.warn("pty dispose failed during teardown", { error })
+      }
     }
     session.dispose = []
     try {
       session.process.kill()
-    } catch {}
+    } catch (error) {
+      log.warn("pty process kill failed during teardown", { error })
+    }
     for (const ws of session.subscribers.values()) {
       try {
         ws.close()
-      } catch {}
+      } catch (error) {
+        log.warn("pty subscriber close failed during teardown", { error })
+      }
     }
     session.subscribers.clear()
   }

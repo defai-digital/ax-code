@@ -190,10 +190,9 @@ describe("terminal runtime", () => {
 })
 
 describe("terminal runtime error visibility", () => {
-  it("logs when killing an idle terminal process fails instead of swallowing the error", async () => {
-    const { app, routes } = createRouteRegistry()
+  it("logs when ptyProcess.kill throws during force-kill instead of swallowing the error", async () => {
+    const { app, getRoute } = createRouteRegistry()
     const server = new EventEmitter()
-    server.on = server.addListener.bind(server)
 
     const warnings = []
     const originalWarn = console.warn
@@ -201,30 +200,59 @@ describe("terminal runtime error visibility", () => {
       warnings.push(args.map(String).join(" "))
     }
 
-    try {
-      createRuntime(server, {
-        app,
-        spawn: () => {
-          throw new Error("spawn unavailable in test")
-        },
-      })
-
-      // Force-create a session entry via internal map by calling create then
-      // monkey-patching the process kill path is hard; instead exercise the
-      // exported kill path through restart when kill throws.
-      // Register a fake session by invoking create with a controlled spawn.
-    } finally {
-      console.warn = originalWarn
+    const killingPty = {
+      pid: 0,
+      onData() {
+        return { dispose() {} }
+      },
+      onExit() {
+        return { dispose() {} }
+      },
+      kill() {
+        throw new Error("simulated kill failure")
+      },
     }
 
-    // Source-level invariant: empty catch (error) {} must not remain.
-    const src = fs.readFileSync(new URL("./runtime.js", import.meta.url), "utf8")
-    expect(src).not.toMatch(/catch \(error\) \{\s*\}/)
-    // Every killTerminalProcess try must have a warn path nearby.
-    const killBlocks = [...src.matchAll(/try \{\s*killTerminalProcess[\s\S]*?catch \(error\) \{([\s\S]*?)\}/g)]
-    expect(killBlocks.length).toBeGreaterThan(0)
-    for (const block of killBlocks) {
-      expect(block[1]).toMatch(/console\.(warn|error)/)
+    const runtime = createRuntime(server, {
+      app,
+      fs: {
+        promises: {
+          stat: async () => ({ isDirectory: () => true }),
+        },
+      },
+      uiAuthController: { enabled: false },
+      buildAugmentedPath: () => process.env.PATH || "",
+      searchPathFor: (name) => name,
+      isExecutable: () => true,
+      validateCwd: async (cwd) => ({ ok: true, cwd }),
+      getPtyProvider: async () => ({
+        backend: "test-mock",
+        spawn: () => killingPty,
+      }),
+      TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS: 1000,
+      TERMINAL_INPUT_WS_REBIND_WINDOW_MS: 1000,
+      TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW: 3,
+    })
+
+    try {
+      const createRoute = getRoute("POST", "/api/terminal/create")
+      const createRes = createMockResponse()
+      await createRoute({ body: { cwd: process.cwd(), cols: 80, rows: 24 } }, createRes)
+      expect(createRes.statusCode).toBe(200)
+      expect(createRes.body?.sessionId).toBeTruthy()
+
+      const forceKill = getRoute("POST", "/api/terminal/force-kill")
+      const killRes = createMockResponse()
+      forceKill({ body: { sessionId: createRes.body.sessionId } }, killRes)
+
+      expect(killRes.statusCode).toBe(200)
+      expect(killRes.body).toEqual({ success: true, killedCount: 1 })
+      expect(warnings.some((line) => line.includes("Failed to kill terminal process") && line.includes("simulated kill failure"))).toBe(
+        true,
+      )
+    } finally {
+      console.warn = originalWarn
+      await runtime.shutdown()
     }
   })
 })

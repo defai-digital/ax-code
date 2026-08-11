@@ -81,11 +81,20 @@ function getInstallSecret(): string {
         }
       }
     }
-  } catch {
-    // Data directory not available (e.g. unit tests) — fall back gracefully
+  } catch (error) {
+    // Data directory not available (e.g. unit tests) — fall back gracefully.
+    // Log so production data-dir failures do not silently weaken key derivation.
+    log.warn("install secret unavailable; using legacy machine id for encryption key derivation", {
+      error,
+    })
     installSecret = ""
   }
   return installSecret
+}
+
+/** Test-only: clear the cached install secret so getInstallSecret re-reads disk. */
+export function __resetInstallSecretCacheForTests() {
+  installSecret = undefined
 }
 
 /** Legacy machine ID (hostname-platform-arch only) — used as fallback for decryption. */

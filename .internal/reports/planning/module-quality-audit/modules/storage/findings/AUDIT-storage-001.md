@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Title | Corrupt JSON migration crash loop |
+| Title | Corrupt legacy JSON skipped during migration |
 | Category | stability |
 | Severity | Critical |
 | Origin | prior-review |
@@ -10,17 +10,16 @@
 | Module | storage |
 | Evidence | packages/ax-code/src/storage/storage.ts |
 | Independent verifier | codex-sol |
-| Regression test | source re-verify / existing suite |
+| Regression test | packages/ax-code/test/storage |
+| Owner | codex-sol |
+| Expiry | n/a |
 
 ## Proof
-Corrupt legacy files skipped with log.warn; migration continues
+log.warn skip corrupt files; no crash loop
 
 ## Impact
-Trust/stability defect on packages/ax-code/src/storage surface.
-
-## Fix
-See proof. Minimal invariant restoration already present or applied this program.
+Affects `packages/ax-code/src/storage` (persistence, stability).
 
 ## Verification
-- Re-read evidence path at baseline/current
-- Static control-flow proof of current defense
+- Evidence path re-read at commit `8556bab68b2232bf9bbf4509092468efa73611af`
+- packages/ax-code/test/storage

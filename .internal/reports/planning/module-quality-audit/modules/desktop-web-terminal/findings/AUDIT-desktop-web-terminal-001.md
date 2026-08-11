@@ -2,25 +2,24 @@
 
 | Field | Value |
 |-------|-------|
-| Title | Empty catch (error) {} swallowed kill/SSE cleanup failures |
+| Title | pty kill failures logged (not swallowed) |
 | Category | silent-error |
 | Severity | Medium |
 | Origin | new |
 | Status | verified-fixed |
 | Module | desktop-web-terminal |
-| Evidence | desktop/packages/web/server/lib/terminal/runtime.js (7 sites) |
+| Evidence | desktop/packages/web/server/lib/terminal/runtime.js:killTerminalProcess |
 | Independent verifier | implementer dual-pass |
 | Regression test | desktop/packages/web/server/lib/terminal/runtime.test.js |
+| Owner | ax-code-glm |
+| Expiry | n/a |
 
 ## Proof
-Replaced with console.warn/error; regression test asserts no empty catch and logging present
+console.warn on kill failure; behavioral force-kill test
 
 ## Impact
-Trust/stability defect on desktop/packages/web/server/lib/terminal surface.
-
-## Fix
-See proof. Minimal invariant restoration already present or applied this program.
+Affects `desktop/packages/web/server/lib/terminal` (desktop, security).
 
 ## Verification
-- Re-read evidence path at baseline/current
-- Regression test: desktop/packages/web/server/lib/terminal/runtime.test.js
+- Evidence path re-read at commit `8556bab68b2232bf9bbf4509092468efa73611af`
+- desktop/packages/web/server/lib/terminal/runtime.test.js

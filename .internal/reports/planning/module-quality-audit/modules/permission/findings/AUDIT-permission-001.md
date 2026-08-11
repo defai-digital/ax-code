@@ -2,25 +2,24 @@
 
 | Field | Value |
 |-------|-------|
-| Title | Project policy.json silently grants tool permissions |
+| Title | Untrusted policy.json strips allow grants |
 | Category | security |
 | Severity | Critical |
 | Origin | prior-review |
 | Status | verified-fixed |
 | Module | permission |
 | Evidence | packages/ax-code/src/permission/index.ts:loadPolicy |
-| Independent verifier | ax-code-glm (independent re-read 2026-08-11) |
-| Regression test | source re-verify / existing suite |
+| Independent verifier | codex-sol |
+| Regression test | packages/ax-code/test/permission |
+| Owner | ax-code-glm |
+| Expiry | n/a |
 
 ## Proof
-Untrusted projects only keep deny rules; allow grants ignored with log.warn
+Only deny rules applied when untrusted; allow grants logged and ignored
 
 ## Impact
-Trust/stability defect on packages/ax-code/src/permission surface.
-
-## Fix
-See proof. Minimal invariant restoration already present or applied this program.
+Affects `packages/ax-code/src/permission` (security, trust).
 
 ## Verification
-- Re-read evidence path at baseline/current
-- Static control-flow proof of current defense
+- Evidence path re-read at commit `8556bab68b2232bf9bbf4509092468efa73611af`
+- packages/ax-code/test/permission

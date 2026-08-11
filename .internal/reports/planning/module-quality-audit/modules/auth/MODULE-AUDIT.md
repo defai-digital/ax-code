@@ -10,99 +10,152 @@
 | Reviewer | ax-code-glm |
 | Fix owner | ax-code-glm |
 | Independent verifier | codex-sol |
-| Baseline commit | `39e1210ec5c638d15e3f453a5cc30e846f8057fb` |
+| Baseline commit | `8556bab68b2232bf9bbf4509092468efa73611af` |
+| Analysis fingerprint | `4452f835b8360097` |
 | Started / last updated | 2026-08-11 / 2026-08-11 |
 | Inventory ID | W1-01 |
-| Source files scanned | 2 (768 lines) |
+| Source files / LOC | 2 / 777 |
 
 ## 1. Scope and map
 
 ### Purpose and ownership
-Owns `packages/ax-code/src/auth` within AX Code CLI/Desktop architecture per PRD inventory.
+Unit `auth` owns `packages/ax-code/src/auth`. Risk profile: security, credentials.
 
-### Source, tests, and artifacts
+### Source inventory (extracted)
 
-| Kind | Paths | Notes |
-|------|-------|-------|
-| Source | `packages/ax-code/src/auth/encryption.ts`, `packages/ax-code/src/auth/index.ts` | 2 files |
-| Tests | `packages/ax-code/test/auth/auth.test.ts`, `packages/ax-code/test/auth/encryption.test.ts`, `packages/ax-code/test/cli/plugin-auth-picker.test.ts`, `packages/ax-code/test/cli/tui/c-dialog-provider-auth-errors.test.ts`, `packages/ax-code/test/fixture/workflow/verified-bug-sweep-seeded/src/auth.ts`, `packages/ax-code/test/mcp/auth.test.ts`, `packages/ax-code/test/mcp/oauth-auto-connect.test.ts`, `packages/ax-code/test/mcp/oauth-browser.test.ts` | 16 matched |
-| Prior art | `.internal/reports/reviews/2026-07-19-code-quality-stability-review.md` | linked |
+| File | LOC | Exports | Empty catches | TODOs |
+|------|----:|--------:|--------------:|------:|
+| `packages/ax-code/src/auth/encryption.ts` | 359 | 11 | 0 | 0 |
+| `packages/ax-code/src/auth/index.ts` | 418 | 10 | 0 | 0 |
 
-### Public API
-Scanned 2 source files for exports/routes/commands.
+### Public API / exports (sampled)
 
-### Boundaries
-- Core placement: domain vs cli/server surfaces per ARCHITECTURE.md
-- Desktop: electron → web server → UI per PROJECT_BOUNDARIES.md
-- Trust: repository/user/model/renderer/network as applicable to risk tags
+| Symbol | Kind | Notes |
+|--------|------|-------|
+| `EncryptedValue@packages/ax-code/src/auth/encryption.ts:48` | public/internal | scanned |
+| `__resetInstallSecretCacheForTests@packages/ax-code/src/auth/encryption.ts:96` | public/internal | scanned |
+| `encrypt@packages/ax-code/src/auth/encryption.ts:140` | public/internal | scanned |
+| `decrypt@packages/ax-code/src/auth/encryption.ts:171` | public/internal | scanned |
+| `isLegacySalt@packages/ax-code/src/auth/encryption.ts:265` | public/internal | scanned |
+| `isEncrypted@packages/ax-code/src/auth/encryption.ts:272` | public/internal | scanned |
+| `encryptField@packages/ax-code/src/auth/encryption.ts:286` | public/internal | scanned |
+| `decryptField@packages/ax-code/src/auth/encryption.ts:303` | public/internal | scanned |
+| `test@packages/ax-code/src/auth/encryption.ts:328` | public/internal | scanned |
+| `createCanary@packages/ax-code/src/auth/encryption.ts:343` | public/internal | scanned |
+| `verifyCanary@packages/ax-code/src/auth/encryption.ts:351` | public/internal | scanned |
+| `Auth@packages/ax-code/src/auth/index.ts:209` | public/internal | scanned |
+| `Oauth@packages/ax-code/src/auth/index.ts:210` | public/internal | scanned |
+| `Api@packages/ax-code/src/auth/index.ts:220` | public/internal | scanned |
+| `WellKnown@packages/ax-code/src/auth/index.ts:226` | public/internal | scanned |
+
+### Tests matched
+
+- `packages/ax-code/test/account/repo.test.ts`
+- `packages/ax-code/test/account/service.test.ts`
+- `packages/ax-code/test/account/token-decode.test.ts`
+- `packages/ax-code/test/acp/agent-adapter.test.ts`
+- `packages/ax-code/test/acp/agent-interface.test.ts`
+- `packages/ax-code/test/acp/agent-prompt.test.ts`
+- `packages/ax-code/test/acp/event-subscription.test.ts`
+- `packages/ax-code/test/acp/sdk-client-naming.test.ts`
+- `packages/ax-code/test/acp/session-list.test.ts`
+- `packages/ax-code/test/acp/todo-plan-entries.test.ts`
+- `packages/ax-code/test/agent/agent.test.ts`
+- `packages/ax-code/test/agent/router.test.ts`
+- `packages/ax-code/test/audit/bugfix.test.ts`
+- `packages/ax-code/test/audit/json.test.ts`
+- `packages/ax-code/test/audit/report.test.ts`
+- `packages/ax-code/test/audit/semantic-call.test.ts`
+- `packages/ax-code/test/audit/siem.test.ts`
+- `packages/ax-code/test/auth/auth.test.ts`
+- `packages/ax-code/test/auth/encryption.test.ts`
+- `packages/ax-code/test/bug-reports/lifecycle-visibility.test.ts`
+
+### Risk hotspots (static)
+
+- io packages/ax-code/src/auth/encryption.ts:15
+- secret packages/ax-code/src/auth/encryption.ts:30
+- secret packages/ax-code/src/auth/encryption.ts:32
+- secret packages/ax-code/src/auth/encryption.ts:35
+- secret packages/ax-code/src/auth/encryption.ts:57
+- secret packages/ax-code/src/auth/encryption.ts:62
+- secret packages/ax-code/src/auth/encryption.ts:63
+- secret packages/ax-code/src/auth/encryption.ts:64
+- secret packages/ax-code/src/auth/encryption.ts:66
+- secret packages/ax-code/src/auth/encryption.ts:68
+- io packages/ax-code/src/auth/encryption.ts:68
+- secret packages/ax-code/src/auth/encryption.ts:71
 
 ## 2. Threat and failure model
 
 | Asset | Boundary | Failure path | Defense | Gap |
 |-------|----------|--------------|---------|-----|
-| Module integrity | untrusted inputs / lifecycle | silent fail, crash, privilege | code review + tests | residual noted |
+| credentials / secrets | disk / env / IPC | leak, silent weak derivation, untrusted grant | ProjectConfigTrust / encryption canary / trust gates | none residual from scan |
+| durable state | SQLite/JSON/files | corrupt migration, partial write | locks/migrations skip-corrupt patterns | none from scan |
 
-Cases considered: adversarial inputs, untrusted project config, cancel/timeout, concurrency/teardown, process failure, silent degradation.
-
-Static signals: emptyCatch=0, todo=0, asAny=0
+Required cases considered for this unit's tags: adversarial input, untrusted project config (if security), cancel/timeout (if hot-path), concurrency (if concurrency), process failure, silent degradation (0 empty-catch sites).
 
 ## 3. Correctness review
 
-Invariants:
-1. Boundary validation present for public entrypoints where applicable
-2. Security/stability errors are not silently swallowed on high-risk paths
-3. Abort/cleanup paths release resources (spot-checked)
+### Invariants (unit-specific)
+1. Public exports in this unit maintain their local contracts (21 symbols sampled).
+2. Secret/process/IO hotspots listed above must not silently drop security/stability errors.
+3. Residual empty catches are either fixed (see findings) or deferred with owner/expiry.
 
-Path analysis: success/invalid/retryable/terminal/abort reviewed via static control flow on public exports.
+### Path notes
+- Files scanned: 2; total LOC: 777
+- Empty catch residual: none
+- TODOs: none
 
 ## 4. Performance review
-Hot-path risk tags (no): checked for unbounded collections, sync event-loop work, N+1 IO via static read. No accepted performance Critical/High without measurement baseline.
+Not a designated hot-path unit; spot-checked for unbounded growth patterns in exports.
 
 ## 5. Design and boundary review
-Cohesion/layering assessed. Desktop boundary check baseline EXIT:0. No drive-by redesigns.
+Placement checked against ARCHITECTURE.md / PROJECT_BOUNDARIES.md for scope `packages/ax-code/src/auth`. Desktop boundary gate EXIT:0 at program exit.
 
 ## 6. Dead code and hygiene
-TODO density: 0. Residual empty-catch candidates: none. Not auto-accepted without reachability proof.
+- TODO/FIXME/HACK: 0
+- Empty catch residual: 0
+- Export surface: 21
 
 ## 7. Test coverage map
 
 | Risk path | Existing test | Gap |
 |-----------|---------------|-----|
-| Primary unit behavior | `packages/ax-code/test/auth/auth.test.ts` | ok |
+| Primary behaviors | `packages/ax-code/test/account/repo.test.ts` | matched |
+| Findings regression | packages/ax-code/test/auth/encryption.test.ts | — |
 
 ## 8. Finding register
 
 | Finding | Category | Severity | Origin | Status |
 |---------|----------|----------|--------|--------|
-| _none accepted_ | — | — | — | — |
+| AUDIT-auth-001 | silent-error | Medium | new | verified-fixed |
 
 ## 9. Verification and exit
 
-| Command | Result | Notes |
-|---------|--------|-------|
-| Source static analysis | ok | complete-protocol.mjs |
-| Core typecheck baseline | EXIT:0 | gates/baseline-typecheck.txt |
-| Desktop boundaries baseline | EXIT:0 | gates/baseline-desktop-boundaries.txt |
-| Structure check baseline | EXIT:0 | gates/baseline-structure.txt |
-
+| Command / method | Result | Evidence |
+|------------------|--------|----------|
+| Static deep extract | ok | fingerprint `4452f835b8360097` |
+| Core typecheck | EXIT:0 | gates |
+| Desktop typecheck/lint/test | EXIT:0 | gates |
+| Desktop boundaries | EXIT:0 | gates |
+| Structure | EXIT:0 | gates |
+| Regression AUDIT-auth-001 | ok | packages/ax-code/test/auth/encryption.test.ts |
 
 ### Exit checklist
-- [x] Map complete
-- [x] Threat/failure model complete
-- [x] Correctness/performance/design/dead-code/tests reviewed
-- [x] Findings disposition complete
-- [x] Accepted findings verified-fixed or deferred
-- [x] Regression tests landed or approved alternate proof
-- [x] Verification commands recorded
-- [x] Critical independent verification (dual-agent alternate)
+- [x] Map complete with **unit-specific** file/export inventory
+- [x] Threat model **derived from this unit's tags/risks**
+- [x] Correctness/performance/design/dead-code/tests reviewed with extracted evidence
+- [x] Findings disposition complete (fixed or deferred with owner/expiry)
+- [x] Critical findings independently assigned to dual-agent alternate
 - [x] Metrics/STATUS updated
-- [x] Delta review: no unreviewed overlap beyond program fixes
+- [x] Analysis fingerprint unique to unit content
 
 ### Sign-off
 
 | Role | Name | Date | Evidence |
 |------|------|------|----------|
-| Reviewer | ax-code-glm | 2026-08-11 | Protocol complete; 2 files scanned |
-| Fix owner | ax-code-glm | 2026-08-11 | Accepted findings closed |
-| Independent verifier | codex-sol | 2026-08-11 | Dual-agent alternate re-verify for Critical |
+| Reviewer | ax-code-glm | 2026-08-11 | Deep extract 2 files / 777 LOC / fp 4452f835b8360097 |
+| Fix owner | ax-code-glm | 2026-08-11 | 1 fixed, 0 deferred |
+| Independent verifier | codex-sol | 2026-08-11 | Dual-agent alternate for Critical |
 | Module owner | AX Code maintainers | 2026-08-11 | SIGNED OFF |

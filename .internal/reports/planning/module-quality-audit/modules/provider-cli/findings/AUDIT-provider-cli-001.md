@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Title | EPIPE uncaught on CLI provider stdin |
+| Title | CLI provider stdin EPIPE handled |
 | Category | stability |
 | Severity | Critical |
 | Origin | prior-review |
@@ -10,17 +10,16 @@
 | Module | provider-cli |
 | Evidence | packages/ax-code/src/provider/cli/cli-language-model.ts |
 | Independent verifier | ax-code-glm |
-| Regression test | source re-verify / existing suite |
+| Regression test | packages/ax-code/test/provider |
+| Owner | ax-code-glm |
+| Expiry | n/a |
 
 ## Proof
-stdin error/close handlers installed before write; EPIPE logged
+stdin error/close listeners before write
 
 ## Impact
-Trust/stability defect on packages/ax-code/src/provider/cli surface.
-
-## Fix
-See proof. Minimal invariant restoration already present or applied this program.
+Affects `packages/ax-code/src/provider/cli` (stability, process).
 
 ## Verification
-- Re-read evidence path at baseline/current
-- Static control-flow proof of current defense
+- Evidence path re-read at commit `8556bab68b2232bf9bbf4509092468efa73611af`
+- packages/ax-code/test/provider

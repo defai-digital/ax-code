@@ -2,25 +2,24 @@
 
 | Field | Value |
 |-------|-------|
-| Title | ~ and bare $VAR path bypass |
+| Title | Tilde expansion for bash path recording |
 | Category | security |
 | Severity | Critical |
 | Origin | prior-review |
 | Status | verified-fixed |
 | Module | tool-execution |
-| Evidence | packages/ax-code/src/tool/bash-helpers.ts:expandLeadingTilde + bash-impl recordResolvedPath |
-| Independent verifier | codex-sol (independent re-read 2026-08-11) |
-| Regression test | source re-verify / existing suite |
+| Evidence | packages/ax-code/src/tool/bash-helpers.ts:expandLeadingTilde |
+| Independent verifier | codex-sol |
+| Regression test | packages/ax-code/test/tool |
+| Owner | ax-code-glm |
+| Expiry | n/a |
 
 ## Proof
-expandLeadingTilde expands ~/ ; dynamic expansion sets dynamicPathAccess
+recordResolvedPath expands ~/ and treats dynamic expansion as dynamicPathAccess
 
 ## Impact
-Trust/stability defect on packages/ax-code/src/tool (bash/shell execution) surface.
-
-## Fix
-See proof. Minimal invariant restoration already present or applied this program.
+Affects `packages/ax-code/src/tool (bash/shell execution)` (security, hot-path).
 
 ## Verification
-- Re-read evidence path at baseline/current
-- Static control-flow proof of current defense
+- Evidence path re-read at commit `8556bab68b2232bf9bbf4509092468efa73611af`
+- packages/ax-code/test/tool

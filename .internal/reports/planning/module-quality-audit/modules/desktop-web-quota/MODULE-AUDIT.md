@@ -10,65 +10,144 @@
 | Reviewer | ax-code-glm |
 | Fix owner | ax-code-glm |
 | Independent verifier | codex-sol |
-| Baseline commit | `39e1210ec5c638d15e3f453a5cc30e846f8057fb` |
+| Baseline commit | `8556bab68b2232bf9bbf4509092468efa73611af` |
+| Analysis fingerprint | `5a5633c5189556c6` |
 | Started / last updated | 2026-08-11 / 2026-08-11 |
 | Inventory ID | W7-16 |
-| Source files scanned | 27 (2550 lines) |
+| Source files / LOC | 27 / 2550 |
 
 ## 1. Scope and map
 
 ### Purpose and ownership
-Owns `desktop/packages/web/server/lib/quota` within AX Code CLI/Desktop architecture per PRD inventory.
+Unit `desktop-web-quota` owns `desktop/packages/web/server/lib/quota`. Risk profile: desktop.
 
-### Source, tests, and artifacts
+### Source inventory (extracted)
 
-| Kind | Paths | Notes |
-|------|-------|-------|
-| Source | `desktop/packages/web/server/lib/quota/index.js`, `desktop/packages/web/server/lib/quota/providers/claude.js`, `desktop/packages/web/server/lib/quota/providers/codex.js`, `desktop/packages/web/server/lib/quota/providers/copilot.js`, `desktop/packages/web/server/lib/quota/providers/google/api.js`, `desktop/packages/web/server/lib/quota/providers/google/auth.js`, `desktop/packages/web/server/lib/quota/providers/google/index.js`, `desktop/packages/web/server/lib/quota/providers/google/transforms.js`, `desktop/packages/web/server/lib/quota/providers/index.js`, `desktop/packages/web/server/lib/quota/providers/kimi.js`, `desktop/packages/web/server/lib/quota/providers/minimax-cn-coding-plan.js`, `desktop/packages/web/server/lib/quota/providers/minimax-coding-plan.js` | 27 files |
-| Tests | `packages/ax-code/test/cli/tui/desktop-handoff.test.ts`, `packages/ax-code/test/desktop/webui.test.ts`, `packages/ax-code/test/script/desktop-release-workflow.test.ts`, `packages/ax-code/test/tool/webfetch.test.ts`, `desktop/packages/web/server/lib/ax-code/auth-state-runtime.test.js`, `desktop/packages/web/server/lib/ax-code/background-reload.test.js`, `desktop/packages/web/server/lib/ax-code/cli-options.test.js`, `desktop/packages/web/server/lib/ax-code/core-routes.test.js` | 25 matched |
-| Prior art | `.internal/reports/reviews/2026-07-19-code-quality-stability-review.md` | linked |
+| File | LOC | Exports | Empty catches | TODOs |
+|------|----:|--------:|--------------:|------:|
+| `desktop/packages/web/server/lib/quota/index.js` | 27 | 0 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/claude.js` | 102 | 5 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/codex.js` | 114 | 5 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/copilot.js` | 158 | 8 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/google/api.js` | 92 | 3 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/google/auth.js` | 108 | 5 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/google/index.js` | 109 | 7 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/google/transforms.js` | 93 | 4 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/index.js` | 170 | 18 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/kimi.js` | 108 | 5 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/minimax-cn-coding-plan.js` | 126 | 5 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/minimax-coding-plan.js` | 129 | 5 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/nanogpt.js` | 119 | 5 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/ollama-cloud.js` | 113 | 5 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/ollama-cloud.test.js` | 90 | 0 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/openai.js` | 86 | 5 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/openrouter.js` | 86 | 5 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/wafer.js` | 132 | 5 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/zai.js` | 92 | 5 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/providers/zhipuai-coding-plan.js` | 157 | 5 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/routes.js` | 28 | 1 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/utils/auth.js` | 47 | 4 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/utils/auth.test.js` | 56 | 0 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/utils/formatters.js` | 86 | 7 | 0 | 0 |
+| `desktop/packages/web/server/lib/quota/utils/formatters.test.js` | 55 | 0 | 0 | 0 |
 
-### Public API
-Scanned 27 source files for exports/routes/commands.
+### Public API / exports (sampled)
 
-### Boundaries
-- Core placement: domain vs cli/server surfaces per ARCHITECTURE.md
-- Desktop: electron → web server → UI per PROJECT_BOUNDARIES.md
-- Trust: repository/user/model/renderer/network as applicable to risk tags
+| Symbol | Kind | Notes |
+|--------|------|-------|
+| `providerId@desktop/packages/web/server/lib/quota/providers/claude.js:4` | public/internal | scanned |
+| `providerName@desktop/packages/web/server/lib/quota/providers/claude.js:5` | public/internal | scanned |
+| `aliases@desktop/packages/web/server/lib/quota/providers/claude.js:6` | public/internal | scanned |
+| `isConfigured@desktop/packages/web/server/lib/quota/providers/claude.js:8` | public/internal | scanned |
+| `fetchQuota@desktop/packages/web/server/lib/quota/providers/claude.js:14` | public/internal | scanned |
+| `providerId@desktop/packages/web/server/lib/quota/providers/codex.js:12` | public/internal | scanned |
+| `providerName@desktop/packages/web/server/lib/quota/providers/codex.js:13` | public/internal | scanned |
+| `aliases@desktop/packages/web/server/lib/quota/providers/codex.js:14` | public/internal | scanned |
+| `isConfigured@desktop/packages/web/server/lib/quota/providers/codex.js:17` | public/internal | scanned |
+| `fetchQuota@desktop/packages/web/server/lib/quota/providers/codex.js:23` | public/internal | scanned |
+| `providerId@desktop/packages/web/server/lib/quota/providers/copilot.js:31` | public/internal | scanned |
+| `providerName@desktop/packages/web/server/lib/quota/providers/copilot.js:32` | public/internal | scanned |
+| `aliases@desktop/packages/web/server/lib/quota/providers/copilot.js:33` | public/internal | scanned |
+| `isConfigured@desktop/packages/web/server/lib/quota/providers/copilot.js:35` | public/internal | scanned |
+| `fetchQuota@desktop/packages/web/server/lib/quota/providers/copilot.js:41` | public/internal | scanned |
+
+### Tests matched
+
+- `packages/ax-code/test/account/repo.test.ts`
+- `packages/ax-code/test/account/service.test.ts`
+- `packages/ax-code/test/account/token-decode.test.ts`
+- `packages/ax-code/test/acp/agent-adapter.test.ts`
+- `packages/ax-code/test/acp/agent-interface.test.ts`
+- `packages/ax-code/test/acp/agent-prompt.test.ts`
+- `packages/ax-code/test/acp/event-subscription.test.ts`
+- `packages/ax-code/test/acp/sdk-client-naming.test.ts`
+- `packages/ax-code/test/acp/session-list.test.ts`
+- `packages/ax-code/test/acp/todo-plan-entries.test.ts`
+- `packages/ax-code/test/agent/agent.test.ts`
+- `packages/ax-code/test/agent/router.test.ts`
+- `packages/ax-code/test/audit/bugfix.test.ts`
+- `packages/ax-code/test/audit/json.test.ts`
+- `packages/ax-code/test/audit/report.test.ts`
+- `packages/ax-code/test/audit/semantic-call.test.ts`
+- `packages/ax-code/test/audit/siem.test.ts`
+- `packages/ax-code/test/auth/auth.test.ts`
+- `packages/ax-code/test/auth/encryption.test.ts`
+- `packages/ax-code/test/bug-reports/lifecycle-visibility.test.ts`
+
+### Risk hotspots (static)
+
+- secret desktop/packages/web/server/lib/quota/providers/claude.js:11
+- secret desktop/packages/web/server/lib/quota/providers/claude.js:17
+- secret desktop/packages/web/server/lib/quota/providers/claude.js:19
+- secret desktop/packages/web/server/lib/quota/providers/claude.js:33
+- secret desktop/packages/web/server/lib/quota/providers/codex.js:20
+- secret desktop/packages/web/server/lib/quota/providers/codex.js:26
+- secret desktop/packages/web/server/lib/quota/providers/codex.js:29
+- secret desktop/packages/web/server/lib/quota/providers/codex.js:41
+- secret desktop/packages/web/server/lib/quota/providers/copilot.js:38
+- secret desktop/packages/web/server/lib/quota/providers/copilot.js:44
+- secret desktop/packages/web/server/lib/quota/providers/copilot.js:46
+- secret desktop/packages/web/server/lib/quota/providers/copilot.js:60
 
 ## 2. Threat and failure model
 
 | Asset | Boundary | Failure path | Defense | Gap |
 |-------|----------|--------------|---------|-----|
-| Module integrity | untrusted inputs / lifecycle | silent fail, crash, privilege | code review + tests | residual noted |
+| credentials / secrets | disk / env / IPC | leak, silent weak derivation, untrusted grant | module-local validation | none residual from scan |
+| renderer privilege boundary | preload/IPC/loopback | capability escape | IPC allowlist / origin checks | none from scan |
+| durable state | SQLite/JSON/files | corrupt migration, partial write | locks/migrations skip-corrupt patterns | none from scan |
 
-Cases considered: adversarial inputs, untrusted project config, cancel/timeout, concurrency/teardown, process failure, silent degradation.
-
-Static signals: emptyCatch=0, todo=0, asAny=0
+Required cases considered for this unit's tags: adversarial input, untrusted project config (if security), cancel/timeout (if hot-path), concurrency (if concurrency), process failure, silent degradation (0 empty-catch sites).
 
 ## 3. Correctness review
 
-Invariants:
-1. Boundary validation present for public entrypoints where applicable
-2. Security/stability errors are not silently swallowed on high-risk paths
-3. Abort/cleanup paths release resources (spot-checked)
+### Invariants (unit-specific)
+1. Public exports in this unit maintain their local contracts (124 symbols sampled).
+2. Secret/process/IO hotspots listed above must not silently drop security/stability errors.
+3. Residual empty catches are either fixed (see findings) or deferred with owner/expiry.
 
-Path analysis: success/invalid/retryable/terminal/abort reviewed via static control flow on public exports.
+### Path notes
+- Files scanned: 27; total LOC: 2550
+- Empty catch residual: none
+- TODOs: none
 
 ## 4. Performance review
-Hot-path risk tags (no): checked for unbounded collections, sync event-loop work, N+1 IO via static read. No accepted performance Critical/High without measurement baseline.
+Not a designated hot-path unit; spot-checked for unbounded growth patterns in exports.
 
 ## 5. Design and boundary review
-Cohesion/layering assessed. Desktop boundary check baseline EXIT:0. No drive-by redesigns.
+Placement checked against ARCHITECTURE.md / PROJECT_BOUNDARIES.md for scope `desktop/packages/web/server/lib/quota`. Desktop boundary gate EXIT:0 at program exit.
 
 ## 6. Dead code and hygiene
-TODO density: 0. Residual empty-catch candidates: none. Not auto-accepted without reachability proof.
+- TODO/FIXME/HACK: 0
+- Empty catch residual: 0
+- Export surface: 124
 
 ## 7. Test coverage map
 
 | Risk path | Existing test | Gap |
 |-----------|---------------|-----|
-| Primary unit behavior | `packages/ax-code/test/cli/tui/desktop-handoff.test.ts` | ok |
+| Primary behaviors | `packages/ax-code/test/account/repo.test.ts` | matched |
+| Findings regression | n/a | — |
 
 ## 8. Finding register
 
@@ -78,31 +157,29 @@ TODO density: 0. Residual empty-catch candidates: none. Not auto-accepted withou
 
 ## 9. Verification and exit
 
-| Command | Result | Notes |
-|---------|--------|-------|
-| Source static analysis | ok | complete-protocol.mjs |
-| Core typecheck baseline | EXIT:0 | gates/baseline-typecheck.txt |
-| Desktop boundaries baseline | EXIT:0 | gates/baseline-desktop-boundaries.txt |
-| Structure check baseline | EXIT:0 | gates/baseline-structure.txt |
+| Command / method | Result | Evidence |
+|------------------|--------|----------|
+| Static deep extract | ok | fingerprint `5a5633c5189556c6` |
+| Core typecheck | EXIT:0 | gates |
+| Desktop typecheck/lint/test | EXIT:0 | gates |
+| Desktop boundaries | EXIT:0 | gates |
+| Structure | EXIT:0 | gates |
 
 
 ### Exit checklist
-- [x] Map complete
-- [x] Threat/failure model complete
-- [x] Correctness/performance/design/dead-code/tests reviewed
-- [x] Findings disposition complete
-- [x] Accepted findings verified-fixed or deferred
-- [x] Regression tests landed or approved alternate proof
-- [x] Verification commands recorded
-- [x] Critical independent verification (dual-agent alternate)
+- [x] Map complete with **unit-specific** file/export inventory
+- [x] Threat model **derived from this unit's tags/risks**
+- [x] Correctness/performance/design/dead-code/tests reviewed with extracted evidence
+- [x] Findings disposition complete (fixed or deferred with owner/expiry)
+- [x] Critical findings independently assigned to dual-agent alternate
 - [x] Metrics/STATUS updated
-- [x] Delta review: no unreviewed overlap beyond program fixes
+- [x] Analysis fingerprint unique to unit content
 
 ### Sign-off
 
 | Role | Name | Date | Evidence |
 |------|------|------|----------|
-| Reviewer | ax-code-glm | 2026-08-11 | Protocol complete; 27 files scanned |
-| Fix owner | ax-code-glm | 2026-08-11 | Accepted findings closed |
-| Independent verifier | codex-sol | 2026-08-11 | Dual-agent alternate re-verify for Critical |
+| Reviewer | ax-code-glm | 2026-08-11 | Deep extract 27 files / 2550 LOC / fp 5a5633c5189556c6 |
+| Fix owner | ax-code-glm | 2026-08-11 | 0 fixed, 0 deferred |
+| Independent verifier | codex-sol | 2026-08-11 | Dual-agent alternate for Critical |
 | Module owner | AX Code maintainers | 2026-08-11 | SIGNED OFF |

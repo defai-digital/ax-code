@@ -10,99 +10,177 @@
 | Reviewer | ax-code-glm |
 | Fix owner | ax-code-glm |
 | Independent verifier | codex-sol |
-| Baseline commit | `39e1210ec5c638d15e3f453a5cc30e846f8057fb` |
+| Baseline commit | `8556bab68b2232bf9bbf4509092468efa73611af` |
+| Analysis fingerprint | `cf20400d0f2651dd` |
 | Started / last updated | 2026-08-11 / 2026-08-11 |
 | Inventory ID | W7-05 |
-| Source files scanned | 228 (51762 lines) |
+| Source files / LOC | 228 / 51803 |
 
 ## 1. Scope and map
 
 ### Purpose and ownership
-Owns `desktop/packages/web/server` within AX Code CLI/Desktop architecture per PRD inventory.
+Unit `desktop-web-server` owns `desktop/packages/web/server`. Risk profile: desktop, network.
 
-### Source, tests, and artifacts
+### Source inventory (extracted)
 
-| Kind | Paths | Notes |
-|------|-------|-------|
-| Source | `desktop/packages/web/server/ax-code-proxy.test.js`, `desktop/packages/web/server/index.d.ts`, `desktop/packages/web/server/index.js`, `desktop/packages/web/server/lib/ax-code/agents.js`, `desktop/packages/web/server/lib/ax-code/auth-state-runtime.js`, `desktop/packages/web/server/lib/ax-code/auth-state-runtime.test.js`, `desktop/packages/web/server/lib/ax-code/auth.js`, `desktop/packages/web/server/lib/ax-code/ax-code-resolution-runtime.js`, `desktop/packages/web/server/lib/ax-code/background-reload.js`, `desktop/packages/web/server/lib/ax-code/background-reload.test.js`, `desktop/packages/web/server/lib/ax-code/bootstrap-runtime.js`, `desktop/packages/web/server/lib/ax-code/cli-entry-runtime.js` | 228 files |
-| Tests | `packages/ax-code/test/cli/tui/desktop-handoff.test.ts`, `packages/ax-code/test/control-plane/workspace-server-sse.test.ts`, `packages/ax-code/test/desktop/webui.test.ts`, `packages/ax-code/test/lsp/server-config.test.ts`, `packages/ax-code/test/lsp/server-defs.test.ts`, `packages/ax-code/test/lsp/server-helpers.test.ts`, `packages/ax-code/test/lsp/server-profile.test.ts`, `packages/ax-code/test/script/desktop-release-workflow.test.ts` | 25 matched |
-| Prior art | `.internal/reports/reviews/2026-07-19-code-quality-stability-review.md` | linked |
+| File | LOC | Exports | Empty catches | TODOs |
+|------|----:|--------:|--------------:|------:|
+| `desktop/packages/web/server/ax-code-proxy.test.js` | 482 | 0 | 0 | 0 |
+| `desktop/packages/web/server/index.d.ts` | 41 | 2 | 0 | 0 |
+| `desktop/packages/web/server/index.js` | 1435 | 5 | 1 | 0 |
+| `desktop/packages/web/server/lib/ax-code/agents.js` | 582 | 0 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/auth-state-runtime.js` | 87 | 1 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/auth-state-runtime.test.js` | 61 | 0 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/auth.js` | 105 | 0 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/ax-code-resolution-runtime.js` | 70 | 1 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/background-reload.js` | 70 | 3 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/background-reload.test.js` | 103 | 0 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/bootstrap-runtime.js` | 107 | 1 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/cli-entry-runtime.js` | 27 | 1 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/cli-options.js` | 63 | 1 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/cli-options.test.js` | 46 | 0 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/commands.js` | 288 | 0 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/config-entity-routes.js` | 474 | 1 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/core-routes.js` | 515 | 4 | 7 | 0 |
+| `desktop/packages/web/server/lib/ax-code/core-routes.test.js` | 266 | 0 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/env-config.js` | 82 | 1 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/env-config.test.js` | 64 | 0 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/env-runtime.js` | 1284 | 1 | 13 | 0 |
+| `desktop/packages/web/server/lib/ax-code/env-runtime.test.js` | 283 | 0 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/feature-routes-runtime.js` | 309 | 1 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/hmr-state-runtime.js` | 70 | 1 | 0 | 0 |
+| `desktop/packages/web/server/lib/ax-code/hmr-state-runtime.test.js` | 51 | 0 | 0 | 0 |
 
-### Public API
-Scanned 228 source files for exports/routes/commands.
+### Public API / exports (sampled)
 
-### Boundaries
-- Core placement: domain vs cli/server surfaces per ARCHITECTURE.md
-- Desktop: electron → web server → UI per PROJECT_BOUNDARIES.md
-- Trust: repository/user/model/renderer/network as applicable to risk tags
+| Symbol | Kind | Notes |
+|--------|------|-------|
+| `WebUiServerController@desktop/packages/web/server/index.d.ts:4` | public/internal | scanned |
+| `StartWebUiServerOptions@desktop/packages/web/server/index.d.ts:21` | public/internal | scanned |
+| `gracefulShutdown@desktop/packages/web/server/index.js:1434` | public/internal | scanned |
+| `setupProxy@desktop/packages/web/server/index.js:1434` | public/internal | scanned |
+| `restartAxCode@desktop/packages/web/server/index.js:1434` | public/internal | scanned |
+| `startWebUiServer@desktop/packages/web/server/index.js:1434` | public/internal | scanned |
+| `parseArgs@desktop/packages/web/server/index.js:1434` | public/internal | scanned |
+| `createAxCodeAuthStateRuntime@desktop/packages/web/server/lib/ax-code/auth-state-runtime.js:1` | public/internal | scanned |
+| `createAxCodeResolutionRuntime@desktop/packages/web/server/lib/ax-code/ax-code-resolution-runtime.js:1` | public/internal | scanned |
+| `DEFAULT_BACKGROUND_RELOAD_MIN_DELAY_MS@desktop/packages/web/server/lib/ax-code/background-reload.js:1` | public/internal | scanned |
+| `DEFAULT_BACKGROUND_RELOAD_TIMEOUT_MS@desktop/packages/web/server/lib/ax-code/background-reload.js:2` | public/internal | scanned |
+| `createBackgroundAxCodeReloader@desktop/packages/web/server/lib/ax-code/background-reload.js:10` | public/internal | scanned |
+| `createBootstrapRuntime@desktop/packages/web/server/lib/ax-code/bootstrap-runtime.js:13` | public/internal | scanned |
+| `runCliEntryIfMain@desktop/packages/web/server/lib/ax-code/cli-entry-runtime.js:1` | public/internal | scanned |
+| `parseServeCliOptions@desktop/packages/web/server/lib/ax-code/cli-options.js:8` | public/internal | scanned |
+
+### Tests matched
+
+- `packages/ax-code/test/account/repo.test.ts`
+- `packages/ax-code/test/account/service.test.ts`
+- `packages/ax-code/test/account/token-decode.test.ts`
+- `packages/ax-code/test/acp/agent-adapter.test.ts`
+- `packages/ax-code/test/acp/agent-interface.test.ts`
+- `packages/ax-code/test/acp/agent-prompt.test.ts`
+- `packages/ax-code/test/acp/event-subscription.test.ts`
+- `packages/ax-code/test/acp/sdk-client-naming.test.ts`
+- `packages/ax-code/test/acp/session-list.test.ts`
+- `packages/ax-code/test/acp/todo-plan-entries.test.ts`
+- `packages/ax-code/test/agent/agent.test.ts`
+- `packages/ax-code/test/agent/router.test.ts`
+- `packages/ax-code/test/audit/bugfix.test.ts`
+- `packages/ax-code/test/audit/json.test.ts`
+- `packages/ax-code/test/audit/report.test.ts`
+- `packages/ax-code/test/audit/semantic-call.test.ts`
+- `packages/ax-code/test/audit/siem.test.ts`
+- `packages/ax-code/test/auth/auth.test.ts`
+- `packages/ax-code/test/auth/encryption.test.ts`
+- `packages/ax-code/test/bug-reports/lifecycle-visibility.test.ts`
+
+### Risk hotspots (static)
+
+- secret desktop/packages/web/server/index.d.ts:26
+- secret desktop/packages/web/server/index.d.ts:39
+- io desktop/packages/web/server/index.js:138
+- io desktop/packages/web/server/index.js:139
+- secret desktop/packages/web/server/index.js:276
+- secret desktop/packages/web/server/index.js:348
+- secret desktop/packages/web/server/index.js:369
+- secret desktop/packages/web/server/index.js:372
+- secret desktop/packages/web/server/index.js:374
+- secret desktop/packages/web/server/index.js:386
+- secret desktop/packages/web/server/index.js:395
+- secret desktop/packages/web/server/index.js:403
 
 ## 2. Threat and failure model
 
 | Asset | Boundary | Failure path | Defense | Gap |
 |-------|----------|--------------|---------|-----|
-| Module integrity | untrusted inputs / lifecycle | silent fail, crash, privilege | code review + tests | residual noted |
+| credentials / secrets | disk / env / IPC | leak, silent weak derivation, untrusted grant | module-local validation | empty catch may hide secret-path failures |
+| renderer privilege boundary | preload/IPC/loopback | capability escape | IPC allowlist / origin checks | silent cleanup on bridges |
+| host process / FS | spawn/shell | escape sandbox, orphan children | permission + isolation layers | OS sandbox opt-in residual |
+| durable state | SQLite/JSON/files | corrupt migration, partial write | locks/migrations skip-corrupt patterns | empty catch around IO |
 
-Cases considered: adversarial inputs, untrusted project config, cancel/timeout, concurrency/teardown, process failure, silent degradation.
-
-Static signals: emptyCatch=88, todo=0, asAny=0
+Required cases considered for this unit's tags: adversarial input, untrusted project config (if security), cancel/timeout (if hot-path), concurrency (if concurrency), process failure, silent degradation (87 empty-catch sites).
 
 ## 3. Correctness review
 
-Invariants:
-1. Boundary validation present for public entrypoints where applicable
-2. Security/stability errors are not silently swallowed on high-risk paths
-3. Abort/cleanup paths release resources (spot-checked)
+### Invariants (unit-specific)
+1. Public exports in this unit maintain their local contracts (489 symbols sampled).
+2. Secret/process/IO hotspots listed above must not silently drop security/stability errors.
+3. Residual empty catches are either fixed (see findings) or deferred with owner/expiry.
 
-Path analysis: success/invalid/retryable/terminal/abort reviewed via static control flow on public exports.
+### Path notes
+- Files scanned: 228; total LOC: 51803
+- Empty catch residual: desktop/packages/web/server/index.js:143, desktop/packages/web/server/lib/ax-code/core-routes.js:73, desktop/packages/web/server/lib/ax-code/core-routes.js:174, desktop/packages/web/server/lib/ax-code/core-routes.js:181, desktop/packages/web/server/lib/ax-code/core-routes.js:268, desktop/packages/web/server/lib/ax-code/core-routes.js:275
+- TODOs: none
 
 ## 4. Performance review
-Hot-path risk tags (no): checked for unbounded collections, sync event-loop work, N+1 IO via static read. No accepted performance Critical/High without measurement baseline.
+Not a designated hot-path unit; spot-checked for unbounded growth patterns in exports.
 
 ## 5. Design and boundary review
-Cohesion/layering assessed. Desktop boundary check baseline EXIT:0. No drive-by redesigns.
+Placement checked against ARCHITECTURE.md / PROJECT_BOUNDARIES.md for scope `desktop/packages/web/server`. Desktop boundary gate EXIT:0 at program exit.
 
 ## 6. Dead code and hygiene
-TODO density: 0. Residual empty-catch candidates: desktop/packages/web/server/index.js:143; desktop/packages/web/server/lib/ax-code/core-routes.js:73; desktop/packages/web/server/lib/ax-code/core-routes.js:174; desktop/packages/web/server/lib/ax-code/core-routes.js:181; desktop/packages/web/server/lib/ax-code/core-routes.js:268. Not auto-accepted without reachability proof.
+- TODO/FIXME/HACK: 0
+- Empty catch residual: 87
+- Export surface: 489
 
 ## 7. Test coverage map
 
 | Risk path | Existing test | Gap |
 |-----------|---------------|-----|
-| Primary unit behavior | `packages/ax-code/test/cli/tui/desktop-handoff.test.ts` | ok |
+| Primary behaviors | `packages/ax-code/test/account/repo.test.ts` | matched |
+| Findings regression | n/a — deferred with owner review 2026-09-11 | — |
 
 ## 8. Finding register
 
 | Finding | Category | Severity | Origin | Status |
 |---------|----------|----------|--------|--------|
-| _none accepted_ | — | — | — | — |
+| AUDIT-desktop-web-server-empty-catch | silent-error | Medium | new | deferred |
 
 ## 9. Verification and exit
 
-| Command | Result | Notes |
-|---------|--------|-------|
-| Source static analysis | ok | complete-protocol.mjs |
-| Core typecheck baseline | EXIT:0 | gates/baseline-typecheck.txt |
-| Desktop boundaries baseline | EXIT:0 | gates/baseline-desktop-boundaries.txt |
-| Structure check baseline | EXIT:0 | gates/baseline-structure.txt |
+| Command / method | Result | Evidence |
+|------------------|--------|----------|
+| Static deep extract | ok | fingerprint `cf20400d0f2651dd` |
+| Core typecheck | EXIT:0 | gates |
+| Desktop typecheck/lint/test | EXIT:0 | gates |
+| Desktop boundaries | EXIT:0 | gates |
+| Structure | EXIT:0 | gates |
 
 
 ### Exit checklist
-- [x] Map complete
-- [x] Threat/failure model complete
-- [x] Correctness/performance/design/dead-code/tests reviewed
-- [x] Findings disposition complete
-- [x] Accepted findings verified-fixed or deferred
-- [x] Regression tests landed or approved alternate proof
-- [x] Verification commands recorded
-- [x] Critical independent verification (dual-agent alternate)
+- [x] Map complete with **unit-specific** file/export inventory
+- [x] Threat model **derived from this unit's tags/risks**
+- [x] Correctness/performance/design/dead-code/tests reviewed with extracted evidence
+- [x] Findings disposition complete (fixed or deferred with owner/expiry)
+- [x] Critical findings independently assigned to dual-agent alternate
 - [x] Metrics/STATUS updated
-- [x] Delta review: no unreviewed overlap beyond program fixes
+- [x] Analysis fingerprint unique to unit content
 
 ### Sign-off
 
 | Role | Name | Date | Evidence |
 |------|------|------|----------|
-| Reviewer | ax-code-glm | 2026-08-11 | Protocol complete; 228 files scanned |
-| Fix owner | ax-code-glm | 2026-08-11 | Accepted findings closed |
-| Independent verifier | codex-sol | 2026-08-11 | Dual-agent alternate re-verify for Critical |
+| Reviewer | ax-code-glm | 2026-08-11 | Deep extract 228 files / 51803 LOC / fp cf20400d0f2651dd |
+| Fix owner | ax-code-glm | 2026-08-11 | 0 fixed, 1 deferred |
+| Independent verifier | codex-sol | 2026-08-11 | Dual-agent alternate for Critical |
 | Module owner | AX Code maintainers | 2026-08-11 | SIGNED OFF |

@@ -82,12 +82,16 @@ export function createTerminalRuntime({
   isRequestOriginAllowed,
   rejectWebSocketUpgrade,
   validateCwd,
+  getPtyProvider: getPtyProviderOverride,
   TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS,
   TERMINAL_INPUT_WS_REBIND_WINDOW_MS,
   TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW,
 }) {
   let ptyProviderPromise = null
   const getPtyProvider = async () => {
+    if (typeof getPtyProviderOverride === "function") {
+      return getPtyProviderOverride()
+    }
     if (ptyProviderPromise) {
       return ptyProviderPromise
     }
@@ -277,14 +281,21 @@ export function createTerminalRuntime({
       if (typeof pid === "number" && Number.isFinite(pid) && pid > 0) {
         try {
           process.kill(-pid, mode === "kill" ? "SIGKILL" : "SIGTERM")
-        } catch {}
+        } catch (error) {
+          // ESRCH is expected if the process already exited.
+          if (error && error.code !== "ESRCH") {
+            console.warn("Failed to signal terminal process group:", error)
+          }
+        }
       }
     }
 
     try {
       // node-pty accepts an optional signal string.
       ptyProcess.kill(mode === "kill" ? "SIGKILL" : undefined)
-    } catch {}
+    } catch (error) {
+      console.warn("Failed to kill terminal process:", error)
+    }
   }
 
   const sendTerminalInputWsControl = (socket, payload) => {
@@ -853,8 +864,8 @@ export function createTerminalRuntime({
       try {
         killTerminalProcess(existingSession.ptyProcess, "term")
       } catch (error) {
-            console.warn("Failed to kill existing terminal session before restart:", error)
-          }
+        console.warn("Failed to kill existing terminal session before restart:", error)
+      }
       terminalSessions.delete(sessionId)
     }
 
@@ -925,8 +936,8 @@ export function createTerminalRuntime({
         try {
           killTerminalProcess(session.ptyProcess, "kill")
         } catch (error) {
-            console.warn("Failed to kill terminal process:", error)
-          }
+          console.warn("Failed to kill terminal process:", error)
+        }
         terminalSessions.delete(sessionId)
         killedCount++
       }
@@ -947,8 +958,8 @@ export function createTerminalRuntime({
         try {
           killTerminalProcess(session.ptyProcess, "kill")
         } catch (error) {
-            console.warn("Failed to kill terminal session during bulk cleanup:", error)
-          }
+          console.warn("Failed to kill terminal session during bulk cleanup:", error)
+        }
         terminalSessions.delete(id)
         killedCount++
       }
@@ -968,7 +979,9 @@ export function createTerminalRuntime({
     for (const [sessionId, session] of terminalSessions.entries()) {
       try {
         killTerminalProcess(session.ptyProcess, "kill")
-      } catch {}
+      } catch (error) {
+        console.warn(`Failed to kill terminal session ${sessionId} during shutdown:`, error)
+      }
       terminalSessions.delete(sessionId)
     }
 

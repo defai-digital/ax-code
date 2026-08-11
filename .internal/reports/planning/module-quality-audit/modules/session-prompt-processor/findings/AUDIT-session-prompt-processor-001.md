@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Title | Stream ended without finish not retryable |
+| Title | Stream-ended classified as APIError for retry |
 | Category | stability |
 | Severity | Critical |
 | Origin | prior-review |
@@ -10,17 +10,16 @@
 | Module | session-prompt-processor |
 | Evidence | packages/ax-code/src/session/processor-impl.ts + message-v2-impl.ts |
 | Independent verifier | ax-code-glm |
-| Regression test | source re-verify / existing suite |
+| Regression test | packages/ax-code/test/session |
+| Owner | codex-sol |
+| Expiry | n/a |
 
 ## Proof
-Throws MessageV2.APIError; fromError maps stream-ended message; retry path uses SessionRetry
+Throws MessageV2.APIError; retryable path engaged
 
 ## Impact
-Trust/stability defect on packages/ax-code/src/session (prompt/processor) surface.
-
-## Fix
-See proof. Minimal invariant restoration already present or applied this program.
+Affects `packages/ax-code/src/session (prompt/processor)` (hot-path, correctness).
 
 ## Verification
-- Re-read evidence path at baseline/current
-- Static control-flow proof of current defense
+- Evidence path re-read at commit `8556bab68b2232bf9bbf4509092468efa73611af`
+- packages/ax-code/test/session

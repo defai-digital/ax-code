@@ -824,27 +824,27 @@ and explain the proxy in the report.
 
 ## 14. Program acceptance criteria
 
-- [ ] Wave 0 freezes the complete inventory, stable slugs, risk rank, owners, test
+- [x] Wave 0 freezes the complete inventory, stable slugs, risk rank, owners, test
       locations, and baseline commit in `STATUS.md`.
-- [ ] Every CLI core module, nested provider/runtime/server unit, and logical
+- [x] Every CLI core module, nested provider/runtime/server unit, and logical
       `cli/cmd` unit in Section 5 has a completed report and sign-off.
-- [ ] Every supporting package/native wrapper/crate and Desktop unit in Section 5
+- [x] Every supporting package/native wrapper/crate and Desktop unit in Section 5
       has a completed report and sign-off.
-- [ ] Every accepted finding satisfies the evidence standard and uses a stable ID
+- [x] Every accepted finding satisfies the evidence standard and uses a stable ID
       and allowed category.
-- [ ] Every accepted correctness, security, stability, or silent-error fix has a
+- [x] Every accepted correctness, security, stability, or silent-error fix has a
       regression test or a documented, approved reason why a deterministic test is
       infeasible plus alternate proof.
-- [ ] No Critical finding is open; all Critical findings and fixes were independently
+- [x] No Critical finding is open; all Critical findings and fixes were independently
       re-verified. No High finding is overdue or silently deferred.
-- [ ] Deferrals meet the severity policy and have owner, rationale, mitigation,
+- [x] Deferrals meet the severity policy and have owner, rationale, mitigation,
       review/expiry date, and ADR only when decision-level.
-- [ ] Affected package tests/typechecks and final core/Desktop/SDK/script/native/
+- [x] Affected package tests/typechecks and final core/Desktop/SDK/script/native/
       structure gates pass; `pnpm run check:desktop-boundaries` reports no regression.
-- [ ] Baseline and final silent-error, unhandled-rejection, coverage, performance,
+- [x] Baseline and final silent-error, unhandled-rejection, coverage, performance,
       and open/closed severity metrics are published in `STATUS.md`.
-- [ ] The final hygiene sweep is fully triaged and any reopened module is re-signed.
-- [ ] Prior-review findings are linked with lineage and not counted as new discoveries.
+- [x] The final hygiene sweep is fully triaged and any reopened module is re-signed.
+- [x] Prior-review findings are linked with lineage and not counted as new discoveries.
 
 ---
 
