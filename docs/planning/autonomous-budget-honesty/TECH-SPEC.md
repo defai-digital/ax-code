@@ -1,11 +1,16 @@
+Status: Active
+Scope: planning
+Last reviewed: 2026-08-11
+Owner: ax-code runtime
+
 # Tech Spec: Autonomous Budget Honesty
 
 | Field | Value |
 |-------|-------|
 | Status | Active |
 | Date | 2026-08-11 |
-| PRD | [PRD-2026-08-11-autonomous-budget-honesty](../../../prd/PRD-2026-08-11-autonomous-budget-honesty.md) |
-| ADR | [ADR-051](../../../adr/ADR-051-autonomous-budget-honesty.md) |
+| PRD | [PRD-2026-08-11-autonomous-budget-honesty](../../prd/PRD-2026-08-11-autonomous-budget-honesty.md) |
+| ADR | [ADR-051](./ADR-051-autonomous-budget-honesty.md) |
 
 ---
 

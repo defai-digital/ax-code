@@ -1,3 +1,8 @@
+Status: Active
+Scope: planning
+Last reviewed: 2026-08-11
+Owner: ax-code runtime
+
 # PRD: Autonomous Budget Honesty
 
 | Field | Value |
@@ -5,8 +10,8 @@
 | Status | Active |
 | Owner | AX Code runtime |
 | Created | 2026-08-11 |
-| Related | Dual review (Codex + Qoder, 2026-08-11); ADR-051; `.internal/reports/planning/autonomous-budget-honesty/TECH-SPEC.md`; ADR-048 (agentic runtime) |
-| Location | `.internal/prd/PRD-2026-08-11-autonomous-budget-honesty.md` |
+| Related | Dual review (Codex + Qoder, 2026-08-11); ADR-051; `docs/planning/autonomous-budget-honesty/TECH-SPEC.md`; ADR-048 (agentic runtime) |
+| Location | `docs/prd/PRD-2026-08-11-autonomous-budget-honesty.md` |
 
 ---
 
@@ -216,7 +221,7 @@ Three concrete defects follow from this table:
 | Docs | `docs/guides/autonomous.md` | Budget table, auto-routing note, config keys, Source-of-Truth list |
 
 (Full per-file design in
-`.internal/reports/planning/autonomous-budget-honesty/TECH-SPEC.md` §3.)
+`docs/planning/autonomous-budget-honesty/TECH-SPEC.md` §3.)
 
 ## 10. Test plan (summary)
 

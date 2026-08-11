@@ -1,3 +1,8 @@
+Status: Active
+Scope: planning
+Last reviewed: 2026-08-11
+Owner: ax-code runtime
+
 # Planning: Autonomous Budget Honesty
 
 | Field | Value |
