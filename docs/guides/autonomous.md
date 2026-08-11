@@ -149,7 +149,7 @@ In a session, run **`/limits`** to print the resolved budget stack, effective TU
 
 **What the TUI shows:** during a multi-step run the header chip reports `step current/max` where `max` is the **effective pacing cap** for the active agent — `min(agent.steps, session.max_steps)` when the agent is capped, otherwise the per-segment limit. It is not a total-run counter across auto-continuations.
 
-**Auto-routing:** keyword routing may switch the session to a specialist agent (Debug, Security, DevOps, …). Specialists no longer ship a hidden 25/30-step default (see ADR-051); they share the session budgets above unless you set `agent.<name>.steps`. Disable routing with `"routing": { "disable": true }` if you want the Dev agent only.
+**Auto-routing:** keyword routing may switch the session to a specialist agent (Debug, Security, DevOps, …). Specialists share the same unbounded-by-default agent step policy as Dev unless you set `agent.<name>.steps`. Disable routing with `"routing": { "disable": true }` if you want the Dev agent only.
 
 **Long runs:** use `/goal` or Super-Long for multi-hour work — they lift ordinary continuation caps and use the larger cumulative ceiling (default 20,000), with verification / pause semantics documented in [Loop Mode](loop-mode.md).
 
