@@ -10,11 +10,10 @@ AX Code runs coding agents against your actual repositories through AX Code Desk
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
-[![Release v7.4.0](https://img.shields.io/badge/Release-v7.4.0-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v7.4.0)
+[![Release v7.5.0](https://img.shields.io/badge/Release-v7.5.0-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v7.5.0)
 [![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
-[![Windows x64](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
-[![Windows ARM64 CLI](https://img.shields.io/badge/Windows%20ARM64-CLI-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
-[![Linux x64/arm64 CLI](https://img.shields.io/badge/Linux%20x64%2Farm64-CLI-E95420?logo=ubuntu&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
+[![Windows x64/ARM64](https://img.shields.io/badge/Windows-x64%20%2B%20ARM64-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
+[![Ubuntu 24.04+ amd64/arm64](https://img.shields.io/badge/Ubuntu%2024.04%2B-amd64%20%2B%20arm64-E95420?logo=ubuntu&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/gf9UyPxaN2)
 
@@ -24,12 +23,12 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ### Supported Install Targets
 
-| Platform            | Status         | Install path                                           |
-| ------------------- | -------------- | ------------------------------------------------------ |
-| macOS Apple Silicon | Active support | Homebrew CLI formula and Desktop cask                  |
-| Windows x64         | Active support | PowerShell CLI installer and Desktop release installer |
-| Windows ARM64       | Active support | PowerShell CLI installer and Desktop release installer |
-| Linux x64 / arm64   | Active support | Bash CLI installer + Desktop `.deb`/AppImage (Ubuntu 24.04+ glibc) |
+| Platform                        | Status         | Install path                                           |
+| ------------------------------- | -------------- | ------------------------------------------------------ |
+| macOS Apple Silicon             | Active support | Homebrew CLI formula and Desktop cask                  |
+| Windows x64                     | Active support | PowerShell CLI installer and Desktop release installer |
+| Windows ARM64                   | Active support | PowerShell CLI installer and Desktop release installer |
+| Ubuntu 24.04+ (amd64 and arm64) | Active support | Bash CLI installer plus Desktop `.deb`/AppImage        |
 
 **Recommended: AX Code Desktop**
 
@@ -72,7 +71,7 @@ Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**.
 
 The PowerShell `install.ps1` path installs the CLI only. It does not install the Desktop app.
 
-**Linux (CLI)**
+**Ubuntu 24.04+ (CLI)**
 
 Ubuntu Desktop/Server **24.04 LTS** and newer (glibc) on **amd64** and **arm64**:
 
@@ -112,7 +111,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/d
 
 Verifies the downloaded release archive with minisign (bootstraps a pinned minisign binary when needed). Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only if you intentionally accept an unverifiable download. Installs the node-bundled CLI under `%USERPROFILE%\.ax-code\bin`. Pin a version with `-Version <release>`. Uninstall with `.\install.ps1 -Uninstall`.
 
-Supported CLI install paths are Homebrew (macOS), the GitHub release installer for Windows PowerShell, and the bash installer for Linux glibc (Ubuntu 24.04+ amd64/arm64). The Windows PowerShell and Linux bash installers are CLI-only; use the platform Desktop release assets (macOS DMG/cask, Windows `.exe`, Linux `.deb`/AppImage) for the Desktop app. npm packages are not a supported release channel. See [Installation and Runtime Channels](docs/getting-started/install-runtime.md) for the full matrix.
+Supported CLI install paths are Homebrew (macOS), the GitHub release installer for Windows PowerShell, and the bash installer for Ubuntu 24.04+ on amd64/arm64. The Windows PowerShell and Ubuntu bash installers are CLI-only; use the platform Desktop release assets (macOS DMG/cask, Windows `.exe`, Ubuntu `.deb`/AppImage) for the Desktop app. npm packages are not a supported release channel. See [Installation and Runtime Channels](docs/getting-started/install-runtime.md) for the full matrix.
 
 AX Engine local inference is available only on eligible Apple Silicon Macs. Install its matching MLX runtime with `brew install defai-digital/ax-engine/ax-engine`; AX Code then starts and manages the local server on demand. Windows Desktop users should use hosted providers or OpenAI-compatible provider gateways; AX Code itself remains local-only and cannot be used as a remote server. For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `HF_TOKEN`, `UNOROUTER_API_KEY`, `ZHIPU_API_KEY`, Alibaba plan keys, and `GITHUB_TOKEN`.
 
@@ -145,7 +144,7 @@ hash -r
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
-This updates the Windows CLI. AX Code Desktop updates through the Desktop auto-updater, or by downloading the latest `AX-Code-<version>-win-x64.exe` / `AX-Code-<version>-win-arm64.exe` installer from GitHub Releases. For unattended Desktop installs, run the NSIS installer with `/S` (for example `.\AX-Code-7.4.0-win-x64.exe /S`).
+This updates the Windows CLI. AX Code Desktop updates through the Desktop auto-updater, or by downloading the latest `AX-Code-<version>-win-x64.exe` / `AX-Code-<version>-win-arm64.exe` installer from GitHub Releases. For unattended Desktop installs, run the NSIS installer with `/S` (for example `.\AX-Code-7.5.0-win-x64.exe /S`).
 
 ### From Source (contributors)
 
@@ -154,7 +153,7 @@ git clone https://github.com/defai-digital/ax-code.git
 cd ax-code && pnpm install && pnpm run setup:cli
 ```
 
-Requires [pnpm](https://pnpm.io) v10.33.4+ and [Node.js](https://nodejs.org) matching the root `package.json` engine (`>=24`, `>=26` for source-mode TUI commands that use `--experimental-ffi`). `setup:cli` builds and installs a node-bundled launcher. `ax-code doctor` should report `Runtime: Node vX.Y.Z (node-bundled)` — the same node-bundled runtime shipped by every supported install channel (Homebrew, Windows installer).
+Requires [pnpm](https://pnpm.io) v10.33.4+ and [Node.js](https://nodejs.org) matching the root `package.json` engine (`>=24`, `>=26` for source-mode TUI commands that use `--experimental-ffi`). `setup:cli` builds and installs a node-bundled launcher. `ax-code doctor` should report `Runtime: Node vX.Y.Z (node-bundled)` — the same node-bundled runtime shipped by every supported install channel (Homebrew, Windows installer, and Ubuntu installer).
 
 Refresh the local bundled runtime after code changes:
 
@@ -178,14 +177,14 @@ That source launcher should report `Runtime: Node vX.Y.Z (source)` and is intent
 
 AX Code is designed for agent work that touches real files, shells, sessions, and team policy. The same runtime powers every surface:
 
-| Need                         | Use                                                                                                                         |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Desktop app                  | AX Code Desktop provides the graphical app from [`desktop/`](desktop/) as a separate Electron installable for macOS/Windows |
-| Interactive coding           | `ax-code` opens the terminal UI with provider, model, agent, session, MCP, and skill flows                                  |
-| One-shot automation          | `ax-code run "review the auth flow"` runs a bounded headless task                                                           |
-| Local service / integrations | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                                              |
-| TypeScript embedding         | `@ax-code/sdk` provides `createAgent()`, streaming events, sessions, custom tools, and tests                                |
-| VS Code                      | The VS Code integration uses the installed CLI/server while staying editor-native                                           |
+| Need                         | Use                                                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Desktop app                  | AX Code Desktop provides the graphical app from [`desktop/`](desktop/) for macOS, Windows, and Ubuntu 24.04+ |
+| Interactive coding           | `ax-code` opens the terminal UI with provider, model, agent, session, MCP, and skill flows                   |
+| One-shot automation          | `ax-code run "review the auth flow"` runs a bounded headless task                                            |
+| Local service / integrations | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                               |
+| TypeScript embedding         | `@ax-code/sdk` provides `createAgent()`, streaming events, sessions, custom tools, and tests                 |
+| VS Code                      | The VS Code integration uses the installed CLI/server while staying editor-native                            |
 
 ## Current Capabilities
 
