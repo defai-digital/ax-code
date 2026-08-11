@@ -1,0 +1,32 @@
+{
+  "slug": "server-routes-app-context-schema",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/app-context-schema.ts",
+    "packages/ax-code/src/server/routes/app-context.ts",
+    "packages/ax-code/src/server/routes/app-context-templates.ts",
+    "packages/ax-code/src/server/routes/app-context-checks.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/src/memory/injector.ts",
+    "packages/ax-code/src/memory/store.ts",
+    "packages/ax-code/test/server/app-context-routes.test.ts",
+    "packages/sdk/openapi.json",
+    "packages/sdk/js/src/v2/gen/types.gen.ts",
+    "docs/module-quality-audit/modules/server-routes-app-context-schema/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Bounded the unit to its seven exports, two private sub-shapes, aggregate response, request validator, and inferred data contracts.",
+    "2": "Confirmed that the sole request field is a five-value enum validated before route access and that remaining strings describe server output.",
+    "3": "Matched every template enum member to producer data and switch handling, including conditional directory rules and idempotent file creation.",
+    "4": "Compared live response construction with OpenAPI and SDK output, identifying the undocumented extra stale flag as low-severity drift.",
+    "5": "Checked one-time schema construction, fixed and parallel metadata probes, linear array parsing, and the four-result discovery bound.",
+    "6": "Verified schema ownership remains beside the routes and that template and check producers consume inferred contracts instead of duplicate interfaces.",
+    "7": "Scanned for maintenance hazards and confirmed optional-file reads rethrow non-ENOENT errors while memory load failures are logged and represented by null.",
+    "8": "Reconciled the empty finding register, assessed focused route coverage, and noted missing invalid-key and memory-contract assertions without elevating a Critical item.",
+    "9": "Completed the exact app-context route test with five passing cases and a successful core TypeScript typecheck."
+  },
+  "date": "2026-08-11"
+}

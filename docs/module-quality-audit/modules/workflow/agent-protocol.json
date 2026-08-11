@@ -1,0 +1,41 @@
+{
+  "slug": "workflow",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/workflow/artifact.ts",
+    "packages/ax-code/src/workflow/budget.ts",
+    "packages/ax-code/src/workflow/dispatch-adapter.ts",
+    "packages/ax-code/src/workflow/eval-corpus.ts",
+    "packages/ax-code/src/workflow/eval.ts",
+    "packages/ax-code/src/workflow/fixtures.ts",
+    "packages/ax-code/src/workflow/index.ts",
+    "packages/ax-code/src/workflow/planner.ts",
+    "packages/ax-code/src/workflow/projection.ts",
+    "packages/ax-code/src/workflow/routine.ts",
+    "packages/ax-code/src/workflow/run/budget.ts",
+    "packages/ax-code/src/workflow/run/final-report.ts",
+    "packages/ax-code/src/workflow/run/index.ts",
+    "packages/ax-code/src/workflow/run/internal.ts",
+    "packages/ax-code/src/workflow/scheduler.ts",
+    "packages/ax-code/src/workflow/spec.ts",
+    "packages/ax-code/src/workflow/state.ts",
+    "packages/ax-code/src/workflow/task-queue.ts",
+    "packages/ax-code/src/workflow/template.ts",
+    "packages/ax-code/src/workflow/workflow.sql.ts",
+    "docs/module-quality-audit/modules/workflow/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "20 files, ~6080 LOC; barrel at index.ts:1 re-exports 12 siblings + curated state IDs; no layer cycles (run/* never imports scheduler).",
+    "2": "Concurrency guarded by per-run KeyedSerialQueue (scheduler.ts:26-31); persistence across 5 SQLite tables with cascade deletes; real modes are crash-during-running and budget overrun mid-phase.",
+    "3": "Budget ratio guard is divide-by-zero safe via `limit > 0` at budget.ts:157; completion gate at run/internal.ts:347 covers required-mode + missing artifacts + degenerate no-evidence case. Gap: recoverInterrupted only handles status 'running' (run/index.ts:410), leaving paused/blocked crash victims stranded. MEDIUM.",
+    "4": "appendBudgetUsage rescans all child ledger rows per call (run/budget.ts:66-74) — O(c*k^2) cumulative; getDetail parses every row twice (run/index.ts:192); syncItem re-aggregates all phases/children per event (task-queue.ts:128-167). Latent, not blocking the seeded corpus.",
+    "5": "Scheduler depends on run/planner, never the reverse; WorkflowRun namespace spread-merge at run/index.ts:453 is stable but re-types Info/Status twice. isTerminalChildStatus duplicated in 3 files (run/internal.ts:263, scheduler.ts:501, task-queue.ts:227) — meets dedup threshold. LOW.",
+    "6": "Dead state: `failed` array in recoverInterrupted (run/index.ts:422) is never populated, always returned as []. Near-dup envelope loaders: eval.ts:165-205 vs run/internal.ts:460-504 differ only in failure string format. No unused exports.",
+    "7": "All catches are documented fire-and-forget cancels (scheduler.ts:207, 245; task-queue.ts:183); magic numbers externalized (spec.ts:5-18, eval.ts:11, dispatch-adapter.ts:253); no TODO/FIXME; zod used for both parse and inference.",
+    "8": "Dedicated unit tests for artifact.ts and budget.ts; seeded eval corpus (eval-corpus.ts:82-134) with closed-loop recall check. Integration-only coverage gaps: recoverInterrupted, budget cascade, scheduler restart early-return (scheduler.ts:80-84).",
+    "9": "No Critical findings accepted. Disposition: recovery-status gap + restart coupling = MEDIUM; budget-ledger quadratic = MEDIUM/LOW; dedup + dead failed-array = LOW. No reverify.md required (no Critical items). Approved at MEDIUM residual risk."
+  },
+  "date": "2026-08-11"
+}

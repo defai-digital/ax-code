@@ -1,0 +1,20 @@
+{
+  "agentId": "ax-code-glm-snapshot-20260811T192735Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:27:35Z",
+  "finishedAt": "2026-08-11T19:31:23Z",
+  "slug": "snapshot",
+  "filesRead": [
+    "packages/ax-code/src/snapshot/index.ts",
+    "packages/ax-code/src/util/git.ts",
+    "packages/ax-code/src/util/git-output.ts",
+    "packages/ax-code/src/util/queue.ts",
+    "packages/ax-code/src/project/instance.ts",
+    "packages/ax-code/src/session/revert.ts",
+    "packages/ax-code/src/server/routes/session-impl.ts",
+    "packages/ax-code/test/snapshot/snapshot.test.ts",
+    "docs/module-quality-audit/modules/snapshot/MODULE-AUDIT.md",
+    "docs/module-quality-audit/modules/snapshot/protocol/steps.md"
+  ]
+}

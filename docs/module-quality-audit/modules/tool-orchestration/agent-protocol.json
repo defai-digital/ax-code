@@ -1,0 +1,26 @@
+{
+  "slug": "tool-orchestration",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/tool/arena-implement.ts",
+    "packages/ax-code/src/tool/arena.ts",
+    "packages/ax-code/src/tool/council.ts",
+    "packages/ax-code/src/tool/task.ts",
+    "packages/ax-code/src/tool/task_parallel.ts",
+    "docs/module-quality-audit/modules/tool-orchestration/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Inventoried two tool families: ensemble fan-out (arena.ts ArenaTool@215, council.ts CouncilTool@239) and subagent spawners (task.ts TaskTool@95, task_parallel.ts TaskParallelTool@275, arena-implement.ts runImplementArena@631). All share Session.create + SessionPrompt.prompt+withTimeout + abort-cancel spine.",
+    "2": "Abort propagation is consistent: task.ts dual listeners@124,132 with defer cleanup; task_parallel.ts per-task cancel@160; arena-implement throwIfAborted@293 at every await boundary in runVerification. Session teardown is asymmetric-by-design: abort removes orphan (task.ts@338), operational failure preserves for resume (task.ts@345-354). Zero empty catches across all 5 files.",
+    "3": "Correctness gaps: plan arena runs unbounded Promise.all@arena.ts:429 while implement uses FanOut concurrency:2@arena-implement.ts:648; council also unbounded@council.ts:329. Single-member FanOut wrap + manual retry double-layers execution (arena.ts@106,146,170; council.ts@122,159,119). riskScore@arena-implement.ts:537 maps linesChanged/20 to 1-20, conflating size with risk.",
+    "4": "Timeout layering is coherent: IMPLEMENT 12min@arena-implement.ts:31 + VERIFY 5min@:32, FanOut budget IMPLEMENT+60s@:651 avoids firing before contestant withTimeout@:489. snapshotContestantPatch issues 4-7 git calls, run twice per contestant (pre/post verify@512,524) — ~40-70 subprocess calls for a 5-contestant arena. Verification runs bash -lc@:325 from trusted local VerificationPolicy, no external injection surface.",
+    "5": "Ownership boundary is clean: tools are thin orchestration shells; ranking/aggregation/debate in pure mode/* modules. Permission scoping tight and layered — arena-implement denies task/task_parallel/arena/council/todowrite/question/external_directory both at Session@434-442 and prompt-tool@474-486. Depth guard MAX_DEPTH=5 walks parent chain (task.ts@149-162, task_parallel.ts@85-100). task_parallel enforces WriteIsolation@331 (single writer) and EnsemblePreflight.assertTaskParallelAllowed@304.",
+    "6": "Duplication between task.ts and task_parallel.ts: assistantError@43/26, errorDetails@53/36, isAbortError@72/49, finalize prompt text@296-301/201-206 near-identical — but only 2 call sites, below 3+ extraction threshold. MemberSelectionSchema duplicated arena.ts@44 vs council.ts@43 intentionally (circular-dep guard, divergent validation rules). No dead exports.",
+    "7": "Material behavioral gap: task.ts fires SubagentStop lifecycle hook (fireSubagentStop@30, called@366 failure and@431 success) but task_parallel.ts never imports @/hooks/lifecycle — user SubagentStop hooks silently skipped for all parallel subagents. Secondary skew: needsRecoveredResultReview@task.ts:76 not ported to task_parallel finalize path@189-225. enableIfDisabled@arena.ts:275 persists modes.arena.enabled to project config (council has no equivalent).",
+    "8": "Five findings registered, none Critical/High: #1 MEDIUM SubagentStop gap (task_parallel), #2 LOW unbounded Promise.all vs FanOut, #3 LOW single-member FanOut+manual retry, #4 LOW riskScore size-as-risk heuristic, #5 LOW recovered-result review flag not ported. findings/ dir is empty so no Critical items require reverify.md.",
+    "9": "Primary (ax-code-glm) pass complete: 5 primary sources + MODULE-AUDIT.md read in full, all line evidence drawn directly. No Critical/High findings so no reverify.md required under gate rules. Read-only review — no code changes. Ready for codex-sol verifier-lane sign-off against the Step 8 dispositions."
+  },
+  "date": "2026-08-11"
+}

@@ -1,0 +1,33 @@
+{
+  "slug": "context",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "docs/module-quality-audit/modules/context/MODULE-AUDIT.md",
+    "packages/ax-code/src/context/analyzer.ts",
+    "packages/ax-code/src/context/generator.ts",
+    "packages/ax-code/src/context/index.ts",
+    "packages/ax-code/src/context/long-agent-packer.ts",
+    "packages/ax-code/test/context/analyzer.test.ts",
+    "packages/ax-code/test/context/generator.test.ts",
+    "packages/ax-code/test/context/long-agent-packer.test.ts",
+    "packages/ax-code/src/cli/cmd/init.ts",
+    "packages/ax-code/src/session/llm-impl.ts",
+    "packages/ax-code/src/session/processor-impl.ts",
+    "packages/ax-code/test/session/llm.test.ts",
+    "packages/ax-code/src/provider/agent-optimization-profile.ts"
+  ],
+  "stepNotes": {
+    "1": "The context unit combines checkout analysis, pure AGENTS.md generation, guarded file lifecycle operations, and a four-tier long-agent prompt packer used by session code.",
+    "2": "Checkout-controlled manifest and path text crosses into generated Markdown or provider context, while the sole file mutation is root/AGENTS.md and packed content is not logged.",
+    "3": "Most precedence and I/O behavior is explicit, but separator characters are excluded during admission and can make the rendered token estimate exceed the requested budget.",
+    "4": "Analysis caps scans at 5,000 files in batches of 50; generation is list-bounded, and packing performs two bounded whole-context joins in the prompt path.",
+    "5": "Analyzer, renderer, lifecycle wrapper, and packer have distinct ownership; the private public-parameter type and duplicated convention package-manager field are API rough edges.",
+    "6": "No marker or suppression debt was found; broad manifest error suppression reduces diagnostics, and strict-mode guidance is unreachable through analyzer-produced data.",
+    "7": "Twenty-five focused tests cover decoding, selected generated sections, and tier behavior, but omit Context I/O, analyzer integration, most generator modes, and separator-aware budget enforcement.",
+    "8": "The ledger is empty; this pass records one Low budget-accounting defect, keeps two lesser quality observations, and finds no Critical item requiring re-verification.",
+    "9": "All three focused test files passed, core typechecking passed, and a two-entry runtime probe reproduced a 2-token result under a 1-token budget."
+  },
+  "date": "2026-08-11"
+}

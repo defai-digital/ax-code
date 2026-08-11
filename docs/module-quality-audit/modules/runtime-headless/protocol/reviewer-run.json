@@ -1,0 +1,24 @@
+{
+  "agentId": "ax-code-glm-runtime-headless-20260811T192114Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:21:14Z",
+  "finishedAt": "2026-08-11T19:23:20Z",
+  "filesRead": [
+    "packages/ax-code/src/runtime/headless/command.ts",
+    "packages/ax-code/src/runtime/headless/effects.ts",
+    "packages/ax-code/src/runtime/headless/event-log.ts",
+    "packages/ax-code/src/runtime/headless/event-sink-node.ts",
+    "packages/ax-code/src/runtime/headless/event-sink.ts",
+    "packages/ax-code/src/runtime/headless/event.ts",
+    "packages/ax-code/src/runtime/headless/index.ts",
+    "packages/ax-code/src/runtime/headless/projection.ts",
+    "packages/ax-code/src/runtime/headless/replay.ts",
+    "packages/ax-code/src/runtime/headless/runner.ts",
+    "packages/ax-code/src/runtime/headless/runtime.ts",
+    "docs/module-quality-audit/modules/runtime-headless/MODULE-AUDIT.md",
+    "packages/ax-code/test/runtime/headless/projection.test.ts",
+    "packages/ax-code/src/permission/index.ts"
+  ],
+  "slug": "runtime-headless"
+}

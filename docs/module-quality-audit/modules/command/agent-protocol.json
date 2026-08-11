@@ -1,0 +1,36 @@
+{
+  "slug": "command",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/command/file-command.ts",
+    "packages/ax-code/src/command/index.ts",
+    "packages/ax-code/src/config/config-impl.ts",
+    "packages/ax-code/src/config/markdown.ts",
+    "packages/ax-code/src/util/filesystem.ts",
+    "packages/ax-code/src/util/glob.ts",
+    "packages/ax-code/src/session/prompt-command-template.ts",
+    "packages/ax-code/src/session/prompt-command.ts",
+    "packages/ax-code/src/session/prompt-command-setup.ts",
+    "packages/ax-code/src/session/prompt-command-execution.ts",
+    "packages/ax-code/src/server/routes/app.ts",
+    "packages/ax-code/src/capability/index.ts",
+    "packages/ax-code/test/AGENTS.md",
+    "packages/ax-code/test/command/file-command.test.ts",
+    "packages/ax-code/test/command/hints.test.ts",
+    "docs/module-quality-audit/modules/command/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Bound the command unit to its parser/discovery namespace and merged runtime catalog, then followed their public consumers.",
+    "2": "Confirmed shell interpolation is disabled for file commands and identified missing containment for symlink-following compatibility roots.",
+    "3": "Traced duplicate resolution and found that absolute-path sorting, rather than explicit scope, determines the first retained authored command.",
+    "4": "Verified instance caching and noted that each root parses every matched Markdown file in one unbounded Promise.all burst.",
+    "5": "Checked the shared parser contract and located precedence responsibility in mutation order inside the catalog initializer.",
+    "6": "Inspected both catch sites, confirmed their ENOENT-only dispositions, and reviewed warning construction and repetitive builtin setup.",
+    "7": "Ran the two direct test suites successfully and enumerated uncovered scope-collision, symlink, config-collision, and MCP-collision paths.",
+    "8": "Reconciled the empty on-disk findings set with the audit's none-accepted row; no Critical reverify artifact is applicable.",
+    "9": "Completed focused tests and core typecheck, while recording the requested reviewer/verifier roles and the stale inverse audit header."
+  },
+  "date": "2026-08-11"
+}

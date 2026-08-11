@@ -1,0 +1,35 @@
+{
+  "slug": "replay",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/agent-control-query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/compare.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/event-log.sql.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/event.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/recorder.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/replay.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/tool-call-query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/control-plane/agent-control-summary.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/replay/reconstruct.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/replay/recorder-batching.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/audit.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/branch.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/replay/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Mapped the replay unit: acyclic dependency graph rooted at index.ts (EventLogID) with event.ts holding the 30-variant zod union and query.ts as the sole read/write chokepoint over EventLogTable.",
+    "2": "Truncation handled via bySessionStrict (throws TruncatedError at query.ts:54) for determinism paths and warnIfTruncated for diagnostic paths; sequence-gap and leak caps defended by transactions and the token re-begin guard.",
+    "3": "Replay.run verify mode catches both orphan tool.result and orphan tool.call directions; reconstruct.test.ts:286 asserts compare loads the strict log exactly once. Noted a like-for-like fragility in compare's tool-call source comparison.",
+    "4": "event_log_session_type_sequence_idx backs the typed lookups so the TUI route indicator avoids full-session loads; count/prune use count(*) in a transaction; flagged a 2N-scan pattern in the SessionBranch caller outside this unit.",
+    "5": "Strict/non-strict split is the module's key invariant and is applied consistently across run/reconstructStream/compare; rank comparator terminates in localeCompare for determinism; rank's empty-input throw is unreachable behind branch.ts:160's guard.",
+    "6": "No empty catches in any of the 9 files; recorder fallbacks log full sessionID/eventType/sequence context; step_id column is under-documented inside the module but not dead; no orphan helpers in compare.ts.",
+    "7": "Replay.summary switch (replay.ts:423) handles 16 of 30 event types with no default arm, so autonomous/planner/safety/quality events are invisible in the CLI debug summary — the main test gap.",
+    "8": "No Critical or High findings; recorded one MEDIUM (summary switch staleness) and two LOW observations for codex-sol to confirm; no findings files written because none clear the tracked-finding bar.",
+    "9": "Static map matches what I read; persistence is transactional where it matters; no injection/traversal/secret surface; recommend sign-off and hand the unit to codex-sol for the independent confirmation pass."
+  },
+  "date": "2026-08-11"
+}

@@ -1,0 +1,32 @@
+{
+  "slug": "session-fork-revert",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/session/branch.ts",
+    "packages/ax-code/src/session/compare.ts",
+    "packages/ax-code/src/session/move.ts",
+    "packages/ax-code/src/session/revert.ts",
+    "packages/ax-code/src/session/rollback.ts",
+    "packages/ax-code/src/session/index.ts",
+    "packages/ax-code/src/session/schema.ts",
+    "packages/ax-code/src/session/prompt-run-state.ts",
+    "packages/ax-code/src/id/id.ts",
+    "packages/ax-code/src/id/branded.ts",
+    "packages/ax-code/src/snapshot/index.ts",
+    "docs/module-quality-audit/modules/session-fork-revert/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Five-file scope mapped; SessionMove (move.ts:12) is validation-only, no execute path in-file.",
+    "2": "assertNotBusy (revert.ts:25) is in-memory (prompt-run-state.ts:32); setRevert (index.ts:542) lacks the Lock.write that setProductMetadata (index.ts:530) holds.",
+    "3": "Split-brain window in revert.ts:67-91: Snapshot.revert rewrites the tree before setRevert persists metadata; no compensating restore on late failure.",
+    "4": "cleanup serializes Bus.publish across removed messages (revert.ts:148-159); compare.detail runs Replay.compare twice in deep mode (compare.ts:219).",
+    "5": "family() throws bare string Errors (branch.ts:215,217); detail() at branch.ts:160 omits a return annotation despite implicit Detail|undefined.",
+    "6": "compare.ts:268-269 non-null assertions replay(left.deep)! rely on an un-checked deep invariant; rollback.ts:123-124 same pattern after filter.",
+    "7": "No direct unit test drives the revert split-brain window; rollback resolve/pick/match (rollback.ts:75,140,156) are untested pure functions.",
+    "8": "Five findings registered: one MEDIUM (revert atomicity) and four LOW; no Critical, no findings/ files present.",
+    "9": "Read-only review; no source mutated, so no build/test run required to validate the unit; follow-ups prioritized in steps.md Step 9."
+  },
+  "date": "2026-08-11"
+}

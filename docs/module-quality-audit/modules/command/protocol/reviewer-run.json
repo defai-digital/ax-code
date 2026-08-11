@@ -1,0 +1,26 @@
+{
+  "agentId": "codex-sol-command-20260811T192735Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:27:35Z",
+  "finishedAt": "2026-08-11T19:31:35Z",
+  "filesRead": [
+    "packages/ax-code/src/command/file-command.ts",
+    "packages/ax-code/src/command/index.ts",
+    "packages/ax-code/src/config/config-impl.ts",
+    "packages/ax-code/src/config/markdown.ts",
+    "packages/ax-code/src/util/filesystem.ts",
+    "packages/ax-code/src/util/glob.ts",
+    "packages/ax-code/src/session/prompt-command-template.ts",
+    "packages/ax-code/src/session/prompt-command.ts",
+    "packages/ax-code/src/session/prompt-command-setup.ts",
+    "packages/ax-code/src/session/prompt-command-execution.ts",
+    "packages/ax-code/src/server/routes/app.ts",
+    "packages/ax-code/src/capability/index.ts",
+    "packages/ax-code/test/AGENTS.md",
+    "packages/ax-code/test/command/file-command.test.ts",
+    "packages/ax-code/test/command/hints.test.ts",
+    "docs/module-quality-audit/modules/command/MODULE-AUDIT.md"
+  ],
+  "slug": "command"
+}

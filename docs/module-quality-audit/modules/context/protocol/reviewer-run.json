@@ -1,0 +1,23 @@
+{
+  "agentId": "codex-sol-context-20260811T192114Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:21:14Z",
+  "finishedAt": "2026-08-11T19:26:55Z",
+  "filesRead": [
+    "docs/module-quality-audit/modules/context/MODULE-AUDIT.md",
+    "packages/ax-code/src/context/analyzer.ts",
+    "packages/ax-code/src/context/generator.ts",
+    "packages/ax-code/src/context/index.ts",
+    "packages/ax-code/src/context/long-agent-packer.ts",
+    "packages/ax-code/test/context/analyzer.test.ts",
+    "packages/ax-code/test/context/generator.test.ts",
+    "packages/ax-code/test/context/long-agent-packer.test.ts",
+    "packages/ax-code/src/cli/cmd/init.ts",
+    "packages/ax-code/src/session/llm-impl.ts",
+    "packages/ax-code/src/session/processor-impl.ts",
+    "packages/ax-code/test/session/llm.test.ts",
+    "packages/ax-code/src/provider/agent-optimization-profile.ts"
+  ],
+  "slug": "context"
+}

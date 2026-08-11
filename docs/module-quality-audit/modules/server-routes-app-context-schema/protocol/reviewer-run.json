@@ -1,0 +1,22 @@
+{
+  "agentId": "codex-sol-server-routes-app-context-schema-20260811T192735Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:27:35Z",
+  "finishedAt": "2026-08-11T19:29:24Z",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/app-context-schema.ts",
+    "packages/ax-code/src/server/routes/app-context.ts",
+    "packages/ax-code/src/server/routes/app-context-templates.ts",
+    "packages/ax-code/src/server/routes/app-context-checks.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/src/memory/injector.ts",
+    "packages/ax-code/src/memory/store.ts",
+    "packages/ax-code/test/server/app-context-routes.test.ts",
+    "packages/sdk/openapi.json",
+    "packages/sdk/js/src/v2/gen/types.gen.ts",
+    "docs/module-quality-audit/modules/server-routes-app-context-schema/MODULE-AUDIT.md"
+  ],
+  "slug": "server-routes-app-context-schema"
+}

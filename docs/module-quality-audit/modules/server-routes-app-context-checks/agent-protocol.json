@@ -1,0 +1,26 @@
+{
+  "slug": "server-routes-app-context-checks",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/app-context-checks.ts",
+    "packages/ax-code/src/server/routes/app-context.ts",
+    "packages/ax-code/src/server/routes/app-context-schema.ts",
+    "packages/ax-code/src/util/filesystem.ts",
+    "packages/ax-code/src/util/string-list.ts",
+    "docs/module-quality-audit/modules/server-routes-app-context-checks/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single-export module; one consumer at app-context.ts:72 feeding the 'checks' field of GET /context.",
+    "2": "Inputs { root, dir } come from Instance server-side, not request bodies; no path-injection vector; only local project files are read.",
+    "3": "makeTargets regex over-matches ':=' Makefile assignments (line 106); readOptionalJson rethrows parse errors and can 500 the whole route via app-context.ts:72.",
+    "4": "Sequential findUp/up walks on every GET /context with no caching; bounded by stop=root but the independent ecosystem probes are Promise.all-able.",
+    "5": "Clean helper-then-orchestrator shape; magic cap literal 4 at line 98 should be a named MAX_CHECKS constant; relativeFromRoot is an inlineable one-liner.",
+    "6": "No empty catches; readOptionalJson/readOptionalText correctly narrow via isEnoent; redundant Filesystem.exists re-check on findUp results at lines 161/179/201/215.",
+    "7": "No direct unit test for the 4-entry cap, ecosystem precedence, seen dedup, makeTargets regex, or quote whitespace rule; only incidental route tests listed in MODULE-AUDIT.",
+    "8": "One M (parse-error 500 propagation) and three L findings (makeTargets :=, magic cap, no test); no High or Critical items.",
+    "9": "Read-only reviewer lane; no code edits; fingerprint c70527832eae04a3 matches MODULE-AUDIT; no Critical items so reverify.md is not emitted here; hand-off to codex-sol for second pass."
+  },
+  "date": "2026-08-11"
+}

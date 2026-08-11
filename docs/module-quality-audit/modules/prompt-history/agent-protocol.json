@@ -1,0 +1,27 @@
+{
+  "slug": "prompt-history",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/prompt-history/index.ts",
+    "packages/ax-code/src/prompt-history/prompt-history.sql.ts",
+    "packages/ax-code/src/prompt-history/schema.ts",
+    "packages/ax-code/src/server/routes/prompt-history.ts",
+    "packages/ax-code/test/server/prompt-history.test.ts",
+    "packages/ax-code/src/storage/db.ts",
+    "docs/module-quality-audit/modules/prompt-history/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Inventory confirmed: 3 in-scope files, only consumer is server/routes/prompt-history.ts (GET/POST at lines 38/62); prompt_history table referenced nowhere else in src/.",
+    "2": "Persistence-tagged unit; all SQL is Drizzle-parameterized (index.ts:32-40, 76-86, 88-96), no string interpolation; inputs double-validated by route zod validator and PromptHistoryEntry.parse at index.ts:59.",
+    "3": "list() reverses DESC-ordered rows to ascending chronological order (index.ts:37,42) matching test/server/prompt-history.test.ts:83-85; normalizeListLimit sends non-finite to 0 -> empty list (index.ts:19-31).",
+    "4": "append() runs dedup+insert+trim inside Database.transaction (index.ts:62); contract is synchronous per storage/db.ts:279,314-330; id() at index.ts:12-17 guarantees PK uniqueness via UUID even for same-ms collisions.",
+    "5": "prompt_history_project_time_idx (prompt-history.sql.ts:23) covers the WHERE project_id=? + ORDER BY time_created DESC,id DESC shape used by both list (index.ts:33-39) and the trim SELECT (index.ts:88-93); no N+1.",
+    "6": "Project scoping enforced on every query via eq(project_id, Instance.project.id) (index.ts:36,66,91); MAX_ENTRIES is the single source of truth reused by route validator at server/routes/prompt-history.ts:12.",
+    "7": "time_updated column (prompt-history.sql.ts:21) is dead: module only INSERTs/DELETEs, never UPDATEs, so $onUpdate never fires and the column stays NULL; sequence (index.ts:10) is process-global mutable state but harmless given UUID suffix.",
+    "8": "No Critical/High/Medium findings; two LOW notes (dead time_updated; normalizeListLimit(0) returns 1 row, untested). findings/ dir is empty and this pass adds nothing; matches MODULE-AUDIT.md:71-73 ledger.",
+    "9": "Verification surface is pnpm --dir packages/ax-code run typecheck plus vitest run test/server/prompt-history.test.ts (covers project scope, MAX_ENTRIES trim, non-finite limit, consecutive dedup). No source modified, no rebuild needed. No Critical findings -> no reverify.md emitted."
+  },
+  "date": "2026-08-11"
+}

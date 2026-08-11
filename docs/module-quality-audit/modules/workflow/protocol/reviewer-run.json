@@ -1,0 +1,31 @@
+{
+  "agentId": "ax-code-glm-workflow-20260811T192114Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:21:14Z",
+  "finishedAt": "2026-08-11T19:24:02Z",
+  "filesRead": [
+    "packages/ax-code/src/workflow/artifact.ts",
+    "packages/ax-code/src/workflow/budget.ts",
+    "packages/ax-code/src/workflow/dispatch-adapter.ts",
+    "packages/ax-code/src/workflow/eval-corpus.ts",
+    "packages/ax-code/src/workflow/eval.ts",
+    "packages/ax-code/src/workflow/fixtures.ts",
+    "packages/ax-code/src/workflow/index.ts",
+    "packages/ax-code/src/workflow/planner.ts",
+    "packages/ax-code/src/workflow/projection.ts",
+    "packages/ax-code/src/workflow/routine.ts",
+    "packages/ax-code/src/workflow/run/budget.ts",
+    "packages/ax-code/src/workflow/run/final-report.ts",
+    "packages/ax-code/src/workflow/run/index.ts",
+    "packages/ax-code/src/workflow/run/internal.ts",
+    "packages/ax-code/src/workflow/scheduler.ts",
+    "packages/ax-code/src/workflow/spec.ts",
+    "packages/ax-code/src/workflow/state.ts",
+    "packages/ax-code/src/workflow/task-queue.ts",
+    "packages/ax-code/src/workflow/template.ts",
+    "packages/ax-code/src/workflow/workflow.sql.ts",
+    "docs/module-quality-audit/modules/workflow/MODULE-AUDIT.md"
+  ],
+  "slug": "workflow"
+}

@@ -1,0 +1,25 @@
+{
+  "slug": "server-routes-app-context-templates",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app-context-templates.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app-context-schema.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app-context.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/app-context-routes.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-app-context-templates/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Mapped the unit to two pure exports (contextTemplates@:8, templateBody@:53) with AppContextTemplateData/AppContextTemplateKey imported from app-context-schema.ts:2; sole consumer is app-context.ts (import :13, use :66/:106/:114).",
+    "2": "No IO/network/secrets in this file; network+api risk tags trace to consumer route. dir-rules path at :45 is built from caller-supplied input.dir, but caller derives it from Instance state, not request body.",
+    "3": "path.resolve guard at :40 correctly normalizes both sides so dir===root suppresses dir-rules; repo-rules body at :56-71 matches the assertion in app-context-routes.test.ts:117; relativeFromRoot||'.' fallback at :76 keeps Scope non-empty.",
+    "4": "No hot path: <=5-element array alloc and a single string join per call; path.resolve/path.join are O(1); endpoints are low-frequency user-triggered. Nothing to optimize.",
+    "5": "templateBody switch lacks a default/assertNever guard, so widening AppContextTemplateKey would silently return undefined; metadata and body live in two parallel switches keyed by the same literals. Both are non-blocking tidy-ups for a 5-item catalog.",
+    "6": "No dead code. relativeFromRoot helper (:4-6) is single-use but documents intent; five case bodies share [...].join('\\n') shape but contain distinct prose, not duplicated logic.",
+    "7": "No direct unit tests for contextTemplates/templateBody; indirect coverage via app-context-routes.test.ts:39 (repo-rules listed) and :98-117 (repo-rules POST round-trip). dir-rules, review-checklist, frontend-style-guide, release-checklist bodies are unasserted.",
+    "8": "No Critical/High findings; findings/ directory is empty and consistent. Two LOW informational notes logged in steps.md only (exhaustiveness guard; co-locate metadata+body) — non-blocking.",
+    "9": "Re-read app-context-templates.ts:8-51/:53-116/:40/:76, app-context-schema.ts:18-25/49-51, app-context.ts:66/106/114, app-context-routes.test.ts:39/98-117. Verification scope: pnpm --dir packages/ax-code run typecheck + AX_TEST_FILES=test/server/app-context-routes.test.ts. Ready for codex-sol independent verify."
+  },
+  "date": "2026-08-11"
+}

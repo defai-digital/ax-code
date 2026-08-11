@@ -1,0 +1,34 @@
+{
+  "slug": "runtime-headless",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/runtime/headless/command.ts",
+    "packages/ax-code/src/runtime/headless/effects.ts",
+    "packages/ax-code/src/runtime/headless/event-log.ts",
+    "packages/ax-code/src/runtime/headless/event-sink-node.ts",
+    "packages/ax-code/src/runtime/headless/event-sink.ts",
+    "packages/ax-code/src/runtime/headless/event.ts",
+    "packages/ax-code/src/runtime/headless/index.ts",
+    "packages/ax-code/src/runtime/headless/projection.ts",
+    "packages/ax-code/src/runtime/headless/replay.ts",
+    "packages/ax-code/src/runtime/headless/runner.ts",
+    "packages/ax-code/src/runtime/headless/runtime.ts",
+    "docs/module-quality-audit/modules/runtime-headless/MODULE-AUDIT.md",
+    "packages/ax-code/test/runtime/headless/projection.test.ts",
+    "packages/ax-code/src/permission/index.ts"
+  ],
+  "stepNotes": {
+    "1": "Barrel index.ts:1-9 re-exports 8 siblings; reducer (projection.ts) is isolated from I/O (event-sink-node.ts, runtime.ts) and side effects (effects.ts).",
+    "2": "command union (command.ts:58-88) + event union (event.ts:84-101) versioned via HEADLESS_RUNTIME_SCHEMA_VERSION=1; HEADLESS_RUNTIME_EVENT_TYPES set (event.ts:107-165) is a manual second source of truth vs the union.",
+    "3": "applyHeadlessProjectionEvent switch is exhaustive with a never guard at projection.ts:260; autonomous perm guard at projection.ts:114 uses Permission.isInteractiveOnly (permission/index.ts:208) to keep destructive ops human-gated.",
+    "4": "Effects are fire-and-forget (effects.ts:61-66, runner.ts:104-107); runner.ts:106 defaults onWarn to no-op, so autonomous failures silently vanish when caller omits onWarn.",
+    "5": "postJson (runtime.ts:103-127) throws with status+body on !ok and parses 200 via parseHeadlessRuntimeJsonBody; two `as any` casts at runtime.ts:85,88 leak past SDK types on permission/question reply.",
+    "6": "event-log.ts:10-27 circular-guarded serializer falls back to a serialization_error record; event-sink-node.ts:20-39 handles backpressure and endStream does ordered finish/error cleanup; file sink opens flags:\"w\" (per-run truncate).",
+    "7": "replay.ts structuredClone (lines 39,74,90) prevents source mutation; replayHeadlessEvents and replayHeadlessEventLogLines share near-duplicate loop bodies differing only in decoder.",
+    "8": "Probe-key mapping duplicated inline in applyHeadlessProjectionEvent (projection.ts:213-257) and standalone in runtimeProbeKeysForEvent (264-302) which is a real public API consumed by tests + SDK mirror.",
+    "9": "projection.test.ts (433 lines) covers reducer + probe keys; gap: no test for onWarn-omitted-under-autonomous behavior tied to the Step 4 finding; no Critical findings so no reverify pass required."
+  },
+  "date": "2026-08-11"
+}

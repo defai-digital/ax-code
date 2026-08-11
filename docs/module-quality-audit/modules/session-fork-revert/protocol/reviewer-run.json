@@ -1,0 +1,22 @@
+{
+  "agentId": "ax-code-glm-session-fork-revert-20260811T192114Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:21:14Z",
+  "finishedAt": "2026-08-11T19:34:52Z",
+  "filesRead": [
+    "packages/ax-code/src/session/branch.ts",
+    "packages/ax-code/src/session/compare.ts",
+    "packages/ax-code/src/session/move.ts",
+    "packages/ax-code/src/session/revert.ts",
+    "packages/ax-code/src/session/rollback.ts",
+    "packages/ax-code/src/session/index.ts",
+    "packages/ax-code/src/session/schema.ts",
+    "packages/ax-code/src/session/prompt-run-state.ts",
+    "packages/ax-code/src/id/id.ts",
+    "packages/ax-code/src/id/branded.ts",
+    "packages/ax-code/src/snapshot/index.ts",
+    "docs/module-quality-audit/modules/session-fork-revert/MODULE-AUDIT.md"
+  ],
+  "slug": "session-fork-revert"
+}

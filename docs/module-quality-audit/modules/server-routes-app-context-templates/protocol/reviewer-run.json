@@ -1,0 +1,15 @@
+{
+  "agentId": "ax-code-glm-server-routes-app-context-templates-20260811T192735Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:27:35Z",
+  "finishedAt": "2026-08-11T19:58:12Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app-context-templates.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app-context-schema.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app-context.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/app-context-routes.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-app-context-templates/MODULE-AUDIT.md"
+  ],
+  "slug": "server-routes-app-context-templates"
+}

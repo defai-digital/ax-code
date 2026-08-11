@@ -1,0 +1,28 @@
+{
+  "slug": "session-compaction",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/compaction.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/prompt-loop-compaction.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/prompt-session-summary.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/summary.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/session-compaction/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/prompt-loop-decisions.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/context-tier.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/constants/session.ts"
+  ],
+  "stepNotes": {
+    "1": "Inventoried the four in-scope files (compaction.ts 581 LOC, prompt-loop-compaction.ts 233, prompt-session-summary.ts 31, summary.ts 241) with their named exports pinned to file:line.",
+    "2": "Concurrency is gated by module-level inFlight Set at compaction.ts:24 with try/finally cleanup at :303; busy-retry bounded to 40 by PENDING_COMPACTION_BUSY_RETRY_LIMIT in prompt-loop-decisions.ts:80; PreCompact lifecycle hook failure is swallowed and logged at compaction.ts:298.",
+    "3": "Found an unreachable media-placeholder branch at compaction.ts:458-461 caused by the over-broad file filter at compaction.ts:319; also flagged the redundant agent?.model optional chain at compaction.ts:332-333 after the null-guard throw.",
+    "4": "effectiveTotal at compaction.ts:52 uses Math.max(total, componentTotal) to defeat under-reporting providers; prune batches DB writes at compaction.ts:253 with per-part fallback counted at :261-266; budget has a documented ax-engine special case at compaction.ts:72-75.",
+    "5": "Clean five-way split of budget/isOverflow/prune/process/create; minor smell that MIN_COMPACTABLE_HISTORY_TOKENS (prompt-loop-compaction.ts:123) and SUPER_LONG_USABLE_FRACTION (compaction.ts:89) sit on opposite sides of the module line.",
+    "6": "Three concrete hygiene items: dead placeholder branch at compaction.ts:458-461, redundant optional chain at compaction.ts:333, untyped cast in isSyntheticContinuation at prompt-loop-compaction.ts:104-106. No empty catches in the unit.",
+    "7": "MODULE-AUDIT.md test inventory listed only TUI/CLI integration tests and missed the three direct unit-test files: test/session/compaction.test.ts (1079 lines), test/session/prompt-loop-compaction.test.ts (271 lines), and test/session/context-tier.test.ts.",
+    "8": "No findings/ files exist yet. Independent items worth filing: MEDIUM on the replay-branch dead code, LOW on the redundant optional chain, LOW on the cast, INFO on the audit test gap. No Critical items.",
+    "9": "Documentation-only pass with no source edits, so no typecheck/test verification is required for this run; no Critical findings means no reverify.md second-pass is triggered."
+  }
+}

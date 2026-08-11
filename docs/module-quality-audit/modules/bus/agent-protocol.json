@@ -1,0 +1,29 @@
+{
+  "slug": "bus",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "packages/ax-code/src/bus/bus-event.ts",
+    "packages/ax-code/src/bus/global.ts",
+    "packages/ax-code/src/bus/index.ts",
+    "packages/ax-code/src/util/timeout.ts",
+    "packages/ax-code/src/project/state.ts",
+    "packages/ax-code/src/server/routes/event.ts",
+    "packages/ax-code/src/server/routes/global.ts",
+    "packages/ax-code/test/bus/bus.test.ts",
+    "packages/ax-code/test/bus/publish-callsite.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Confirmed 3 files / 12 exports reconcile with MODULE-AUDIT; registry + GlobalBus + instance-scoped Bus split is clean.",
+    "2": "Concurrency risk traced to deliver() and raw(); 10s withTimeout plus array-snapshot in prepare() mitigates throwing/stalling/unsubscribing-mid-deliver subscribers.",
+    "3": "publish vs publishDetached semantics verified; MEDIUM finding: dispose hook at index.ts:31 only notifies wildcard subscribers, typed subscribe(InstanceDisposed) would silently miss teardown.",
+    "4": "Hot path publish is O(subscribers/key); payloads() runs once behind lazy route init; GlobalBus maxListeners=200 is a metric-less magic ceiling (LOW).",
+    "5": "Dual-bus design (instance-scoped Bus + process GlobalBus bridged via directory-tagged emitGlobal) is coherent and matches workspace-server/TUI/global-route consumers.",
+    "6": "No empty catches or TODOs; type erosion at Subscription=any (index.ts:12) and `as any` in payloads() are intentional localized escapes; once() string sentinel is cosmetic.",
+    "7": "bus.test.ts covers await/detach/order; publish-callsite.test.ts is a repo-wide AST guardrail; gaps: no test for dispose-hook delivery, subscriber timeout path, or throw isolation.",
+    "8": "Four findings lodged: 1 MEDIUM (dispose wildcard asymmetry) + 3 LOW; no Critical, so no reverify.md second-pass required.",
+    "9": "Read-only review, no source edits; evidence grounded in direct file reads and 131-callsite enumeration; verifier codex-sol to confirm index.ts:31 MEDIUM and the LOW items."
+  }
+}

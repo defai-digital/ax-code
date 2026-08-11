@@ -1,0 +1,17 @@
+{
+  "agentId": "ax-code-glm-prompt-history-20260811T192114Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:21:14Z",
+  "finishedAt": "2026-08-11T19:52:09Z",
+  "filesRead": [
+    "packages/ax-code/src/prompt-history/index.ts",
+    "packages/ax-code/src/prompt-history/prompt-history.sql.ts",
+    "packages/ax-code/src/prompt-history/schema.ts",
+    "packages/ax-code/src/server/routes/prompt-history.ts",
+    "packages/ax-code/test/server/prompt-history.test.ts",
+    "packages/ax-code/src/storage/db.ts",
+    "docs/module-quality-audit/modules/prompt-history/MODULE-AUDIT.md"
+  ],
+  "slug": "prompt-history"
+}

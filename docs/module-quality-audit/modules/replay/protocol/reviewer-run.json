@@ -1,0 +1,26 @@
+{
+  "agentId": "ax-code-glm-replay-20260811T192114Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:21:14Z",
+  "finishedAt": "2026-08-11T19:24:48Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/agent-control-query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/compare.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/event-log.sql.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/event.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/recorder.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/replay.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/tool-call-query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/record.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/control-plane/agent-control-summary.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/replay/reconstruct.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/replay/recorder-batching.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/audit.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/branch.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/replay/MODULE-AUDIT.md"
+  ],
+  "slug": "replay"
+}

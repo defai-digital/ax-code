@@ -1,0 +1,29 @@
+{
+  "slug": "snapshot",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "packages/ax-code/src/snapshot/index.ts",
+    "packages/ax-code/src/util/git.ts",
+    "packages/ax-code/src/util/git-output.ts",
+    "packages/ax-code/src/util/queue.ts",
+    "packages/ax-code/src/project/instance.ts",
+    "packages/ax-code/src/session/revert.ts",
+    "packages/ax-code/src/server/routes/session-impl.ts",
+    "packages/ax-code/test/snapshot/snapshot.test.ts",
+    "docs/module-quality-audit/modules/snapshot/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single-file Snapshot namespace at index.ts:14 owning a shadow gitdir under Global.Path.data/snapshot/<project.id> (index.ts:90) with its own refs/snapshots/<hash> namespace; 8 async exports plus Patch/FileDiff zod schemas, state held in one Instance.state singleton (index.ts:84-130).",
+    "2": "Destructive surface is revert@461-495 whose sink remove(file)@489 is fs.rm(file,{recursive:true,force:true})@147-149 with no worktree-containment check; trust boundary is persisted DB patch parts (string[] schema) reloaded by SessionRevert.revert, not the unauthenticated HTTP revert route which validates only {messageID,partID?} at session-impl.ts:1500.",
+    "3": "track@319 returns current.prevHash on write-tree/update-ref failure (index.ts:336-360) silently yielding a stale hash; add@234-237 discards its runGit result so all four callers continue on a possibly-stale index; restore@398-458 has the strongest flow with a two-phase read-tree/checkout-index rollback pinned by the chmod test at snapshot.test.ts:222.",
+    "4": "All ops serialize through KeyedSerialQueue keyed on the literal 'snapshot' (index.ts:185-187); cleanup timers are unref'd (index.ts:111-113) and cleared on dispose; diffFull issues up to 4 git subprocesses per changed file serially under the lock with no overall timeout in util/git.ts.",
+    "5": "Clean layering with session/revert.ts (policy) vs snapshot (mutation); design hole is Patch.files:string[] (index.ts:15-18) exposing absolute paths with no containment tie, trusted unchecked at the destructive sink; enabled()@208 is deliberately not gated on restore/revert/diff so post-disable undo still works.",
+    "6": "No empty catches, TODOs, or any-casts; read@140-145 swallows only ENOENT (EACCES test at snapshot.test.ts:417 pins rethrow); remove@147-149 swallows all fs.rm failures including EACCES and file-to-directory replacement — a silent-error gap; log callsites consistently attach structured exitCode/stderr/hash fields.",
+    "7": "Strong coverage in snapshot.test.ts (1478 lines, 40+ cases) including CJK/Cyrillic/emoji, secondary-worktree isolation, ref expiry with packed-refs fallback; gaps: no out-of-worktree revert path test, no forced git-add failure, no fs.rm failure, no newline/whitespace patch filename, no hung-git timeout case.",
+    "8": "snapshotTimestamp@161-183 three-tier ladder (meta file -> loose-ref mtime -> packed-refs mtime) with deliberate write-back at 178-181 to prevent git gc from refreshing apparent age; ensureRepo@294-308 sets core config only on first creation so upgrades never silently reconfigure existing snapshot repos.",
+    "9": "No Critical; top issue classified HIGH (containment) not Critical because exploitation requires DB-write/authenticated-local capability not unauthenticated remote input; four MEDIUM silent-error issues (track stale hash, ignored add status, diffFull exit codes, swallowed deletion) and one LOW perf item; reverify.md not emitted since the Critical precondition is unmet."
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "slug": "question",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/question/autonomous.ts",
+    "packages/ax-code/src/question/clarify.ts",
+    "packages/ax-code/src/question/index.ts",
+    "packages/ax-code/src/question/schema.ts",
+    "packages/ax-code/src/tool/question.ts",
+    "packages/ax-code/src/server/routes/question.ts",
+    "packages/ax-code/src/project/instance.ts",
+    "packages/ax-code/src/project/state.ts",
+    "packages/ax-code/test/question/autonomous.test.ts",
+    "packages/ax-code/test/question/clarify.test.ts",
+    "packages/ax-code/test/question/question.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Mapped the 4-file/583-LOC unit: schema (branded ID), autonomous + clarify (pure heuristics), index.ts (stateful lifecycle). Confirmed narrow boundary — only bus/config/instance/replay/flag imports, no UI/storage/LSP coupling.",
+    "2": "HTTP reply path is the sole security-relevant surface; validateQuestionAnswers (server/routes/question.ts:121-157) enforces count/empty/dup/single-select/custom-label rules. Grep confirms Question.reply/reject are called only from that validated route, so no internal bypass exists.",
+    "3": "ask/reply/reject lifecycle is correct: set-before-await with try/finally delete, unknown-ID no-op, dispose hook rejects all pending. confidenceFromRanked relies on ranked being sorted descending, which chooseDecision guarantees at autonomous.ts:120. Found one narrow LOW race on the escalation fall-through between Config.get() and state().",
+    "4": "All hot paths O(options^2) at worst on 2-4 option inputs. detectAmbiguity constructs 13 regexes per call (sub-microsecond). Bus.publishDetached is fire-and-forget. Only redundant work is autonomousDecisions recomputed in tool/question.ts:54 — negligible.",
+    "5": "Ownership coherent: two pure helpers + one stateful namespace that is the single integration point for 4 callers. QuestionInfoShape duplicate in clarify.ts:12-19 is documented cycle-avoidance; autonomous scorer intentionally more permissive than Info schema with explicit rationaleFor fallback.",
+    "6": "No empty catches or TODOs. Three cosmetic notes: RejectedError sets name twice plus overrides message getter; toConstraints optional-chaining on a required string field is dead but harmless; AVOID_OVERENGINEERING_CONTEXT_MARKER is an undocumented strict subset of AVOID_OVERENGINEERING_MARKER.",
+    "7": "Strong coverage on pure layers (autonomous regression at autonomous.test.ts:102-128, clarify bounds). Gap: toConstraints length-mismatch tolerance (Math.min + continue) has no direct test; recommend one targeted case feeding more/fewer answers than questions.",
+    "8": "Four LOW findings raised this pass (dispose-during-ask race, SCOPE_ANCHORS false-negative on 'in progress', undocumented regex subset, missing toConstraints test). No Critical/High. findings/ directory was empty — nothing carried over.",
+    "9": "Read-only review, no code modified, no commands executed by this lane. Verification delegated to codex-sol: run the three test/question files via AX_TEST_FILES plus root pnpm run typecheck. All findings LOW; no blocker; recommended test is nice-to-have not a gate."
+  },
+  "date": "2026-08-11"
+}
