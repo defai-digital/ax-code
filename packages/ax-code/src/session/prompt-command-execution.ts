@@ -7,6 +7,7 @@ import { commandSetup } from "./prompt-command-setup"
 import { resolveCommandForExecution, validateCommandArguments } from "./prompt-command"
 import { createWorkflowCommandRun, workflowCommandPrompt } from "./prompt-command-workflow"
 import { executeGoalCommand } from "./prompt-goal-command"
+import { executeLimitsCommand } from "./prompt-limits-command"
 import { executeRecurringCommand } from "./prompt-recurring-command"
 import type { CommandInput, PromptInput } from "./prompt-input"
 
@@ -26,6 +27,9 @@ export async function executePromptCommand(input: CommandInput, prompt: PromptRu
   }
   if (input.command === Command.Default.LOOP) {
     return executeRecurringCommand(input)
+  }
+  if (input.command === Command.Default.LIMITS) {
+    return executeLimitsCommand(input)
   }
   let command = await resolveCommandForExecution({ sessionID: input.sessionID, name: input.command })
   validateCommandArguments({ sessionID: input.sessionID, command, arguments: input.arguments })

@@ -89,11 +89,15 @@ Three concrete defects follow from this table:
 
 ## 4. Non-goals (v1)
 
-- Full `autonomy.budget` schema redesign / named profiles (`quick`/`long`/`goal`).
 - Progress-aware soft budget extension.
-- Making tool-only and burst limits user-configurable (follow-up).
 - Changing Super-Long / goal cumulative defaults (20,000).
 - Removing auto-routing entirely (optional disable already exists).
+
+### Shipped after v1 (follow-up PR)
+
+- First-class `autonomy.budget` / `autonomy.stall` / profiles (`quick`/`standard`/`long`/`goal`/`custom`).
+- Configurable tool-only and burst rate limits.
+- `/limits` doctor command.
 
 ## 5. Requirements
 

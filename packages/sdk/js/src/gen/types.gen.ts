@@ -2296,6 +2296,91 @@ export type Config = {
    */
   autonomous?: boolean
   /**
+   * Autonomous workload budgets and stall breakers. Prefer this over scattering limits across session and experimental keys. See /limits.
+   */
+  autonomy?: {
+    /**
+     * Named workload profile that seeds budget defaults: quick (tight), standard (shipped defaults), long (multi-file batches), goal (goal-scale headroom), custom (no profile seeds). Explicit autonomy.budget / session.* fields always win over the profile.
+     */
+    profile?: "quick" | "standard" | "long" | "goal" | "custom"
+    /**
+     * First-class autonomy budgets. Takes precedence over session.* and experimental.autonomous_caps when set.
+     */
+    budget?: {
+      model_turns?: {
+        /**
+         * Outer-loop steps per auto-continuation segment (alias: session.max_steps; default 500)
+         */
+        per_segment?: number
+        /**
+         * Cumulative outer-loop steps across continuations, goals, and Super-Long (alias: session.max_total_steps)
+         */
+        total?: number
+      }
+      /**
+       * Auto-continuations after a per-segment step limit (alias: session.max_continuations; default 3)
+       */
+      continuations?: number
+      /**
+       * Auto-continuations while todos remain pending (alias: session.max_todo_retries; default 10)
+       */
+      todo_retries?: number
+      tool_calls?: {
+        /**
+         * Blast-radius tool-call ceiling per continuation (alias: experimental.autonomous_caps.steps; default 500)
+         */
+        per_segment?: number
+        rate?: {
+          /**
+           * Max tool calls in a rolling window (default 30). Protects against parallel tool floods.
+           */
+          count?: number
+          /**
+           * Rolling window length in seconds for the tool-call rate limit (default 10)
+           */
+          window_seconds?: number
+        }
+        /**
+         * Per-tool call-count caps (alias: experimental.autonomous_caps.perTool). 0 or negative disables.
+         */
+        per_tool?: {
+          [key: string]: number
+        }
+      }
+      changes?: {
+        /**
+         * Max distinct files changed in an autonomous run (alias: experimental.autonomous_caps.files)
+         */
+        files_total?: number
+        /**
+         * Max instrumented line-change total (alias: experimental.autonomous_caps.lines)
+         */
+        lines_total?: number
+        /**
+         * Glob patterns that refuse writes (alias: experimental.autonomous_caps.blockedPaths)
+         */
+        blocked_paths?: Array<string>
+      }
+    }
+    /**
+     * Stall / loop breakers that are independent of workload step ceilings
+     */
+    stall?: {
+      /**
+       * Hard stop after this many consecutive tool-only model finishes (default 35)
+       */
+      tool_only_turns?: number
+      /**
+       * First synthesis checkpoint during a tool-only streak (default 15)
+       */
+      tool_only_nudge?: number
+      /**
+       * Final warning checkpoint before the hard stop (default max-5)
+       */
+      tool_only_final_nudge?: number
+    }
+  }
+  /**
    * Enable Super-Long supervised long-run mode (default: on for models with a 64k+ context window, thinking, and prompt caching — e.g. Qwen 3.7 Max/Plus; off otherwise)
    */
   super_long?:

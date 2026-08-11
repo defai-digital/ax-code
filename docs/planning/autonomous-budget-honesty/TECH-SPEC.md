@@ -25,11 +25,12 @@ In scope:
 - `docs/guides/autonomous.md` — budget documentation
 - Tests under `packages/ax-code/test/agent/`, `test/session/`, TUI pure tests
 
-Out of scope:
+Follow-up (implemented in feat/autonomy-budget-schema):
 
-- OpenAPI / SDK generation unless schema fields are required
-- `experimental.autonomous_caps` promotion
-- Burst / tool-only configurability
+- First-class `autonomy.budget` + `autonomy.stall` + profiles
+- Configurable tool-only and burst rate limits
+- `/limits` doctor command
+- OpenAPI / SDK regeneration when Config.Info changes
 
 ---
 

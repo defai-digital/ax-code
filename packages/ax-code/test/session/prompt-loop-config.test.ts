@@ -9,7 +9,8 @@ import {
 
 describe("promptLoopLimits", () => {
   test("uses prompt loop defaults when session config is absent", () => {
-    expect(promptLoopLimits({ session: undefined } as any)).toEqual({
+    const limits = promptLoopLimits({ session: undefined } as any)
+    expect(limits).toMatchObject({
       sessionStepLimit: GLOBAL_STEP_LIMIT,
       maxContinuations: 3,
       maxTotalSteps: GLOBAL_STEP_LIMIT * 4,
@@ -20,18 +21,19 @@ describe("promptLoopLimits", () => {
       maxEmptyModelTurnRetries: MAX_EMPTY_MODEL_TURN_RETRIES,
       maxTruncatedModelTurnRetries: MAX_TRUNCATED_MODEL_TURN_RETRIES,
     })
+    expect(limits.autonomy.profile).toBe("standard")
+    expect(limits.autonomy.toolCallRate.count).toBe(30)
   })
 
   test("derives completion gate retries from todo retry config", () => {
-    expect(
-      promptLoopLimits({
-        session: {
-          max_steps: 42,
-          max_continuations: 5,
-          max_todo_retries: 1,
-        },
-      } as any),
-    ).toEqual({
+    const limits = promptLoopLimits({
+      session: {
+        max_steps: 42,
+        max_continuations: 5,
+        max_todo_retries: 1,
+      },
+    } as any)
+    expect(limits).toMatchObject({
       sessionStepLimit: 42,
       maxContinuations: 5,
       // Cumulative ceiling defaults to step limit × (continuations + 1).

@@ -743,6 +743,98 @@ export const Info = z
     layout: Layout.optional().describe("@deprecated Always uses stretch layout."),
     permission: Permission.optional(),
     autonomous: z.boolean().optional().describe("Enable autonomous mode (default: true)"),
+    autonomy: z
+      .object({
+        profile: z
+          .enum(["quick", "standard", "long", "goal", "custom"])
+          .optional()
+          .describe(
+            "Named workload profile that seeds budget defaults: quick (tight), standard (shipped defaults), " +
+              "long (multi-file batches), goal (goal-scale headroom), custom (no profile seeds). " +
+              "Explicit autonomy.budget / session.* fields always win over the profile.",
+          ),
+        budget: z
+          .object({
+            model_turns: z
+              .object({
+                per_segment: SafeInteger.min(10)
+                  .optional()
+                  .describe("Outer-loop steps per auto-continuation segment (alias: session.max_steps; default 500)"),
+                total: SafeInteger.min(10)
+                  .optional()
+                  .describe(
+                    "Cumulative outer-loop steps across continuations, goals, and Super-Long " +
+                      "(alias: session.max_total_steps)",
+                  ),
+              })
+              .optional(),
+            continuations: NonNegativeInteger.optional().describe(
+              "Auto-continuations after a per-segment step limit (alias: session.max_continuations; default 3)",
+            ),
+            todo_retries: NonNegativeInteger.optional().describe(
+              "Auto-continuations while todos remain pending (alias: session.max_todo_retries; default 10)",
+            ),
+            tool_calls: z
+              .object({
+                per_segment: PositiveInteger.optional().describe(
+                  "Blast-radius tool-call ceiling per continuation (alias: experimental.autonomous_caps.steps; default 500)",
+                ),
+                rate: z
+                  .object({
+                    count: PositiveInteger.optional().describe(
+                      "Max tool calls in a rolling window (default 30). Protects against parallel tool floods.",
+                    ),
+                    window_seconds: PositiveInteger.optional().describe(
+                      "Rolling window length in seconds for the tool-call rate limit (default 10)",
+                    ),
+                  })
+                  .optional(),
+                per_tool: z
+                  .record(z.string(), SafeInteger)
+                  .optional()
+                  .describe(
+                    "Per-tool call-count caps (alias: experimental.autonomous_caps.perTool). 0 or negative disables.",
+                  ),
+              })
+              .optional(),
+            changes: z
+              .object({
+                files_total: PositiveInteger.optional().describe(
+                  "Max distinct files changed in an autonomous run (alias: experimental.autonomous_caps.files)",
+                ),
+                lines_total: PositiveInteger.optional().describe(
+                  "Max instrumented line-change total (alias: experimental.autonomous_caps.lines)",
+                ),
+                blocked_paths: z
+                  .array(z.string())
+                  .optional()
+                  .describe("Glob patterns that refuse writes (alias: experimental.autonomous_caps.blockedPaths)"),
+              })
+              .optional(),
+          })
+          .optional()
+          .describe(
+            "First-class autonomy budgets. Takes precedence over session.* and experimental.autonomous_caps when set.",
+          ),
+        stall: z
+          .object({
+            tool_only_turns: PositiveInteger.optional().describe(
+              "Hard stop after this many consecutive tool-only model finishes (default 35)",
+            ),
+            tool_only_nudge: PositiveInteger.optional().describe(
+              "First synthesis checkpoint during a tool-only streak (default 15)",
+            ),
+            tool_only_final_nudge: PositiveInteger.optional().describe(
+              "Final warning checkpoint before the hard stop (default max-5)",
+            ),
+          })
+          .optional()
+          .describe("Stall / loop breakers that are independent of workload step ceilings"),
+      })
+      .optional()
+      .describe(
+        "Autonomous workload budgets and stall breakers. Prefer this over scattering limits across session and experimental keys. See /limits.",
+      ),
     super_long: z
       .union([
         z.boolean(),

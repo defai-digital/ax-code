@@ -121,6 +121,7 @@ export namespace Command {
     PRD: "prd",
     GOAL: "goal",
     LOOP: "loop",
+    LIMITS: "limits",
     COUNCIL: "council",
     ARENA: "arena",
     MODE: "mode",
@@ -212,6 +213,15 @@ export namespace Command {
     commands[Default.LOOP] = {
       name: Default.LOOP,
       description: "run a prompt on a fixed interval: /loop <interval> <prompt> | status | stop",
+      source: "command",
+      sourceTool: "builtin",
+      scope: "builtin",
+      template: "",
+      hints: ["$ARGUMENTS"],
+    }
+    commands[Default.LIMITS] = {
+      name: Default.LIMITS,
+      description: "show resolved autonomous budgets and stall breakers for this session",
       source: "command",
       sourceTool: "builtin",
       scope: "builtin",
