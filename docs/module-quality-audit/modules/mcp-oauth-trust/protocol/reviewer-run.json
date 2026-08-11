@@ -1,0 +1,19 @@
+{
+  "agentId": "ax-code-glm-mcp-oauth-trust-20260811T191427Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:14:27Z",
+  "finishedAt": "2026-08-11T19:41:03Z",
+  "slug": "mcp-oauth-trust",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/mcp/auth.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/mcp/oauth-callback.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/mcp/oauth-provider.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/mcp/trust.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/mcp-oauth-trust/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/auth/encryption.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/lock.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/mcp/impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/mcp-impl.ts"
+  ]
+}

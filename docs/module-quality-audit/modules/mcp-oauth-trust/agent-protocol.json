@@ -1,0 +1,29 @@
+{
+  "slug": "mcp-oauth-trust",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/mcp/auth.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/mcp/oauth-callback.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/mcp/oauth-provider.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/mcp/trust.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/mcp-oauth-trust/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/auth/encryption.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/lock.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/mcp/impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/mcp-impl.ts"
+  ],
+  "stepNotes": {
+    "1": "Inventoried the four in-scope files (auth/oauth-callback/oauth-provider/trust) plus confirmed out-of-module callers: McpAuth.clearCodeVerifier at impl.ts:1475 and two McpOAuthProvider constructions at impl.ts:558,1311 and mcp-impl.ts:948.",
+    "2": "Assets are tokens/clientSecret/codeVerifier/oauthState in mcp-auth.json and the trust ledger in mcp-trust.json; controls traced are AES-256-GCM at rest (0o600), PKCE bound to serverUrl (M-02), CSRF state validated against in-memory pendingAuths, and loopback binding on 127.0.0.1.",
+    "3": "All mutating auth paths serialize on Lock.write(filepath); the invalidateCredentials rewrite (oauth-provider.ts:186-206) and the set/remove lock unification (auth.ts:131-136,220-229) close the prior race where a parallel updateTokens could resurrect a cleared token.",
+    "4": "all() decrypts every field per call but is bounded by the keyCache in encryption.ts (512-entry cap) and the v2 10k-iteration PBKDF2 path; callback server uses port:0 to avoid EADDRINUSE, publishing the real port via setCallbackPort.",
+    "5": "Clean layering: only oauth-provider.ts imports the MCP SDK; auth.ts and trust.ts keep disjoint persistence files with no cross-writes; oauth-callback.ts depends on oauth-provider only for three path/port constants.",
+    "6": "No empty catches, TODOs, or dead exports found; PENDING_AUTHS_MAX=100 with evictOldestPendingAuth is justified defense-in-depth, not speculative; fixedState is reachable via the CLI headless path.",
+    "7": "15 test files listed in MODULE-AUDIT under test/mcp and test/cli; connect-lock.test.ts and mcp-config-lock.test.ts map directly to the lock-race regressions documented inline; not re-run in this read-only pass.",
+    "8": "No Critical/High findings; two LOW observations recorded: oauthState not bound to serverUrl (unlike codeVerifier), and isSensitiveRecordKey in trust.ts misses hyphenated forms like x-api-key which would fold raw secret values into the fingerprint hash.",
+    "9": "Static read-only review of the four files plus encryption.ts, lock.ts, and impl.ts caller region; no mutations by this reviewer; runtime test:mcp verification is deferred to the codex-sol independent verifier lane."
+  }
+}

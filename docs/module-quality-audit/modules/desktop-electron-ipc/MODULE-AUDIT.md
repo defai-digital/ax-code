@@ -11,7 +11,7 @@
 | Status | SIGNED OFF |
 | Reviewer | codex-sol |
 | Independent verifier | ax-code-glm |
-| Baseline commit | `8a38b90b950855545c6b2479220274357904f111` |
+| Baseline commit | `94e95c161c7deb8e055d8806a5f285e516285715` |
 | Analysis fingerprint | `8796ea7d2279e5d2` |
 | Protocol marker | agent-protocol.json complete |
 | Source files / LOC | 49 / 6080 |
@@ -100,6 +100,6 @@ Completed by dual-agent; see agent-protocol.json
 
 | Role | Name | Date | Evidence |
 |------|------|------|----------|
-| Reviewer | codex-sol | 2026-08-11 | filesRead=53 |
+| Reviewer | codex-sol | 2026-08-11 | filesRead=35 |
 | Independent verifier | ax-code-glm | 2026-08-11 | dual-agent |
 | Module owner | AX Code maintainers | 2026-08-11 | SIGNED OFF |

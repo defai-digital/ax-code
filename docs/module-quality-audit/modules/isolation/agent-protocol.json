@@ -1,0 +1,32 @@
+{
+  "slug": "isolation",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/isolation/index.ts",
+    "packages/ax-code/src/isolation/os-sandbox.ts",
+    "packages/ax-code/src/util/filesystem.ts",
+    "packages/ax-code/src/tool/bash-impl.ts",
+    "packages/ax-code/src/config/schema-impl.ts",
+    "packages/ax-code/src/server/routes/isolation.ts",
+    "packages/ax-code/test/isolation/isolation.test.ts",
+    "packages/ax-code/test/isolation/os-sandbox.test.ts",
+    "packages/ax-code/test/isolation/os-sandbox-integration.test.ts",
+    "docs/guides/sandbox.md",
+    "docs/module-quality-audit/modules/isolation/MODULE-AUDIT.md",
+    "docs/module-quality-audit/modules/isolation/findings/AUDIT-isolation-001.md"
+  ],
+  "stepNotes": {
+    "1": "Traced the portable policy namespace, OS wrapper namespace, and bash integration points.",
+    "2": "Defined write, protected-path, network, symlink, case-folding, bypass, and fallback threats.",
+    "3": "Checked precedence, canonical containment, read-only ordering, scoped bypass, and bash denial invariants.",
+    "4": "Assessed synchronous realpath and binary-probe costs, cache bounds, and profile cleanup lifetime.",
+    "5": "Confirmed policy/rendering separation and noted stale schema wording for the auto backend default.",
+    "6": "Reviewed every catch and exported helper; cleanup suppression is intentional and no dead branch was found.",
+    "7": "Read unit and macOS integration coverage and identified missing Linux bubblewrap execution coverage.",
+    "8": "Rechecked AUDIT-isolation-001 against current profile source, regression assertions, and fix provenance.",
+    "9": "Observed 48 focused tests pass after authorized fixture access and a clean core TypeScript check."
+  },
+  "date": "2026-08-11"
+}

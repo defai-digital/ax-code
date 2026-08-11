@@ -1,6 +1,6 @@
 {
-  "signed": 16,
-  "reviewing": 236,
+  "signed": 28,
+  "reviewing": 224,
   "findingsWritten": 34,
   "results": [
     {
@@ -183,12 +183,12 @@
       "id": "W2-01a",
       "slug": "session-prompt-processor",
       "wave": 2,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 79,
       "lines": 12486,
       "empty": 0,
       "fingerprint": "dd428f964265ebb9",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W2-01b",
@@ -370,45 +370,45 @@
       "id": "W3-01",
       "slug": "permission",
       "wave": 3,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 5,
       "lines": 948,
       "empty": 0,
       "fingerprint": "1f3cc633b17d6cb8",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W3-02",
       "slug": "isolation",
       "wave": 3,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 2,
       "lines": 625,
       "empty": 0,
       "fingerprint": "8f20139566cb50c8",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W3-03a",
       "slug": "tool-mutation",
       "wave": 3,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 7,
       "lines": 2018,
       "empty": 0,
       "fingerprint": "28ef8548fddc8729",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W3-03b",
       "slug": "tool-execution",
       "wave": 3,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 7,
       "lines": 1821,
       "empty": 0,
       "fingerprint": "8ac761467d467434",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W3-03c",
@@ -447,34 +447,34 @@
       "id": "W3-04",
       "slug": "shell",
       "wave": 3,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 111,
       "empty": 0,
       "fingerprint": "de00b2924e381514",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W3-05",
       "slug": "pty",
       "wave": 3,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 2,
       "lines": 540,
       "empty": 1,
       "fingerprint": "83719469a990085a",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W3-06",
       "slug": "file",
       "wave": 3,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 7,
       "lines": 1984,
       "empty": 1,
       "fingerprint": "4620a4dba682368d",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W3-07",
@@ -491,12 +491,12 @@
       "id": "W3-08",
       "slug": "worktree",
       "wave": 3,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 2,
       "lines": 941,
       "empty": 0,
       "fingerprint": "9df34adad83e9a83",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W3-09",
@@ -568,12 +568,12 @@
       "id": "W4-01",
       "slug": "storage",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 8,
       "lines": 1455,
       "empty": 1,
       "fingerprint": "c7f796bc0e337309",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-02",
@@ -1140,12 +1140,12 @@
       "id": "W5-03",
       "slug": "provider-cli",
       "wave": 5,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 10,
       "lines": 1721,
       "empty": 0,
       "fingerprint": "006bcd2735fedf13",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W5-04",
@@ -1173,12 +1173,12 @@
       "id": "W5-05b",
       "slug": "mcp-oauth-trust",
       "wave": 5,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 4,
       "lines": 932,
       "empty": 0,
       "fingerprint": "ee8c6ebcca798252",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W5-05c",

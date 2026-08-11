@@ -1,0 +1,33 @@
+{
+  "agentId": "codex-sol-provider-cli-20260811T191413Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:14:13Z",
+  "finishedAt": "2026-08-11T19:18:07Z",
+  "filesRead": [
+    "docs/module-quality-audit/modules/provider-cli/MODULE-AUDIT.md",
+    "docs/module-quality-audit/modules/provider-cli/findings/AUDIT-provider-cli-001.md",
+    "packages/ax-code/src/provider/cli/attachments.ts",
+    "packages/ax-code/src/provider/cli/binary.ts",
+    "packages/ax-code/src/provider/cli/cli-language-model.ts",
+    "packages/ax-code/src/provider/cli/config.ts",
+    "packages/ax-code/src/provider/cli/connect.ts",
+    "packages/ax-code/src/provider/cli/effort.ts",
+    "packages/ax-code/src/provider/cli/json.ts",
+    "packages/ax-code/src/provider/cli/parser.ts",
+    "packages/ax-code/src/provider/cli/prompt.ts",
+    "packages/ax-code/src/provider/cli/resolve.ts",
+    "packages/ax-code/src/provider/loaders.ts",
+    "packages/ax-code/src/util/env.ts",
+    "packages/ax-code/src/util/process.ts",
+    "packages/ax-code/test/provider/cli/attachments.test.ts",
+    "packages/ax-code/test/provider/cli/cli-language-model.test.ts",
+    "packages/ax-code/test/provider/cli/connect.test.ts",
+    "packages/ax-code/test/provider/cli/json.test.ts",
+    "packages/ax-code/test/provider/cli/parser.test.ts",
+    "packages/ax-code/test/provider/cli/prompt.test.ts",
+    "packages/ax-code/test/provider/cli/resolve.test.ts",
+    "packages/ax-code/test/provider/loaders.test.ts"
+  ],
+  "slug": "provider-cli"
+}

@@ -1,0 +1,17 @@
+{
+  "agentId": "ax-code-glm-worktree-20260811T191425Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:14:25Z",
+  "finishedAt": "2026-08-11T19:16:30Z",
+  "filesRead": [
+    "packages/ax-code/src/worktree/index-impl.ts",
+    "packages/ax-code/src/worktree/index.ts",
+    "docs/module-quality-audit/modules/worktree/MODULE-AUDIT.md",
+    "packages/ax-code/src/util/git.ts",
+    "packages/ax-code/src/util/process.ts",
+    "packages/ax-code/test/worktree/worktree.test.ts",
+    "packages/ax-code/test/project/worktree-remove.test.ts"
+  ],
+  "slug": "worktree"
+}

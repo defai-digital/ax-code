@@ -1,0 +1,27 @@
+{
+  "slug": "worktree",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/worktree/index-impl.ts",
+    "packages/ax-code/src/worktree/index.ts",
+    "docs/module-quality-audit/modules/worktree/MODULE-AUDIT.md",
+    "packages/ax-code/src/util/git.ts",
+    "packages/ax-code/src/util/process.ts",
+    "packages/ax-code/test/worktree/worktree.test.ts",
+    "packages/ax-code/test/project/worktree-remove.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Single 938-line namespace Worktree at index-impl.ts:18; index.ts:1 is a pure re-export. 27 exports, inbound deps limited to Global/Instance/Project/Process/git helpers — no leakage into tool/session layers.",
+    "2": "Three hazard classes: git subprocess exit codes (checked at every call site), filesystem TOCTOU during name allocation (atomic mkdir at index-impl.ts:368), and DB write failure post git side-effect (rollback cascade at index-impl.ts:497-525). No secrets traverse the module.",
+    "3": "Traced create/createReady/remove/reset end to end. createReady rollback-on-start-failure (index-impl.ts:638) and remove's re-list-after-failure tolerance (index-impl.ts:748) are correct. Minor: reset's double cancelPendingStartScripts uses mismatched key forms (index-impl.ts:800 vs :892), harmless due to next-tick bootstrap fire.",
+    "4": "All git I/O flows through git()/Process.run which drain + destroy pipes (util/process.ts:160-168), no fd leak. Deferred timers call timer.unref() at index-impl.ts:453 and :629. prune() bounds each fs.rm behind a path-containment check (index-impl.ts:270). startScriptTimers released on both fire and cancel.",
+    "5": "Cohesive leaf service: name allocation + git plumbing + lifecycle + start-script scheduling all feed the four lifecycle ops. create (deferred) vs createReady (synchronous) is a deliberate caller-profile split, not duplication. Porcelain parser triplicated at :298/:659/:816 is optional DRY polish only.",
+    "6": "prepareCreate (index-impl.ts:604) ensures preallocated dir is rm'd on any throw. sweep two-pass clean parses git warning lines and retries (index-impl.ts:276-285). Swallowed .catch(() => undefined) at index-impl.ts:271 is best-effort and re-surfaced by the git clean retry; realpath fallback at :289 handles not-yet-existing targets.",
+    "7": "Three test files, ~15 cases: create cleanup, DB-failure rollback, EACCES surfacing, createReady e2e + rollback, startPoint injection rejection, reset cancellation, remove detach regression, branch-survives-rm-failure. Gaps: no test for reset remote-HEAD resolution (:859-865) or sweep/prune two-pass beyond happy path.",
+    "8": "No Critical/High findings. Existing findings/ dir absent and MODULE-AUDIT register shows none accepted. Three LOW observations logged (L1 double-cancel key mismatch, L2 darwin case-fold heuristic, L3 porcelain parser duplication) — none blocking, no reverify gate.",
+    "9": "Reconciled fingerprint 9df34adad83e9a83 against 939+2 LOC by hand. 9-step protocol complete as primary reviewer. No Critical findings raised so no reverify.md second-pass required. Independent verifier codex-sol sign-off still pending per MODULE-AUDIT gate."
+  },
+  "date": "2026-08-11"
+}

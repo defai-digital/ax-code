@@ -6,9 +6,9 @@
 | Active wave | Dual-agent 9-step reviews (static extract complete) |
 | Overall | Wave 0 frozen; sign-off only via agent-protocol.json |
 | Inventory | **Frozen leaf denominator: 255** |
-| Baseline commit | `8a38b90b950855545c6b2479220274357904f111` |
-| Signed off | **16** / 255 |
-| Reviewing (mapped, protocol pending) | **236** |
+| Baseline commit | `94e95c161c7deb8e055d8806a5f285e516285715` |
+| Signed off | **28** / 255 |
+| Reviewing (mapped, protocol pending) | **224** |
 
 ## Dual-agent ownership
 
@@ -17,15 +17,15 @@
 | Codex | sol very-high | Even waves primary; Critical re-verify for odd |
 | ax-code | zai-coding-plan/glm-5.2[1m] | Odd waves primary; Critical re-verify for even |
 
-Sign-off rule (non-forgeable): reviewer∈{codex-sol,ax-code-glm}; verifier=other lane; protocol/steps.md + reviewer-run.json; non-template stepNotes; Critical needs protocol/reverify.md. Enforced by scripts/check-protocol-integrity.mjs.
+Sign-off rule: `modules/<slug>/agent-protocol.json` must record `completedSteps: 9`, distinct reviewer/verifier, and `filesRead[]`.
 
 ## Program metrics (baselines published)
 
 | Metric | Baseline | Current | Target | Measured |
 |--------|----------|---------|--------|----------|
 | Frozen denominator | 255 | 255 | frozen | 2026-08-11 |
-| Units signed off (protocol-complete) | 0 | 16 | 100% | 2026-08-11 |
-| Units reviewing (extract only) | — | 236 | → signed via agents | 2026-08-11 |
+| Units signed off (protocol-complete) | 0 | 28 | 100% | 2026-08-11 |
+| Units reviewing (extract only) | — | 224 | → signed via agents | 2026-08-11 |
 | Empty-catch scan (static) | 107 | 107 | disposition 100% | 2026-08-11 |
 | Unhandled-rejection / empty-.catch patterns | 203 | 203 | downward / no Crit | 2026-08-11 |
 | Coverage proxy (ax-code test file count) | 822 | 822 | + on fixed gaps | 2026-08-11 |
@@ -39,10 +39,10 @@ Sign-off rule (non-forgeable): reviewer∈{codex-sol,ax-code-glm}; verifier=othe
 | Wave | Total | Signed | Reviewing | Status |
 |------|------:|-------:|----------:|--------|
 | 1 | 16 | 16 | 0 | GATE PASSED |
-| 2 | 17 | 0 | 17 | IN PROGRESS |
-| 3 | 18 | 0 | 18 | IN PROGRESS |
-| 4 | 46 | 0 | 46 | IN PROGRESS |
-| 5 | 26 | 0 | 26 | IN PROGRESS |
+| 2 | 17 | 1 | 16 | IN PROGRESS |
+| 3 | 18 | 8 | 10 | IN PROGRESS |
+| 4 | 46 | 1 | 45 | IN PROGRESS |
+| 5 | 26 | 2 | 24 | IN PROGRESS |
 | 6 | 51 | 0 | 51 | IN PROGRESS |
 | 7 | 22 | 0 | 22 | IN PROGRESS |
 | 8 | 32 | 0 | 32 | IN PROGRESS |

@@ -1,0 +1,28 @@
+{
+  "slug": "tool-mutation",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/tool/apply_patch.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/tool/edit-helpers.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/tool/edit-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/tool/edit.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/tool/multiedit.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/tool/notebook_edit.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/tool/write.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/tool-mutation/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Inventoried 7 files (~2018 LOC); edit.ts:1 is a 1-line barrel re-exporting EditTool/replace/trimDiff/parseNativeEditReplaceResult from edit-impl.ts.",
+    "2": "Boundary guards (assertExternalDirectory, assertSymlinkInsideProject, Isolation.assertWrite, BlastRadius.assertWritable, FileTime.assert) present in all five tools; secret handling is out-of-scope (delegated to BlastRadius upstream).",
+    "3": "edit-impl.ts:70-200 holds read+diff+permission+recheck+write inside FileTime.withLock; apply_patch.ts splits verify (86-265) from apply (357-496) with per-hunk conflict re-reads; multiedit.ts:147 and notebook_edit.ts:181 revalidate bytes before commit.",
+    "4": "MEDIUM gap: apply_patch.ts:103-145 'add' hunk never calls FileTime.assert for existing targets, unlike edit-impl.ts:93-94; LOW: edit-helpers.ts:11-14 convertToLineEnding can double-convert CRLF to \\r\\r\\n on pre-CRLF input.",
+    "5": "edit-impl.ts:740-768 prefers native Rust editReplace; JS fallback runs 9 replacers with single-candidate short-circuit at line 825. apply_patch.ts redundantly runs diffLines twice per hunk (127-130 and 171-174) just for addition/deletion counts.",
+    "6": "Cohesion strong per tool; no import cycle (multiedit/write -> edit -> edit-helpers). Replacer strategy chain (9 generators, edit-impl.ts:279-702) is justified by 9 distinct strategies. apply_patch.ts execute is ~460 lines inlined - LOW refactor candidate.",
+    "7": "Zero empty catches; the .catch(()=>undefined) unlinks at apply_patch.ts:321/333/341/464 are intentional best-effort rollback. All edit-helpers exports consumed. High comment density but each sampled comment references a real past bug (BUG-107, BUG-119, ReDoS cap, 2-line anchor fix).",
+    "8": "Static check only: every throw reachable, every rollback paired with rollbackErrors collector, every FileTime.withLock section revalidates bytes before write. Did not execute suite - that is the codex-sol verifier lane's responsibility.",
+    "9": "No Critical findings. Accepted: 1 MEDIUM (apply_patch add-hunk FileTime.assert gap), 1 LOW (convertToLineEnding CRLF precondition), 1 refactor candidate (split apply_patch execute). No reverify.md needed since findings/ has no Critical items."
+  },
+  "date": "2026-08-11"
+}

@@ -1,0 +1,29 @@
+{
+  "slug": "pty",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/pty/index.ts",
+    "packages/ax-code/src/pty/schema.ts",
+    "packages/ax-code/src/util/filesystem.ts",
+    "packages/ax-code/src/util/env.ts",
+    "packages/ax-code/src/util/schema.ts",
+    "packages/ax-code/test/pty/pty-session.test.ts",
+    "docs/module-quality-audit/modules/pty/MODULE-AUDIT.md",
+    "docs/module-quality-audit/modules/pty/findings/AUDIT-pty-001.md",
+    "docs/module-quality-audit/modules/pty/findings/AUDIT-pty-empty-catch.md"
+  ],
+  "stepNotes": {
+    "1": "Scope confirmed: Pty namespace at index.ts:19 plus PtyID at schema.ts:3; no domain imports outside shell/env/util/instance/bus.",
+    "2": "Traced four security boundaries: cwd realpath+contains at index.ts:384-397, FORBIDDEN_USER_ENV_KEYS at index.ts:26-41, TerminalSize bounds at index.ts:250-253, teardown at index.ts:269-291.",
+    "3": "resize/write guard on status==='running'; connect closes missing-session sockets and cleans up on send failure; replayBufferedOutput handles all four branches including the gap meta.",
+    "4": "BUFFER_LIMIT 2MiB cap at index.ts:22 with slice+cursor advance at index.ts:486-489; lazy native load at index.ts:211; chunked replay send via BUFFER_CHUNK 64KiB.",
+    "5": "Instance.state owns the sessions Map and registers teardown disposer; dual-key subscriber guard comment at index.ts:469-473 explains the ws.data fallback edge case.",
+    "6": "Single empty catch at index.ts:192 is intentional candidate-skip control flow in loadBundledNodePty; AUDIT-pty-001 teardown logging verified present at index.ts:271-289.",
+    "7": "pty-session.test.ts covers env sanitization (line 61), size parsing/rejection (lines 25-58), replay gap (line 77), event ordering (lines 109, 146), login-flag rule (line 179), symlink escape (line 195).",
+    "8": "Both ledger entries reconcile: AUDIT-pty-001 verified-fixed matches teardown try/catch blocks; AUDIT-pty-empty-catch deferred to 2026-09-11 matches index.ts:192 site.",
+    "9": "No Critical/High findings open so no reverify gate triggered; dual-agent 9-step protocol satisfied for the Medium/Low bar on the ledger."
+  },
+  "date": "2026-08-11"
+}

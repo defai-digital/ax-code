@@ -1,0 +1,33 @@
+{
+  "slug": "shell",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/shell/shell.ts",
+    "packages/ax-code/src/util/which.ts",
+    "packages/ax-code/src/util/lazy.ts",
+    "packages/ax-code/src/util/filesystem.ts",
+    "packages/ax-code/src/flag/flag.ts",
+    "packages/ax-code/src/tool/bash-impl.ts",
+    "packages/ax-code/src/session/prompt-shell-command.ts",
+    "packages/ax-code/src/mcp/impl.ts",
+    "packages/ax-code/test/shell/shell.test.ts",
+    "packages/ax-code/test/runtime/shell-env.test.ts",
+    "packages/ax-code/test/session/prompt-shell-command.test.ts",
+    "packages/ax-code/test/util/shell-args.test.ts",
+    "docs/module-quality-audit/modules/shell/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Scoped the unit to the single namespace at shell.ts:15; five exports, 17 in-repo call sites across pty/tool/session/provider/lsp/mcp/cli. Leaf utility, no transitive subsystem coupling.",
+    "2": "Risk surface is process lifecycle. Traced killTree (shell.ts:16-55) failure paths: ESRCH handled by catch at :42, EPERM (non-group-leader) by inner fallback at :46, win32 taskkill /f /t at :26 resolves on exit+error so it cannot hang.",
+    "3": "Verified the detached-spawn contract that justifies process.kill(-pid) at shell.ts:37 is honored at bash-impl.ts:756,776 and prompt-shell-command.ts:84; setsid variant at bash-impl.ts:760 also yields a fresh group. Only mcp/impl.ts:64-76 supplies a positive-pid kill closure that breaks group semantics on the fallback branch.",
+    "4": "No hot paths; killTree worst case ~400-600ms via the two 200ms SIGKILL_TIMEOUT_MS sleeps. _preferred/_acceptable memoized via lazy() so env lookups happen once; noted lazy.reset() is never called so tests can't invalidate.",
+    "5": "Cohesion is tight (pick a shell / stop a tree). KillableProcess structural type at shell.ts:10-13 is minimal and fits both ChildProcess and the MCP shim. preferred vs acceptable blacklist asymmetry is deliberate (interactive PTY vs scripted bash tool) but undocumented at the call sites.",
+    "6": "No dead exports; both silent catches at shell.ts:42 and :51 carry explanatory comments and are intentional control flow. Only fragile literal is the git-bash relative path at :74, mitigated by the COMSPEC/cmd.exe final fallback at :77 and the AX_CODE_GIT_BASH_PATH override flag at :69.",
+    "7": "Direct unit test test/shell/shell.test.ts:5-17 covers isAcceptable + case-insensitive win32 extension stripping. killTree, the win32 taskkill branch, the EPERM/ESRCH fallback, and lazy reset have no dedicated coverage; indirectly exercised via prompt-shell-command.test.ts and shell-env.test.ts.",
+    "8": "No Critical/High. MEDIUM: killTree EPERM fallback degrades to direct-only kill (mcp/impl.ts closure is the one at-risk caller). LOW: Windows git-bash layout heuristic (shell.ts:70-77). LOW: lazy caches have no reset seam. INFO: preferred/acceptable asymmetry undocumented.",
+    "9": "Ledger consistent with empty findings/ dir and MODULE-AUDIT.md '_none accepted_' row. No Critical items => reverify.md not required by the dual-agent gate. Handed to verifier codex-sol for confirmation."
+  },
+  "date": "2026-08-11"
+}

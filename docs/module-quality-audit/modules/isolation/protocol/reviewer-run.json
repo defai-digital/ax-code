@@ -1,0 +1,22 @@
+{
+  "agentId": "codex-sol-isolation-20260811T191405Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:14:05Z",
+  "finishedAt": "2026-08-11T19:18:19Z",
+  "filesRead": [
+    "packages/ax-code/src/isolation/index.ts",
+    "packages/ax-code/src/isolation/os-sandbox.ts",
+    "packages/ax-code/src/util/filesystem.ts",
+    "packages/ax-code/src/tool/bash-impl.ts",
+    "packages/ax-code/src/config/schema-impl.ts",
+    "packages/ax-code/src/server/routes/isolation.ts",
+    "packages/ax-code/test/isolation/isolation.test.ts",
+    "packages/ax-code/test/isolation/os-sandbox.test.ts",
+    "packages/ax-code/test/isolation/os-sandbox-integration.test.ts",
+    "docs/guides/sandbox.md",
+    "docs/module-quality-audit/modules/isolation/MODULE-AUDIT.md",
+    "docs/module-quality-audit/modules/isolation/findings/AUDIT-isolation-001.md"
+  ],
+  "slug": "isolation"
+}

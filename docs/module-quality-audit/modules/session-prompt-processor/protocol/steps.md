@@ -1,0 +1,37 @@
+# Nine-step review: session-prompt-processor
+
+## Step 1 Establish Scope and Entry Points
+
+The `session-prompt-processor` review followed the public barrels into their implementations: `packages/ax-code/src/session/llm.ts:1` exports `LLM`, while `packages/ax-code/src/session/processor.ts:1` exports `SessionProcessor`. The principal runtime surfaces are `LLM.stream` at `packages/ax-code/src/session/llm-impl.ts:109` and `SessionProcessor.create`/`process` at `packages/ax-code/src/session/processor-impl.ts:49` and `packages/ax-code/src/session/processor-impl.ts:247`. The prompt-side scope also includes command resolution, autonomous decisions, cache helpers, workflow summaries, and attachment conversion.
+
+## Step 2 Analyze Trust Boundaries
+
+Attachment URLs are treated as untrusted input: malformed URLs become synthetic text at `packages/ax-code/src/session/prompt-file-attachment.ts:89`, project containment is checked before reading at `packages/ax-code/src/session/prompt-file-attachment.ts:120`, and a resolved symlink target is checked again at `packages/ax-code/src/session/prompt-file-attachment.ts:129`. Binary attachments are capped at 50 MiB at `packages/ax-code/src/session/prompt-file-attachment.ts:245`. MCP prompt commands require an explicit permission decision at `packages/ax-code/src/session/prompt-command-setup.ts:37`, and workflow-backed commands disable template shell expansion at `packages/ax-code/src/session/prompt-command-execution.ts:47`. At the provider boundary, read-only and no-network isolation remove incompatible tools at `packages/ax-code/src/session/llm-impl.ts:950`.
+
+## Step 3 Trace Stream and Retry Correctness
+
+`LLM.stream` rejects an already-aborted request before provider setup at `packages/ax-code/src/session/llm-impl.ts:122`, bounds setup with a provider-sensitive timeout at `packages/ax-code/src/session/llm-impl.ts:131`, and captures non-throwing SDK stream failures at `packages/ax-code/src/session/llm-impl.ts:396`. The idle watchdog wraps `fullStream` and clears its timer on both fulfillment and rejection at `packages/ax-code/src/session/llm-impl.ts:643`. Most importantly, a stream that closes without `finish` becomes a retryable `MessageV2.APIError` at `packages/ax-code/src/session/processor-impl.ts:1143`; normalization and `SessionRetry.retryable` then feed the bounded retry path at `packages/ax-code/src/session/processor-impl.ts:1175` and `packages/ax-code/src/session/processor-impl.ts:1183`.
+
+## Step 4 Check State Transitions and Limits
+
+The processor persists step completion, normalized usage, the assistant message, and an optional patch together at `packages/ax-code/src/session/processor-impl.ts:868` and `packages/ax-code/src/session/processor-impl.ts:930`; a successful provider step resets the consecutive failure counter at `packages/ax-code/src/session/processor-impl.ts:1056`. Autonomous continuation decisions keep the ordinary cap lifted only for Super-Long or an active goal at `packages/ax-code/src/session/prompt-autonomous-decisions.ts:200`, while the cumulative ceiling has an unconditional stop branch at `packages/ax-code/src/session/prompt-autonomous-decisions.ts:452`. Budget-limited goals get one wrap-up and then a terminal decision at `packages/ax-code/src/session/prompt-autonomous-decisions.ts:609`, preventing an unbounded continuation loop.
+
+## Step 5 Review Hot-path Cost and Concurrency
+
+Streaming deltas and part snapshots are coalesced before persistence at `packages/ax-code/src/session/processor-impl.ts:164` and `packages/ax-code/src/session/processor-impl.ts:179`, then explicitly drained before final transactional writes at `packages/ax-code/src/session/processor-impl.ts:1250`. Tool calls are bounded to 30 within ten seconds at `packages/ax-code/src/session/processor-impl.ts:159`. LLM permission filtering uses a 32-entry LRU keyed by sorted tool names and a stable ruleset serialization at `packages/ax-code/src/session/llm-impl.ts:891`, and Super-Long pacing state is separately capped at 64 entries at `packages/ax-code/src/session/llm-impl.ts:46`. The generic prompt cache correctly reloads only when its key changes at `packages/ax-code/src/session/prompt-cache.ts:3`.
+
+## Step 6 Evaluate Module Boundaries and Data Minimization
+
+The thin `llm.ts` and `processor.ts` barrels preserve stable imports while the implementation files own provider streaming and event processing. Prompt command orchestration remains staged: command/model validation occurs at `packages/ax-code/src/session/prompt-command-execution.ts:30`, setup produces the resolved user and parts at `packages/ax-code/src/session/prompt-command-setup.ts:56`, and only then does the plugin hook and prompt call execute at `packages/ax-code/src/session/prompt-command-execution.ts:69`. Workflow projection exposes only opted-in artifacts, clamps summaries, and respects redaction state at `packages/ax-code/src/session/prompt-command-workflow.ts:128` and `packages/ax-code/src/session/prompt-command-workflow.ts:142`. This limits main-context payloads without entangling the workflow scheduler with prompt rendering.
+
+## Step 7 Inspect Failure Handling and Hygiene
+
+Catch sites have explicit fallbacks or observable logging. Code-graph initialization logs and returns `undefined` at `packages/ax-code/src/session/prompt-code-graph.ts:73`; file read failures publish a session-visible synthetic part at `packages/ax-code/src/session/prompt-file-attachment.ts:202`; malformed workflow scalar JSON deliberately remains a string at `packages/ax-code/src/session/prompt-command-workflow.ts:193`. The static scan found no TODO/FIXME markers or credential literals in the candidate set. The remaining type looseness is localized to SDK middleware parameters at `packages/ax-code/src/session/llm-impl.ts:452` and legacy command parts at `packages/ax-code/src/session/prompt-command-parts.ts:10`; neither crosses into the persisted message schema without normalization.
+
+## Step 8 Reconcile Findings and Regression Evidence
+
+`docs/module-quality-audit/modules/session-prompt-processor/findings/AUDIT-session-prompt-processor-001.md:7` marks the unfinished-stream retry defect Critical and `:9` records it as verified-fixed. The second source pass confirmed the `APIError` schema requires `isRetryable` at `packages/ax-code/src/session/message-v2-impl.ts:48`, already-shaped API errors survive normalization at `packages/ax-code/src/session/message-v2-impl.ts:1112`, and the processor constructs that shape before entering retry. The dedicated regression simulates one premature close followed by a valid finish at `packages/ax-code/test/session/processor.test.ts:758`, then asserts two provider calls, one sleep, and no terminal error at `packages/ax-code/test/session/processor.test.ts:825`. No additional Critical item was identified in the reviewed candidate set.
+
+## Step 9 Execute Verification and Exit Review
+
+The focused Vitest command selected nine prompt/processor test files and completed with 9 files and 240 tests passing; this includes attachment rejection cases at `packages/ax-code/test/session/prompt-file-attachment.test.ts:42` and the unfinished-stream regression at `packages/ax-code/test/session/processor.test.ts:758`. `pnpm --dir packages/ax-code run typecheck` also completed successfully. Together with the explicit retry exhaustion guard at `packages/ax-code/src/session/processor-impl.ts:1185`, these results support reviewer sign-off and the Critical finding's secondary confirmation.

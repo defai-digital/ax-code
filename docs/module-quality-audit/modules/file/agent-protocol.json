@@ -1,0 +1,33 @@
+{
+  "slug": "file",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "packages/ax-code/src/file/ignore.ts",
+    "packages/ax-code/src/file/index.ts",
+    "packages/ax-code/src/file/protected.ts",
+    "packages/ax-code/src/file/ripgrep.ts",
+    "packages/ax-code/src/file/status.ts",
+    "packages/ax-code/src/file/time.ts",
+    "packages/ax-code/src/file/watcher.ts",
+    "packages/ax-code/src/file/ignore-patterns.json",
+    "packages/ax-code/src/util/filesystem.ts",
+    "packages/ax-code/test/file/path-traversal.test.ts",
+    "packages/ax-code/test/file/ignore-drift.test.ts",
+    "docs/module-quality-audit/modules/file/MODULE-AUDIT.md",
+    "docs/module-quality-audit/modules/file/findings/AUDIT-file-empty-catch.md"
+  ],
+  "stepNotes": {
+    "1": "Seven modules confirmed via direct read; index.ts is the dominant ~40% LOC module and is the surface the HTTP routes call directly (per path-traversal.test.ts:38-46).",
+    "2": "Path-traversal defense is layered: assertSafePathInput null-byte check (index.ts:24-28) + Filesystem.contains lexical check (index.ts:623,713) + realpath+contains symlink check (index.ts:627-632,717-723). Confirmed contains is deliberately symlink-unaware at util/filesystem.ts:203-213.",
+    "3": "ignore.ts runs the whitelist loop twice (25-27 and 41-43); the second copy is dead on every path. ripgrep files() normalizes missing-cwd to ENOENT only on the subprocess branch (356-366), not the native branch (314-343).",
+    "4": "status() uses a 32-wide worker pool for untracked reads (index.ts:562, BUG-102 fix); home-dir scan guard short-circuits the recursive walk (index.ts:423-426). Native watcher polls 50ms vs poll watcher POLL_MS=100 (watcher.ts:211 vs 29) - undocumented 2x latency gap.",
+    "5": "Clean namespace-per-module composition. ignore-patterns.json is JS/Rust single-source-of-truth enforced by ignore-drift.test.ts:17-24. Three watcher backends with ordered fallback (watcher.ts:314-352). Inline ~190-line extension sets in index.ts:99-277 could be externalized but is low-urgency.",
+    "6": "Beyond the logged Low empty-catch at ripgrep.ts:275, found dead duplicate whitelist (ignore.ts:41-43), a localized `let rgEntry: any` at ripgrep.ts:247, and a raw `.ax-code` string literal at ripgrep.ts:434. Recorded in steps.md Step 6, not promoted to formal findings.",
+    "7": "Strong security-path coverage in path-traversal.test.ts (../, nested ../, absolute escape, prefix collision) and JS/Rust parity in ignore-drift.test.ts. Gap: no test asserting native-off vs native-on whitelist parity for the ignore.ts duplication.",
+    "8": "Exactly one finding on disk (AUDIT-file-empty-catch.md, Low/deferred, expiry 2026-09-11, verifier codex-sol); MODULE-AUDIT.md register row at line 89 matches. No Critical/High items, so no reverify.md second pass is required by the gate.",
+    "9": "Primary lane (ax-code-glm) now at 9-of-9; codex-sol independent confirmation still pending. Applicable checks: pnpm --dir packages/ax-code run typecheck and AX_TEST_FILES targeting test/file/*. Baseline 8a38b90b950855545c6b2479220274357904f111 / fingerprint 4620a4dba682368d unchanged by this read-only pass."
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "slug": "provider-ax-engine",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/provider/ax-engine/catalog.ts",
+    "packages/ax-code/src/provider/ax-engine/connection.ts",
+    "packages/ax-code/src/provider/ax-engine/constants.ts",
+    "packages/ax-code/src/provider/ax-engine/delete.ts",
+    "packages/ax-code/src/provider/ax-engine/dependency.ts",
+    "packages/ax-code/src/provider/ax-engine/download-job.ts",
+    "packages/ax-code/src/provider/ax-engine/download-progress.ts",
+    "packages/ax-code/src/provider/ax-engine/hf-cache.ts",
+    "packages/ax-code/src/provider/ax-engine/index.ts",
+    "packages/ax-code/src/provider/ax-engine/install.ts",
+    "packages/ax-code/src/provider/ax-engine/lifecycle.ts",
+    "packages/ax-code/src/provider/ax-engine/model-cache.ts",
+    "packages/ax-code/src/provider/ax-engine/model-card.ts",
+    "packages/ax-code/src/provider/ax-engine/paths.ts",
+    "packages/ax-code/src/provider/ax-engine/platform.ts",
+    "packages/ax-code/src/provider/ax-engine/prepare.ts",
+    "packages/ax-code/src/provider/ax-engine/provider-loader.ts",
+    "packages/ax-code/src/provider/ax-engine/python.ts",
+    "packages/ax-code/src/provider/ax-engine/server.ts",
+    "packages/ax-code/src/provider/ax-engine/status.ts",
+    "docs/module-quality-audit/modules/provider-ax-engine/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Barrel at index.ts:1-18 re-exports 19 siblings; import direction is acyclic (constants outward to provider-loader).",
+    "2": "Attach locked to loopback at connection.ts:39-41; installer requires SHA-256+HTTPS at install.ts:215-222 and uses Ssrf.pinnedFetch at install.ts:265; server env sanitized at server.ts:584-587; delete fenced at delete.ts:120-125 and delete.ts:166-171.",
+    "3": "download-job.ts:124-134 re-reads job.status as AxEngineModelJobStatus to survive a cancel landing during a late successful download; finally at download-job.ts:152-158 avoids evicting a newer running job; server.ts:296-312 re-checks process exit after each health probe.",
+    "4": "catalog.ts:194 fan-outs eligibility/dependency/jobs/server; model-cache.ts:558-579 polls HF cache only below 85%; server.ts:457-483 coalesces same-process starts; directorySize realpath-dedupes at model-cache.ts:119-146.",
+    "5": "One resource per module (paths/hf-cache/model-cache/server/install/delete); lifecycle.ts:8-30 keeps shared phase literals; injectable runtime seams at download-job.ts:37-42, prepare.ts:27-34, install.ts:45-51.",
+    "6": "No empty catches; .catch(() => undefined) sites pair with destructive ops; AX_ENGINE_BINARY_RELEASE undefined at constants.ts:73 is documented forward-compat, still wired through dependency.ts:109-137; mtp branch at model-cache.ts:697-701 retained for future catalog entries.",
+    "7": "None of the 15 listed test files import directly from provider/ax-engine/*; pure untested targets include normalizeAxEngineEndpointBaseURL (connection.ts:24), evaluateAxEngineModelFit (catalog.ts:87), commandLooksLikeAxEngineServer (server.ts:157), mapAxEngineStatusToLifecycle (lifecycle.ts:48).",
+    "8": "findings/ empty and audit register reads _none accepted_; no Critical defect found; two non-blocking notes: module-level mutable Maps at provider-loader.ts:44 and server.ts:457, and getModel external path passes signal undefined at provider-loader.ts:334-338 unlike the 2s timeout siblings.",
+    "9": "Reviewer ax-code-glm 9-step complete; verifier codex-sol pending; no Critical findings so no reverify.md required; implementer verification: pnpm --dir packages/ax-code run typecheck and pnpm run test:scripts."
+  },
+  "date": "2026-08-11"
+}
