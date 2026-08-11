@@ -1,0 +1,24 @@
+{
+  "agentId": "codex-sol-provider-retry-errors-20260811T194802Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:48:02Z",
+  "finishedAt": "2026-08-11T19:53:03Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/cli/effort.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/effort-label.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/cli/cli-language-model.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/transform.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/tui/component/dialog-effort.tsx",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/message-v2-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/prompt-loop-errors.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/json-record.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/provider/error.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/provider/effort-label.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/provider/cli/cli-language-model.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/provider/transform.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/provider-retry-errors/MODULE-AUDIT.md"
+  ],
+  "slug": "provider-retry-errors"
+}

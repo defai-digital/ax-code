@@ -1,0 +1,33 @@
+{
+  "slug": "code-intelligence",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/code-intelligence/auto-index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/code-intelligence/builder-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/code-intelligence/builder.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/code-intelligence/graph-context.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/code-intelligence/id.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/code-intelligence/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/code-intelligence/lockfile.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/code-intelligence/native-store.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/code-intelligence/query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/code-intelligence/schema.sql.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/code-intelligence/syntactic.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/code-intelligence/watcher.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/code-intelligence/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Confirmed the 12-file inventory and the CodeIntelligence -> CodeGraphQuery -> schema.sql.ts layering; no Drizzle imports leak past query.ts except the schema declarations themselves.",
+    "2": "IndexLock uses atomic fs.open(wx) plus a process.kill pid liveness probe that correctly treats EPERM as alive; native flock() path auto-releases on crash. Fire-and-forget auto-index converts every error into a visible state transition.",
+    "3": "Per-file write transaction at builder-impl.ts:1054 is atomic (delete+insert+upsert); sha short-circuit only trusts completeness==='full' and never recycles node ids. Gap found: query.ts:319 deleteFile is the only CRUD op missing the useNative dispatch and NativeStore has no deleteFile.",
+    "4": "Hotspot: builder-impl.ts:1025 listFiles is called per committed file making import resolution O(files^2); parseImportSpecifiers is O(text*matches) with no size guard. countNodes/countEdges and deleteEdgesTouchingFile are already optimized.",
+    "5": "Scope policy lives at the facade (inScope, index.ts:76) and is independently re-checked with realpath in graph-context.ts:190 against symlink escape; graphEnvelope is provenance-only by design and never a fallback router.",
+    "6": "No empty catches or TODOs; all constants named. Minor: inFlight/triedProjects Sets in auto-index.ts:166/174 are uncapped process-lifetime (acknowledged debt); watcher instances Map is cleaned via Instance.onLifecycle.",
+    "7": "Pure helpers exported for LSP-free testing (lookupCallerKind, planReferenceQueriesForBookmarks, parseImportSpecifiers, resolveContainingNodeFromDb); test-only escape hatches use __ prefix; clearProject clears both native and main DB so tests are store-agnostic.",
+    "8": "Two findings recorded for codex-sol: MEDIUM deleteFile native-store asymmetry (affects watcher purgeFile path), MEDIUM per-file listFiles quadratic cost in commitPreparedIndex. No Critical items so no reverify.md required from this lane.",
+    "9": "Read-only review, no source mutated; verification deferred to codex-sol via pnpm --dir packages/ax-code run typecheck and run test:unit / run test:deterministic. Module stays REVIEWING until verifier confirms or rebuts the two Step 8 findings."
+  },
+  "date": "2026-08-11"
+}

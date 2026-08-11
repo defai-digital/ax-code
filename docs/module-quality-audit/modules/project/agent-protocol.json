@@ -1,0 +1,36 @@
+{
+  "slug": "project",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "packages/ax-code/src/project/bootstrap.ts",
+    "packages/ax-code/src/project/instance.ts",
+    "packages/ax-code/src/project/project-identity.ts",
+    "packages/ax-code/src/project/project.sql.ts",
+    "packages/ax-code/src/project/project.ts",
+    "packages/ax-code/src/project/schema.ts",
+    "packages/ax-code/src/project/state.ts",
+    "packages/ax-code/src/project/vcs.ts",
+    "packages/ax-code/src/storage/db.ts",
+    "packages/ax-code/test/project/project.test.ts",
+    "packages/ax-code/test/project/migrate-global.test.ts",
+    "packages/ax-code/test/project/state.test.ts",
+    "packages/ax-code/test/project/instance-context.test.ts",
+    "packages/ax-code/test/project/vcs.test.ts",
+    "packages/ax-code/test/project/worktree-remove.test.ts",
+    "docs/module-quality-audit/modules/project/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Two fused sub-layers confirmed: identity/persistence (schema, project.sql, project.ts 504 LOC, project-identity.ts) and runtime/lifecycle (instance.ts 429 LOC ALS anchor, state.ts generic memo, bootstrap.ts startup, vcs.ts branch tracker); 40 exports reconcile with MODULE-AUDIT §1.",
+    "2": "Persistence risk traced to fromDirectory's multi-step fs+git+DB sequence, the non-transactional migrateGlobalSessionsToProject loop, State.create's pending-but-not-rejecting Promise gap (bounded only by the 5s dispose cap), and disposeAll's serial first-error-rethrow.",
+    "3": "Traced Project.fromDirectory's four git branches and the upsert at project.ts:299; MEDIUM: the upsert and the migrateGlobalSessionsToProject call at project.ts:333 are two separate Database.use calls with no enclosing transaction — crash window leaves project row with un-claimed sessions, eventually consistent on next call.",
+    "4": "list/fromDirectory issue up to 3 git subprocess calls plus two .git/ax-code reads; State.dispose fans out concurrently with 5s/entry cap; disposeAll serializes across instances; discover glob is fire-and-forget behind the experimental flag — all acceptable for typical instance counts.",
+    "5": "Project namespace is dense but cohesive around 'a project row'; Instance/State cleanly decoupled via Instance.state delegation to State.create(() => Instance.directory); bootstrap.ts ordering is intentional and commented (TaskQueue recovery, parallel Plugin/LSP/Diagnostic, provider warmup moved pre-prompt).",
+    "6": "No empty catches/TODOs; the .catch(()=>undefined) sites are commented best-effort; type erosion confined to State.Entry (required for varied dispose signatures) and Instance.bind args; disposeAll's duplicate cache.get guard is belt-and-suspenders, not dead.",
+    "7": "Strong suite: project.test.ts (625 LOC) covers fromDirectory variants, malformed-row recovery, sandbox transaction spy; migrate-global.test.ts pins the regression; state.test.ts covers invalidate + stuck-dispose 5s cap; gaps: multi-root git case untested, InstanceBootstrap recovery loop (bootstrap.ts:84-106) has no direct unit test, no crash-between-writes migration test.",
+    "8": "Seven findings lodged: 2 MEDIUM (non-atomic migration window at project.ts:299/333, non-transactional loop at project.ts:136) + 4 LOW (legacy '/' worktree sentinel in hot path, Vcs endsWith('HEAD') over-match, untested bootstrap recovery, silent malformed-row drop) + 1 INFO (fakeVcs read-once at module load); no Critical, so no reverify.md second-pass required.",
+    "9": "Read-only review, no source edits; evidence grounded in direct reads of all eight project source files plus storage/db.ts to confirm Database.use vs Database.transaction semantics; verifier codex-sol to independently re-read the fromDirectoryPromise call sequence and confirm the project.ts:299/333 atomicity window."
+  }
+}

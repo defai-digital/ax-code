@@ -1,0 +1,41 @@
+{
+  "slug": "cli-cmd-tui-session-route",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/cli/cmd/tui/routes/session/activity.ts",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/agent-control-activity.ts",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/autonomous-active.ts",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/autonomous-pulse.ts",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/branch.ts",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/capability-catalog.ts",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/child.ts",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/coalesce.ts",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/compaction-view-model.ts",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/compare.ts",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/context.ts",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/dialog-activity.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/dialog-branch.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/dialog-capability-catalog.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/dialog-compare.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/dialog-dre-graph.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/dialog-dre.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/dialog-fork-from-timeline.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/dialog-goal.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/dialog-message.tsx",
+    "docs/module-quality-audit/modules/cli-cmd-tui-session-route/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Scoped the 20 candidate files; confirmed clean .ts/.tsx ownership split (branch.ts:3 namespace vs dialog-branch.tsx:9 SolidJS wiring).",
+    "2": "Trust boundary crossings limited to SDK calls (fork at dialog-fork-from-timeline.tsx:40) and clipboard (dialog-message.tsx:64); all rejects are logged+toasted, zero empty catches.",
+    "3": "activityItems (activity.ts:153) 3-source concat + desc sort is correct; coalesceParts error-burst rule at coalesce.ts:23 properly excludes errored parts from collapsed groups.",
+    "4": "autonomous-pulse.ts:41 uses unref'd refcounted single timer with onCleanup(stop) at :70; dialog-capability-catalog.tsx:25 threads AbortSignal into both SDK and fetch paths.",
+    "5": "Pure view-models (branch.ts, compare.ts, capability-catalog.ts, coalesce.ts, compaction-view-model.ts, autonomous-active.ts) contain zero SolidJS imports — unit-testable; Entry type duplicated at branch.ts:8 and compare.ts:9 but only 2 sites so no extraction per AGENTS rule.",
+    "6": "No TODO/FIXME, no commented-out blocks, no dead branches across all 20 files; every import I checked resolves to a concrete use site.",
+    "7": "Direct unit tests exist for the 3 highest-logic helpers (autonomous-active, coalesce, footer-view-model); compare.ts entries() builder (~80 lines at :73) lacks direct test but has indirect dialog coverage — LOW gap only.",
+    "8": "No Critical or High findings surfaced; findings/ dir remains empty; two LOW observations noted (Entry type dup, missing compare.ts unit test) not registered as findings.",
+    "9": "Static fingerprint c71ea50a769e841a matches MODULE-AUDIT; no Critical findings so no reverify.md gate from this lane; recommend sign-off at LOW residual risk pending codex-sol independent verify."
+  },
+  "date": "2026-08-11"
+}

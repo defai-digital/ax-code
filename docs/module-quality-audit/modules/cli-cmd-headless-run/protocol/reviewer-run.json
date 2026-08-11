@@ -1,0 +1,23 @@
+{
+  "agentId": "ax-code-glm-cli-cmd-headless-run-20260811T195838Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:58:38Z",
+  "finishedAt": "2026-08-11T20:04:07Z",
+  "slug": "cli-cmd-headless-run",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/headless-run.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-headless-run/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/runtime/listen-security.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/attach-auth.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/internal-url.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/runtime/headless/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/runtime/headless/event-sink-node.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/runtime/headless/runner.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/runtime/headless/runtime.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/runtime/headless/event.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/run-lifecycle.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/bootstrap.ts"
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "slug": "sdk",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/sdk/programmatic-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/sdk/programmatic.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/sdk/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/sdk/js/src/programmatic/types.ts",
+    "/Users/akiralam/code/ax-code/packages/sdk/js/src/programmatic/agent.ts",
+    "/Users/akiralam/code/ax-code/packages/sdk/js/src/programmatic/index.ts",
+    "/Users/akiralam/code/ax-code/packages/sdk/js/src/programmatic/tool.ts",
+    "/Users/akiralam/code/ax-code/packages/sdk/js/src/v2/gen/types.gen.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/auth/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/bootstrap.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/runtime-auth.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/server.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/tool/registry.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/sdk/programmatic.test.ts",
+    "/Users/akiralam/code/ax-code/packages/sdk/js/test/errors.test.ts",
+    "/Users/akiralam/code/ax-code/packages/sdk/js/test/tool.test.ts",
+    "/Users/akiralam/code/ax-code/packages/sdk/js/test/stream-handle.test.ts",
+    "/Users/akiralam/code/ax-code/packages/sdk/js/test/index-exports.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Traced the runtime barrel, exported functions and errors, published type contract, and dynamic loader boundary.",
+    "2": "Followed API keys through environment detection, encrypted 0600 persistence, runtime-header authorization, and default permission denial.",
+    "3": "Found unscoped message and error events that can cross-contaminate concurrent sessions sharing a directory subscription.",
+    "4": "Checked generator completion, blocked-read cancellation, stream timeout omission, and post-disposal session-handle behavior.",
+    "5": "Compared retry status selection with ProviderError.isRetryable and assessed subscription and awaited-hook costs.",
+    "6": "Confirmed bootstrap ownership while identifying unused system and agent-level signal options plus warning-only tool registration.",
+    "7": "Distinguished two behavioral formatter tests from source-text assertions and mock-only stream coverage, then listed runtime gaps.",
+    "8": "Classified one High, three Medium, and one Low issue; none qualifies for Critical secondary confirmation.",
+    "9": "Recorded 9 passing core tests, 26 passing SDK tests, and a successful core typecheck before reviewer handoff."
+  },
+  "date": "2026-08-11"
+}

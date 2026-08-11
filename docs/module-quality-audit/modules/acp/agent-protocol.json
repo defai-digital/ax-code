@@ -1,0 +1,41 @@
+{
+  "slug": "acp",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/acp/agent-adapter.ts",
+    "packages/ax-code/src/acp/agent.ts",
+    "packages/ax-code/src/acp/prompt.ts",
+    "packages/ax-code/src/acp/session-mode.ts",
+    "packages/ax-code/src/acp/session.ts",
+    "packages/ax-code/src/acp/types.ts",
+    "packages/ax-code/src/acp/usage.ts",
+    "packages/ax-code/src/acp/utils.ts",
+    "packages/ax-code/src/acp/README.md",
+    "packages/ax-code/src/cli/cmd/acp.ts",
+    "packages/ax-code/src/util/log.ts",
+    "packages/ax-code/src/server/routes/mcp.ts",
+    "packages/ax-code/src/mcp/impl.ts",
+    "packages/ax-code/test/acp/agent-adapter.test.ts",
+    "packages/ax-code/test/acp/agent-interface.test.ts",
+    "packages/ax-code/test/acp/agent-prompt.test.ts",
+    "packages/ax-code/test/acp/event-subscription.test.ts",
+    "packages/ax-code/test/acp/session-list.test.ts",
+    "packages/ax-code/test/acp/todo-plan-entries.test.ts",
+    "docs/integrations/acp.md",
+    "docs/module-quality-audit/modules/acp/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "ACP.init creates one connection-bound Agent at agent.ts:92-125; orchestration stays in agent.ts while session.ts owns mappings, session-mode.ts composes capabilities, and adapter/prompt/usage/utils isolate wire translations.",
+    "2": "Session state retains caller-supplied MCP definitions and logs the whole state at INFO (session.ts:76-83,110-117); remote headers and local environment values originate at session-mode.ts:129-154 and util/log.ts:343-418 applies no redaction.",
+    "3": "Two user-visible losses were traced: empty-string edit results fail the truthy guard at agent.ts:529-537, and unknown slash commands fall through agent.ts:729-749 without prompt submission or an error; model selection also accepts unknown identifiers at agent-adapter.ts:247-275.",
+    "4": "Connection abort clears timers, caches, replay state, and sessions at agent.ts:152-162, replay is capped at 500 events, and permissions lock per session; event EOF can hot-loop while a thrown subscription error permanently stops updates at agent.ts:128-149.",
+    "5": "Model and prompt concerns are cohesive, but MCP lifetime is not: ACPSessionState presents McpServer[] as per-session while session-mode.ts:158-173 adds names to directory-scoped MCP state, allowing same-directory sessions to replace or inherit servers.",
+    "6": "Strict SDK calls reject empty core payloads, yet MCP add failures are logged and swallowed at session-mode.ts:158-171; outbound update failures are intentionally best-effort, and malformed JSON/base64/cursors are explicitly validated in utils.ts:34-115.",
+    "7": "The targeted run passed 8 files and 33 tests; coverage is strong for URI conversion, session timestamps, event isolation, permission serialization, and replay dedupe, but absent for empty edits, unknown slash commands, model rejection, secret logging, MCP isolation, and stream recovery.",
+    "8": "Compatibility helpers remain exported at module and ACP namespace scope (agent.ts:74-90), but initialize advertises ax-code-login while authenticate always returns method-not-found (agent.ts:253-278), and README limitations at lines 114-123 lag implemented mode/load behavior.",
+    "9": "No acp findings file exists and no Critical re-verification artifact is required; the pass classifies raw MCP credential logging as HIGH, six reliability/correctness/ownership concerns below Critical, and prioritizes redaction plus focused regressions."
+  },
+  "date": "2026-08-11"
+}

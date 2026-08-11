@@ -1,0 +1,28 @@
+{
+  "agentId": "codex-sol-provider-stream-20260811T194802Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:48:02Z",
+  "finishedAt": "2026-08-11T19:53:32Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/transform.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/usage.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/provider-stream/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-info.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/models.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-capabilities.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/provider-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/xai/server-tools.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/cli/effort.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/cli/cli-language-model.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/flag/flag.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/llm-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/processor-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/prompt-tools.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/provider/transform.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/provider/cli/cli-language-model.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/session/compaction.test.ts"
+  ],
+  "slug": "provider-stream"
+}

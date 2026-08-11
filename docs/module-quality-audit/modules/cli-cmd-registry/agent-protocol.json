@@ -1,0 +1,28 @@
+{
+  "slug": "cli-cmd-registry",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-registry/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot-node.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/run.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/headless-run.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/smoke.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/boot.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Located the identity adapter, its private double-dash type, and the separate bootstrap registration loop.",
+    "2": "Traced user-controlled post-separator values from yargs population into prompt assembly without attributing consumer policy to the helper.",
+    "3": "Reproduced numeric coercion after -- and the resulting includes-on-number crash hidden by the string-array annotation.",
+    "4": "Confirmed that the runtime adapter returns the original object in constant time without allocating or retaining resources.",
+    "5": "Compared contextual command typing with the never casts used by both registration bootstraps and identified the weakened boundary.",
+    "6": "Checked the compact helper for branches, catches, suppressions, and stale state, finding only the misleading element type.",
+    "7": "Verified the current smoke case uses an empty string after -- and therefore misses the numeric coercion path.",
+    "8": "Reconciled the absent findings directory and empty audit register while documenting one new Medium correctness issue in the protocol.",
+    "9": "Ran core typecheck, one focused smoke test, and an installed-yargs reproduction that demonstrates the uncovered runtime failure."
+  },
+  "date": "2026-08-11"
+}

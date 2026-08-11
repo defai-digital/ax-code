@@ -1,0 +1,24 @@
+{
+  "slug": "global",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/global/index.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/global/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/flag/flag.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/global/cache-cleanup.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Single-file unit at src/global/index.ts (148 lines); exports Global namespace and Global.Path; imports toErrorMessage, Filesystem, Flag from internal packages.",
+    "2": "Risk surface is filesystem mutation at startup (mkdir/rename/rm at lines 55-145); cleaned flag gates version stamping for partial-failure safety; one empty catch at line 147 not reflected in MODULE-AUDIT line 26.",
+    "3": "Path.home is a lazy getter (lines 40-42) but data/cache/config/state are frozen at module load (lines 26-29) from testHome captured at line 18 — split-brain if AX_CODE_TEST_HOME is mutated post-import.",
+    "4": "Trash-rename strategy (lines 110-121) keeps recursive rm off the startup hot path; cache dir is read three times on a version bump which is acceptable; no sync fs calls; TLA-free IIFE for esbuild compatibility.",
+    "5": "Singleton Path map is appropriate; fallback() and warnGlobalInit() are properly module-private; design wart is the mixed lazy/eager semantics for the five path accessors.",
+    "6": "entries[index] ?? ['unknown','unknown'] at line 74 is unreachable given lockstep entries array; no TODO/FIXME markers; TRASH_PREFIX used consistently at lines 108/110/144.",
+    "7": "cache-cleanup.test.ts is a brittle source-string inspection test asserting mkdir precedes readdir; no test covers the fallback() helper, the split-brain path semantics, or the trash-sweep path.",
+    "8": "MEDIUM split-brain path semantics (lines 18-29 vs 40-42); LOW audit-ledger mismatch on empty-catch count; INFO unreachable fallback at line 74. No Critical findings, so no reverify.md required.",
+    "9": "Read-only review, no source changes; validation path for an implementer is pnpm --dir packages/ax-code run typecheck plus AX_TEST_FILES=test/global/cache-cleanup.test.ts vitest run; verifier codex-sol should re-read lines 18-29 against 40-42."
+  },
+  "date": "2026-08-11"
+}

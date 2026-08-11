@@ -1,0 +1,23 @@
+{
+  "slug": "cli-cmd-mcp",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/mcp.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/mcp-impl.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-mcp/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Shim mcp.ts:1 re-exports mcp-impl.ts; real mass is the 1022-line sibling exporting 7 subcommands (list/auth/logout/trust/untrust/add/debug) plus 4 pure helpers and isMcpRemote.",
+    "2": "Sensitive boundaries: config-file writes (579-596), outbound HTTP to user URL (903-929), OAuth token display (881-892); SSRF guard at 903-904 with BUG-004 tag precedes every fetch via Ssrf.pinnedFetch.",
+    "3": "Debug 401 path consumes body at 943 to avoid socket leak; transport.close in finally (992-998) covers non-success throws so non-UnauthorizedError exceptions cannot leak the socket; Bus unsubscribe at 386-388 spans all auth outcomes.",
+    "4": "addMcpToConfig takes Lock.write (580) + FileLock.acquire (581) via using-disposal for in-process and cross-process safety; jsonc-parser modify/applyEdits (588-591) preserves comments; resolveConfigPath candidate ordering (561-577) matches the config layer.",
+    "5": "list --tools pre-builds toolsByServer Map once (145-152); MCP.status and listAllTools each called once, no per-server N+1; aggregate reduce at 220 is O(servers x tools); TOOL_COUNT_WARN_THRESHOLD (26) is a named, documented policy value.",
+    "6": "Cohesive single-file CLI surface; pure helpers exported separately for testability; imports only downward into ../../mcp, ../../config, ../../permission, ../../project/instance, ../../bus, ../../util/* — no sideways coupling into session/provider/tool.",
+    "7": "Empty catches at 237/943/997/1008 all carry inline rationale + benign fallback (empty array / void / void / empty string); redundant `as Config.Mcp` cast at 711 is the only soft spot; no TODOs, no dead branches, no unused imports.",
+    "8": "No Critical/High/Medium findings; one Low note — add custom-remote validates only http(s) protocol (748-757) without Ssrf.assertPublicUrl at add-time, defensible since no request fires during add; findings/ left empty as no severity threshold met.",
+    "9": "Re-read mcp-impl.ts in full (1022 lines) and the shim; audit fingerprint 3fb49ce7ea7ae163 matches the 2-LOC shim but undercounts the sibling where the real mass lives; verifier codex-sol should weight mcp-impl.ts; no reverify.md required because no Critical findings."
+  },
+  "date": "2026-08-11"
+}

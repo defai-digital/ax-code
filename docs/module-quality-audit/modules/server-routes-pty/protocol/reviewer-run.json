@@ -1,0 +1,28 @@
+{
+  "agentId": "codex-sol-server-routes-pty-20260811T193857Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:38:57Z",
+  "finishedAt": "2026-08-11T19:43:57Z",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/pty.ts",
+    "packages/ax-code/src/server/routes/route-params.ts",
+    "packages/ax-code/src/server/runtime-adapter.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/src/server/error.ts",
+    "packages/ax-code/src/server/middleware.ts",
+    "packages/ax-code/src/runtime/listen-security.ts",
+    "packages/ax-code/src/pty/index.ts",
+    "packages/ax-code/src/pty/schema.ts",
+    "packages/ax-code/src/id/branded.ts",
+    "packages/ax-code/src/id/id.ts",
+    "packages/ax-code/src/util/schema.ts",
+    "packages/ax-code/test/server/route-validation.test.ts",
+    "packages/ax-code/test/server/server.test.ts",
+    "packages/ax-code/test/pty/pty-session.test.ts",
+    "packages/ax-code/test/pty/pty-output-isolation.test.ts",
+    "docs/module-quality-audit/modules/server-routes-pty/MODULE-AUDIT.md"
+  ],
+  "slug": "server-routes-pty"
+}

@@ -1,0 +1,27 @@
+{
+  "agentId": "codex-sol-server-routes-workflow-20260811T194329Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:43:29Z",
+  "finishedAt": "2026-08-11T19:48:23Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/workflow.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-workflow/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/server.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/validation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/runtime/listen-security.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/spec.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/routine.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/run/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/run/internal.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/artifact.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/state.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/template.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/tui/context/sync-runtime-sync.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/workflow-routes.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/workflow/template.test.ts"
+  ],
+  "slug": "server-routes-workflow"
+}

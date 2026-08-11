@@ -1,0 +1,29 @@
+{
+  "slug": "stats",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "packages/ax-code/src/stats/breakdown.ts",
+    "packages/ax-code/src/stats/index.ts",
+    "packages/ax-code/src/stats/types.ts",
+    "packages/ax-code/src/cli/cmd/context.ts",
+    "packages/ax-code/test/stats/breakdown.test.ts",
+    "packages/ax-code/test/cli/stats.test.ts",
+    "packages/ax-code/src/memory/recorder.ts",
+    "packages/ax-code/src/memory/generator.ts",
+    "docs/module-quality-audit/modules/stats/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "stats is a 3-file leaf unit (barrel + breakdown.ts 109 LOC + types.ts 33 LOC); sole production consumer is cli/cmd/context.ts:9 importing only calculateBreakdown and formatBreakdown.",
+    "2": "Pure compute + ANSI formatting, no I/O or secrets; real numeric hazards are repeat() RangeError and Infinity/NaN from zero model limit, both already guarded at breakdown.ts:22-23 and :72.",
+    "3": "Traced all four exports; calculateBreakdown non-negative, getStatus >= thresholds match test/stats/breakdown.test.ts:110-118; flagged context.ts:94 feeding tool *calls* into the tool *definition* formula at breakdown.ts:26.",
+    "4": "All O(1) arithmetic plus four-row string assembly bounded by barWidth=30; consumer's message loop (context.ts:57-75) is linear and appropriate for a one-shot CLI report; no N+1.",
+    "5": "breakdown.ts is cohesive with only a type-only Provider.Model dep; design blemish is mixed physical units in the input struct (systemPromptLength in chars vs the other buckets already in tokens) at breakdown.ts:15-21.",
+    "6": "Grep confirms TokenUsage (types.ts:5) and ContextReport (types.ts:25) have zero consumers; getStatus is exported but only called internally by formatBreakdown at breakdown.ts:55 — all removable, LOW severity.",
+    "7": "estimateTokens chars/4 heuristic is triplicated: stats/breakdown.ts:11, memory/recorder.ts:22, memory/generator.ts:56 — meets the repo 3+ site threshold for a shared util (MEDIUM, non-blocking).",
+    "8": "breakdown.test.ts covers provider windows, fallbacks, threshold classification, and the overflow regression at line 153; no Critical findings, findings/ stays empty, no finding files raised this pass.",
+    "9": "No reverify.md required since no Critical findings exist; unit gate delegates to pnpm typecheck + test:unit (includes test/stats/breakdown.test.ts); ready for codex-sol verifier countersign."
+  }
+}

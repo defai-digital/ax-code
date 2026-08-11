@@ -1,0 +1,33 @@
+{
+  "slug": "cli-cmd-workspace-serve",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "packages/ax-code/src/cli/cmd/workspace-serve.ts",
+    "packages/ax-code/src/cli/cmd/runtime/workspace-serve.ts",
+    "packages/ax-code/src/cli/cmd/cmd.ts",
+    "packages/ax-code/src/cli/network.ts",
+    "packages/ax-code/src/util/signals.ts",
+    "packages/ax-code/src/control-plane/workspace-server/server.ts",
+    "packages/ax-code/src/server/runtime-adapter.ts",
+    "packages/ax-code/src/runtime/listen-security.ts",
+    "packages/ax-code/src/cli/boot.ts",
+    "packages/ax-code/src/cli/boot-node.ts",
+    "packages/ax-code/src/cli/cmd/runtime/serve.ts",
+    "packages/ax-code/test/control-plane/workspace-server-sse.test.ts",
+    "docs/module-quality-audit/modules/cli-cmd-workspace-serve/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Barrel file workspace-serve.ts:1 re-exports from runtime/workspace-serve.ts (24 LOC); no internal dependents grep across src/**/*.ts.",
+    "2": "WorkspaceServeCommand is a cmd() identity CommandModule; builder wires withNetworkOptions (port/hostname/mdns/mdns-domain/cors) with loopback defaults.",
+    "3": "Handler traces resolveNetworkOptions -> requireAuthForNetwork -> WorkspaceServer.Listen -> console.log -> registerShutdownSignals -> await new Promise(()=>{}); three layered loopback guards (network.ts:74, :92, server.ts:106).",
+    "4": "FINDING High: WorkspaceServeCommand is absent from boot.ts cmds[] (lines 60-106, has ServeCommand at :84 but not this one) and from boot-node.ts:16; no auto-discovery -> command is unreachable, runtime/workspace-serve.ts is dead code as shipped.",
+    "5": "Unreachable today so no live surface; if re-registered, assertAuthenticatedNetworkBind (server.ts:104-110) + test control-plane/workspace-server-sse.test.ts:19-21 enforce loopback; basicAuth optional on Flag.AX_CODE_SERVER_PASSWORD; no secrets logged.",
+    "6": "Shutdown via registerShutdownSignals single-shot guard (signals.ts:18-30) -> server.stop() -> exit(0); ServerHandle.stop contract from runtime-adapter.ts:23-28; no IPC so omission vs serve.ts is correct; Low: signals.ts:27-29 swallows server.stop() errors.",
+    "7": "Mirrors runtime/serve.ts structure (good); Low cosmetic: requireAuthForNetwork message at network.ts:93-98 suggests 'ax-code serve' not 'workspace-serve' since helper is shared.",
+    "8": "workspace-server-sse.test.ts covers WorkspaceServer.Listen/App directly (179 LOC) but never imports WorkspaceServeCommand; no test guards boot.ts registry membership, which is why the Step 4 wiring gap went undetected.",
+    "9": "Typecheck graph clean; runtime verify impossible because command unregistered; one High (dead wiring) + two Low notes; binary cheap fix: register in boot.ts cmds[] or delete both files, ideally with a registry-coverage test."
+  }
+}

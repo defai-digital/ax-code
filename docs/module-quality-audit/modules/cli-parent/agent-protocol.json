@@ -1,0 +1,42 @@
+{
+  "slug": "cli-parent",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "docs/module-quality-audit/modules/cli-parent/MODULE-AUDIT.md",
+    "docs/module-quality-audit/modules/cli-parent/findings/AUDIT-cli-parent-empty-catch.md",
+    "packages/ax-code/src/cli/attach-auth.ts",
+    "packages/ax-code/src/cli/boolean-flag.ts",
+    "packages/ax-code/src/cli/boot-node.ts",
+    "packages/ax-code/src/cli/boot.ts",
+    "packages/ax-code/src/cli/bootstrap.ts",
+    "packages/ax-code/src/cli/bootstrap/env.ts",
+    "packages/ax-code/src/cli/bootstrap/fatal.ts",
+    "packages/ax-code/src/cli/bootstrap/migrate.ts",
+    "packages/ax-code/src/cli/bootstrap/windows-console.ts",
+    "packages/ax-code/src/cli/cmd/account.ts",
+    "packages/ax-code/src/cli/cmd/acp.ts",
+    "packages/ax-code/src/cli/cmd/agent.ts",
+    "packages/ax-code/src/cli/cmd/audit.ts",
+    "packages/ax-code/src/cli/cmd/branch.ts",
+    "packages/ax-code/src/cli/cmd/capability.ts",
+    "packages/ax-code/src/cli/cmd/cmd.ts",
+    "packages/ax-code/src/cli/cmd/compare.ts",
+    "packages/ax-code/src/cli/cmd/context.ts",
+    "packages/ax-code/src/cli/cmd/db.ts",
+    "packages/ax-code/src/cli/cmd/debug/agent.ts"
+  ],
+  "stepNotes": {
+    "1": "Two parallel boots own the registry: boot.ts registers the full ~45-command array (boot.ts:60-106) while boot-node.ts keeps a minimal [DoctorCommand, GenerateCommand] subset (boot-node.ts:16) for the compiled doctor path.",
+    "2": "Process handlers at boot.ts:111-129 record to DiagnosticLog and force exit after 100ms on uncaught exceptions; attach-auth.ts:3-9 builds Basic auth from AX_CODE_SERVER_PASSWORD, and windows-console.ts:48 execs chcp.com with an intentional commented empty catch at :49.",
+    "3": "scheduleForcedExit unrefs the 2000ms grace timer (boot.ts:140-148) and run() clears stale timers at entry; the --uninstall branch at boot.ts:243 returns without scheduling forced exit, an asymmetry versus the normal path at boot.ts:275.",
+    "4": "init sets a finite maxListeners(64) at env.ts:135 instead of silencing the warning, startShellEnvLoad fires in the background at env.ts:180, migrate short-circuits when the DB exists (migrate.ts:30), and commands defer heavy modules via dynamic import (acp.ts:20-23, audit.ts:99).",
+    "5": "boot.ts and boot-node.ts duplicate ~60 lines of yargs/hooks scaffolding but diverge on commands, Windows console, and uninstall handling — only two sites, below the extraction threshold; cmd.ts and db.ts are thin typed passthroughs preserving registry uniformity.",
+    "6": "Candidate files carry zero TODOs; the AUDIT-cli-parent-empty-catch sites all lie in child units (run.ts, storage/session.ts, tui/prompt, github-api.ts), and the only empty catch in the bootstrap set read here is the intentional one at windows-console.ts:49.",
+    "7": "boot.test.ts, bootstrap/windows-console.test.ts, and per-command tests (account/acp/agent/audit/capability) cover the surface; the DI seams in fatal.ts and migrate.ts enable deterministic unit tests, while the --uninstall and migration-skip branches are the gap to confirm.",
+    "8": "AUDIT-cli-parent-empty-catch is Low/deferred with all four cataloged sites in child units; no new finding is accepted, no Critical exists, so no protocol/reverify.md is required by the gate for this unit.",
+    "9": "Source-level evidence only; no code was modified in this read-only review, core typecheck baseline is EXIT:0 per STATUS.md, and the unit stays REVIEWING pending the codex-sol verifier lane."
+  }
+}

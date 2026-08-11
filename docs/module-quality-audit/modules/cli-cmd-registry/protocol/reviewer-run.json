@@ -1,0 +1,18 @@
+{
+  "agentId": "codex-sol-cli-cmd-registry-20260811T195536Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:55:36Z",
+  "finishedAt": "2026-08-11T19:58:04Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-registry/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot-node.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/run.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/headless-run.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/smoke.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/boot.test.ts"
+  ],
+  "slug": "cli-cmd-registry"
+}

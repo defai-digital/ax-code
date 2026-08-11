@@ -1,0 +1,20 @@
+{
+  "agentId": "ax-code-glm-design-check-20260811T195406Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:54:06Z",
+  "finishedAt": "2026-08-11T20:04:32Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/design-check/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/design-check/types.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/design-check/rules/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/design-check/rules/alt-text.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/design-check/rules/colors.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/design-check/rules/form-labels.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/design-check/rules/inline-styles.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/design-check/rules/spacing.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/design-check.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/design-check/MODULE-AUDIT.md"
+  ],
+  "slug": "design-check"
+}

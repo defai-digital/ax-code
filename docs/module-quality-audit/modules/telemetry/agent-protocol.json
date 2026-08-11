@@ -1,0 +1,31 @@
+{
+  "slug": "telemetry",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/telemetry/index.ts",
+    "packages/ax-code/src/telemetry/span.ts",
+    "docs/module-quality-audit/modules/telemetry/MODULE-AUDIT.md",
+    "docs/module-quality-audit/modules/telemetry/findings/AUDIT-telemetry-empty-catch.md",
+    "packages/ax-code/test/telemetry/index.test.ts",
+    "packages/ax-code/src/replay/query.ts",
+    "packages/ax-code/src/replay/event.ts",
+    "packages/ax-code/src/cli/cmd/audit.ts",
+    "packages/ax-code/src/flag/flag.ts",
+    "packages/ax-code/src/util/ssrf.ts",
+    "packages/ax-code/package.json"
+  ],
+  "stepNotes": {
+    "1": "Established the telemetry namespace, span helpers, and audit CLI as the reviewed surface.",
+    "2": "Confirmed public-address enforcement and identified the local paths and errors sent to the collector.",
+    "3": "Traced initialization deduplication, graceful setup failure, and state-clearing shutdown behavior.",
+    "4": "Checked event ordering, parent context selection, attribute attachment, and immediate span completion.",
+    "5": "Verified the 10,000-event query ceiling and linear map-and-export processing cost.",
+    "6": "Found that withSpanSync may repeat a failing side-effecting callback through its outer fallback.",
+    "7": "Ran the two focused tests and documented untested export and wrapper branches.",
+    "8": "Validated the deferred Low empty-catch record and noted the distinct unfiled synchronous correctness risk.",
+    "9": "Recorded passing targeted Vitest and core TypeScript checks; no Critical re-verification file was needed."
+  },
+  "date": "2026-08-11"
+}

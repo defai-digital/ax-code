@@ -8,9 +8,9 @@
 | Origin | new |
 | Status | deferred |
 | Module | cli-parent |
-| Owner | codex-sol |
+| Owner | ax-code-glm |
 | Expiry | 2026-09-11 |
-| Independent verifier | ax-code-glm |
+| Independent verifier | codex-sol |
 
 ## Per-site disposition
 

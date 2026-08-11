@@ -1,0 +1,30 @@
+{
+  "slug": "share",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/share/share.sql.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/share/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/session.sql.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/storage/schema.sql.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/storage/schema.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/storage/json-migration.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/migration/20260127222353_familiar_lady_ursula/migration.sql",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/session/session.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/storage/json-migration.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Bound share to the SessionShareTable declaration, its storage-barrel export, one-row-per-session key, and inherited timestamp fields.",
+    "2": "Traced the plaintext secret from legacy JSON into SQLite and confirmed logs and the active session projection do not reveal that credential.",
+    "3": "Compared the Drizzle relation with generated DDL, checked orphan prefiltering, and noted that the foreign key lacks SessionID branding at compile time.",
+    "4": "Followed transactional descendant deletion through the cascade and reviewed the importer's 1,000-row batches, bounded readers, and row fallback.",
+    "5": "Separated the compatibility table from the current session.share_url projection and recorded the need for an explicit authority if sharing returns.",
+    "6": "Checked the declarative source for suppression or maintenance debt and traced malformed reads, rejected payloads, insert fallback, and rollback behavior.",
+    "7": "Located happy-path, orphan, corrupt-JSON, and cascade regressions, with share-specific duplicate migration retained as a narrow coverage opportunity.",
+    "8": "Matched the current schema to its original migration, reconciled the empty finding register, and found no Critical item requiring secondary confirmation.",
+    "9": "Ran two exact Vitest files with 36 passing tests and completed the core tsgo typecheck successfully before verifier handoff."
+  },
+  "date": "2026-08-11"
+}

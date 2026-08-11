@@ -1,0 +1,42 @@
+{
+  "slug": "wiki",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/wiki/config.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/wiki/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/wiki/native.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/wiki/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/wiki.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/init.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/bootstrap.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/config/config.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/config/config-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/config/schema-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/project/instance.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/provider-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-wiki/package.json",
+    "/Users/akiralam/code/ax-code/packages/ax-wiki/src/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-wiki/src/types.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-wiki/src/paths.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-wiki/src/safety.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-wiki/src/discovery.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-wiki/src/plan.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-wiki/src/build.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-wiki/test/plan.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-wiki/test/build.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Established the wiki adapter exports and traced both production CLI consumers.",
+    "2": "Checked merged/global fallback, override precedence, schema limits, and engine-only projection.",
+    "3": "Followed planning, incremental selection, conflict refusal, validation, writes, and rollback.",
+    "4": "Examined prompt trust instructions, structured result bounds, prior-content cap, and abort cleanup.",
+    "5": "Confirmed argument-array Git execution plus path containment, symlink, size, and binary safeguards.",
+    "6": "Measured source, page, evidence, and concurrency bounds and recorded the sequential latency tradeoff.",
+    "7": "Validated ownership between AX Code and ax-wiki and the Instance-root invariant in shipping callers.",
+    "8": "Reconciled the empty finding register with engine regressions and identified wrapper coverage debt.",
+    "9": "Observed 13 passing engine tests and successful engine and core TypeScript checks."
+  },
+  "date": "2026-08-11"
+}

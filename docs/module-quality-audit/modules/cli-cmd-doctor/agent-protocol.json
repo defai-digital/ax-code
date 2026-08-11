@@ -1,0 +1,25 @@
+{
+  "slug": "cli-cmd-doctor",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/doctor.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/doctor-storage.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/doctor-health.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/doctor-preload.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-doctor/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Scope: doctor.ts is the yargs CommandModule orchestrator (line 233); 6 pure check helpers exported for testing, 4 heavier checks delegated to doctor-storage/doctor-health/doctor-preload sidecars.",
+    "2": "Threat model: pgrep argv is a fixed literal (no injection); port probe hard-codes 127.0.0.1; credentials check emits only provider IDs and env-var names, never values. Risk is silent error swallowing, not exfiltration.",
+    "3": "Correctness: getServerExposureCheck and getIsolationPolicyCheck precedence logic is sound; getAxEngineDoctorCheck branches are mutually exclusive. Found require(\"net\") at line 451 throws ReferenceError in native ESM and is masked by the catch at 476 -> F-1 MEDIUM.",
+    "4": "Performance: handler is fully sequential despite independent probes (3 ancestor walks, 1500ms fetch, 1000ms socket, 4 NativeAddon loads, 5s pgrep, 5-file log scan). Low-frequency command so non-blocking, but Promise.all over independent checks is the single biggest perf lever.",
+    "5": "Design: orchestration/sidecar split is healthy; sidecars accept injectable seams (inspect/run/readFile/readdir/stat/resolveSync). getServerExposureCheck hardcodes status:'ok' even when overriding a user-requested non-loopback bind -> UX nit, not a defect.",
+    "6": "Hygiene: no unused imports or dead exports found. Inline check-numbering comments have drifted (two '11b' at lines 434+480, two '12' at 484+487, missing '11a') -> F-2 LOW, cosmetic only.",
+    "7": "Tests: MODULE-AUDIT test list is broad CLI coverage, not doctor-specific. Pure helpers and injectable sidecars are unit-testable; the handler (line 236) is the only un-injectable surface and is acceptably uncovered.",
+    "8": "Findings: F-1 MEDIUM require(\"net\") in ESM (line 451); F-2 LOW drifted check-number comments; F-3 LOW DoctorCheck type duplicated across 4 sibling files (4 identical copies clears the extraction bar). No Critical findings -> no reverify.md required.",
+    "9": "Verification: independent re-read confirms F-1 (only require() in the file, ESM module per package.json, masked by catch at 476); F-2/F-3 confirmed by line inspection. Repro path for F-1: pnpm dev doctor with another process holding the TUI port still reports port available. No Critical items; ready for codex-sol verifier confirmation."
+  },
+  "date": "2026-08-11"
+}

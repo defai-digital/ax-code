@@ -1,0 +1,21 @@
+{
+  "agentId": "ax-code-glm-provider-registry-20260811T194802Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:48:02Z",
+  "finishedAt": "2026-08-11T19:49:30Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-capabilities.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-id.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-info.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-key.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-selectability.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-support.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/models.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/provider-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/provider.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/qwen37-readiness.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/provider-registry/MODULE-AUDIT.md"
+  ],
+  "slug": "provider-registry"
+}

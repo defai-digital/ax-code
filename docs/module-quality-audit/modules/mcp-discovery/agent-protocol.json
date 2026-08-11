@@ -1,0 +1,33 @@
+{
+  "slug": "mcp-discovery",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/mcp/constants.ts",
+    "packages/ax-code/src/mcp/discovery.ts",
+    "packages/ax-code/src/mcp/templates/index.ts",
+    "packages/ax-code/src/cli/cmd/mcp-impl.ts",
+    "packages/ax-code/src/mcp/impl.ts",
+    "packages/ax-code/src/config/schema-impl.ts",
+    "packages/ax-code/src/util/process.ts",
+    "packages/ax-code/src/util/env.ts",
+    "packages/ax-code/test/AGENTS.md",
+    "packages/ax-code/test/mcp/discovery-playwright.test.ts",
+    "packages/ax-code/test/mcp/discovery-spawn.test.ts",
+    "packages/ax-code/test/mcp/templates.test.ts",
+    "docs/module-quality-audit/modules/mcp-discovery/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Traced discovery exports, template helpers, the shared timeout, and both CLI entry points.",
+    "2": "Verified array-based sanitized process probes and identified plaintext template-secret persistence risk.",
+    "3": "Followed every discovery branch and found the empty-config CLI return that bypasses opt-in discovery.",
+    "4": "Accounted for all probe deadlines, response cleanup, parallel candidates, and duplicate Playwright work.",
+    "5": "Compared template conversion with strict config schemas and noted catalog and remote-auth drift risks.",
+    "6": "Reviewed fallback catches, cleanup behavior, stale comments, redundant settlement handling, and package resolution.",
+    "7": "Ran 27 focused tests and catalogued aggregate, CLI, TCP-success, global-binary, and network gaps.",
+    "8": "Reconciled the empty finding directory while assigning High, Medium, and Low severities to observed issues.",
+    "9": "Confirmed the focused Vitest run and core TypeScript check both pass without treating gaps as covered."
+  },
+  "date": "2026-08-11"
+}

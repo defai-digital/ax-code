@@ -1,0 +1,17 @@
+{
+  "agentId": "ax-code-glm-capability-20260811T195102Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:51:02Z",
+  "finishedAt": "2026-08-11T19:53:44Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/capability/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/capability.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/tui/routes/session/capability-catalog.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/skill/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/capability/capability.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/capability/MODULE-AUDIT.md"
+  ],
+  "slug": "capability"
+}

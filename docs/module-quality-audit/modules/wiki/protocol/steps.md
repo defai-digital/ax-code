@@ -1,0 +1,41 @@
+# Review Protocol — wiki
+
+Unit slug: `wiki`  
+Reviewer: `codex-sol` (`gpt-5.6-sol-xhigh`)  
+Independent verifier: `ax-code-glm`
+
+## Step 1 Scope and public surface
+
+The `wiki` unit is the AX Code adapter around the reusable `@ax-code/ax-wiki` engine. `packages/ax-code/src/wiki/index.ts:1-3` re-exports the engine plus the local configuration and native-generation adapters. The local public surface comprises `WikiRuntimeConfig`, `resolveWikiRuntimeConfig`, and `engineConfig` (`packages/ax-code/src/wiki/config.ts:5-11,35-59`) and `gitHeadCommit`, `planNativeWiki`, and `runNativeWiki` (`packages/ax-code/src/wiki/native.ts:100-111,133-183`). Production consumers are the dedicated CLI at `packages/ax-code/src/cli/cmd/wiki.ts:6-20` and the opt-in initialization flow at `packages/ax-code/src/cli/cmd/init.ts:5,79-129`.
+
+## Step 2 Configuration resolution and precedence
+
+`resolveWikiRuntimeConfig` first uses the instance-scoped merged configuration and falls back to global configuration only when that lookup throws (`packages/ax-code/src/wiki/config.ts:21-33`). It applies secure/default-on booleans, normalizes the output directory, and gives trimmed command-line `dir` and `model` overrides precedence (`config.ts:35-46`). The accepted configuration is schema-constrained, including `maxPages` 3–40, `maxSourcesPerPage` 1–200, and minimum evidence byte budgets (`packages/ax-code/src/config/schema-impl.ts:1002-1058`). `engineConfig` deliberately projects only engine-owned keys (`config.ts:49-59`), preventing runtime controls such as `enabled` and `touchClaudeMd` from leaking into the engine contract.
+
+## Step 3 Planning and build control flow
+
+`planNativeWiki` resolves runtime options, loads repository `ax-wiki.config.json`, drops undefined runtime fields, merges runtime values over disk values, discovers sources, and creates a deterministic plan (`packages/ax-code/src/wiki/native.ts:133-142`). `runNativeWiki` rejects disabled generation before model work (`native.ts:152-154`), resolves one provider model, constructs one generator closure, and delegates persistence and incremental selection to `buildAxWiki` (`native.ts:154-183`). The engine hashes the plan and sources, regenerates only pages selected by changed source paths on update, and refuses to overwrite unmanaged edits without `force` (`packages/ax-wiki/src/build.ts:126-161`). It validates the complete in-memory candidate before any page write (`build.ts:193-242`) and attempts rollback if a later write or deletion fails (`build.ts:258-289`).
+
+## Step 4 Model prompt and output correctness
+
+Generation uses a Zod object requiring a 20–600 character summary, an 80-character minimum body, and at most 80 symbols (`packages/ax-code/src/wiki/native.ts:25-29`). The system prompt explicitly limits claims to supplied evidence, labels repository content as untrusted, requires repository-relative citations, and requires uncertainty to be disclosed (`native.ts:31-45`). Page prompts include the target, related planned pages, module counts, maintainer instructions, optional graph context, at most 24,000 characters of prior generated content, and tagged source evidence (`native.ts:47-87`). Each model call receives an independent 180-second abort timer that is cleared in `finally` (`native.ts:155-170`). The engine performs an additional useful-content check and renders authoritative source metadata before accepting the result (`packages/ax-wiki/src/build.ts:88-93,186-189`).
+
+## Step 5 Filesystem, process, and trust boundaries
+
+The adapter invokes `git rev-parse HEAD` through `execFile` with an argument array, a fixed 10-second timeout, and the requested root as `cwd`; failure intentionally degrades repository-head metadata to `undefined` (`packages/ax-code/src/wiki/native.ts:100-110`). Wiki directory strings reject absolute paths and `..` segments (`packages/ax-wiki/src/paths.ts:13-20`), while all resolved outputs are checked to remain beneath the repository root (`paths.ts:30-36`). Before output access, every existing directory segment is inspected and symlinks or non-directories are rejected (`packages/ax-wiki/src/safety.ts:9-27`). Source discovery skips symlinks escaping the real repository, oversized files, binary content, generated directories, and the wiki output itself (`packages/ax-wiki/src/discovery.ts:121-180`). No credential is read or logged by the reviewed adapter; repository text crosses the provider boundary only as explicitly untrusted generation evidence.
+
+## Step 6 Performance and resource bounds
+
+Source discovery prefers one NUL-delimited `git ls-files` subprocess and falls back to a recursive walk only when Git listing fails (`packages/ax-wiki/src/discovery.ts:77-104,139-148`). Files larger than `maxSourceBytes` are excluded (`discovery.ts:151-180`), and evidence reading is capped both per file at 32,000 characters and per page by the remaining byte budget (`discovery.ts:185-200`). Planning caps default/custom generated pages at 40 and selected evidence at the configured source count (`packages/ax-wiki/src/plan.ts:69,126-142,178-183`). Native generation processes target pages sequentially because `buildAxWiki` awaits graph context and generation inside its page loop (`packages/ax-wiki/src/build.ts:163-191`); this avoids unbounded concurrent model calls but means worst-case latency can approach the sum of the per-page 180-second timeouts. That is a deliberate bounded-throughput tradeoff, not a correctness defect.
+
+## Step 7 Coupling, lifecycle, and maintainability
+
+The boundary is cohesive: deterministic discovery, planning, validation, and writes remain in `packages/ax-wiki`, while AX Code owns merged runtime configuration, provider resolution, and graph enrichment (`packages/ax-code/src/wiki/native.ts:4-21`). CLI commands establish an `Instance` around the same root before calling the adapter (`packages/ax-code/src/cli/cmd/wiki.ts:25-32`; `packages/ax-code/src/cli/bootstrap.ts:4-16`), which makes `graphContext` use of `Instance.project.id` and `Instance.directory` consistent with `request.root` in shipping call paths (`packages/ax-code/src/wiki/native.ts:113-131`). Graph enrichment is best-effort and returns no context on indexing failure, while source evidence remains available. The candidate files contain no TODO/FIXME markers or unsafe type suppressions. The three catches are purposeful fallbacks: merged-to-global config, unavailable Git metadata, and unavailable graph enrichment (`config.ts:21-32`; `native.ts:100-110,113-130`).
+
+## Step 8 Test evidence and finding disposition
+
+No file exists under `docs/module-quality-audit/modules/wiki/findings/`, and the earlier register records no accepted item (`docs/module-quality-audit/modules/wiki/MODULE-AUDIT.md:53-57`). Engine tests cover deterministic plans and unsafe directory normalization (`packages/ax-wiki/test/plan.test.ts:8-35`), incremental rebuilds (`packages/ax-wiki/test/build.test.ts:40-60`), protected edits and conflict refusal (`build.test.ts:62-80`), validation-before-write (`build.test.ts:82-91`), staleness (`build.test.ts:93-101`), symlinked-output rejection (`build.test.ts:103-113`), and malformed disk configuration (`build.test.ts:115-121`). A non-blocking coverage gap remains: no focused test imports `packages/ax-code/src/wiki/config.ts` or `native.ts`, so runtime/default precedence, the disabled guard, model selection, graph fallback, Git timeout fallback, and abort cleanup are checked only by static reasoning or exercised indirectly through CLI use. This review accepts no Critical, High, Medium, or Low defect; the wrapper-test gap is a coverage recommendation.
+
+## Step 9 Verification and exit decision
+
+Verification completed with `pnpm --dir packages/ax-wiki test` (3 files, 13 tests passed), `pnpm --dir packages/ax-wiki run typecheck`, and `pnpm --dir packages/ax-code run typecheck`; both typechecks exited successfully. These checks cover the reusable engine and compile the AX Code adapter against its provider, configuration, graph, and engine contracts. The evidence supports completion of the primary nine-step review for `wiki`. Because neither the findings directory nor this pass contains a Critical item, `protocol/reverify.md` is not created; independent verifier `ax-code-glm` remains responsible for the separate lane confirmation.

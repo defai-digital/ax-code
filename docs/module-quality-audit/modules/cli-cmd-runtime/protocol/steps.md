@@ -1,0 +1,41 @@
+# Review Protocol — cli-cmd-runtime
+
+Unit slug: `cli-cmd-runtime`  
+Reviewer: `codex-sol` (`gpt-5.6-sol-xhigh`)  
+Independent verifier lane: `ax-code-glm`
+
+## Step 1 Scope and command reachability
+
+The reviewed implementations are `RestartCommand` at `packages/ax-code/src/cli/cmd/runtime/restart.ts:11`, `ServeCommand` at `packages/ax-code/src/cli/cmd/runtime/serve.ts:23`, and `WorkspaceServeCommand` at `packages/ax-code/src/cli/cmd/runtime/workspace-serve.ts:6`. Production boot registers restart and serve in the command array (`packages/ax-code/src/cli/boot.ts:37-39` and `:84-85`). Serve is deliberately lazy-loaded by `packages/ax-code/src/cli/cmd/serve.ts:12-14`. By contrast, repository search found `WorkspaceServeCommand` only in its implementation and the re-export at `packages/ax-code/src/cli/cmd/workspace-serve.ts:1`; it is absent from the boot command array at `packages/ax-code/src/cli/boot.ts:60-106`, so it has no normal CLI entry point.
+
+## Step 2 Trust boundaries and destructive inputs
+
+Restart constrains its outbound request to loopback and interpolates only a validated integer port (`packages/ax-code/src/cli/cmd/runtime/restart.ts:4-8` and `:24-26`). Both server commands resolve shared network policy before binding (`packages/ax-code/src/cli/cmd/runtime/serve.ts:31-35`; `packages/ax-code/src/cli/cmd/runtime/workspace-serve.ts:10-13`), while explicit non-loopback hosts and CORS origins are rejected in `packages/ax-code/src/cli/network.ts:71-84`. The principal local safety concern is `--ipc-socket`: the user-controlled path is canonicalized and then passed directly to `unlinkSync` (`packages/ax-code/src/cli/cmd/runtime/serve.ts:38-45`). There is no `lstat`/socket-kind check before deletion, so a typo naming an ordinary file can remove that file with the caller's privileges.
+
+## Step 3 Restart correctness and response contract
+
+`validateRuntimeRestartPort` accepts only integer TCP ports 1 through 65535 (`packages/ax-code/src/cli/cmd/runtime/restart.ts:4-8`) and is applied during yargs validation and again in the handler (`restart.ts:19-24`), protecting direct handler callers as well as parsed CLI calls. The handler POSTs to `/instance/restart`, treats network failures as a controlled failure, and exits nonzero for any non-2xx response (`restart.ts:25-32`). That path matches the server route at `packages/ax-code/src/server/routes/app.ts:58-80`, whose handler reloads the current instance before returning success. The direct regression covers boundary ports and non-numeric/non-finite values at `packages/ax-code/test/cli/runtime-restart.test.ts:4-15`.
+
+## Step 4 Server startup, shutdown, and failure behavior
+
+Serve creates one Hono app, passes it to the HTTP listener, and reuses the same `app.fetch` for optional IPC (`packages/ax-code/src/cli/cmd/runtime/serve.ts:34-49`), avoiding divergent route state. It prints readiness only after listeners start and launches project prewarming as detached work with an observable warning on failure (`serve.ts:12-20` and `:52-53`). Shutdown closes IPC before HTTP and exits only after both complete (`serve.ts:55-60`); workspace shutdown similarly awaits its server (`packages/ax-code/src/cli/cmd/runtime/workspace-serve.ts:16-20`). Shared signal registration suppresses duplicate shutdown entry through its `handled` guard (`packages/ax-code/src/util/signals.ts:16-29`). A residual failure-mode gap is that a rejected shutdown callback is swallowed there, leaving `process.exit(0)` unreached and later signals ignored.
+
+## Step 5 Runtime cost and long-lived resources
+
+The command handlers do constant startup work: restart issues one fetch (`packages/ax-code/src/cli/cmd/runtime/restart.ts:25-26`), serve starts at most two listeners (`packages/ax-code/src/cli/cmd/runtime/serve.ts:34-49`), and workspace-serve starts one listener (`packages/ax-code/src/cli/cmd/runtime/workspace-serve.ts:11-14`). The intentionally unresolved promises at `serve.ts:62` and `workspace-serve.ts:22` keep long-lived commands resident without polling. IPC tracks active sockets and destroys them before closing the listener (`packages/ax-code/src/server/ipc-transport.ts:37-42` and `:60-73`), while workspace SSE caps its per-client queue at 1024 and drops excess events with sampled warnings (`packages/ax-code/src/control-plane/workspace-server/server.ts:54-75`). No unbounded command-local collection or per-request fan-out was found.
+
+## Step 6 Ownership, reuse, and surface consistency
+
+Network option definition and configuration precedence remain in the shared CLI layer (`packages/ax-code/src/cli/network.ts:5-39` and `:41-84`); OS-signal mechanics remain in `packages/ax-code/src/util/signals.ts:14-34`; HTTP/IPC and workspace event serving are delegated to their server modules. The runtime command files therefore mostly compose dependencies rather than reimplementing them. Lazy loading in `packages/ax-code/src/cli/cmd/serve.ts:4-15` keeps heavy server imports off unrelated CLI startup. The outlier is workspace-serve: its copy says “remote workspace event server” (`packages/ax-code/src/cli/cmd/runtime/workspace-serve.ts:7-9`), yet the shared resolver enforces loopback and the wrapper is explicitly excluded from typecheck at `packages/ax-code/tsconfig.json:3-9`; together with its missing boot registration, this is a stale or intentionally dormant surface that should be documented or removed.
+
+## Step 7 Hygiene and maintainability
+
+The three candidate sources contain no TODO/FIXME markers, type suppressions, or commented-out implementations. Error conversion in prewarm retains the actual message (`packages/ax-code/src/cli/cmd/runtime/serve.ts:18-20`), and restart gives a concise operator-facing failure (`packages/ax-code/src/cli/cmd/runtime/restart.ts:26-31`). The catch around IPC cleanup is documented but catches every unlink error (`serve.ts:40-44`), which hides whether the target was absent, non-removable, or an ordinary file. The duplicated shutdown blocks at `serve.ts:55-60` and `packages/ax-code/src/cli/cmd/runtime/workspace-serve.ts:16-20` are small, but neither uses `try/finally`; a shared helper could guarantee exit behavior and error reporting.
+
+## Step 8 Coverage and finding disposition
+
+Focused coverage directly exercises restart validation (`packages/ax-code/test/cli/runtime-restart.test.ts:4-15`), config/argv precedence and loopback policy (`packages/ax-code/test/cli/network.test.ts:22-116`), IPC request routing and streaming (`packages/ax-code/test/server/ipc-transport.test.ts:104-224`), and workspace bind/header/SSE behavior (`packages/ax-code/test/control-plane/workspace-server-sse.test.ts:18-105`). There is no handler-level regression for listener startup rollback, stale socket replacement, signal-driven shutdown, or CLI visibility of workspace-serve. This pass records one Medium local data-safety finding for unconditional `unlinkSync` of an arbitrary `--ipc-socket` target (`packages/ax-code/src/cli/cmd/runtime/serve.ts:38-44`) and one Low reachability/design advisory for the unregistered workspace command (`packages/ax-code/src/cli/boot.ts:60-106`). The earlier register reports no accepted items at `docs/module-quality-audit/modules/cli-cmd-runtime/MODULE-AUDIT.md:65-69`, and no finding files currently exist; neither issue is Critical.
+
+## Step 9 Verification and reviewer outcome
+
+From `packages/ax-code`, `AX_TEST_FILES=test/cli/runtime-restart.test.ts,test/cli/network.test.ts,test/server/ipc-transport.test.ts,test/control-plane/workspace-server-sse.test.ts pnpm exec vitest run` passed all 4 files and 26 tests after Unix-socket permission was allowed; the sandboxed attempt had four `EPERM` listener failures at `packages/ax-code/src/server/ipc-transport.ts:48-57`, with the other 22 tests passing. From the repository root, `pnpm --dir packages/ax-code run typecheck` passed. The exercised restart boundaries are visible at `packages/ax-code/test/cli/runtime-restart.test.ts:5-14`, and IPC lifecycle cleanup at `packages/ax-code/test/server/ipc-transport.test.ts:12-24`. Because neither the empty findings directory nor this primary pass contains a Critical item, `protocol/reverify.md` is not required; independent verifier `ax-code-glm` remains responsible for the separate lane sign-off.

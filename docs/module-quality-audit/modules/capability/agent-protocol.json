@@ -1,0 +1,27 @@
+{
+  "slug": "capability",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/capability/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/capability.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/tui/routes/session/capability-catalog.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/skill/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/capability/capability.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/capability/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Confirmed single-file unit at packages/ax-code/src/capability/index.ts (226 LOC); six surface symbols inside namespace Capability, no sub-modules.",
+    "2": "Two real consumers of Capability.list: CLI (cli/cmd/capability.ts:36) passes filePaths; HTTP (server/routes/app.ts:186) passes none and serializes via Capability.Info.array() schema.",
+    "3": "Promise.all fans out six producers at index.ts:34; deprecatedToolsAgents set is built before agent mapping and consulted at line 52; final two-level sort at line 58 is deterministic.",
+    "4": "Adapter fidelity checked: fromCommand permissionImpact precedence workflow>mcp>agent>default (lines 82-88); fromWorkflow unconditionally sets requiresWorkflowRuntime=true (line 165); deprecated_agent_tools warning gated on caller flag (lines 129-137).",
+    "5": "Performance: per-skill Skill.matchByPaths([skill], ...) at index.ts:94 is redundant given the API accepts arrays (src/skill/index.ts:376); batchable but low-impact at catalog scale; compactMetadata allocates intermediates per entry.",
+    "6": "Cohesion high (pure aggregation); coupling is read-only fan-in across seven sibling modules; Info.source/sourceTool/scope overlap is implicit and would benefit from a JSDoc clarifying intent.",
+    "7": "No empty catches; addCommandSkillDuplicateWarnings mutates a fresh local array safely (lines 195-213); no try/catch around Promise.all is the correct fail-closed contract for catalog aggregation.",
+    "8": "No Critical or High findings; three LOW notes (batchable matchByPaths, doc-debt on Info fields, redundant inner sort) recorded in steps.md ledger; nothing written to findings/ since severity threshold not met.",
+    "9": "Tests in test/capability/capability.test.ts cover happy-path adapters, deprecated-tools warning, and dotted instruction paths; primary 9-step complete, unit awaiting codex-sol independent verification; no Critical items so no reverify.md required."
+  },
+  "date": "2026-08-11"
+}

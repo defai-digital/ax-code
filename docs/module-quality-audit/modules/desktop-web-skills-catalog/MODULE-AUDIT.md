@@ -11,7 +11,7 @@
 | Status | REVIEWING |
 | Reviewer | ax-code-glm |
 | Independent verifier | codex-sol |
-| Baseline commit | `ad9a854c3f8f6cc3ffc48c356a2546d3f23e9945` |
+| Baseline commit | `5fefa00cdc847667d3ba3d38509a751498ee4180` |
 | Analysis fingerprint | `06ddcb243f38f846` |
 | Protocol marker | pending dual-agent 9-step |
 | Source files / LOC | 18 / 1977 |

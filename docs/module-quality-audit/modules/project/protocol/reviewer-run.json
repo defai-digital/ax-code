@@ -1,0 +1,29 @@
+{
+  "agentId": "ax-code-glm-project-20260811T194329Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:43:29Z",
+  "finishedAt": "2026-08-11T19:58:02Z",
+  "slug": "project",
+  "filesRead": [
+    "packages/ax-code/src/project/bootstrap.ts",
+    "packages/ax-code/src/project/instance.ts",
+    "packages/ax-code/src/project/project-identity.ts",
+    "packages/ax-code/src/project/project.sql.ts",
+    "packages/ax-code/src/project/project.ts",
+    "packages/ax-code/src/project/schema.ts",
+    "packages/ax-code/src/project/state.ts",
+    "packages/ax-code/src/project/vcs.ts",
+    "packages/ax-code/src/storage/db.ts",
+    "packages/ax-code/test/project/project.test.ts",
+    "packages/ax-code/test/project/migrate-global.test.ts",
+    "packages/ax-code/test/project/state.test.ts",
+    "packages/ax-code/test/project/instance-context.test.ts",
+    "packages/ax-code/test/project/vcs.test.ts",
+    "packages/ax-code/test/project/worktree-remove.test.ts",
+    "docs/module-quality-audit/modules/project/MODULE-AUDIT.md",
+    "docs/module-quality-audit/modules/bus/protocol/steps.md",
+    "docs/module-quality-audit/modules/bus/protocol/reviewer-run.json",
+    "docs/module-quality-audit/modules/bus/agent-protocol.json"
+  ]
+}

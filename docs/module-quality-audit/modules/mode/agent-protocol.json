@@ -1,0 +1,36 @@
+{
+  "slug": "mode",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/mode/arena.ts",
+    "packages/ax-code/src/mode/budget.ts",
+    "packages/ax-code/src/mode/council.ts",
+    "packages/ax-code/src/mode/debate.ts",
+    "packages/ax-code/src/mode/ensemble-shared.ts",
+    "packages/ax-code/src/mode/hybrid.ts",
+    "packages/ax-code/src/mode/implement-arena.ts",
+    "packages/ax-code/src/mode/index.ts",
+    "packages/ax-code/src/mode/json-mode-prompt.ts",
+    "packages/ax-code/src/mode/memory.ts",
+    "packages/ax-code/src/mode/policy.ts",
+    "packages/ax-code/src/mode/preflight.ts",
+    "packages/ax-code/src/mode/protocol.ts",
+    "packages/ax-code/src/mode/work-mode.ts",
+    "packages/ax-code/src/mode/worktree-policy.ts",
+    "docs/module-quality-audit/modules/mode/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Barrel at index.ts:1-13 exports 12 namespaces but omits json-mode-prompt.ts; tools import those helpers directly (src/tool/arena.ts:16, src/tool/council.ts:13), an export-surface inconsistency to normalize.",
+    "2": "Only memory.ts and ensemble-shared.ts perform IO; the comment-only catch at ensemble-shared.ts:162-164 is defensible because ModeMemory.load() (memory.ts:121-132) already swallows its own errors and returns an empty store.",
+    "3": "resolveMode (policy.ts:104-169) silently differs: council defaults enabled (enabled===false disables, line 82) vs arena defaults disabled (enabled!==true, line 85); the cap-drift bug is budget.ts:26 HARD_MAX=6 vs src/tool/arena.ts:32 HARD_MAX=5 — a 6-contestant config passes Budget.check then gets clamped to 5 by the tool.",
+    "4": "append (memory.ts:134-152) serializes via module-level writeChain + in-process Lock.write + cross-process FileLock.acquire then load/rewrite; MAX_OUTCOMES=2000 (memory.ts:18) bounds growth. arena ranking O(n^2) is bounded by HARD_MAX; no hot-loop concern.",
+    "5": "ensemble-shared.ts:4-9 documents a deliberate cycle-avoidance split keeping MemberSelectionSchema local to each tool; worktree-policy.ts:26-64 cleanly delegates to WriteIsolation.evaluateParallelAgents and only translates the result per isolation mode.",
+    "6": "implement-arena.ts:152-158 isolationForContestants is @deprecated with no production caller (only test/mode/implement-arena.test.ts:144-146). Four duplicated max-member literals: budget.ts:26=6, council.ts:328=6 inline, src/tool/arena.ts:32=5, src/tool/council.ts:27=6 — should consolidate to one shared constant.",
+    "7": "Real coverage is in packages/ax-code/test/mode/ (13 files), but MODULE-AUDIT.md:64-79 mis-lists test/cli/tui view-model tests instead; ensemble-shared.ts has no dedicated unit test (IO-bound, indirect coverage only).",
+    "8": "No Critical/HIGH findings accepted; candidate ledger items are cap-drift (MEDIUM), duplicated caps (LOW), deprecated isolationForContestants (LOW), off-barrel json-mode-prompt export (LOW), and audit test-inventory mis-attribution (INFO). None block sign-off.",
+    "9": "Read-only pass, no source modified so no regression risk; verifier codex-sol should run pnpm --dir packages/ax-code run typecheck and vitest over test/mode/ and re-confirm the budget.ts:26 vs src/tool/arena.ts:32 cap-drift claim before closing."
+  },
+  "date": "2026-08-11"
+}

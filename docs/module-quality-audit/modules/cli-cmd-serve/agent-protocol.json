@@ -1,0 +1,33 @@
+{
+  "slug": "cli-cmd-serve",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "AGENTS.md",
+    "docs/module-quality-audit/STATUS.md",
+    "docs/module-quality-audit/modules/cli-cmd-serve/MODULE-AUDIT.md",
+    "packages/ax-code/src/cli/boot.ts",
+    "packages/ax-code/src/cli/cmd/cmd.ts",
+    "packages/ax-code/src/cli/cmd/runtime/serve.ts",
+    "packages/ax-code/src/cli/cmd/serve.ts",
+    "packages/ax-code/src/cli/network.ts",
+    "packages/ax-code/src/server/ipc-transport.ts",
+    "packages/ax-code/test/AGENTS.md",
+    "packages/ax-code/test/cli/boot.test.ts",
+    "packages/ax-code/test/cli/network.test.ts",
+    "packages/ax-code/test/server/ipc-transport.test.ts"
+  ],
+  "stepNotes": {
+    "1": "ServeCommand is a single lazy facade at serve.ts:4-15; boot.ts imports it at line 39 and registers it at line 84, while runtime lifecycle remains outside this unit.",
+    "2": "Network inputs come from network.ts:5-38 and ipc-socket is a free string at serve.ts:8-11; import and delegate failures are deliberately allowed to reach boot.ts:258-268.",
+    "3": "Facade metadata at serve.ts:5-11 matches runtime/serve.ts:24-30 exactly, and the awaited return at serve.ts:13-14 preserves completion and rejection semantics.",
+    "4": "Heavy Server, IPC, project-bootstrap, and signal imports stay in runtime/serve.ts:1-10 and load only through serve.ts:13, keeping unrelated CLI startup and help paths lighter.",
+    "5": "Parse-time metadata belongs to the facade and listener lifecycle to runtime/serve.ts:31-62; duplicated metadata is currently synchronized but lacks an automated parity check.",
+    "6": "ServeCommand is reachable from boot.ts:39,84 and serve.ts:1-15 contains no TODO, empty catch, stale branch, global mutation, or unowned resource; args:any is the only weak typing seam.",
+    "7": "network.test.ts:22-116 and ipc-transport.test.ts:104-130 cover adjacent behavior and passed 18/18, but no test directly asserts lazy loading, forwarding, or facade/runtime metadata parity.",
+    "8": "MODULE-AUDIT.md:60-64 records no accepted finding and findings/ is empty; no Critical or High issue was found, so the Critical-only reverify artifact is inapplicable.",
+    "9": "Core typecheck exited 0 and the focused two-file Vitest run passed all 18 tests after Unix-socket binding was rerun outside the sandbox; only this unit's three requested artifacts changed."
+  },
+  "date": "2026-08-11"
+}

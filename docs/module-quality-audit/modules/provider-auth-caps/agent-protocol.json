@@ -1,0 +1,27 @@
+{
+  "slug": "provider-auth-caps",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/provider/auth.ts",
+    "packages/ax-code/src/provider/model-capabilities.ts",
+    "packages/ax-code/src/provider/model-selectability.ts",
+    "packages/ax-code/src/provider/xai/auth-plugin.ts",
+    "docs/module-quality-audit/modules/provider-auth-caps/MODULE-AUDIT.md",
+    "packages/ax-code/src/auth/index.ts",
+    "packages/ax-code/src/server/routes/provider.ts"
+  ],
+  "stepNotes": {
+    "1": "Opened all four in-scope files plus server/routes/provider.ts:633-727 and auth/index.ts to confirm Auth.set consumes the Oauth/Api shapes ProviderAuth.callback emits; baseline LOC matches MODULE-AUDIT.",
+    "2": "Traced attacker-controlled method/code inputs from route validators into authorize/callback; the bounds-check at auth.ts:158-165 converts the prior raw TypeError into a typed OauthMissing, closing the deref-undefined regression. No SQL/shell/eval sinks in this unit.",
+    "3": "authorize validates prompts only when both method.prompts and input.inputs are truthy (auth.ts:168); a plugin declaring required prompts but receiving undefined inputs skips validation. pending.set at auth.ts:178 silently overwrites a prior in-flight entry for the same provider.",
+    "4": "Verified the if/else-if ladder at auth.ts:210-233 prefers non-empty refresh, then api key, then oauth-with-empty-refresh. The empty-string refresh is required by Auth.Oauth schema (auth/index.ts:228-235) and round-trips through encryptEntry/decryptEntry; the inline comment is slightly misleading but behaviour is correct.",
+    "5": "xAI CLIENT_ID at xai/auth-plugin.ts:5 is a public device-code identifier, not a secret. sleep at lines 11-24 cleans up its abort listener. expiresAt fallback at line 101 reuses device-code expiry rather than a token-derived value; impact bounded by refresh-token renewal.",
+    "6": "MODEL_REGISTRY ordering checked for Qwen Max (159-219), Qwen Plus (225-285), GLM 5.x (361-393): provider-filtered entries precede fallback in every family. getModelCapabilities returns shallow copies; listRegisteredModels spreads only top level so nested capabilities mutation would leak — no current caller mutates.",
+    "7": "modelSelectableForProvider composes undefined/memory/output-text/toolcall checks; TOOLCALL_OPTIONAL_PROVIDER_IDS is a small seven-entry CLI allowlist. Called from eight sites (provider-impl, ensemble-shared, prompt-routing, tui dialogs) so any weakening propagates broadly; decision tree has no missing branch.",
+    "8": "No Critical/High findings. Three LOW correctness items recorded (auth.ts:168 validation skip, auth.ts:178 pending overwrite, xai/auth-plugin.ts:101 expires fallback) — none accepted as a defect against this gate. No secrets, no injection, no auth bypass.",
+    "9": "Read-only review lane; no edits, no test command run here. codex-sol should run pnpm --dir packages/ax-code run test:unit (auth+provider groups) and confirm the bounds-check fix against test/cli/tui/c-dialog-provider-auth-errors.test.ts and the overwrite observation against test/plugin/auth-override.test.ts. No Critical findings so no reverify.md blocker."
+  },
+  "date": "2026-08-11"
+}

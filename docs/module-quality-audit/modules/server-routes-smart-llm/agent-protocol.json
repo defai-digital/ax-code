@@ -1,0 +1,27 @@
+{
+  "slug": "server-routes-smart-llm",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/smart-llm.ts",
+    "packages/ax-code/src/server/routes/project-config.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/util/lazy.ts",
+    "packages/ax-code/src/flag/flag.ts",
+    "packages/ax-code/src/server/server.ts",
+    "docs/module-quality-audit/modules/server-routes-smart-llm/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single export SmartLlmRoutes (lazy Hono) mounted once at server.ts:304 under /smart-llm; grep confirms no other consumers.",
+    "2": "PUT body gated by BooleanFeatureState zod schema via validator() wrapper that converts failure into invalidRequest; no secrets logged (only the boolean).",
+    "3": "GET fallback config?.routing?.llm ?? Flag.AX_CODE_SMART_LLM is consistent with the access-time getter at flag.ts:244 and the FeatureFlag.set side-effect in readProjectConfigFeatureState.",
+    "4": "PUT discriminates {error} vs {enabled} via 'in' check (line 73) and writes through updateProjectConfig which holds Lock.write + FileLock.acquire, so concurrent toggles cannot interleave.",
+    "5": "GET does an uncached Filesystem.readText on every call (project-config.ts:132-136); acceptable for low-volume local polling but is the only real cost in the unit.",
+    "6": "True structural twin is only autonomous.ts; super-long.ts has extra logic, so below the 3+ bar — deliberately NOT recommending a booleanFeatureRoute() factory.",
+    "7": "SmartLlmState uses .meta({ref}) for the response schema while the PUT request validator keeps base BooleanFeatureState; cosmetic docs naming mismatch only, matches sibling convention.",
+    "8": "No direct route test exists; test tree shows only mocked-URL consumers and an agent-router env-flag test, leaving the GET fallback and the PUT 500 branch uncovered.",
+    "9": "One LOW-severity finding (test gap), zero Critical/High; findings/ dir empty so no reverify.md second pass is required; runtime verify owned by codex-sol."
+  },
+  "date": "2026-08-11"
+}

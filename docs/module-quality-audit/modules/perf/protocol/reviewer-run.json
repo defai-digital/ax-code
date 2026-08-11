@@ -1,0 +1,15 @@
+{
+  "agentId": "ax-code-glm-perf-20260811T195536Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:55:36Z",
+  "finishedAt": "2026-08-11T19:58:02Z",
+  "filesRead": [
+    "packages/ax-code/src/perf/native.ts",
+    "packages/ax-code/src/flag/flag.ts",
+    "packages/ax-code/src/util/feature-flags.ts",
+    "packages/ax-code/test/perf/native.test.ts",
+    "docs/module-quality-audit/modules/perf/MODULE-AUDIT.md"
+  ],
+  "slug": "perf"
+}

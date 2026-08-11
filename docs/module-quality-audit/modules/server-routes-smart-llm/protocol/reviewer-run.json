@@ -1,0 +1,17 @@
+{
+  "agentId": "ax-code-glm-server-routes-smart-llm-20260811T194158Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:41:58Z",
+  "finishedAt": "2026-08-11T19:42:58Z",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/smart-llm.ts",
+    "packages/ax-code/src/server/routes/project-config.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/util/lazy.ts",
+    "packages/ax-code/src/flag/flag.ts",
+    "packages/ax-code/src/server/server.ts",
+    "docs/module-quality-audit/modules/server-routes-smart-llm/MODULE-AUDIT.md"
+  ],
+  "slug": "server-routes-smart-llm"
+}

@@ -1,0 +1,36 @@
+{
+  "slug": "server-routes-runtime-status",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/runtime-status.ts",
+    "docs/module-quality-audit/modules/server-routes-runtime-status/MODULE-AUDIT.md",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/test/server/server.test.ts",
+    "packages/ax-code/src/lsp/index-impl.ts",
+    "packages/ax-code/src/format/index.ts",
+    "packages/ax-code/src/code-intelligence/index.ts",
+    "packages/ax-code/src/code-intelligence/auto-index.ts",
+    "packages/ax-code/test/code-intelligence/auto-index.test.ts",
+    "packages/ax-code/src/tool/registry.ts",
+    "packages/ax-code/src/debug-engine/index.ts",
+    "packages/ax-code/src/debug-engine/query.ts",
+    "packages/ax-code/src/debug-engine/diagnostic-correlation.ts",
+    "packages/ax-code/test/debug-engine/diagnostic-correlation.test.ts",
+    "packages/ax-code/src/cli/cmd/tui/context/sync-runtime-sync.ts",
+    "packages/ax-code/test/cli/tui/sync-runtime-sync.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Identified one lazy route factory exposing four root-mounted GET status endpoints.",
+    "2": "Confirmed inherited authentication, rate limiting, directory validation, and per-Instance project isolation.",
+    "3": "Matched each documented response schema to the concrete producer shape and handler payload.",
+    "4": "Traced enabled and disabled DRE branches, project-filtered plans, graph state, and empty correlation behavior.",
+    "5": "Checked response bounds, indexed graph counts, background scheduling, and duplicate auto-index suppression.",
+    "6": "Verified the route composes subsystem-owned status APIs instead of duplicating state ownership.",
+    "7": "Found all imports live and the only catch intentionally limited to best-effort scheduling.",
+    "8": "Reconciled the empty finding ledger with producer, consumer, and public-mount tests; noted direct handler coverage debt.",
+    "9": "Recorded 38 passing focused tests and a successful core typecheck; no Critical re-verification trigger exists."
+  },
+  "date": "2026-08-11"
+}

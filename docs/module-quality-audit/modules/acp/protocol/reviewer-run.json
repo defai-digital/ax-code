@@ -1,0 +1,31 @@
+{
+  "agentId": "codex-sol-acp-20260811T195236Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:52:36Z",
+  "finishedAt": "2026-08-11T19:57:47Z",
+  "filesRead": [
+    "packages/ax-code/src/acp/agent-adapter.ts",
+    "packages/ax-code/src/acp/agent.ts",
+    "packages/ax-code/src/acp/prompt.ts",
+    "packages/ax-code/src/acp/session-mode.ts",
+    "packages/ax-code/src/acp/session.ts",
+    "packages/ax-code/src/acp/types.ts",
+    "packages/ax-code/src/acp/usage.ts",
+    "packages/ax-code/src/acp/utils.ts",
+    "packages/ax-code/src/acp/README.md",
+    "packages/ax-code/src/cli/cmd/acp.ts",
+    "packages/ax-code/src/util/log.ts",
+    "packages/ax-code/src/server/routes/mcp.ts",
+    "packages/ax-code/src/mcp/impl.ts",
+    "packages/ax-code/test/acp/agent-adapter.test.ts",
+    "packages/ax-code/test/acp/agent-interface.test.ts",
+    "packages/ax-code/test/acp/agent-prompt.test.ts",
+    "packages/ax-code/test/acp/event-subscription.test.ts",
+    "packages/ax-code/test/acp/session-list.test.ts",
+    "packages/ax-code/test/acp/todo-plan-entries.test.ts",
+    "docs/integrations/acp.md",
+    "docs/module-quality-audit/modules/acp/MODULE-AUDIT.md"
+  ],
+  "slug": "acp"
+}

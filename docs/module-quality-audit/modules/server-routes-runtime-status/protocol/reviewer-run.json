@@ -1,0 +1,26 @@
+{
+  "agentId": "codex-sol-server-routes-runtime-status-20260811T194027Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:40:27Z",
+  "finishedAt": "2026-08-11T19:43:36Z",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/runtime-status.ts",
+    "docs/module-quality-audit/modules/server-routes-runtime-status/MODULE-AUDIT.md",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/test/server/server.test.ts",
+    "packages/ax-code/src/lsp/index-impl.ts",
+    "packages/ax-code/src/format/index.ts",
+    "packages/ax-code/src/code-intelligence/index.ts",
+    "packages/ax-code/src/code-intelligence/auto-index.ts",
+    "packages/ax-code/test/code-intelligence/auto-index.test.ts",
+    "packages/ax-code/src/tool/registry.ts",
+    "packages/ax-code/src/debug-engine/index.ts",
+    "packages/ax-code/src/debug-engine/query.ts",
+    "packages/ax-code/src/debug-engine/diagnostic-correlation.ts",
+    "packages/ax-code/test/debug-engine/diagnostic-correlation.test.ts",
+    "packages/ax-code/src/cli/cmd/tui/context/sync-runtime-sync.ts",
+    "packages/ax-code/test/cli/tui/sync-runtime-sync.test.ts"
+  ],
+  "slug": "server-routes-runtime-status"
+}

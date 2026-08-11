@@ -1,0 +1,37 @@
+{
+  "slug": "server-routes-workflow",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/workflow.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-workflow/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/server.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/validation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/runtime/listen-security.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/spec.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/routine.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/run/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/run/internal.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/artifact.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/state.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/template.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/tui/context/sync-runtime-sync.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/workflow-routes.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/workflow/template.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Three lazy route exports begin at workflow.ts:167, :492, and :568 and are mounted under /workflow-runs, /workflow-templates, and /workflow-routines at server.ts:309-311.",
+    "2": "The feature gate is applied independently to all three sub-apps; Zod bounds IDs, limits, filters, and scopes, while raw artifact payloads require includePayload=true and production listen rejects non-loopback hosts.",
+    "3": "Create dispatch is exclusive because the body refinement requires one of templateID/spec; all detail and lifecycle responses compact artifacts, and retry selects phase or whole-run behavior after validation.",
+    "4": "Run misses use storage NotFoundError and routines translate their domain errors, but plain WorkflowTemplateNotFoundError falls through plainErrorEnvelope to 500 despite route metadata declaring 404; accepted as Medium.",
+    "5": "Dashboard performs list plus getDetail per run, and getDetail reads four child collections; limit is optional server-side although the TUI supplies limit=8, producing a Low scalability advisory.",
+    "6": "HTTP metadata and validation stay in the route layer while workflow persistence/execution remain in domain modules; WorkflowRoutineRunBody duplicates domain RunInput and is a future schema-drift risk.",
+    "7": "No TODO/FIXME or swallowed failure exists in workflow.ts; the known routine errors are translated and unknown errors rethrow, while small duplicate feature-gate middleware keeps each export independently safe.",
+    "8": "workflow-routes.test.ts covers 12 behavioral cases across gating, lifecycle, malformed IDs, redaction, evals, templates, and routines, but never requests an unknown template over HTTP or stress-tests dashboard history.",
+    "9": "Targeted Vitest passed 1 file and 12 tests; one Medium 404/500 defect and one Low dashboard advisory were recorded, with no Critical evidence and therefore no reverify.md from this primary lane."
+  },
+  "date": "2026-08-11"
+}

@@ -1,0 +1,31 @@
+{
+  "slug": "provider-registry",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-capabilities.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-id.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-info.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-key.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-selectability.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-support.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/models.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/provider-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/provider.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/qwen37-readiness.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/provider-registry/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Inventory confirmed: capability layer (model-capabilities.ts:144-429 registry), identity helpers (model-id.ts, model-key.ts), snapshot ingestion (model-info.ts, models.ts, model-support.ts, model-selectability.ts), runtime wiring (provider-impl.ts:1-1414, provider.ts re-export). provider-impl.ts dominates at 1414 lines.",
+    "2": "Three untrusted inputs defended: AX_CODE_MODELS_PATH confined via isAllowedModelPath realpath check (models.ts:193-209), AX_CODE_MODELS_URL gated by Ssrf.assertPublicUrl + pinnedFetch (models.ts:239-240), dynamic SDK install restricted to @ai-sdk/* allowlist (provider-impl.ts:963) and file:// re-confined to worktree/data/cache/config (provider-impl.ts:1008-1034). Auth CR/LF sanitization at provider-impl.ts:117-121.",
+    "3": "Resolver getModelCapabilities (model-capabilities.ts:478-485) is first-match-wins; provider-specific entries precede their fallbacks (Qwen Alibaba 159-172 before generic 206-219; GLM Z.AI 361-374 before generic 381-393). matchesPattern double-tests raw and normalized id (437-443) which is required because registry regexes use optional separators. Long-agent gate (506-513) and ADR-040 GLM-5 experimental bits (367-368) align.",
+    "4": "Cache invalidation is generation-based (modelCacheGeneration bumps at invalidate 751 and invalidateAll 769). getLanguage (1136-1205) re-checks generation after every await and reroutes via retryAfterInvalidation capped at MODEL_CACHE_INVALIDATION_RETRY_LIMIT=8 (line 69). getModel discovery-aware retry (1106-1109) uses discovery promise identity as sentinel so a fresh discovery from a concurrent invalidate is re-awaited exactly once. No deadlock: invalidateAll avoids nested Instance.provide for the active dir (784).",
+    "5": "Hot-path constants are sound: ModelsDev.get memoizes sanitized view on Data() identity (models.ts:262-268), getSDK dedupes concurrent installs via sdkPending (provider-impl.ts:879-880, 1057-1062) with a 5s negative cache (line 803), discovery is fire-and-forget so list() never blocks (633-671). Mild note: applyModelFilters (358-402) and provider sweep (607-622) delete during Object.entries iteration - safe today because entries snapshots keys, but refactor-fragile.",
+    "6": "Selectability/support filtering operates on snapshot-derived ProviderModel; capability queries operate on bare model-id strings. model-capabilities.ts:376-380 makes the separation explicit. Smells: deprecated isQwen37MaxOrPlusModel wrappers (547-573) re-route to qwen37-readiness.ts:111-122 which is a separate detection path from MODEL_REGISTRY regexes - two sources of truth. model-selectability.ts exports providerModelSelectable (flat, 38-41) and modelSelectableForProvider (nested, 43-53) with near-identical bodies.",
+    "7": "Dead/redundant: model-info.ts:140-141 initializes variants:{} then immediately overwrites. model-support.ts:4 GLM_HIDDEN_FINAL_SEGMENTS keeps bracketed 'glm-5.1[1m]' which is unreachable via normalized probes (bare 'glm-5.1-1m' already listed). model-capabilities.ts:582-584 listRegisteredModels shallow-copies MODEL_REGISTRY so inner capabilities objects are shared by reference - callers are read-only today. No empty catches; defensive catches in model-info.ts:144 and models.ts:215 log providerID/modelID/source context.",
+    "8": "No Critical or High findings accepted this run. LOW observations recorded inline in steps.md (dead variants assignment, shallow-copy registry exposure, dual Qwen-37 detection via deprecated wrappers, bracketed GLM id). findings/ directory remains empty, so the Step 9 critical-reverify gate does not trigger and no reverify.md is required.",
+    "9": "Read-only pass; no production code modified so typecheck/test sandwich not triggered for this unit. Follow-up implementer verification commands recorded: pnpm --dir packages/ax-code run typecheck; run test:unit; run test:recovery. Reviewer ax-code-glm sign-off on the 9-step pass; independent verifier codex-sol pending its own pass over the same evidence paths."
+  },
+  "date": "2026-08-11"
+}

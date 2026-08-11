@@ -1,0 +1,37 @@
+{
+  "slug": "id",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/id/branded.ts",
+    "packages/ax-code/src/id/id.ts",
+    "packages/ax-code/test/id/branded.test.ts",
+    "packages/util/src/identifier.ts",
+    "packages/ax-code/src/tool/truncate.ts",
+    "packages/ax-code/src/server/routes/route-params.ts",
+    "packages/ax-code/src/session/schema.ts",
+    "packages/ax-code/src/session/message-v2-impl.ts",
+    "packages/ax-code/src/session/prompt-loop-messages.ts",
+    "packages/ax-code/src/session/revert.ts",
+    "packages/ax-code/src/session/index.ts",
+    "packages/ax-code/src/tool/batch.ts",
+    "packages/ax-code/src/workflow/state.ts",
+    "packages/ax-code/src/project/schema.ts",
+    "docs/module-quality-audit/modules/id/MODULE-AUDIT.md",
+    "docs/module-quality-audit/README.md",
+    "docs/prd/PRD-2026-08-11-module-by-module-quality-audit.md"
+  ],
+  "stepNotes": {
+    "1": "Reviewed the 163-line two-file leaf and traced its branded and raw APIs into session/workflow schemas, message ordering, and part ordering; the unit owns generation semantics but no IO or lifecycle state beyond two counters.",
+    "2": "Route-param zod schemas depend on the prefix check, yet a live probe showed the session schema accepts 'sesame'; downstream exact-key lookup bounds the impact, while malformed timestamp text can still throw during BigInt parsing.",
+    "3": "Proved three ordering failures: the six-byte packing wraps its 36-bit timestamp on 2026-08-14, a regressing supplied clock emits decreasing IDs, and call 4097 at a fixed millisecond reuses the next millisecond's time/counter prefix.",
+    "4": "Generation uses constant memory and one synchronous crypto rejection-sampling loop; 248/256 bytes are accepted, so no performance issue was asserted without a benchmark. The high-rate threshold is treated as correctness, not speed.",
+    "5": "The branded facade is cohesive and the prefix union is closed, but packages/util duplicates the packer and already contains rollback/counter safeguards missing from the id unit, demonstrating policy drift between two owners.",
+    "6": "Confirmed the casts are deliberate nominal constructors and found no TODO, suppression, empty catch, or registration residue. The audit inventory is stale by one LOC per file and misses the direct branded.test.ts suite.",
+    "7": "Ran the exact branded test file: 4/4 passed. Coverage omits descending/create/timestamp, separator shape, clock rollback, counter spill, 36-bit wrap, malformed timestamp input, and suffix invariants; deterministic boundary tests are required.",
+    "8": "Classified the epoch wrap as High correctness, rollback/counter handling as Medium, and missing separator validation as Low. Proposed mtime/order containment plus a compatible encoding migration, then parity with util safeguards and stricter token_ checks.",
+    "9": "Focused Vitest and the core package typecheck both passed; deterministic probes reproduced every stated defect. Review is 9-of-9 but not eligible for sign-off until the High ordering/retention issue is remediated and ax-code-glm verifies it."
+  },
+  "date": "2026-08-11"
+}

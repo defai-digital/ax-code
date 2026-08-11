@@ -1,0 +1,41 @@
+{
+  "slug": "cli-cmd-runtime",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/cli/cmd/runtime/restart.ts",
+    "packages/ax-code/src/cli/cmd/runtime/serve.ts",
+    "packages/ax-code/src/cli/cmd/runtime/workspace-serve.ts",
+    "docs/module-quality-audit/modules/cli-cmd-runtime/MODULE-AUDIT.md",
+    "packages/ax-code/src/cli/cmd/restart.ts",
+    "packages/ax-code/src/cli/cmd/serve.ts",
+    "packages/ax-code/src/cli/cmd/workspace-serve.ts",
+    "packages/ax-code/src/cli/boot.ts",
+    "packages/ax-code/src/cli/network.ts",
+    "packages/ax-code/src/util/signals.ts",
+    "packages/ax-code/src/server/routes/app.ts",
+    "packages/ax-code/src/server/ipc-transport.ts",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/src/server/runtime-adapter.ts",
+    "packages/ax-code/src/control-plane/workspace-server/server.ts",
+    "packages/ax-code/test/cli/runtime-restart.test.ts",
+    "packages/ax-code/test/cli/network.test.ts",
+    "packages/ax-code/test/server/ipc-transport.test.ts",
+    "packages/ax-code/test/control-plane/workspace-server-sse.test.ts",
+    "packages/ax-code/tsconfig.json",
+    "packages/ax-code/test/AGENTS.md"
+  ],
+  "stepNotes": {
+    "1": "Traced all three runtime implementations through their wrapper exports and the production boot command array; workspace-serve has no registered CLI path.",
+    "2": "Checked loopback enforcement, restart URL construction, and the user-controlled IPC path; unconditional unlink of a non-socket target is the main local safety risk.",
+    "3": "Matched restart's validated POST to the server route that reloads Instance state and confirmed direct boundary-value tests.",
+    "4": "Followed HTTP and IPC startup ordering, detached instance prewarm, one-shot signal handling, and awaited stop sequencing.",
+    "5": "Reviewed listener, socket, queue, and residency behavior; work is bounded except for intentional long-lived server promises and SSE streams.",
+    "6": "Confirmed shared ownership for network policy and signals, while identifying workspace-serve's inconsistent remote wording, exclusion, and reachability.",
+    "7": "Inspected catches, operator messages, duplication, TODO markers, and shutdown-finalization behavior across the candidate sources.",
+    "8": "Reconciled direct and dependency-level tests with the empty finding directory; classified socket deletion Medium and dormant command reachability Low.",
+    "9": "Ran four exact Vitest files to 26/26 passing with Unix-socket permission and completed the package TypeScript check successfully."
+  },
+  "date": "2026-08-11"
+}

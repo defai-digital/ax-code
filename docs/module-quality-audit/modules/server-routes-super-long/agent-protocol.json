@@ -1,0 +1,41 @@
+{
+  "slug": "server-routes-super-long",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/super-long.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-super-long/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/project-config.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/session-lookup.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/autonomous.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/server.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/validation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/runtime-auth.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/super-long-policy.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/super-long-runtime.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/prompt-super-long.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/llm-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/flag/scoped.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/feature-flags.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/env.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/config/config-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/config/schema-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/project/bootstrap.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/project/instance.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/super-long.test.ts"
+  ],
+  "stepNotes": {
+    "1": "SuperLongRoutes at super-long.ts:92 contributes three documented endpoints mounted under /super-long at server.ts:305, with separate state and timing schemas.",
+    "2": "The server validates the project directory at server.ts:258-277 and applies auth, origin, and rate-limit middleware at lines 166-196; the route mutates ax-code.json plus process-global flags.",
+    "3": "Provider-aware model parsing and persist-before-env ordering are sound, but autonomousEnabled at super-long.ts:51-59 can consume another directory's managed env mirror and falsely disable the current project.",
+    "4": "GET performs one config read, status optionally adds one read-only runtime-store lookup, and PUT serializes writers with Lock.write plus FileLock at project-config.ts:138-154; no unbounded hot path found.",
+    "5": "SuperLongPolicy owns normalization, precedence, and duration, while session-lookup.ts:16-21 protects timing by project; duplicated env-name literals across route, autonomous route, and policy are a Low drift risk.",
+    "6": "Imports and schemas are live and store failures are logged, but super-long.ts:244 returns an undocumented non-AppErrorEnvelope 500 absent from the OpenAPI responses at lines 198-208.",
+    "7": "The focused super-long route file passed all 14 tests and covers defaults, persistence, validation, timing, and session isolation; it lacks status scoped-reconciliation and two-directory autonomous cases.",
+    "8": "Registered High incomplete /status scoped reconciliation, Medium cross-project autonomous env bleed, and Low persistence-error contract drift; no Critical item requires reverify.md.",
+    "9": "Focused Vitest and core tsgo typecheck passed on 2026-08-11; review exits complete for codex-sol while the three findings await ax-code-glm confirmation."
+  },
+  "date": "2026-08-11"
+}

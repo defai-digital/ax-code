@@ -1,0 +1,43 @@
+{
+  "slug": "mcp-lifecycle",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/mcp/constants.ts",
+    "packages/ax-code/src/mcp/discovery.ts",
+    "packages/ax-code/src/mcp/impl.ts",
+    "packages/ax-code/src/mcp/index.ts",
+    "packages/ax-code/src/mcp/templates/index.ts",
+    "packages/ax-code/src/mcp/auth.ts",
+    "packages/ax-code/src/mcp/oauth-callback.ts",
+    "packages/ax-code/src/mcp/oauth-provider.ts",
+    "packages/ax-code/src/mcp/trust.ts",
+    "packages/ax-code/src/config/schema-impl.ts",
+    "packages/ax-code/src/util/env.ts",
+    "packages/ax-code/src/util/queue.ts",
+    "packages/ax-code/src/util/timeout.ts",
+    "packages/ax-code/src/cli/cmd/mcp-impl.ts",
+    "packages/ax-code/test/mcp/connect-lock.test.ts",
+    "packages/ax-code/test/mcp/discovery-playwright.test.ts",
+    "packages/ax-code/test/mcp/discovery-spawn.test.ts",
+    "packages/ax-code/test/mcp/headers.test.ts",
+    "packages/ax-code/test/mcp/oauth-auto-connect.test.ts",
+    "packages/ax-code/test/mcp/templates.test.ts",
+    "packages/ax-code/test/mcp/trust.test.ts",
+    "packages/ax-code/package.json",
+    "docs/module-quality-audit/modules/mcp-lifecycle/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Established the exported lifecycle namespace, timeout constant, discovery probes, template catalog, and their CLI entry points.",
+    "2": "Followed trust decisions, SSRF-pinned remote requests, sanitized local environments, redacted stderr, and encrypted OAuth persistence.",
+    "3": "Traced startup and connect disposal guards and identified the missing late-completion guard in dynamic add.",
+    "4": "Checked per-name serialization, request deadlines, concurrent enumeration, cache coalescing, and duplicate Playwright probe work.",
+    "5": "Separated transport state from credential storage, SDK OAuth adaptation, callback waiting, discovery, templates, and CLI presentation.",
+    "6": "Reviewed cleanup and status failures and identified full local command arrays as a possible credential-bearing log surface.",
+    "7": "Matched 91 passing MCP tests to locking, cleanup, OAuth, discovery, trust, headers, permission, and template behaviors, then noted race gaps.",
+    "8": "Compared the empty accepted register and absent finding files with two Medium and one Low protocol observations; none is Critical.",
+    "9": "Ran the exact 13-file MCP Vitest selection and the core tsgo typecheck successfully."
+  },
+  "date": "2026-08-11"
+}

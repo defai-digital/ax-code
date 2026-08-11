@@ -1,0 +1,28 @@
+{
+  "slug": "server-routes-tui",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/tui.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/tui/event.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/validation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/session-lookup.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/lazy.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/server.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-tui/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single export TuiRoutes built via lazy() at tui.ts:34; sole consumer is server.ts:323 mounting under /tui prefix. Blast radius is the HTTP surface plus generated SDK operationIds.",
+    "2": "Ten POST handlers enumerated; six share the executeCommand factory at tui.ts:29-32 firing TuiEvent.CommandExecute. All handlers return literal boolean true matching the resolver(z.boolean()) schema.",
+    "3": "validator wrapper at validation.ts:4-14 routes failed parses to invalidRequest(c) (400). Three payload routes carry real zod schemas; the five bodyless executeCommand routes correctly omit validators.",
+    "4": "/publish union discriminator over four TuiEvent types at tui.ts:242-256; the find() at tui.ts:263 was previously a non-null assertion that crashed Bus.publish — the explicit if(!def) guard at 264-267 now returns a 400 tuiCommand envelope and logs a warning.",
+    "5": "Both /select-session (tui.ts:295-299) and /publish with type tui.session.select (tui.ts:268-271) funnel through requireCurrentProjectSession (session-lookup.ts:16-22), which throws HTTPException(409) on cross-project mismatch; validated sessionID is what reaches Bus.publish.",
+    "6": "OpenAPI error drift: /select-session declares errors(400,404) at tui.ts:291 but the 409 from requireCurrentProjectSession is undeclared; /publish declares only errors(400) at tui.ts:239 missing both 404 and 409; /show-toast applies a validator at tui.ts:218 but omits errors(400) entirely. MEDIUM.",
+    "7": "TUI_COMMAND_MAPPINGS (tui.ts:14-27) is a curated twelve-key allow-list enforced by /execute-command, but /publish can submit arbitrary command strings because CommandExecute schema uses z.union([enum, z.string()]) at event.ts:10-29 — the /execute-command strictness is advisory, and the map plus the event.ts enum are two sources of truth. LOW.",
+    "8": "No empty catches, no TODOs, no console prints; log handle used exactly once; lazy deferral keeps router construction off cold-start; handlers await Bus.publish so subscribers cannot silently drop; no file/socket/timer/subscription lifecycle concerns.",
+    "9": "MODULE-AUDIT test list targets TUI components, not the HTTP route handlers; no route-level coverage for the 400 tuiCommand path, the /publish 400 unknown-type path, or the 409 cross-project path through either SessionSelect entrypoint. No findings/*.md files; no Critical or High issues; MEDIUM and LOW observations recorded in steps.md for the ledger."
+  },
+  "date": "2026-08-11"
+}

@@ -1,0 +1,27 @@
+{
+  "slug": "cli-cmd-skill",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/skill.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/skill/authoring.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/bootstrap.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/skill/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/skill.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-skill/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single-file unit (224 LOC) wiring five yargs subcommands (list/create/validate/doctor/test-trigger) plus six exported helpers; re-exports authoring.ts symbols at skill.ts:22-29 to satisfy test imports from test/cli/skill.test.ts:3-14.",
+    "2": "Only write surface is SkillCreateCommand (skill.ts:122); traversal blocked by SKILL_NAME_PATTERN regex and assertContained in authoring.ts:113-119; read-only subcommands never mutate state; no env/secret handling.",
+    "3": "applySkillValidationExitCode is intentionally escalate-only (sets exitCode=1 on invalid, never resets to 0) and composes with other signals; SkillTestTriggerCommand correctly omits it; empty handler at skill.ts:223 is dead by demandCommand at line 222.",
+    "4": "Skill.all (skill/index.ts:398) resolves the cached Instance.state so filesystem discovery runs at most once per process; format helpers are O(n) over skills with no nested scans; no N+1 patterns.",
+    "5": "CLI module doubles as a partial barrel for authoring.ts via the re-exports at skill.ts:22-29 — minor boundary blur between command layer and domain layer, LOW severity, not blocking.",
+    "6": "No duplicated logic inside the module; applySkillValidationExitCode is reused by both validate (line 159) and doctor (line 180); String() coercions at lines 126-127 and the args.files cast at line 201 are defensive against yargs loose typing.",
+    "7": "Pure helpers well-covered in test/cli/skill.test.ts (format/exit-code/report builders/createSkill traversal guard); gap: no end-to-end coverage of the five yargs command modules, the --json branches, or the path.resolve/filter(Boolean) branches.",
+    "8": "findings/ directory is empty and MODULE-AUDIT.md line 68 records _none accepted_; two LOW observations noted (barrel re-exports, handler wiring untested), neither rises to an actionable patch.",
+    "9": "Cross-read authoring.ts, cmd.ts, bootstrap.ts, skill/index.ts (Skill.all, matchByPaths, containment), and the test file; no Critical items so no reverify.md emitted from this primary pass; verifier codex-sol pending."
+  },
+  "date": "2026-08-11"
+}

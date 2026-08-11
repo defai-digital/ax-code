@@ -1,0 +1,31 @@
+{
+  "slug": "mcp-tools",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "packages/ax-code/src/mcp/permission-pattern.ts",
+    "packages/ax-code/src/mcp/templates/index.ts",
+    "packages/ax-code/src/mcp/tool-conversion.ts",
+    "packages/ax-code/src/mcp/impl.ts",
+    "packages/ax-code/src/session/prompt-tools.ts",
+    "packages/ax-code/src/util/env.ts",
+    "packages/ax-code/test/mcp/permission-pattern.test.ts",
+    "packages/ax-code/test/mcp/tool-conversion.test.ts",
+    "packages/ax-code/test/mcp/templates.test.ts",
+    "packages/ax-code/test/mcp/permission-contract.test.ts",
+    "docs/module-quality-audit/modules/mcp-tools/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Three independent files: McpPermissionPattern (derive@100, one consumer at prompt-tools.ts:488), TEMPLATES catalog (14 entries + 4 pure helpers), and tool-conversion (7 exports consumed by impl.ts:1057/1067/1149); no intra-unit imports.",
+    "2": "Security-tagged surface is derive(); durable flag requires every candidate durable (permission-pattern.ts:149) so one external/unknown arg flips whole result to non-durable [\"*\"]; secrets redacted via URL rewrite (32-45) and global SECRET_PATTERN (env.ts:8) in both pattern (124) and metadata (74).",
+    "3": "derive repo/db/path branches traced: repo regex (109) rejects whitespace/extra slashes; normalizePath (51-61) rejects .., ../, and absolute relative (drive-crossing safe) -> opaque path:<external> durable:false (60); resolveMcpToolPermissionKeys final non-null assertion (72) is provably safe since every item enters either unique (45-51) or collision (62-70) branch.",
+    "4": "No shared mutable state in any file (fresh candidates/seen per derive call at 101-102); convertMcpTool fires concurrently per tool in impl.ts Promise.all with per-key result slots (no data race); LOW perf asymmetry: args sweep at 123 is unbounded while summarizer caps at 20 (73) and output at 8 (147).",
+    "5": "Clean responsibility split: pattern unit emits approval data but defers decision to ctx.ask (prompt-tools.ts:489); templates toConfig isolates the .strict() schema contract (194-205); tool-conversion preserves legacy unique keys (45-51, documented impl.ts:1100-1103, pinned permission-contract.test.ts:53) so existing permission wildcards keep matching.",
+    "6": "Zero empty catches / TODOs / any-casts in all three files; normalizeUrl try/catch returns undefined -> addCandidate skips (correct degrade); mcpSchemaByteLength (75-81) converts stringify failure (circular/bigint) into labelled thrown Error; convertMcpTool rethrows after logging (119-122).",
+    "7": "Strongest coverage is permission-contract.test.ts (115 lines) pinning resolveMcpToolPermissionKeys determinism/order-independence (45-62) and wildcard semantics (65-99); templates.test.ts validates every entry against real zod schemas (77-92); gaps: derive db/schema/table (113-121) and resource/id (141) branches untested, convertMcpTool wrapper (93-100) only indirectly exercised.",
+    "8": "Backward-compat contract is explicit: unique sanitized keys preserved verbatim so existing permission entries/wildcards match, only collisions get stable __mcp_<sha256-12hex> suffix (63, order-independence pinned at 58-61); toConfig output constrained by strict zod schemas so new template fields cannot break validation if kept out of the output object.",
+    "9": "No Critical, no High; findings/ empty and not elevated on this pass. Five LOW observations: unbounded args sweep (123), raw-path embed in no-worktree branch (53, defensive only since caller always supplies worktree), two untested derive branches (db/table, resource/id), untested convertMcpTool wrapper, and unpinned npx -y versions in templates (deliberate always-current choice). No reverify.md emitted since Critical precondition unmet."
+  }
+}

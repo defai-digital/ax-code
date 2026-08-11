@@ -1,0 +1,38 @@
+{
+  "slug": "provider-stream",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/transform.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/usage.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/provider-stream/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-info.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/models.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-capabilities.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/provider-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/xai/server-tools.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/cli/effort.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/cli/cli-language-model.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/flag/flag.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/llm-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/processor-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/prompt-tools.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/provider/transform.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/provider/cli/cli-language-model.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/session/compaction.test.ts"
+  ],
+  "stepNotes": {
+    "1": "ProviderTransform exports request/message/schema adapters at transform.ts:24-788; llm-impl.ts:241-260 and :343-456 show their placement in the live stream path, while usage.ts:3-48 owns provenance classification.",
+    "2": "User attachment parts are capability-checked at transform.ts:174-228, data-URL headers are parsed without traversing payload bytes at :181-203, and AX Engine runtime metadata is stripped at :617-628 before wire serialization.",
+    "3": "Interleaved reasoning is preserved under the declared extension field while Groq-only rejection strips reasoning parts at transform.ts:82-172; Gemini schema recursion handles enum conversion, required filtering, combiners, and cycles at :693-788.",
+    "4": "Provider effort shapes are gated by capability, SDK, model family, and provider at transform.ts:355-479; Alibaba sanitization at :582-615 and token caps at :667-690 keep thinking/output reservations internally consistent.",
+    "5": "markEstimatedUsage installs non-enumerable provenance at usage.ts:19-25; usageSource handles scalar and nested totals at :11-48, and session/index.ts:1093-1119 carries that source beside normalized token totals.",
+    "6": "Candidate logic is synchronous and allocation-bounded: reasoning parts use a single content pass at transform.ts:119-127, image parsing avoids payload-wide matching at :181-203, and schema cycles terminate via WeakSet at :720-783.",
+    "7": "Provider-specific policy tables are delegated to xai/server-tools.ts:41-74 and cli/effort.ts:1-29; the candidates have no catches, task markers, console output, or suppression directives, with loose types limited to open option/schema boundaries.",
+    "8": "transform.test.ts exercises message, schema, variants, provider options, caps, and Alibaba/z.ai branches through line 2500; CLI and compaction tests cover estimated, exact, and missing usage, leaving only malformed-edge and less-common modality cases.",
+    "9": "Focused Vitest passed 3 files and 222 tests and the core typecheck passed; no severity-bearing defect or Critical finding was accepted, findings/ is empty, and no reverify.md was created from this primary review lane."
+  },
+  "date": "2026-08-11"
+}

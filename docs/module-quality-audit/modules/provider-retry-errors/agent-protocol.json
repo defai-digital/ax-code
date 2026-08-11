@@ -1,0 +1,34 @@
+{
+  "slug": "provider-retry-errors",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/cli/effort.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/effort-label.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/cli/cli-language-model.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/transform.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/tui/component/dialog-effort.tsx",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/message-v2-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/prompt-loop-errors.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/json-record.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/provider/error.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/provider/effort-label.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/provider/cli/cli-language-model.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/provider/transform.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/provider-retry-errors/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Scoped the unit to CLI effort translation, effort presentation, and provider error normalization; traced their entry points through transform.ts:355-360, cli-language-model.ts:154-170, and message-v2-impl.ts:1142-1167.",
+    "2": "Validated both untrusted boundaries: provider-option effort is allowlisted at cli/effort.ts:15-29, while response JSON and URLs are record-checked, HTML-suppressed, and hostname-validated at error.ts:61-91,136-148.",
+    "3": "Confirmed a single provider-level table drives advertised variants and native argument encoding; unsupported providers and the test value $(unsafe) produce no effort arguments.",
+    "4": "Checked Auto normalization, case-insensitive known labels, unknown-key fallback, exact-key deduplication, provider-key detail, and stale-selection clamping across effort-label.ts:71-155.",
+    "5": "Followed retry state from parseAPICallError through MessageV2.APIError into nonRetryableProviderError; Alibaba quota is forced retryable, while explicit false reaches the prompt-loop stop branch.",
+    "6": "Found only bounded table/regex scans and payload-linear serialization; circular structures terminate via WeakSet and serialization exceptions become a safe JSON envelope.",
+    "7": "Ownership is separated among wire arguments, UI copy, and error normalization; generic JSON parsing is delegated, all candidate imports are purposeful, and defensive catches have observable fallback behavior.",
+    "8": "Ran four focused suites covering error decoding, spoofed Alibaba hosts, hostile stream records, effort labels, CLI arguments, spawning, and transform variants; 195 tests passed.",
+    "9": "The findings directory was empty and independent review established no severity-bearing defect; no Critical reverify artifact is applicable, and the unit is ready for ax-code-glm verification."
+  },
+  "date": "2026-08-11"
+}

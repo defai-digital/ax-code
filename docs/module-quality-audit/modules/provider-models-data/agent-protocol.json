@@ -1,0 +1,31 @@
+{
+  "slug": "provider-models-data",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/provider/model-id.ts",
+    "packages/ax-code/src/provider/model-info.ts",
+    "packages/ax-code/src/provider/model-key.ts",
+    "packages/ax-code/src/provider/model-support.ts",
+    "packages/ax-code/src/provider/schema.ts",
+    "packages/ax-code/src/provider/models.ts",
+    "packages/ax-code/src/provider/transform.ts",
+    "packages/ax-code/src/provider/provider-impl.ts",
+    "packages/ax-code/src/cli/cmd/tui/context/local-util.ts",
+    "packages/ax-code/test/provider/model-support.test.ts",
+    "docs/module-quality-audit/modules/provider-models-data/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "On-disk LOC for the four in-scope files is 16+191+34+98 = 339, matching MODULE-AUDIT.md exactly; exports (2/5/5/5) also match the inventory.",
+    "2": "Dependency direction is acyclic: model-id.ts and model-key.ts are leaves; model-support.ts imports only model-id.ts:13; model-info.ts:1-7 imports schema, models, transform, util/log, util/error-message. Verified consumers at provider/transform.ts:10, provider/models.ts:10, provider/provider-impl.ts:31.",
+    "3": "buildModelProbes (model-support.ts:27-31) emits 3 variants per token via parseModelProbes (lowercased, dash-normalized, dash-stripped), which is why gemini_3_pro / 'gemini 3 pro' both match gemini-3 in model-support.test.ts:81-87. No defect in the normalization layer.",
+    "4": "isModelSupportedForProvider (model-support.ts:33-58) applies future-GPT and embedding rejections before a providerID switch. The OpenAI branch (model-support.ts:70-76) returns true when no probe contains 'gpt', so o1/o3/o4 reasoning SKUs pass through — correct but undercommented at the call site.",
+    "5": "supportsGlmModels (model-support.ts:85-97) distinguishes glm-5.10 (true) from glm-5.1 (false) because the trailing (?:$|[^0-9]) boundary in GLM_HIDDEN_FINAL_PATTERN (model-support.ts:5) fails for the trailing 0 in 5.10; the model then falls through to hasGlmMajorVersionAtLeastFive (model-support.ts:60-68). Logic is correct; the boundary deserves an inline comment.",
+    "6": "providerModelKey (model-key.ts:6-8) encodes as ${providerID}/${modelID}; canonical equality is structural via providerModelEquals (model-key.ts:10-12), so reseller-prefixed ids like zai-org/glm-5.1-tee are safe. The only string parser, parseProviderModelKey (local-util.ts:79-86), splits on first slash and round-trips correctly, but the invariant lives outside this unit.",
+    "7": "fromModelsDevProvider (model-info.ts:164-189) and fromModelsDevModel (model-info.ts:96-152) both wrap their bodies in try/catch and return undefined on failure; provider-impl.ts:308-314 filters undefined. The identity mapValues at model-info.ts:142 (m.variants = mapValues(ProviderTransform.variants(m), (v) => v)) is a cosmetic no-op wrapper worth a one-line comment.",
+    "8": "test/provider/model-support.test.ts (127 lines) covers the gating predicates with positive/negative/separator/reseller-prefix cases. Direct unit tests for model-id.ts and model-key.ts are absent, and fromModelsDevProvider has no malformed-input test asserting the undefined+warn contract — both are worth adding.",
+    "9": "No Critical findings. LOW-severity follow-ups only: comment the OpenAI allow-list semantics, comment the GLM boundary regex, document the split-on-first-slash parser invariant, simplify the identity mapValues, and add direct tests for model-id/model-key and the malformed-provider path. Typecheck and the existing model-support tests are sufficient to ratify this review."
+  },
+  "date": "2026-08-11"
+}

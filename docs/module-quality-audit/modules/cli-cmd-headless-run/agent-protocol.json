@@ -1,0 +1,33 @@
+{
+  "slug": "cli-cmd-headless-run",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/headless-run.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-headless-run/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/runtime/listen-security.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/attach-auth.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/internal-url.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/runtime/headless/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/runtime/headless/event-sink-node.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/runtime/headless/runner.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/runtime/headless/runtime.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/runtime/headless/event.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/run-lifecycle.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/bootstrap.ts"
+  ],
+  "stepNotes": {
+    "1": "Single 272-line file exporting HeadlessRunCommand (yargs CommandModule at line 33); private assertInternalUrl/createInternalFetch back the trust boundary and are not public surface. Inventory reconciles with MODULE-AUDIT (1 export, 0 TODOs, 0 empty catches).",
+    "2": "All egress routes through createInternalFetch (line 20) which asserts protocol + internal hostname per call (line 23); attach mode is double-gated by assertLoopbackHttpUrl (line 254) and assertInternalUrl (line 256). Verified isInternalHostname allow-list in internal-url.ts:21 is loopback + synthetic opentui/opencode.internal only.",
+    "3": "runWithBackend selects exactly one command shape (session.abort / session.command / session.prompt) and a single stopWhen predicate; cross-checked isHeadlessSessionIdleEvent (event.ts:189) requires matching sessionID + idle status, so foreign sessions cannot stop the run.",
+    "4": "Idle timer re-arms per event, unref'd (line 200), cleared before the timedOut check (lines 235-239) matching run-lifecycle.test.ts:97. SIGINT/SIGTERM use process.on and are removed in finally (lines 214-215, 248-249) matching run-lifecycle.test.ts:109.",
+    "5": "Exit codes are mutually exclusive: 124 on inactivity timeout, 1 on captured session error, unset on clean idle. interpolated idleTimeoutMs is a validated finite number (line 183), no injection surface.",
+    "6": "callerCwd captured once (line 117); local --dir does process.chdir (line 122) without restore, unlike run.ts which restores previousCwd (run-lifecycle.test.ts:45-51). Impact LOW because headless-run is terminal, but the inconsistency with run.ts is notable.",
+    "7": "Non-TTY stdin is buffered via Buffer.concat (line 132) and appended with a leading newline; when no positional message is given the prompt ships '\\n'+stdin to parts[0].text (line 175). Validation trims for emptiness (line 134) so all-whitespace still throws, but non-empty pipes carry the cosmetic newline.",
+    "8": "No Critical/High. MEDIUM: direct tests are source-text grep based (run-lifecycle.test.ts:97-138), brittle to cosmetic refactor and blind to behavior-preserving regressions. LOW: chdir not restored; LOW: leading newline on piped stdin. INFO: --event-log '-' sentinel (line 208) undocumented.",
+    "9": "Re-read runner.ts (closes sink + detaches listener in finally), runtime.ts (consumes the fetch/headers we pass), event.ts predicates, and attach-auth.ts (returns undefined when no password so local mode adds no Authorization header). Inventory reconciles; no Critical findings so reverify.md is not required. Disposition: ACCEPT."
+  }
+}

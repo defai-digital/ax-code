@@ -1,0 +1,27 @@
+{
+  "slug": "cli-cmd-session",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/cli/cmd/session.ts",
+    "packages/ax-code/src/cli/cmd/storage/session.ts",
+    "packages/ax-code/src/cli/boot.ts",
+    "packages/ax-code/src/cli/cmd/cmd.ts",
+    "packages/ax-code/test/cli/smoke.test.ts",
+    "packages/ax-code/test/cli/session-clear-project.test.ts",
+    "docs/module-quality-audit/modules/cli-cmd-session/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Confirmed session.ts:1 is a live named re-export consumed by cli/boot.ts:40 and registered at boot.ts:98; the audit table's zero-export count is inaccurate.",
+    "2": "The facade has no direct effects; reachable boundaries are backup JSON writes at storage/session.ts:139-173, deletion at 251-260, and TTY pager spawning at 436-465.",
+    "3": "Traced six demanded subcommands at storage/session.ts:53-65 and the delete validation/not-found/removal flow at 385-397 through real CLI cases in smoke.test.ts:231-266.",
+    "4": "Clear-project writes its backup before the dry-run/confirmation branch and deletes roots to avoid double-removing children (storage/session.ts:228-260); pager signal handlers are released in finally at 450-468.",
+    "5": "List pushes roots and max-count into Session.list at storage/session.ts:423, while pager use is limited to unbounded TTY tables at 436; full backup construction grows with project transcript size at 141-173.",
+    "6": "The one-line facade preserves boot's stable import while storage/session.ts owns behavior; cmd.ts:1-7 confirms no adapter logic is hidden, and the facade contains no stale branch or duplicate declaration.",
+    "7": "Smoke coverage reaches list/delete via the real entrypoint (smoke.test.ts:207-266,289-317); session-clear-project.test.ts:29-188 covers backup, confirmation, child cascade, and status payload, with pager/prune rendering gaps noted.",
+    "8": "MODULE-AUDIT.md:60-64 records no accepted finding and no findings files exist for this unit; no Critical evidence was found, so a reverify artifact is not required.",
+    "9": "Targeted Vitest verification passed 2 files and 18 tests in 58.85s using AX_TEST_FILES for smoke.test.ts and session-clear-project.test.ts; primary review is 9-of-9 with ax-code-glm retained as verifier."
+  },
+  "date": "2026-08-11"
+}

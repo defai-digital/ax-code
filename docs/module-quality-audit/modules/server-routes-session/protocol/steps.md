@@ -1,0 +1,40 @@
+# Review Protocol: server-routes-session
+
+Reviewer: `codex-sol`  
+Independent verifier: `ax-code-glm`
+
+## Step 1 Scope and Public Route Surface
+
+The scoped candidate, `packages/ax-code/src/server/routes/session.ts:1`, is a compatibility facade that re-exports `SessionRoutes`; the implementation is the lazy Hono router beginning at `packages/ax-code/src/server/routes/session-impl.ts:190-192`. The server mounts it at `/session` in `packages/ax-code/src/server/server.ts:299-314`. I followed all 40 route declarations, including list/status/detail reads, move and rollback operations, session/message/part mutation, synchronous prompt/command/shell execution, and their queued variants. The existing inventory identifies only the facade and therefore understates the effective surface (`docs/module-quality-audit/modules/server-routes-session/MODULE-AUDIT.md:20-29`).
+
+## Step 2 Trust and Mutation Boundaries
+
+Requests pass runtime/password authentication, browser-origin checks, rate limiting, and logging at `packages/ax-code/src/server/server.ts:166-208`; the directory is then validated and installed as the request's `Instance` at `packages/ax-code/src/server/server.ts:258-277`. Session-specific handlers parse the validated parameter and enforce project compatibility through `parseCurrentProjectSessionID` and `requireCurrentProjectSession` (`packages/ax-code/src/server/routes/session-lookup.ts:16-32`). This guard covers the destructive delete and abort paths at `packages/ax-code/src/server/routes/session-impl.ts:794-817,923-944`, and comparison explicitly checks both session IDs at lines 538-548. The relevant assets are session metadata, message/part content, queued shell or prompt payloads, rollback state, and permission decisions.
+
+## Step 3 Control Flow and Association Checks
+
+The common JSON path first verifies the current-project session and only then reads the validated body (`packages/ax-code/src/server/routes/session-impl.ts:176-188`); synchronous prompt, command, and shell handlers all reuse that path at lines 1320-1325, 1413-1418, and 1469-1474. Queued execution validates timeout bounds and restart metadata at lines 47-57, persists the validated body, starts the durable executor, and returns 202 at lines 81-105. Nested message lookup binds both IDs in its database predicate (`packages/ax-code/src/session/message-v2-impl.ts:990-1009`), while part updates additionally require body IDs to equal every path ID (`packages/ax-code/src/server/routes/session-impl.ts:1283-1294`). Compare, rollback selection, and not-found branches all terminate before mutation. I found no bypass of the current-project guard in these flows.
+
+## Step 4 Validation and Failure Semantics
+
+One client-error mismatch is present. PATCH `/session/:sessionID` accepts any string for `title` at `packages/ax-code/src/server/routes/session-impl.ts:837-848`, but the called domain function requires `z.string().min(1)` at `packages/ax-code/src/session/index.ts:496-498`. The `fn` wrapper rethrows schema errors (`packages/ax-code/src/util/fn.ts:3-13`), and the server error normalizer has no Zod-specific branch, so it converts that ordinary client mistake to a generic 500 (`packages/ax-code/src/server/error.ts:242-253`). This is a Low correctness finding: the route schema should share the domain constraint or map the failure to 400. There is also a Low OpenAPI gap: many guarded handlers advertise only 400/404 (for example `session.get` at `session-impl.ts:261-283`), although cross-project access demonstrably returns 409 (`packages/ax-code/test/server/project-identity.test.ts:31-48`).
+
+## Step 5 Performance and Resource Bounds
+
+Message listing is deliberately bounded: an omitted limit becomes 100, explicit limits stop at 500, and continuation is exposed through `Link` and `X-Next-Cursor` (`packages/ax-code/src/server/routes/session-impl.ts:1038-1110`). The storage query fetches only `limit + 1` rows and hydrates that page (`packages/ax-code/src/session/message-v2-impl.ts:930-962`). In contrast, deleting one message calls `Session.messages` and scans the fully hydrated history to decide whether the busy gate can be skipped (`session-impl.ts:1167-1191`); `Session.messages` accumulates every streamed message and all parts before reversing the array (`packages/ax-code/src/session/index.ts:582-595`). This is a Medium resilience finding for very large sessions because a single-message delete is O(total history payload) in time and memory. A targeted message lookup plus existence query for an assistant child would keep the same race policy without materializing the history.
+
+## Step 6 Design and Ownership
+
+The facade/implementation split at `packages/ax-code/src/server/routes/session.ts:1` preserves the stable import used by `packages/ax-code/src/server/server.ts:14,313`. Inside the implementation, HTTP validation and response shaping stay in the route layer, while session, risk, graph, rollback, goal, queue, and permission behavior is delegated to domain modules imported at `packages/ax-code/src/server/routes/session-impl.ts:7-37`. That delegation is sound, but the 1,583-line fluent router combines many independently evolving endpoint families. The shared helpers at lines 81-188 reduce duplication; further splitting read-only analysis, message mutation, and execution endpoints into composable routers would lower review and merge risk without changing the public mount.
+
+## Step 7 Dead Code and Hygiene
+
+The one-line re-export is live because the server imports `./routes/session` (`packages/ax-code/src/server/server.ts:14`), and `SessionRoutes` itself is consumed at the mount (`server.ts:313`). The deprecated permission-response endpoint is explicitly marked and still delegates to the same checked `Permission.reply` outcome as its replacement (`packages/ax-code/src/server/routes/session-impl.ts:1543-1580`), so it is compatibility code rather than unreachable code. The reviewed route files contain no TODO/FIXME marker or empty catch. The cursor decoder's catch intentionally returns validation failure (`session-impl.ts:1067-1078`), and comments around pagination and message deletion explain non-obvious bounds and concurrency policy at lines 1088-1091 and 1170-1179.
+
+## Step 8 Test Coverage and Finding Register
+
+Focused behavioral coverage is materially better than the TUI-heavy list in the original audit (`docs/module-quality-audit/modules/server-routes-session/MODULE-AUDIT.md:31-47`). Pagination, invalid cursors, decimal limits, async queue acceptance, ownership wiring, and delete gating are covered in `packages/ax-code/test/server/session-messages.test.ts:110-230,251-400,403-430`; validation, move, metadata, busy, rollback, and error envelopes are exercised in `packages/ax-code/test/server/route-validation.test.ts:31-145,147-399`. The prior register reports no accepted item at `MODULE-AUDIT.md:60-64`, and the unit's `findings/` directory contained no files. This pass records the Medium full-history delete scan and the two Low contract issues from Steps 4-5. No Critical item was found, so no Critical-only `protocol/reverify.md` is warranted.
+
+## Step 9 Verification and Exit
+
+From `packages/ax-code`, `AX_TEST_FILES=test/server/session-list.test.ts,test/server/session-messages.test.ts,test/server/project-identity.test.ts,test/server/route-validation.test.ts pnpm exec vitest run` passed 4 files and 73 tests. From the repository root, `pnpm --dir packages/ax-code run typecheck` completed successfully with `tsgo --noEmit`. Those tests directly cover the route behaviors cited above, including bounded default pagination at `packages/ax-code/test/server/session-messages.test.ts:137-175`, project isolation at `packages/ax-code/test/server/project-identity.test.ts:31-48`, and route validation at `packages/ax-code/test/server/route-validation.test.ts:31-399`. All nine primary-review steps are complete for `server-routes-session`; independent verification remains assigned to `ax-code-glm`, with no Critical second-pass artifact required.

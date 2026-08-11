@@ -1,0 +1,28 @@
+{
+  "slug": "notification",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/notification/events.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/bus/bus-event.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/tool/monitor.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/tui/ui/toast.tsx",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/tui/app.tsx",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/mcp/impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/prompt-routing.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/notification/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single 30-line file events.ts exporting NotificationEvent with three BusEvent.define contracts: ToastShow (events.ts:5-13), MonitorLine (events.ts:14-21), MonitorExit (events.ts:22-29). Pure schema module, no runtime logic.",
+    "2": "No network/fs/env/secrets surface. Realistic risk is contract drift and duplicate type strings in the bus registry (bus-event.ts:7-16); the three notification.* types are unique. MonitorExit.exitCode nullable semantics and unbounded ToastShow.duration noted as soft hazards.",
+    "3": "Every producer (prompt-routing.ts:67, mcp/impl.ts:651/675, monitor.ts:103/135, bash-impl.ts:265, bash-background.ts:188) emits shapes that validate against the zod schemas; app.tsx:1382 forwards fields to toast.show, which re-parses via safeParse (toast.tsx:111) with a safe fallback.",
+    "4": "Three schema objects allocated once at import; O(1) Map inserts. No per-call allocation. Toast queue capped at MAX_QUEUED_TOASTS=5 (toast.tsx:67) with duplicate collapse, so the channel cannot be flooded.",
+    "5": "Follows the project <Domain>Event bus convention with high cohesion. Bundling toasts and monitor telemetry together is correct at this size; only optional polish (describe() on exitCode null semantics) — not a finding.",
+    "6": "No empty catches, no TODOs, no unused exports (all three members have live references), zod import used by all schemas. describe() present on duration only — minor polish.",
+    "7": "No dedicated unit test (matches MODULE-AUDIT 'none auto-matched'). Module is declarative schema with no branching, so direct unit tests have low marginal value; the leverage is a repo-wide registry-uniqueness check, out of scope here.",
+    "8": "Zero accepted findings. findings/ directory is empty and MODULE-AUDIT lists _none accepted_. Independent read confirms no Critical/High/Medium/Low issues; the describe() and exitCode-doc observations sit below the severity bar.",
+    "9": "Typecheck covers the file (valid imports). All 21 NotificationEvent grep hits resolve to real producer/consumer sites with no orphans and no duplicate type strings. Disposition: PASS for packages/ax-code/src/notification; codex-sol can cross-check the cited evidence paths."
+  },
+  "date": "2026-08-11"
+}

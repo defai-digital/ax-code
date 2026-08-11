@@ -1,0 +1,25 @@
+{
+  "slug": "perf",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/perf/native.ts",
+    "packages/ax-code/src/flag/flag.ts",
+    "packages/ax-code/src/util/feature-flags.ts",
+    "packages/ax-code/test/perf/native.test.ts",
+    "docs/module-quality-audit/modules/perf/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single-file unit: packages/ax-code/src/perf/native.ts (185 lines). Exports NativePerf namespace (9 fns) + NativePerfSnapshot type. 15+ sibling consumers identified via grep across config, file, code-intelligence, debug-engine, and CLI layers.",
+    "2": "No network/fs/db surface. Writes only to in-memory Map (line 29) and optional process.stderr (line 163). Byte accounting stores sizes only, never payload contents, so no secret-shape persistence. Native crash can lose the exit-time flush; acknowledged pattern in flag.ts:124-127.",
+    "3": "run/runAsync error paths (lines 89-92, 106-109) re-throw after recording fails counter. get-then-set in record() (lines 52-69) is atomic in Node's event loop. snapshot() zero-guards avgMs (line 117). bytes() try/catch (lines 43-47) degrades circular input to 0 rather than throwing into a hot path.",
+    "4": "record() invoked after performance.now() delta computed, so bytes() serialization cost does NOT inflate totalMs. However it does inflate wall-clock latency of every profiled dispatch on hot paths (code-intelligence/native-store.ts:50, file/ignore.ts:33). render() default param (line 142) materializes snapshot even when disabled. Both Medium, gated off by default.",
+    "5": "namespace pattern matches AGENTS.md convention. Stat/Row/Snapshot type layering (lines 4-27) minimal and coherent. install() idempotent via ready guard (line 170). ready is one-shot with no teardown — latent exit-listener leak in embedded hosts. Imports only Flag + FeatureFlag, no cycles.",
+    "6": "No empty error-swallowing catches (the one try/catch at 43-47 is intentional best-effort). No TODOs, no dead branches, no orphaned exports. formatMs used exactly twice. bytes() mixes per-item array recursion with whole-object JSON.stringify — inconsistent but not worth consolidating.",
+    "7": "Direct test (test/perf/native.test.ts, 57 lines) covers run success, run failure-as-fails, and render output. Gaps: runAsync untested; install/flush/enable lifecycle and exit-flush path untested; bytes() branches (ArrayBuffer, typed-array, circular) untested; reset only exercised as cleanup.",
+    "8": "No Critical findings; findings/ empty. Medium: M1 bytes() observer-effect latency (lines 43-44), M2 render() default-param waste (line 142). Low: L1 one-shot ready flag (line 170), L2 missing bytes() branch tests (lines 33-50). None blocking; deferred to improvement ticket.",
+    "9": "Verification commands: pnpm --dir packages/ax-code run typecheck and pnpm --dir packages/ax-code exec vitest run test/perf/native.test.ts. No source mutated (read-only lane), so no native rebuild needed. No Critical findings => no reverify.md required. Awaiting codex-sol independent second pass on the same evidence path."
+  },
+  "date": "2026-08-11"
+}

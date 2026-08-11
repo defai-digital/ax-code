@@ -1,0 +1,38 @@
+{
+  "slug": "server-routes-pty",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/pty.ts",
+    "packages/ax-code/src/server/routes/route-params.ts",
+    "packages/ax-code/src/server/runtime-adapter.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/src/server/error.ts",
+    "packages/ax-code/src/server/middleware.ts",
+    "packages/ax-code/src/runtime/listen-security.ts",
+    "packages/ax-code/src/pty/index.ts",
+    "packages/ax-code/src/pty/schema.ts",
+    "packages/ax-code/src/id/branded.ts",
+    "packages/ax-code/src/id/id.ts",
+    "packages/ax-code/src/util/schema.ts",
+    "packages/ax-code/test/server/route-validation.test.ts",
+    "packages/ax-code/test/server/server.test.ts",
+    "packages/ax-code/test/pty/pty-session.test.ts",
+    "packages/ax-code/test/pty/pty-output-isolation.test.ts",
+    "docs/module-quality-audit/modules/server-routes-pty/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "PtyRoutes exposes six lazy Hono operations plus parsePtyReconnectCursor in pty.ts:15-239 and is mounted under /pty at server.ts:299-301; PTY_ID_PARAM supplies branded path validation.",
+    "2": "POST accepts process-execution inputs, but server.listen enforces loopback at server.ts:345-366, browser upgrades pass origin checks at :183-195, cwd realpaths stay inside the project at pty/index.ts:379-397, and user env overrides are filtered at :131-141.",
+    "3": "GET maps absent sessions to NotFoundError, but PUT serializes undefined from Pty.update and DELETE returns true when Pty.remove finds nothing; the combined 200 false-success/schema violation is a Medium missing-resource contract issue.",
+    "4": "The connect lifecycle validates raw sockets, awaits Pty.connect, drains at most the queued messages, detects close-before-ready, and invokes subscriber cleanup at most once through the closed guard in pty.ts:172-235.",
+    "5": "Pre-ready input is capped at 100 messages, replay storage at 2 MiB, replay chunks at 64 KiB, and stale subscribers are evicted; concurrent PTY process count itself has no lifetime cap beyond request-rate controls.",
+    "6": "HTTP and runtime-upgrade concerns remain outside the PTY domain, which owns replay/process/subscriber state; Low contract drift remains because OpenAPI describes connect as 200 JSON boolean rather than a WebSocket with binary metadata frames.",
+    "7": "The route has no empty catches or TODOs: setup exceptions are logged before queue clearing and close, invalid ws.raw shapes fail closed, and the shared validator maps Zod failures to client errors.",
+    "8": "The audit ledger and absent findings directory contain no accepted records; focused tests cover cursor parsing, cwd/env/replay/lifecycle and socket reuse, but absent-ID PUT/DELETE and real upgrade race behavior are not tested.",
+    "9": "Core typecheck passed; focused Vitest runs passed 58/58 PTY/validation tests and 19/19 server tests. One Medium plus Low follow-ups were recorded, with no Critical item and therefore no reverify.md requirement."
+  },
+  "date": "2026-08-11"
+}

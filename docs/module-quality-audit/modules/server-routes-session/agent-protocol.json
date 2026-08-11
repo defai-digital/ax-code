@@ -1,0 +1,39 @@
+{
+  "slug": "server-routes-session",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/session.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/session-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/session-lookup.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/route-params.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/server.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/validation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/message-v2.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/message-v2-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/status.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/project/instance.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/fn.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/session-list.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/session-messages.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/project-identity.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/route-validation.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/session/status.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-session/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Followed the facade export into the 40-operation lazy Hono router and confirmed its /session mount.",
+    "2": "Traced authentication, origin, rate, directory, and current-project session guards around read and mutation paths.",
+    "3": "Checked shared JSON helpers, durable async dispatch, nested message association, and part identifier equality.",
+    "4": "Identified empty-title validation drift that turns client input into a 500 and under-documented 409 responses.",
+    "5": "Contrasted bounded cursor pagination with the unbounded fully hydrated history scan used by message deletion.",
+    "6": "Confirmed domain delegation while noting that one 1,583-line router owns several separable endpoint families.",
+    "7": "Confirmed the facade and deprecated permission route remain live and found no empty catch or TODO marker.",
+    "8": "Reconciled the empty findings directory with focused server coverage and classified one Medium and two Low observations.",
+    "9": "Ran four focused Vitest files with 73 passing tests and completed the core TypeScript typecheck successfully."
+  },
+  "date": "2026-08-11"
+}

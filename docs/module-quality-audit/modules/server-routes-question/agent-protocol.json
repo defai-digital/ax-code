@@ -1,0 +1,34 @@
+{
+  "slug": "server-routes-question",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/question.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-question/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/question/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/question/schema.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/route-params.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/validation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/server.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/request-directory.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/lazy.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/permission.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/permission/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/tui/routes/session/question.tsx",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/route-validation.test.ts"
+  ],
+  "stepNotes": {
+    "1": "QuestionRoutes is mounted at /question (server.ts:318) and defines list, reply, and reject operations with distinct OpenAPI operation IDs in question.ts:13-108.",
+    "2": "Pending prompt contents and deferred settlement cross the HTTP boundary; runtime/password auth and browser-origin enforcement precede routing at server.ts:166-196, while requestID and reply bodies are schema-validated.",
+    "3": "The reply path validates live question count, trims values, rejects blanks and duplicates, enforces cardinality and option membership, and emits structured 400/404 responses (question.ts:53-74, 121-156).",
+    "4": "MEDIUM: reply and reject pre-check Question.list then ignore whether the later state mutation applied; concurrent losers can still return 200 or publish duplicate/contradictory events (question.ts:57-105; question/index.ts:231-267).",
+    "5": "Question.list and each route pre-check are O(p) over an in-memory pending map; answer validation is linear in submitted values and labels, with no external I/O or material scaling concern.",
+    "6": "HTTP/OpenAPI, branded route parameters, and question state have clear owners, but atomic claim/delete and an applied boolean belong in Question.reply/reject, following permission/index.ts:418-460.",
+    "7": "LOW: question.ts:111-114 documents a string-or-null return although validateQuestionAnswers actually returns a tagged object at lines 121-156; structured error paths otherwise avoid silent catches.",
+    "8": "route-validation.test.ts:594-673 covers stale reply and normalized success; reject, list, individual validation failures, and concurrent settlement lack direct route tests. Focused tests passed 43/43 and core typecheck passed.",
+    "9": "Registered one MEDIUM concurrency defect and two LOW maintenance/coverage gaps; no Critical or High item exists, so the Critical-only reverify artifact is not required before ax-code-glm verification."
+  },
+  "date": "2026-08-11"
+}
