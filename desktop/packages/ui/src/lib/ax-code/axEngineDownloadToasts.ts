@@ -36,11 +36,26 @@ const POLL_MS = 2000
 const MISSING_JOB_GRACE_MS = 10_000
 
 export function createDownloadToastTracker(deps: DownloadToastDeps) {
-  const announced = new Map<string, { name: string; directory: string | null; announcedAt: number }>()
+  const announced = new Map<
+    string,
+    { name: string; directory: string | null; announcedAt: number; lastPercent?: number }
+  >()
   let timer: number | undefined
   let polling = false
 
   const toastId = (jobId: string) => `axe-dl-${jobId}`
+
+  function progressDescription(job: AxEngineModelJobSummary): string {
+    const progress = job.progress
+    if (progress?.mode === "determinate" && Number.isFinite(progress.percent)) {
+      const percent = Math.max(0, Math.min(100, Math.round(progress.percent)))
+      const message = progress.message?.trim()
+      return message
+        ? tr("axEngine.download.toast.progressWithMessage", { percent: String(percent), message })
+        : tr("axEngine.download.toast.progress", { percent: String(percent) })
+    }
+    return progress?.message?.trim() || tr("axEngine.download.toast.downloadingDescription")
+  }
 
   function announce(job: { id: string }, name: string, directory: string | null) {
     announced.set(job.id, { name, directory, announcedAt: deps.now() })
@@ -80,6 +95,24 @@ export function createDownloadToastTracker(deps: DownloadToastDeps) {
       } else if (job.status === "cancelled") {
         deps.toast.dismiss(toastId(jobId))
         announced.delete(jobId)
+      } else if (job.status === "queued" || job.status === "running") {
+        // Milestone-style toast updates only: refresh description when percent
+        // advances by at least 5 points (or first determinate reading).
+        const percent =
+          job.progress?.mode === "determinate" && Number.isFinite(job.progress.percent)
+            ? Math.round(job.progress.percent)
+            : undefined
+        const advanced =
+          percent !== undefined &&
+          (info.lastPercent === undefined || percent >= info.lastPercent + 5 || percent >= 99)
+        if (advanced || (job.progress?.message && percent === undefined)) {
+          if (percent !== undefined) info.lastPercent = percent
+          deps.toast.loading(tr("axEngine.download.toast.downloading", { name: info.name }), {
+            id: toastId(jobId),
+            description: progressDescription(job),
+            duration: Infinity,
+          })
+        }
       }
     }
     if (announced.size === 0) stopTimer()

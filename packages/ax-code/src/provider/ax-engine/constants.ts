@@ -1,26 +1,14 @@
 export const AX_ENGINE_PROVIDER_ID = "ax-engine"
-export const AX_ENGINE_QWEN36_27B_MODEL_ID = "qwen3.6-27b-6bit"
-export const AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID = "qwen3-coder-next-6bit"
-export const AX_ENGINE_QWEN36_35B_MODEL_ID = "qwen3.6-35b-a3b"
-export const AX_ENGINE_GEMMA4_12B_MODEL_ID = "gemma-4-12b"
-export const AX_ENGINE_GEMMA4_26B_MODEL_ID = "gemma-4-26b"
-export const AX_ENGINE_GEMMA4_31B_MODEL_ID = "gemma-4-31b"
-export const AX_ENGINE_GLM47_FLASH_MODEL_ID = "glm-4.7-flash"
+export const AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID = "qwen3.6-27b-axq-6bit"
+export const AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID = "qwen3.5-9b-axq-6bit"
+export const AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID = "qwen3-coder-next-axq-6bit"
 export const AX_ENGINE_DISPLAY_NAME = "AX Engine (Local)"
-export const AX_ENGINE_QWEN36_27B_API_MODEL_ID = "qwen3.6-27b"
-export const AX_ENGINE_QWEN3_CODER_NEXT_API_MODEL_ID = "qwen3-coder-next"
-export const AX_ENGINE_QWEN36_35B_API_MODEL_ID = "qwen3.6-35b"
-export const AX_ENGINE_GEMMA4_12B_API_MODEL_ID = "gemma-4-12b"
-export const AX_ENGINE_GEMMA4_26B_API_MODEL_ID = "gemma-4-26b"
-export const AX_ENGINE_GEMMA4_31B_API_MODEL_ID = "gemma-4-31b"
-export const AX_ENGINE_GLM47_FLASH_API_MODEL_ID = "glm-4.7-flash"
-export const AX_ENGINE_QWEN36_27B_MODEL_DISPLAY_NAME = "Qwen3.6-27B 6-bit (Local MLX Auto)"
-export const AX_ENGINE_QWEN3_CODER_NEXT_MODEL_DISPLAY_NAME = "Qwen3-Coder-Next 6-bit (Local MLX)"
-export const AX_ENGINE_QWEN36_35B_MODEL_DISPLAY_NAME = "Qwen3.6-35B-A3B 6-bit (Local MLX Auto)"
-export const AX_ENGINE_GEMMA4_12B_MODEL_DISPLAY_NAME = "Gemma 4 12B 6-bit (Local MLX Auto)"
-export const AX_ENGINE_GEMMA4_26B_MODEL_DISPLAY_NAME = "Gemma 4 26B 6-bit (Local MLX Auto)"
-export const AX_ENGINE_GEMMA4_31B_MODEL_DISPLAY_NAME = "Gemma 4 31B 6-bit (Local MLX Auto)"
-export const AX_ENGINE_GLM47_FLASH_MODEL_DISPLAY_NAME = "GLM 4.7 Flash 6-bit (Local MLX Auto)"
+export const AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID = "qwen3.6-27b-axq"
+export const AX_ENGINE_QWEN35_9B_AXQ_API_MODEL_ID = "qwen3.5-9b-axq"
+export const AX_ENGINE_QWEN3_CODER_NEXT_AXQ_API_MODEL_ID = "qwen3-coder-next-axq"
+export const AX_ENGINE_QWEN36_27B_AXQ_MODEL_DISPLAY_NAME = "Qwen3.6-27B AXQ 6-bit (Local MLX Auto)"
+export const AX_ENGINE_QWEN35_9B_AXQ_MODEL_DISPLAY_NAME = "Qwen3.5-9B AXQ 6-bit (Local MLX Auto)"
+export const AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_DISPLAY_NAME = "Qwen3-Coder-Next AXQ 6-bit (Local MLX)"
 // Keep the client default aligned with ax-engine-server. Managed lifecycle may
 // still select 31419+ when another process owns the preferred port.
 export const AX_ENGINE_DEFAULT_PORT = 31418
@@ -84,175 +72,101 @@ export type AxEngineBinaryRelease = {
 // overrides stay available for validating a future self-contained artifact.
 export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease | undefined = undefined
 
+// Single source of truth for the built-in AX Engine model catalog exposed by
+// `/provider/ax-engine/models`, Desktop Models, and provider pickers. Desktop and
+// other clients must not hardcode model ids — they read this catalog from the
+// ax-code process that is currently serving. Editing this file only affects a
+// Desktop session when that session spawns this monorepo's ax-code (desktop:dev
+// prefers the monorepo source launcher over Homebrew/PATH installs).
 export const AX_ENGINE_MODEL_IDS = [
-  AX_ENGINE_QWEN36_27B_MODEL_ID,
-  AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
-  AX_ENGINE_QWEN36_35B_MODEL_ID,
-  AX_ENGINE_GEMMA4_12B_MODEL_ID,
-  AX_ENGINE_GEMMA4_26B_MODEL_ID,
-  AX_ENGINE_GEMMA4_31B_MODEL_ID,
-  AX_ENGINE_GLM47_FLASH_MODEL_ID,
+  AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
+  AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID,
+  AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID,
 ] as const
 export type AxEngineModelID = (typeof AX_ENGINE_MODEL_IDS)[number]
 
 export const AX_ENGINE_QUANTIZATION_IDS = ["mlx6bit"] as const
 export type AxEngineQuantization = (typeof AX_ENGINE_QUANTIZATION_IDS)[number]
 
+/** Absolute source path (repo-relative) for the managed model catalog contract. */
+export const AX_ENGINE_CATALOG_SOURCE = "packages/ax-code/src/provider/ax-engine/constants.ts" as const
+
 export const AX_ENGINE_MODEL_DEFINITIONS = {
-  [AX_ENGINE_QWEN36_27B_MODEL_ID]: {
-    id: AX_ENGINE_QWEN36_27B_MODEL_ID,
-    apiModelID: AX_ENGINE_QWEN36_27B_API_MODEL_ID,
-    name: AX_ENGINE_QWEN36_27B_MODEL_DISPLAY_NAME,
+  // Pre-packaged AutomatosX AXQuant (AXQ) 6-bit + MTP snapshot. Direct HF download
+  // (not download-mtp) because the hub package already ships model-manifest.json and
+  // the AXQuant MTP sidecar contract.
+  [AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID]: {
+    id: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
+    apiModelID: AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID,
+    name: AX_ENGINE_QWEN36_27B_AXQ_MODEL_DISPLAY_NAME,
     defaultQuantization: "mlx6bit",
     toolcall: true,
     minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
-    // Keep enough local context for the fixed tool schema plus real conversation
-    // history; smaller windows leave compaction with nothing useful to shrink.
     contextTokens: 65_536,
     outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
     quantizations: {
       mlx6bit: {
-        hfRepo: "mlx-community/Qwen3.6-27B-6bit",
-        downloadMode: "mtp",
-        packageMarker: "ax_mtp_sidecar_manifest.json",
+        hfRepo: "AutomatosX/AX-Qwen3.6-27B-MLX-AXQ-6bit-MTP",
+        downloadMode: "direct",
+        packageMarker: "axquant_mtp_sidecar_manifest.json",
         directFallback: true,
-        mtpSource: "Qwen sidecar from Qwen/Qwen3.6-27B",
-        minDiskBytes: 96 * 1024 ** 3,
+        mtpSource: "AXQuant MTP sidecar packaged with AutomatosX/AX-Qwen3.6-27B-MLX-AXQ-6bit-MTP",
+        // ~21 GB complete download; keep headroom for HF snapshot + temp files.
+        minDiskBytes: 32 * 1024 ** 3,
       },
     },
   },
-  [AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID]: {
-    id: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
-    apiModelID: AX_ENGINE_QWEN3_CODER_NEXT_API_MODEL_ID,
-    name: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_DISPLAY_NAME,
+  // Lighter AutomatosX AXQ 9B pack with MTP sidecar. Direct HF download; hub
+  // ships axquant_mtp_sidecar_manifest.json but not model-manifest.json (ax-engine
+  // emits the native manifest after download).
+  [AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID]: {
+    id: AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID,
+    apiModelID: AX_ENGINE_QWEN35_9B_AXQ_API_MODEL_ID,
+    name: AX_ENGINE_QWEN35_9B_AXQ_MODEL_DISPLAY_NAME,
+    defaultQuantization: "mlx6bit",
+    toolcall: true,
+    minMemoryBytes: 0,
+    contextTokens: 32_768,
+    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
+    quantizations: {
+      mlx6bit: {
+        hfRepo: "AutomatosX/AX-Qwen3.5-9B-MLX-AXQ-6bit-MTP",
+        downloadMode: "direct",
+        packageMarker: "axquant_mtp_sidecar_manifest.json",
+        directFallback: true,
+        mtpSource: "AXQuant MTP sidecar packaged with AutomatosX/AX-Qwen3.5-9B-MLX-AXQ-6bit-MTP",
+        // ~8.4 GB complete download; keep headroom for HF snapshot + temp files.
+        minDiskBytes: 16 * 1024 ** 3,
+      },
+    },
+  },
+  // AutomatosX AXQuant 6-bit coding specialist. Direct HF download; hub package
+  // has no MTP sidecar and no pre-shipped model-manifest.json (ax-engine emits
+  // the native manifest after download).
+  [AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID]: {
+    id: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID,
+    apiModelID: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_API_MODEL_ID,
+    name: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_DISPLAY_NAME,
     defaultQuantization: "mlx6bit",
     toolcall: true,
     minMemoryBytes: AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES,
-    // The 6-bit 80B-A3B specialist is memory-heavy. Keep the managed default
-    // at 16K; the compact AX Engine prompt/tool profile still leaves useful
-    // coding history while avoiding unsafe KV pressure on 96-128GB hosts.
     contextTokens: 16_384,
     outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
     quantizations: {
       mlx6bit: {
-        hfRepo: "mlx-community/Qwen3-Coder-Next-6bit",
+        hfRepo: "AutomatosX/AX-Qwen3-Coder-Next-MLX-AXQ-6bit",
         downloadMode: "direct",
         packageMarker: undefined,
         directFallback: true,
-        mtpSource: "Direct decode coding specialist (no supported MTP package)",
-        minDiskBytes: 96 * 1024 ** 3,
-      },
-    },
-  },
-  [AX_ENGINE_QWEN36_35B_MODEL_ID]: {
-    id: AX_ENGINE_QWEN36_35B_MODEL_ID,
-    apiModelID: AX_ENGINE_QWEN36_35B_API_MODEL_ID,
-    name: AX_ENGINE_QWEN36_35B_MODEL_DISPLAY_NAME,
-    defaultQuantization: "mlx6bit",
-    toolcall: true,
-    minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
-    contextTokens: 32_768,
-    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
-    quantizations: {
-      mlx6bit: {
-        hfRepo: "mlx-community/Qwen3.6-35B-A3B-6bit",
-        downloadMode: "mtp",
-        packageMarker: "ax_mtp_sidecar_manifest.json",
-        directFallback: true,
-        mtpSource: "Qwen sidecar from Qwen/Qwen3.6-35B-A3B",
-        minDiskBytes: 96 * 1024 ** 3,
-      },
-    },
-  },
-  [AX_ENGINE_GEMMA4_12B_MODEL_ID]: {
-    id: AX_ENGINE_GEMMA4_12B_MODEL_ID,
-    apiModelID: AX_ENGINE_GEMMA4_12B_API_MODEL_ID,
-    name: AX_ENGINE_GEMMA4_12B_MODEL_DISPLAY_NAME,
-    defaultQuantization: "mlx6bit",
-    // The Gemma 4 family advertises openai_tool_calling_supported via the
-    // ax-engine /v1/models card. Tool calling is a serving-level capability
-    // shared across the family, so all three Gemma 4 sizes enable it. Keeping
-    // this false starves the session of tools (session/llm.ts gates tool
-    // dispatch on capabilities.toolcall) and the model degrades to a tool-less
-    // chatbot.
-    toolcall: true,
-    minMemoryBytes: 0,
-    contextTokens: 32_768,
-    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
-    quantizations: {
-      mlx6bit: {
-        hfRepo: "mlx-community/gemma-4-12B-it-6bit",
-        downloadMode: "mtp",
-        packageMarker: "ax_gemma4_assistant_mtp.json",
-        directFallback: true,
-        mtpSource: "assistant package from mlx-community/gemma-4-12B-it-assistant-6bit",
-        minDiskBytes: 48 * 1024 ** 3,
-      },
-    },
-  },
-  [AX_ENGINE_GEMMA4_26B_MODEL_ID]: {
-    id: AX_ENGINE_GEMMA4_26B_MODEL_ID,
-    apiModelID: AX_ENGINE_GEMMA4_26B_API_MODEL_ID,
-    name: AX_ENGINE_GEMMA4_26B_MODEL_DISPLAY_NAME,
-    defaultQuantization: "mlx6bit",
-    toolcall: true,
-    minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
-    contextTokens: 32_768,
-    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
-    quantizations: {
-      mlx6bit: {
-        hfRepo: "mlx-community/gemma-4-26b-a4b-it-6bit",
-        downloadMode: "mtp",
-        packageMarker: "ax_gemma4_assistant_mtp.json",
-        directFallback: true,
-        mtpSource: "assistant package from google/gemma-4-26b-a4b-it-assistant",
-        minDiskBytes: 96 * 1024 ** 3,
-      },
-    },
-  },
-  [AX_ENGINE_GEMMA4_31B_MODEL_ID]: {
-    id: AX_ENGINE_GEMMA4_31B_MODEL_ID,
-    apiModelID: AX_ENGINE_GEMMA4_31B_API_MODEL_ID,
-    name: AX_ENGINE_GEMMA4_31B_MODEL_DISPLAY_NAME,
-    defaultQuantization: "mlx6bit",
-    toolcall: true,
-    minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
-    contextTokens: 32_768,
-    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
-    quantizations: {
-      mlx6bit: {
-        hfRepo: "mlx-community/gemma-4-31b-it-6bit",
-        downloadMode: "mtp",
-        packageMarker: "ax_gemma4_assistant_mtp.json",
-        directFallback: true,
-        mtpSource: "assistant package from google/gemma-4-31b-it-assistant",
-        minDiskBytes: 96 * 1024 ** 3,
-      },
-    },
-  },
-  [AX_ENGINE_GLM47_FLASH_MODEL_ID]: {
-    id: AX_ENGINE_GLM47_FLASH_MODEL_ID,
-    apiModelID: AX_ENGINE_GLM47_FLASH_API_MODEL_ID,
-    name: AX_ENGINE_GLM47_FLASH_MODEL_DISPLAY_NAME,
-    defaultQuantization: "mlx6bit",
-    toolcall: true,
-    minMemoryBytes: 0,
-    contextTokens: 32_768,
-    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
-    quantizations: {
-      mlx6bit: {
-        hfRepo: "mlx-community/GLM-4.7-Flash-6bit",
-        downloadMode: "mtp",
-        packageMarker: "ax_glm_mtp_manifest.json",
-        directFallback: true,
-        mtpSource: "built-in MTP sidecar extracted from zai-org/GLM-4.7-Flash",
-        minDiskBytes: 48 * 1024 ** 3,
+        mtpSource: "Direct decode AXQuant coding specialist (no MTP package)",
+        // ~60 GB complete download; keep headroom for HF snapshot + temp files.
+        minDiskBytes: 80 * 1024 ** 3,
       },
     },
   },
 } as const
 
-export const AX_ENGINE_DEFAULT_MODEL_ID: AxEngineModelID = AX_ENGINE_QWEN36_27B_MODEL_ID
+export const AX_ENGINE_DEFAULT_MODEL_ID: AxEngineModelID = AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID
 
 export const AX_ENGINE_DEFAULT_QUANTIZATION: AxEngineQuantization = "mlx6bit"
 

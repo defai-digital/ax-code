@@ -22,6 +22,7 @@ import {
   fetchProviderSources,
   getCurrentDirectory,
   isCliProvider,
+  isLocalProvider,
   isRecord,
   isRestartingError,
   normalizeAuthType,
@@ -39,6 +40,17 @@ import { openExternalUrl } from "@/lib/url"
 import type { ModelMetadata } from "@/types"
 import { useI18n } from "@/lib/i18n"
 import type { ProviderSources } from "./types"
+import {
+  cancelAxEngineModelDownload,
+  fetchAxEngineModels,
+  startAxEngineModelDownload,
+  type AxEngineModelCatalogEntry,
+  type AxEngineModelJobSummary,
+  type AxEngineModelsResponse,
+} from "@/lib/ax-code/axEngineModelsApi"
+import { downloadToastTracker } from "@/lib/ax-code/axEngineDownloadToasts"
+
+const AX_ENGINE_PROVIDER_ID = "ax-engine"
 
 const COMPACT_NUMBER_FORMATTER = new Intl.NumberFormat("en-US", {
   notation: "compact",
@@ -100,10 +112,84 @@ export const ProvidersPage: React.FC = () => {
   // Start collapsed; selecting a different provider re-collapses so Connect/
   // Reconnect is always one click away from the "Connected" summary row.
   const [showAuthPanel, setShowAuthPanel] = React.useState(false)
+  // Local AX Engine catalog (download status / jobs). Only loaded when the
+  // selected provider is ax-engine so Providers can start weight downloads.
+  const [axEngineCatalog, setAxEngineCatalog] = React.useState<AxEngineModelsResponse | null>(null)
+  const [axEngineBusyKey, setAxEngineBusyKey] = React.useState<string | null>(null)
+  const axEngineInFlightRef = React.useRef(false)
 
   React.useEffect(() => {
     setShowAuthPanel(false)
   }, [selectedProviderId])
+
+  const loadAxEngineCatalog = React.useCallback(async () => {
+    if (axEngineInFlightRef.current) return
+    axEngineInFlightRef.current = true
+    try {
+      const next = await fetchAxEngineModels(directory)
+      setAxEngineCatalog(next)
+      downloadToastTracker.reconcile(next.jobs)
+    } catch (error) {
+      console.error("Failed to load AX Engine model catalog:", error)
+    } finally {
+      axEngineInFlightRef.current = false
+    }
+  }, [directory])
+
+  React.useEffect(() => {
+    if (selectedProviderId !== AX_ENGINE_PROVIDER_ID) {
+      setAxEngineCatalog(null)
+      return
+    }
+    void loadAxEngineCatalog()
+  }, [selectedProviderId, loadAxEngineCatalog])
+
+  const axEngineHasActiveJob =
+    axEngineCatalog?.jobs.some((job) => job.status === "queued" || job.status === "running") ?? false
+  React.useEffect(() => {
+    if (selectedProviderId !== AX_ENGINE_PROVIDER_ID || !axEngineHasActiveJob) return
+    const timer = window.setInterval(() => void loadAxEngineCatalog(), 2000)
+    return () => window.clearInterval(timer)
+  }, [selectedProviderId, axEngineHasActiveJob, loadAxEngineCatalog])
+
+  const axEngineEntryById = React.useMemo(() => {
+    const map = new Map<string, AxEngineModelCatalogEntry>()
+    for (const model of axEngineCatalog?.models ?? []) map.set(model.id, model)
+    return map
+  }, [axEngineCatalog])
+
+  const axEngineActiveJob = (modelId: string): AxEngineModelJobSummary | undefined =>
+    axEngineCatalog?.jobs.find(
+      (job) =>
+        job.modelID === modelId && (job.status === "queued" || job.status === "running"),
+    )
+
+  const handleAxEngineDownload = async (modelId: string, modelName: string) => {
+    setAxEngineBusyKey(modelId)
+    try {
+      const job = await startAxEngineModelDownload(modelId, directory)
+      downloadToastTracker.announce(job, modelName, directory)
+      await loadAxEngineCatalog()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("localModels.toast.downloadStartFailed"))
+    } finally {
+      setAxEngineBusyKey(null)
+    }
+  }
+
+  const handleAxEngineCancel = async (job: AxEngineModelJobSummary) => {
+    setAxEngineBusyKey(job.id)
+    try {
+      const result = await cancelAxEngineModelDownload(job.id, directory)
+      if (result?.status === "complete") toast.success(t("localModels.toast.downloadAlreadyFinished"))
+      else toast.success(t("localModels.toast.downloadCancelled"))
+      await loadAxEngineCatalog()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("localModels.toast.actionFailed"))
+    } finally {
+      setAxEngineBusyKey(null)
+    }
+  }
 
   React.useEffect(() => {
     if (!selectedProviderId && providers.length > 0) {
@@ -258,16 +344,22 @@ export const ProvidersPage: React.FC = () => {
   const selectedSources = selectedProviderId ? providerSources[selectedProviderId] : undefined
 
   const reloadAfterProviderAuthSave = async (successMessage: string) => {
+    // Credentials are global across projects — drop every project-scoped
+    // provider snapshot so switching projects does not require reconnect.
+    useConfigStore.getState().invalidateAllProviderCaches()
     try {
       await reloadAxCodeConfiguration({
         message: "Restarting AX Code to load provider credentials...",
         scopes: ["providers"],
         mode: "active",
       })
+      await loadProviders({ directory })
       toast.success(successMessage)
     } catch (reloadError) {
       console.error("Provider auth was saved, but AX Code reload failed:", reloadError)
       toast.warning(t("settings.providers.page.toast.apiKeySavedRestartFailed"))
+      // Still try to refresh the active project from the server.
+      await loadProviders({ directory }).catch(() => undefined)
     }
   }
 
@@ -306,6 +398,25 @@ export const ProvidersPage: React.FC = () => {
     } catch (error) {
       console.error("Failed to connect CLI provider:", error)
       toast.error(t("settings.providers.page.toast.cliProviderConnectFailed"))
+    } finally {
+      setAuthBusyKey(null)
+    }
+  }
+
+  // Local inference providers (ax-engine, ollama, ax-studio) do not require a
+  // cloud API key. Persist the conventional local sentinel so the provider is
+  // marked connected; the runtime supplies its own default key when needed.
+  const handleEnableLocalProvider = async (providerId: string) => {
+    const busyKey = `local:${providerId}`
+    setAuthBusyKey(busyKey)
+
+    try {
+      await saveProviderAuth(providerId, "local", directory)
+      await reloadAfterProviderAuthSave(t("settings.providers.page.toast.localProviderConnected"))
+      setSelectedProvider(providerId)
+    } catch (error) {
+      console.error("Failed to enable local provider:", error)
+      toast.error(t("settings.providers.page.toast.localProviderConnectFailed"))
     } finally {
       setAuthBusyKey(null)
     }
@@ -600,7 +711,16 @@ export const ProvidersPage: React.FC = () => {
                           autoFocus
                         />
                       </div>
-                      <ScrollableOverlay outerClassName="max-h-[240px]" className="p-1">
+                      <ScrollableOverlay
+                        // Cap list height so long catalogs scroll. fillContainer=false so
+                        // max-height applies to the scroll target; alwaysShowScrollbar so
+                        // the vertical thumb stays visible as a cue that more items exist.
+                        outerClassName="max-h-[240px]"
+                        className="max-h-[240px] p-1 pr-2"
+                        disableHorizontal
+                        alwaysShowScrollbar
+                        fillContainer={false}
+                      >
                         {(() => {
                           const filtered = unconnectedProviders.filter((p) => {
                             const query = providerSearchQuery.toLowerCase()
@@ -666,6 +786,22 @@ export const ProvidersPage: React.FC = () => {
                         {authBusyKey === `cli:${candidateProviderId}`
                           ? t("settings.providers.page.actions.saving")
                           : t("settings.providers.page.actions.useCli")}
+                      </Button>
+                    </div>
+                  ) : isLocalProvider(candidateProviderId) ? (
+                    <div className="py-1.5 space-y-2">
+                      <p className="typography-meta text-muted-foreground">
+                        {t("settings.providers.page.auth.localProviderHint")}
+                      </p>
+                      <Button
+                        size="xs"
+                        className="!font-normal"
+                        onClick={() => handleEnableLocalProvider(candidateProviderId)}
+                        disabled={authBusyKey === `local:${candidateProviderId}`}
+                      >
+                        {authBusyKey === `local:${candidateProviderId}`
+                          ? t("settings.providers.page.actions.saving")
+                          : t("settings.providers.page.actions.enableLocal")}
                       </Button>
                     </div>
                   ) : (
@@ -946,6 +1082,22 @@ export const ProvidersPage: React.FC = () => {
                         : t("settings.providers.page.actions.useCli")}
                     </Button>
                   </div>
+                ) : isLocalProvider(selectedProvider.id) ? (
+                  <div className="py-1.5 space-y-2">
+                    <p className="typography-meta text-muted-foreground">
+                      {t("settings.providers.page.auth.localProviderHint")}
+                    </p>
+                    <Button
+                      size="xs"
+                      className="!font-normal"
+                      onClick={() => handleEnableLocalProvider(selectedProvider.id)}
+                      disabled={authBusyKey === `local:${selectedProvider.id}`}
+                    >
+                      {authBusyKey === `local:${selectedProvider.id}`
+                        ? t("settings.providers.page.actions.saving")
+                        : t("settings.providers.page.actions.enableLocal")}
+                    </Button>
+                  </div>
                 ) : (
                   <div className="py-1.5">
                     <label className="typography-ui-label text-foreground flex items-center gap-1.5">
@@ -1175,6 +1327,18 @@ export const ProvidersPage: React.FC = () => {
               )}
             </h3>
             <div className="flex items-center gap-1">
+              {selectedProvider.id === AX_ENGINE_PROVIDER_ID && (
+                <Button
+                  variant="outline"
+                  size="xs"
+                  className="!font-normal"
+                  onClick={() => void loadAxEngineCatalog()}
+                  disabled={axEngineBusyKey !== null}
+                >
+                  <Icon name="refresh" className="h-3.5 w-3.5" />
+                  {t("settings.providers.page.actions.refreshLocal")}
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="xs"
@@ -1200,6 +1364,11 @@ export const ProvidersPage: React.FC = () => {
           </div>
 
           <section className="px-2 pb-2 pt-0">
+            {selectedProvider.id === AX_ENGINE_PROVIDER_ID && (
+              <p className="typography-meta text-muted-foreground mb-2">
+                {t("settings.providers.page.models.axEngineDownloadHint")}
+              </p>
+            )}
             <div className="relative mb-2">
               <Icon
                 name="search"
@@ -1228,6 +1397,11 @@ export const ProvidersPage: React.FC = () => {
                   const isHidden = hiddenModels.some(
                     (item) => item.providerID === selectedProvider.id && item.modelID === modelId,
                   )
+                  const localEntry = selectedProvider.id === AX_ENGINE_PROVIDER_ID ? axEngineEntryById.get(modelId) : undefined
+                  const activeJob = modelId ? axEngineActiveJob(modelId) : undefined
+                  const downloadBusy =
+                    Boolean(modelId) &&
+                    (axEngineBusyKey === modelId || (activeJob ? axEngineBusyKey === activeJob.id : false))
 
                   const contextTokens = formatTokens(metadata?.limit?.context)
                   const outputTokens = formatTokens(metadata?.limit?.output)
@@ -1252,12 +1426,50 @@ export const ProvidersPage: React.FC = () => {
                       label: t("settings.providers.page.models.capability.imageInput"),
                     })
 
+                  const downloadPercent =
+                    activeJob?.progress?.mode === "determinate" && Number.isFinite(activeJob.progress.percent)
+                      ? Math.max(0, Math.min(100, Math.round(activeJob.progress.percent)))
+                      : undefined
+                  const localStatusLabel = !localEntry
+                    ? null
+                    : activeJob
+                      ? downloadPercent !== undefined
+                        ? `${t("settings.providers.page.models.localStatus.downloading")} ${downloadPercent}%`
+                        : t("settings.providers.page.models.localStatus.downloading")
+                      : localEntry.local.present && localEntry.local.complete
+                        ? t("settings.providers.page.models.localStatus.downloaded")
+                        : localEntry.fit.downloadable
+                          ? t("settings.providers.page.models.localStatus.readyToDownload")
+                          : t("settings.providers.page.models.localStatus.unavailable")
+
                   return (
                     <div key={modelId} className="py-1.5">
                       <div className={cn("flex items-center gap-3", isHidden && "opacity-50")}>
-                        <span className="typography-meta font-medium text-foreground truncate flex-1 min-w-0">
-                          {modelName}
-                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="typography-meta font-medium text-foreground truncate">{modelName}</div>
+                          {localStatusLabel && (
+                            <div className="typography-micro text-muted-foreground mt-0.5">{localStatusLabel}</div>
+                          )}
+                          {activeJob && (
+                            <div
+                              className="relative mt-1.5 h-1 w-full max-w-[12rem] overflow-hidden rounded-full bg-border"
+                              role="progressbar"
+                              aria-label={`${modelName} downloading`}
+                              aria-valuemin={downloadPercent !== undefined ? 0 : undefined}
+                              aria-valuemax={downloadPercent !== undefined ? 100 : undefined}
+                              aria-valuenow={downloadPercent}
+                            >
+                              {downloadPercent !== undefined ? (
+                                <div
+                                  className="absolute inset-y-0 left-0 rounded-full bg-primary transition-[width] duration-500 ease-out"
+                                  style={{ width: `${downloadPercent}%` }}
+                                />
+                              ) : (
+                                <div className="oc-indeterminate-progress-bar absolute inset-y-0 left-0 w-1/4 rounded-full bg-primary" />
+                              )}
+                            </div>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {(contextTokens || outputTokens) && (
                             <span className="typography-micro text-muted-foreground flex-shrink-0 bg-[var(--surface-muted)] px-1.5 py-0.5 rounded">
@@ -1283,6 +1495,48 @@ export const ProvidersPage: React.FC = () => {
                                 </span>
                               ))}
                             </div>
+                          )}
+                          {selectedProvider.id === AX_ENGINE_PROVIDER_ID && localEntry && (
+                            <>
+                              {activeJob ? (
+                                <Button
+                                  size="xs"
+                                  variant="outline"
+                                  className="!font-normal shrink-0"
+                                  disabled={downloadBusy}
+                                  onClick={() => void handleAxEngineCancel(activeJob)}
+                                >
+                                  <Icon
+                                    name={downloadBusy ? "loader" : "close"}
+                                    className={cn("h-3.5 w-3.5", downloadBusy && "animate-spin")}
+                                  />
+                                  {t("settings.providers.page.models.actions.cancelDownload")}
+                                </Button>
+                              ) : localEntry.local.present && localEntry.local.complete ? (
+                                <span className="typography-micro text-[var(--status-success)] shrink-0">
+                                  {t("settings.providers.page.models.localStatus.readyForChat")}
+                                </span>
+                              ) : (
+                                <Button
+                                  size="xs"
+                                  className="!font-normal shrink-0"
+                                  disabled={downloadBusy || !localEntry.fit.downloadable}
+                                  title={
+                                    !localEntry.fit.downloadable
+                                      ? (localEntry.fit.blockers[0] ??
+                                        t("settings.providers.page.models.localStatus.unavailable"))
+                                      : undefined
+                                  }
+                                  onClick={() => void handleAxEngineDownload(modelId, modelName)}
+                                >
+                                  <Icon
+                                    name={downloadBusy ? "loader" : "download"}
+                                    className={cn("h-3.5 w-3.5", downloadBusy && "animate-spin")}
+                                  />
+                                  {t("settings.providers.page.models.actions.download")}
+                                </Button>
+                              )}
+                            </>
                           )}
                           <button
                             type="button"

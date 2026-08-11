@@ -73,6 +73,7 @@ import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 import { Instance } from "@/project/instance"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
+import AX_ENGINE_BASH_DESCRIPTION from "./bash-ax-engine.txt"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -349,9 +350,15 @@ export namespace ToolRegistry {
         .map(async (tool) => {
           try {
             using _ = log.time(tool.id)
-            const next = await tool.init({ agent })
+            const next = await tool.init({ agent, model })
+            const description =
+              model.providerID === AX_ENGINE_PROVIDER_ID && tool.id === "bash"
+                ? AX_ENGINE_BASH_DESCRIPTION.replaceAll("${directory}", Instance.directory)
+                    .replaceAll("${maxLines}", String(Truncate.MAX_LINES))
+                    .replaceAll("${maxBytes}", String(Truncate.MAX_BYTES))
+                : next.description
             const output = {
-              description: next.description,
+              description,
               parameters: next.parameters,
             }
             await Plugin.trigger("tool.definition", { toolID: tool.id }, output)

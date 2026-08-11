@@ -333,9 +333,10 @@ const upsertContextPanelTab = (
 ): ContextPanelDirectoryState => {
   const nextTab = createContextPanelTab(descriptor)
   const existingIndex = current.tabs.findIndex((tab) => tab.id === nextTab.id)
+  // New context-panel tabs open leftmost on the strip (active immediately).
   const tabs =
     existingIndex === -1
-      ? [...current.tabs, nextTab]
+      ? [nextTab, ...current.tabs]
       : current.tabs.map((tab, index) =>
           index === existingIndex
             ? {

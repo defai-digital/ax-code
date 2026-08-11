@@ -164,6 +164,27 @@ export namespace AutonomousContinuationPrompt {
     )
   }
 
+  export function axEngineReadOnlyCheckpoint(input: {
+    consecutiveTurns: number
+    forceThreshold: number
+    forced: boolean
+  }) {
+    const turns = `${input.consecutiveTurns} read-only tool turn${input.consecutiveTurns === 1 ? "" : "s"}`
+    if (input.forced) {
+      return (
+        `Local-engine convergence checkpoint: ${turns} produced no source change or completed answer. ` +
+        `Tools are disabled for the next turn. Use the evidence already collected to answer now, ` +
+        `including any uncertainty or blocker instead of running another repository scan.`
+      )
+    }
+    return (
+      `Local-engine latency checkpoint: the last ${turns} only inspected the workspace. ` +
+      `If the latest result answers the request, respond now. Otherwise make only the smallest focused follow-up; ` +
+      `do not repeat or slightly vary a successful repository-wide query. ` +
+      `After ${input.forceThreshold} consecutive read-only turns, the next response will be text-only.`
+    )
+  }
+
   export function completionGateRetry(input: { message: string; attempt: number; maxAttempts: number }) {
     return (
       `Control-plane completion gate blocked completion: ${input.message}\n` +

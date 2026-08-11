@@ -196,7 +196,10 @@ async function acquireFileLock(): Promise<Disposable> {
 async function invalidateProviderCacheAfterAuthChange() {
   try {
     const { Provider } = await import("../provider/provider")
-    await Provider.invalidate()
+    // Credentials are global; provider state is cached per project directory.
+    // Invalidate every live Instance so connecting a key in project A is
+    // visible when switching to project B without reconnecting.
+    await Provider.invalidateAll()
   } catch {
     // Auth is also used before an Instance context exists. In that case
     // there is no provider cache to invalidate.

@@ -17,8 +17,18 @@ import {
 } from "./constants"
 import type { AxEngineModelID, AxEngineQuantization } from "./constants"
 import { AxEnginePaths } from "./paths"
+import { axEngineDownloadEnv } from "./python"
+import {
+  applyProgressEvent,
+  parseGiBTotalFromMessage,
+  parseProgressJsonLine,
+  progressFromCacheBytes,
+  type AxEngineDownloadProgress,
+} from "./download-progress"
 import { HfCache } from "./hf-cache"
 import { Log } from "@/util/log"
+import type { Readable } from "node:stream"
+import fsSync from "fs"
 
 const log = Log.create({ service: "ax-engine-model-cache" })
 
@@ -374,9 +384,29 @@ export async function getModelStatus(options: AxEngineModelOptions = {}): Promis
 }
 
 function parseDownloadJson(text: string): { dest?: string; revision?: string } {
-  const parsed = parseJsonResult(text)
-  if (!parsed.ok || !parsed.value || typeof parsed.value !== "object") return {}
-  const record = parsed.value as Record<string, unknown>
+  const parse = (candidate: string) => {
+    const parsed = parseJsonResult(candidate)
+    if (!parsed.ok || !parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) return undefined
+    return parseDownloadSummary(parsed.value as Record<string, unknown>)
+  }
+
+  const direct = parse(text)
+  if (direct?.dest) return direct
+
+  // ax-engine 6.11 keeps progress events as NDJSON but its binary wrapper
+  // pretty-prints the final helper summary across multiple lines. Parse the
+  // trailing JSON object as a suffix when the whole mixed transcript is not a
+  // single JSON value.
+  const lines = text.split(/\r?\n/)
+  for (let index = lines.length - 1; index >= 0; index--) {
+    if (!lines[index]?.trimStart().startsWith("{")) continue
+    const trailing = parse(lines.slice(index).join("\n").trim())
+    if (trailing?.dest) return trailing
+  }
+  return direct ?? {}
+}
+
+function parseDownloadSummary(record: Record<string, unknown>): { dest?: string; revision?: string } {
   const nestedDownload =
     record.download && typeof record.download === "object" ? (record.download as Record<string, unknown>) : undefined
   return {
@@ -395,6 +425,186 @@ function parseDownloadJson(text: string): { dest?: string; revision?: string } {
           ? nestedDownload.revision
           : undefined,
   }
+}
+
+async function readLines(stream: Readable, onLine: (line: string) => void): Promise<void> {
+  let buffer = ""
+  for await (const chunk of stream) {
+    buffer += typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8")
+    let newline = buffer.indexOf("\n")
+    while (newline !== -1) {
+      const line = buffer.slice(0, newline)
+      buffer = buffer.slice(newline + 1)
+      if (line.trim()) onLine(line)
+      newline = buffer.indexOf("\n")
+    }
+  }
+  if (buffer.trim()) onLine(buffer)
+}
+
+/** Best-effort recursive size for progress only (does not throw). */
+function measureDirBytes(target: string): number {
+  try {
+    const stat = fsSync.statSync(target)
+    if (stat.isFile()) return stat.size
+    if (!stat.isDirectory()) return 0
+  } catch {
+    return 0
+  }
+  let total = 0
+  const stack = [target]
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    let entries: fsSync.Dirent[]
+    try {
+      entries = fsSync.readdirSync(current, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const entry of entries) {
+      const full = path.join(current, entry.name)
+      try {
+        if (entry.isDirectory()) stack.push(full)
+        else if (entry.isFile() || entry.isSymbolicLink()) {
+          total += fsSync.statSync(full).size
+        }
+      } catch {
+        // ignore unreadable entries mid-download
+      }
+    }
+  }
+  return total
+}
+
+/**
+ * Run `ax-engine download|download-mtp --json --progress-json`, stream-parse
+ * NDJSON progress events, and return the final summary text + exit code.
+ *
+ * Mid-download: also poll the HF hub cache for the target repo so the UI does
+ * not freeze at the engine's sparse start event (~5%) for multi-GB transfers.
+ */
+async function runAxEngineDownload(input: {
+  cmd: string[]
+  env: NodeJS.ProcessEnv
+  signal?: AbortSignal
+  onProgress?: (progress: AxEngineDownloadProgress) => void
+  /** Hugging Face repo id used to locate the hub cache for byte polling. */
+  watchRepo?: string
+  /** Optional known total size (bytes); also learned from engine messages. */
+  expectedBytes?: number
+}): Promise<{ code: number; stdout: string; stderr: string; lastSummary?: Record<string, unknown> }> {
+  // Prefer live progress. Older engines that reject the flag are retried once
+  // without it and stay indeterminate.
+  const withProgress = [...input.cmd, "--progress-json"]
+  const attempt = async (cmd: string[]) => {
+    const startedAt = Date.now()
+    const proc = Process.spawn(cmd, {
+      stdout: "pipe",
+      stderr: "pipe",
+      env: input.env,
+      abort: input.signal,
+      timeout: DOWNLOAD_TIMEOUT_MS,
+    })
+    if (!proc.stdout || !proc.stderr) throw new Error("Process output not available")
+
+    let progress: AxEngineDownloadProgress | undefined
+    let lastSummary: Record<string, unknown> | undefined
+    let expectedBytes = input.expectedBytes
+    const stdoutChunks: string[] = []
+    const stderrChunks: Buffer[] = []
+    // Pretty-printed final summaries from the engine wrapper span multiple
+    // lines. Accumulate from the first "{" until JSON.parse succeeds.
+    let multiLineJson: string | undefined
+
+    const publish = (event: { done: number; total: number; message?: string }) => {
+      progress = applyProgressEvent(progress, event)
+      input.onProgress?.(progress)
+    }
+
+    const tryConsumeJsonObject = (text: string): boolean => {
+      const parsed = parseProgressJsonLine(text)
+      if (parsed.kind === "progress") {
+        const fromMessage = parseGiBTotalFromMessage(parsed.event.file)
+        if (fromMessage) expectedBytes = expectedBytes ?? fromMessage
+        publish({
+          done: parsed.event.done,
+          total: parsed.event.total,
+          message: parsed.event.file,
+        })
+        return true
+      }
+      if (parsed.kind === "summary") {
+        lastSummary = parsed.value
+        return true
+      }
+      return false
+    }
+
+    const onStdoutLine = (line: string) => {
+      stdoutChunks.push(line)
+      if (multiLineJson !== undefined) {
+        multiLineJson += `\n${line}`
+        if (tryConsumeJsonObject(multiLineJson)) multiLineJson = undefined
+        return
+      }
+      if (tryConsumeJsonObject(line)) return
+      // Start of a pretty-printed object (engine final summary).
+      if (line.trimStart().startsWith("{")) multiLineJson = line
+    }
+
+    // Poll HF cache while snapshot_download is blocked inside the engine —
+    // progress-json is otherwise silent for most of a multi-GB download.
+    const CACHE_POLL_MS = 2000
+    let pollTimer: ReturnType<typeof setInterval> | undefined
+    if (input.watchRepo && input.onProgress) {
+      const repoPath = HfCache.repoDir(input.watchRepo, input.env)
+      const tick = () => {
+        // Prefer engine events once we leave the weight phase (>= 85).
+        if (progress && progress.percent >= 85) return
+        const downloaded = measureDirBytes(repoPath)
+        if (downloaded <= 0 && !progress) return
+        const event = progressFromCacheBytes({
+          downloadedBytes: downloaded,
+          totalBytes: expectedBytes,
+          startedAt,
+        })
+        publish(event)
+      }
+      pollTimer = setInterval(tick, CACHE_POLL_MS)
+      // First sample quickly so the bar moves off a frozen 5%/0.0 GiB.
+      setTimeout(tick, 250)
+    }
+
+    const stdoutDone = readLines(proc.stdout, onStdoutLine)
+    const stderrDone = (async () => {
+      for await (const chunk of proc.stderr!) {
+        stderrChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+      }
+    })()
+
+    try {
+      const code = await proc.exited
+      await Promise.all([stdoutDone, stderrDone])
+      return {
+        code,
+        stdout: stdoutChunks.join("\n"),
+        stderr: Buffer.concat(stderrChunks).toString("utf8"),
+        lastSummary,
+      }
+    } finally {
+      if (pollTimer) clearInterval(pollTimer)
+    }
+  }
+
+  const first = await attempt(withProgress)
+  const unknownOption =
+    first.code !== 0 &&
+    /unknown (download )?option: --progress-json|unrecognized option.*progress-json/i.test(
+      `${first.stderr}\n${first.stdout}`,
+    )
+  if (!unknownOption) return first
+  log.warn("ax-engine rejected --progress-json; retrying without live progress")
+  return attempt(input.cmd)
 }
 
 export async function markPrepared(input: {
@@ -457,6 +667,7 @@ export async function downloadModel(input: {
   quantization?: AxEngineQuantization
   dest?: string
   signal?: AbortSignal
+  onProgress?: (progress: AxEngineDownloadProgress) => void
 }): Promise<AxEnginePrepareState> {
   const modelID = input.modelID ?? AX_ENGINE_DEFAULT_MODEL_ID
   const quantization = input.quantization ?? AX_ENGINE_MODEL_DEFINITIONS[modelID].defaultQuantization
@@ -478,7 +689,10 @@ export async function downloadModel(input: {
   // default) and returns that snapshot path, so the weights live in one
   // standard location instead of being copied into ax-code's own cache.
   const dest = input.dest ? resolveDownloadDestination(modelID, quantization, input.dest) : undefined
-  const useMtpPackage = quantizationDefinition.downloadMode === "mtp"
+  // Catalog currently ships only direct packs; keep the MTP branch so adding a
+  // downloadMode: "mtp" entry later works without a type-narrowing false error.
+  const downloadMode = quantizationDefinition.downloadMode as "direct" | "mtp"
+  const useMtpPackage = downloadMode === "mtp"
   const cmd = useMtpPackage
     ? [input.binaryPath, "download-mtp", modelID, "--json"]
     : [input.binaryPath, "download", repo, "--json"]
@@ -486,15 +700,32 @@ export async function downloadModel(input: {
 
   using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: PREPARE_LOCK_STALE_MS })
   await assertDiskSpace({ modelID, quantization, downloadDir: dest ?? HfCache.root() })
-  const result = await Process.text(cmd, {
-    timeout: DOWNLOAD_TIMEOUT_MS,
-    abort: input.signal,
-    nothrow: true,
+  // Always inject AX_ENGINE_PYTHON when a managed/explicit Python with
+  // huggingface_hub is available. Relying on parent env alone fails for CLI
+  // launches and some Desktop paths that never set the variable.
+  const downloadEnv = axEngineDownloadEnv()
+  if (downloadEnv.AX_ENGINE_PYTHON) {
+    log.info("ax-engine download using AX_ENGINE_PYTHON", { python: downloadEnv.AX_ENGINE_PYTHON })
+  } else {
+    log.warn("ax-engine download has no AX_ENGINE_PYTHON; ax-engine will use system python3", {
+      hint: "python3 -m pip install huggingface_hub  (or install into ~/.ax-engine/venv)",
+    })
+  }
+  const result = await runAxEngineDownload({
+    cmd,
+    env: downloadEnv,
+    signal: input.signal,
+    onProgress: input.onProgress,
+    watchRepo: repo,
+    // minDiskBytes includes headroom; use it only as a soft upper bound until
+    // the engine (or hub) reports a real total in a progress message.
+    expectedBytes: undefined,
   })
   if (result.code !== 0) {
-    throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: ${result.stderr.toString().trim() || result.text.trim()}`)
+    throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: ${result.stderr.trim() || result.stdout.trim()}`)
   }
-  const parsed = parseDownloadJson(result.text.trim())
+  const streamed = result.lastSummary ? parseDownloadSummary(result.lastSummary) : undefined
+  const parsed = streamed?.dest ? streamed : parseDownloadJson(result.stdout.trim())
   if (!parsed.dest) {
     throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: ax-engine download did not return a destination`)
   }

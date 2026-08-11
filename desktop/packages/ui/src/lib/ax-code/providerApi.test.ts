@@ -9,6 +9,7 @@ import {
   fetchProviderJsonWithRetry,
   fetchProviderSources,
   isCliProvider,
+  isLocalProvider,
   isRestartingError,
   parseAuthMethodsPayload,
   parseAvailableProvidersPayload,
@@ -93,6 +94,16 @@ describe("isCliProvider", () => {
     expect(isCliProvider("antigravity-cli")).toBe(true)
     expect(isCliProvider("kimi-cli")).toBe(true)
     expect(isCliProvider("openai")).toBe(false)
+  })
+})
+
+describe("isLocalProvider", () => {
+  test("recognizes local inference providers that do not need a cloud API key", () => {
+    expect(isLocalProvider("ax-engine")).toBe(true)
+    expect(isLocalProvider("ollama")).toBe(true)
+    expect(isLocalProvider("ax-studio")).toBe(true)
+    expect(isLocalProvider("openai")).toBe(false)
+    expect(isLocalProvider("anthropic")).toBe(false)
   })
 })
 

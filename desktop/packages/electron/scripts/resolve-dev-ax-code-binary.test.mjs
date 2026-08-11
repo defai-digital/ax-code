@@ -48,7 +48,7 @@ describe("resolveDevAxCodeBinary", () => {
     expect(resolved).toBe(explicit)
   })
 
-  it("falls back to PATH when AX_CODE_BINARY is missing", () => {
+  it("falls back to PATH when AX_CODE_BINARY and monorepo source are missing", () => {
     const dir = makeTempDir("ax-dev-cli-path-")
     const pathBinDir = path.join(dir, "path-bin")
     fs.mkdirSync(pathBinDir)
@@ -64,6 +64,28 @@ describe("resolveDevAxCodeBinary", () => {
       warn: () => {},
     })
     expect(resolved).toBe(pathBin)
+  })
+
+  it("prefers monorepo source over PATH so local catalog edits are visible", () => {
+    const dir = makeTempDir("ax-dev-cli-source-over-path-")
+    const fakeElectron = path.join(dir, "electron")
+    fs.mkdirSync(fakeElectron, { recursive: true })
+    const pathBinDir = path.join(dir, "path-bin")
+    fs.mkdirSync(pathBinDir)
+    const pathBin = path.join(pathBinDir, "ax-code")
+    fs.writeFileSync(pathBin, "#!/bin/sh\necho path\n", { mode: 0o755 })
+    fs.chmodSync(pathBin, 0o755)
+
+    const resolved = resolveDevAxCodeBinary({
+      electronDir: fakeElectron,
+      monorepoRoot,
+      env: { PATH: pathBinDir },
+      platform: "linux",
+      warn: () => {},
+    })
+
+    expect(resolved).toBe(path.join(fakeElectron, ".dev-bin", "ax-code"))
+    expect(resolved).not.toBe(pathBin)
   })
 
   it("generates a monorepo source launcher when PATH has no ax-code", () => {

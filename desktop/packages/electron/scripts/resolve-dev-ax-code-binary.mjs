@@ -1,12 +1,11 @@
 /**
  * Resolve the ax-code CLI binary for monorepo Desktop `dev` runs.
  *
- * Desktop's managed server spawns `ax-code serve`. On fresh Ubuntu checkouts the
- * CLI is often missing from PATH, which surfaces as `spawn ax-code ENOENT` and
- * aborts AX Code integration. Preference order:
+ * Desktop's managed server spawns `ax-code serve`. Preference order:
  *   1. Explicit AX_CODE_BINARY (when executable)
- *   2. PATH lookup
- *   3. Generated monorepo source launcher under electron/.dev-bin/
+ *   2. Generated monorepo source launcher under electron/.dev-bin/
+ *      (so local catalog/provider edits are visible without setup:cli)
+ *   3. PATH lookup (Homebrew / installed CLI) as a last resort
  */
 import fs from "node:fs"
 import os from "node:os"
@@ -72,7 +71,54 @@ export function resolveDevAxCodeBinary(options = {}) {
   const explicit = typeof env.AX_CODE_BINARY === "string" ? env.AX_CODE_BINARY.trim() : ""
   if (explicit) {
     if (executable(explicit)) return explicit
-    warn(`[electron-dev] AX_CODE_BINARY="${explicit}" is not executable; falling back to PATH / monorepo source`)
+    warn(`[electron-dev] AX_CODE_BINARY="${explicit}" is not executable; falling back to monorepo source / PATH`)
+  }
+
+  const entry = path.join(monorepoRoot, "packages", "ax-code", "src", "index-node-tui.ts")
+  const loader = path.join(monorepoRoot, "script", "solid-loader.mjs")
+  const nodeFfiRunner = path.join(monorepoRoot, "script", "node-ffi-runner.mjs")
+  const packageCwd = path.join(monorepoRoot, "packages", "ax-code")
+  if (fsp.existsSync(entry) && fsp.existsSync(nodeFfiRunner)) {
+    const binDir = path.join(electronDir, ".dev-bin")
+    fsp.mkdirSync(binDir, { recursive: true })
+    if (platform === "win32") {
+      const launcher = path.join(binDir, "ax-code.cmd")
+      fsp.writeFileSync(
+        launcher,
+        [
+          "@echo off",
+          `set "AX_CODE_SOURCE_CWD=${packageCwd}"`,
+          `set "AX_CODE_SOURCE_ENTRY=${entry}"`,
+          `set "AX_CODE_SOURCE_LOADER=${loader}"`,
+          `set "AX_CODE_SOURCE_NODE_FFI_RUNNER=${nodeFfiRunner}"`,
+          "set AX_CODE_ORIGINAL_CWD=%CD%",
+          'cd /d "%AX_CODE_SOURCE_CWD%"',
+          'node "%AX_CODE_SOURCE_NODE_FFI_RUNNER%" --import tsx --import "%AX_CODE_SOURCE_LOADER%" --conditions=node "%AX_CODE_SOURCE_ENTRY%" %*',
+          "",
+        ].join(os.EOL),
+        "utf8",
+      )
+      return launcher
+    }
+
+    const launcher = path.join(binDir, "ax-code")
+    fsp.writeFileSync(
+      launcher,
+      [
+        "#!/bin/sh",
+        `AX_CODE_SOURCE_CWD=${JSON.stringify(packageCwd)}`,
+        `AX_CODE_SOURCE_ENTRY=${JSON.stringify(entry)}`,
+        `AX_CODE_SOURCE_LOADER=${JSON.stringify(loader)}`,
+        `AX_CODE_SOURCE_NODE_FFI_RUNNER=${JSON.stringify(nodeFfiRunner)}`,
+        'export AX_CODE_ORIGINAL_CWD="$(pwd)"',
+        'cd "$AX_CODE_SOURCE_CWD" || exit 1',
+        'exec node "$AX_CODE_SOURCE_NODE_FFI_RUNNER" --import tsx --import "$AX_CODE_SOURCE_LOADER" --conditions=node "$AX_CODE_SOURCE_ENTRY" "$@"',
+        "",
+      ].join("\n"),
+      { encoding: "utf8", mode: 0o755 },
+    )
+    fsp.chmodSync(launcher, 0o755)
+    return launcher
   }
 
   const pathLookup =
@@ -81,55 +127,8 @@ export function resolveDevAxCodeBinary(options = {}) {
     }) || searchPathFor("ax-code", env, platform, { isExecutable: executable })
   if (pathLookup) return pathLookup
 
-  const entry = path.join(monorepoRoot, "packages", "ax-code", "src", "index-node-tui.ts")
-  const loader = path.join(monorepoRoot, "script", "solid-loader.mjs")
-  const nodeFfiRunner = path.join(monorepoRoot, "script", "node-ffi-runner.mjs")
-  const packageCwd = path.join(monorepoRoot, "packages", "ax-code")
-  if (!fsp.existsSync(entry) || !fsp.existsSync(nodeFfiRunner)) {
-    warn(
-      "[electron-dev] monorepo source CLI not found; Desktop will start without AX Code integration unless AX_CODE_BINARY is set",
-    )
-    return null
-  }
-
-  const binDir = path.join(electronDir, ".dev-bin")
-  fsp.mkdirSync(binDir, { recursive: true })
-  if (platform === "win32") {
-    const launcher = path.join(binDir, "ax-code.cmd")
-    fsp.writeFileSync(
-      launcher,
-      [
-        "@echo off",
-        `set "AX_CODE_SOURCE_CWD=${packageCwd}"`,
-        `set "AX_CODE_SOURCE_ENTRY=${entry}"`,
-        `set "AX_CODE_SOURCE_LOADER=${loader}"`,
-        `set "AX_CODE_SOURCE_NODE_FFI_RUNNER=${nodeFfiRunner}"`,
-        "set AX_CODE_ORIGINAL_CWD=%CD%",
-        'cd /d "%AX_CODE_SOURCE_CWD%"',
-        'node "%AX_CODE_SOURCE_NODE_FFI_RUNNER%" --import tsx --import "%AX_CODE_SOURCE_LOADER%" --conditions=node "%AX_CODE_SOURCE_ENTRY%" %*',
-        "",
-      ].join(os.EOL),
-      "utf8",
-    )
-    return launcher
-  }
-
-  const launcher = path.join(binDir, "ax-code")
-  fsp.writeFileSync(
-    launcher,
-    [
-      "#!/bin/sh",
-      `AX_CODE_SOURCE_CWD=${JSON.stringify(packageCwd)}`,
-      `AX_CODE_SOURCE_ENTRY=${JSON.stringify(entry)}`,
-      `AX_CODE_SOURCE_LOADER=${JSON.stringify(loader)}`,
-      `AX_CODE_SOURCE_NODE_FFI_RUNNER=${JSON.stringify(nodeFfiRunner)}`,
-      'export AX_CODE_ORIGINAL_CWD="$(pwd)"',
-      'cd "$AX_CODE_SOURCE_CWD" || exit 1',
-      'exec node "$AX_CODE_SOURCE_NODE_FFI_RUNNER" --import tsx --import "$AX_CODE_SOURCE_LOADER" --conditions=node "$AX_CODE_SOURCE_ENTRY" "$@"',
-      "",
-    ].join("\n"),
-    { encoding: "utf8", mode: 0o755 },
+  warn(
+    "[electron-dev] monorepo source CLI not found; Desktop will start without AX Code integration unless AX_CODE_BINARY is set",
   )
-  fsp.chmodSync(launcher, 0o755)
-  return launcher
+  return null
 }

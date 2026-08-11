@@ -10,6 +10,11 @@ type OverlayScrollbarProps = {
   observeMutations?: boolean
   suppressVisibility?: boolean
   userIntentOnly?: boolean
+  /**
+   * Keep the thumb visible whenever content overflows (do not auto-hide).
+   * Useful for compact menus/dropdowns where users need a cue that more items exist.
+   */
+  alwaysVisible?: boolean
 }
 
 type ThumbMetrics = {
@@ -34,8 +39,9 @@ const OverlayScrollbarComponent: React.FC<OverlayScrollbarProps> = ({
   observeMutations = true,
   suppressVisibility = false,
   userIntentOnly = false,
+  alwaysVisible = false,
 }) => {
-  const [visible, setVisible] = React.useState(false)
+  const [visible, setVisible] = React.useState(alwaysVisible)
   const [vertical, setVertical] = React.useState<ThumbMetrics>({ length: 0, offset: 0 })
   const [horizontal, setHorizontal] = React.useState<ThumbMetrics>({ length: 0, offset: 0 })
   const hideTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -121,6 +127,10 @@ const OverlayScrollbarComponent: React.FC<OverlayScrollbarProps> = ({
   }, [])
 
   const scheduleHide = React.useCallback(() => {
+    if (alwaysVisible) {
+      setVisible(true)
+      return
+    }
     if (hideTimeoutRef.current) {
       clearTimeout(hideTimeoutRef.current)
     }
@@ -129,7 +139,7 @@ const OverlayScrollbarComponent: React.FC<OverlayScrollbarProps> = ({
       return
     }
     hideTimeoutRef.current = setTimeout(() => setVisible(false), hideDelayMs)
-  }, [hideDelayMs])
+  }, [alwaysVisible, hideDelayMs])
 
   const markUserIntent = React.useCallback(() => {
     lastUserIntentAtRef.current = Date.now()
@@ -141,6 +151,10 @@ const OverlayScrollbarComponent: React.FC<OverlayScrollbarProps> = ({
     }
     frameRef.current = requestAnimationFrame(() => {
       updateMetrics()
+      if (alwaysVisible) {
+        setVisible(true)
+        return
+      }
       if (suppressVisibility && !isDraggingRef.current) {
         setVisible(false)
         return
@@ -155,14 +169,14 @@ const OverlayScrollbarComponent: React.FC<OverlayScrollbarProps> = ({
       setVisible(true)
       scheduleHide()
     })
-  }, [scheduleHide, suppressVisibility, updateMetrics, userIntentOnly])
+  }, [alwaysVisible, scheduleHide, suppressVisibility, updateMetrics, userIntentOnly])
 
   React.useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
     updateMetrics()
-    setVisible(false)
+    setVisible(alwaysVisible)
 
     const onScroll = () => handleScroll()
     const onKeyDown = (event: KeyboardEvent) => {
@@ -227,6 +241,7 @@ const OverlayScrollbarComponent: React.FC<OverlayScrollbarProps> = ({
       if (metricsFrameRef.current) cancelAnimationFrame(metricsFrameRef.current)
     }
   }, [
+    alwaysVisible,
     containerRef,
     handleScroll,
     markUserIntent,
@@ -236,6 +251,14 @@ const OverlayScrollbarComponent: React.FC<OverlayScrollbarProps> = ({
     updateMetrics,
     userIntentOnly,
   ])
+
+  // When alwaysVisible, re-show the thumb whenever overflow metrics become non-empty.
+  React.useEffect(() => {
+    if (!alwaysVisible) return
+    if (vertical.length > 0 || horizontal.length > 0) {
+      setVisible(true)
+    }
+  }, [alwaysVisible, vertical.length, horizontal.length])
 
   React.useEffect(() => {
     if (!suppressVisibility) {

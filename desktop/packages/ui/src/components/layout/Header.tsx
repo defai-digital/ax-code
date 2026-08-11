@@ -61,7 +61,7 @@ import { useTerminalStore } from "@/stores/useTerminalStore"
 import { isLoopbackHostname } from "@/lib/loopback"
 import { ProjectActionsButton } from "@/components/layout/ProjectActionsButton"
 import { SessionSwitcherDropdown } from "@/components/session/SessionSwitcherDropdown"
-import { canUseLocalElectronDesktopIPC, invokeDesktop, isDesktopShell, startDesktopWindowDrag } from "@/lib/desktop"
+import { invokeDesktop, isDesktopShell, startDesktopWindowDrag } from "@/lib/desktop"
 import {
   isDesktopWindowFullscreen as isDesktopWindowFullscreenNative,
   onDesktopWindowResized,
@@ -772,7 +772,6 @@ export const Header: React.FC = () => {
   const openContextBrowser = useUIStore((state) => state.openContextBrowser)
   const browserPanel = useUIStore((state) => state.browserPanel)
   const closeContextBrowser = useUIStore((state) => state.closeContextBrowser)
-  const openContextDashboard = useUIStore((state) => state.openContextDashboard)
   const closeContextPanel = useUIStore((state) => state.closeContextPanel)
   const contextPanelByDirectory = useUIStore((state) => state.contextPanelByDirectory)
   const activeMainTab = useUIStore((state) => state.activeMainTab)
@@ -833,7 +832,6 @@ export const Header: React.FC = () => {
     }
     return isDesktopShell()
   })
-  const hasLocalElectronDesktopIPC = React.useMemo(() => canUseLocalElectronDesktopIPC(), [])
   const [isDesktopWindowFullscreen, setIsDesktopWindowFullscreen] = React.useState(false)
 
   const isMacPlatform = React.useMemo(() => {
@@ -1367,32 +1365,6 @@ export const Header: React.FC = () => {
     })
   }, [])
 
-  const handleOpenDraftMiniChat = React.useCallback(() => {
-    void invokeDesktop("desktop_open_draft_mini_chat_window", {
-      directory: normalize(openDirectory || activeProject?.path || ""),
-      projectId: activeProject?.id ?? null,
-    }).catch((error) => {
-      console.warn("[header] failed to open draft mini chat window", error)
-    })
-  }, [activeProject?.id, activeProject?.path, openDirectory])
-
-  const handleOpenCurrentMiniChat = React.useCallback(() => {
-    if (isNewSessionDraftOpen) {
-      handleOpenDraftMiniChat()
-      return
-    }
-
-    if (!currentSessionId) {
-      return
-    }
-    void invokeDesktop("desktop_open_session_mini_chat_window", {
-      sessionId: currentSessionId,
-      directory: normalize(openDirectory || activeProject?.path || ""),
-    }).catch((error) => {
-      console.warn("[header] failed to open session mini chat window", error)
-    })
-  }, [activeProject?.path, currentSessionId, handleOpenDraftMiniChat, isNewSessionDraftOpen, openDirectory])
-
   const handleOpenContextPanel = React.useCallback(() => {
     const directory = normalize(openDirectory || "")
     if (!directory) {
@@ -1441,21 +1413,6 @@ export const Header: React.FC = () => {
     openContextBrowser("")
   }, [browserPanel.isOpen, browserPanel.focused, closeContextBrowser, openContextBrowser])
 
-  const handleOpenContextDashboard = React.useCallback(() => {
-    const directory = normalize(openDirectory || "")
-    if (!directory) {
-      return
-    }
-
-    const panelState = contextPanelByDirectory[directory]
-    if (getActiveContextMode(panelState) === "dashboard") {
-      closeContextPanel(directory)
-      return
-    }
-
-    openContextDashboard(directory)
-  }, [closeContextPanel, contextPanelByDirectory, openContextDashboard, openDirectory])
-
   const isContextPlanActive = React.useMemo(() => {
     const directory = normalize(openDirectory || "")
     if (!directory) {
@@ -1469,15 +1426,6 @@ export const Header: React.FC = () => {
     () => browserPanel.isOpen && browserPanel.focused,
     [browserPanel.isOpen, browserPanel.focused],
   )
-
-  const isContextDashboardActive = React.useMemo(() => {
-    const directory = normalize(openDirectory || "")
-    if (!directory) {
-      return false
-    }
-    const panelState = contextPanelByDirectory[directory]
-    return getActiveContextMode(panelState) === "dashboard"
-  }, [contextPanelByDirectory, openDirectory])
 
   const desktopHeaderIconButtonClass = DESKTOP_HEADER_ICON_BUTTON_CLASS
 
@@ -1878,13 +1826,6 @@ export const Header: React.FC = () => {
             Icon={"global"}
           />
           <HeaderIconActionButton
-            title={t("header.actions.openDashboard")}
-            ariaLabel={t("header.actions.openDashboard")}
-            onClick={handleOpenContextDashboard}
-            pressed={isContextDashboardActive}
-            Icon={"bar-chart-box"}
-          />
-          <HeaderIconActionButton
             title={t("header.actions.rightSidebarWithShortcut", { shortcut: shortcutLabel("toggle_right_sidebar") })}
             ariaLabel={t("header.actions.toggleRightSidebarAria")}
             onClick={toggleRightSidebar}
@@ -1903,8 +1844,6 @@ export const Header: React.FC = () => {
       ) : null}
     </>
   )
-
-  const showMiniChatHeaderAction = hasLocalElectronDesktopIPC && (isNewSessionDraftOpen || Boolean(currentSessionId))
 
   const renderDesktop = () => (
     <div
@@ -1927,27 +1866,14 @@ export const Header: React.FC = () => {
           Icon={"menu-2"}
         />
       ) : null}
-      <HeaderIconActionButton
-        title={t("header.actions.openSessionsWithShortcut", { shortcut: shortcutLabel("toggle_sidebar") })}
-        ariaLabel={t("header.actions.openSessionsAria")}
-        onClick={handleOpenSessionSwitcher}
-        className={`${desktopHeaderIconButtonClass} shrink-0`}
-        Icon={"layout-left"}
-      />
 
-      <div className="flex min-w-0 flex-1 items-center pl-3">
-        {!isWorkSurface && projectActionsContext ? (
-          <ProjectActionsButton
-            projectRef={projectActionsContext.projectRef}
-            directory={projectActionsContext.directory}
-            className="mr-2"
-          />
-        ) : null}
+      {/* Order: session title → open sessions → project actions */}
+      <div className="flex min-w-0 items-center pl-1">
         <SessionSwitcherDropdown>
           <button
             type="button"
             aria-label={t("sessions.switcher.openAria")}
-            className="app-region-no-drag mr-3 flex min-w-0 flex-col items-start rounded-md px-1 py-0.5 -my-0.5 text-left transition-colors hover:bg-interactive-hover/60 focus-visible:outline-none focus-visible:bg-interactive-hover/60"
+            className="app-region-no-drag mr-1 flex min-w-0 max-w-[min(40vw,18rem)] flex-col items-start rounded-md px-1 py-0.5 -my-0.5 text-left transition-colors hover:bg-interactive-hover/60 focus-visible:outline-none focus-visible:bg-interactive-hover/60"
           >
             <span className="truncate typography-ui-label font-normal leading-tight text-foreground max-w-full">
               {isNewSessionDraftOpen
@@ -1993,7 +1919,25 @@ export const Header: React.FC = () => {
             ) : null}
           </button>
         </SessionSwitcherDropdown>
+      </div>
 
+      <HeaderIconActionButton
+        title={t("header.actions.openSessionsWithShortcut", { shortcut: shortcutLabel("toggle_sidebar") })}
+        ariaLabel={t("header.actions.openSessionsAria")}
+        onClick={handleOpenSessionSwitcher}
+        className={`${desktopHeaderIconButtonClass} shrink-0`}
+        Icon={"layout-left"}
+      />
+
+      {!isWorkSurface && projectActionsContext ? (
+        <ProjectActionsButton
+          projectRef={projectActionsContext.projectRef}
+          directory={projectActionsContext.directory}
+          className="ml-1 shrink-0"
+        />
+      ) : null}
+
+      <div className="flex min-w-0 flex-1 items-center pl-2">
         <div className="flex-1" />
 
         <div className="flex shrink-0 items-center gap-1">
@@ -2009,21 +1953,11 @@ export const Header: React.FC = () => {
               showPercentIcon
               onClick={handleOpenContextPanel}
               pressed={isContextPanelActive}
-              className={!showMiniChatHeaderAction ? "mr-3.5" : ""}
+              className="mr-3.5"
               valueClassName="typography-ui-label font-medium leading-none text-foreground"
               percentIconClassName="h-5 w-5"
             />
           ) : null}
-          <HeaderIconActionButton
-            visible={showMiniChatHeaderAction}
-            title={isNewSessionDraftOpen ? t("header.actions.newMiniChat") : t("header.actions.openSessionMiniChat")}
-            ariaLabel={
-              isNewSessionDraftOpen ? t("header.actions.newMiniChatAria") : t("header.actions.openSessionMiniChatAria")
-            }
-            onClick={handleOpenCurrentMiniChat}
-            className={cn(desktopHeaderIconButtonClass, showDesktopHeaderContextUsage ? "mr-3.5" : "mr-1")}
-            Icon={"picture-in-picture-2"}
-          />
           {desktopSidebarActions}
           <WindowsWindowControls visible={isWindowsElectronDesktop} />
         </div>

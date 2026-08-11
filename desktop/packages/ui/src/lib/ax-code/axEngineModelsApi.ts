@@ -12,6 +12,15 @@ export type AxEngineModelFitState =
   | "local-unusable"
   | "failed"
 
+export type AxEngineDownloadProgress = {
+  mode: "determinate" | "indeterminate"
+  percent: number
+  done?: number
+  total?: number
+  message?: string
+  updatedAt: number
+}
+
 export type AxEngineModelJobSummary = {
   id: string
   type: "download"
@@ -24,6 +33,7 @@ export type AxEngineModelJobSummary = {
   revision?: string
   error?: string
   logTail?: string[]
+  progress?: AxEngineDownloadProgress
 }
 
 export type AxEngineModelCatalogEntry = {
@@ -64,6 +74,11 @@ export type AxEngineModelCatalogEntry = {
 }
 
 export type AxEngineModelsResponse = {
+  /** Served by the live ax-code process — sole catalog contract, not a Desktop hardcode. */
+  catalog?: {
+    source: string
+    modelIDs: string[]
+  }
   eligibility: {
     supported: boolean
     platform: string
@@ -111,6 +126,44 @@ export type AxEngineModelsResponse = {
   }
   models: AxEngineModelCatalogEntry[]
   jobs: AxEngineModelJobSummary[]
+}
+
+/** Desktop /health fields that identify which ax-code binary is serving the catalog. */
+export type DesktopAxCodeRuntimeIdentity = {
+  binaryPath: string | null
+  binarySource: string | null
+  version: string | null
+}
+
+export const fetchDesktopAxCodeRuntimeIdentity = async (): Promise<DesktopAxCodeRuntimeIdentity> => {
+  try {
+    const response = await fetch("/health", { method: "GET", headers: { Accept: "application/json" } })
+    if (!response.ok) return { binaryPath: null, binarySource: null, version: null }
+    const body = (await response.json()) as {
+      axCodeBinaryResolved?: unknown
+      axCodeBinarySource?: unknown
+      axCodeVersion?: unknown
+    }
+    return {
+      binaryPath: typeof body.axCodeBinaryResolved === "string" ? body.axCodeBinaryResolved : null,
+      binarySource: typeof body.axCodeBinarySource === "string" ? body.axCodeBinarySource : null,
+      version: typeof body.axCodeVersion === "string" ? body.axCodeVersion : null,
+    }
+  } catch {
+    return { binaryPath: null, binarySource: null, version: null }
+  }
+}
+
+/** True when the path looks like a packaged/Homebrew install rather than monorepo source. */
+export const isExternalInstalledAxCodeBinary = (binaryPath: string | null | undefined): boolean => {
+  if (!binaryPath) return false
+  const normalized = binaryPath.replace(/\\/g, "/")
+  return (
+    normalized.includes("/Cellar/ax-code/") ||
+    normalized.includes("/opt/homebrew/bin/ax-code") ||
+    normalized.includes("/usr/local/bin/ax-code") ||
+    /\/\.ax-code\/bin\/ax-code(?:\.exe)?$/i.test(normalized)
+  )
 }
 
 export type AxEngineDeleteModelResponse = {

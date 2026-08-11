@@ -5,12 +5,12 @@ import { tmpdir } from "../../fixture/fixture"
 import { deleteAxEngineModel } from "../../../src/provider/ax-engine/delete"
 import { AxEnginePaths } from "../../../src/provider/ax-engine/paths"
 
-const GEMMA = { modelID: "gemma-4-12b", quant: "mlx6bit", repo: "mlx-community/gemma-4-12B-it-6bit" } as const
+const AXQ27 = { modelID: "qwen3.6-27b-axq-6bit", quant: "mlx6bit", repo: "AutomatosX/AX-Qwen3.6-27B-MLX-AXQ-6bit-MTP" } as const
 const C1 = "1111111111111111111111111111111111111111"
 const C2 = "2222222222222222222222222222222222222222"
 
 function repoBase(hfRoot: string) {
-  return path.join(hfRoot, `models--${GEMMA.repo.replace(/\//g, "--")}`)
+  return path.join(hfRoot, `models--${AXQ27.repo.replace(/\//g, "--")}`)
 }
 
 async function writeBlob(hfRoot: string, hash: string, content: string) {
@@ -67,7 +67,7 @@ describe("deleteAxEngineModel frees HF cache blobs", () => {
     const snapshot = await makeSnapshot(hfRoot, C1, { "model-00001-of-00001.safetensors": "blob-a" })
     await fs.writeFile(path.join(repoBase(hfRoot), "refs", "main"), C1)
 
-    const result = await deleteAxEngineModel({ modelID: GEMMA.modelID, quantization: GEMMA.quant })
+    const result = await deleteAxEngineModel({ modelID: AXQ27.modelID, quantization: AXQ27.quant })
 
     expect(result.deleted).toBe(true)
     expect(result.path).toBe(snapshot)
@@ -92,7 +92,7 @@ describe("deleteAxEngineModel frees HF cache blobs", () => {
     })
     await fs.writeFile(path.join(repoBase(hfRoot), "refs", "main"), C2)
 
-    const result = await deleteAxEngineModel({ modelID: GEMMA.modelID, quantization: GEMMA.quant })
+    const result = await deleteAxEngineModel({ modelID: AXQ27.modelID, quantization: AXQ27.quant })
 
     expect(result.deleted).toBe(true)
     expect(result.path).toBe(doomed)
@@ -109,12 +109,12 @@ describe("deleteAxEngineModel frees HF cache blobs", () => {
   test("managed (non-HF) model dirs still delete as before", async () => {
     await using dir = await tmpdir()
     process.env.HF_HUB_CACHE = path.join(dir.path, "hub")
-    const managed = AxEnginePaths.managedModelDir(GEMMA.modelID, GEMMA.quant)
+    const managed = AxEnginePaths.managedModelDir(AXQ27.modelID, AXQ27.quant)
     await fs.mkdir(managed, { recursive: true })
     await fs.writeFile(path.join(managed, "model-manifest.json"), "{}")
     await fs.writeFile(path.join(managed, "model.safetensors"), "M".repeat(2048))
 
-    const result = await deleteAxEngineModel({ modelID: GEMMA.modelID, quantization: GEMMA.quant })
+    const result = await deleteAxEngineModel({ modelID: AXQ27.modelID, quantization: AXQ27.quant })
 
     expect(result.deleted).toBe(true)
     expect(result.path).toBe(managed)

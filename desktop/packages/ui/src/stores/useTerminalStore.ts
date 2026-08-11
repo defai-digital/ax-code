@@ -197,9 +197,11 @@ export const useTerminalStore = create<TerminalStore>()(
             if (!existing) {
               newSessions.set(key, createEmptyDirectoryState(tab))
             } else {
+              // New terminal sessions open leftmost on the tab bar.
               newSessions.set(key, {
                 ...existing,
-                tabs: [...existing.tabs, tab],
+                tabs: [tab, ...existing.tabs],
+                activeTabId: tabId,
               })
             }
 

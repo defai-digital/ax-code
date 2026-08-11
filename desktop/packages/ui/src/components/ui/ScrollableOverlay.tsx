@@ -17,6 +17,8 @@ type ScrollableOverlayProps = React.HTMLAttributes<HTMLElement> & {
   useScrollShadow?: boolean
   scrollShadowSize?: number
   userIntentOnly?: boolean
+  /** Keep the overlay scrollbar visible while content overflows. */
+  alwaysShowScrollbar?: boolean
   /** Forwarded to the inner element (e.g. textarea). */
   disabled?: boolean
 }
@@ -39,6 +41,7 @@ export const ScrollableOverlay = React.forwardRef<HTMLElement, ScrollableOverlay
       useScrollShadow = false,
       scrollShadowSize,
       userIntentOnly = false,
+      alwaysShowScrollbar = false,
       ...rest
     },
     ref,
@@ -97,6 +100,7 @@ export const ScrollableOverlay = React.forwardRef<HTMLElement, ScrollableOverlay
           disableHorizontal={disableHorizontal}
           observeMutations={observeMutations}
           userIntentOnly={userIntentOnly}
+          alwaysVisible={alwaysShowScrollbar}
         />
       </div>
     )

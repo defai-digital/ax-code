@@ -5,10 +5,10 @@ import {
   startDownloadJob,
   type AxEngineDownloadJobRuntime,
 } from "../../../src/provider/ax-engine/download-job"
-import { AX_ENGINE_GEMMA4_12B_MODEL_ID } from "../../../src/provider/ax-engine/constants"
+import { AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID } from "../../../src/provider/ax-engine/constants"
 import type { downloadModel } from "../../../src/provider/ax-engine/model-cache"
 
-const MODEL_ID = AX_ENGINE_GEMMA4_12B_MODEL_ID
+const MODEL_ID = AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID
 
 const eligibility = {
   supported: true,
@@ -49,7 +49,7 @@ function runtimeWith(download: typeof downloadModel): AxEngineDownloadJobRuntime
 const preparedState = {
   modelID: MODEL_ID,
   quantization: "mlx6bit" as const,
-  path: "/models/gemma",
+  path: "/models/glm",
   revision: "abc123",
   preparedAt: 1,
 }
@@ -72,12 +72,37 @@ describe("ax-engine download jobs", () => {
     const first = await startDownloadJob({ modelID: MODEL_ID }, runtime)
     const second = await startDownloadJob({ modelID: MODEL_ID }, runtime)
     expect(second.id).toBe(first.id)
+    expect(first.progress?.mode).toBe("indeterminate")
 
     await downloadRunning
     resolveDownload(preparedState)
     await vi.waitFor(async () => expect(await activeJobs()).toEqual([]))
     const jobs = await listDownloadJobs()
-    expect(jobs.find((job) => job.id === first.id)?.status).toBe("complete")
+    const completed = jobs.find((job) => job.id === first.id)
+    expect(completed?.status).toBe("complete")
+    expect(completed?.progress).toMatchObject({ mode: "determinate", percent: 100 })
+  })
+
+  test("forwards live download progress onto the job summary", async () => {
+    let onProgress: ((progress: { mode: "determinate"; percent: number; updatedAt: number }) => void) | undefined
+    let resolveDownload!: (state: typeof preparedState) => void
+    let downloadStarted!: () => void
+    const downloadRunning = new Promise<void>((resolve) => (downloadStarted = resolve))
+    const runtime = runtimeWith((input) => {
+      onProgress = input.onProgress as typeof onProgress
+      downloadStarted()
+      return new Promise((resolve) => (resolveDownload = resolve)) as any
+    })
+
+    const job = await startDownloadJob({ modelID: MODEL_ID }, runtime)
+    await downloadRunning
+    onProgress?.({ mode: "determinate", percent: 42, updatedAt: Date.now() })
+    await vi.waitFor(async () => {
+      const active = (await listDownloadJobs()).find((entry) => entry.id === job.id)
+      expect(active?.progress).toMatchObject({ mode: "determinate", percent: 42 })
+    })
+    resolveDownload(preparedState)
+    await vi.waitFor(async () => expect(await activeJobs()).toEqual([]))
   })
 
   test("cancelled download that still resolves stays cancelled, not complete", async () => {

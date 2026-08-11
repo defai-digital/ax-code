@@ -75,22 +75,7 @@ export function SidebarHeader(props: Props): React.ReactNode {
       <div className="flex h-auto min-h-8 flex-col gap-1">
         <div className="flex h-8 items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={handleOpenDirectoryDialog}
-                  className={headerActionButtonClass}
-                  aria-label={t("sessions.sidebar.header.actions.addProject")}
-                >
-                  <Icon name="folder-add" className={headerActionIconClass} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={4}>
-                <p>{t("sessions.sidebar.header.actions.addProject")}</p>
-              </TooltipContent>
-            </Tooltip>
-
+            {/* New session is the primary action — keep it leftmost on the bar. */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -104,6 +89,22 @@ export function SidebarHeader(props: Props): React.ReactNode {
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={4}>
                 <p>{t("sessions.sidebar.header.actions.newSession")}</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleOpenDirectoryDialog}
+                  className={headerActionButtonClass}
+                  aria-label={t("sessions.sidebar.header.actions.addProject")}
+                >
+                  <Icon name="folder-add" className={headerActionIconClass} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                <p>{t("sessions.sidebar.header.actions.addProject")}</p>
               </TooltipContent>
             </Tooltip>
 

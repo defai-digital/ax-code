@@ -69,6 +69,7 @@ import { GitHubPrPickerDialog } from "@/components/session/GitHubPrPickerDialog"
 import { Icon } from "@/components/icon/Icon"
 import { DraftPresetChips } from "./DraftPresetChips"
 import { useProjectKnowledge, projectKnowledgeFileLabel } from "@/hooks/useProjectKnowledge"
+import { useDesktopSurfaceStore } from "@/stores/useDesktopSurfaceStore"
 import { useChatSearchDirectory } from "@/hooks/useChatSearchDirectory"
 import { axCodeClient } from "@/lib/ax-code/client"
 import { useProjectsStore } from "@/stores/useProjectsStore"
@@ -848,6 +849,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
   const currentDirectory = useDirectoryStore((s) => s.currentDirectory)
   const homeDirectory = useDirectoryStore((s) => s.homeDirectory)
   const projectKnowledge = useProjectKnowledge(currentDirectory)
+  const isCodeSurface = useDesktopSurfaceStore((s) => s.surface) === "code"
   const currentSessionDirectoryForSync = useSessionUIStore(
     React.useCallback(
       (s) => (currentSessionId ? s.getDirectoryForSession(currentSessionId) : null),
@@ -3555,7 +3557,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 draftProjectLabel,
               )}
             </h1>
-            {!projectKnowledge.isLoading && (
+            {isCodeSurface && !projectKnowledge.isLoading && (
               <div className="mt-3 flex items-center justify-center gap-2">
                 {projectKnowledge.exists ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 typography-micro text-emerald-600 dark:text-emerald-400">

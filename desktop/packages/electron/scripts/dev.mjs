@@ -2,6 +2,7 @@
 import { spawn } from "node:child_process"
 import fs from "node:fs"
 import net from "node:net"
+import os from "node:os"
 import path from "node:path"
 import { createRequire } from "node:module"
 import { fileURLToPath } from "node:url"
@@ -123,11 +124,22 @@ if (devAxCodeBinary) {
   console.log(`[electron-dev] AX_CODE_BINARY=${devAxCodeBinary}`)
 }
 
+// ax-engine model downloads need huggingface_hub in the Python the CLI spawns.
+// Prefer an explicit env; otherwise use the conventional ~/.ax-engine/venv if present.
+const defaultAxEnginePython = path.join(os.homedir(), ".ax-engine", "venv", "bin", "python")
+const devAxEnginePython =
+  (typeof process.env.AX_ENGINE_PYTHON === "string" && process.env.AX_ENGINE_PYTHON.trim()) ||
+  (fs.existsSync(defaultAxEnginePython) ? defaultAxEnginePython : "")
+if (devAxEnginePython) {
+  console.log(`[electron-dev] AX_ENGINE_PYTHON=${devAxEnginePython}`)
+}
+
 const sharedEnv = {
   ...process.env,
   AX_CODE_DESKTOP_PORT: String(serverPort),
   AX_CODE_DESKTOP_RENDERER_PORT: String(rendererPort),
   ...(devAxCodeBinary ? { AX_CODE_BINARY: devAxCodeBinary } : {}),
+  ...(devAxEnginePython ? { AX_ENGINE_PYTHON: devAxEnginePython } : {}),
 }
 
 const vite = spawnManaged(children, "pnpm", ["run", "dev:vite"], {

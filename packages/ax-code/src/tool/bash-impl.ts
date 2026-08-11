@@ -3,7 +3,9 @@ import { spawn } from "child_process"
 import { Tool } from "./tool"
 import path from "path"
 import DESCRIPTION from "./bash.txt"
+import DESCRIPTION_AX_ENGINE from "./bash-ax-engine.txt"
 import { Log } from "../util/log"
+import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { Instance } from "../project/instance"
 import { lazy } from "@/util/lazy"
 import { Language } from "web-tree-sitter"
@@ -204,13 +206,16 @@ const parser = lazy(async () => {
 })
 
 // TODO: we may wanna rename this tool so it works better on other shells
-export const BashTool = Tool.define("bash", async () => {
+export const BashTool = Tool.define("bash", async (initCtx) => {
   const config = await Config.get()
   const shell = Shell.acceptable(config.shell)
   log.info("bash tool using shell", { shell })
+  const description =
+    initCtx?.model?.providerID === AX_ENGINE_PROVIDER_ID ? DESCRIPTION_AX_ENGINE : DESCRIPTION
 
   return {
-    description: DESCRIPTION.replaceAll("${directory}", Instance.directory)
+    description: description
+      .replaceAll("${directory}", Instance.directory)
       .replaceAll("${maxLines}", String(Truncate.MAX_LINES))
       .replaceAll("${maxBytes}", String(Truncate.MAX_BYTES)),
     parameters: z.object({

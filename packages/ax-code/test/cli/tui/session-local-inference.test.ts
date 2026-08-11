@@ -30,7 +30,7 @@ describe("sidebarLocalInferenceView", () => {
             id: "msg_1",
             role: "assistant",
             providerID: "ax-engine",
-            modelID: "qwen3.6-27b-6bit",
+            modelID: "qwen3.6-27b-axq-6bit",
             time: { created: 1_000 },
             tokens: { input: 1_000, output: 0 },
           },
@@ -49,7 +49,7 @@ describe("sidebarLocalInferenceView", () => {
             id: "msg_1",
             role: "assistant",
             providerID: "ax-engine",
-            modelID: "gemma-4-12b",
+            modelID: "qwen3-coder-next-axq-6bit",
             time: { created: 1_000, completed: 5_000 },
             tokens: { input: 2_000, output: 300 },
           },
@@ -59,7 +59,7 @@ describe("sidebarLocalInferenceView", () => {
         },
       }),
     ).toEqual({
-      modelID: "gemma-4-12b",
+      modelID: "qwen3-coder-next-axq-6bit",
       prefillRate: "2.0k t/s",
       decodeRate: "100 t/s",
     })
@@ -73,7 +73,7 @@ describe("sidebarLocalInferenceView", () => {
             id: "msg_1",
             role: "assistant",
             providerID: "ax-engine",
-            modelID: "gemma-4-12b",
+            modelID: "qwen3.6-27b-axq-6bit",
             time: { created: 1_000, completed: 3_000 },
             tokens: { input: 1_000, output: 100 },
           },
@@ -81,7 +81,7 @@ describe("sidebarLocalInferenceView", () => {
             id: "msg_2",
             role: "assistant",
             providerID: "ax-engine",
-            modelID: "glm-4.7-flash",
+            modelID: "qwen3-coder-next-axq-6bit",
             time: { created: 10_000, completed: 13_000 },
             tokens: { input: 600, output: 240 },
           },
@@ -92,7 +92,7 @@ describe("sidebarLocalInferenceView", () => {
         },
       }),
     ).toMatchObject({
-      modelID: "glm-4.7-flash",
+      modelID: "qwen3-coder-next-axq-6bit",
       prefillRate: "600 t/s",
       decodeRate: "120 t/s",
     })

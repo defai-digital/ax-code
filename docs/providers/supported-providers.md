@@ -69,19 +69,15 @@ For Kimi Code membership, install the local `kimi` binary, run `kimi login`, the
 
 ## AX Engine Local Provider
 
-`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and exposes curated 6-bit MLX models. Qwen3.6, Gemma 4, and GLM-4.7-Flash prefer packaged MTP acceleration and fall back to direct decode when only complete base weights are present; Qwen3-Coder-Next uses direct decode.
+`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and exposes curated AutomatosX AXQ 6-bit MLX packs. The 27B and 9B packs include an AXQuant MTP sidecar; the coding specialist is direct decode.
 
-| Provider id | Model id                | Display name                           | Context | Output |
-| ----------- | ----------------------- | -------------------------------------- | ------: | -----: |
-| `ax-engine` | `qwen3.6-27b-6bit`      | Qwen3.6-27B 6-bit (Local MLX Auto)     |  65,536 |  2,048 |
-| `ax-engine` | `qwen3-coder-next-6bit` | Qwen3-Coder-Next 6-bit (Local MLX)     |  16,384 |  2,048 |
-| `ax-engine` | `qwen3.6-35b-a3b`       | Qwen3.6-35B-A3B 6-bit (Local MLX Auto) |  32,768 |  2,048 |
-| `ax-engine` | `gemma-4-12b`           | Gemma 4 12B 6-bit (Local MLX Auto)     |  32,768 |  2,048 |
-| `ax-engine` | `gemma-4-26b`           | Gemma 4 26B 6-bit (Local MLX Auto)     |  32,768 |  2,048 |
-| `ax-engine` | `gemma-4-31b`           | Gemma 4 31B 6-bit (Local MLX Auto)     |  32,768 |  2,048 |
-| `ax-engine` | `glm-4.7-flash`         | GLM 4.7 Flash 6-bit (Local MLX Auto)   |  32,768 |  2,048 |
+| Provider id | Model id                    | Display name                           | Context | Output |
+| ----------- | --------------------------- | -------------------------------------- | ------: | -----: |
+| `ax-engine` | `qwen3.6-27b-axq-6bit`      | Qwen3.6-27B AXQ 6-bit (Local MLX Auto) |  65,536 |  2,048 |
+| `ax-engine` | `qwen3.5-9b-axq-6bit`       | Qwen3.5-9B AXQ 6-bit (Local MLX Auto)  |  32,768 |  2,048 |
+| `ax-engine` | `qwen3-coder-next-axq-6bit` | Qwen3-Coder-Next AXQ 6-bit (Local MLX) |  16,384 |  2,048 |
 
-The default local model is `qwen3.6-27b-6bit`. See [AX Engine Model Selection](ax-engine-model-selection.md) for ranking, memory, and disk guidance.
+The default local model is `qwen3.6-27b-axq-6bit`. See [AX Engine Model Selection](ax-engine-model-selection.md) for ranking, memory, and disk guidance.
 
 For a configured local AX Engine server, `/v1/models` is authoritative: AX Code discovers the live model IDs, context/output limits, modalities, and structured tool-call support. A model that does not advertise structured tool calling is not used for coding-agent requests.
 

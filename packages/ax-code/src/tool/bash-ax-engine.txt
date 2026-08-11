@@ -1,0 +1,13 @@
+Run one focused shell command in ${directory} by default. Use the `workdir` parameter for another directory instead of `cd`.
+
+Use Bash for git, builds, tests, package managers, process control, and aggregate repository queries. Prefer list/glob/grep/read/edit/write for ordinary file discovery, reading, searching, and changes.
+
+Minimize local-model round trips:
+- Prefer one single-pass command over shell loops or repeated scans.
+- For repository counts, prefer tracked/source files (for example `git ls-files`) and exclude dependency/generated trees such as .git, node_modules, .venv, venv, dist, build, and target.
+- If a command's result answers the request, synthesize the answer instead of running a slightly different version of the same query.
+- Batch independent checks in one call when that keeps output clear and bounded.
+
+Set `run_in_background: true` for dev servers, watchers, or other long-running commands; use bash_output to poll and kill_shell to stop them. Output beyond ${maxLines} lines or ${maxBytes} bytes is truncated and saved for focused follow-up.
+
+Do not commit, install packages, modify global system state, or run destructive commands unless the user requested it.

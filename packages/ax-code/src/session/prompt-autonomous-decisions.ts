@@ -259,6 +259,36 @@ type ToolOnlyTurnDecision =
   | { action: "nudge"; final: boolean; forced: boolean }
   | { action: "stop" }
 
+type ToolActivityPart = {
+  type?: string
+  tool?: string
+}
+
+// These tools can inspect or control an inspection process without directly
+// creating a source patch. Bash is treated as read-only only when the same
+// turn has no persisted patch part, so shell-based edits do not trip the
+// local-model convergence guard.
+const READ_ONLY_EXPLORATION_TOOLS = new Set(["bash", "bash_output", "kill_shell", "list", "read", "glob", "grep"])
+
+export function isReadOnlyExplorationTurn(parts: readonly ToolActivityPart[] | undefined): boolean {
+  if (!parts?.length || parts.some((part) => part.type === "patch")) return false
+  const tools = parts.filter((part) => part.type === "tool")
+  return tools.length > 0 && tools.every((part) => READ_ONLY_EXPLORATION_TOOLS.has(part.tool ?? ""))
+}
+
+type ReadOnlyExplorationDecision = { action: "ignore" } | { action: "nudge" } | { action: "force_text" }
+
+export function readOnlyExplorationDecision(input: {
+  consecutiveTurns: number
+  nudged: boolean
+  nudgeThreshold: number
+  forceThreshold: number
+}): ReadOnlyExplorationDecision {
+  if (input.consecutiveTurns >= input.forceThreshold) return { action: "force_text" }
+  if (!input.nudged && input.consecutiveTurns >= input.nudgeThreshold) return { action: "nudge" }
+  return { action: "ignore" }
+}
+
 // Circuit breaker for streaks of turns that end in further tool calls without
 // a completed text response. Two checkpoints (a synthesis nudge, then a final
 // warning) fire before the hard stop. `consecutiveToolOnlyTurns` is the streak

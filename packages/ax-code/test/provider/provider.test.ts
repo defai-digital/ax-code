@@ -137,6 +137,68 @@ test("Auth.set invalidates provider cache after key replacement", async () => {
   })
 })
 
+test("Auth.set in one project makes the key visible in another without reconnect", async () => {
+  // Auth credentials are global; provider state is cached per Instance directory.
+  // Connecting a key while project A is active must not leave project B stuck on
+  // a pre-auth empty provider list until the user reconnects there.
+  await using projectA = await tmpdir()
+  await using projectB = await tmpdir()
+
+  try {
+    // Warm both project instances without credentials.
+    await Instance.provide({
+      directory: projectA.path,
+      fn: async () => {
+        await Provider.list()
+      },
+    })
+    await Instance.provide({
+      directory: projectB.path,
+      fn: async () => {
+        expect((await Provider.list())[ProviderID.xai]).toBeUndefined()
+      },
+    })
+
+    // Connect from project A only.
+    await Instance.provide({
+      directory: projectA.path,
+      fn: async () => {
+        await Auth.set("xai", { type: "api", key: "shared-key" })
+        expect((await Provider.list())[ProviderID.xai]?.key).toBe("shared-key")
+      },
+    })
+
+    // Project B must see the same global credential without a second Auth.set.
+    await Instance.provide({
+      directory: projectB.path,
+      fn: async () => {
+        expect((await Provider.list())[ProviderID.xai]?.key).toBe("shared-key")
+      },
+    })
+  } finally {
+    await Auth.remove("xai")
+  }
+})
+
+test("Auth.set during Instance boot init does not deadlock invalidateAll", async () => {
+  // Regression: invalidateAll used to Instance.provide() every listed directory,
+  // including the one still booting, which awaited its own boot promise forever.
+  await using tmp = await tmpdir()
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        await Auth.set("xai", { type: "api", key: "boot-init-key" })
+      },
+      fn: async () => {
+        expect((await Provider.list())[ProviderID.xai]?.key).toBe("boot-init-key")
+      },
+    })
+  } finally {
+    await Auth.remove("xai")
+  }
+})
+
 test("getLanguage registers pending model loads before awaiting them", async () => {
   const src = await fs.readFile(path.join(import.meta.dirname, "../../src/provider/provider-impl.ts"), "utf-8")
   const start = src.indexOf("export async function getLanguage(")

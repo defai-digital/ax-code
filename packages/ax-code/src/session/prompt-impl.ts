@@ -56,9 +56,11 @@ import {
   goalLongRunActive,
   emptyModelTurnIncompleteMessage,
   hasSuccessfulGoalCompleteTool,
+  isReadOnlyExplorationTurn,
   isEmptyModelTurn,
   isTruncatedModelTurn,
   modelTurnFinished,
+  readOnlyExplorationDecision,
   resolveTurnToolChoice,
   toolOnlyTurnDecision,
   type GoalBudgetWrapUp,
@@ -80,11 +82,14 @@ import { createPromptRunState } from "./prompt-run-state"
 import { resolvePromptCache, type PromptCacheEntry } from "./prompt-cache"
 import { SystemPrompt } from "./system"
 import {
+  AX_ENGINE_READ_ONLY_TURN_FORCE,
+  AX_ENGINE_READ_ONLY_TURN_NUDGE,
   TOOL_ONLY_TURN_NUDGE,
   TOOL_ONLY_TURN_FINAL_NUDGE,
   MAX_TOOL_ONLY_TURNS,
   promptLoopLimits,
 } from "./prompt-loop-config"
+import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { GOAL_CEILING_CONVERGENCE_STEPS } from "@/constants/session"
 import {
   CommandInput as CommandInputSchema,
@@ -338,6 +343,8 @@ export namespace SessionPrompt {
     // instead of trusting another advisory nudge.
     let toolOnlyFinalCheckpointHits = 0
     let forceTextOnlyTurn = false
+    let consecutiveAxEngineReadOnlyTurns = 0
+    let axEngineReadOnlyNudged = false
     const cachedSystemPrompt: PromptRequestCache = {
       environment: undefined,
       environmentModelKey: undefined,
@@ -378,6 +385,8 @@ export namespace SessionPrompt {
       BlastRadius.resetSteps(sessionID)
       consecutiveToolOnlyTurns = 0
       toolOnlyNudges = 0
+      consecutiveAxEngineReadOnlyTurns = 0
+      axEngineReadOnlyNudged = false
       fallbackModelOverride = undefined
       failedFallbackProviderIDs.clear()
       cachedMsgs = undefined
@@ -903,6 +912,8 @@ export namespace SessionPrompt {
       if (modelFinished) {
         consecutiveToolOnlyTurns = 0
         toolOnlyNudges = 0
+        consecutiveAxEngineReadOnlyTurns = 0
+        axEngineReadOnlyNudged = false
       }
 
       // A provider turn that returns finish="other" with zero tokens is a
@@ -1204,7 +1215,13 @@ export namespace SessionPrompt {
         // #381: a successful update_goal(status=complete) that ends the turn
         // with tool-calls must force a final text summary, not climb toward
         // the tool-only circuit breaker after the goal is already done.
-        const currentParts = msgs.find((item) => item.info.id === processor.message.id)?.parts
+        // Autonomous mode refreshes `msgs` above, while supervised tool turns
+        // intentionally defer that history refresh until the next iteration.
+        // Read the just-written parts directly in the latter case so both the
+        // goal-complete and local read-only convergence guards see this turn.
+        const currentParts =
+          msgs.find((item) => item.info.id === processor.message.id)?.parts ??
+          (await MessageV2.parts(processor.message.id))
         const goalForce = goalCompleteForceTextDecision({
           modelFinished,
           goalCompletedThisTurn: hasSuccessfulGoalCompleteTool(currentParts),
@@ -1213,6 +1230,8 @@ export namespace SessionPrompt {
           forceTextOnlyTurn = true
           consecutiveToolOnlyTurns = 0
           toolOnlyNudges = 0
+          consecutiveAxEngineReadOnlyTurns = 0
+          axEngineReadOnlyNudged = false
           log.info("goal complete forces text-only final turn", {
             command: "session.prompt.loop",
             status: "force_text",
@@ -1227,6 +1246,42 @@ export namespace SessionPrompt {
         }
 
         consecutiveToolOnlyTurns += 1
+        const axEngineReadOnlyTurn =
+          model.providerID === AX_ENGINE_PROVIDER_ID && isReadOnlyExplorationTurn(currentParts)
+        if (axEngineReadOnlyTurn) {
+          consecutiveAxEngineReadOnlyTurns += 1
+          const readOnlyTransition = readOnlyExplorationDecision({
+            consecutiveTurns: consecutiveAxEngineReadOnlyTurns,
+            nudged: axEngineReadOnlyNudged,
+            nudgeThreshold: AX_ENGINE_READ_ONLY_TURN_NUDGE,
+            forceThreshold: AX_ENGINE_READ_ONLY_TURN_FORCE,
+          })
+          if (readOnlyTransition.action !== "ignore") {
+            const forced = readOnlyTransition.action === "force_text"
+            if (forced) forceTextOnlyTurn = true
+            else axEngineReadOnlyNudged = true
+            log.info("ax-engine read-only turn checkpoint", {
+              command: "session.prompt.loop",
+              status: forced ? "force_text" : "nudge",
+              sessionID,
+              consecutiveTurns: consecutiveAxEngineReadOnlyTurns,
+              forced,
+            })
+            await createAutonomousTextContinuation({
+              sessionID,
+              messages: msgs,
+              text: AutonomousContinuationPrompt.axEngineReadOnlyCheckpoint({
+                consecutiveTurns: consecutiveAxEngineReadOnlyTurns,
+                forceThreshold: AX_ENGINE_READ_ONLY_TURN_FORCE,
+                forced,
+              }),
+            })
+            continue
+          }
+        } else {
+          consecutiveAxEngineReadOnlyTurns = 0
+          axEngineReadOnlyNudged = false
+        }
         const toolOnlyTransition = toolOnlyTurnDecision({
           consecutiveToolOnlyTurns,
           toolOnlyNudges,

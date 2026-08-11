@@ -280,7 +280,11 @@ export function axEngineLoader(): CustomLoader {
         // loader runs. Only return config/env credentials here so encrypted
         // auth can win without being shadowed by the default "local" key.
         ...(configuredApiKey ? { apiKey: configuredApiKey } : {}),
-        includeUsage: false,
+        // AX Engine 6.11+ emits the OpenAI-compatible terminal usage chunk
+        // when stream_options.include_usage is requested. Keeping this off
+        // made every successful local turn look like a zero-token response,
+        // which broke context telemetry and usage-driven compaction.
+        includeUsage: true,
         fetch: async (input: string | Request | URL, init?: RequestInit) => {
           const headers = new Headers(init?.headers)
           if (!headers.has("authorization")) {

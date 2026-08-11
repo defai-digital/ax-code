@@ -12713,14 +12713,7 @@ export type ProviderAxEnginePrepareData = {
   body?: {
     modelPath?: string
     binaryPath?: string
-    modelID?:
-      | "qwen3.6-27b-6bit"
-      | "qwen3-coder-next-6bit"
-      | "qwen3.6-35b-a3b"
-      | "gemma-4-12b"
-      | "gemma-4-26b"
-      | "gemma-4-31b"
-      | "glm-4.7-flash"
+    modelID?: "qwen3.6-27b-axq-6bit" | "qwen3.5-9b-axq-6bit" | "qwen3-coder-next-axq-6bit"
     quantization?: "mlx4bit" | "mlx6bit"
     download?: boolean
     start?: boolean
@@ -12752,14 +12745,7 @@ export type ProviderAxEngineStartData = {
   body?: {
     modelPath?: string
     binaryPath?: string
-    modelID?:
-      | "qwen3.6-27b-6bit"
-      | "qwen3-coder-next-6bit"
-      | "qwen3.6-35b-a3b"
-      | "gemma-4-12b"
-      | "gemma-4-26b"
-      | "gemma-4-31b"
-      | "glm-4.7-flash"
+    modelID?: "qwen3.6-27b-axq-6bit" | "qwen3.5-9b-axq-6bit" | "qwen3-coder-next-axq-6bit"
     quantization?: "mlx4bit" | "mlx6bit"
     download?: boolean
   }

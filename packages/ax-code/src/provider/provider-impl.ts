@@ -742,6 +742,10 @@ export namespace Provider {
   // would also tear down LSP clients, MCP connections, the session
   // store, and the tool registry, which is disproportionate for an
   // auth-only change.
+  //
+  // Auth credentials are global (`auth.json`), but provider state is
+  // per-directory. Prefer `invalidateAll()` after Auth.set/remove so every
+  // open project picks up the new credentials without reconnecting.
   export async function invalidate() {
     const currentState = await state()
     modelCacheGeneration++
@@ -750,6 +754,46 @@ export namespace Provider {
     currentState.sdkPending.clear()
     currentState.sdk.clear()
     await state.invalidate()
+  }
+
+  /**
+   * Invalidate provider state for every live Instance directory.
+   * Auth credentials are global; each project keeps its own provider cache, so
+   * a connect in project A must drop project B's cache too.
+   *
+   * Must not re-enter Instance.provide for the active directory: Auth.set/remove
+   * often runs inside Instance boot `init`, and providing the same directory
+   * again awaits the in-flight boot promise → deadlock.
+   */
+  export async function invalidateAll() {
+    modelCacheGeneration++
+    let currentDirectory: string | undefined
+    try {
+      currentDirectory = Instance.directory
+    } catch {
+      currentDirectory = undefined
+    }
+
+    // Drop the active ALS provider cache without nested provide.
+    try {
+      await state.invalidate()
+    } catch {
+      // No active instance ALS context.
+    }
+
+    const peers = Instance.list().filter((directory) => directory !== currentDirectory)
+    await Promise.all(
+      peers.map((directory) =>
+        Instance.provide({
+          directory,
+          fn: async () => {
+            // Drop the directory entry only. Do not await state() first — that
+            // would re-run the full provider init pipeline just to discard it.
+            await state.invalidate()
+          },
+        }),
+      ),
+    )
   }
 
   // Short-lived negative cache for provider install failures. Without it,

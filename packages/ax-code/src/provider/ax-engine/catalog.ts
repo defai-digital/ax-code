@@ -1,5 +1,6 @@
 import z from "zod"
 import {
+  AX_ENGINE_CATALOG_SOURCE,
   AX_ENGINE_ERROR,
   AX_ENGINE_MODEL_DEFINITIONS,
   AX_ENGINE_MODEL_IDS,
@@ -52,7 +53,16 @@ export type AxEngineModelCatalogEntry = {
   fit: AxEngineModelFit
 }
 
+export type AxEngineCatalogMeta = {
+  /** Repo-relative path of the TypeScript module that defines the catalog. */
+  source: typeof AX_ENGINE_CATALOG_SOURCE
+  /** Stable ordered model ids from AX_ENGINE_MODEL_IDS. */
+  modelIDs: readonly AxEngineModelID[]
+}
+
 export type AxEngineModelsResponse = {
+  /** Identity of the in-process catalog contract (not a client-side list). */
+  catalog: AxEngineCatalogMeta
   eligibility: AxEnginePlatformEligibility
   dependency: AxEngineDependencyStatus
   server: AxEngineServerRuntimeStatus
@@ -227,6 +237,10 @@ export async function getAxEngineModelsCatalog(): Promise<AxEngineModelsResponse
   }
 
   return {
+    catalog: {
+      source: AX_ENGINE_CATALOG_SOURCE,
+      modelIDs: AX_ENGINE_MODEL_IDS,
+    },
     eligibility,
     dependency,
     server,

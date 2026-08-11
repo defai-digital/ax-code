@@ -90,12 +90,11 @@ export namespace Server {
 
   export const Default = lazy(() => createApp({ port: DEFAULT_SERVER_PORT }))
 
-  async function invalidateProviderState(directory: string) {
-    await Instance.provide({
-      directory,
-      init: InstanceBootstrap,
-      fn: () => Provider.invalidate(),
-    })
+  async function invalidateProviderStateAll() {
+    // Auth credentials are global, but Provider state is cached per Instance
+    // directory. Drop every live project's provider cache so connect/disconnect
+    // in one Desktop project is visible in every other open project.
+    await Provider.invalidateAll()
   }
 
   async function updateProviderAuth(
@@ -105,11 +104,18 @@ export namespace Server {
   ) {
     const directory = requestDirectory(c)
     if (directory instanceof Response) return directory
-    await updater(providerID)
-    // Invalidate the per-directory provider cache so the next
-    // `Provider.list()` re-reads auth and picks up this update
-    // without requiring a process restart. See issue #13.
-    await invalidateProviderState(directory)
+    // Ensure the request directory has an Instance so list() works immediately
+    // for the project the user is viewing (Auth.set also invalidates all).
+    await Instance.provide({
+      directory,
+      init: InstanceBootstrap,
+      fn: async () => {
+        await updater(providerID)
+      },
+    })
+    // Auth.set already calls Provider.invalidateAll(); call again as a belt
+    // for updaters that only remove/set without going through Auth helpers.
+    await invalidateProviderStateAll()
     return c.json(true)
   }
 

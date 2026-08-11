@@ -46,7 +46,7 @@ function makeHarness(fetchJobs?: () => Promise<AxEngineModelJobSummary[]>) {
 }
 
 const job = (id: string, status: AxEngineModelJobSummary["status"], error?: string): AxEngineModelJobSummary =>
-  ({ id, type: "download", modelID: "gemma-4-12b", quantization: "mlx6bit", status, error }) as AxEngineModelJobSummary
+  ({ id, type: "download", modelID: "qwen3.6-27b-axq-6bit", quantization: "mlx6bit", status, error }) as AxEngineModelJobSummary
 
 const flush = async () => {
   await Promise.resolve()

@@ -15,12 +15,15 @@ import { AxEnginePaths } from "../../../src/provider/ax-engine/paths"
 import { Filesystem } from "../../../src/util/filesystem"
 import { Process } from "../../../src/util/process"
 
-const GEMMA = { modelID: "gemma-4-12b", quant: "mlx6bit", repo: "mlx-community/gemma-4-12B-it-6bit" } as const
-const GLM = { modelID: "glm-4.7-flash", quant: "mlx6bit", repo: "mlx-community/GLM-4.7-Flash-6bit" } as const
-const CODER = {
-  modelID: "qwen3-coder-next-6bit",
+const AXQ27 = {
+  modelID: "qwen3.6-27b-axq-6bit",
   quant: "mlx6bit",
-  repo: "mlx-community/Qwen3-Coder-Next-6bit",
+  repo: "AutomatosX/AX-Qwen3.6-27B-MLX-AXQ-6bit-MTP",
+} as const
+const CODER = {
+  modelID: "qwen3-coder-next-axq-6bit",
+  quant: "mlx6bit",
+  repo: "AutomatosX/AX-Qwen3-Coder-Next-MLX-AXQ-6bit",
 } as const
 const COMMIT = "1111111111111111111111111111111111111111"
 const FALLBACK_COMMIT = "2222222222222222222222222222222222222222"
@@ -39,7 +42,7 @@ async function makeHfSnapshot(
   await fs.writeFile(path.join(snapshot, "model-00001-of-00001.safetensors"), "weights")
   await fs.writeFile(path.join(snapshot, "config.json"), "{}")
   if (opts.manifest !== false) await fs.writeFile(path.join(snapshot, "model-manifest.json"), "{}")
-  if (opts.packageMarker !== false) await fs.writeFile(path.join(snapshot, "ax_gemma4_assistant_mtp.json"), "{}")
+  if (opts.packageMarker !== false) await fs.writeFile(path.join(snapshot, "axquant_mtp_sidecar_manifest.json"), "{}")
   return snapshot
 }
 
@@ -70,41 +73,41 @@ describe("HfCache.snapshotDir / isCompleteSnapshot", () => {
   test("prefers the refs/main commit and requires weights + manifest", async () => {
     await using dir = await tmpdir()
     const hfRoot = path.join(dir.path, "hub")
-    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
+    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
     const env = { HF_HUB_CACHE: hfRoot }
 
-    expect(await HfCache.snapshotDir(GEMMA.repo, env)).toBe(snapshot)
+    expect(await HfCache.snapshotDir(AXQ27.repo, env)).toBe(snapshot)
     expect(await HfCache.isCompleteSnapshot(snapshot)).toBe(true)
   })
 
   test("an incomplete snapshot (no AX manifest) is not usable", async () => {
     await using dir = await tmpdir()
     const hfRoot = path.join(dir.path, "hub")
-    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT, { manifest: false })
+    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT, { manifest: false })
     expect(await HfCache.isCompleteSnapshot(snapshot)).toBe(false)
   })
 
   test("completeSnapshotDir falls back when refs/main points at an incomplete snapshot", async () => {
     await using dir = await tmpdir()
     const hfRoot = path.join(dir.path, "hub")
-    const pinned = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT, { manifest: false })
-    const fallback = await makeHfSnapshot(hfRoot, GEMMA.repo, FALLBACK_COMMIT)
-    await fs.writeFile(path.join(hfRoot, `models--${GEMMA.repo.replace(/\//g, "--")}`, "refs", "main"), COMMIT)
+    const pinned = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT, { manifest: false })
+    const fallback = await makeHfSnapshot(hfRoot, AXQ27.repo, FALLBACK_COMMIT)
+    await fs.writeFile(path.join(hfRoot, `models--${AXQ27.repo.replace(/\//g, "--")}`, "refs", "main"), COMMIT)
 
-    expect(await HfCache.snapshotDir(GEMMA.repo, { HF_HUB_CACHE: hfRoot })).toBe(pinned)
-    expect(await HfCache.completeSnapshotDir(GEMMA.repo, { HF_HUB_CACHE: hfRoot })).toBe(fallback)
+    expect(await HfCache.snapshotDir(AXQ27.repo, { HF_HUB_CACHE: hfRoot })).toBe(pinned)
+    expect(await HfCache.completeSnapshotDir(AXQ27.repo, { HF_HUB_CACHE: hfRoot })).toBe(fallback)
   })
 
   test("returns undefined when the repo is not cached", async () => {
     await using dir = await tmpdir()
-    expect(await HfCache.snapshotDir(GEMMA.repo, { HF_HUB_CACHE: path.join(dir.path, "hub") })).toBeUndefined()
-    expect(await HfCache.completeSnapshotDir(GEMMA.repo, { HF_HUB_CACHE: path.join(dir.path, "hub") })).toBeUndefined()
+    expect(await HfCache.snapshotDir(AXQ27.repo, { HF_HUB_CACHE: path.join(dir.path, "hub") })).toBeUndefined()
+    expect(await HfCache.completeSnapshotDir(AXQ27.repo, { HF_HUB_CACHE: path.join(dir.path, "hub") })).toBeUndefined()
   })
 
   test("rejects a snapshot with a dangling weight symlink", async () => {
     await using dir = await tmpdir()
     const hfRoot = path.join(dir.path, "hub")
-    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
+    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
     // Simulate an interrupted download: the snapshot link exists but the blob
     // it points at was never written.
     await fs.rm(path.join(snapshot, "model-00001-of-00001.safetensors"))
@@ -118,7 +121,7 @@ describe("HfCache.snapshotDir / isCompleteSnapshot", () => {
   test("rejects a snapshot missing shards named by the weight index", async () => {
     await using dir = await tmpdir()
     const hfRoot = path.join(dir.path, "hub")
-    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
+    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
     await fs.writeFile(
       path.join(snapshot, "model.safetensors.index.json"),
       JSON.stringify({
@@ -159,13 +162,13 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
+    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
     // Legacy managed copy also complete — HF must still win.
-    const managed = AxEnginePaths.managedModelDir(GEMMA.modelID, GEMMA.quant)
+    const managed = AxEnginePaths.managedModelDir(AXQ27.modelID, AXQ27.quant)
     await fs.mkdir(managed, { recursive: true })
     await fs.writeFile(path.join(managed, "model-manifest.json"), "{}")
 
-    const status = await getModelStatus({ modelID: GEMMA.modelID, quantization: GEMMA.quant })
+    const status = await getModelStatus({ modelID: AXQ27.modelID, quantization: AXQ27.quant })
     expect(status.present).toBe(true)
     expect(status.path).toBe(snapshot)
   })
@@ -174,13 +177,13 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
+    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
     await fs.rm(path.join(snapshot, "model-00001-of-00001.safetensors"))
 
-    const status = await getModelStatus({ modelID: GEMMA.modelID, quantization: GEMMA.quant })
+    const status = await getModelStatus({ modelID: AXQ27.modelID, quantization: AXQ27.quant })
     expect(status.present).toBe(false)
     expect(status.blockers).toEqual([
-      "AX_ENGINE_MODEL_MISSING: prepare Gemma 4 12B 6-bit (Local MLX Auto) before using ax-engine",
+      "AX_ENGINE_MODEL_MISSING: prepare Qwen3.6-27B AXQ 6-bit (Local MLX Auto) before using ax-engine",
     ])
   })
 
@@ -188,9 +191,9 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT, { packageMarker: false })
+    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT, { packageMarker: false })
 
-    const status = await getModelStatus({ modelID: GEMMA.modelID, quantization: GEMMA.quant })
+    const status = await getModelStatus({ modelID: AXQ27.modelID, quantization: AXQ27.quant })
     expect(status.present).toBe(true)
     expect(status.complete).toBe(true)
     expect(status.path).toBe(snapshot)
@@ -201,16 +204,16 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
+    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
     await fs.rm(path.join(snapshot, "model-00001-of-00001.safetensors"))
     await Filesystem.writeJson(AxEnginePaths.prepareState, {
-      modelID: GEMMA.modelID,
-      quantization: GEMMA.quant,
+      modelID: AXQ27.modelID,
+      quantization: AXQ27.quant,
       path: snapshot,
       preparedAt: 1,
     })
 
-    const status = await getModelStatus({ modelID: GEMMA.modelID, quantization: GEMMA.quant })
+    const status = await getModelStatus({ modelID: AXQ27.modelID, quantization: AXQ27.quant })
     expect(status.present).toBe(false)
   })
 
@@ -218,13 +221,13 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
+    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
     await fs.rm(path.join(snapshot, "model-00001-of-00001.safetensors"))
 
     await expect(
-      markPrepared({ modelID: GEMMA.modelID, quantization: GEMMA.quant, modelPath: snapshot }),
+      markPrepared({ modelID: AXQ27.modelID, quantization: AXQ27.quant, modelPath: snapshot }),
     ).rejects.toThrow("model path is incomplete")
-    const status = await getModelStatus({ modelID: GEMMA.modelID, quantization: GEMMA.quant })
+    const status = await getModelStatus({ modelID: AXQ27.modelID, quantization: AXQ27.quant })
     expect(status.present).toBe(false)
   })
 
@@ -234,7 +237,7 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
+    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
     await fs.rm(path.join(snapshot, "model-00001-of-00001.safetensors"))
     const originalText = Process.text
     vi.spyOn(Process, "text").mockImplementation((cmd, opts) => {
@@ -254,7 +257,7 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await fs.chmod(binary, 0o755)
 
     await expect(
-      downloadModel({ binaryPath: binary, modelID: GEMMA.modelID, quantization: GEMMA.quant }),
+      downloadModel({ binaryPath: binary, modelID: AXQ27.modelID, quantization: AXQ27.quant }),
     ).rejects.toThrow("downloaded model path is incomplete")
     expect(await Filesystem.exists(AxEnginePaths.prepareState)).toBe(false)
   })
@@ -265,12 +268,12 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
+    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
     const originalText = Process.text
-    // 60 GiB free: enough for gemma-4-12b (48 GiB) but not for the default
-    // model's 96 GiB requirement, which a call site that drops modelID would
-    // apply to every download.
-    const availableBlocks = (60 * 1024 ** 3) / 1024
+    // 40 GiB free: enough for the default qwen3.6-27b-axq-6bit (32 GiB) but not
+    // for qwen3-coder-next-axq-6bit (80 GiB). A call site that drops modelID would wrongly
+    // pass the disk gate for this download.
+    const availableBlocks = (40 * 1024 ** 3) / 1024
     const spy = vi.spyOn(Process, "text").mockImplementation((cmd, opts) => {
       if (cmd[0] === "df") {
         const stdout = Buffer.from(`Filesystem 1024-blocks Used Available Capacity Mounted on
@@ -290,34 +293,35 @@ describe("ax-engine model storage uses the HF snapshot", () => {
       )
       await fs.chmod(binary, 0o755)
 
-      const prepared = await downloadModel({ binaryPath: binary, modelID: GEMMA.modelID, quantization: GEMMA.quant })
-      expect(prepared.path).toBe(snapshot)
+      await expect(
+        downloadModel({ binaryPath: binary, modelID: CODER.modelID, quantization: CODER.quant }),
+      ).rejects.toThrow("AX_ENGINE_INSUFFICIENT_DISK")
       expect(
         spy.mock.calls.some(
           ([cmd]) =>
             Array.isArray(cmd) &&
             cmd[0] === binary &&
-            cmd[1] === "download-mtp" &&
-            cmd[2] === GEMMA.modelID &&
+            cmd[1] === "download" &&
+            cmd[2] === CODER.repo &&
             cmd[3] === "--json",
         ),
-      ).toBe(true)
+      ).toBe(false)
     } finally {
       spy.mockRestore()
     }
   })
 
-  test("downloadModel prepares GLM through its built-in MTP package path", async () => {
+  test("downloadModel accepts ax-engine progress followed by a pretty-printed summary", async () => {
     if (process.platform === "win32") return
 
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    const snapshot = await makeHfSnapshot(hfRoot, GLM.repo, COMMIT)
-    await fs.writeFile(path.join(snapshot, "ax_glm_mtp_manifest.json"), "{}")
+    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
+    await fs.writeFile(path.join(snapshot, "axquant_mtp_sidecar_manifest.json"), "{}")
     const availableBlocks = (120 * 1024 ** 3) / 1024
     const originalText = Process.text
-    const spy = vi.spyOn(Process, "text").mockImplementation((cmd, opts) => {
+    const textSpy = vi.spyOn(Process, "text").mockImplementation((cmd, opts) => {
       if (cmd[0] === "df") {
         const stdout = Buffer.from(`Filesystem 1024-blocks Used Available Capacity Mounted on
 /dev/test 200000000 1000000 ${availableBlocks} 1% ${cmd.at(-1) ?? "/"}
@@ -326,27 +330,42 @@ describe("ax-engine model storage uses the HF snapshot", () => {
       }
       return originalText(cmd, opts)
     })
+    const spawnSpy = vi.spyOn(Process, "spawn")
     try {
       const binary = path.join(dir.path, "fake-ax-engine")
       await fs.writeFile(
         binary,
-        `#!/usr/bin/env node\nconsole.log(${JSON.stringify(JSON.stringify({ dest: snapshot, revision: COMMIT }))})\n`,
+        `#!/usr/bin/env node
+console.log(JSON.stringify({ event: "progress", done: 5, total: 100, file: "Downloading weights" }))
+console.log(JSON.stringify({ dest: ${JSON.stringify(snapshot)}, revision: ${JSON.stringify(COMMIT)} }, null, 2))
+`,
       )
       await fs.chmod(binary, 0o755)
 
-      await downloadModel({ binaryPath: binary, modelID: GLM.modelID, quantization: GLM.quant })
-      expect(
-        spy.mock.calls.some(
-          ([cmd]) =>
-            Array.isArray(cmd) &&
-            cmd[0] === binary &&
-            cmd[1] === "download-mtp" &&
-            cmd[2] === GLM.modelID &&
-            cmd[3] === "--json",
-        ),
-      ).toBe(true)
+      const progressEvents: Array<{ percent: number; message?: string }> = []
+      await downloadModel({
+        binaryPath: binary,
+        modelID: AXQ27.modelID,
+        quantization: AXQ27.quant,
+        onProgress: (p) => progressEvents.push({ percent: p.percent, message: p.message }),
+      })
+      const downloadCall = spawnSpy.mock.calls.find(
+        ([cmd]) =>
+          Array.isArray(cmd) &&
+          cmd[0] === binary &&
+          cmd[1] === "download" &&
+          cmd[2] === AXQ27.repo &&
+          cmd.includes("--json") &&
+          cmd.includes("--progress-json"),
+      )
+      expect(downloadCall).toBeTruthy()
+      // downloadModel must always pass an env object so AX_ENGINE_PYTHON can be
+      // injected for huggingface_hub without relying on parent process state.
+      expect(downloadCall?.[1]).toEqual(expect.objectContaining({ env: expect.any(Object) }))
+      expect(progressEvents.some((event) => event.percent === 5 && event.message === "Downloading weights")).toBe(true)
     } finally {
-      spy.mockRestore()
+      textSpy.mockRestore()
+      spawnSpy.mockRestore()
     }
   })
 
@@ -359,7 +378,7 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     const snapshot = await makeHfSnapshot(hfRoot, CODER.repo, COMMIT)
     const availableBlocks = (120 * 1024 ** 3) / 1024
     const originalText = Process.text
-    const spy = vi.spyOn(Process, "text").mockImplementation((cmd, opts) => {
+    const textSpy = vi.spyOn(Process, "text").mockImplementation((cmd, opts) => {
       if (cmd[0] === "df") {
         const stdout = Buffer.from(`Filesystem 1024-blocks Used Available Capacity Mounted on
 /dev/test 200000000 1000000 ${availableBlocks} 1% ${cmd.at(-1) ?? "/"}
@@ -368,6 +387,7 @@ describe("ax-engine model storage uses the HF snapshot", () => {
       }
       return originalText(cmd, opts)
     })
+    const spawnSpy = vi.spyOn(Process, "spawn")
     try {
       const binary = path.join(dir.path, "fake-ax-engine")
       await fs.writeFile(
@@ -378,17 +398,18 @@ describe("ax-engine model storage uses the HF snapshot", () => {
 
       await downloadModel({ binaryPath: binary, modelID: CODER.modelID, quantization: CODER.quant })
       expect(
-        spy.mock.calls.some(
+        spawnSpy.mock.calls.some(
           ([cmd]) =>
             Array.isArray(cmd) &&
             cmd[0] === binary &&
             cmd[1] === "download" &&
             cmd[2] === CODER.repo &&
-            cmd[3] === "--json",
+            cmd.includes("--json"),
         ),
       ).toBe(true)
     } finally {
-      spy.mockRestore()
+      textSpy.mockRestore()
+      spawnSpy.mockRestore()
     }
   })
 
@@ -400,8 +421,8 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await fs.symlink(target, link)
 
     const status = await getDiskStatus({
-      modelID: GEMMA.modelID,
-      quantization: GEMMA.quant,
+      modelID: AXQ27.modelID,
+      quantization: AXQ27.quant,
       downloadDir: link,
     })
     expect(status.ok).toBe(false)
@@ -413,11 +434,11 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT, { manifest: false })
-    const fallback = await makeHfSnapshot(hfRoot, GEMMA.repo, FALLBACK_COMMIT)
-    await fs.writeFile(path.join(hfRoot, `models--${GEMMA.repo.replace(/\//g, "--")}`, "refs", "main"), COMMIT)
+    await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT, { manifest: false })
+    const fallback = await makeHfSnapshot(hfRoot, AXQ27.repo, FALLBACK_COMMIT)
+    await fs.writeFile(path.join(hfRoot, `models--${AXQ27.repo.replace(/\//g, "--")}`, "refs", "main"), COMMIT)
 
-    const status = await getModelStatus({ modelID: GEMMA.modelID, quantization: GEMMA.quant })
+    const status = await getModelStatus({ modelID: AXQ27.modelID, quantization: AXQ27.quant })
     expect(status.present).toBe(true)
     expect(status.path).toBe(fallback)
   })
@@ -426,19 +447,19 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
-    const managed = AxEnginePaths.managedModelDir(GEMMA.modelID, GEMMA.quant)
+    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
+    const managed = AxEnginePaths.managedModelDir(AXQ27.modelID, AXQ27.quant)
     await fs.mkdir(managed, { recursive: true })
     await fs.writeFile(path.join(managed, "model.safetensors"), "weights")
     // prepare.json still points at the managed dir — must be repointed.
     await Filesystem.writeJson(AxEnginePaths.prepareState, {
-      modelID: GEMMA.modelID,
-      quantization: GEMMA.quant,
+      modelID: AXQ27.modelID,
+      quantization: AXQ27.quant,
       path: managed,
       preparedAt: 1,
     })
 
-    const result = await reclaimManagedCopy(GEMMA.modelID, GEMMA.quant)
+    const result = await reclaimManagedCopy(AXQ27.modelID, AXQ27.quant)
     expect(result?.snapshotPath).toBe(snapshot)
     expect(await Filesystem.exists(managed)).toBe(false)
     const state = await Filesystem.readJson(AxEnginePaths.prepareState)
@@ -449,12 +470,12 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT, { manifest: false }) // no AX manifest -> not safe
-    const managed = AxEnginePaths.managedModelDir(GEMMA.modelID, GEMMA.quant)
+    await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT, { manifest: false }) // no AX manifest -> not safe
+    const managed = AxEnginePaths.managedModelDir(AXQ27.modelID, AXQ27.quant)
     await fs.mkdir(managed, { recursive: true })
     await fs.writeFile(path.join(managed, "model.safetensors"), "weights")
 
-    const result = await reclaimManagedCopy(GEMMA.modelID, GEMMA.quant)
+    const result = await reclaimManagedCopy(AXQ27.modelID, AXQ27.quant)
     expect(result).toBeUndefined()
     expect(await Filesystem.exists(managed)).toBe(true)
   })
@@ -463,13 +484,13 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT, { packageMarker: false })
-    const managed = AxEnginePaths.managedModelDir(GEMMA.modelID, GEMMA.quant)
+    await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT, { packageMarker: false })
+    const managed = AxEnginePaths.managedModelDir(AXQ27.modelID, AXQ27.quant)
     await fs.mkdir(managed, { recursive: true })
     await fs.writeFile(path.join(managed, "model.safetensors"), "weights")
-    await fs.writeFile(path.join(managed, "ax_gemma4_assistant_mtp.json"), "{}")
+    await fs.writeFile(path.join(managed, "axquant_mtp_sidecar_manifest.json"), "{}")
 
-    const result = await reclaimManagedCopy(GEMMA.modelID, GEMMA.quant)
+    const result = await reclaimManagedCopy(AXQ27.modelID, AXQ27.quant)
     expect(result).toBeUndefined()
     expect(await Filesystem.exists(managed)).toBe(true)
   })
@@ -478,14 +499,14 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
-    const managed = AxEnginePaths.managedModelDir(GEMMA.modelID, GEMMA.quant)
+    await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
+    const managed = AxEnginePaths.managedModelDir(AXQ27.modelID, AXQ27.quant)
     await fs.mkdir(managed, { recursive: true })
     await fs.writeFile(path.join(managed, "model.safetensors"), "weights")
     await fs.mkdir(path.dirname(AxEnginePaths.prepareState), { recursive: true })
     await fs.writeFile(AxEnginePaths.prepareState, "{not json")
 
-    const result = await reclaimManagedCopy(GEMMA.modelID, GEMMA.quant)
+    const result = await reclaimManagedCopy(AXQ27.modelID, AXQ27.quant)
     expect(result).toBeUndefined()
     expect(await Filesystem.exists(managed)).toBe(true)
   })

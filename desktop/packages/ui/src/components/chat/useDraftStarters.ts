@@ -11,15 +11,18 @@ import type { IconName } from "@/components/icon/icons"
 import {
   BUILTIN_STARTERS,
   DEFAULT_GLOBAL_STARTERS,
+  DEFAULT_WORK_STARTERS,
   COMMAND_FALLBACK_ICON,
   SKILL_FALLBACK_ICON,
   getBuiltInStarter,
+  getWorkBuiltInStarter,
   normalizeStarterLabel,
   sameStarter,
   starterKey,
   type DraftStarterRef,
   type DraftStarterType,
 } from "@/lib/draftStarters"
+import { useDesktopSurfaceStore } from "@/stores/useDesktopSurfaceStore"
 
 export type StarterGroup = "global" | "project"
 
@@ -50,6 +53,8 @@ export type UseDraftStartersResult = {
   project: ResolvedStarter[]
   pinnable: PinnableItem[]
   hasProject: boolean
+  /** When true, chips are work-surface presets (not user-customizable code starters). */
+  isWorkSurface: boolean
   ensureLoaded: () => void
   addStarter: (item: PinnableItem) => void
   removeStarter: (group: StarterGroup, ref: DraftStarterRef) => void
@@ -58,6 +63,8 @@ export type UseDraftStartersResult = {
 
 export function useDraftStarters(): UseDraftStartersResult {
   const { t } = useI18n()
+  const desktopSurface = useDesktopSurfaceStore((s) => s.surface)
+  const isWorkSurface = desktopSurface === "work"
   const globalRaw = useUIStore((s) => s.globalDraftStarters)
   const commands = useCommandsStore((s) => s.commands)
   const skills = useSkillsStore((s) => s.skills)
@@ -105,6 +112,17 @@ export function useDraftStarters(): UseDraftStartersResult {
   const resolve = React.useCallback(
     (ref: DraftStarterRef, group: StarterGroup): ResolvedStarter | null => {
       if (ref.type === "command") {
+        const workBuiltin = getWorkBuiltInStarter(ref.name)
+        if (workBuiltin) {
+          return {
+            id: chipId(group, ref),
+            ref,
+            group,
+            label: t(workBuiltin.labelKey),
+            icon: workBuiltin.icon,
+            submitText: workBuiltin.command,
+          }
+        }
         const builtin = getBuiltInStarter(ref.name)
         if (builtin) {
           return {
@@ -139,15 +157,22 @@ export function useDraftStarters(): UseDraftStartersResult {
     [t, commandNames, skillNames],
   )
 
-  const globalRefs = React.useMemo<readonly DraftStarterRef[]>(() => globalRaw ?? DEFAULT_GLOBAL_STARTERS, [globalRaw])
+  const globalRefs = React.useMemo<readonly DraftStarterRef[]>(() => {
+    if (isWorkSurface) return DEFAULT_WORK_STARTERS
+    return globalRaw ?? DEFAULT_GLOBAL_STARTERS
+  }, [globalRaw, isWorkSurface])
 
   const global = React.useMemo(
     () => globalRefs.map((r) => resolve(r, "global")).filter((x): x is ResolvedStarter => x !== null),
     [globalRefs, resolve],
   )
+  // Project-pinned coding starters stay Code-only; Work surface shows daily-work chips only.
   const project = React.useMemo(
-    () => projectStarters.map((r) => resolve(r, "project")).filter((x): x is ResolvedStarter => x !== null),
-    [projectStarters, resolve],
+    () =>
+      isWorkSurface
+        ? []
+        : projectStarters.map((r) => resolve(r, "project")).filter((x): x is ResolvedStarter => x !== null),
+    [isWorkSurface, projectStarters, resolve],
   )
 
   const pinnedKeys = React.useMemo(() => {
@@ -209,6 +234,7 @@ export function useDraftStarters(): UseDraftStartersResult {
 
   const addStarter = React.useCallback(
     (item: PinnableItem) => {
+      if (isWorkSurface) return
       const ref: DraftStarterRef = { type: item.type, name: item.name }
       if (item.scope === "project") {
         if (!projectRef || projectStarters.some((r) => sameStarter(r, ref))) return
@@ -219,11 +245,12 @@ export function useDraftStarters(): UseDraftStartersResult {
         persistGlobal([...base, ref])
       }
     },
-    [projectRef, projectStarters, globalRaw, persistProject, persistGlobal],
+    [isWorkSurface, projectRef, projectStarters, globalRaw, persistProject, persistGlobal],
   )
 
   const removeStarter = React.useCallback(
     (group: StarterGroup, ref: DraftStarterRef) => {
+      if (isWorkSurface) return
       if (group === "project") {
         persistProject(projectStarters.filter((r) => !sameStarter(r, ref)))
       } else {
@@ -231,11 +258,12 @@ export function useDraftStarters(): UseDraftStartersResult {
         persistGlobal(base.filter((r) => !sameStarter(r, ref)))
       }
     },
-    [projectStarters, globalRaw, persistProject, persistGlobal],
+    [isWorkSurface, projectStarters, globalRaw, persistProject, persistGlobal],
   )
 
   const reorder = React.useCallback(
     (group: StarterGroup, fromId: string, toId: string) => {
+      if (isWorkSurface) return
       const base = group === "project" ? projectStarters : (globalRaw ?? DEFAULT_GLOBAL_STARTERS)
       const from = base.findIndex((r) => chipId(group, r) === fromId)
       const to = base.findIndex((r) => chipId(group, r) === toId)
@@ -244,8 +272,18 @@ export function useDraftStarters(): UseDraftStartersResult {
       if (group === "project") persistProject(next)
       else persistGlobal(next)
     },
-    [projectStarters, globalRaw, persistProject, persistGlobal],
+    [isWorkSurface, projectStarters, globalRaw, persistProject, persistGlobal],
   )
 
-  return { global, project, pinnable, hasProject: !!projectRef, ensureLoaded, addStarter, removeStarter, reorder }
+  return {
+    global,
+    project,
+    pinnable: isWorkSurface ? [] : pinnable,
+    hasProject: !!projectRef,
+    isWorkSurface,
+    ensureLoaded,
+    addStarter,
+    removeStarter,
+    reorder,
+  }
 }

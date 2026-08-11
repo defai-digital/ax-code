@@ -2,24 +2,23 @@ import React from "react"
 import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
 
 export type ProjectKnowledgeState = {
-  /** True when any project knowledge file (CLAUDE.md or AGENTS.md) exists. */
+  /** True when any project knowledge file (AGENTS.md or CLAUDE.md) exists. */
   exists: boolean
-  /** True when a project-level CLAUDE.md exists. */
-  claudeMd: boolean
-  /** True when a project-level AGENTS.md exists. */
+  /** True when a project-level AGENTS.md exists (AX Code primary). */
   agentsMd: boolean
+  /** True when a project-level CLAUDE.md exists (compat / secondary). */
+  claudeMd: boolean
   isLoading: boolean
 }
 
-const EMPTY: ProjectKnowledgeState = { exists: false, claudeMd: false, agentsMd: false, isLoading: false }
+const EMPTY: ProjectKnowledgeState = { exists: false, agentsMd: false, claudeMd: false, isLoading: false }
 
 const cache = new Map<string, ProjectKnowledgeState>()
 
 /**
  * Detects whether project knowledge files exist in the given workspace
- * directory. ax-code reads both CLAUDE.md and project-level AGENTS.md
- * automatically at session start; this hook surfaces the result in the UI
- * (indicator + "create" shortcut).
+ * directory. AX Code prefers project-level AGENTS.md (also reads CLAUDE.md
+ * for compatibility). Surfaces existence for the draft welcome indicator.
  */
 export function useProjectKnowledge(directory: string | null | undefined): ProjectKnowledgeState {
   const { files } = useRuntimeAPIs()
@@ -50,12 +49,12 @@ export function useProjectKnowledge(directory: string | null | undefined): Proje
         .then(() => true)
         .catch(() => false)
 
-    Promise.all([probe("CLAUDE.md"), probe("AGENTS.md")]).then(([claudeMd, agentsMd]) => {
+    Promise.all([probe("AGENTS.md"), probe("CLAUDE.md")]).then(([agentsMd, claudeMd]) => {
       if (cancelled) return
       const next: ProjectKnowledgeState = {
-        exists: claudeMd || agentsMd,
-        claudeMd,
+        exists: agentsMd || claudeMd,
         agentsMd,
+        claudeMd,
         isLoading: false,
       }
       cache.set(directory, next)
@@ -71,13 +70,13 @@ export function useProjectKnowledge(directory: string | null | undefined): Proje
 }
 
 /**
- * Builds a display label naming the detected project knowledge file(s),
- * e.g. "CLAUDE.md", "AGENTS.md", or "CLAUDE.md + AGENTS.md". Returns an
- * empty string when none are present.
+ * Builds a display label naming the detected project knowledge file(s).
+ * AGENTS.md is listed first (AX Code primary); CLAUDE.md is secondary compat.
+ * Returns an empty string when none are present.
  */
 export function projectKnowledgeFileLabel(state: ProjectKnowledgeState): string {
   const files: string[] = []
-  if (state.claudeMd) files.push("CLAUDE.md")
   if (state.agentsMd) files.push("AGENTS.md")
+  if (state.claudeMd) files.push("CLAUDE.md")
   return files.join(" + ")
 }

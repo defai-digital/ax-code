@@ -11,7 +11,9 @@ import {
   goalContinuationDecision,
   isEmptyModelTurn,
   isTruncatedModelTurn,
+  isReadOnlyExplorationTurn,
   modelTurnFinished,
+  readOnlyExplorationDecision,
   resolveTurnToolChoice,
   toolOnlyTurnDecision,
   totalStepLimitDecision,
@@ -19,6 +21,7 @@ import {
   hasSuccessfulGoalCompleteTool,
   goalCompleteForceTextDecision,
 } from "../../src/session/prompt-autonomous-decisions"
+import { AX_ENGINE_READ_ONLY_TURN_FORCE, AX_ENGINE_READ_ONLY_TURN_NUDGE } from "../../src/session/prompt-loop-config"
 
 function unfinishedTodosGate() {
   return {
@@ -42,30 +45,22 @@ function emptySubagentGate(signature = "empty-subagent:one") {
 
 describe("autonomous continuation decisions", () => {
   test("effectiveContinuationCap lifts the ordinary cap for active goals and Super-Long", () => {
-    expect(
-      effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: undefined }),
-    ).toBe(3)
-    expect(
-      effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: "paused" }),
-    ).toBe(3)
-    expect(
-      effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: "complete" }),
-    ).toBe(3)
-    expect(
-      effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: "blocked" }),
-    ).toBe(3)
+    expect(effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: undefined })).toBe(3)
+    expect(effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: "paused" })).toBe(3)
+    expect(effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: "complete" })).toBe(3)
+    expect(effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: "blocked" })).toBe(3)
     expect(
       effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: "budget_limited" }),
     ).toBe(3)
-    expect(
-      effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: "active" }),
-    ).toBe(Number.POSITIVE_INFINITY)
-    expect(
-      effectiveContinuationCap({ maxContinuations: 3, superLongActive: true, goalStatus: undefined }),
-    ).toBe(Number.POSITIVE_INFINITY)
-    expect(
-      effectiveContinuationCap({ maxContinuations: 3, superLongActive: true, goalStatus: "active" }),
-    ).toBe(Number.POSITIVE_INFINITY)
+    expect(effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: "active" })).toBe(
+      Number.POSITIVE_INFINITY,
+    )
+    expect(effectiveContinuationCap({ maxContinuations: 3, superLongActive: true, goalStatus: undefined })).toBe(
+      Number.POSITIVE_INFINITY,
+    )
+    expect(effectiveContinuationCap({ maxContinuations: 3, superLongActive: true, goalStatus: "active" })).toBe(
+      Number.POSITIVE_INFINITY,
+    )
     // Explicit zero still means "no step-limit continuations" unless a lift applies.
     expect(effectiveContinuationCap({ maxContinuations: 0, superLongActive: false })).toBe(0)
   })
@@ -978,6 +973,38 @@ describe("tool-only turn decision", () => {
   })
 })
 
+describe("local read-only exploration convergence", () => {
+  test("classifies inspection tools without a patch as read-only", () => {
+    expect(isReadOnlyExplorationTurn([{ type: "tool", tool: "bash" }, { type: "step-finish" }])).toBe(true)
+    expect(isReadOnlyExplorationTurn([{ type: "tool", tool: "grep" }])).toBe(true)
+  })
+
+  test("does not classify source mutations or non-inspection tools as read-only", () => {
+    expect(isReadOnlyExplorationTurn([{ type: "tool", tool: "bash" }, { type: "patch" }])).toBe(false)
+    expect(isReadOnlyExplorationTurn([{ type: "tool", tool: "edit" }])).toBe(false)
+    expect(isReadOnlyExplorationTurn([{ type: "tool", tool: "question" }])).toBe(false)
+    expect(isReadOnlyExplorationTurn([])).toBe(false)
+  })
+
+  test("nudges once, then forces synthesis at the shipped ax-engine thresholds", () => {
+    const config = {
+      nudgeThreshold: AX_ENGINE_READ_ONLY_TURN_NUDGE,
+      forceThreshold: AX_ENGINE_READ_ONLY_TURN_FORCE,
+    }
+    expect(AX_ENGINE_READ_ONLY_TURN_NUDGE).toBe(1)
+    expect(AX_ENGINE_READ_ONLY_TURN_FORCE).toBe(3)
+    expect(readOnlyExplorationDecision({ consecutiveTurns: 1, nudged: false, ...config })).toEqual({
+      action: "nudge",
+    })
+    expect(readOnlyExplorationDecision({ consecutiveTurns: 2, nudged: true, ...config })).toEqual({
+      action: "ignore",
+    })
+    expect(readOnlyExplorationDecision({ consecutiveTurns: 3, nudged: true, ...config })).toEqual({
+      action: "force_text",
+    })
+  })
+})
+
 describe("goal complete force text (#381)", () => {
   test("detects successful update_goal complete from tool parts", () => {
     expect(
@@ -998,21 +1025,19 @@ describe("goal complete force text (#381)", () => {
         },
       ]),
     ).toBe(false)
-    expect(hasSuccessfulGoalCompleteTool([{ type: "tool", tool: "bash", state: { status: "completed" } }])).toBe(
-      false,
-    )
+    expect(hasSuccessfulGoalCompleteTool([{ type: "tool", tool: "bash", state: { status: "completed" } }])).toBe(false)
   })
 
   test("forces text when goal completed this tool-only turn", () => {
-    expect(
-      goalCompleteForceTextDecision({ modelFinished: false, goalCompletedThisTurn: true }),
-    ).toEqual({ action: "force_text" })
-    expect(
-      goalCompleteForceTextDecision({ modelFinished: true, goalCompletedThisTurn: true }),
-    ).toEqual({ action: "ignore" })
-    expect(
-      goalCompleteForceTextDecision({ modelFinished: false, goalCompletedThisTurn: false }),
-    ).toEqual({ action: "ignore" })
+    expect(goalCompleteForceTextDecision({ modelFinished: false, goalCompletedThisTurn: true })).toEqual({
+      action: "force_text",
+    })
+    expect(goalCompleteForceTextDecision({ modelFinished: true, goalCompletedThisTurn: true })).toEqual({
+      action: "ignore",
+    })
+    expect(goalCompleteForceTextDecision({ modelFinished: false, goalCompletedThisTurn: false })).toEqual({
+      action: "ignore",
+    })
   })
 })
 

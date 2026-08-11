@@ -13,7 +13,9 @@ import {
   deleteAxEngineModel,
   fetchAxEngineConnection,
   fetchAxEngineModels,
+  fetchDesktopAxCodeRuntimeIdentity,
   installAxEngine,
+  isExternalInstalledAxCodeBinary,
   startAxEngineServer,
   startAxEngineModelDownload,
   stopAxEngineServer,
@@ -22,6 +24,7 @@ import {
   type AxEngineModelCatalogEntry,
   type AxEngineModelJobSummary,
   type AxEngineModelsResponse,
+  type DesktopAxCodeRuntimeIdentity,
 } from "@/lib/ax-code/axEngineModelsApi"
 import { downloadToastTracker } from "@/lib/ax-code/axEngineDownloadToasts"
 import { getCurrentDirectory } from "@/lib/ax-code/providerApi"
@@ -60,6 +63,7 @@ export const LocalModelsPage: React.FC = () => {
   }, [activeProjectId])
   const [data, setData] = React.useState<AxEngineModelsResponse | null>(null)
   const [connection, setConnection] = React.useState<AxEngineConnectionView | null>(null)
+  const [runtimeIdentity, setRuntimeIdentity] = React.useState<DesktopAxCodeRuntimeIdentity | null>(null)
   const [showAttachForm, setShowAttachForm] = React.useState(false)
   const [attachBaseURL, setAttachBaseURL] = React.useState("http://127.0.0.1:31418/v1")
   const [attachApiKey, setAttachApiKey] = React.useState("")
@@ -82,14 +86,16 @@ export const LocalModelsPage: React.FC = () => {
     if (inFlightRef.current) return
     inFlightRef.current = true
     try {
-      const [next, nextConnection] = await Promise.all([
+      const [next, nextConnection, nextRuntime] = await Promise.all([
         fetchAxEngineModels(directory),
         fetchAxEngineConnection(directory),
+        fetchDesktopAxCodeRuntimeIdentity(),
       ])
       if (!mountedRef.current) return
       setError(null)
       setData(next)
       setConnection(nextConnection)
+      setRuntimeIdentity(nextRuntime)
       if (!connectionInitializedRef.current) {
         connectionInitializedRef.current = true
         setAttachBaseURL(nextConnection.baseURL)
@@ -203,6 +209,10 @@ export const LocalModelsPage: React.FC = () => {
   const handleInstallEngine = () =>
     void runAction("ax-engine-install", () => installAxEngine(directory), t("localModels.toast.engineInstalled"))
   const canStartServer = Boolean(startCandidate) && !hasActiveJob && !loading
+  const axCodeCliSummary = runtimeIdentity?.binaryPath
+    ? `${runtimeIdentity.binaryPath}${runtimeIdentity.version ? ` · v${runtimeIdentity.version}` : ""}`
+    : "Resolving ax-code CLI…"
+  const usingExternalCatalogRuntime = isExternalInstalledAxCodeBinary(runtimeIdentity?.binaryPath)
   const handleServerToggle = async () => {
     if (data?.server.running) {
       await runAction("ax-engine-server", () => stopAxEngineServer(directory), t("localModels.toast.engineStopped"))
@@ -267,8 +277,10 @@ export const LocalModelsPage: React.FC = () => {
           <div className="min-w-0 space-y-1">
             <h1 className="typography-ui-header font-semibold text-foreground">Models</h1>
             <p className="typography-meta text-muted-foreground">
-              Download and manage local AX Engine models with automatic MTP or Direct decode. AX Engine requires macOS
-              26+, Apple Silicon M2 or later.
+              Download and manage local AX Engine models with automatic MTP or Direct decode. The model list is served by
+              the live ax-code process (single source of truth in{" "}
+              <code className="typography-micro">packages/ax-code/src/provider/ax-engine/constants.ts</code>
+              ). AX Engine requires macOS 26+, Apple Silicon M2 or later.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -389,8 +401,31 @@ export const LocalModelsPage: React.FC = () => {
             )}
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-4">
+          {usingExternalCatalogRuntime && (
+            <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 typography-meta text-amber-100">
+              Catalog is served by an <strong>installed</strong> ax-code CLI (
+              <code className="typography-micro">{runtimeIdentity?.binaryPath}</code>
+              ), not this monorepo. Local edits to the model catalog will not appear until Desktop uses the workspace
+              CLI. For development, run <code className="typography-micro">pnpm run desktop:dev</code> (prefers monorepo
+              source) or set <code className="typography-micro">settings.axCodeBinary</code> /{" "}
+              <code className="typography-micro">AX_CODE_BINARY</code> to a source launcher.
+            </div>
+          )}
+
+          <div className="grid gap-3 lg:grid-cols-5">
             <StatusBox title="Host" value={hostSummary} blocked={data ? !data.eligibility.supported : false} />
+            <StatusBox
+              title="AX Code CLI"
+              value={axCodeCliSummary}
+              blocked={usingExternalCatalogRuntime}
+              action={
+                data?.catalog?.modelIDs?.length ? (
+                  <span className="typography-micro text-muted-foreground">
+                    {data.catalog.modelIDs.length} catalog model{data.catalog.modelIDs.length === 1 ? "" : "s"}
+                  </span>
+                ) : undefined
+              }
+            />
             <StatusBox
               title="AX Engine"
               value={
@@ -507,6 +542,62 @@ const StatusBox: React.FC<{ title: string; value: string; blocked?: boolean; act
   </div>
 )
 
+const STALL_HINT_MS = 45_000
+
+const DownloadProgressCell: React.FC<{
+  job: AxEngineModelJobSummary
+  modelName: string
+  minDiskBytes: number
+  now: number
+}> = ({ job, modelName, minDiskBytes, now }) => {
+  const progress = job.progress
+  const determinate = progress?.mode === "determinate" && Number.isFinite(progress.percent)
+  const percent = determinate ? Math.max(0, Math.min(100, Math.round(progress.percent))) : 0
+  const stalled =
+    job.status === "running" &&
+    progress?.updatedAt !== undefined &&
+    now - progress.updatedAt > STALL_HINT_MS
+  const statusLabel =
+    job.status === "queued" ? "Queued…" : determinate ? `Downloading… ${percent}%` : "Downloading…"
+  const detail =
+    stalled && !progress?.message
+      ? "Still downloading…"
+      : progress?.message || (stalled ? "Still downloading…" : undefined)
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5 typography-micro font-medium leading-4 text-foreground">
+        <Icon name="loader" className="h-3 w-3 animate-spin text-muted-foreground" />
+        {statusLabel}
+      </div>
+      <div
+        className="relative h-1.5 w-full overflow-hidden rounded-full bg-border"
+        role="progressbar"
+        aria-label={`${modelName} ${job.status === "queued" ? "queued for download" : "downloading"}`}
+        aria-valuemin={determinate ? 0 : undefined}
+        aria-valuemax={determinate ? 100 : undefined}
+        aria-valuenow={determinate ? percent : undefined}
+      >
+        {determinate ? (
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-primary transition-[width] duration-500 ease-out"
+            style={{ width: `${percent}%` }}
+          />
+        ) : (
+          <div className="oc-indeterminate-progress-bar absolute inset-y-0 left-0 w-1/4 rounded-full bg-primary" />
+        )}
+      </div>
+      <div className="space-y-0.5 typography-micro leading-4 text-muted-foreground" aria-live="polite">
+        {detail ? <div className="truncate" title={detail}>{detail}</div> : null}
+        <div>
+          {`≈${formatLocalModelBytes(minDiskBytes)}`}
+          {job.status === "running" && job.startedAt ? ` · ${formatElapsed(now - job.startedAt)} elapsed` : ""}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const ModelRow: React.FC<{
   model: AxEngineModelCatalogEntry
   job?: AxEngineModelJobSummary
@@ -538,23 +629,7 @@ const ModelRow: React.FC<{
       </div>
       <div className="min-w-0 space-y-1">
         {job ? (
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 typography-micro font-medium leading-4 text-foreground">
-              <Icon name="loader" className="h-3 w-3 animate-spin text-muted-foreground" />
-              {job.status === "queued" ? "Queued…" : "Downloading…"}
-            </div>
-            <div
-              className="relative h-1 w-full overflow-hidden rounded-full bg-border"
-              role="progressbar"
-              aria-label={`${model.name} ${job.status === "queued" ? "queued for download" : "downloading"}`}
-            >
-              <div className="oc-indeterminate-progress-bar absolute inset-y-0 left-0 w-1/4 rounded-full bg-primary" />
-            </div>
-            <div className="typography-micro leading-4 text-muted-foreground">
-              {`≈${formatLocalModelBytes(model.minDiskBytes)}`}
-              {job.status === "running" && job.startedAt ? ` · ${formatElapsed(now - job.startedAt)} elapsed` : ""}
-            </div>
-          </div>
+          <DownloadProgressCell job={job} modelName={model.name} minDiskBytes={model.minDiskBytes} now={now} />
         ) : (
           <span
             className="inline-flex rounded-full border border-border bg-background px-2 py-0.5 typography-micro leading-4 text-foreground"

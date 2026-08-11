@@ -2,10 +2,17 @@ import { randomUUID } from "crypto"
 import { AX_ENGINE_ERROR, AX_ENGINE_MODEL_DEFINITIONS, isAxEngineModelID } from "./constants"
 import type { AxEngineModelID, AxEngineQuantization } from "./constants"
 import { getDependencyStatus } from "./dependency"
+import {
+  completeProgress,
+  indeterminateProgress,
+  type AxEngineDownloadProgress,
+} from "./download-progress"
 import { downloadModel, getDiskStatus, normalizeQuantization } from "./model-cache"
 import { requirePlatformEligibility } from "./platform"
 
 export type AxEngineModelJobStatus = "queued" | "running" | "complete" | "failed" | "cancelled"
+
+export type { AxEngineDownloadProgress }
 
 export type AxEngineModelJobSummary = {
   id: string
@@ -19,6 +26,8 @@ export type AxEngineModelJobSummary = {
   revision?: string
   error?: string
   logTail?: string[]
+  /** Live download progress from ax-engine `--progress-json` (when available). */
+  progress?: AxEngineDownloadProgress
 }
 
 type AxEngineDownloadJob = AxEngineModelJobSummary & {
@@ -79,6 +88,7 @@ export async function startDownloadJob(
     modelID: input.modelID,
     quantization,
     status: "queued",
+    progress: indeterminateProgress("Queued…"),
     controller,
   }
   const run = async (): Promise<AxEngineModelJobSummary> => {
@@ -98,11 +108,18 @@ export async function startDownloadJob(
       if (!disk.ok) throw new Error(disk.blockers[0] ?? `${AX_ENGINE_ERROR.InsufficientDisk}: insufficient disk space`)
       job.status = "running"
       job.startedAt = Date.now()
+      job.progress = indeterminateProgress("Starting download…")
       const prepared = await download({
         binaryPath: dependency.binaryPath,
         modelID: input.modelID,
         quantization,
         signal: controller.signal,
+        onProgress: (progress) => {
+          // Ignore late progress after cancel so the UI does not flash
+          // "downloading" after the user aborted.
+          if ((job.status as AxEngineModelJobStatus) === "cancelled") return
+          job.progress = progress
+        },
       })
       // Cancel can race a late successful download: never leave the job as
       // "complete" after the user (or a superseding start) aborted it.
@@ -119,6 +136,8 @@ export async function startDownloadJob(
       job.finishedAt = Date.now()
       job.path = prepared.path
       job.revision = prepared.revision
+      // Only publish 100% after successful validation/exit (Codex guidance).
+      job.progress = completeProgress(job.progress)
       return summarize(job)
     } catch (error) {
       job.finishedAt = Date.now()

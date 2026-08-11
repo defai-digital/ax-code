@@ -23,7 +23,8 @@ describe("useTerminalStore", () => {
     const normalizedState = useTerminalStore.getState().getDirectoryState("c:/Repo")
 
     expect(useTerminalStore.getState().sessions).toHaveLength(1)
-    expect(normalizedState?.tabs.map((tab) => tab.id)).toEqual(["tab-1", secondTabId])
+    // New tabs are prepended (leftmost on the bar).
+    expect(normalizedState?.tabs.map((tab) => tab.id)).toEqual([secondTabId, "tab-1"])
   })
 
   test("does not rehydrate ephemeral terminal session state from storage", () => {

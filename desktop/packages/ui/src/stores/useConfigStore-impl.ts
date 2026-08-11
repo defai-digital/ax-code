@@ -478,6 +478,8 @@ interface ConfigStore {
   settingsMessageStreamTransport: "auto" | "ws" | "sse"
 
   activateDirectory: (directory: string | null | undefined) => Promise<void>
+  /** Drop all per-project provider snapshots (auth is global; caches must not stay stale). */
+  invalidateAllProviderCaches: () => void
 
   loadProviders: (options?: { directory?: string | null }) => Promise<void>
   loadAgents: (options?: { directory?: string | null }) => Promise<boolean>
@@ -646,6 +648,34 @@ export const useConfigStore = create<ConfigStore>()(
         settingsDefaultFileViewerPreview: false,
         settingsZenModel: undefined,
         settingsMessageStreamTransport: "auto",
+        invalidateAllProviderCaches: () => {
+          // Provider credentials are global. After connect/disconnect, every
+          // project snapshot would otherwise keep a pre-auth empty list until
+          // the user "reconnects" in that project.
+          for (const timer of _providerPollTimer.values()) clearTimeout(timer)
+          _providerPollTimer.clear()
+          _providerStartupPollUntil.clear()
+          _inFlightProviders.clear()
+          set((state) => {
+            const cleared: Record<string, DirectoryScopedConfig> = {}
+            for (const [key, snapshot] of Object.entries(state.directoryScoped)) {
+              cleared[key] = {
+                ...snapshot,
+                providers: [],
+                selectedProviderId: "",
+                defaultProviders: {},
+              }
+            }
+            return {
+              directoryScoped: cleared,
+              providers: [],
+              selectedProviderId: "",
+              defaultProviders: {},
+              providersError: null,
+            }
+          })
+        },
+
         activateDirectory: async (directory) => {
           const directoryKey = toDirectoryKey(directory)
 
