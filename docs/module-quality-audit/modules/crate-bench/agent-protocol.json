@@ -18,13 +18,13 @@
   "stepNotes": {
     "1": "Three [[bin]] targets declared at Cargo.toml:8-18; no [lib], no pub items anywhere in bench_{diff,fs,index}.rs — confirmed zero exports.",
     "2": "No secrets, env reads, or network IO; only fs touch is read-only WalkBuilder over the live working tree at bench_fs.rs:171-207.",
-    "3": "bench_index.rs:32-45 gen_id diverges from production id::ascending (id.rs:69-95): biased %62 instead of rejection sampling, no atomic CAS, no counter — see findings/bench-id-drift.md.",
-    "4": "PRAGMA journal_mode=WAL on Connection::open_in_memory() at bench_index.rs:57-65 is a silent no-op; measurement claims WAL/normal sync that does not apply to :memory:.",
-    "5": "fmt_ns/report triplicated verbatim (bench_diff:7-26, bench_fs:9-28, bench_index:7-26); IGNORE_FOLDERS/IGNORE_FILE_PATTERNS hand-copied at bench_fs.rs:32-75 from ax-code-fs/src/lib.rs:90.",
+    "3": "bench_index.rs:32-45 gen_id diverges from production id::ascending (id.rs:69-95): biased %62 instead of rejection sampling, no atomic CAS, no counter — AUDIT-crate-bench-001 deferred.",
+    "4": "PRAGMA journal_mode=WAL on Connection::open_in_memory() at bench_index.rs:57-65 is a silent no-op — AUDIT-crate-bench-002 deferred (in-memory measurement only).",
+    "5": "fmt_ns/report triplicated; IGNORE_* hand-copied at bench_fs.rs:32-75 from ax-code-fs — AUDIT-crate-bench-003 deferred quality drift.",
     "6": "No dead pub items (none exist); make_content and strategy_line_trimmed both have live callers; underflow guards at bench_diff.rs:47-49 and 66-68 are correct.",
     "7": "Zero #[test] in the crate; bench-scripts.test.ts covers TS harness only (bench-both.ts/bench-opencode.ts), not the Rust binaries — no Rust coverage at all.",
-    "8": "Three findings accepted: 1 MEDIUM (gen_id drift), 2 LOW (duplication + WAL-on-memory). No Critical, no High. All advisory; crate ships no runtime.",
-    "9": "Verification by source read and cross-crate grep only; no cargo test surface for this bin crate, did not run bench binaries (non-deterministic live-tree walk). No Critical findings -> no reverify.md."
+    "8": "Three findings deferred with owner/expiry: AUDIT-crate-bench-001 Medium correctness, 002/003 Low; no Critical/High; ledger matches MODULE-AUDIT register.",
+    "9": "Verification by source read and cross-crate grep only; no cargo test surface for this bin crate; no Critical findings so reverify.md not required."
   },
   "date": "2026-08-11"
 }

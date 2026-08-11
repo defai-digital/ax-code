@@ -49,7 +49,11 @@ Completed by dual-agent; see agent-protocol.json
 
 | Finding | Category | Severity | Origin | Status |
 |---------|----------|----------|--------|--------|
-| _none accepted_ | — | — | — | — |
+| `AUDIT-crate-bench-001` | correctness | Medium | new | deferred |
+| `AUDIT-crate-bench-002` | correctness | Low | new | deferred |
+| `AUDIT-crate-bench-003` | quality | Low | new | deferred |
+
+Deferred items have owner, rationale, mitigation, and expiry 2026-09-11 in `findings/AUDIT-crate-bench-00N.md`.
 
 ## 9. Verification and exit
 

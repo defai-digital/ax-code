@@ -72,7 +72,9 @@ Completed by dual-agent; see agent-protocol.json
 
 | Finding | Category | Severity | Origin | Status |
 |---------|----------|----------|--------|--------|
-| _none accepted_ | — | — | — | — |
+| `AUDIT-isolation-001` | security | Critical | prior-review | verified-fixed |
+
+Critical remediation and independent re-verify: `findings/AUDIT-isolation-001.md` + `protocol/reverify.md`.
 
 ## 9. Verification and exit
 
