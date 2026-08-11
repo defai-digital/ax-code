@@ -155,7 +155,7 @@ export namespace Config {
     )
   }
 
-  function restrictUntrustedProjectConfig(copy: Record<string, unknown>) {
+  function restrictUntrustedConfig(copy: Record<string, unknown>) {
     // These fields can execute a repository-selected binary, import a package,
     // redirect provider credentials, or read arbitrary files from the user's
     // home directory. Project config may use them only after the explicit
@@ -1320,7 +1320,11 @@ export namespace Config {
             Object.entries(entries).map(([name, value]) => [name, restrictUntrustedAgent(value)]),
           )
         }
-        if (options.projectTrust === true) restrictUntrustedProjectConfig(copy)
+        // Every explicitly untrusted source gets the executable/credential
+        // restrictions. `projectTrust` controls only whether the out-of-band
+        // project opt-in can make a source trusted; remote sources never gain
+        // that trust merely because the project opt-in is enabled.
+        restrictUntrustedConfig(copy)
       }
       return copy
     })()
@@ -1431,7 +1435,11 @@ export namespace Config {
     const filepath = path.join(Instance.directory, "ax-code.json")
     using _inProcess = await Lock.write(filepath)
     using _crossProcess = await FileLock.acquire(filepath)
-    const existing = await loadFile(filepath)
+    // This is a read-modify-write operation, not a config evaluation. Parsing
+    // the raw JSONC avoids materializing {file:} or {env:} references from a
+    // repository-controlled file back into that file as literal secrets.
+    const before = await readFile(filepath)
+    const existing = before ? parseConfig(before, filepath) : {}
     const merged = mergeConfigConcatArrays(existing, config)
     const parsed = parseConfig(JSON.stringify(merged), filepath)
     await Filesystem.writeJson(filepath, parsed)

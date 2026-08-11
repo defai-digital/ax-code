@@ -24,6 +24,7 @@ const lockFile = `${file}.lock`
 const LOCK_TIMEOUT_MS = 5_000
 const LOCK_POLL_MS = 20
 const LOCK_STALE_MS = 60 * 60 * 1000
+const LOCK_MALFORMED_GRACE_MS = LOCK_TIMEOUT_MS
 
 type AuthLockBody = ProcessLockBody & {
   token: string
@@ -115,15 +116,21 @@ async function acquireFileLock(): Promise<Disposable> {
   }
 
   async function readSnapshot() {
+    const stat = await fsPromises.stat(lockFile).catch((error) => {
+      if (Filesystem.isEnoent(error)) return undefined
+      throw error
+    })
+    if (!stat) return undefined
     const text = await readLockFile()
-    if (!text) return undefined
+    if (text === undefined) return undefined
     return {
       text,
       holder: parseProcessLockBody<{ token: string }>(text),
+      mtimeMs: stat.mtimeMs,
     }
   }
 
-  async function removeStaleSnapshot(snapshot: { text: string }) {
+  async function removeStaleSnapshot(snapshot: { text: string; mtimeMs: number }) {
     const claimFile = staleLockClaimFile(snapshot.text)
     let fd: fsPromises.FileHandle | undefined
     try {
@@ -139,6 +146,12 @@ async function acquireFileLock(): Promise<Disposable> {
       const current = await readLockFile()
       if (current === undefined) return true
       if (current !== snapshot.text) return false
+      const currentStat = await fsPromises.stat(lockFile).catch((error) => {
+        if (Filesystem.isEnoent(error)) return undefined
+        throw error
+      })
+      if (!currentStat) return true
+      if (currentStat.mtimeMs !== snapshot.mtimeMs) return false
       await cleanupAuthLockFile()
       return true
     } finally {
@@ -151,6 +164,11 @@ async function acquireFileLock(): Promise<Disposable> {
     if (!snapshot) return true
     const holder = snapshot.holder
     if (!holder) {
+      // Exclusive creation happens before the owner writes the JSON body. A
+      // concurrent reader can therefore observe an empty or partial body for
+      // a brief window; never reap that in-progress lock as corrupt. Truly
+      // abandoned malformed locks become recoverable after one acquire window.
+      if (Date.now() - snapshot.mtimeMs <= LOCK_MALFORMED_GRACE_MS) return false
       return removeStaleSnapshot(snapshot)
     }
 
@@ -349,13 +367,22 @@ export namespace Auth {
       // failed to decrypt (e.g. a transient install-secret issue or a
       // partially-written field) are kept as-is and can be recovered on
       // a later read — this full-file rewrite must not erase them.
-      const updated: Record<string, unknown> = { ...providerData, __canary: createCanary() }
-      for (const [key, info] of Object.entries(entries)) {
-        updated[key] = encryptEntry(info)
-      }
       try {
         using _crossProcess = await acquireFileLock()
         using _inProcess = await Lock.write("auth")
+        // The initial read happens before the lock so ordinary reads remain
+        // cheap. Re-read under the write lock before a migration rewrite:
+        // Auth.set/remove may have committed newer credentials meanwhile.
+        const latest = await readAuthData()
+        const updated: Record<string, unknown> = { ...latest }
+        if (!updated.__canary || !verifyCanary(updated.__canary)) updated.__canary = createCanary()
+        for (const [key, info] of Object.entries(entries)) {
+          if (!(key in latest)) continue
+          // Migrate only the exact value we inspected. Preserve a concurrent
+          // replacement instead of overwriting it with a stale credential.
+          if (JSON.stringify(latest[key]) !== JSON.stringify(providerData[key])) continue
+          updated[key] = encryptEntry(info)
+        }
         await Filesystem.writeJson(file, updated, 0o600)
       } catch (cause) {
         throw authError("Failed to migrate auth entries", cause)

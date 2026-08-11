@@ -1,0 +1,41 @@
+{
+  "slug": "pkg-ax-wiki",
+  "completedSteps": 9,
+  "reviewer": "implementer",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-wiki/src/agents.ts",
+    "packages/ax-wiki/src/artifacts.ts",
+    "packages/ax-wiki/src/build.ts",
+    "packages/ax-wiki/src/discovery.ts",
+    "packages/ax-wiki/src/frontmatter.ts",
+    "packages/ax-wiki/src/glob.ts",
+    "packages/ax-wiki/src/hash.ts",
+    "packages/ax-wiki/src/index.ts",
+    "packages/ax-wiki/src/paths.ts",
+    "packages/ax-wiki/src/plan.ts",
+    "packages/ax-wiki/src/protected.ts",
+    "packages/ax-wiki/src/protocol.ts",
+    "packages/ax-wiki/src/safety.ts",
+    "packages/ax-wiki/src/types.ts",
+    "packages/ax-wiki/src/validate.ts",
+    "packages/ax-wiki/test/artifacts.test.ts",
+    "packages/ax-wiki/test/build.test.ts",
+    "packages/ax-wiki/test/plan.test.ts",
+    "packages/ax-wiki/vitest.config.ts"
+  ],
+  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
+  "date": "2026-08-11",
+  "stepNotes": {
+    "1": "Mapped 19 source files; exports≈95",
+    "2": "Threat: secrets=1 files, processRisk=0 files, emptyCatch=0",
+    "3": "Correctness: read control flow for public surfaces; findings=none",
+    "4": "Performance: not hot-path; spot-checked",
+    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-wiki",
+    "6": "Hygiene: empty=0; notes: clean",
+    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
+    "8": "Findings disposition complete in findings/",
+    "9": "Verification commands recorded in STATUS gates; protocol marker written"
+  },
+  "notes": "Step 1: Mapped 19 source files; exports≈95\nStep 2: Threat: secrets=1 files, processRisk=0 files, emptyCatch=0\nStep 3: Correctness: read control flow for public surfaces; findings=none\nStep 4: Performance: not hot-path; spot-checked\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-wiki\nStep 6: Hygiene: empty=0; notes: clean\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+}

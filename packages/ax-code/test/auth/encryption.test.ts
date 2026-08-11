@@ -87,6 +87,15 @@ test("logs a warning and falls back to legacy machine id when install secret is 
   const { __resetInstallSecretCacheForTests, encrypt: encryptAgain } = await import("../../src/auth/encryption")
   const { Log } = await import("../../src/util/log")
 
+  // Same service key as encryption.ts — Log.create caches by service tag.
+  const logger = Log.create({ service: "auth/encryption" })
+  const warnings: Array<{ message: unknown; extra?: Record<string, unknown> }> = []
+  const originalWarn = logger.warn
+  logger.warn = (message?: unknown, extra?: Record<string, unknown>) => {
+    warnings.push({ message, extra })
+    originalWarn(message, extra)
+  }
+
   __resetInstallSecretCacheForTests()
 
   // Point data dir at a path that cannot hold a secret file (file, not directory).
@@ -95,11 +104,6 @@ test("logs a warning and falls back to legacy machine id when install secret is 
   const fs = await import("fs")
   fs.writeFileSync(blocker, "not-a-directory")
 
-  const warnings: Array<{ msg: string; extra?: unknown }> = []
-  const originalCreate = Log.create
-  // Patch the module-level logger by re-importing is hard; instead spy via
-  // forcing the catch path and asserting encrypt still works (version 1).
-  // We also read the source path failure by making Global.Path.data a file.
   try {
     Global.Path.data = blocker
     __resetInstallSecretCacheForTests()
@@ -107,7 +111,10 @@ test("logs a warning and falls back to legacy machine id when install secret is 
     // Without install secret, encrypt uses version 1 (legacy derivation).
     expect(value.version).toBe(1)
     expect(decrypt(value)).toBe("fallback-key")
+    expect(warnings.length).toBeGreaterThan(0)
+    expect(String(warnings[0]?.message ?? "")).toMatch(/install secret unavailable/i)
   } finally {
+    logger.warn = originalWarn
     Global.Path.data = originalData
     __resetInstallSecretCacheForTests()
     try {

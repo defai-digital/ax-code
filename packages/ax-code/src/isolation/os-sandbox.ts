@@ -191,8 +191,6 @@ export namespace OsSandbox {
 (deny default)
 (allow process*)
 (allow sysctl-read)
-(allow mach*)
-(allow ipc*)
 (allow signal)
 (allow system-socket)
 (allow file-read*)

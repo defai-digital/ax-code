@@ -23,7 +23,14 @@ export function decodeEncryptedTokenValue(value: unknown): EncryptedValue | unde
 
 function decryptToken<T extends string>(raw: string, make: (s: string) => T): T {
   const encrypted = parseEncryptedToken(raw)
-  if (!encrypted) return make(raw)
+  if (!encrypted) {
+    // Legacy plaintext rows still work, but must be visible — silent acceptance
+    // of non-encrypted shapes hides corruption and weak-key downgrade failures.
+    log.warn("stored account token is not encrypted; accepting as legacy plaintext", {
+      tokenLength: raw.length,
+    })
+    return make(raw)
+  }
 
   try {
     return make(decrypt(encrypted))

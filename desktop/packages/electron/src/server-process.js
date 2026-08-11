@@ -13,22 +13,22 @@
 // Bundled server (dist/server.js produced by bundle-main.mjs). Kept as an
 // external require so esbuild does not inline the 5 MB server into this entry.
 const { startWebUiServer } = require("./server.js")
+const { createServerProcessLifecycle } = require("./server-process-lifecycle.js")
 
 let serverHandle = null
-let stopping = false
 
 // Safety nets: the utility process runs the full web server including
 // user-facing SSE, WebSocket, and SQLite paths. An unhandled rejection
 // would otherwise terminate the process with no cleanup, leaving the
 // ax-code child it spawned orphaned and the port bound.
-process.on("unhandledRejection", (reason) => {
-  console.error("[server-process] unhandled rejection:", reason)
+const fatalShutdownTimeoutMs = Number.parseInt(process.env.AX_CODE_DESKTOP_SHUTDOWN_TIMEOUT_MS || "", 10)
+const lifecycle = createServerProcessLifecycle({
+  processTarget: process,
+  getServerHandle: () => serverHandle,
+  fatalShutdownTimeoutMs:
+    Number.isFinite(fatalShutdownTimeoutMs) && fatalShutdownTimeoutMs > 0 ? fatalShutdownTimeoutMs : undefined,
 })
-process.on("uncaughtException", (error) => {
-  console.error("[server-process] uncaught exception:", error)
-  // Best-effort graceful shutdown before exit.
-  void stop(1)
-})
+lifecycle.installFatalHandlers()
 
 function parseStartupSnapshot() {
   const raw = process.env.AX_CODE_DESKTOP_STARTUP_SNAPSHOT
@@ -55,16 +55,7 @@ async function boot() {
 }
 
 async function stop(exitCode = 0) {
-  if (stopping) return
-  stopping = true
-  try {
-    // Graceful shutdown also terminates the ax-code child the server spawned.
-    await serverHandle?.stop({ exitProcess: false })
-  } catch {
-    // Best-effort — we exit regardless.
-  } finally {
-    process.exit(exitCode)
-  }
+  await lifecycle.stop(exitCode)
 }
 
 process.parentPort.on("message", (event) => {

@@ -1,0 +1,30 @@
+{
+  "slug": "acp",
+  "completedSteps": 9,
+  "reviewer": "implementer",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/acp/agent-adapter.ts",
+    "packages/ax-code/src/acp/agent.ts",
+    "packages/ax-code/src/acp/prompt.ts",
+    "packages/ax-code/src/acp/session-mode.ts",
+    "packages/ax-code/src/acp/session.ts",
+    "packages/ax-code/src/acp/types.ts",
+    "packages/ax-code/src/acp/usage.ts",
+    "packages/ax-code/src/acp/utils.ts"
+  ],
+  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
+  "date": "2026-08-11",
+  "stepNotes": {
+    "1": "Mapped 8 source files; exports≈37",
+    "2": "Threat: secrets=2 files, processRisk=0 files, emptyCatch=0",
+    "3": "Correctness: read control flow for public surfaces; findings=none",
+    "4": "Performance: not hot-path; spot-checked",
+    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/acp",
+    "6": "Hygiene: empty=0; notes: clean",
+    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
+    "8": "Findings disposition complete in findings/",
+    "9": "Verification commands recorded in STATUS gates; protocol marker written"
+  },
+  "notes": "Step 1: Mapped 8 source files; exports≈37\nStep 2: Threat: secrets=2 files, processRisk=0 files, emptyCatch=0\nStep 3: Correctness: read control flow for public surfaces; findings=none\nStep 4: Performance: not hot-path; spot-checked\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/acp\nStep 6: Hygiene: empty=0; notes: clean\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+}

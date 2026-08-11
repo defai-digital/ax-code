@@ -38,6 +38,8 @@ describe("OsSandbox.buildSeatbeltProfile", () => {
     })
     expect(profile).toContain("(version 1)")
     expect(profile).toContain("(deny network*)")
+    expect(profile).not.toContain("(allow mach*)")
+    expect(profile).not.toContain("(allow ipc*)")
     // Paths are realpath'd — on macOS /tmp → /private/tmp
     const ws = OsSandbox.canonicalPath("/tmp/ws")
     expect(profile).toContain(`subpath "${ws}"`)

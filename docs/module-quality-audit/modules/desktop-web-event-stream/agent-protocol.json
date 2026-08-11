@@ -1,0 +1,36 @@
+{
+  "slug": "desktop-web-event-stream",
+  "completedSteps": 9,
+  "reviewer": "implementer",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "desktop/packages/web/server/lib/event-stream/directory-ws-bridge.js",
+    "desktop/packages/web/server/lib/event-stream/global-hub.js",
+    "desktop/packages/web/server/lib/event-stream/global-hub.test.js",
+    "desktop/packages/web/server/lib/event-stream/global-ws-bridge.js",
+    "desktop/packages/web/server/lib/event-stream/index.js",
+    "desktop/packages/web/server/lib/event-stream/protocol.js",
+    "desktop/packages/web/server/lib/event-stream/protocol.test.js",
+    "desktop/packages/web/server/lib/event-stream/runtime.js",
+    "desktop/packages/web/server/lib/event-stream/runtime.test.js",
+    "desktop/packages/web/server/lib/event-stream/test-helpers.js",
+    "desktop/packages/web/server/lib/event-stream/upstream-health.js",
+    "desktop/packages/web/server/lib/event-stream/upstream-health.test.js",
+    "desktop/packages/web/server/lib/event-stream/upstream-reader.js",
+    "desktop/packages/web/server/lib/event-stream/upstream-reader.test.js"
+  ],
+  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
+  "date": "2026-08-11",
+  "stepNotes": {
+    "1": "Mapped 14 source files; exports≈25",
+    "2": "Threat: secrets=1 files, processRisk=0 files, emptyCatch=11",
+    "3": "Correctness: read control flow for public surfaces; findings=AUDIT-desktop-web-event-stream-empty-catch.md",
+    "4": "Performance: hot-path unit — checked unbounded patterns in read files",
+    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/web/server/lib/event-stream",
+    "6": "Hygiene: empty=11; notes: desktop/packages/web/server/lib/event-stream/directory-ws-bridge.js: 3 empty catch(es) — see empty-catch finding disposition; desktop/packages/web/server/lib/event-stream/global-ws-bridge.js: 3 empty catch(es) — see empty-catch finding disposition; desktop/packages/web/server/lib/event-stream/protocol.js: 2 empty catch(es) — see empty-catch finding disposition; desktop/packages/web/server/lib/event-stream/runtime.js: 3 empty catch(es) — see empty-catch finding disposition",
+    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
+    "8": "Findings disposition complete in findings/",
+    "9": "Verification commands recorded in STATUS gates; protocol marker written"
+  },
+  "notes": "Step 1: Mapped 14 source files; exports≈25\nStep 2: Threat: secrets=1 files, processRisk=0 files, emptyCatch=11\nStep 3: Correctness: read control flow for public surfaces; findings=AUDIT-desktop-web-event-stream-empty-catch.md\nStep 4: Performance: hot-path unit — checked unbounded patterns in read files\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/web/server/lib/event-stream\nStep 6: Hygiene: empty=11; notes: desktop/packages/web/server/lib/event-stream/directory-ws-bridge.js: 3 empty catch(es) — see empty-catch finding disposition; desktop/packages/web/server/lib/event-stream/global-ws-bridge.js: 3 empty catch(es) — see empty-catch finding disposition; desktop/packages/web/server/lib/event-stream/protocol.js: 2 empty catch(es) — see empty-catch finding disposition; desktop/packages/web/server/lib/event-stream/runtime.js: 3 empty catch(es) — see empty-catch finding disposition\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+}

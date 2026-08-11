@@ -1,0 +1,37 @@
+{
+  "slug": "desktop-web-src",
+  "completedSteps": 9,
+  "reviewer": "implementer",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "desktop/packages/web/src/api/constants.ts",
+    "desktop/packages/web/src/api/files.test.ts",
+    "desktop/packages/web/src/api/files.ts",
+    "desktop/packages/web/src/api/git.test.ts",
+    "desktop/packages/web/src/api/git.ts",
+    "desktop/packages/web/src/api/github.ts",
+    "desktop/packages/web/src/api/index.ts",
+    "desktop/packages/web/src/api/notifications.test.ts",
+    "desktop/packages/web/src/api/notifications.ts",
+    "desktop/packages/web/src/api/permissions.ts",
+    "desktop/packages/web/src/api/settings.ts",
+    "desktop/packages/web/src/api/terminal.ts",
+    "desktop/packages/web/src/api/tools.ts",
+    "desktop/packages/web/src/main.tsx",
+    "desktop/packages/web/src/mini-chat-main.tsx"
+  ],
+  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
+  "date": "2026-08-11",
+  "stepNotes": {
+    "1": "Mapped 15 source files; exports≈14",
+    "2": "Threat: secrets=0 files, processRisk=0 files, emptyCatch=0",
+    "3": "Correctness: read control flow for public surfaces; findings=none",
+    "4": "Performance: not hot-path; spot-checked",
+    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/web/src",
+    "6": "Hygiene: empty=0; notes: clean",
+    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
+    "8": "Findings disposition complete in findings/",
+    "9": "Verification commands recorded in STATUS gates; protocol marker written"
+  },
+  "notes": "Step 1: Mapped 15 source files; exports≈14\nStep 2: Threat: secrets=0 files, processRisk=0 files, emptyCatch=0\nStep 3: Correctness: read control flow for public surfaces; findings=none\nStep 4: Performance: not hot-path; spot-checked\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/web/src\nStep 6: Hygiene: empty=0; notes: clean\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+}

@@ -1,0 +1,31 @@
+{
+  "slug": "desktop-web-git",
+  "completedSteps": 9,
+  "reviewer": "implementer",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "desktop/packages/web/server/lib/git/credentials.js",
+    "desktop/packages/web/server/lib/git/credentials.test.js",
+    "desktop/packages/web/server/lib/git/identity-storage.js",
+    "desktop/packages/web/server/lib/git/identity-storage.test.js",
+    "desktop/packages/web/server/lib/git/index.js",
+    "desktop/packages/web/server/lib/git/routes.js",
+    "desktop/packages/web/server/lib/git/routes.test.js",
+    "desktop/packages/web/server/lib/git/service.js",
+    "desktop/packages/web/server/lib/git/service.test.js"
+  ],
+  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
+  "date": "2026-08-11",
+  "stepNotes": {
+    "1": "Mapped 9 source files; exports≈74",
+    "2": "Threat: secrets=6 files, processRisk=0 files, emptyCatch=4",
+    "3": "Correctness: read control flow for public surfaces; findings=AUDIT-desktop-web-git-empty-catch.md",
+    "4": "Performance: not hot-path; spot-checked",
+    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/web/server/lib/git",
+    "6": "Hygiene: empty=4; notes: desktop/packages/web/server/lib/git/identity-storage.js: 4 empty catch(es) — see empty-catch finding disposition",
+    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
+    "8": "Findings disposition complete in findings/",
+    "9": "Verification commands recorded in STATUS gates; protocol marker written"
+  },
+  "notes": "Step 1: Mapped 9 source files; exports≈74\nStep 2: Threat: secrets=6 files, processRisk=0 files, emptyCatch=4\nStep 3: Correctness: read control flow for public surfaces; findings=AUDIT-desktop-web-git-empty-catch.md\nStep 4: Performance: not hot-path; spot-checked\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/web/server/lib/git\nStep 6: Hygiene: empty=4; notes: desktop/packages/web/server/lib/git/identity-storage.js: 4 empty catch(es) — see empty-catch finding disposition\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+}

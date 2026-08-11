@@ -1,0 +1,42 @@
+{
+  "slug": "provider-ax-engine",
+  "completedSteps": 9,
+  "reviewer": "implementer",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/provider/ax-engine/catalog.ts",
+    "packages/ax-code/src/provider/ax-engine/connection.ts",
+    "packages/ax-code/src/provider/ax-engine/constants.ts",
+    "packages/ax-code/src/provider/ax-engine/delete.ts",
+    "packages/ax-code/src/provider/ax-engine/dependency.ts",
+    "packages/ax-code/src/provider/ax-engine/download-job.ts",
+    "packages/ax-code/src/provider/ax-engine/download-progress.ts",
+    "packages/ax-code/src/provider/ax-engine/hf-cache.ts",
+    "packages/ax-code/src/provider/ax-engine/index.ts",
+    "packages/ax-code/src/provider/ax-engine/install.ts",
+    "packages/ax-code/src/provider/ax-engine/lifecycle.ts",
+    "packages/ax-code/src/provider/ax-engine/model-cache.ts",
+    "packages/ax-code/src/provider/ax-engine/model-card.ts",
+    "packages/ax-code/src/provider/ax-engine/paths.ts",
+    "packages/ax-code/src/provider/ax-engine/platform.ts",
+    "packages/ax-code/src/provider/ax-engine/prepare.ts",
+    "packages/ax-code/src/provider/ax-engine/provider-loader.ts",
+    "packages/ax-code/src/provider/ax-engine/python.ts",
+    "packages/ax-code/src/provider/ax-engine/server.ts",
+    "packages/ax-code/src/provider/ax-engine/status.ts"
+  ],
+  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
+  "date": "2026-08-11",
+  "stepNotes": {
+    "1": "Mapped 20 source files; exports≈217",
+    "2": "Threat: secrets=7 files, processRisk=2 files, emptyCatch=0",
+    "3": "Correctness: read control flow for public surfaces; findings=none",
+    "4": "Performance: hot-path unit — checked unbounded patterns in read files",
+    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/provider/ax-engine",
+    "6": "Hygiene: empty=0; notes: clean",
+    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
+    "8": "Findings disposition complete in findings/",
+    "9": "Verification commands recorded in STATUS gates; protocol marker written"
+  },
+  "notes": "Step 1: Mapped 20 source files; exports≈217\nStep 2: Threat: secrets=7 files, processRisk=2 files, emptyCatch=0\nStep 3: Correctness: read control flow for public surfaces; findings=none\nStep 4: Performance: hot-path unit — checked unbounded patterns in read files\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for packages/ax-code/src/provider/ax-engine\nStep 6: Hygiene: empty=0; notes: clean\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+}

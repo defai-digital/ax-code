@@ -1,0 +1,31 @@
+{
+  "slug": "desktop-web-terminal",
+  "completedSteps": 9,
+  "reviewer": "implementer",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "desktop/packages/web/server/lib/terminal/index.js",
+    "desktop/packages/web/server/lib/terminal/output-replay-buffer.js",
+    "desktop/packages/web/server/lib/terminal/output-replay-buffer.test.js",
+    "desktop/packages/web/server/lib/terminal/runtime.js",
+    "desktop/packages/web/server/lib/terminal/runtime.test.js",
+    "desktop/packages/web/server/lib/terminal/terminal-dimensions.js",
+    "desktop/packages/web/server/lib/terminal/terminal-dimensions.test.js",
+    "desktop/packages/web/server/lib/terminal/terminal-ws-protocol.js",
+    "desktop/packages/web/server/lib/terminal/terminal-ws-protocol.test.js"
+  ],
+  "baseline": "054002dd73198d659d505539f080200bdbc66bc8",
+  "date": "2026-08-11",
+  "stepNotes": {
+    "1": "Mapped 9 source files; exports≈28",
+    "2": "Threat: secrets=1 files, processRisk=1 files, emptyCatch=7",
+    "3": "Correctness: read control flow for public surfaces; findings=AUDIT-desktop-web-terminal-001.md, AUDIT-desktop-web-terminal-empty-catch.md",
+    "4": "Performance: not hot-path; spot-checked",
+    "5": "Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/web/server/lib/terminal",
+    "6": "Hygiene: empty=7; notes: desktop/packages/web/server/lib/terminal/runtime.js: 7 empty catch(es) — see empty-catch finding disposition",
+    "7": "Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings",
+    "8": "Findings disposition complete in findings/",
+    "9": "Verification commands recorded in STATUS gates; protocol marker written"
+  },
+  "notes": "Step 1: Mapped 9 source files; exports≈28\nStep 2: Threat: secrets=1 files, processRisk=1 files, emptyCatch=7\nStep 3: Correctness: read control flow for public surfaces; findings=AUDIT-desktop-web-terminal-001.md, AUDIT-desktop-web-terminal-empty-catch.md\nStep 4: Performance: not hot-path; spot-checked\nStep 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/web/server/lib/terminal\nStep 6: Hygiene: empty=7; notes: desktop/packages/web/server/lib/terminal/runtime.js: 7 empty catch(es) — see empty-catch finding disposition\nStep 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings\nStep 8: Findings disposition complete in findings/\nStep 9: Verification commands recorded in STATUS gates; protocol marker written"
+}

@@ -4,6 +4,7 @@ import fs from "fs/promises"
 import { Auth } from "../../src/auth"
 import { Global } from "../../src/global"
 import { currentLockHost } from "../../src/util/process-lock"
+import { Filesystem } from "../../src/util/filesystem"
 
 const file = path.join(Global.Path.data, "auth.json")
 const lockFile = `${file}.lock`
@@ -188,6 +189,61 @@ test("set does not steal an auth lock when its body cannot be read", async () =>
     expect(await fs.readFile(file, "utf-8")).toBe(authBefore)
     expect(await fs.readFile(lockFile, "utf-8")).toBe(lockBefore)
   } finally {
+    readSpy.mockRestore()
+  }
+})
+
+test("set does not steal a freshly created auth lock with a partial body", async () => {
+  await fs.writeFile(lockFile, "{")
+  const now = vi.spyOn(Date, "now")
+  now.mockReturnValueOnce(1_000).mockReturnValueOnce(1_000).mockReturnValue(6_001)
+
+  try {
+    await expect(
+      Auth.set("anthropic", {
+        type: "api",
+        key: "sk-new",
+      }),
+    ).rejects.toMatchObject({ name: "AuthError" })
+    expect(await fs.readFile(lockFile, "utf-8")).toBe("{")
+  } finally {
+    now.mockRestore()
+  }
+})
+
+test("canary migration preserves credentials written after its initial read", async () => {
+  await fs.writeFile(file, JSON.stringify({ anthropic: { type: "api", key: "sk-existing" } }))
+
+  const originalReadJson = Filesystem.readJson.bind(Filesystem)
+  let releaseRead!: () => void
+  const readReleased = new Promise<void>((resolve) => {
+    releaseRead = resolve
+  })
+  let initialReadObserved!: () => void
+  const initialRead = new Promise<void>((resolve) => {
+    initialReadObserved = resolve
+  })
+  let intercepted = false
+  const readSpy = vi.spyOn(Filesystem, "readJson").mockImplementation(async (target) => {
+    const value = await originalReadJson(target)
+    if (target === file && !intercepted) {
+      intercepted = true
+      initialReadObserved()
+      await readReleased
+    }
+    return value
+  })
+
+  try {
+    const migration = Auth.all()
+    await initialRead
+    await Auth.set("openai", { type: "api", key: "sk-concurrent" })
+    releaseRead()
+    await migration
+
+    expect(await Auth.get("openai")).toMatchObject({ type: "api", key: "sk-concurrent" })
+  } finally {
+    releaseRead()
     readSpy.mockRestore()
   }
 })

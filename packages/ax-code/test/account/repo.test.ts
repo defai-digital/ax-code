@@ -314,3 +314,35 @@ test("active returns none for malformed active account rows", async () => {
   const active = await AccountRepo.active()
   expect(active).toBeUndefined()
 })
+
+test("getRow logs when stored tokens are legacy plaintext instead of encrypted values", async () => {
+  const { Log } = await import("../../src/util/log")
+  const logger = Log.create({ service: "account.repo" })
+  const warnings: Array<{ message: unknown; extra?: Record<string, unknown> }> = []
+  const originalWarn = logger.warn
+  logger.warn = (message?: unknown, extra?: Record<string, unknown>) => {
+    warnings.push({ message, extra })
+    originalWarn(message, extra)
+  }
+
+  try {
+    const db = Database.Client()
+    const id = "user-plaintext"
+    const now = Date.now()
+    // Database.Client().run only accepts a SQL string (no bind params).
+    db.run(
+      /*sql*/ `INSERT INTO account (id, email, url, access_token, refresh_token, token_expiry, time_created, time_updated)
+       VALUES ('${id}', 'plain@example.com', 'https://control.example.com', 'plaintext-access', 'plaintext-refresh', ${now + 3600_000}, ${now}, ${now})`,
+    )
+
+    const row = await AccountRepo.getRow(AccountID.make(id))
+    expect(row).toBeDefined()
+    expect(row!.access_token).toBe(AccessToken.make("plaintext-access"))
+    expect(row!.refresh_token).toBe(RefreshToken.make("plaintext-refresh"))
+
+    const plaintextWarnings = warnings.filter((w) => String(w.message ?? "").includes("not encrypted"))
+    expect(plaintextWarnings.length).toBeGreaterThanOrEqual(2)
+  } finally {
+    logger.warn = originalWarn
+  }
+})

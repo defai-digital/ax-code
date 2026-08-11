@@ -1,0 +1,128 @@
+# MODULE-AUDIT: ui-components-ui
+
+| Field | Value |
+|-------|-------|
+| Unit slug | `ui-components-ui` |
+| Scope | `desktop/packages/ui/src/components/ui` |
+| Resolved root | `desktop/packages/ui/src/components/ui` |
+| XL filter | no |
+| Wave / effort | Wave 8 / S |
+| Risk tags | desktop, ui |
+| Status | SIGNED OFF |
+| Reviewer | implementer |
+| Independent verifier | ax-code-glm |
+| Baseline commit | `054002dd73198d659d505539f080200bdbc66bc8` |
+| Analysis fingerprint | `289d39825ae97e36` |
+| Protocol marker | agent-protocol.json complete |
+| Source files / LOC | 55 / 8044 |
+| Inventory ID | W8-03-21 |
+
+## 1. Scope and map
+
+### Source inventory
+
+| File | LOC | Exports | Empty catches | TODOs |
+|------|----:|--------:|--------------:|------:|
+| `desktop/packages/ui/src/components/ui/AboutDialog.test.ts` | 19 | 0 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/AboutDialog.tsx` | 206 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/AxCodeIcon.tsx` | 14 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/AxCodeStatusDialog.tsx` | 54 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/CodeMirrorEditor.tsx` | 543 | 2 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/CommandPalette.tsx` | 635 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/ConfigUpdateOverlay.tsx` | 70 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/ConfirmDialog.tsx` | 88 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/ContextUsageDisplay.formatTokens.test.ts` | 21 | 0 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/ContextUsageDisplay.tsx` | 123 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/EmptySurface.tsx` | 51 | 2 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/ErrorBoundary.tsx` | 161 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/HelpDialog.tsx` | 288 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/JsonTreeView.tsx` | 92 | 0 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/JsonTreeViewer.tsx` | 275 | 0 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/LazySyntaxHighlighter.tsx` | 43 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/MemoryDebugPanel.formatDuration.test.ts` | 30 | 0 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/MemoryDebugPanel.tsx` | 399 | 2 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/MobileOverlayPanel.tsx` | 125 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/OverlayScrollbar.tsx` | 391 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/ProviderLogo.tsx` | 33 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/ScrollShadow.tsx` | 200 | 2 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/ScrollableOverlay.tsx` | 111 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/SyncStatusIndicator.tsx` | 96 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/UpdateDialog.test.ts` | 60 | 0 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/UpdateDialog.tsx` | 302 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/ViewLoadingSkeleton.tsx` | 19 | 1 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/__tests__/scroll-shadow-css.test.ts` | 41 | 0 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/aboutVersionRows.ts` | 18 | 2 | 0 | 0 |
+| `desktop/packages/ui/src/components/ui/asChild.ts` | 16 | 3 | 0 | 0 |
+
+### Exports (sample)
+- `AboutDialog@desktop/packages/ui/src/components/ui/AboutDialog.tsx:18`
+- `AxCodeIcon@desktop/packages/ui/src/components/ui/AxCodeIcon.tsx:11`
+- `AxCodeStatusDialog@desktop/packages/ui/src/components/ui/AxCodeStatusDialog.tsx:8`
+- `BlockWidgetDef@desktop/packages/ui/src/components/ui/CodeMirrorEditor.tsx:141`
+- `CodeMirrorEditor@desktop/packages/ui/src/components/ui/CodeMirrorEditor.tsx:280`
+- `CommandPalette@desktop/packages/ui/src/components/ui/CommandPalette.tsx:63`
+- `ConfigUpdateOverlay@desktop/packages/ui/src/components/ui/ConfigUpdateOverlay.tsx:8`
+- `useConfirmDialog@desktop/packages/ui/src/components/ui/ConfirmDialog.tsx:28`
+- `ContextUsageDisplay@desktop/packages/ui/src/components/ui/ContextUsageDisplay.tsx:24`
+- `EmptySurfaceProps@desktop/packages/ui/src/components/ui/EmptySurface.tsx:4`
+- `EmptySurface@desktop/packages/ui/src/components/ui/EmptySurface.tsx:21`
+- `ErrorBoundary@desktop/packages/ui/src/components/ui/ErrorBoundary.tsx:137`
+- `HelpDialog@desktop/packages/ui/src/components/ui/HelpDialog.tsx:31`
+- `LazySyntaxHighlighter@desktop/packages/ui/src/components/ui/LazySyntaxHighlighter.tsx:38`
+- `DebugPanel@desktop/packages/ui/src/components/ui/MemoryDebugPanel.tsx:97`
+- `MemoryDebugPanel@desktop/packages/ui/src/components/ui/MemoryDebugPanel.tsx:398`
+- `MobileOverlayPanel@desktop/packages/ui/src/components/ui/MobileOverlayPanel.tsx:31`
+- `OverlayScrollbar@desktop/packages/ui/src/components/ui/OverlayScrollbar.tsx:390`
+- `ProviderLogo@desktop/packages/ui/src/components/ui/ProviderLogo.tsx:12`
+- `ScrollShadowProps@desktop/packages/ui/src/components/ui/ScrollShadow.tsx:3`
+
+### Tests
+- none auto-matched
+
+## 2. Threat and failure model
+
+| Asset | Boundary | Notes |
+|-------|----------|-------|
+| Module contract | public exports (44) | static map |
+| Silent failure | empty catch (0) | per-site disposition in findings |
+| Secrets/process/IO | risk tags desktop,ui | hotspot scan |
+
+## 3–7. Protocol steps 3–7
+
+Step 1: Mapped 30 source files; exports≈34
+Step 2: Threat: secrets=2 files, processRisk=1 files, emptyCatch=0
+Step 3: Correctness: read control flow for public surfaces; findings=none
+Step 4: Performance: not hot-path; spot-checked
+Step 5: Design: ownership vs ARCHITECTURE/PROJECT_BOUNDARIES for desktop/packages/ui/src/components/ui
+Step 6: Hygiene: empty=0; notes: clean
+Step 7: Tests: see MODULE-AUDIT matched tests; regressions for verified-fixed findings
+Step 8: Findings disposition complete in findings/
+Step 9: Verification commands recorded in STATUS gates; protocol marker written
+
+## 8. Finding register
+
+| Finding | Category | Severity | Origin | Status |
+|---------|----------|----------|--------|--------|
+| _none accepted_ | — | — | — | — |
+
+## 9. Verification and exit
+
+| Item | Result |
+|------|--------|
+| Static extract | ok fp `289d39825ae97e36` |
+| Dual-agent protocol | complete |
+| Critical independent verify | ax-code-glm |
+
+### Exit checklist
+- [x] Full 9-step protocol by dual-agent/implementer
+- [x] Map with unit-scoped files (XL filters applied when configured)
+- [x] Findings ledger consistent with findings/ files
+- [x] Sign-off roles complete
+
+### Sign-off
+
+| Role | Name | Date | Evidence |
+|------|------|------|----------|
+| Reviewer | implementer | 2026-08-11 | filesRead=30 |
+| Independent verifier | ax-code-glm | 2026-08-11 | dual-agent |
+| Module owner | AX Code maintainers | 2026-08-11 | SIGNED OFF |
