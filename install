@@ -114,8 +114,25 @@ ensure_minisign_available() {
         tar -xzf "$tmp_dir/$archive" -C "$tmp_dir"
     fi
 
-    local found
-    found="$(find "$tmp_dir" -type f -name minisign | head -n 1 || true)"
+    local found=""
+    if [[ "$archive" == *.tar.gz ]]; then
+        # The Linux bootstrap archive contains both x86_64 and aarch64
+        # executables. Filesystem enumeration order is not stable, so selecting
+        # the first file can install the opposite architecture and fail with
+        # "Exec format error" during signature verification.
+        local minisign_arch=""
+        case "$(uname -m)" in
+          x86_64|amd64) minisign_arch="x86_64" ;;
+          aarch64|arm64) minisign_arch="aarch64" ;;
+          *)
+            rm -rf "$tmp_dir"
+            return 1
+            ;;
+        esac
+        found="$(find "$tmp_dir" -type f -path "*/${minisign_arch}/minisign" -print -quit)"
+    else
+        found="$(find "$tmp_dir" -type f -name minisign -print -quit)"
+    fi
     if [ -z "$found" ] || [ ! -f "$found" ]; then
         rm -rf "$tmp_dir"
         return 1

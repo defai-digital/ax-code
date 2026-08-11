@@ -55,6 +55,15 @@ describe("install script", () => {
     expect(text).toContain("Unsupported platform: musl/Alpine Linux")
   })
 
+  test("selects the Minisign bootstrap binary for the Linux host architecture", async () => {
+    const text = await readFile(installScript, "utf-8")
+    expect(text).toContain('case "$(uname -m)" in')
+    expect(text).toContain('x86_64|amd64) minisign_arch="x86_64"')
+    expect(text).toContain('aarch64|arm64) minisign_arch="aarch64"')
+    expect(text).toContain('-path "*/${minisign_arch}/minisign" -print -quit')
+    expect(text).not.toContain('find "$tmp_dir" -type f -name minisign | head -n 1')
+  })
+
   test("warns when the installed binary is not first on PATH", async () => {
     const text = await readFile(installScript, "utf-8")
     expect(text).toContain("warn_path_precedence")
