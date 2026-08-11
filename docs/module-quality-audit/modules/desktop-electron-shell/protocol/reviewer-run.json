@@ -1,0 +1,33 @@
+{
+  "agentId": "ax-code-glm-desktop-electron-shell-20260811T201516Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T20:15:16Z",
+  "finishedAt": "2026-08-11T20:21:42Z",
+  "filesRead": [
+    "desktop/packages/electron/src/desktop-boot-outcome.js",
+    "desktop/packages/electron/src/desktop-boot-outcome.test.mjs",
+    "desktop/packages/electron/src/desktop-browser-capture-policy.js",
+    "desktop/packages/electron/src/desktop-browser-capture-policy.test.mjs",
+    "desktop/packages/electron/src/desktop-capture-page-policy.test.mjs",
+    "desktop/packages/electron/src/desktop-dialog.js",
+    "desktop/packages/electron/src/desktop-dialog.test.mjs",
+    "desktop/packages/electron/src/desktop-file-search.js",
+    "desktop/packages/electron/src/desktop-file-search.test.mjs",
+    "desktop/packages/electron/src/desktop-hosts.js",
+    "desktop/packages/electron/src/desktop-hosts.test.mjs",
+    "desktop/packages/electron/src/desktop-lan-address.js",
+    "desktop/packages/electron/src/desktop-lan-address.test.mjs",
+    "desktop/packages/electron/src/desktop-read-file-policy.js",
+    "desktop/packages/electron/src/desktop-read-file-policy.test.mjs",
+    "desktop/packages/electron/src/desktop-window-title.js",
+    "desktop/packages/electron/src/desktop-window-title.test.mjs",
+    "desktop/packages/electron/src/external-url.js",
+    "desktop/packages/electron/src/external-url.test.mjs",
+    "desktop/packages/electron/src/installed-apps-cache.js",
+    "desktop/packages/electron/src/installed-apps-cache.test.mjs",
+    "docs/module-quality-audit/modules/desktop-electron-shell/MODULE-AUDIT.md",
+    "docs/module-quality-audit/modules/desktop-electron-shell/findings/AUDIT-desktop-electron-shell-empty-catch.md"
+  ],
+  "slug": "desktop-electron-shell"
+}

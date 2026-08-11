@@ -1,0 +1,32 @@
+{
+  "slug": "cli-cmd-pr",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/cli/cmd/pr.ts",
+    "docs/module-quality-audit/modules/cli-cmd-pr/MODULE-AUDIT.md",
+    "packages/ax-code/src/cli/cmd/github-agent/pr.ts",
+    "packages/ax-code/test/cli/github-agent-pr.test.ts",
+    "packages/ax-code/src/cli/boot.ts",
+    "packages/ax-code/src/cli/cmd/cmd.ts",
+    "packages/ax-code/src/cli/cmd/export.ts",
+    "packages/ax-code/src/cli/cmd/serve.ts",
+    "packages/ax-code/src/util/process.ts",
+    "packages/ax-code/src/util/git.ts",
+    "packages/ax-code/src/util/signals.ts",
+    "packages/ax-code/test/cli/boot.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Confirmed that the lightweight PR façade is imported by boot, included in the command list, and registered with yargs.",
+    "2": "Followed the numeric positional through gh and git argument arrays and verified that cross-spawn receives separate argv values rather than shell text.",
+    "3": "Matched wrapper and implementation command shapes, verified promise forwarding, and identified the missing positive-integer PR constraint as Low severity.",
+    "4": "Checked that heavy GitHub dependencies load only on invocation and that child-process signal handlers are removed through finally cleanup.",
+    "5": "Compared the PR façade with the export and serve lazy wrappers and isolated duplicated metadata as the principal ownership tradeoff.",
+    "6": "Reviewed rejection propagation, mutable state, catches, and typing; the explicit any weakens compile-time agreement with the delegated command.",
+    "7": "Mapped the three decoder/parser tests and documented the absence of direct façade, validation, checkout-error, and cleanup coverage.",
+    "8": "Reconciled the empty register and absent findings directory, retaining one Low advisory and no issue that requires Critical re-verification.",
+    "9": "Completed the exact PR helper Vitest target at 3/3 passing and the package tsgo typecheck with no errors."
+  },
+  "date": "2026-08-11"
+}

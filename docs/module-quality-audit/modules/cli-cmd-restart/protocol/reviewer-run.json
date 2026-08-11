@@ -1,0 +1,19 @@
+{
+  "agentId": "codex-sol-cli-cmd-restart-20260811T201345Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T20:13:45Z",
+  "finishedAt": "2026-08-11T20:15:48Z",
+  "filesRead": [
+    "packages/ax-code/src/cli/cmd/restart.ts",
+    "packages/ax-code/src/cli/cmd/runtime/restart.ts",
+    "packages/ax-code/src/cli/boot.ts",
+    "packages/ax-code/src/cli/cmd/cmd.ts",
+    "packages/ax-code/src/server/constants.ts",
+    "packages/ax-code/src/constants/server.ts",
+    "packages/ax-code/src/server/routes/app.ts",
+    "packages/ax-code/test/cli/runtime-restart.test.ts",
+    "docs/module-quality-audit/modules/cli-cmd-restart/MODULE-AUDIT.md"
+  ],
+  "slug": "cli-cmd-restart"
+}

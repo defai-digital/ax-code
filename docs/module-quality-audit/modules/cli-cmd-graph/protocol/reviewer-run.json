@@ -1,0 +1,22 @@
+{
+  "agentId": "codex-sol-cli-cmd-graph-20260811T201044Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T20:10:44Z",
+  "finishedAt": "2026-08-11T20:14:43Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/AGENTS.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/graph.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/session-latest.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/graph/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/graph/format.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/graph.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/graph/execution-graph.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/smoke.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-graph/MODULE-AUDIT.md"
+  ],
+  "slug": "cli-cmd-graph"
+}

@@ -1,0 +1,26 @@
+{
+  "slug": "cli-cmd-trace",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/trace.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/trace-log.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/session-latest.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/risk/score.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-trace/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single-file unit (trace.ts, 425 lines); confirmed EventQuery.bySessionWithTimestamp return shape at query.ts:116 matches the destructure at trace.ts:196.",
+    "2": "Builder advertises 7 flags but --errors/--slow/--service are honored only in the --logs branch (trace.ts:314-328) and --risk only in the replay branch (trace.ts:170), so the two modes have asymmetric flag semantics.",
+    "3": "Duration math at trace.ts:186-187 relies on sequence ordering from query.ts:125 and is safe; the readdir().catch at trace.ts:257 collapses EACCES/EMFILE into the same 'No log files found' message at line 272.",
+    "4": "Replay branch loads up to BY_SESSION_LIMIT=10000 rows (query.ts:20) then renders only the last `limit` (default 50) at trace.ts:189; EventQuery.recentBySession at query.ts:101 already exists for tail reads.",
+    "5": "Handler is 260 lines (146-405) with inline ANSI escapes at 211/225/237/360-379 and no TTY guard, so redirected output keeps raw escapes; splitting runReplayTrace/runLegacyLogTrace would mirror the header's two-mode split.",
+    "6": "Zero empty catches in source; LogEntry's [key:string]:unknown index (trace.ts:35) intentionally supports the arbitrary key=value stash at line 72; parseDecimalTraceDuration is private but fully covered via parseTraceTextLogLine.",
+    "7": "trace-log.test.ts covers all 7 exported helpers including NaN/1.5/'10'/undefined limit rejection (lines 93-100) but TraceCommand.handler, the replay branch, and the legacy file-discovery branch have no direct coverage.",
+    "8": "No findings/ files exist for this unit; the four LOW observations (silent flag no-ops, readdir fallback, full-load-then-tail, ANSI leak) do not meet Critical/Medium thresholds so no findings/ artifacts or reverify.md are emitted.",
+    "9": "Cross-checked resolveSession/printNoSessionFound against session-latest.ts:4-9 and the Risk namespace against score.ts:15-75; CI gates are pnpm --dir packages/ax-code run typecheck and run test:unit; no Critical findings so no reverify gate is triggered."
+  },
+  "date": "2026-08-11"
+}

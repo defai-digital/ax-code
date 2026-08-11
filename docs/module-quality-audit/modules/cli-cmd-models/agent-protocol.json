@@ -1,0 +1,34 @@
+{
+  "slug": "cli-cmd-models",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/models.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-models/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/ui.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/project/instance.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-info.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-key.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/model-selectability.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/models.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/provider-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/schema.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/provider/model-key.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/provider/model-selectability.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Confirmed the single command export, its yargs arguments, and its registration in the production CLI command array.",
+    "2": "Traced verbose output into the provider model schema and found unredacted arbitrary headers and options as a Medium disclosure concern.",
+    "3": "Verified instance scoping, discovery completion, provider lookup, eligibility filtering, and per-provider model sorting.",
+    "4": "Checked stdout/stderr framing and deterministic provider ordering; identified the successful exit status on an unknown provider.",
+    "5": "Bounded the cost to provider/model sorting plus concurrent discovery loaders, each protected by a ten-second timeout.",
+    "6": "Confirmed presentation, provider state, selectability, identity branding, and key formatting remain in their respective layers.",
+    "7": "Inspected early returns, refresh compatibility behavior, error propagation, markers, suppressions, and stale local naming.",
+    "8": "Matched shared filter and formatter tests to the command and documented the absence of direct command-level regression coverage.",
+    "9": "Ran two focused Vitest files with 14 passing tests and completed the package typecheck successfully."
+  },
+  "date": "2026-08-11"
+}

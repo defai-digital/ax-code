@@ -1,0 +1,28 @@
+{
+  "slug": "cli-cmd-db",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/db.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/storage/db.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/storage/db.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/storage/json-migration.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/ui.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-db/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Unit is a 1-line barrel at packages/ax-code/src/cli/cmd/db.ts:1 re-exporting DbCommand from ./storage/db; real implementation is 143 LOC in storage/db.ts, registered in boot.ts:99.",
+    "2": "Three external boundaries: node:sqlite binding (storage/db.ts:11-17), external sqlite3 binary via spawn (storage/db.ts:68), and JsonMigration write path (storage/db.ts:88); no network or secret surfaces.",
+    "3": "QueryCommand uses ok-flag plus unconditional db.close() at storage/db.ts:64 so both success and catch paths release the handle; MigrateCommand closes in finally at :131. Spawn fallback resolves on close regardless of exit code.",
+    "4": "Per-invocation DatabaseSync is fine for a short-lived CLI; db.prepare(query).all() at :50 materialises the full result set with no row cap, which is a foot-gun on large histories but acceptable for an operator tool.",
+    "5": "Heaviest coupling is importing the full storage/db barrel just to read Database.Path; only the lazy JsonMigration import at :87 is properly scoped. cmd() wrapper at cmd.ts:5 is an appropriately thin passthrough.",
+    "6": "No dead exports (DbCommand consumed in boot.ts:99), no empty catches, no TODOs; toErrorMessage used consistently for error surfacing at :62 and :128.",
+    "7": "Only db path and db path --help are covered in test/cli/smoke.test.ts:127,197; query, migrate, format option, and sqlite3 fallback are untested, while JsonMigration.run has strong coverage in test/storage/json-migration.test.ts.",
+    "8": "No Critical or High findings. MEDIUM: spawn fallback missing child.on('error') at storage/db.ts:68-71. LOWs: query creates DB file via openSync 'a' at :15, result materialisation unbounded at :50, test gap, barrel coupling INFO.",
+    "9": "Read-only lane made no code changes. Recommended live gates: pnpm --dir packages/ax-code run typecheck and vitest run test/cli/smoke.test.ts. Status READY for codex-sol verifier sign-off, no Critical blockers."
+  },
+  "date": "2026-08-11"
+}

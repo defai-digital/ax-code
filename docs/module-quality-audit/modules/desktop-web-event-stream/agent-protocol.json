@@ -1,0 +1,39 @@
+{
+  "slug": "desktop-web-event-stream",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "date": "2026-08-11",
+  "startedAt": "2026-08-11T20:18:17Z",
+  "finishedAt": "2026-08-11T20:31:42Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/event-stream/directory-ws-bridge.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/event-stream/global-hub.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/event-stream/global-hub.test.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/event-stream/global-ws-bridge.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/event-stream/index.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/event-stream/protocol.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/event-stream/protocol.test.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/event-stream/runtime.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/event-stream/runtime.test.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/event-stream/test-helpers.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/event-stream/upstream-health.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/event-stream/upstream-health.test.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/event-stream/upstream-reader.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/event-stream/upstream-reader.test.js",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/desktop-web-event-stream/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/desktop-web-event-stream/findings/AUDIT-desktop-web-event-stream-empty-catch.md"
+  ],
+  "stepNotes": {
+    "1": "14 in-scope files; index.js re-exports 20 symbols; runtime.js is the only file leaving the folder (imports parseRequestPathname from ../terminal/index.js:3).",
+    "2": "Two dominant failure classes: upstream stalls/unavailability (upstream-reader.js:121-124 abort + Last-Event-ID reconnect) and slow WS clients (protocol.js:74-89 close 1013 on bufferedAmount overflow).",
+    "3": "global-ws-bridge.js:140-166 wedge-fix gives non-ready clients error+1011 on post-everConnected errors; replayAfter full-buffer fallback at global-hub.js:152-167 locked by global-hub.test.js:85-122.",
+    "4": "Global path shares one upstream reader across N clients (runtime.test.js:130 asserts fetchCalls===1); directory path is intentionally 1:1 (runtime.test.js:212-255); all timers unref'd.",
+    "5": "Layering protocol->reader->hub->bridge->runtime is clean and unidirectional; runtime.js:23-29 SSE/WS failure asymmetry is a coupling smell that can leak dead SSE responses.",
+    "6": "10 empty catches tracked in the Medium finding; runtime.js:27 (SSE write swallow) and runtime.js:142-144 (upgrade error swallow) are the two real concerns; UPSTREAM_STALL_TIMEOUT_CONCURRENT_MS unused in-module.",
+    "7": "global-ws-bridge.js and directory-ws-bridge.js have no direct test files (covered only transitively via runtime.test.js); upstream-reader.js:196-211 trailing-buffer flush has no direct test.",
+    "8": "One Medium finding (AUDIT-desktop-web-event-stream-empty-catch, 10 sites, deferred, expiry 2026-09-11); no Critical findings raised in this pass; one-line SSE-leak fix suggested as follow-up.",
+    "9": "Evidence is the file:line citations above plus the cited test cases; desktop vitest config runs *.test.js per AGENTS.md; no Critical findings so no reverify.md required for the gate."
+  }
+}

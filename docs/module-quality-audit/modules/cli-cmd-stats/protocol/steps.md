@@ -1,0 +1,41 @@
+# Review Protocol — cli-cmd-stats
+
+Unit: `cli-cmd-stats`  
+Reviewer: `codex-sol` (`gpt-5.6-sol-xhigh`)  
+Independent verifier: `ax-code-glm`
+
+## Step 1 Scope and production reachability
+
+The candidate is the single implementation file `packages/ax-code/src/cli/cmd/stats.ts`: it defines the yargs command at lines 50-91 and exports validation, aggregation, and rendering helpers at lines 93-107, 121-326, and 328-416. The production CLI imports `StatsCommand` at `packages/ax-code/src/cli/boot.ts:42`, places it in the command array at line 87, and registers every array member with yargs at line 216. The command is therefore live through `ax-code stats`; the review also follows its direct session, database, project-context, model-key, locale, and bootstrap dependencies.
+
+## Step 2 Inputs, stored-data boundaries, and terminal output
+
+`--days` and `--tools` are declared numeric at `packages/ax-code/src/cli/cmd/stats.ts:55-62`, while `--project` is a string at lines 66-69. The check at lines 70-75 rejects negative, fractional, and non-finite numeric limits through the guards at lines 93-107. `--models` has no declared yargs type at lines 63-65; the check validates it only when parsing produced a number at line 73, and the handler recognizes only `true` or a number at lines 81-86. Thus a string such as `--models abc` is accepted and silently leaves model output disabled, a Low input-contract issue. Stored provider/model identifiers and tool names flow to terminal strings at lines 216-243 and 372-409. Their schemas permit general strings (`packages/ax-code/src/session/message-v2-impl.ts:341-350` and `:423-444`), so escaping control characters before rendering would harden stats output when a database contains imported or otherwise untrusted identifiers.
+
+## Step 3 Filtering and aggregation correctness
+
+The day calculation distinguishes all-time, local midnight for zero, and a rolling N-day cutoff at `packages/ax-code/src/cli/cmd/stats.ts:121-140`; project filtering compares either the current instance project or an explicit project ID at lines 142-151. A material accuracy limitation remains: inclusion is based on `session.time.updated` at line 142, but every message in an included session is loaded at line 195 and accumulated at lines 214-257. A long-lived session updated today therefore contributes its entire historical token total to “last N days,” not only usage in the requested interval. Within that chosen session set, assistant token fields match the message schema at `packages/ax-code/src/session/message-v2-impl.ts:435-444`, provider/model keys use the centralized `providerID/modelID` representation from `packages/ax-code/src/provider/model-key.ts:1-8`, and median calculation correctly handles empty, odd, and even successful samples at `packages/ax-code/src/cli/cmd/stats.ts:316-323`.
+
+## Step 4 Failure handling and lifecycle cleanup
+
+Session message reads run in groups and use `Promise.allSettled` at `packages/ax-code/src/cli/cmd/stats.ts:190-269`, so one corrupt or unreadable session warns with a safely converted reason and does not discard other results. `toErrorMessage` falls back even when string conversion throws at `packages/ax-code/src/util/error-message.ts:1-7`; the focused test exercises that path at `packages/ax-code/test/cli/stats.test.ts:136-169`. Partial failure does create inconsistent denominators: `totalSessions` is fixed to all filtered sessions at `packages/ax-code/src/cli/cmd/stats.ts:153-155`, successful token samples alone enter the median at lines 265-273, while average tokens divide by every filtered session at line 315. Top-level query and project-context failures propagate, and `bootstrap` guarantees instance disposal in `packages/ax-code/src/cli/bootstrap.ts:4-16`.
+
+## Step 5 Complexity and resource behavior
+
+`getAllSessions` performs an unfiltered table scan and materializes all valid rows at `packages/ax-code/src/cli/cmd/stats.ts:113-119`, even though the session schema has an updated-time index at `packages/ax-code/src/session/session.sql.ts:52-58`. Filtering afterward at `packages/ax-code/src/cli/cmd/stats.ts:142-150` sacrifices that index for the convenience of all-project statistics. Work is bounded to 20 concurrent session reads at lines 190-194, but each `Session.messages` call builds a complete array (`packages/ax-code/src/session/index.ts:582-595`) from 50-message database pages (`packages/ax-code/src/session/message-v2-impl.ts:967-977`). Runtime is linear in all selected message and part records, with memory proportional to up to 20 complete session histories plus the aggregate maps. The warning above 1,000 sessions at `packages/ax-code/src/cli/cmd/stats.ts:176-178` acknowledges this cost; pushing the day/project predicates into SQL would reduce startup work for selective queries.
+
+## Step 6 API ownership and maintainability
+
+The file owns four cohesive concerns: yargs metadata and dispatch at `packages/ax-code/src/cli/cmd/stats.ts:50-91`, input guards at lines 93-107, database-backed aggregation at lines 109-326, and text rendering at lines 328-428. The `cmd` helper preserves yargs' `CommandModule` typing (`packages/ax-code/src/cli/cmd/cmd.ts:1-7`), while bootstrap supplies the instance context used by the empty-project filter; `Instance.project` is context-backed at `packages/ax-code/src/project/instance.ts:227-235`. Direct `console` and `process.stdout` calls couple the renderer to a terminal, especially the cursor-up sequence at `packages/ax-code/src/cli/cmd/stats.ts:381-383`, but exporting `displayStats` keeps that behavior independently testable. Centralized `Locale.number` formatting at `packages/ax-code/src/util/locale.ts:31-40` avoids a second compact-number convention.
+
+## Step 7 Hygiene and behavioral coverage
+
+The implementation contains no catch that discards an error without a warning, and malformed session rows are not blindly trusted: `Session.safe` delegates to schema parsing at `packages/ax-code/src/session/index.ts:90-132`. All five public values named by the audit at `docs/module-quality-audit/modules/cli-cmd-stats/MODULE-AUDIT.md:28-33` are live either in boot or focused tests. `dateRange` is computed at `packages/ax-code/src/cli/cmd/stats.ts:302-307` but not rendered, and reasoning tokens are accumulated at lines 228 and 278 yet omitted from the token-usage rows at lines 348-360; these are clarity/reconciliation notes rather than dead branches. Tests cover tool limit zero, non-finite values, both validators, and rejected message reads at `packages/ax-code/test/cli/stats.test.ts:17-169`. Missing cases include day-window semantics, project IDs, token/model/tool aggregation, median parity, model limit zero, string-valued `--models`, long labels, and control characters.
+
+## Step 8 Finding register reconciliation and severity
+
+The audit currently records no accepted item at `docs/module-quality-audit/modules/cli-cmd-stats/MODULE-AUDIT.md:64-68`, and no file exists under this unit's `findings/` path. This review identifies the whole-history behavior behind a recent-session day filter (`packages/ax-code/src/cli/cmd/stats.ts:142,195-257`) as a Medium accuracy concern because displayed period usage can be substantially overstated. It also records two Low edge cases: string-valued `--models` is ignored (`:63-65,70-86`), and model limit zero creates an empty `modelsToDisplay` at lines 364-366 but still emits the cursor-up control sequence at lines 381-383. No Critical condition was found, so the Critical-only secondary-confirmation file is not created.
+
+## Step 9 Verification and reviewer outcome
+
+From `packages/ax-code`, `AX_TEST_FILES=test/cli/stats.test.ts pnpm exec vitest run` passed the one focused file and all five tests whose assertions occupy `packages/ax-code/test/cli/stats.test.ts:17-169`. From the repository root, `pnpm --dir packages/ax-code run typecheck` passed, covering the command's registration through `packages/ax-code/src/cli/boot.ts:42,87,216`. The `cli-cmd-stats` primary review is complete for reviewer `codex-sol`: no Critical issue requires `reverify.md`, the existing test/type gates are green, and the independent `ax-code-glm` lane remains the named verifier for its separate protocol check.

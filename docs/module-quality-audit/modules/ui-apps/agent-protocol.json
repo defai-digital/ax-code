@@ -1,0 +1,42 @@
+{
+  "slug": "ui-apps",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "desktop/packages/ui/src/apps/AppEffects.tsx",
+    "desktop/packages/ui/src/apps/ElectronMiniChatApp.tsx",
+    "desktop/packages/ui/src/apps/miniChatPresence.test.ts",
+    "desktop/packages/ui/src/apps/miniChatPresence.ts",
+    "desktop/packages/ui/src/apps/renderElectronMiniChatApp.tsx",
+    "desktop/packages/ui/src/apps/useAppFontEffects.ts",
+    "docs/module-quality-audit/modules/ui-apps/MODULE-AUDIT.md",
+    "desktop/packages/ui/src/App.tsx",
+    "desktop/packages/ui/src/components/mini-chat/MiniChatLayout.tsx",
+    "desktop/packages/ui/src/hooks/useFontPreferences.ts",
+    "desktop/packages/ui/src/lib/fontLoader.ts",
+    "desktop/packages/ui/src/lib/fontOptions.ts",
+    "desktop/packages/ui/src/stores/useConfigStore.ts",
+    "desktop/packages/ui/src/stores/useConfigStore-impl.ts",
+    "desktop/packages/ui/src/stores/useDirectoryStore.ts",
+    "desktop/packages/ui/src/sync/notification-store.ts",
+    "desktop/packages/ui/src/sync/session-actions.ts",
+    "desktop/packages/ui/src/sync/sync-context-impl.tsx",
+    "desktop/packages/ui/package.json",
+    "desktop/packages/ui/scripts/run-tests.mjs",
+    "desktop/packages/web/src/mini-chat-main.tsx",
+    "desktop/packages/electron/src/main.js"
+  ],
+  "stepNotes": {
+    "1": "Bound ui-apps to the six audited sources and confirmed the mini-chat renderer is reached from the web entry bundle.",
+    "2": "Traced URL parameters, Electron-side encoding, BroadcastChannel validation, runtime API registration, and remote font loading.",
+    "3": "Followed initialization retries, directory selection, delayed session hydration, draft creation, and unavailable-state reset guards.",
+    "4": "Checked project discovery fan-out and cancellation plus timer/channel teardown, identifying a bounded shared-presence-key race.",
+    "5": "Confirmed reusable sync effects are separated from window-only effects and provider composition stays at the application boundary.",
+    "6": "Verified resource cleanup and observable error paths, while noting that private bootstrap effects impede isolated testing.",
+    "7": "Ran focused and full UI tests, TypeScript checking, and candidate lint; documented the missing orchestration scenarios.",
+    "8": "Reconciled the absent findings ledger, classified the multi-window presence edge Low, and found no Critical trigger.",
+    "9": "Completed primary reviewer sign-off with green checks while preserving ax-code-glm as the independent verifier lane."
+  },
+  "date": "2026-08-11"
+}

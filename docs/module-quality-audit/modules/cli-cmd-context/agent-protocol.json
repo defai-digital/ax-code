@@ -1,0 +1,35 @@
+{
+  "slug": "cli-cmd-context",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/context.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/bootstrap.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/message-v2-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/provider-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/provider/schema.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/stats/breakdown.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/acp/usage.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/smoke.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/stats/breakdown.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/session-list.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-context/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/stats/protocol/steps.md"
+  ],
+  "stepNotes": {
+    "1": "ContextCommand is the single yargs export at context.ts:11-129 and is registered in boot.ts:10,105; cmd.ts:1-7 contributes typing only, leaving runtime behavior in the unit handler.",
+    "2": "The identifier is compared in memory at context.ts:33-39 rather than sent to SQL or a shell; the command intentionally prints title/model metadata at lines 42-43 and 106-117, while bootstrap.ts:4-17 guarantees instance disposal.",
+    "3": "Session.list is newest-first at session/index.ts:631-638, but context.ts:24,34 rejects explicit IDs outside the latest 1,000; lines 57-75 also sum all historical usage and tool calls instead of following the last-assistant convention at acp/usage.ts:47-60.",
+    "4": "Work is linear in materialized sessions, messages, and parts; context.ts:24 fetches 1,000 sessions even for the one-row default, while session/index.ts:582-595 loads the complete selected message history before scanning.",
+    "5": "Bootstrap, Session, Provider, and stats responsibilities are cleanly delegated, but context.ts:91-97 supplies executed tool-call count to stats/breakdown.ts:25-30 where it means tool definitions, creating a cross-module unit mismatch.",
+    "6": "Imports and accumulators are used and no TODO blocks exist; context.ts:84-88 intentionally falls back to an unknown model without retaining diagnostics, and lines 120-123 incorrectly say an explicitly selected session is the latest.",
+    "7": "smoke.test.ts:364-388 covers one explicit-ID happy path and breakdown.test.ts:27-168 covers renderer arithmetic; no test covers empty/missing/default selection, 1,000-row truncation, multi-turn cached usage, tool parts, or the explicit-session footer.",
+    "8": "Accepted findings are MEDIUM inaccurate current-context calculation (context.ts:57-75,91-97), MEDIUM bounded explicit-ID lookup (lines 24,34-39), and LOW misleading latest footer (lines 120-123); no Critical or High item was present.",
+    "9": "Focused Vitest execution passed 24 tests across cli/smoke.test.ts and stats/breakdown.test.ts, and the packages/ax-code typecheck passed; review artifacts changed no production source and require no Critical reverify file."
+  },
+  "date": "2026-08-11"
+}

@@ -1,0 +1,29 @@
+{
+  "slug": "cli-cmd-wiki",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/cli/cmd/wiki.ts",
+    "packages/ax-code/src/cli/cmd/cmd.ts",
+    "packages/ax-code/src/cli/bootstrap.ts",
+    "packages/ax-code/src/wiki/index.ts",
+    "packages/ax-code/src/wiki/config.ts",
+    "packages/ax-code/src/wiki/native.ts",
+    "packages/ax-code/src/cli/boot.ts",
+    "packages/ax-code/src/util/filesystem.ts",
+    "docs/module-quality-audit/modules/cli-cmd-wiki/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single-file unit at packages/ax-code/src/cli/cmd/wiki.ts; 10 exported yargs command modules plus the WikiCommand aggregator registered in boot.ts:101. Five private helpers (rootFromArgs, withWiki, printStatus, commonOptions, generationOptions, runGenerateOrUpdate) carry shared logic.",
+    "2": "Only process side effects are process.exitCode=1 at wiki.ts:76,111,250,298. gitHeadCommit (native.ts:100) uses a static literal argv with 10s timeout and windowsHide; no user-controlled tokens reach the shell. No secrets handled.",
+    "3": "WikiDoctorCommand reuses one git head call for status+lint (wiki.ts:88-93); WikiRelatedCommand normalizes the positional defensively (wiki.ts:286) and degrades to exitCode 1 instead of throwing. withWiki's CommonArgs type under-describes the real yargs arg shape but inference makes it functionally correct.",
+    "4": "Every handler is I/O- or model-bound; bootstrap (bootstrap.ts:4) disposes Instance in a finally so no leak across commands. runGenerateOrUpdate streams progress via onProgress and is cleanly suppressed under --quiet (wiki.ts:185-193).",
+    "5": "Clean adapter boundary: CLI-only concerns stay here, all domain logic imported from ../../wiki (façade over @ax-code/ax-wiki + ./config + ./native). No direct reach into provider/graph/storage internals. generate/update share runGenerateOrUpdate, differing only by the action token.",
+    "6": "No empty catches or TODOs. Empty async handler at wiki.ts:320 is required by the yargs demandCommand aggregator, not dead code. dirOption/modelOption consts are reused. CommonArgs.model (wiki.ts:23) is declared but only generationOptions registers --model (wiki.ts:208); bracket-vs-dot arg access is inconsistent in runGenerateOrUpdate.",
+    "7": "Coverage gap: grep of packages/ax-code/test/** for wiki / WikiCommand / cli/cmd/wiki returns zero hits against this module. Existing wiki hits are unrelated (mcp.wiki in config.test.ts, openwiki in instruction.test.ts, context text in generator.test.ts). Exit codes and --json/--stdout/--dry-run branches are unverified.",
+    "8": "One MEDIUM finding (no direct CLI test coverage of exit codes and output branches), two LOW findings (CommonArgs.model overstates arg shape; inconsistent kebab-case arg access), one INFO (MODULE-AUDIT says 322 LOC, file is 321). No Critical or High findings, so the Critical-reverify path is not triggered.",
+    "9": "Read-only review of eight source files plus MODULE-AUDIT; no source mutated so no build gate applies to this artifact. Future fix verification command is pnpm --dir packages/ax-code run typecheck. Recommend moving status from REVIEWING to VERIFIED-pending-tests once test/cli/cmd/wiki.test.ts lands."
+  },
+  "date": "2026-08-11"
+}

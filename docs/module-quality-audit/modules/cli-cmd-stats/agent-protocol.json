@@ -1,0 +1,35 @@
+{
+  "slug": "cli-cmd-stats",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/cli/cmd/stats.ts",
+    "docs/module-quality-audit/modules/cli-cmd-stats/MODULE-AUDIT.md",
+    "packages/ax-code/test/cli/stats.test.ts",
+    "packages/ax-code/src/cli/boot.ts",
+    "packages/ax-code/src/cli/cmd/cmd.ts",
+    "packages/ax-code/src/cli/bootstrap.ts",
+    "packages/ax-code/src/storage/db.ts",
+    "packages/ax-code/src/session/session.sql.ts",
+    "packages/ax-code/src/session/index.ts",
+    "packages/ax-code/src/session/message-v2.ts",
+    "packages/ax-code/src/session/message-v2-impl.ts",
+    "packages/ax-code/src/project/instance.ts",
+    "packages/ax-code/src/provider/model-key.ts",
+    "packages/ax-code/src/util/locale.ts",
+    "packages/ax-code/src/util/error-message.ts"
+  ],
+  "stepNotes": {
+    "1": "Traced the stats command from its five exports through boot import, command-array membership, and yargs registration.",
+    "2": "Reviewed numeric and project arguments, found string-valued models input is silently ignored, and followed stored labels to terminal output.",
+    "3": "Checked cutoff, project selection, token accumulation, model-key construction, and median math; the date filter counts whole histories of recently updated sessions.",
+    "4": "Verified per-session rejection isolation and safe error conversion, while noting that failed reads make total-session, average, and median populations diverge.",
+    "5": "Quantified the full session scan, 20-session concurrency, 50-message paging, and missed opportunity to use the updated-time database index.",
+    "6": "Assessed the command, validation, aggregation, and terminal-rendering split along with context lifecycle and shared formatting ownership.",
+    "7": "Confirmed schema-safe row decoding and enumerated focused coverage gaps for filtering, aggregation, model-zero output, labels, and control characters.",
+    "8": "Reconciled the empty ledger with one Medium period-accuracy concern and two Low CLI/rendering edge cases; none met Critical severity.",
+    "9": "Ran the exact stats Vitest target with 5/5 passing and completed the core tsgo typecheck without errors."
+  },
+  "date": "2026-08-11"
+}

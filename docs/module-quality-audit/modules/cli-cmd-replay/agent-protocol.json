@@ -1,0 +1,31 @@
+{
+  "slug": "cli-cmd-replay",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/replay.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/replay.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/bootstrap.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/compare.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/trace.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/session-required.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/schema.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/run.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-replay/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single 149-LOC file, one export ReplayCommand registered at cli/boot.ts:63; grep of test/ for ReplayCommand returns zero direct CLI tests.",
+    "2": "Read-only inspection surface; sessionID goes through SessionID.make branded parser before any DB access; export mode dumps full event log including tool inputs/outputs to stdout — not a new privilege boundary but a content-disclosure surface when piped.",
+    "3": "bySessionStrict throws ReplayTruncatedError at query.ts:54 for sessions over 10k events; replay.ts handler has no try/catch and bootstrap.ts does not translate, so the error reaches the operator as a raw stack. Also: 'check' silently aliases 'verify' at replay.ts:40 with no help-text explanation, and args['from-step'] ?? args.fromStep is a redundant yargs fallback (sibling run.ts:717 uses only the kebab form).",
+    "4": "count(sid) at replay.ts:33 uses COUNT(*) (O(1) memory, good); export mode double-scans the event log via EventQuery.bySession at line 65 and Replay.reconstructStream→bySessionStrict at line 67, doubling peak resident memory for large sessions — mechanical fix is to call the already-factored reconstructStreamFromEvents.",
+    "5": "Six-mode if/else dispatch is still readable and does not clear the rule-of-three bar for a mode map; stdout/stderr split is consistent with compare.ts and trace.ts; replay.ts routes through bootstrap() which guarantees Instance.dispose() in the finally — cleaner than compare.ts:25 and trace.ts:151 calling Instance.provide directly.",
+    "6": "replay.ts:26 leaks internal 'R7:' roadmap prefix into user-facing --help describe; replay.ts:66 .catch(() => undefined) swallows ALL Session.get errors during export (not just NotFoundError) — the audit's empty-catch count misses promise-handler swallows; replay.ts:47 'use programmatically with LLM.stream mock' is a developer affordance exposed through the operator CLI.",
+    "7": "No CLI integration test exists — rg 'ReplayCommand' against packages/ax-code/test/ returns zero matches; the MODULE-AUDIT.md test list is the generic Wave-6 inventory; underlying Replay namespace is covered by test/replay/reconstruct.test.ts but the CLI surface (mode dispatch, exit-code semantics at process.exit(1) lines 58/90/145) is uncovered.",
+    "8": "One MEDIUM (uncaught TruncatedError), two LOW (.catch(() => undefined) swallow, double scan in export), three INFO (redundant fallback, R7 leak, missing CLI tests); no Critical findings so the verifier re-read gate is not auto-triggered.",
+    "9": "Docs-only artifact write — no source mutation under cli-cmd-replay or any other unit, so typecheck/test:scripts re-run is not required by the verification protocol for this pass; codex-sol (verifier lane) can re-read the MEDIUM evidence chain query.ts:50–60 → replay/replay.ts:62,175,345 → replay.ts:30–148 if it elects to confirm independently."
+  }
+}

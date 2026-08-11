@@ -1,0 +1,42 @@
+# Review Protocol — desktop-web-scheduled-tasks
+
+Reviewer: `codex-sol`  
+Model: `gpt-5.6-sol-xhigh`  
+Independent verifier: `ax-code-glm`  
+Date: 2026-08-11
+
+## Step 1 Scope and public surface
+
+The `desktop-web-scheduled-tasks` unit exposes three layers. `desktop/packages/web/server/lib/scheduled-tasks/routes.js:12` exports the Express registrar, which installs list, upsert, delete, manual-run, status, and SSE endpoints at lines 28, 48, 86, 115, 156, and 194. `desktop/packages/web/server/lib/scheduled-tasks/runtime.js:54,77,178,188` exports command parsing, next-run calculation, title formatting, and the runtime factory; the returned lifecycle surface appears at lines 903-910. `desktop/packages/web/server/lib/scheduled-tasks/time.js:3,10,26,55` supplies normalization and parsing helpers. The ownership statement in `desktop/packages/web/server/lib/scheduled-tasks/DOCUMENTATION.md:7-9` correctly places persistence in project configuration and execution orchestration here, although its returned-API list at lines 27-34 omits `getStatus`.
+
+## Step 2 Inputs and trust boundaries
+
+Route parameters are trimmed and rejected when empty (`desktop/packages/web/server/lib/scheduled-tasks/routes.js:1-10,29-32,87-94`), and every project-scoped operation verifies the ID against sanitized settings before touching task data (`routes.js:22-25,35-40,97-102,126-131`). The PUT handler only establishes that `body.task` is an object at lines 54-57; the substantive checks live in `desktop/packages/web/server/lib/projects/project-config.js:104-163` for schedule kind, timezone, time, weekday, and cron validity and at lines 166-193 for execution input. Runtime requests carry injected auth headers without logging them (`desktop/packages/web/server/lib/scheduled-tasks/runtime.js:549-554`), encode session and queue identifiers in URLs (`runtime.js:443-447,472-480`), and send prompts as JSON rather than shell text (`runtime.js:415-428,448-456`). One disclosure edge remains: `routes.js:76-82` returns the underlying exception message even for a 500, unlike the generic errors used by list and delete.
+
+## Step 3 Scheduling correctness
+
+Daily and weekly calculations sort normalized times and compare zoned Luxon values (`desktop/packages/web/server/lib/scheduled-tasks/runtime.js:93-142`); once schedules reject malformed or past timestamps at lines 145-160, while cron parse failures degrade to `null` at lines 163-172. Time normalization itself strictly accepts 24-hour `HH:mm`, deduplicates, and sorts (`desktop/packages/web/server/lib/scheduled-tasks/time.js:1-23`). A real edge case exists in the shared five-second exclusion window: daily candidates at `runtime.js:98-112` and once candidates at lines 155-157 are discarded when they are no more than five seconds ahead. Starting or editing a daily task at 08:59:57 for 09:00 therefore advances it to tomorrow, and a once task can lose its only occurrence. The slack should distinguish an already-consumed due time from a still-future time instead of excluding both.
+
+## Step 4 Durability concurrency and cleanup
+
+Accepted core work is made recoverable by persisting `activeQueueItemId` immediately after the async 202 response (`desktop/packages/web/server/lib/scheduled-tasks/runtime.js:597-620`) and reconciling that handle on startup (`runtime.js:291-318,556-566`). Polling holds the running slot until a terminal queue state (`runtime.js:485-499`), counters are released in a `finally` block at lines 795-804, and `stop` clears timers and pending queue entries at lines 871-882. Two reliability gaps remain. First, scheduled dispatch uses `void runTask(...).finally(...)` without a rejection handler (`runtime.js:826-828`); persistence is allowed to reject, as demonstrated by `desktop/packages/web/server/lib/scheduled-tasks/runtime.test.js:305-319`, so the background path can produce an unhandled rejection. Second, `runNow` calls `runTask` directly at `runtime.js:836-859` and never consults the global/project caps enforced by `canRunTask` at lines 407-413, meaning simultaneous manual runs can exceed both configured limits.
+
+## Step 5 Design and ownership
+
+The boundary is mostly coherent. Routes delegate storage to `projectConfigRuntime` and resynchronization to `scheduledTasksRuntime` (`desktop/packages/web/server/lib/scheduled-tasks/routes.js:65-68,102-108`); serialized file mutations and state normalization remain with `desktop/packages/web/server/lib/projects/project-config.js:399-438,441-490`; timers, catch-up, queueing, sessions, and core task polling stay in the runtime. Wiring is explicit dependency injection: `desktop/packages/web/server/lib/ax-code/feature-routes-runtime.js:119-126` supplies route dependencies, while `desktop/packages/web/server/index.js:986-1007` constructs the runtime and translates its events to desktop SSE payloads. This matches the design declared in `desktop/packages/web/server/lib/scheduled-tasks/DOCUMENTATION.md:3-9` and keeps the module independently testable.
+
+## Step 6 Failure visibility and code hygiene
+
+The tracked empty catches are concrete rather than equivalent. The fallback status scan silently undercounts when one project read fails (`desktop/packages/web/server/lib/scheduled-tasks/routes.js:168-180`); initial SSE delivery at lines 204-211 is best effort and the heartbeat can still validate the connection; project-path lookup at `desktop/packages/web/server/lib/scheduled-tasks/runtime.js:341-355` loses the original lookup error; and event callbacks at `runtime.js:623-631,778-786` are intentionally isolated from task execution but lack comments. The cron and command-list catches at `runtime.js:163-172,508-514` are not empty and encode explicit fallback behavior. There is also removable no-op bookkeeping: `consumed` is assigned at `runtime.js:812,824`, but the terminal branch at lines 831-833 only returns from a function that has no following work. Documentation is slightly stale because `DOCUMENTATION.md:13-18` omits once schedules and lines 27-34 omit `getStatus`.
+
+## Step 7 Test evidence and gaps
+
+The helper suite checks trimming, rejection, deduplication, sorting, fallback, and parsed parts (`desktop/packages/web/server/lib/scheduled-tasks/time.test.js:9-41`). Runtime tests cover daily, weekly, multiple-time, once, title, and slash-command helpers (`desktop/packages/web/server/lib/scheduled-tasks/runtime.test.js:91-219`) plus durable slot holding, overdue coalescing, queue-handle recovery, and counter release after persistence failure (`runtime.test.js:221-319`). `desktop/packages/web/server/sse-routes.test.js:42-69` verifies SSE headers, registration, and close cleanup. Missing focused cases include CRUD/status route validation, cron and DST behavior, the five-second boundary, manual-run concurrency caps, one-time consumption, scheduled-path rejection handling, timeout polling cleanup, and callback failures. The targeted run completed with 3 files and 20 tests passing.
+
+## Step 8 Finding assessment
+
+`docs/module-quality-audit/modules/desktop-web-scheduled-tasks/findings/AUDIT-desktop-web-scheduled-tasks-empty-catch.md:5-13` records one deferred Low silent-error item, and lines 15-28 enumerate five review-needed sites. The severity is reasonable because none of those catches controls authentication, authorization, task persistence, or process termination; the status fallback and project-path lookup still deserve diagnostic logging because they mask useful causes. The scheduling-boundary and background-rejection observations from Steps 3 and 4 are additional reliability follow-ups not represented by the existing finding file. No finding under this unit has Critical severity, so the Critical-only second-pass artifact is not applicable.
+
+## Step 9 Verification and reviewer exit
+
+The implementation evidence, audit ledger, related persistence/wiring, and route test were re-read for this pass. Targeted verification succeeded with `pnpm --dir desktop/packages/web exec vitest run server/lib/scheduled-tasks/runtime.test.js server/lib/scheduled-tasks/time.test.js server/sse-routes.test.js`: 3 test files and 20 tests passed. No production source was changed. Reviewer `codex-sol` completes this nine-part review for `desktop-web-scheduled-tasks`; independent verifier `ax-code-glm` remains the other lane. Because `docs/module-quality-audit/modules/desktop-web-scheduled-tasks/findings/AUDIT-desktop-web-scheduled-tasks-empty-catch.md:7` is Low rather than Critical, no `protocol/reverify.md` was created.

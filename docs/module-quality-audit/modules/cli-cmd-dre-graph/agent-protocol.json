@@ -1,0 +1,29 @@
+{
+  "slug": "cli-cmd-dre-graph",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "date": "2026-08-11",
+  "filesRead": [
+    "packages/ax-code/src/cli/cmd/dre-graph.ts",
+    "packages/ax-code/src/cli/cmd/dre-graph-server.ts",
+    "packages/ax-code/src/cli/cmd/session-latest.ts",
+    "packages/ax-code/src/cli/cmd/cmd.ts",
+    "packages/ax-code/src/project/instance.ts",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/src/cli/boot.ts",
+    "docs/module-quality-audit/modules/cli-cmd-dre-graph/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Scoped to DreGraphCommand at packages/ax-code/src/cli/cmd/dre-graph.ts:19, registered in boot.ts:94; 1 file / 1 export, no TODOs, no empty catches at the unit boundary.",
+    "2": "Loopback-only bind enforced by DreGraphServer.listen hard-coding hostname 127.0.0.1 (dre-graph-server.ts:14) plus Server.assertAuthenticatedNetworkBind at server.ts:355; --port validated integer 0-65535 via validateListenPort at server.ts:126-130. No secrets or env input.",
+    "3": "Traced --index vs session branches; non-null assertions hit!.sid/hit!.dir at lines 52 and 55 are safe only because of the early return at line 45 — coupling flagged in Step 8 as LOW. Shutdown idempotent via stopping flag at lines 60-66.",
+    "4": "No hot path; args.index ternary at line 44 short-circuits target() so --index never boots an Instance. DreGraphServer.listen bypasses the shared/ensure cache (dre-graph-server.ts:29-37), correct for a one-shot CLI invocation vs the TUI's long-lived server.",
+    "5": "Clean layering: thin CLI adapter over dre-graph-server.ts + session-latest.ts + Instance. Does not reach into server/routes/dre-graph.ts or quality/dre-graph-* directly. Smell: .option('open',...) at line 38 shadows the open npm import at line 1.",
+    "6": "No dead exports or unused imports. DreGraphServer.clear() (dre-graph-server.ts:9) is unused here but legitimately used by the TUI session display layer. Signal listeners at lines 67-68 never removed; acceptable because shutdown ends in process.exit(0) at line 65.",
+    "7": "Grep of packages/ax-code/test/cli for dre-graph|DreGraph returned zero matches — the CLI handler has no direct test coverage. Route layer (test/server/dre-graph.test.ts:36-275) and quality renderers are covered, but --index branch, no-hit early return, URL build, --open toggle, and SIGINT/SIGTERM shutdown are unverified. Highest-value follow-up.",
+    "8": "Five findings registered (one MEDIUM test gap, three LOW readability/robustness nits, one INFO). No Critical, no High, so no protocol/reverify.md required. No findings/*.md files existed previously in this unit.",
+    "9": "PASS with four non-blocking follow-ups. agent-protocol.json records completedSteps=9, reviewer=ax-code-glm, verifier=codex-sol. Static map matches MODULE-AUDIT.md section 1 (1 file, 73 LOC, 1 export)."
+  }
+}

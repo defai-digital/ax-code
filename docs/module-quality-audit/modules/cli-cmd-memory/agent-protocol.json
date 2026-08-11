@@ -1,0 +1,33 @@
+{
+  "slug": "cli-cmd-memory",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/memory.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/memory/generator.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/memory/injector.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/memory/store.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/memory/recorder.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/memory/recall.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/memory/doctor.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/memory/evaluation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/memory/types.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/memory.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-memory/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "The live yargs surface is one memory parent plus nine registered children at memory.ts:47-61, and boot.ts:31/100 confirms top-level CLI reachability.",
+    "2": "Project/global writes and deletes resolve through store.ts:15-20 and memory.ts:156-176/238-253; eval's only user-selected read is the cases file at evaluation.ts:85-90.",
+    "3": "Recorder validates curated entry fields at recorder.ts:108-121/145-176, but unrestricted warmup and limit numbers cross the CLI boundary at memory.ts:70-79/334-337/498-502.",
+    "4": "Generator scans four sections concurrently at generator.ts:267-278; recall sorts linearly at recall.ts:60-86, while clear's exists-then-unlink sequence at memory.ts:156-176 is redundant and racy.",
+    "5": "The module is a thin presentation adapter over generator/store/recorder/recall/doctor/evaluation imports at memory.ts:4-13, with clean early JSON returns at memory.ts:362-365/453-456/532-535.",
+    "6": "Status masks corrupt-store errors because injector.ts:212-216 returns null for every load failure and memory.ts:126-130 renders null as no cache; doctor.ts:51-82 preserves that distinction.",
+    "7": "memory.test.ts:23-186 passes seven focused cases for remember, recall, doctor, eval, and exit helpers, but warmup/status/clear/forget/list and builder validation remain unexercised.",
+    "8": "The review records one Medium limit-semantics defect and two Low validation/diagnostic defects; none is Critical, while the earlier empty ledger is visible at MODULE-AUDIT.md:71-75.",
+    "9": "Focused verification ran AX_TEST_FILES=test/cli/memory.test.ts pnpm exec vitest run with 1 file and 7 tests passing, after tracing boot.ts:31/100 and evaluation.ts:85-151."
+  },
+  "date": "2026-08-11"
+}

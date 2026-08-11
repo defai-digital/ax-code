@@ -1,0 +1,32 @@
+{
+  "slug": "cli-cmd-workflow",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/workflow.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/workflow-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/artifact.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/routine.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/run/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/scheduler.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/state.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/workflow/template.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/workflow.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-workflow/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Followed the one-line barrel into workflow-impl and confirmed boot registers its re-exported WorkflowCommand.",
+    "2": "Checked write, scale, trust, routine, and artifact-payload boundaries against their domain-layer validators.",
+    "3": "Traced every stateful subcommand through the feature gate and confirmed runtime status remains available while disabled.",
+    "4": "Matched yargs options to handler fields and zod-backed ID parsing, including raw-string fallback for non-JSON inputs.",
+    "5": "Identified a low-risk unbounded dashboard detail fan-out when callers omit the optional run limit.",
+    "6": "Confirmed domain ownership stays outside the CLI and noted duplicated start/routine option builders as drift-prone.",
+    "7": "Reviewed both catch sites, centralized JSON output, control-command reuse, and public-symbol consumers for hygiene.",
+    "8": "Ran the direct 12-test helper suite and documented the missing yargs/handler integration coverage.",
+    "9": "Completed core typecheck, found no Critical through Medium defect, and recorded two LOW follow-ups without a reverify file."
+  },
+  "date": "2026-08-11"
+}

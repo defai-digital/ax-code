@@ -1,0 +1,37 @@
+# Nine-step review: desktop-web-desktop
+
+## Step 1 Scope and runtime reachability
+
+The `desktop-web-desktop` unit consists of the factory exported at `desktop/packages/web/server/lib/desktop/startup-diagnostics.js:49-135` and its focused tests at `desktop/packages/web/server/lib/desktop/startup-diagnostics.test.js:1-81`. Production code imports the factory in `desktop/packages/web/server/index.js:55`, creates one runtime per `main()` invocation at lines 1128-1136, and exposes snapshots and Electron event ingestion at lines 1394-1415. The public server declaration reflects those controller surfaces in `desktop/packages/web/server/index.d.ts:4-18`. This establishes that the helper is live startup infrastructure, not a test-only utility.
+
+## Step 2 Trust boundaries and disclosure
+
+Events arrive from an Electron-provided initial snapshot and from later server or desktop producers. The utility process parses the environment snapshot and forwards callback events over `parentPort` at `desktop/packages/electron/src/server-process.js:33-52`. Within the reviewed helper, `sanitizeDetails` limits strings, array width, and nesting depth and redacts keys matching credential terms (`desktop/packages/web/server/lib/desktop/startup-diagnostics.js:3-29`). Redaction is key-based, so a secret embedded under a neutral key such as `url` is outside this guarantee. This matters because the diagnostics route returns the snapshot at `desktop/packages/web/server/lib/ax-code/core-routes.js:198-204`, and bootstrap registers that status route before the general `/api` authentication middleware at `desktop/packages/web/server/lib/ax-code/bootstrap-runtime.js:52-72`. Current producers should therefore continue to treat event names, sources, and non-sensitive detail fields as potentially observable.
+
+## Step 3 Normalization and time invariants
+
+`normalizeEvent` rejects missing or blank names, trims names and sources, substitutes the injected clock for non-finite event times, clamps pre-start relative times to zero, and sanitizes every detail payload (`desktop/packages/web/server/lib/desktop/startup-diagnostics.js:31-47`). The factory preserves a finite initial start epoch and a trimmed boot identifier, otherwise generating safe defaults at lines 49-59. Snapshot generation adds ISO and epoch timestamps without mutating history at lines 119-126. One hardening edge remains: `Number.isFinite` accepts epochs outside JavaScript's valid `Date` range, so a hostile initial value could make `toISOString()` throw; the production Electron snapshot is generated locally at `desktop/packages/electron/src/startup-diagnostics.js:83-90`, making this a malformed-internal-input risk rather than a demonstrated production defect.
+
+## Step 4 Retention and milestone semantics
+
+`pushEvent` updates both ordered history and the lifetime milestone set, then evicts oldest entries until the configured cap is met (`desktop/packages/web/server/lib/desktop/startup-diagnostics.js:64-75`). `record` always appends a valid event, whereas `markOnce` suppresses a previously seen milestone at lines 85-107. Initial events are normalized without callbacks at lines 78-83, and `mergeSnapshot` admits only event names not already seen at lines 109-117. Eviction deliberately does not clear `seenMilestones`, so a one-shot milestone cannot recur merely because its event fell out of the retained window. No production caller overrides `maxEvents`; because the option is not validated, negative or non-finite custom values would defeat the retention loop's assumptions and should not be accepted from untrusted configuration.
+
+## Step 5 Callback failure isolation
+
+The runtime stores an event before invoking `onEvent`, and the callback is called only when enabled and callable (`desktop/packages/web/server/lib/desktop/startup-diagnostics.js:64-72`). The catch at line 73 prevents a telemetry transport failure from aborting server startup; the concrete callback is itself a best-effort `parentPort.postMessage` in `desktop/packages/electron/src/server-process.js:48-51`. This ordering preserves local evidence even when cross-process delivery fails. The catch has no local explanation or observability, however, so repeated forwarding failures are silent. That exact site is tracked as deferred Low severity in `docs/module-quality-audit/modules/desktop-web-desktop/findings/AUDIT-desktop-web-desktop-empty-catch.md:15-26`; it is not on the server readiness or cleanup control path.
+
+## Step 6 Resource bounds and data ownership
+
+Normal insertion is constant-sized except for `Array.shift()` during eviction, and the default maximum of 256 at `desktop/packages/web/server/lib/desktop/startup-diagnostics.js:49-53` makes that cost negligible. Sanitization caps strings at 240 characters, arrays at 20 entries, and nested traversal after depth three at lines 12-22, though it does not cap the number of keys on an object. Initial snapshots can therefore consume work proportional to supplied object breadth and event count even though retained history is bounded at lines 67-69. `snapshot()` copies the events array but reuses its event objects at lines 119-125; current consumers immediately serialize the result through HTTP or IPC, but future in-process callers should avoid mutating returned entries.
+
+## Step 7 Test depth and uncovered branches
+
+The focused suite proves relative timing, one-shot suppression, token-key redaction, initial snapshot import, history eviction, boot-ID preservation, and whitespace normalization (`desktop/packages/web/server/lib/desktop/startup-diagnostics.test.js:5-81`). The route suite separately proves the snapshot is returned by the diagnostics endpoint at `desktop/packages/web/server/lib/ax-code/core-routes.test.js:47-67`. There is no direct coverage for `mergeSnapshot`, callback notification or callback exceptions, invalid names and timestamps, custom milestone aliases, string/array/depth truncation, non-plain values, or malformed `maxEvents`. These are concrete additions for future tests; the exercised production-default behavior passed.
+
+## Step 8 Findings reconciliation
+
+The existing audit registers one deferred Low silent-error item at `docs/module-quality-audit/modules/desktop-web-desktop/MODULE-AUDIT.md:50-55`, matching the sole file under `findings/`. Independent reading confirms the referenced `catch {}` is present at `desktop/packages/web/server/lib/desktop/startup-diagnostics.js:70-74` and is intentionally fail-open for diagnostics delivery, while its lack of explanation remains a legitimate hygiene concern. This review found no Critical item and therefore did not create `protocol/reverify.md`. The requested protocol metadata names codex-sol as reviewer and ax-code-glm as verifier, superseding the reversed pending labels at `MODULE-AUDIT.md:11-16` for this run only.
+
+## Step 9 Verification and conclusion
+
+`pnpm --dir desktop/packages/web exec vitest run server/lib/desktop/startup-diagnostics.test.js server/lib/ax-code/core-routes.test.js` passed two files and all 13 tests. Direct `node --check` commands for `startup-diagnostics.js` and `startup-diagnostics.test.js` also exited successfully. The implementation is small, live, bounded under production defaults, and adequately protects key-labeled credentials. Completion of this nine-step review is compatible with the existing deferred Low finding; the most valuable follow-up is branch coverage for callback failure, merge behavior, sanitizer limits, and invalid option values.

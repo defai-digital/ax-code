@@ -1,0 +1,25 @@
+{
+  "slug": "cli-cmd-upgrade",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/upgrade.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/installation/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/upgrade.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-upgrade/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single-file unit: packages/ax-code/src/cli/cmd/upgrade.ts (134 LOC), one export UpgradeCommand registered at src/cli/boot.ts:81; two private pure helpers format the launcher warnings.",
+    "2": "Spawning is delegated to Installation (array-form argv in installation/index.ts), so the handler adds no injection vector; the only user-controlled value (args.target) is forwarded to the bash installer via VERSION env with no local quoting.",
+    "3": "Control flow walked end-to-end; the prompts.isCancel(install) guard on line 82 correctly prevents a Ctrl-C from falling through to upgrade, and the up-to-date short-circuit at line 102 is sound.",
+    "4": "Real defect: line 93 calls Installation.latest() without forwarding the resolved method, so an explicit --method curl is ignored for version resolution because latest() re-detects (installation/index.ts:284); fix is Installation.latest(method).",
+    "5": "On the --method path, the awaited Installation.method() call on line 67 is wasted (its result is discarded), and post-upgrade does two back-to-back version-probe spawns (installation/index.ts:366 then 382-387); acceptable for an interactive command.",
+    "6": "Coupling to Installation is one-directional and consumes only the intended public surface; the two warning formatters (lines 6-42) are the correct extraction; the .catch(err => err) idiom on line 111 is a minor readability smell, not a defect.",
+    "7": "No dead code, no unused imports, no empty catches, no TODOs; the inlined win32/unix recovery copy in formatShadowedLauncherWarning is fine given a single caller and should not be extracted prematurely.",
+    "8": "UpgradeCommand.handler has zero direct tests; test/cli/upgrade.test.ts imports from src/cli/upgrade.ts (the background checker), a different file than the unit under review, confirmed via grep for UpgradeCommand across the test tree.",
+    "9": "Accepted 1 MEDIUM (--method ignored on latest lookup), 1 MEDIUM (no handler tests), 1 LOW (non-Error throws render no diagnostic), 1 INFO (catch idiom); no Critical items so no reverify.md is required."
+  },
+  "date": "2026-08-11"
+}

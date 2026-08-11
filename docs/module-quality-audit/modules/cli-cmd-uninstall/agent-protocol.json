@@ -1,0 +1,29 @@
+{
+  "slug": "cli-cmd-uninstall",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/uninstall.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-uninstall/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/installation/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/global/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/filesystem.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/process.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/uninstall-format-size.test.ts",
+    "/Users/akiralam/code/ax-code/install"
+  ],
+  "stepNotes": {
+    "1": "The uninstall command is exported at uninstall.ts:26, exposes four boolean options, and is registered in the production command array at boot.ts:82.",
+    "2": "Deletion is limited to four fixed ax-code children of XDG-derived roots; confirmation is opt-out only via force, and dry-run returns before execution.",
+    "3": "Keep flags gate their matching data and config entries, curl detection adds profile/binary follow-up work, and brew uses a closed constant command mapping.",
+    "4": "Array-form process execution avoids shell injection, but atomic rename over a symlinked shell profile can replace the link instead of editing its referent; assessed Medium.",
+    "5": "Cleanup matches the installer's marker and PATH forms, yet arbitrary ZDOTDIR and sh .ashrc layouts can be missed and the adjacent fish marker rule is broader than necessary.",
+    "6": "Summary sizing is a serial recursive walk with a stat per regular file; acceptable for a one-shot command but potentially slow on large caches and deep trees.",
+    "7": "Installation, global-path, filesystem, error, and process responsibilities remain delegated; the audit's 334-line inventory is one line stale against the current 333-line source.",
+    "8": "The two direct tests cover only formatSize units and rounding thresholds; mutation, cancellation, failure, profile, and symlink behavior have no direct regression coverage.",
+    "9": "Focused Vitest passed 1 file and 2 tests and the core typecheck passed; no Critical item exists, so this primary lane did not create reverify.md."
+  },
+  "date": "2026-08-11"
+}

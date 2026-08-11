@@ -1,0 +1,41 @@
+{
+  "slug": "desktop-web-github",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/github/auth.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/github/auth.test.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/github/device-flow.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/github/index.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/github/octokit.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/github/pr-status.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/github/repo/fork-detection.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/github/repo/index.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/github/routes.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/github/routes.test.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/github/DOCUMENTATION.md",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/desktop-web-github/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/ax-code/feature-routes-runtime.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/ax-code/bootstrap-runtime.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/ax-code/core-routes.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/ax-code/startup-pipeline-runtime.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/git/service.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/index.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/src/api/github.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/views/git/PullRequestSection.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/api/types.ts"
+  ],
+  "stepNotes": {
+    "1": "The facade exports auth, device-flow, Octokit, and repo helpers, while routes.js registers auth, PR, fork, branch, issue, and context HTTP endpoints and pr-status.js owns multi-remote discovery.",
+    "2": "Production /api middleware requires the UI session and rate-limits calls; account projections omit tokens, but the temporary auth file is populated before chmod 0600, leaving a local exposure interval.",
+    "3": "Discovery can return an upstream PR, yet update, merge, and ready resolve origin again and accept only a PR number; fallback search also filters same-name repositories without checking owner.",
+    "4": "PR status caching is bounded but keyed only by directory, branch, and remote and is read before auth, so activation or disconnect can reuse another account's connected result; check details can fan out heavily.",
+    "5": "Auth, OAuth transport, Octokit creation, repo parsing, and route orchestration have clear homes, but mutation schemas drop the resolved repository identity and check aggregation is duplicated in two handlers.",
+    "6": "Most expected 403/404 gaps are narrowed and unknown errors rethrow, while default-branch lookup and per-repo list helpers suppress broader failures that can turn revoked auth into empty connected data.",
+    "7": "The six passing tests cover four auth filesystem cases and two activation validation cases, leaving device flow, fork resolution, caches, fallback matching, and every PR operation without focused coverage.",
+    "8": "The primary pass records one High fork-mutation defect, three Medium issues involving temp permissions, cache identity, and fallback ownership, plus Low amplification/error-reporting advisories; no Critical evidence exists.",
+    "9": "Focused Vitest passed 2 files and 6 tests, and production registration plus the web API and UI call sites were checked to confirm the route-level conclusions beyond the isolated test app."
+  },
+  "date": "2026-08-11"
+}

@@ -1,0 +1,28 @@
+{
+  "slug": "cli-cmd-risk",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/risk.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/risk.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/session-required.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/id/branded.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/schema.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/risk-view.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-risk/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single-file unit, 247 LOC; two top-level exports (RiskView namespace at risk.ts:7, RiskCommand at risk.ts:194). RiskView.lines is exercised directly by test/cli/risk-view.test.ts, justifying the namespace export.",
+    "2": "Read-only command: process.cwd() anchor at risk.ts:228, stdout-only writes at risk.ts:239,243. No shell/fs/net. SessionRisk.load throws NotFoundError via Session.get (session/risk.ts:123) and the handler does not catch it. SessionID.make at branded.ts:19-21 is a pure brand cast with zero runtime validation.",
+    "3": "Pure renderer. Non-null assertion at risk.ts:123 is guarded by the length check at risk.ts:119. Rollup fallback at risk.ts:58 covered by risk-view.test.ts:170-212. replaceAll('_', ' ') contract pinned by risk-view.test.ts:167 and 317-376.",
+    "4": "Handler at risk.ts:226-246 is linear; four inclusion flags map 1:1 to SessionRisk.load options. Findings/envelopes are deliberately not loaded because the renderer never reads detail.findings or detail.envelopes.",
+    "5": "Renderer is linear in hint count with evidence capped at 3 (risk.ts:143-147). SessionRisk.load already parallelizes via Promise.all in session/risk.ts. No N+1, no unbounded growth surface in this file.",
+    "6": "CLI -> session -> storage dependency direction only; no circular edges. Inline NonNullable<...> aliases at risk.ts:8-11 bind to the canonical SessionRisk.Detail schema (session/risk.ts:48-65), preserving a single source of truth.",
+    "7": "No empty catches, no TODOs, no dead helpers (validation, qualityLine, decisionHintReadiness, reviewDecisionLabel, reviewResultLine, debugCasesLine all have live call sites). Only smell is the repeated '-' divider literal, cosmetic.",
+    "8": "One MEDIUM: missing friendly NotFoundError handling vs sibling commands rollback.ts:33 / branch.ts:22 / compare.ts:32-33 which all use getRequiredSession. Two LOW/INFO: SessionID.make does not validate; boolean flag UX and JSON shape variance. No Critical.",
+    "9": "Verification path: pnpm --dir packages/ax-code run typecheck and pnpm --dir packages/ax-code exec vitest run test/cli/risk-view.test.ts (7 scenarios). No Critical findings, so no reverify.md required by the protocol gate."
+  },
+  "date": "2026-08-11"
+}

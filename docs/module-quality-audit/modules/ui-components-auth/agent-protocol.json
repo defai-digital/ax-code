@@ -1,0 +1,33 @@
+{
+  "slug": "ui-components-auth",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "desktop/packages/ui/src/components/auth/SessionAuthGate.tsx",
+    "docs/module-quality-audit/modules/ui-components-auth/MODULE-AUDIT.md",
+    "desktop/packages/ui/src/main.tsx",
+    "desktop/packages/ui/src/apps/renderElectronMiniChatApp.tsx",
+    "desktop/packages/ui/src/lib/passkeys.ts",
+    "desktop/packages/ui/src/lib/passkeys.test.ts",
+    "desktop/packages/ui/src/lib/persistence.ts",
+    "desktop/packages/ui/src/lib/directoryPersistence.ts",
+    "desktop/packages/ui/package.json",
+    "desktop/packages/ui/scripts/run-tests.mjs",
+    "desktop/packages/web/server/lib/ax-code/core-routes.js",
+    "desktop/packages/web/server/lib/ui-auth/ui-auth.js",
+    "desktop/packages/web/server/lib/ui-auth/ui-auth.test.js"
+  ],
+  "stepNotes": {
+    "1": "Confirmed the sole exported gate, its four non-authenticated screens, and live placement around both the main app and Electron mini-chat roots.",
+    "2": "Followed password and trust-device inputs through cookie-bearing session and passkey requests into server-side verification and TTL selection.",
+    "3": "Traced every session response and password/passkey success or failure into the five-state gate, including the protected-child render invariant.",
+    "4": "Checked concurrent startup requests, effect cleanup, passkey busy-state finalizers, once-per-unlock preference resync, and absence of polling or retained timers.",
+    "5": "Verified that the component owns UI orchestration while the passkey library owns WebAuthn exchanges, with provider placement satisfying theme and i18n dependencies.",
+    "6": "Reviewed all fallback catches, the fixed-false bypass scaffolding, focus restoration, error relationships, and the icon-only submit label.",
+    "7": "Established that passkey route normalization and server secret safety are tested but the gate's render/state transitions have no direct component regression suite.",
+    "8": "Reconciled the empty finding register with the inspected evidence, retained only non-blocking test/scaffolding observations, and found no Critical trigger.",
+    "9": "Recorded 226 UI test files and 1,411 tests passing plus a successful UI TypeScript check, then completed a final evidence reread."
+  },
+  "date": "2026-08-11"
+}

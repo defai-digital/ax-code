@@ -1,0 +1,32 @@
+{
+  "agentId": "codex-sol-ui-apps-20260811T202421Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T20:24:21Z",
+  "finishedAt": "2026-08-11T20:29:33Z",
+  "filesRead": [
+    "desktop/packages/ui/src/apps/AppEffects.tsx",
+    "desktop/packages/ui/src/apps/ElectronMiniChatApp.tsx",
+    "desktop/packages/ui/src/apps/miniChatPresence.test.ts",
+    "desktop/packages/ui/src/apps/miniChatPresence.ts",
+    "desktop/packages/ui/src/apps/renderElectronMiniChatApp.tsx",
+    "desktop/packages/ui/src/apps/useAppFontEffects.ts",
+    "docs/module-quality-audit/modules/ui-apps/MODULE-AUDIT.md",
+    "desktop/packages/ui/src/App.tsx",
+    "desktop/packages/ui/src/components/mini-chat/MiniChatLayout.tsx",
+    "desktop/packages/ui/src/hooks/useFontPreferences.ts",
+    "desktop/packages/ui/src/lib/fontLoader.ts",
+    "desktop/packages/ui/src/lib/fontOptions.ts",
+    "desktop/packages/ui/src/stores/useConfigStore.ts",
+    "desktop/packages/ui/src/stores/useConfigStore-impl.ts",
+    "desktop/packages/ui/src/stores/useDirectoryStore.ts",
+    "desktop/packages/ui/src/sync/notification-store.ts",
+    "desktop/packages/ui/src/sync/session-actions.ts",
+    "desktop/packages/ui/src/sync/sync-context-impl.tsx",
+    "desktop/packages/ui/package.json",
+    "desktop/packages/ui/scripts/run-tests.mjs",
+    "desktop/packages/web/src/mini-chat-main.tsx",
+    "desktop/packages/electron/src/main.js"
+  ],
+  "slug": "ui-apps"
+}

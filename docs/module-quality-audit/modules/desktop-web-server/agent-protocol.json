@@ -1,0 +1,42 @@
+{
+  "slug": "desktop-web-server",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "desktop/packages/web/server/index.d.ts",
+    "desktop/packages/web/server/index.js",
+    "desktop/packages/web/server/ax-code-proxy.test.js",
+    "desktop/packages/web/server/lib/ax-code/agents.js",
+    "desktop/packages/web/server/lib/ax-code/auth-state-runtime.js",
+    "desktop/packages/web/server/lib/ax-code/auth-state-runtime.test.js",
+    "desktop/packages/web/server/lib/ax-code/auth.js",
+    "desktop/packages/web/server/lib/ax-code/ax-code-resolution-runtime.js",
+    "desktop/packages/web/server/lib/ax-code/background-reload.js",
+    "desktop/packages/web/server/lib/ax-code/background-reload.test.js",
+    "desktop/packages/web/server/lib/ax-code/bootstrap-runtime.js",
+    "desktop/packages/web/server/lib/ax-code/cli-entry-runtime.js",
+    "desktop/packages/web/server/lib/ax-code/cli-options.js",
+    "desktop/packages/web/server/lib/ax-code/cli-options.test.js",
+    "desktop/packages/web/server/lib/ax-code/commands.js",
+    "desktop/packages/web/server/lib/ax-code/config-entity-routes.js",
+    "desktop/packages/web/server/lib/ax-code/core-routes.js",
+    "desktop/packages/web/server/lib/ax-code/core-routes.test.js",
+    "desktop/packages/web/server/lib/ax-code/env-config.js",
+    "desktop/packages/web/server/lib/ax-code/env-config.test.js",
+    "docs/module-quality-audit/modules/desktop-web-server/MODULE-AUDIT.md",
+    "docs/module-quality-audit/modules/desktop-web-server/findings/AUDIT-desktop-web-server-empty-catch.md"
+  ],
+  "stepNotes": {
+    "1": "Public surface declared in index.d.ts:31-40 (startWebUiServer, gracefulShutdown, setupProxy, restartAxCode, parseArgs); main entry index.js:1128 wires ~30 injected runtimes and delegates CLI boot to cli-entry-runtime.js:1.",
+    "2": "Loopback enforced at cli-options.js:49 and env-config.js:46-49; probe-url canonicalized to 127.0.0.1 at core-routes.js:14-42; auth.json written 0o600 at auth.js:45. No Critical secrets exposure; only the Medium empty-catch finding is open.",
+    "3": "Shutdown route core-routes.js:216-234 gates on requireAuth then exitProcess:true (test core-routes.test.js:26-45); smoke-crash 404 unless env-gated (core-routes.js:206-214); config-entity routes return correct 400/404/409/500 matrix (config-entity-routes.js:412-431, 237-239).",
+    "4": "Rate limiters mounted at bootstrap-runtime.js:66-67 and core-routes.js:4/320 (1200/min); tiered JSON limits in core-routes.js:469-506 with 1MiB/413 cap on /api/behavior; SSE backpressure in proxy.js (test ax-code-proxy.test.js:93-112); reload dedup coalesces config-save storms (background-reload.js:28-43).",
+    "5": "Consistent dependency-injected runtime-factory pattern (auth-state-runtime.js:1, bootstrap-runtime.js:13, env-config.js:5) keeps the unit testable; module state bridged via defineProperties accessor objects (index.js:466-497, 818-945) plus HMR-state runtime (index.js:341-347). Low-severity note: index.js is 1434 lines with many forwarding wrappers (200-700).",
+    "6": "Empty-catch sites in the read set spot-checked: index.js:1088-1122 destroyAllClientConnections is correctly per-iteration; core-routes.js:173-181/268-275 signal kills are best-effort; core-routes.js:185-187 is lsof tolerance. All match the per-site dispositions in findings/AUDIT-desktop-web-server-empty-catch.md; no silent data-loss path found.",
+    "7": "Strong targeted coverage: auth-state-runtime.test.js:37-59 (trim+header+managed gen), cli-options.test.js:37-44 (loopback reject), env-config.test.js:36-62 (remote fallback+IPv6), background-reload.test.js:67-101 (queued follow-up), core-routes.test.js:129-264 (reload dedup + probe-url gate/canonicalization/reject), ax-code-proxy.test.js:46-91 (SSE headers+auth passthrough). Gap: no direct route-level supertest coverage of the config-entity-routes.js HTTP error matrix.",
+    "8": "Single open finding AUDIT-desktop-web-server-empty-catch (Medium, deferred, expiry 2026-09-11) is consistent with findings/ file. No new Critical/High surfaced. Low-severity observations (index.js size, missing config-entity route tests, needs-log catch sites) recorded in steps.md Step 8, not filed as new defects.",
+    "9": "Audit-only pass with no source mutations, so no typecheck/build rerun needed for the artifacts. Relevant gates per AGENTS.md: pnpm --dir desktop exec vitest run (node project covers desktop/packages/web/server) plus desktop:typecheck/desktop:lint on baseline cab6c0089e3b7b3410f050bc9d824c06a3c3a814. No Critical finding exists, so reverify.md is not required."
+  }
+}

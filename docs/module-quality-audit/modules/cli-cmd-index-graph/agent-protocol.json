@@ -1,0 +1,41 @@
+{
+  "slug": "cli-cmd-index-graph",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/cli/cmd/index-graph.ts",
+    "docs/module-quality-audit/modules/cli-cmd-index-graph/MODULE-AUDIT.md",
+    "packages/ax-code/test/AGENTS.md",
+    "packages/ax-code/test/cli/index-graph.test.ts",
+    "packages/ax-code/test/code-intelligence/graph-highlights.test.ts",
+    "packages/ax-code/test/cli/debug-perf.test.ts",
+    "packages/ax-code/src/cli/boot.ts",
+    "packages/ax-code/src/cli/cmd/cmd.ts",
+    "packages/ax-code/src/cli/cmd/debug/perf.ts",
+    "packages/ax-code/src/project/instance.ts",
+    "packages/ax-code/src/file/ripgrep.ts",
+    "packages/ax-code/src/code-intelligence/index.ts",
+    "packages/ax-code/src/code-intelligence/auto-index.ts",
+    "packages/ax-code/src/code-intelligence/builder.ts",
+    "packages/ax-code/src/code-intelligence/builder-impl.ts",
+    "packages/ax-code/src/code-intelligence/query.ts",
+    "packages/ax-code/src/code-intelligence/native-store.ts",
+    "packages/ax-code/src/code-intelligence/lockfile.ts",
+    "packages/ax-code/test/code-intelligence/query.test.ts",
+    "crates/ax-code-index/src/file.rs",
+    "crates/ax-code-index/src/store.rs"
+  ],
+  "stepNotes": {
+    "1": "Bound cli-cmd-index-graph to its exported helpers, registered yargs command, and perf-command consumers.",
+    "2": "Traced option and cwd inputs through sanitized ripgrep discovery, LSP activity, graph mutation, and terminal or JSON sinks.",
+    "3": "Checked validation, empty-tree reconciliation, pruning guards, and found the bare-prefix collision between sibling root names.",
+    "4": "Reviewed degraded LSP paths, heartbeat cleanup, worker bounds, and confirmed the acquire timeout cannot reach the LockHeldError branch.",
+    "5": "Validated SQL count efficiency and parallel probes while identifying that the CLI limit never reaches the native walker.",
+    "6": "Confirmed project, graph-builder, query, and progress-state ownership and noted the remaining containment-contract mismatch.",
+    "7": "Ran two focused Vitest files with nine passing tests and catalogued missing command, timeout, limit, and prefix-boundary cases.",
+    "8": "Reconciled the empty finding register with one Medium and two Low issues found in the independent source review.",
+    "9": "Completed core typechecking and focused tests, recorded that no Critical reverify trigger applies, and left verifier sign-off to ax-code-glm."
+  },
+  "date": "2026-08-11"
+}

@@ -1,0 +1,37 @@
+# Nine-step review protocol: cli-cmd-debug
+
+## Step 1 Scope and entry points
+
+The reviewed unit is `cli-cmd-debug`, rooted at `packages/ax-code/src/cli/cmd/debug`. Its command tree is assembled in `packages/ax-code/src/cli/cmd/debug/index.ts:16`, with all leaf groups registered at `packages/ax-code/src/cli/cmd/debug/index.ts:20` through `packages/ax-code/src/cli/cmd/debug/index.ts:32`. The parent is reachable from the product CLI because `packages/ax-code/src/cli/boot.ts:60` builds the top-level command list and includes `DebugCommand` at `packages/ax-code/src/cli/boot.ts:71`. All thirteen candidate TypeScript files and the existing module audit were read; direct tests and the configuration/version owners were also inspected where they affected conclusions.
+
+## Step 2 Trust boundaries and sensitive output
+
+User-controlled tool parameters are restricted to JSON in `packages/ax-code/src/cli/cmd/debug/agent.ts:101`, and non-object values are rejected at `packages/ax-code/src/cli/cmd/debug/agent.ts:93`; this avoids the code-execution fallback documented at `packages/ax-code/src/cli/cmd/debug/agent.ts:106`. Tool selection checks availability and disabled state before execution at `packages/ax-code/src/cli/cmd/debug/agent.ts:50` through `packages/ax-code/src/cli/cmd/debug/agent.ts:62`. A remaining disclosure risk exists in `packages/ax-code/src/cli/cmd/debug/config.ts:12`: the resolved configuration is emitted verbatim at line 13, while `packages/ax-code/src/config/schema-impl.ts:557` through line 560 permits a provider `apiKey`. Diagnostic output should therefore be treated as sensitive, and future hardening should redact credential-shaped fields before printing or clearly warn the operator.
+
+## Step 3 Behavioral correctness
+
+Replay correctly converts one-based recorded positions to zero-based LSP coordinates in `packages/ax-code/src/cli/cmd/debug/replay.ts:57` through line 60 and avoids replaying rows whose original call failed at `packages/ax-code/src/cli/cmd/debug/replay.ts:138` through line 174. Its comparison is intentionally limited to decision-path fields at `packages/ax-code/src/cli/cmd/debug/replay.ts:178` through line 195. One concrete correctness defect is the report version: `packages/ax-code/src/cli/cmd/debug/explain-impl.ts:1143` hard-codes `2.12.3`, whereas the canonical runtime value is supplied by `Installation.VERSION` at `packages/ax-code/src/installation/index.ts:78` through line 86 and the reviewed package currently declares `7.5.0`. Machine-readable diagnostic reports can consequently identify the wrong build.
+
+## Step 4 Failure handling and diagnostic integrity
+
+The explain parser is defensive against malformed JSON records at `packages/ax-code/src/cli/cmd/debug/explain-impl.ts:294` through line 303 and against invalid event payloads at lines 356 through 395. However, log discovery and reads convert filesystem failures into empty results at `packages/ax-code/src/cli/cmd/debug/explain-impl.ts:1008`, lines 1025, 1033, 1066, 1083, and 1095. Those empty inputs lead to the healthy summary at `packages/ax-code/src/cli/cmd/debug/explain-impl.ts:1150` through line 1153. Thus permission errors or unreadable logs can be indistinguishable from a genuinely healthy system; surfacing an input/read warning would preserve the diagnostic command's evidentiary value.
+
+## Step 5 Cost and scalability
+
+The three diagnostic sources are loaded concurrently with `Promise.all` at `packages/ax-code/src/cli/cmd/debug/explain-impl.ts:1118` through line 1122, and issue aggregation is linear over parsed records. The loaders nevertheless read the selected log files wholly into memory and split them into arrays at `packages/ax-code/src/cli/cmd/debug/explain-impl.ts:1066` through line 1076 and lines 1079 through 1099; there is no byte or line ceiling, so very large debug logs can produce avoidable latency and memory pressure. In the benchmark command, concurrency/repeat/limit values are validated at `packages/ax-code/src/cli/cmd/debug/perf.ts:413` through line 417, while cache clearing and repeated samples at lines 489 through 506 are deliberate benchmark costs rather than accidental hot-path work.
+
+## Step 6 Structure and ownership
+
+Command composition is localized: `packages/ax-code/src/cli/cmd/debug/file.ts:85` registers the five file subcommands, `packages/ax-code/src/cli/cmd/debug/lsp.ts:8` registers three LSP subcommands, and `packages/ax-code/src/cli/cmd/debug/snapshot.ts:5` registers snapshot operations. The performance command reuses indexing-domain helpers from `../index-graph` at `packages/ax-code/src/cli/cmd/debug/perf.ts:15` through line 21 instead of duplicating indexing policy. The explain implementation's version constant at `packages/ax-code/src/cli/cmd/debug/explain-impl.ts:1143` is the notable ownership violation because installation metadata already has a canonical owner. The one-line re-export in `packages/ax-code/src/cli/cmd/debug/explain.ts:1` is justified as a stable import boundary.
+
+## Step 7 Maintainability and reachability
+
+The parent handlers intentionally contain no work because yargs requires a child command (`packages/ax-code/src/cli/cmd/debug/index.ts:45` through line 46 and `packages/ax-code/src/cli/cmd/debug/perf.ts:582` through line 586). Exported pure helpers are reachable from direct tests, while command objects are reachable through `DebugCommand`. A dead conditional remains in `packages/ax-code/src/cli/cmd/debug/replay.ts:222`: every row with `error_code` already returns from the branch at lines 144 through 174, so the later human-output check cannot execute. No TODO/FIXME markers were found in the candidate files. Catch-based fallback sites in the explain loader are active behavior, not unreachable code, but should be made observable as noted in Step 4.
+
+## Step 8 Test evidence and gaps
+
+`packages/ax-code/test/cli/debug-agent.test.ts:5` through line 26 covers valid JSON, blank input, malformed JSON, arrays, and null. `packages/ax-code/test/cli/debug-explain.test.ts:23` onward exercises replay stalls, malformed records, TUI startup failures, backend failures, reducer/effect/render loops, watchdog stalls, and normal shutdown; the normal-stop negative case is at lines 561 through 585. Statistical aggregation and LSP diagnoses are asserted in `packages/ax-code/test/cli/debug-perf.test.ts:7` through line 360, and malformed replay timestamps are covered in `packages/ax-code/test/cli/debug-replay.test.ts:5` through line 10. The suite lacks end-to-end assertions for command registration/output, config redaction, explain's reported version, unreadable-log behavior, and the file/LSP/snapshot/scrap/skill leaf handlers.
+
+## Step 9 Findings and verification
+
+The pre-existing ledger at `docs/module-quality-audit/modules/cli-cmd-debug/MODULE-AUDIT.md:91` through line 95 contains no accepted findings, and no files exist under this unit's `findings/` path. This review records three follow-up risks in the protocol: credential-bearing resolved config can be printed, explain reports a stale version, and log read failures can yield a false healthy result. None triggered the requested Critical-finding re-verification path because there is no Critical finding artifact to confirm. Targeted verification passed with four files and 28 tests, using `AX_TEST_FILES=test/cli/debug-agent.test.ts,test/cli/debug-explain.test.ts,test/cli/debug-perf.test.ts,test/cli/debug-replay.test.ts pnpm exec vitest run` from `packages/ax-code`; `pnpm --dir packages/ax-code run typecheck` also completed successfully.

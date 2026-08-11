@@ -1,0 +1,32 @@
+{
+  "slug": "desktop-web-git",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "docs/module-quality-audit/modules/desktop-web-git/MODULE-AUDIT.md",
+    "docs/module-quality-audit/modules/desktop-web-git/findings/AUDIT-desktop-web-git-empty-catch.md",
+    "desktop/packages/web/server/lib/git/credentials.js",
+    "desktop/packages/web/server/lib/git/credentials.test.js",
+    "desktop/packages/web/server/lib/git/identity-storage.js",
+    "desktop/packages/web/server/lib/git/identity-storage.test.js",
+    "desktop/packages/web/server/lib/git/index.js",
+    "desktop/packages/web/server/lib/git/routes.js",
+    "desktop/packages/web/server/lib/git/routes.test.js",
+    "desktop/packages/web/server/lib/git/service.js",
+    "desktop/packages/web/server/lib/git/service.test.js",
+    "desktop/packages/web/server/test-helpers/route-harness.js"
+  ],
+  "stepNotes": {
+    "1": "Barrel index.js re-exports service/credentials/identity-storage; routes.js registers ~50 /api/git endpoints via a memoized lazy loader; service.js (4169 lines) holds git binary resolution, path guards, status/diff, and the worktree subsystem.",
+    "2": "Boundaries are filesystem credential/identity reads, spawned git child processes, request-controlled directory/path/hash/branch inputs, and path containment; the credential token never reaches an HTTP surface and identity files are written 0o600/0o700, while runWorktreeStartCommand is the highest-privilege by-design scripting surface.",
+    "3": "Path containment enforced at every file-touching entry via validateRepositoryFilePaths/resolveRepositoryFilePath and re-checked after repo-relative resolution; hash-gated operations guarded by isValidCommitHash at both service and route layers; index mutations serialized per-repo; reset/remote/worktree removal have explicit guards.",
+    "4": "getStatus light mode and bounded new-file stat batches (200 files, concurrency 12) plus a 30s remoteExistenceCache limit cheap polling; filterActiveRemoteBranches fans out ls-remote to every remote with no cache, a latent multi-remote latency risk but not a correctness defect.",
+    "5": "Barrel and lazy route loader are clean, but routes.js duplicates the directory-required check ~40 times and leaks sshCommand parsing logic into the /api/git/set-identity handler; the worktree subsystem inside service.js is effectively its own module and would benefit from extraction but is coupled to shared helpers.",
+    "6": "The four flagged empty catches are all best-effort chmod/rm permission hardening in identity-storage.js (lines 13, 26, 30, 34) and are acceptable to swallow; each needs an explanatory comment rather than a code change; no TODO/FIXME present.",
+    "7": "credentials/identity-storage tests assert permission bits and no-preflight-existsSync invariants; routes.test.js covers only stage/unstage through a mock harness leaving ~45 endpoints untested; service.test.js is strong on reset/cherry-pick/revert/hash-validation but covers none of push, pull, merge/rebase, or the worktree lifecycle.",
+    "8": "The single registered finding (Low, deferred) on the four empty catches is accurate; this pass re-read each site and confirmed the disposition; no new Critical or High accepted since token never reaches HTTP, path/hash/branch guards hold, and the multi-remote and route-parsing issues are performance/design notes.",
+    "9": "Ran pnpm test of all four git test files from desktop/packages/web: 4 files passed, 53/53 tests green in 17.58s under vitest 4.1.9; next valuable step is a push missing-upstream integration test and a createWorktree/removeWorktree round-trip."
+  },
+  "date": "2026-08-11"
+}

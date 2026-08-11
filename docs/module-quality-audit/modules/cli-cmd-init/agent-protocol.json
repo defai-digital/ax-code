@@ -1,0 +1,29 @@
+{
+  "slug": "cli-cmd-init",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/cli/cmd/init.ts",
+    "packages/ax-code/src/cli/bootstrap.ts",
+    "packages/ax-code/src/cli/boot.ts",
+    "packages/ax-code/src/context/index.ts",
+    "packages/ax-code/src/wiki/index.ts",
+    "packages/ax-code/src/wiki/config.ts",
+    "packages/ax-code/src/wiki/native.ts",
+    "packages/ax-code/src/util/filesystem.ts",
+    "docs/module-quality-audit/modules/cli-cmd-init/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single-file unit at packages/ax-code/src/cli/cmd/init.ts exporting one yargs CommandModule (InitCommand:8) registered at boot.ts:96. Six options (--depth,--force,--dry-run,--directory,--wiki,--wiki-only-agents); handler at init.ts:53-131 delegates to Context.init (context/index.ts:36), the wiki façade (wiki/index.ts:1-3), and bootstrap (bootstrap.ts:4).",
+    "2": "Only process side effect is process.exitCode=1 at init.ts:128 (wiki gen failure). AGENTS.md write happens inside Context.init (context/index.ts:73), not in this adapter. --directory flows through path.resolve+Filesystem.resolve (util/filesystem.ts:167) which canonicalizes via realpathSync and normalizes Win/MSYS/Cygwin/WSL paths; targeting an arbitrary dir is the command's intent, not a traversal bug. gitHeadCommit (wiki/native.ts:100) uses static literal argv. Empty catch at init.ts:91 is deliberate policy with a comment, not a silent swallow.",
+    "3": "callerCwd (util/filesystem.ts:182) honors AX_CODE_ORIGINAL_CWD->$PWD->cwd so global --cwd launches resolve the user's real project. depth cast as DepthLevel at init.ts:56 is safe because yargs choices at :27 enumerates the four legal literals. dry-run returns at :61 before bootstrap at :79, skipping both AGENTS.md writes and wiki side effects — consistent with Context.init's dry-run contract. Loose spot: getWikiStatus at init.ts:83 omits repositoryHead that wiki.ts:74 supplies.",
+    "4": "Nothing CPU-hot here; analyze(root) cost is fixed by the analyzer. bootstrap (bootstrap.ts:4) disposes Instance in a finally so no leak even when wiki gen throws. Dry-run returns before bootstrap so preview pays no bootstrap cost. bootstrap IS entered even when created=false so a no-op init still spins up Instance for the soft pointer refresh at :83-89 — acceptable for --wiki=false since getWikiStatus+ensureAgentsWikiPointers are cheap. runNativeWiki streams progress via onProgress (:119) and reports elapsed seconds.",
+    "5": "Clean adapter boundary: CLI-only concerns (yargs, console.log, exitCode) here; domain logic imported from ../../context, ../../wiki, ../bootstrap. Does not reach into provider/graph/storage internals; wiki config read through resolveWikiRuntimeConfig (wiki/config.ts:35)->Config.get. ensureAgentsWikiPointers appears at :85 and :98 with slightly different option objects but not worth extracting for two sites. Handler is ~80 lines mixing four phases — borderline but readable.",
+    "6": "No TODOs and no unintended dead code. Empty catch at init.ts:91 is deliberate policy with a comment, matching the audit's empty-catches=0 count. Nit: depth:string declared at :11 then cast as DepthLevel at :56; yargs choices already constrains runtime value so the cast is correct but the type could be tightened. Kebab options read with bracket access (args[\"dry-run\"]:61, args[\"wiki-only-agents\"]:106) vs camel with dot — forced by yargs convention, not a real inconsistency.",
+    "7": "Coverage gap: grep of packages/ax-code/test/** for cli/cmd/init, InitCommand, and the \"init\" token returns only unrelated hits (git init fixtures at fixture.ts:55/worktree.test.ts:37/release-check.test.ts:37, subtype:init JSON at connect.test.ts:92, init symbol seed at api.test.ts:362). None drive InitCommand.handler. Unverified branches: dry-run (:61-66), already-exists (:68), success summary (:70-77), soft-pointer refresh (:81-94), --wiki/--wiki-only-agents (:97-129), exitCode on failure (:128).",
+    "8": "One MEDIUM finding (no direct test coverage of the ax-code init command surface across six behavioral branches), two LOW findings (getWikiStatus omits repositoryHead in the soft-refresh path; depth:string + as DepthLevel cast), one INFO (MODULE-AUDIT says 133 LOC, file is 132). No Critical or High findings, so the Critical-reverify path is not triggered and no reverify.md is produced.",
+    "9": "Read-only review of eight source files plus MODULE-AUDIT; no source mutated so no build gate applies to this artifact. Future fix verification commands: pnpm --dir packages/ax-code run typecheck and pnpm --dir packages/ax-code exec vitest run test/cli/cmd/init.test.ts once it lands. Fingerprint 01f0a92e4c7bf06f consistent with what I read modulo the one-line LOC drift. Recommend status move from REVIEWING to VERIFIED-pending-tests."
+  },
+  "date": "2026-08-11"
+}

@@ -1,0 +1,37 @@
+{
+  "slug": "desktop-web-src",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/desktop/packages/web/src/api/constants.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/src/api/files.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/src/api/files.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/src/api/git.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/src/api/git.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/src/api/github.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/src/api/index.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/src/api/notifications.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/src/api/notifications.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/src/api/permissions.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/src/api/settings.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/src/api/terminal.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/src/api/tools.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/src/main.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/src/mini-chat-main.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/package.json",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/desktop-web-src/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Composition root is createWebAPIs at api/index.ts:12 assembling eight factories; endpoints are re-exported from @openchamber/ui so no route string is duplicated locally.",
+    "2": "Workspace boundary is the opt-in allowOutsideWorkspace flag forwarded on five files.ts methods; permissions.ts is a deliberate no-op stub that grants no real capability since mutations still hit authenticated server routes.",
+    "3": "normalizePath plus defensive toDirectoryListResult filtering prevent malformed payloads from breaking the list view; github.ts builds query strings three different ways (URLSearchParams, manual encodeURIComponent concat, new URL+searchParams.set) which is a latent encoding hazard.",
+    "4": "No secrets are handled client-side; GitHub tokens stay server-side and only the short-lived deviceCode is sent in authComplete; downloadFile builds an encoded anchor href with no injection surface.",
+    "5": "Layer is stateless with fresh factory objects; terminal.ts delegates reconnect to @openchamber/ui/terminalApi with tunable retry from constants.ts; tools.getAvailableTools refetches per call with no memoization.",
+    "6": "git.ts is an interface-satisfying passthrough whose worktree namespace re-aliases already-flat functions by interface design; the real duplication is the eight repeated fetch-error blocks in files.ts and the duplicated Window global declaration across main.tsx and mini-chat-main.tsx.",
+    "7": "No silent empty catches on production paths; jsonOrNull and the .catch fallbacks feed the following throw; notifications.ts logs denial/unsupported/failure via console with no telemetry; only opaque value is the \"invalid\" sentinel in tools.ts:21.",
+    "8": "Ran co-located vitest (files/git/notifications .test.ts) from desktop/packages/web: 3 files, 6 tests passed; coverage is thin with only 2 of 10 files.ts methods and zero github.ts methods exercised; findings/ is empty so no prior items exist.",
+    "9": "Static read-only review of desktop-web-src with no source changes; no Critical findings so reverify.md is not written; verifier codex-sol should independently confirm github.ts query-building consistency and the coverage gaps."
+  },
+  "date": "2026-08-11"
+}

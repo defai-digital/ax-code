@@ -1,6 +1,6 @@
 {
-  "signed": 136,
-  "reviewing": 116,
+  "signed": 202,
+  "reviewing": 50,
   "findingsWritten": 34,
   "results": [
     {
@@ -1448,12 +1448,12 @@
       "id": "W6-08a",
       "slug": "cli-cmd-tui-boot",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 108,
       "lines": 17427,
       "empty": 1,
       "fingerprint": "11686cfcb7ea509a",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-08b",
@@ -1470,12 +1470,12 @@
       "id": "W6-08c",
       "slug": "cli-cmd-tui-tool-renderers",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 9,
       "lines": 1263,
       "empty": 0,
       "fingerprint": "6f8991a492f52788",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-09",
@@ -1503,12 +1503,12 @@
       "id": "W6-11",
       "slug": "cli-cmd-models",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 85,
       "empty": 0,
       "fingerprint": "3557a9e15d25c5bf",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-12",
@@ -1525,12 +1525,12 @@
       "id": "W6-13",
       "slug": "cli-cmd-workflow",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 2,
       "empty": 0,
       "fingerprint": "102021e2feb9b1cd",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-14",
@@ -1547,661 +1547,661 @@
       "id": "W6-15",
       "slug": "cli-cmd-github-agent",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 8,
       "lines": 1968,
       "empty": 1,
       "fingerprint": "db2efc3168cf09af",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-16",
       "slug": "cli-cmd-storage",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 5,
       "lines": 960,
       "empty": 1,
       "fingerprint": "cf373b3f8ff88788",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-17",
       "slug": "cli-cmd-debug",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 13,
       "lines": 2621,
       "empty": 0,
       "fingerprint": "d7ca0d11859e5cfe",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-18",
       "slug": "cli-cmd-release",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 2,
       "lines": 818,
       "empty": 0,
       "fingerprint": "de5a7524d4560157",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-19",
       "slug": "cli-cmd-webui",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 45,
       "empty": 0,
       "fingerprint": "2d816e9952e292c4",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-20",
       "slug": "cli-cmd-wiki",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 322,
       "empty": 0,
       "fingerprint": "3de233291f45a6ce",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-21",
       "slug": "cli-cmd-pr",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 17,
       "empty": 0,
       "fingerprint": "533414ec0535d217",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-22",
       "slug": "cli-cmd-export",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 17,
       "empty": 0,
       "fingerprint": "4e0a1da617a327ce",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-23",
       "slug": "cli-cmd-import",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 60,
       "empty": 0,
       "fingerprint": "b9446f3cf0ed45aa",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-24",
       "slug": "cli-cmd-upgrade",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 135,
       "empty": 0,
       "fingerprint": "c89c96e036a70cf7",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-25",
       "slug": "cli-cmd-account",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 269,
       "empty": 0,
       "fingerprint": "d2cc8e76b46e242a",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-26",
       "slug": "cli-cmd-acp",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 100,
       "empty": 0,
       "fingerprint": "90669663c2f6e0b4",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-27",
       "slug": "cli-cmd-agent",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 272,
       "empty": 0,
       "fingerprint": "00529268c284288f",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-28",
       "slug": "cli-cmd-audit",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 210,
       "empty": 0,
       "fingerprint": "a47627edddaa1c4a",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-29",
       "slug": "cli-cmd-branch",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 71,
       "empty": 0,
       "fingerprint": "26519d7fef7dfa0b",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-30",
       "slug": "cli-cmd-capability",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 54,
       "empty": 0,
       "fingerprint": "a14525816b419dd9",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-31",
       "slug": "cli-cmd-compare",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 191,
       "empty": 0,
       "fingerprint": "0ee3fa8862b5afa0",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-32",
       "slug": "cli-cmd-context",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 130,
       "empty": 0,
       "fingerprint": "733a2eba215dd61c",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-33",
       "slug": "cli-cmd-db",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 2,
       "empty": 0,
       "fingerprint": "c766073d2077a500",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-34",
       "slug": "cli-cmd-design-check",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 56,
       "empty": 0,
       "fingerprint": "060eddf5db48285e",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-35",
       "slug": "cli-cmd-dre-graph",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 73,
       "empty": 0,
       "fingerprint": "5114b68268285a52",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-36",
       "slug": "cli-cmd-generate",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 43,
       "empty": 0,
       "fingerprint": "3d0dfa2b21826043",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-37",
       "slug": "cli-cmd-github",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 2,
       "empty": 0,
       "fingerprint": "a084de0bbff64a74",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-38",
       "slug": "cli-cmd-graph",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 78,
       "empty": 0,
       "fingerprint": "42748c3a573e925c",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-39",
       "slug": "cli-cmd-index-graph",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 732,
       "empty": 0,
       "fingerprint": "99fec64b5a776950",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-40",
       "slug": "cli-cmd-init",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 133,
       "empty": 0,
       "fingerprint": "01f0a92e4c7bf06f",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-41",
       "slug": "cli-cmd-memory",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 564,
       "empty": 0,
       "fingerprint": "4c0e2d3958c9e416",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-42",
       "slug": "cli-cmd-replay",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 150,
       "empty": 0,
       "fingerprint": "611cf8fba2e64130",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-43",
       "slug": "cli-cmd-restart",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 2,
       "empty": 0,
       "fingerprint": "fb567e70c2a23a02",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-44",
       "slug": "cli-cmd-risk",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 248,
       "empty": 0,
       "fingerprint": "46280454e7d2c14f",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-45",
       "slug": "cli-cmd-rollback",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 170,
       "empty": 0,
       "fingerprint": "acfe3d6bb5e68cf4",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-46",
       "slug": "cli-cmd-stats",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 429,
       "empty": 0,
       "fingerprint": "fa4270272b5b0220",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-47",
       "slug": "cli-cmd-trace",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 426,
       "empty": 0,
       "fingerprint": "ba57fc909205f90a",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W6-48",
       "slug": "cli-cmd-uninstall",
       "wave": 6,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 334,
       "empty": 0,
       "fingerprint": "952ee9f9252eaad9",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-01",
       "slug": "desktop-electron-shell",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 49,
       "lines": 6080,
       "empty": 5,
       "fingerprint": "abaa92677805f79e",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-02",
       "slug": "desktop-electron-server-process",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 79,
       "empty": 1,
       "fingerprint": "8d252058792edab3",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-03",
       "slug": "desktop-electron-tray",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 340,
       "empty": 0,
       "fingerprint": "4f9d7a54c2d5ed38",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-04",
       "slug": "desktop-electron-updates",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 49,
       "lines": 6080,
       "empty": 5,
       "fingerprint": "cc465680ac89a3e1",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-05",
       "slug": "desktop-web-server",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 228,
       "lines": 51803,
       "empty": 87,
       "fingerprint": "0be0e0a6cdb75c03",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-06",
       "slug": "desktop-web-ax-code",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 84,
       "lines": 20115,
       "empty": 37,
       "fingerprint": "c30d09200bea6d31",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-07",
       "slug": "desktop-web-desktop",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 2,
       "lines": 219,
       "empty": 1,
       "fingerprint": "c733cd55909ff983",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-08",
       "slug": "desktop-web-event-stream",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 14,
       "lines": 2404,
       "empty": 10,
       "fingerprint": "516cd83c0fe8488d",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-09",
       "slug": "desktop-web-fs",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 3,
       "lines": 2335,
       "empty": 3,
       "fingerprint": "bff13b0ed5e712e4",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-10",
       "slug": "desktop-web-git",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 9,
       "lines": 6270,
       "empty": 4,
       "fingerprint": "c213128abd667b16",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-11",
       "slug": "desktop-web-github",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 10,
       "lines": 2935,
       "empty": 0,
       "fingerprint": "aee9271f30599127",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-12",
       "slug": "desktop-web-magic-prompts",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 3,
       "lines": 272,
       "empty": 0,
       "fingerprint": "16e6a7201e088ef1",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-13",
       "slug": "desktop-web-notifications",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 11,
       "lines": 1523,
       "empty": 2,
       "fingerprint": "f87ab3cfc86ac9b3",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-14",
       "slug": "desktop-web-preview",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 2,
       "lines": 1903,
       "empty": 9,
       "fingerprint": "fb8dac3b5be4143a",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-15",
       "slug": "desktop-web-projects",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 5,
       "lines": 1210,
       "empty": 1,
       "fingerprint": "617912f90adfa9ff",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-16",
       "slug": "desktop-web-quota",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 27,
       "lines": 2550,
       "empty": 0,
       "fingerprint": "f19960659a70eb47",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-17",
       "slug": "desktop-web-scheduled-tasks",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 5,
       "lines": 1580,
       "empty": 5,
       "fingerprint": "53b388ec7f63492f",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-18",
       "slug": "desktop-web-session-folders",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 2,
       "lines": 124,
       "empty": 0,
       "fingerprint": "28eb4f39800809de",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-19",
       "slug": "desktop-web-skills-catalog",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 18,
       "lines": 1977,
       "empty": 0,
       "fingerprint": "06ddcb243f38f846",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-20",
       "slug": "desktop-web-terminal",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 9,
       "lines": 1778,
       "empty": 6,
       "fingerprint": "5575a9ce46c4081f",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-21",
       "slug": "desktop-web-text",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 2,
       "lines": 179,
       "empty": 0,
       "fingerprint": "8c8fd6ebe18a50cc",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W7-22",
       "slug": "desktop-web-src",
       "wave": 7,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 15,
       "lines": 1265,
       "empty": 0,
       "fingerprint": "454d79d0603392b8",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W8-01",
       "slug": "ui-api",
       "wave": 8,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 3,
       "lines": 7,
       "empty": 0,
       "fingerprint": "7458bd2a97949b10",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W8-02",
       "slug": "ui-apps",
       "wave": 8,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 6,
       "lines": 527,
       "empty": 0,
       "fingerprint": "598fc6bee0218cd9",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W8-03-01",
       "slug": "ui-components-auth",
       "wave": 8,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 585,
       "empty": 0,
       "fingerprint": "b446eb28234a6e48",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W8-03-02",
       "slug": "ui-components-chat",
       "wave": 8,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 158,
       "lines": 39955,
       "empty": 0,
       "fingerprint": "c5f9a604fc9c8936",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W8-03-03",
@@ -2218,12 +2218,12 @@
       "id": "W8-03-04",
       "slug": "ui-components-dashboard",
       "wave": 8,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 4,
       "lines": 748,
       "empty": 0,
       "fingerprint": "3978cbafc4b39441",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W8-03-05",
@@ -2240,12 +2240,12 @@
       "id": "W8-03-06",
       "slug": "ui-components-files",
       "wave": 8,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 6,
       "lines": 203,
       "empty": 0,
       "fingerprint": "5506421359533e6f",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W8-03-07",

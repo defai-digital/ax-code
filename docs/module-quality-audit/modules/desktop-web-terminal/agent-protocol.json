@@ -1,0 +1,33 @@
+{
+  "slug": "desktop-web-terminal",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "desktop/packages/web/server/lib/terminal/index.js",
+    "desktop/packages/web/server/lib/terminal/output-replay-buffer.js",
+    "desktop/packages/web/server/lib/terminal/output-replay-buffer.test.js",
+    "desktop/packages/web/server/lib/terminal/runtime.js",
+    "desktop/packages/web/server/lib/terminal/runtime.test.js",
+    "desktop/packages/web/server/lib/terminal/terminal-dimensions.js",
+    "desktop/packages/web/server/lib/terminal/terminal-dimensions.test.js",
+    "desktop/packages/web/server/lib/terminal/terminal-ws-protocol.js",
+    "desktop/packages/web/server/lib/terminal/terminal-ws-protocol.test.js",
+    "desktop/packages/web/server/test-helpers/route-harness.js",
+    "docs/module-quality-audit/modules/desktop-web-terminal/MODULE-AUDIT.md",
+    "docs/module-quality-audit/modules/desktop-web-terminal/findings/AUDIT-desktop-web-terminal-001.md",
+    "docs/module-quality-audit/modules/desktop-web-terminal/findings/AUDIT-desktop-web-terminal-empty-catch.md"
+  ],
+  "stepNotes": {
+    "1": "Barrel index.js is logic-free; it double-exports the ws protocol surface under TERMINAL_WS_* and the legacy TERMINAL_INPUT_WS_* aliases because input and stream transports share one frame format.",
+    "2": "Auth gate lives in upgradeHandler at runtime.js:491-504 (awaits ensureSessionToken then isRequestOriginAllowed); HTTP routes assume upstream middleware auth. sanitizeTerminalEnv strips AX_CODE_SERVER_PASSWORD/BASH_ENV/ENV before pty spawn.",
+    "3": "observeTerminalShellStartup keeps onData attached after a healthy resolve and exposes release() so prompt bytes between resolve and wire-permanent-handler are not dropped; create/restart both seed the replay buffer via releaseStartupObserver before wireTerminalSession.",
+    "4": "Ring eviction uses Array.shift on a short (<=64KiB) chunk list; oversized-chunk trimmer walks code points via Array.from and is multibyte-safe (verified by the 🙂x test); backpressure path pauses the shared pty and cleanup unconditionally resumes.",
+    "5": "runtime.js is 1009 lines owning PTY load, shell resolution, spawn-fallback, ws server, upgrade gate, replay wiring, idle reaper, and 7 Express routes inside one factory with a clean DI seam; extracting pty-spawn.js and ws-server.js is a Low-priority refactor, not a defect.",
+    "6": "Independently re-read all six empty catches (runtime.js:29,32,213,308,352,996); each is best-effort teardown/telemetry where the close handler does real cleanup, concurring with the deferred Low finding; the catch at :321 returns false and is not strictly empty.",
+    "7": "Pure modules have strong coverage (17+8+4 cases); runtime.test.js covers startup-observer branches, the stat-after-auth ordering invariant, shutdown listener removal, and the AUDIT-001 kill-failure regression. Gap: ws message dispatcher and upgrade auth branch have no direct unit test.",
+    "8": "AUDIT-desktop-web-terminal-001 (Medium) confirmed verified-fixed: killTerminalProcess console.warn at runtime.js:287 and :297 plus the behavioral regression test asserting the warning text. AUDIT-desktop-web-terminal-empty-catch (Low) deferred to 2026-09-11 with per-site rationale. No Critical items.",
+    "9": "Ran pnpm --dir desktop/packages/web exec vitest run server/lib/terminal/ -> 4 files / 42 tests passed (~2.4s). Terminal files are plain JS so tsc/eslint on src are not the gate; the vitest run including the AUDIT-001 regression is the authoritative evidence."
+  },
+  "date": "2026-08-11"
+}

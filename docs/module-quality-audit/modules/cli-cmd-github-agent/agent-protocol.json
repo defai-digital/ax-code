@@ -1,0 +1,35 @@
+{
+  "slug": "cli-cmd-github-agent",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/github-agent/git-ops.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/github-agent/github-api.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/github-agent/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/github-agent/install.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/github-agent/pr.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/github-agent/prompts.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/github-agent/run.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/github-agent/types.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-github-agent/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-github-agent/findings/AUDIT-cli-cmd-github-agent-empty-catch.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/github-agent-pr.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/github-agent-prompts.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/github-agent-git-config.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/github-agent-run-context.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/github-remote.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Confirmed the facade, installer, action runner, PR checkout command, helpers, prompts, and contracts form this unit's operational boundary.",
+    "2": "Traced mock JSON, PAT/OIDC exchange, collaborator authorization, exact-host attachment validation, and pinned network fetches.",
+    "3": "Followed every supported event from validation through repository, same-repository PR, fork PR, and issue handling branches.",
+    "4": "Verified cwd-scoped Git helpers and identified unsafe restoration when setup was skipped plus failure to remove a newly added extraheader.",
+    "5": "Accepted the optional error-body parse catch as Low while noting that token revocation ignores unsuccessful HTTP responses.",
+    "6": "Reviewed context framing, pagination warnings, attachment rewriting, and the missing download-size bound before permission enforcement.",
+    "7": "Found sensible helper boundaries but excessive orchestration and duplicated PR handling in the 510-line runner.",
+    "8": "Read five focused test files and reconciled their coverage with the lone registered Low finding and uncovered cleanup gaps.",
+    "9": "Ran the exact-file Vitest group successfully: five files and thirty tests passed; no Critical finding file triggered re-verification."
+  },
+  "date": "2026-08-11"
+}

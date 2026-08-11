@@ -1,0 +1,33 @@
+{
+  "slug": "cli-cmd-compare",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/compare.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-compare/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/session-required.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/event.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/replay.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/compare.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/risk/score.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/compare.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/string-list.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/compare.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Confirmed both exports, the four CLI arguments, and production registration for the compare command.",
+    "2": "Traced positional IDs through existence checks and assessed raw stored text at the terminal output boundary.",
+    "3": "Followed normal and deep comparison branches and identified partial non-deep results beyond the event cap.",
+    "4": "Bounded memory and linear scans while accounting for duplicate event-log reads during risk and replay work.",
+    "5": "Compared the CLI helpers with ReplayCompare and SessionCompare and found overlapping calculation ownership.",
+    "6": "Checked discriminated event types, route-field assertions, and deterministic event-type normalization.",
+    "7": "Reviewed returns, assertions, state, suppressions, markers, exception handling, and helper visibility.",
+    "8": "Matched the sole focused test to its helper and enumerated uncovered handler branches and observed concerns.",
+    "9": "Passed the exact compare Vitest target and the core package typecheck, with no Critical recheck required."
+  },
+  "date": "2026-08-11"
+}

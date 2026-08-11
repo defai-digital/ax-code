@@ -1,0 +1,29 @@
+{
+  "slug": "cli-cmd-restart",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/cli/cmd/restart.ts",
+    "packages/ax-code/src/cli/cmd/runtime/restart.ts",
+    "packages/ax-code/src/cli/boot.ts",
+    "packages/ax-code/src/cli/cmd/cmd.ts",
+    "packages/ax-code/src/server/constants.ts",
+    "packages/ax-code/src/constants/server.ts",
+    "packages/ax-code/src/server/routes/app.ts",
+    "packages/ax-code/test/cli/runtime-restart.test.ts",
+    "docs/module-quality-audit/modules/cli-cmd-restart/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Traced the one-line public shim through the runtime descriptor and boot command registry.",
+    "2": "Confirmed the validated port is the sole variable crossing into a fixed loopback URL.",
+    "3": "Checked default-port resolution, duplicate handler validation, and POST construction.",
+    "4": "Matched the CLI endpoint to the server reload route and reviewed both failure exits.",
+    "5": "Assessed the single-request resource profile and noted the absence of a client timeout.",
+    "6": "Verified lifecycle work remains server-owned while the CLI layer stays a narrow adapter.",
+    "7": "Reviewed the rejection-to-null branch as deliberate handling and found no dead implementation.",
+    "8": "Compared boundary-validator tests with uncovered fetch, logging, and process-exit branches.",
+    "9": "Ran the focused two-test Vitest file and the core tsgo typecheck successfully."
+  },
+  "date": "2026-08-11"
+}

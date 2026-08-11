@@ -1,0 +1,27 @@
+{
+  "slug": "cli-cmd-capability",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/capability.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/bootstrap.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/capability/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/capability.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-capability/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single-file unit at packages/ax-code/src/cli/cmd/capability.ts (54 LOC). Two exports: formatCapabilityList@:7 and CapabilityCommand@:48. Registered in boot.ts:77. Subcommand CapabilityListCommand at :21.",
+    "2": "Stdout writes at capability.ts:40 and :43 surface repository paths from Capability.list (location fields), not secrets. No network surface. bootstrap.ts:9-14 guarantees Instance.dispose in finally on throw.",
+    "3": "Handler at capability.ts:34-45 traces cleanly: bootstrap -> Capability.list -> JSON early-return (:39-42) or formatCapabilityList (:43). Cast at :37 is a defensive no-op given yargs array typing; empty-array --file is handled by capability/index.ts:51.",
+    "4": "Unit body is O(n) string formatting. Real cost is in Capability.list which already uses Promise.all (capability/index.ts:34-41). No N+1, no timers/listeners allocated in capability.ts.",
+    "5": "Clean CLI/domain boundary: imports Capability namespace but never touches storage/provider internals. Pure formatCapabilityList is exported specifically for testing. Empty parent handler at :52 plus demandCommand is correct yargs delegation idiom.",
+    "6": "No TODOs, no commented blocks, no dead branches. Both exports consumed (boot.ts:77, capability.test.ts:2). EOL import used 3x. INFO-only nit: redundant cast at capability.ts:37, harmless.",
+    "7": "test/cli/capability.test.ts covers formatCapabilityList ok/warn branches and column widths. Gap: handler body (capability.ts:34-45), especially the --json branch at :39-42, has no direct unit test — only indirect CLI smoke coverage.",
+    "8": "One LOW finding accepted: handler/JSON-output branch lacks direct unit test. No Critical/High/Medium. No security, correctness, or resource-leak defects. Redundant cast at :37 recorded as INFO, not promoted.",
+    "9": "Independent evidence re-read across capability.ts, cmd.ts, bootstrap.ts, capability/index.ts, and capability.test.ts. Recommended verify: pnpm --dir packages/ax-code run typecheck and scoped test:unit. Unit acceptable for sign-off; LOW coverage gap is a follow-up, not a blocker."
+  },
+  "date": "2026-08-11"
+}

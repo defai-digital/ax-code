@@ -1,0 +1,42 @@
+# Review protocol — cli-cmd-rollback
+
+Reviewer: `codex-sol` (`gpt-5.6-sol-xhigh`)  
+Independent verifier: `ax-code-glm`
+
+## Step 1 Scope and production command surface
+
+The `cli-cmd-rollback` unit exports one yargs command, `RollbackCommand`, from `packages/ax-code/src/cli/cmd/rollback.ts:10-169`. Its required session positional and `--dry-run`, `--force`, `--list`, and `--step` options are declared at `rollback.ts:11-27`. This is a live production surface: `packages/ax-code/src/cli/boot.ts:17` imports the command and `packages/ax-code/src/cli/boot.ts:60-75` includes it in the registration array. The resolved source agrees with `docs/module-quality-audit/modules/cli-cmd-rollback/MODULE-AUDIT.md:5-7`; the audit still marks the protocol pending at lines 11-16.
+
+## Step 2 Inputs, output, and destructive boundary
+
+The positional string is branded at `packages/ax-code/src/cli/cmd/rollback.ts:32` and checked for existence through `getRequiredSession` at line 33; that helper distinguishes a missing record from unexpected storage failures at `packages/ax-code/src/cli/cmd/session-required.ts:5-12`. `--dry-run` exits before any mutation (`rollback.ts:102-105`), while `--force` bypasses the interactive question at lines 107-118. The destructive path enters `SessionRevert.revert` at lines 136-140 or 159-162, which collects persisted patch parts and calls `Snapshot.revert` at `packages/ax-code/src/session/revert.ts:31-68`. The command constructs no network request, shell command, or credential value. Stored titles, diff filenames, and graph-derived tool labels are written directly to the terminal (`rollback.ts:36-38,53-65,95-100`), so persisted control characters can alter terminal or log presentation; this is a Medium output-hardening concern.
+
+## Step 3 Rollback correctness
+
+The advertised step rollback is broken for current session data. Its search requires both a `step-start` part and a runtime `stepIndex` property (`packages/ax-code/src/cli/cmd/rollback.ts:126-148`), but `StepStartPart` contains only the base fields, `type`, and optional `snapshot` (`packages/ax-code/src/session/message-v2-impl.ts:246-252`), and the producer writes no index (`packages/ax-code/src/session/processor-impl.ts:848-858`). Meanwhile `--list` displays a separately synthesized one-based counter from `ExecutionGraph.build` (`packages/ax-code/src/graph/index.ts:178-187`). The domain resolver correctly correlates ordered `step.start` events to message IDs and persisted parts at `packages/ax-code/src/session/rollback.ts:75-105`. Because every ordinary `--step N` request falls through to “not found,” this is a High functional defect.
+
+The full-session branch also mishandles state cleanup. It retains the session object fetched before mutation (`rollback.ts:33`), ignores the updated value returned by `SessionRevert.revert`, and passes the stale object to cleanup (`rollback.ts:159-163`; the step branch repeats this at lines 136-141). `Session.get` constructs a fresh parsed value (`packages/ax-code/src/session/index.ts:468-473`), `revert` returns the object produced by `Session.setRevert` (`packages/ax-code/src/session/revert.ts:83-91`), and cleanup immediately returns when its argument lacks `revert` (`revert.ts:105-106`). Therefore files may be restored while messages and the revert marker remain pending. The shared service shows the required sequencing by cleaning the returned `next` object at `packages/ax-code/src/session/rollback.ts:201-204`. This is a second High correctness defect.
+
+## Step 4 Complexity and resource behavior
+
+The ordinary path performs bounded session/diff/message reads and one linear diff print (`packages/ax-code/src/cli/cmd/rollback.ts:34,71,95-100,120`). List mode does redundant event-log work: the initial `Risk.fromSession` reads the session events (`packages/ax-code/src/risk/score.ts:395-410`), `ExecutionGraph.build` loads timestamped rows (`packages/ax-code/src/graph/index.ts:110-117`), and the graph calculates risk again at line 313. Each event query is capped at 10,000 rows (`packages/ax-code/src/replay/query.ts:116-130`), which bounds memory but can omit later rollback points. Per-step filtering of all edges followed by repeated node searches at `rollback.ts:53-64` is quadratic in an adverse graph shape. These are Low performance/scalability concerns compared with the correctness failures.
+
+## Step 5 Ownership and dependency design
+
+`Instance.provide` owns the project context (`packages/ax-code/src/cli/cmd/rollback.ts:29-31`), and the CLI appropriately delegates snapshot mutation to `SessionRevert`. However, it reimplements rollback-point listing, selection, preview, and application even though `SessionRollback.resolve`, `detail`, `points`, `preview`, and `apply` already own those operations at `packages/ax-code/src/session/rollback.ts:75-204`. The HTTP route uses that service and its validated point lookup (`packages/ax-code/src/server/routes/session-impl.ts:698-741`). Routing the CLI through the same service would remove the event/part index mismatch, produce step-specific previews, and enforce the correct post-revert cleanup contract.
+
+## Step 6 Type safety and data validation
+
+The `cmd` helper is only a typed identity wrapper (`packages/ax-code/src/cli/cmd/cmd.ts:1-7`). Inside the handler, the session ID and step are asserted with `as string` and `as number`, and the missing step field is forced through `as unknown as { stepIndex?: number }` (`packages/ax-code/src/cli/cmd/rollback.ts:32-33,128-135`). `SessionID.make` itself is a cast rather than runtime validation (`packages/ax-code/src/id/branded.ts:18-21`), although the subsequent lookup safely turns arbitrary IDs into not-found behavior. More importantly, the unknown cast suppresses exactly the schema mismatch responsible for the unusable step path. The CLI also accepts fractional or non-positive numeric steps, whereas the shared `SessionRollback.ApplyInput` requires an integer of at least one (`packages/ax-code/src/session/rollback.ts:45-55`).
+
+## Step 7 Failure semantics and maintainability
+
+The 169-line command has no empty catch, suppression directive, TODO/FIXME marker, module-level mutable state, or commented-out implementation. Early returns make dry-run, list, cancellation, and no-diff behavior easy to follow (`packages/ax-code/src/cli/cmd/rollback.ts:40-105`). Failure signaling is inconsistent: an unrecoverable changed-file state sets `process.exitCode = 1` at lines 80-89 and a missing session exits nonzero through `session-required.ts:9-12`, but a requested step that cannot be found merely prints a message and returns success (`rollback.ts:148-149`). The readline handle is closed on the normal answer path (`rollback.ts:108-114`) but is not protected by `finally` if the question rejects. Both are smaller concerns than the stale cleanup and unreachable step mapping.
+
+## Step 8 Test evidence and issue disposition
+
+There is no test that imports or executes `RollbackCommand`. The closest focused file, `packages/ax-code/test/session/rollback.test.ts:58-79`, tests only tool-label enrichment in `SessionRollback.detail`. `packages/ax-code/test/session/revert-compact.test.ts:151-180` demonstrates the necessary cleanup contract by reloading the session after revert and then asserting that cleanup removes messages and clears the marker. The broad test inventory in `docs/module-quality-audit/modules/cli-cmd-rollback/MODULE-AUDIT.md:31-46` contains no rollback command test, while its register still says no finding is accepted at lines 60-64. This review records two High command defects, one Medium terminal-output concern, and Low resource/error-handling debt. The unit’s `findings/` directory is empty, so there is no Critical item requiring `protocol/reverify.md`.
+
+## Step 9 Focused verification and review outcome
+
+`AX_TEST_FILES=test/session/rollback.test.ts,test/session/revert-compact.test.ts pnpm exec vitest run`, executed from `packages/ax-code`, passed two files and three tests. `pnpm --dir packages/ax-code run typecheck` also passed, including the handler assertions at `packages/ax-code/src/cli/cmd/rollback.ts:126-163`. These checks confirm the existing domain primitives compile and pass their narrow coverage; they do not exercise the CLI’s broken step lookup or stale cleanup argument. The primary nine-step review is complete with High findings and no Critical finding file; `ax-code-glm` remains the independent verifier of record.

@@ -1,0 +1,29 @@
+{
+  "slug": "cli-cmd-acp",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/acp.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/network.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/bootstrap.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/acp/agent.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/feature-flags.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/acp.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-acp/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single-file yargs command module exporting AcpCommand at acp.ts:9; registered in boot.ts:61 alongside ~50 sibling commands; heavy ACP/Server/SDK imports are lazy-loaded inside the handler (acp.ts:20-23) to keep cold start cheap.",
+    "2": "Loopback-only enforcement lives in network.ts:71-80 (hard-rejects non-loopback --hostname, --cors, and any --mdns); no secrets or env values logged, only signal name and caught errors at acp.ts:33-35/94.",
+    "3": "bootstrap wraps body in Instance dispose (bootstrap.ts:4-17); stopping guard at acp.ts:28/31 is sound; defect: SIGINT/SIGTERM listeners registered at acp.ts:46-47 are only detached in finally at acp.ts:91-92, so a throw from Server.listen/createAxCodeClient/ACP.init leaks them.",
+    "4": "WritableStream/ReadableStream pair at acp.ts:53-74 adapts Node stdio to ndJsonStream; stdin data/end/error listeners attached at acp.ts:68-72 and 87-88 are not removed in the finally (acp.ts:90-96) — masked by process.exit(0) on signal path but observable on graceful stdin-EOF.",
+    "5": "Single-threaded event loop makes the boolean stopping guard at acp.ts:31 sufficient; void shutdown(...) at acp.ts:41/44 cannot produce unhandled rejection because server.stop(true).catch swallows internally (acp.ts:34-36).",
+    "6": "Thin wiring module delegates ACP semantics to ACP.init/agent.create (acp.ts:77,80) and HTTP to Server.listen/stop; the dropped AgentSideConnection return at acp.ts:79-81 is idiomatic for the SDK constructor which self-registers on the stream.",
+    "7": "No empty catches, TODOs, or commented code; the one hygiene defect is the dead --cwd yargs option (acp.ts:13-17) silently ignored because the handler calls bootstrap(process.cwd(), ...) at acp.ts:25 instead of args.cwd.",
+    "8": "Only acp.test.ts:5-10 covers this file, asserting createAxCodeClient naming via raw text read — pure rename guard; the seven test/acp/*.test.ts files exercise @/acp/agent, not this entrypoint, so the --cwd defect and shutdown path have no behavioral coverage.",
+    "9": "Three findings accepted: MEDIUM dead --cwd option (acp.ts:13-17 vs 25), LOW signal-listener leak on early failure (acp.ts:46-47 vs 91-92), LOW stdin listeners never detached (acp.ts:68-72); no Critical items so no reverify.md required."
+  },
+  "date": "2026-08-11"
+}

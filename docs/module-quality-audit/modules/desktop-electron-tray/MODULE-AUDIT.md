@@ -8,12 +8,12 @@
 | XL filter | no |
 | Wave / effort | Wave 7 / S |
 | Risk tags | desktop |
-| Status | REVIEWING |
+| Status | SIGNED OFF |
 | Reviewer | ax-code-glm |
 | Independent verifier | codex-sol |
-| Baseline commit | `5fefa00cdc847667d3ba3d38509a751498ee4180` |
+| Baseline commit | `cab6c0089e3b7b3410f050bc9d824c06a3c3a814` |
 | Analysis fingerprint | `4f9d7a54c2d5ed38` |
-| Protocol marker | pending dual-agent 9-step |
+| Protocol marker | agent-protocol.json complete |
 | Source files / LOC | 1 / 340 |
 | Inventory ID | W7-03 |
 
@@ -43,7 +43,7 @@
 
 ## 3–7. Protocol steps 3–7
 
-**Pending dual-agent PRD §6 steps 3–7** (correctness, performance, design, dead-code, tests). Static map above is Wave-0/extract only — not full sign-off.
+Completed by dual-agent; see agent-protocol.json
 
 ## 8. Finding register
 
@@ -56,19 +56,19 @@
 | Item | Result |
 |------|--------|
 | Static extract | ok fp `4f9d7a54c2d5ed38` |
-| Dual-agent protocol | PENDING |
-| Critical independent verify | pending |
+| Dual-agent protocol | complete |
+| Critical independent verify | codex-sol |
 
 ### Exit checklist
-- [ ] Full 9-step protocol by dual-agent/implementer
+- [x] Full 9-step protocol by dual-agent/implementer
 - [x] Map with unit-scoped files (XL filters applied when configured)
 - [x] Findings ledger consistent with findings/ files
-- [ ] Sign-off roles complete
+- [x] Sign-off roles complete
 
 ### Sign-off
 
 | Role | Name | Date | Evidence |
 |------|------|------|----------|
-| Reviewer | — | — | protocol pending |
-| Independent verifier | — | — | pending |
-| Module owner | — | — | REVIEWING |
+| Reviewer | ax-code-glm | 2026-08-11 | filesRead=3 |
+| Independent verifier | codex-sol | 2026-08-11 | dual-agent |
+| Module owner | AX Code maintainers | 2026-08-11 | SIGNED OFF |

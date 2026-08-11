@@ -1,0 +1,29 @@
+{
+  "slug": "cli-cmd-release",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/release/check.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/release/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/filesystem.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/package-json.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/git.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/release-check.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-release/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Identified two public surfaces in check.ts (legacy 2-check API + full runChecks runner) plus the ReleaseCommand parent in index.ts wired from boot.ts:97.",
+    "2": "Confirmed --fetch gates the only network side effect, gitWithTimeout caps all networked git at 10s with stdin ignored, and --skip ids are validated against CHECK_IDS before execution.",
+    "3": "Traced semver validity + semver.gt comparison, latestTag major-scoped fallback, withdrawn-release isPrerelease+text check, and callerCwd via AX_CODE_ORIGINAL_CWD for the launcher cwd shim.",
+    "4": "Noted every check is timed, checks run sequentially in runChecks (no parallelism), and checkPhantomImports is the heaviest path with full-file reads plus 8-candidate resolution per relative import.",
+    "5": "Found check.ts cohesive at the responsibility level but carrying four concerns in 799 lines (legacy API, nine checks, render, yargs); cmd.ts is a 7-line pass-through.",
+    "6": "Classified the two empty catches (readPackageJSON candidate walk, withdrawn-release JSON parse) as intentional and explained; no console.* calls, distinct exit codes 0/1/2.",
+    "7": "Mapped 25 tests covering both surfaces including the v2.21.2 script/ phantom regression, but found no test invokes ReleaseCheckCommand.handler directly (--json, --for-version, --no-color unverified).",
+    "8": "Re-read findings/ (empty) and MODULE-AUDIT.md ledger (_none accepted_); no Critical items exist so the reverify.md conditional artifact does not apply for this unit.",
+    "9": "Ran AX_TEST_FILES=test/cli/release-check.test.ts vitest run from packages/ax-code: 25/25 tests passed in 4.86s, exercising runChecks and the nine-check registry."
+  },
+  "date": "2026-08-11"
+}

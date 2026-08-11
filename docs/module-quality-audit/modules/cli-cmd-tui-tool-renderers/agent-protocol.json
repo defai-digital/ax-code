@@ -1,0 +1,40 @@
+{
+  "slug": "cli-cmd-tui-tool-renderers",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-renderers/basic.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-renderers/dre.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-renderers/file-edits.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-renderers/generic.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-renderers/index.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-renderers/primitives.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-renderers/session.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-renderers/task.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-rendering.ts",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/index.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/format.ts",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/view-model.ts",
+    "packages/ax-code/src/tool/refactor_plan.ts",
+    "packages/ax-code/src/tool/refactor_apply.ts",
+    "packages/ax-code/src/tool/impact_analyze.ts",
+    "packages/ax-code/src/tool/dedup_scan.ts",
+    "packages/ax-code/test/cli/tui/session-tool-rendering.test.ts",
+    "packages/ax-code/test/cli/tui/session-route-fixes.test.ts",
+    "packages/ax-code/test/cli/tui/render-anti-patterns.test.ts",
+    "docs/module-quality-audit/modules/cli-cmd-tui-tool-renderers/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Confirmed the canonical key tuple at tool-rendering.ts:1-22, its exhaustive Record in tool-renderers/index.tsx:15-36, and live Dynamic dispatch in session/index.tsx:2021-2032.",
+    "2": "Renderer text is fed by input/metadata/output; Bash and Generic strip ANSI, Task catches child-preview sync failures, and the actual refactor write permission remains in tool/refactor_apply.ts:44-66.",
+    "3": "Known names preserve their key, unknown strings select generic, and coalesced read/list/glob/grep labels plus pending/running group spinner behavior were traced through the route consumer.",
+    "4": "Reviewed permission highlighting, denial/error rendering, selection-safe clicks, full-patch diff parsing, and child-session navigation guards in primitives.tsx, file-edits.tsx, and task.tsx.",
+    "5": "Verified 500-line Bash/Write expansion caps and DRE list caps; recorded non-Critical exposure from uncapped Generic expansion and Impact's per-bucket slice with a global hidden-row label.",
+    "6": "The policy/dispatch/primitives/domain split is coherent and import direction is guarded, while basic.tsx any-casts and Task's title casts plus unused keybind/local hooks remain maintenance debt.",
+    "7": "Policy, full-diff clipping, and async rejection guards have tests; direct Solid renderer interaction, denial classification, DRE limit behavior, and error-boundary output are not component-tested.",
+    "8": "MODULE-AUDIT.md:87-92 records no accepted item and findings/ is absent; no Critical evidence exists, so this primary pass correctly omits reverify.md while documenting two lower-severity observations.",
+    "9": "Targeted Vitest verification passed 5 files and 130 tests using AX_TEST_FILES for renderer policy, route regressions, anti-patterns, formatting, and view-model behavior."
+  },
+  "date": "2026-08-11"
+}

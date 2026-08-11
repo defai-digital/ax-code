@@ -1,0 +1,19 @@
+{
+  "agentId": "ax-code-glm-cli-cmd-wiki-20260811T200310Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T20:03:10Z",
+  "finishedAt": "2026-08-11T20:14:02Z",
+  "filesRead": [
+    "packages/ax-code/src/cli/cmd/wiki.ts",
+    "packages/ax-code/src/cli/cmd/cmd.ts",
+    "packages/ax-code/src/cli/bootstrap.ts",
+    "packages/ax-code/src/wiki/index.ts",
+    "packages/ax-code/src/wiki/config.ts",
+    "packages/ax-code/src/wiki/native.ts",
+    "packages/ax-code/src/cli/boot.ts",
+    "packages/ax-code/src/util/filesystem.ts",
+    "docs/module-quality-audit/modules/cli-cmd-wiki/MODULE-AUDIT.md"
+  ],
+  "slug": "cli-cmd-wiki"
+}

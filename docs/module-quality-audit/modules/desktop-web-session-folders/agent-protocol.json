@@ -1,0 +1,30 @@
+{
+  "slug": "desktop-web-session-folders",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/session-folders/routes.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/session-folders/routes.test.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/test-helpers/route-harness.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/ax-code/feature-routes-runtime.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/ax-code/core-routes.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/magic-prompts/routes.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/web/server/lib/magic-prompts/runtime.js",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/lib/http.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/stores/useSessionFoldersStore.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/desktop-web-session-folders/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Two files only: routes.js (59 LOC, single export registerSessionFoldersRoutes at line 3) and routes.test.js (63 LOC). Registered at feature-routes-runtime.js:285-289, JSON-body whitelisted at core-routes.js:495.",
+    "2": "GET at routes.js:12 reads sessions-directories.json (filePath line 6); POST at routes.js:33 overwrites it. Outer parser express.json limit 50mb (core-routes.js:498), inner ceiling MAX_BODY_BYTES=4MB (routes.js:1,39).",
+    "3": "Atomic write uses tmp+rename with pid+Date.now()+random suffix (routes.js:46-48); failure path unlinks tmp and swallows unlink errors (52-54). Both behaviors covered by routes.test.js cases at lines 8 and 38.",
+    "4": "No write mutex here, unlike magic-prompts/runtime.js:38 writeLock chain. Atomic rename prevents corruption but overlapping POSTs are last-writer-wins; client-side 250ms debounce (useSessionFoldersStore.ts:45) mitigates in practice.",
+    "5": "GET has three branches (routes.js:12-31): ENOENT->default, JSON.parse throw->default, other->500. Missing branch: parsed-but-wrong-shape (e.g. []) is returned verbatim at line 23 with no schema guard.",
+    "6": "POST body validated only as non-array object (routes.js:35); persisted verbatim. Error responses at lines 28 and 55 echo raw FS error.message including paths. Acceptable for localhost desktop, LOW severity.",
+    "7": "Tight single-purpose cohesion; dependency-injected fsPromises/path/openchamberDataDir (line 4) makes the vi.fn mocks in routes.test.js:11-18 possible. No runtime.js needed since server does full-state replace, not read-modify-write.",
+    "8": "Coverage gap is the main actionable item: GET handler has zero tests; 400 (line 35-37) and 413 (line 39-41) POST branches untested; success response shape (line 50) untested. Existing harness route-harness.js supports adding these cheaply.",
+    "9": "No Critical findings. Accepted: MEDIUM test-coverage gap (Step 8), LOW no-schema-on-body/get, LOW error-message leak. Atomic-write design is sound; module acceptable for desktop local-server use pending codex-sol independent confirmation."
+  },
+  "date": "2026-08-11"
+}

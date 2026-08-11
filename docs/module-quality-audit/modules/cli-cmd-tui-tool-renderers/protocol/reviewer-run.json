@@ -1,0 +1,30 @@
+{
+  "agentId": "codex-sol-cli-cmd-tui-tool-renderers-20260811T200009Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T20:00:09Z",
+  "finishedAt": "2026-08-11T20:04:53Z",
+  "filesRead": [
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-renderers/basic.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-renderers/dre.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-renderers/file-edits.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-renderers/generic.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-renderers/index.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-renderers/primitives.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-renderers/session.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-renderers/task.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/tool-rendering.ts",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/index.tsx",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/format.ts",
+    "packages/ax-code/src/cli/cmd/tui/routes/session/view-model.ts",
+    "packages/ax-code/src/tool/refactor_plan.ts",
+    "packages/ax-code/src/tool/refactor_apply.ts",
+    "packages/ax-code/src/tool/impact_analyze.ts",
+    "packages/ax-code/src/tool/dedup_scan.ts",
+    "packages/ax-code/test/cli/tui/session-tool-rendering.test.ts",
+    "packages/ax-code/test/cli/tui/session-route-fixes.test.ts",
+    "packages/ax-code/test/cli/tui/render-anti-patterns.test.ts",
+    "docs/module-quality-audit/modules/cli-cmd-tui-tool-renderers/MODULE-AUDIT.md"
+  ],
+  "slug": "cli-cmd-tui-tool-renderers"
+}

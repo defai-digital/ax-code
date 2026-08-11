@@ -1,0 +1,32 @@
+{
+  "slug": "cli-cmd-graph",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/AGENTS.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/graph.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/session-latest.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/graph/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/graph/format.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/graph.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/graph/execution-graph.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/smoke.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-graph/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "GraphCommand is the unit's sole export at graph.ts:9, declares graph [sessionID] at line 10, and is registered by cli/boot.ts:23 and :92.",
+    "2": "The handler only writes stdout, but event-derived tool targets and error labels flow through graph/index.ts:202-215 and :276-285 into unsanitized text renderers; recorded local data is therefore the terminal-output trust boundary.",
+    "3": "Session lookup is scoped by Instance.provide and shared session-latest helpers; the count===0 return at graph.ts:40-44 is a real format-contract bug because --json emits plain text instead of the empty graph supported by graph/index.ts:117-132.",
+    "4": "All six non-empty yargs choices reach a matching formatter branch at graph.ts:49-72, --json wins at line 47, and array-returning timeline/topology/ascii outputs are joined consistently.",
+    "5": "EventQuery.count uses COUNT(*) at query.ts:227-238 before build performs the timestamped row load, adding a second query; the 10,000-row cap bounds memory but can make CLI output partial with only a log warning.",
+    "6": "The command preserves one-way layering by delegating context, lookup, graph derivation, and rendering; server/routes/graph.ts:74-85 reuses the same GraphFormat surface.",
+    "7": "All imports and the sole export are live, with no swallowed failures or deferred-work markers; the one-assignment let at graph.ts:32-38 and string cast at :47 are minor readability issues only.",
+    "8": "execution-graph.test.ts covers four builder scenarios and passed 4/4, but no test invokes GraphCommand; smoke.test.ts:268-286 names graph commands while testing only rollback, compare, and branch.",
+    "9": "Accepted one Medium zero-event format violation plus Low terminal-safety and long-session completeness advisories; no Critical item exists, so the conditional reverify.md is not produced."
+  },
+  "date": "2026-08-11"
+}

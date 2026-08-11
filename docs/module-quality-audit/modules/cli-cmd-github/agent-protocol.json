@@ -1,0 +1,28 @@
+{
+  "slug": "cli-cmd-github",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/github.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/github-agent/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/github-agent/types.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/github-agent/run.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/pr.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/boot.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-github/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Unit root is a 1-line selective barrel at github.ts:1 re-exporting 4 of the many symbols in github-agent/index.ts; real logic lives in github-agent/{index,types,run,install,pr,...}.",
+    "2": "Barrel is a pure static re-export with no I/O, process spawn, env read, or secret touch; richer threat surface is in github-agent/* and out of scope for this unit.",
+    "3": "All four bindings resolve: GithubCommand->index.ts:15, parseGitHubRemote->types.ts:157, extractResponseText->types.ts:163, formatPromptTooLargeError->types.ts:170; boot.ts:22 is the only production consumer (of GithubCommand).",
+    "4": "boot.ts:22 statically imports GithubCommand, eagerly loading the full github-agent graph at CLI startup, unlike sibling pr.ts:13 which lazy-imports via await import(); minor asymmetry, LOW.",
+    "5": "Barrel is intentionally narrow (omits format fns, checkTruncation, constants, types) but import discipline is inconsistent: github-agent-run-context.test.ts:8 bypasses the barrel while two other tests use it.",
+    "6": "No dead code, TODO, FIXME, or empty catch in the 1-LOC file; formatting matches semi:false Prettier config; no hygiene action.",
+    "7": "parseGitHubRemote has 30+ assertions in github-remote.test.ts:5-79; extractResponseText and formatPromptTooLargeError covered in github-action.test.ts:82-191; GithubCommand yargs wiring has no direct unit test (indirect via boot/e2e).",
+    "8": "No Critical/High findings; two LOW informational notes (eager load, selective-barrel discipline); MODULE-AUDIT 'none accepted' register upheld.",
+    "9": "Importer graph confirmed via ripgrep over src and test; recommended gates are pnpm typecheck (tsgo) and test:unit for github-remote/github-action; no Critical items so no reverify.md cross-lane confirmation needed."
+  },
+  "date": "2026-08-11"
+}

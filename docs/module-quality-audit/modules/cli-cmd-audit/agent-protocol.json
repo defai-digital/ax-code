@@ -1,0 +1,31 @@
+{
+  "slug": "cli-cmd-audit",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/audit.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/cmd/cmd.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/cli/bootstrap.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/audit/export.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/audit/json.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/audit/report.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/risk/score.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/schema.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/audit.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/cli-cmd-audit/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Unit is a single 209-LOC file: audit.ts:11/57/131/168 define prune/export/report/otlp, registered under AuditCommand at audit.ts:198. cmd.ts:5 is an identity wrapper; no other files live under src/cli/cmd/audit/.",
+    "2": "Sensitive asset is the audit record stream produced by AuditExport/EventQuery, not by this file. .ax-code/policy.json read is gated by errno narrowing in export.ts:163-167. --output (audit.ts:158) overwrites without --force or atomic rename.",
+    "3": "validateAuditPruneDays (audit.ts:39-45) and parseAuditExportSince (audit.ts:47-55) are correct. Material issue: process.exit(1) at audit.ts:125/153/183/188 outruns the Instance.dispose() finally in bootstrap.ts:13. Also, export <bogusID> exits 0 (audit.ts:84-90) while report/otlp exit 1 on count===0.",
+    "4": "Risk-filter branch amortizes Risk.fromSession via the sessionRisks Map (audit.ts:102) and pushes --since into SQL via EventQuery.allSince (query.ts:264). 500-row cursor pagination bounds memory (query.ts:13). Hot-loop process.stdout.write ignores backpressure (audit.ts:89/106/115/120/161).",
+    "5": "Three concerns in one file (coercion, yargs assembly, runtime orchestration). Only one caller of the inline --risk filter, so extraction is not yet warranted. as any cast at audit.ts:112 sidesteps the SessionID brand from schema.ts:3; the export <sessionID> branch already uses SessionID.make at audit.ts:85.",
+    "6": "No empty catches, no TODOs, no unused imports. AuditReport/Risk/Telemetry are intentionally lazy await import(...) to keep non-exporting commands cheap. Only smell is the inline days*24*60*60*1000 at audit.ts:28. No import cycle back into cli/cmd/audit.ts.",
+    "7": "audit.test.ts (25 lines) covers only the two pure validators. All four yargs handlers and all four process.exit(1) branches are uncovered. Root cause: bootstrap(process.cwd(), ...) at audit.ts:26/82/147/178 blocks unit testing without per-PID XDG isolation; a runHandler(opts, directory) seam would unlock coverage.",
+    "8": "Five findings, none Critical/High: F1 [MEDIUM] lifecycle bypass via process.exit vs Instance.dispose; F2 [LOW] inconsistent empty-session exit code; F3 [LOW] as-any SessionID cast; F4 [LOW] stdout backpressure ignored; F5 [LOW] handler test gap. MODULE-AUDIT.md ledger currently lists _none accepted_ and needs the five rows added.",
+    "9": "Verification surface for the unit: pnpm --dir packages/ax-code run typecheck, AX_TEST_FILES=test/cli/audit.test.ts vitest run, and pnpm run test:scripts. No code was modified in this pass, so no native rebuild is needed. F1 is the only gate-worthy item for the codex-sol verifier to confirm against bootstrap.ts:9-14."
+  },
+  "date": "2026-08-11"
+}

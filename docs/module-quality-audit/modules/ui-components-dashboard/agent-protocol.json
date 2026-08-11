@@ -1,0 +1,25 @@
+{
+  "slug": "ui-components-dashboard",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/dashboard/DashboardPanel.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/dashboard/SessionPulse.tsx",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/dashboard/sessionPulseModel.test.ts",
+    "/Users/akiralam/code/ax-code/desktop/packages/ui/src/components/dashboard/sessionPulseModel.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/ui-components-dashboard/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Scoped four files under desktop/packages/ui/src/components/dashboard; DashboardPanel.tsx is an iframe host, SessionPulse.tsx + sessionPulseModel.ts split presentation from a pure view-model.",
+    "2": "Two trust boundaries: the same-origin iframe sandbox at DashboardPanel.tsx:115-121 pairs allow-same-origin with allow-scripts intentionally for first-party dashboard content, and buildSessionPulseModel narrows every payload field through asRecord/asString/asNumber guards.",
+    "3": "Traced buildSessionPulseModel control flow; the change cap of 12 rows at sessionPulseModel.ts:120 plus authoritative semantic.additions at :138 means the total can exceed the visible-row sum by design — noted as UX subtlety, not a defect.",
+    "4": "No hot-path concerns: DashboardPanel memoizes origin/session/url with dependency-tracked useMemo, and SessionPulse runs only O(1) format helpers plus a single bounded pass over a 12-row changes list.",
+    "5": "Layering is clean: sessionPulseModel.ts imports no React and is unit-testable without a DOM, while both .tsx files stay purely presentational; the needs_validation/needs_review CSS overlap at SessionPulse.tsx:27-37 is intentional warning-tier sharing.",
+    "6": "No dead code found — every helper (MetaChip, Section, ChangeRow, riskDotClass) and every export of sessionPulseModel.ts is referenced; zero empty catches and zero TODOs across all four files.",
+    "7": "Model suite pins the tricky format boundaries (119500/119999/120000 -> 2m 0s, 999499 -> 999k, 999500 -> 1.0m); gaps are the failed validation branch, blocked/needs_review readiness, the additions-fallback sum, and the n===10000 token boundary.",
+    "8": "No accepted findings — sandbox composition, total-vs-visible addition behavior, shared warning styling, and test-coverage gaps are intentional design or non-blocking notes, so findings/ stays empty.",
+    "9": "All file:line references resolve to opened files; no Critical items exist so no reverify.md is required; recommended follow-up checks are `pnpm --dir desktop exec vitest run src/components/dashboard` and `pnpm run desktop:typecheck`, not run here since no code changed."
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "slug": "desktop-web-projects",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "desktop/packages/web/server/lib/projects/discover-external.js",
+    "desktop/packages/web/server/lib/projects/discover-external.test.js",
+    "desktop/packages/web/server/lib/projects/project-config.js",
+    "desktop/packages/web/server/lib/projects/project-config.test.js",
+    "desktop/packages/web/server/lib/projects/project-id.js",
+    "desktop/packages/web/server/lib/ax-code/feature-routes-runtime.js",
+    "desktop/packages/web/server/lib/ax-code/routes.js",
+    "desktop/packages/web/server/lib/ax-code/settings-runtime.js",
+    "desktop/packages/web/server/lib/ax-code/settings-normalization-runtime.js",
+    "desktop/packages/web/server/lib/scheduled-tasks/routes.js",
+    "desktop/packages/web/server/index.js",
+    "desktop/packages/web/package.json",
+    "desktop/packages/ui/src/lib/projectId.ts",
+    "desktop/packages/ui/src/lib/projectId.test.ts",
+    "desktop/packages/ui/src/lib/projectResolution.ts",
+    "desktop/packages/ui/src/lib/openchamberConfig.ts",
+    "desktop/packages/ui/src/lib/persistence.ts",
+    "desktop/packages/ui/src/stores/useProjectsStore.ts",
+    "docs/module-quality-audit/modules/desktop-web-projects/MODULE-AUDIT.md",
+    "docs/module-quality-audit/modules/desktop-web-projects/findings/AUDIT-desktop-web-projects-empty-catch.md"
+  ],
+  "stepNotes": {
+    "1": "Three production surfaces were traced: external registry discovery and its Express route, scheduled-task JSON normalization/persistence, and deterministic project-ID creation; feature-routes-runtime.js and server/index.js establish their live composition points.",
+    "2": "Local agent registries supply absolute paths and metadata, while project JSON stores prompts, schedules, provider/model choices, and execution state; absolute-path checks and the project-ID filename allowlist bound the two filesystem-facing trust edges.",
+    "3": "Schedule/date/timezone/task invariants are enforced, but the 240-character Codex trust scan crosses section boundaries and the server project-ID helper does not canonicalize Windows drive case like the UI helper, producing reproducible identity drift.",
+    "4": "Promise-chain locks serialize each project's mutations and temp-file rename supplies atomic replacement; discovery remains linearly latency-bound because every candidate stat is awaited serially, acceptable for small interactive registries.",
+    "5": "Registry parsing, route adaptation, config normalization, and scheduled execution have sensible ownership, while duplicate server/UI implementations of path identity are a concrete design seam whose normalization contracts have diverged.",
+    "6": "The empty catch at project-config.js:352 silently removes invalid persisted tasks from reads and a later write can make that removal permanent; JSON, cron, ENOENT, and registry-read catches elsewhere have explicit sentinel or propagation behavior.",
+    "7": "Focused Vitest execution passed 2 files and 13 tests; coverage is strong for persistence, merging, sorting, bounds, cron, timestamps, and once schedules but absent for project-id.js, section-bounded TOML trust, invalid-task preservation, and concurrent mutations.",
+    "8": "The existing Low deferred empty-catch finding was confirmed; this pass additionally records a Medium candidate for cross-platform ID drift and a Low trust-metadata parsing defect, with no Critical item requiring reverify.md.",
+    "9": "The authoritative web-package Vitest command completed successfully, manual read-only probes reproduced the two new observations, and the review closed without changing production code, the existing ledger, or another audit unit."
+  },
+  "date": "2026-08-11"
+}
