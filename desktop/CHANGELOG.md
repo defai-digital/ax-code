@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.5.0] - 2026-08-11
+
+### Added
+
+- Desktop: adds a Work | Code surface switch, a task-focused Work home, and a project home with pinning, recency, and Codex/Kimi workspace import.
+- Providers: adds native DeepSeek and Meta Muse Spark cloud integrations, including setup discovery and reasoning variants.
+- Distribution: adds Ubuntu 24.04+ CLI and Desktop releases for amd64 and arm64, with `.deb`, AppImage, and node-bundled archive install paths.
+
+### Changed
+
+- AX Engine: speeds local response-only inference, improves model download progress and recovery, and applies accurate full-agent context-budget checks before selection.
+- Security: updates Hono and dependency override floors for current upstream advisories.
+- Release: minisigns every downloadable asset, Apple Developer ID-signs and notarizes macOS builds, and Authenticode-signs Windows Desktop installers for x64 and ARM64 as DEFAI Private Limited.
+
+### Fixed
+
+- Sessions: serializes forced part writes, keeps text-only preflight estimates aligned with requests, forces a final response after completed goals, and surfaces recoverable network pauses.
+- TUI and tools: preserves model selection during discovery, coalesces high-frequency stream updates, gates thinking state on live activity, and prevents duplicate LSP prewarm work.
+- Reliability: hardens local AX Engine tool loops, download parsing, provider invalidation, arena eligibility, CLI stream-idle handling, Desktop endpoint contracts, and release validation.
+
 ## [7.4.1] - 2026-07-29
 
 ### Added

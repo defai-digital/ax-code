@@ -46317,7 +46317,8 @@
         "limit": {
           "context": 256000,
           "output": 64000
-        }
+        },
+        "status": "deprecated"
       },
       "longcat-2.0-free": {
         "id": "longcat-2.0-free",
@@ -99622,7 +99623,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 272000,
+          "context": 1050000,
+          "input": 922000,
           "output": 128000
         },
         "provider": {
@@ -99982,7 +99984,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 272000,
+          "context": 1050000,
+          "input": 922000,
           "output": 128000
         },
         "provider": {
@@ -100479,7 +100482,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 272000,
+          "context": 1050000,
+          "input": 922000,
           "output": 128000
         },
         "provider": {
@@ -107987,6 +107991,42 @@
           "output": 128000
         }
       },
+      "sakana/sakana-namazu": {
+        "id": "sakana/sakana-namazu",
+        "name": "Sakana: Sakana Namazu",
+        "description": "Sakana Namazu is a Japanese-specialized reasoning model from Sakana AI, based on Kimi K2.6 with additional training for Japanese language and business contexts. It is suited for Japanese instruction following,...",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "release_date": "2026-08-11",
+        "last_updated": "2026-08-11",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 262144,
+          "output": 65536
+        }
+      },
       "~google/gemini-flash-latest": {
         "id": "~google/gemini-flash-latest",
         "name": "Google Gemini Flash Latest",
@@ -108524,8 +108564,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "output": 32768
+          "context": 262144,
+          "output": 262144
         }
       },
       "qwen/qwen3.5-9b": {
@@ -109280,7 +109320,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 65536
+          "output": 262144
         }
       },
       "qwen/qwen-2.5-coder-32b-instruct": {
@@ -110181,6 +110221,41 @@
           "output": 131072
         }
       },
+      "upstage/solar-pro4": {
+        "id": "upstage/solar-pro4",
+        "name": "Upstage: Solar Pro 4",
+        "description": "Solar Pro 4 is a large language model from Upstage. It is suited for agentic workflows, office productivity, document-intensive work, and coding.",
+        "family": "solar",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-10",
+        "last_updated": "2026-08-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 524288,
+          "output": 131072
+        }
+      },
       "mistralai/mistral-large": {
         "id": "mistralai/mistral-large",
         "name": "Mistral Large",
@@ -110912,6 +110987,45 @@
         "limit": {
           "context": 6144,
           "output": 6144
+        }
+      },
+      "meta/muse-glimmer-30b": {
+        "id": "meta/muse-glimmer-30b",
+        "name": "Meta: Muse Glimmer 30B",
+        "description": "Muse Glimmer 30B is a dense, open-weight multimodal model from Meta Superintelligence Labs, distilled from Muse Spark and optimized for autonomous agents on consumer hardware. It is suited for long-horizon...",
+        "family": "muse",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-09",
+        "last_updated": "2026-08-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 131072,
+          "output": 131072
         }
       },
       "meta/muse-spark-1.1": {
@@ -112105,7 +112219,7 @@
         "open_weights": true,
         "limit": {
           "context": 1048576,
-          "output": 384000
+          "output": 393216
         }
       },
       "deepseek/deepseek-r1-0528": {
@@ -113905,8 +114019,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1048576,
-          "output": 131072
+          "context": 262144,
+          "output": 262144
         }
       },
       "perplexity/sonar-pro-search": {
@@ -116269,7 +116383,7 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 1048576,
+          "context": 128000,
           "output": 16384
         }
       },
@@ -125518,6 +125632,45 @@
         "limit": {
           "context": 512,
           "output": 0
+        }
+      },
+      "meta/muse-glimmer-30b": {
+        "id": "meta/muse-glimmer-30b",
+        "name": "Muse Glimmer 30B",
+        "description": "Muse Glimmer is a 30-billion-parameter open-weight multimodal model from Meta Superintelligence Labs, distilled from Muse Spark for always-on local agents, tool use, coding, and image understanding.",
+        "family": "muse",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-01-04",
+        "release_date": "2026-08-10",
+        "last_updated": "2026-08-10",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 131072
         }
       },
       "meta/muse-spark-1.1": {

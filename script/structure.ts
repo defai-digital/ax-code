@@ -70,6 +70,7 @@ const keep = [
   ".github",
   ".husky",
   ...INTERNAL_ONLY_ROOTS,
+  ".local",
   ".pnpm-store",
   ".qoder",
   ".ruff_cache",
