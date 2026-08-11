@@ -1,0 +1,2557 @@
+{
+  "signed": 255,
+  "denominator": 255,
+  "findingsFixed": 9,
+  "unitResults": [
+    {
+      "id": "W1-01",
+      "slug": "auth",
+      "wave": 1,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W1-02",
+      "slug": "account",
+      "wave": 1,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 4
+    },
+    {
+      "id": "W1-03",
+      "slug": "config",
+      "wave": 1,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 11
+    },
+    {
+      "id": "W1-04",
+      "slug": "hooks",
+      "wave": 1,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 1,
+      "files": 1
+    },
+    {
+      "id": "W1-05",
+      "slug": "env",
+      "wave": 1,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W1-06",
+      "slug": "plugin",
+      "wave": 1,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W1-07",
+      "slug": "audit",
+      "wave": 1,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 8
+    },
+    {
+      "id": "W1-08",
+      "slug": "risk",
+      "wave": 1,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W1-09",
+      "slug": "control-plane",
+      "wave": 1,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 17
+    },
+    {
+      "id": "W1-10",
+      "slug": "installation",
+      "wave": 1,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W1-11",
+      "slug": "desktop-bridge",
+      "wave": 1,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W1-12",
+      "slug": "desktop-electron-security",
+      "wave": 1,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 48
+    },
+    {
+      "id": "W1-13",
+      "slug": "desktop-electron-ipc",
+      "wave": 1,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 1,
+      "files": 48
+    },
+    {
+      "id": "W1-14",
+      "slug": "desktop-electron-preload",
+      "wave": 1,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W1-15",
+      "slug": "desktop-web-security",
+      "wave": 1,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 9
+    },
+    {
+      "id": "W1-16",
+      "slug": "desktop-web-ui-auth",
+      "wave": 1,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 4
+    },
+    {
+      "id": "W2-01a",
+      "slug": "session-prompt-processor",
+      "wave": 2,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 1,
+      "files": 135
+    },
+    {
+      "id": "W2-01b",
+      "slug": "session-messages-parts",
+      "wave": 2,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 135
+    },
+    {
+      "id": "W2-01c",
+      "slug": "session-compaction",
+      "wave": 2,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 135
+    },
+    {
+      "id": "W2-01d",
+      "slug": "session-lifecycle-queue",
+      "wave": 2,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 135
+    },
+    {
+      "id": "W2-01e",
+      "slug": "session-fork-revert",
+      "wave": 2,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 135
+    },
+    {
+      "id": "W2-02",
+      "slug": "runtime",
+      "wave": 2,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 19
+    },
+    {
+      "id": "W2-03",
+      "slug": "runtime-headless",
+      "wave": 2,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 11
+    },
+    {
+      "id": "W2-04",
+      "slug": "agent",
+      "wave": 2,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W2-05",
+      "slug": "planner",
+      "wave": 2,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 10
+    },
+    {
+      "id": "W2-06",
+      "slug": "dispatch",
+      "wave": 2,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W2-07",
+      "slug": "workflow",
+      "wave": 2,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 20
+    },
+    {
+      "id": "W2-08",
+      "slug": "context",
+      "wave": 2,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 4
+    },
+    {
+      "id": "W2-09",
+      "slug": "prompt-history",
+      "wave": 2,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 3
+    },
+    {
+      "id": "W2-10",
+      "slug": "memory",
+      "wave": 2,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 11
+    },
+    {
+      "id": "W2-11",
+      "slug": "replay",
+      "wave": 2,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 9
+    },
+    {
+      "id": "W2-12",
+      "slug": "snapshot",
+      "wave": 2,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W2-13",
+      "slug": "bus",
+      "wave": 2,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 3
+    },
+    {
+      "id": "W3-01",
+      "slug": "permission",
+      "wave": 3,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 1,
+      "files": 5
+    },
+    {
+      "id": "W3-02",
+      "slug": "isolation",
+      "wave": 3,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W3-03a",
+      "slug": "tool-mutation",
+      "wave": 3,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 78
+    },
+    {
+      "id": "W3-03b",
+      "slug": "tool-execution",
+      "wave": 3,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 1,
+      "files": 78
+    },
+    {
+      "id": "W3-03c",
+      "slug": "tool-network",
+      "wave": 3,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 78
+    },
+    {
+      "id": "W3-03d",
+      "slug": "tool-orchestration",
+      "wave": 3,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 78
+    },
+    {
+      "id": "W3-03e",
+      "slug": "tool-readonly",
+      "wave": 3,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 78
+    },
+    {
+      "id": "W3-04",
+      "slug": "shell",
+      "wave": 3,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W3-05",
+      "slug": "pty",
+      "wave": 3,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W3-06",
+      "slug": "file",
+      "wave": 3,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 8
+    },
+    {
+      "id": "W3-07",
+      "slug": "patch",
+      "wave": 3,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W3-08",
+      "slug": "worktree",
+      "wave": 3,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W3-09",
+      "slug": "command",
+      "wave": 3,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W3-10",
+      "slug": "question",
+      "wave": 3,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 4
+    },
+    {
+      "id": "W3-11",
+      "slug": "bun",
+      "wave": 3,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 5
+    },
+    {
+      "id": "W3-12",
+      "slug": "native",
+      "wave": 3,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W3-13",
+      "slug": "image",
+      "wave": 3,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W3-14",
+      "slug": "import",
+      "wave": 3,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-01",
+      "slug": "storage",
+      "wave": 4,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 1,
+      "files": 8
+    },
+    {
+      "id": "W4-02",
+      "slug": "server",
+      "wave": 4,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 50
+    },
+    {
+      "id": "W4-03-01",
+      "slug": "server-routes-app-context-checks",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-02",
+      "slug": "server-routes-app-context-schema",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-03",
+      "slug": "server-routes-app-context-templates",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-04",
+      "slug": "server-routes-app-context",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-05",
+      "slug": "server-routes-app",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-06",
+      "slug": "server-routes-audit",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-07",
+      "slug": "server-routes-autonomous",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-08",
+      "slug": "server-routes-config",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-09",
+      "slug": "server-routes-dre-graph",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-10",
+      "slug": "server-routes-event",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-11",
+      "slug": "server-routes-experimental",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-12",
+      "slug": "server-routes-file",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-13",
+      "slug": "server-routes-global",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-14",
+      "slug": "server-routes-graph",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-15",
+      "slug": "server-routes-isolation",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-16",
+      "slug": "server-routes-mcp",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-17",
+      "slug": "server-routes-permission",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-18",
+      "slug": "server-routes-project-config",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-19",
+      "slug": "server-routes-project",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-20",
+      "slug": "server-routes-prompt-history",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-21",
+      "slug": "server-routes-provider",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-22",
+      "slug": "server-routes-pty",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-23",
+      "slug": "server-routes-query",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-24",
+      "slug": "server-routes-question",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-25",
+      "slug": "server-routes-route-params",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-26",
+      "slug": "server-routes-runtime-status",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-27",
+      "slug": "server-routes-scheduled-task",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-28",
+      "slug": "server-routes-session-impl",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-29",
+      "slug": "server-routes-session-lookup",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-30",
+      "slug": "server-routes-session",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-31",
+      "slug": "server-routes-skill",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-32",
+      "slug": "server-routes-smart-llm",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-33",
+      "slug": "server-routes-super-long",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-34",
+      "slug": "server-routes-task-queue",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-35",
+      "slug": "server-routes-tui",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-03-36",
+      "slug": "server-routes-workflow",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-04",
+      "slug": "project",
+      "wave": 4,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 8
+    },
+    {
+      "id": "W4-05",
+      "slug": "id",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W4-06",
+      "slug": "global",
+      "wave": 4,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-07",
+      "slug": "share",
+      "wave": 4,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-08",
+      "slug": "stats",
+      "wave": 4,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 3
+    },
+    {
+      "id": "W4-09",
+      "slug": "telemetry",
+      "wave": 4,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W4-10",
+      "slug": "notification",
+      "wave": 4,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W4-11",
+      "slug": "sdk",
+      "wave": 4,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W5-01a",
+      "slug": "provider-registry",
+      "wave": 5,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 53
+    },
+    {
+      "id": "W5-01b",
+      "slug": "provider-stream",
+      "wave": 5,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 53
+    },
+    {
+      "id": "W5-01c",
+      "slug": "provider-auth-caps",
+      "wave": 5,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 53
+    },
+    {
+      "id": "W5-01d",
+      "slug": "provider-retry-errors",
+      "wave": 5,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 53
+    },
+    {
+      "id": "W5-01e",
+      "slug": "provider-models-data",
+      "wave": 5,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 53
+    },
+    {
+      "id": "W5-02",
+      "slug": "provider-ax-engine",
+      "wave": 5,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 20
+    },
+    {
+      "id": "W5-03",
+      "slug": "provider-cli",
+      "wave": 5,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 1,
+      "files": 10
+    },
+    {
+      "id": "W5-04",
+      "slug": "provider-xai",
+      "wave": 5,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W5-05a",
+      "slug": "mcp-lifecycle",
+      "wave": 5,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 11
+    },
+    {
+      "id": "W5-05b",
+      "slug": "mcp-oauth-trust",
+      "wave": 5,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 11
+    },
+    {
+      "id": "W5-05c",
+      "slug": "mcp-tools",
+      "wave": 5,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 11
+    },
+    {
+      "id": "W5-05d",
+      "slug": "mcp-discovery",
+      "wave": 5,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 11
+    },
+    {
+      "id": "W5-06",
+      "slug": "lsp",
+      "wave": 5,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 34
+    },
+    {
+      "id": "W5-07",
+      "slug": "code-intelligence",
+      "wave": 5,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 12
+    },
+    {
+      "id": "W5-08",
+      "slug": "graph",
+      "wave": 5,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W5-09",
+      "slug": "capability",
+      "wave": 5,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W5-10",
+      "slug": "acp",
+      "wave": 5,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 8
+    },
+    {
+      "id": "W5-11",
+      "slug": "ide",
+      "wave": 5,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W5-12",
+      "slug": "skill",
+      "wave": 5,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 4
+    },
+    {
+      "id": "W5-13",
+      "slug": "mode",
+      "wave": 5,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 15
+    },
+    {
+      "id": "W5-14",
+      "slug": "quality",
+      "wave": 5,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 95
+    },
+    {
+      "id": "W5-15",
+      "slug": "design-check",
+      "wave": 5,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 8
+    },
+    {
+      "id": "W5-16",
+      "slug": "debug-engine",
+      "wave": 5,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 23
+    },
+    {
+      "id": "W5-17",
+      "slug": "debug",
+      "wave": 5,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W5-18",
+      "slug": "perf",
+      "wave": 5,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W5-19",
+      "slug": "wiki",
+      "wave": 5,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 3
+    },
+    {
+      "id": "W6-00",
+      "slug": "cli-parent",
+      "wave": 6,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 364
+    },
+    {
+      "id": "W6-01",
+      "slug": "cli-cmd-registry",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-02",
+      "slug": "cli-cmd-session",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-03",
+      "slug": "cli-cmd-run",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-04",
+      "slug": "cli-cmd-headless-run",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-05",
+      "slug": "cli-cmd-serve",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-06",
+      "slug": "cli-cmd-workspace-serve",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-07",
+      "slug": "cli-cmd-runtime",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 3
+    },
+    {
+      "id": "W6-08a",
+      "slug": "cli-cmd-tui-boot",
+      "wave": 6,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-08b",
+      "slug": "cli-cmd-tui-session-route",
+      "wave": 6,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-08c",
+      "slug": "cli-cmd-tui-tool-renderers",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-09",
+      "slug": "cli-cmd-mcp",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-10",
+      "slug": "cli-cmd-providers",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-11",
+      "slug": "cli-cmd-models",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-12",
+      "slug": "cli-cmd-skill",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-13",
+      "slug": "cli-cmd-workflow",
+      "wave": 6,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-14",
+      "slug": "cli-cmd-doctor",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-15",
+      "slug": "cli-cmd-github-agent",
+      "wave": 6,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 8
+    },
+    {
+      "id": "W6-16",
+      "slug": "cli-cmd-storage",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 5
+    },
+    {
+      "id": "W6-17",
+      "slug": "cli-cmd-debug",
+      "wave": 6,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 13
+    },
+    {
+      "id": "W6-18",
+      "slug": "cli-cmd-release",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W6-19",
+      "slug": "cli-cmd-webui",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-20",
+      "slug": "cli-cmd-wiki",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-21",
+      "slug": "cli-cmd-pr",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-22",
+      "slug": "cli-cmd-export",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-23",
+      "slug": "cli-cmd-import",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-24",
+      "slug": "cli-cmd-upgrade",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-25",
+      "slug": "cli-cmd-account",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-26",
+      "slug": "cli-cmd-acp",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-27",
+      "slug": "cli-cmd-agent",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-28",
+      "slug": "cli-cmd-audit",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-29",
+      "slug": "cli-cmd-branch",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-30",
+      "slug": "cli-cmd-capability",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-31",
+      "slug": "cli-cmd-compare",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-32",
+      "slug": "cli-cmd-context",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-33",
+      "slug": "cli-cmd-db",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-34",
+      "slug": "cli-cmd-design-check",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-35",
+      "slug": "cli-cmd-dre-graph",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-36",
+      "slug": "cli-cmd-generate",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-37",
+      "slug": "cli-cmd-github",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-38",
+      "slug": "cli-cmd-graph",
+      "wave": 6,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-39",
+      "slug": "cli-cmd-index-graph",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-40",
+      "slug": "cli-cmd-init",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-41",
+      "slug": "cli-cmd-memory",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-42",
+      "slug": "cli-cmd-replay",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-43",
+      "slug": "cli-cmd-restart",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-44",
+      "slug": "cli-cmd-risk",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-45",
+      "slug": "cli-cmd-rollback",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-46",
+      "slug": "cli-cmd-stats",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-47",
+      "slug": "cli-cmd-trace",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W6-48",
+      "slug": "cli-cmd-uninstall",
+      "wave": 6,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 0
+    },
+    {
+      "id": "W7-01",
+      "slug": "desktop-electron-shell",
+      "wave": 7,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 48
+    },
+    {
+      "id": "W7-02",
+      "slug": "desktop-electron-server-process",
+      "wave": 7,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W7-03",
+      "slug": "desktop-electron-tray",
+      "wave": 7,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W7-04",
+      "slug": "desktop-electron-updates",
+      "wave": 7,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 48
+    },
+    {
+      "id": "W7-05",
+      "slug": "desktop-web-server",
+      "wave": 7,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 228
+    },
+    {
+      "id": "W7-06",
+      "slug": "desktop-web-ax-code",
+      "wave": 7,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 84
+    },
+    {
+      "id": "W7-07",
+      "slug": "desktop-web-desktop",
+      "wave": 7,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W7-08",
+      "slug": "desktop-web-event-stream",
+      "wave": 7,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 14
+    },
+    {
+      "id": "W7-09",
+      "slug": "desktop-web-fs",
+      "wave": 7,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 3
+    },
+    {
+      "id": "W7-10",
+      "slug": "desktop-web-git",
+      "wave": 7,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 9
+    },
+    {
+      "id": "W7-11",
+      "slug": "desktop-web-github",
+      "wave": 7,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 10
+    },
+    {
+      "id": "W7-12",
+      "slug": "desktop-web-magic-prompts",
+      "wave": 7,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 3
+    },
+    {
+      "id": "W7-13",
+      "slug": "desktop-web-notifications",
+      "wave": 7,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 11
+    },
+    {
+      "id": "W7-14",
+      "slug": "desktop-web-preview",
+      "wave": 7,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W7-15",
+      "slug": "desktop-web-projects",
+      "wave": 7,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 5
+    },
+    {
+      "id": "W7-16",
+      "slug": "desktop-web-quota",
+      "wave": 7,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 27
+    },
+    {
+      "id": "W7-17",
+      "slug": "desktop-web-scheduled-tasks",
+      "wave": 7,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 5
+    },
+    {
+      "id": "W7-18",
+      "slug": "desktop-web-session-folders",
+      "wave": 7,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W7-19",
+      "slug": "desktop-web-skills-catalog",
+      "wave": 7,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 18
+    },
+    {
+      "id": "W7-20",
+      "slug": "desktop-web-terminal",
+      "wave": 7,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 1,
+      "files": 9
+    },
+    {
+      "id": "W7-21",
+      "slug": "desktop-web-text",
+      "wave": 7,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W7-22",
+      "slug": "desktop-web-src",
+      "wave": 7,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 15
+    },
+    {
+      "id": "W8-01",
+      "slug": "ui-api",
+      "wave": 8,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 3
+    },
+    {
+      "id": "W8-02",
+      "slug": "ui-apps",
+      "wave": 8,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 6
+    },
+    {
+      "id": "W8-03-01",
+      "slug": "ui-components-auth",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W8-03-02",
+      "slug": "ui-components-chat",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 158
+    },
+    {
+      "id": "W8-03-03",
+      "slug": "ui-components-comments",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 7
+    },
+    {
+      "id": "W8-03-04",
+      "slug": "ui-components-dashboard",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 4
+    },
+    {
+      "id": "W8-03-05",
+      "slug": "ui-components-desktop",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W8-03-06",
+      "slug": "ui-components-files",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 6
+    },
+    {
+      "id": "W8-03-07",
+      "slug": "ui-components-icon",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 3
+    },
+    {
+      "id": "W8-03-08",
+      "slug": "ui-components-icons",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 6
+    },
+    {
+      "id": "W8-03-09",
+      "slug": "ui-components-layout",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 26
+    },
+    {
+      "id": "W8-03-10",
+      "slug": "ui-components-mcp",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W8-03-11",
+      "slug": "ui-components-mini-chat",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 6
+    },
+    {
+      "id": "W8-03-12",
+      "slug": "ui-components-model-picker",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W8-03-13",
+      "slug": "ui-components-multirun",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 6
+    },
+    {
+      "id": "W8-03-14",
+      "slug": "ui-components-notifications",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 4
+    },
+    {
+      "id": "W8-03-15",
+      "slug": "ui-components-onboarding",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 15
+    },
+    {
+      "id": "W8-03-16",
+      "slug": "ui-components-projects",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W8-03-17",
+      "slug": "ui-components-providers",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W8-03-18",
+      "slug": "ui-components-sections",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 99
+    },
+    {
+      "id": "W8-03-19",
+      "slug": "ui-components-session",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 66
+    },
+    {
+      "id": "W8-03-20",
+      "slug": "ui-components-terminal",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W8-03-21",
+      "slug": "ui-components-ui",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 55
+    },
+    {
+      "id": "W8-03-22",
+      "slug": "ui-components-update",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 3
+    },
+    {
+      "id": "W8-03-23",
+      "slug": "ui-components-views",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 76
+    },
+    {
+      "id": "W8-03-24",
+      "slug": "ui-components-work",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W8-04",
+      "slug": "ui-contexts",
+      "wave": 8,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 7
+    },
+    {
+      "id": "W8-05",
+      "slug": "ui-hooks",
+      "wave": 8,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 32
+    },
+    {
+      "id": "W8-06",
+      "slug": "ui-lib",
+      "wave": 8,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 263
+    },
+    {
+      "id": "W8-07",
+      "slug": "ui-stores",
+      "wave": 8,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 97
+    },
+    {
+      "id": "W8-08",
+      "slug": "ui-sync",
+      "wave": 8,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 71
+    },
+    {
+      "id": "W8-09",
+      "slug": "ui-types",
+      "wave": 8,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 16
+    },
+    {
+      "id": "W9-01",
+      "slug": "pkg-sdk-js",
+      "wave": 9,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 92
+    },
+    {
+      "id": "W9-02",
+      "slug": "pkg-plugin",
+      "wave": 9,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 8
+    },
+    {
+      "id": "W9-03",
+      "slug": "pkg-util",
+      "wave": 9,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 15
+    },
+    {
+      "id": "W9-04",
+      "slug": "pkg-script",
+      "wave": 9,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 4
+    },
+    {
+      "id": "W9-05",
+      "slug": "pkg-opentui-core",
+      "wave": 9,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 133
+    },
+    {
+      "id": "W9-06",
+      "slug": "pkg-opentui-solid",
+      "wave": 9,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 38
+    },
+    {
+      "id": "W9-07",
+      "slug": "pkg-opentui-spinner",
+      "wave": 9,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 6
+    },
+    {
+      "id": "W9-08",
+      "slug": "pkg-ax-wiki",
+      "wave": 9,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 21
+    },
+    {
+      "id": "W9-09",
+      "slug": "pkg-ax-code-index-core",
+      "wave": 9,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W9-10",
+      "slug": "pkg-ax-code-fs-native",
+      "wave": 9,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W9-11",
+      "slug": "pkg-ax-code-diff-native",
+      "wave": 9,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W9-12",
+      "slug": "pkg-ax-code-parser-native",
+      "wave": 9,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W9-13",
+      "slug": "pkg-ax-code-terminal-native",
+      "wave": 9,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W9-14",
+      "slug": "pkg-ax-code-daemon",
+      "wave": 9,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W9-15",
+      "slug": "crate-index",
+      "wave": 9,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 13
+    },
+    {
+      "id": "W9-16",
+      "slug": "crate-fs",
+      "wave": 9,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 7
+    },
+    {
+      "id": "W9-17",
+      "slug": "crate-diff",
+      "wave": 9,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 4
+    },
+    {
+      "id": "W9-18",
+      "slug": "crate-parser",
+      "wave": 9,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W9-19",
+      "slug": "crate-terminal",
+      "wave": 9,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 1,
+      "files": 2
+    },
+    {
+      "id": "W9-20",
+      "slug": "crate-daemon",
+      "wave": 9,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 3
+    },
+    {
+      "id": "W9-21",
+      "slug": "crate-bench",
+      "wave": 9,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 3
+    },
+    {
+      "id": "W9-22",
+      "slug": "desktop-docs",
+      "wave": 9,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "ax-code-glm",
+      "findings": 0,
+      "files": 1
+    },
+    {
+      "id": "W10-01",
+      "slug": "constants",
+      "wave": 10,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 7
+    },
+    {
+      "id": "W10-02",
+      "slug": "flag",
+      "wave": 10,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W10-03",
+      "slug": "format",
+      "wave": 10,
+      "size": "S",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 2
+    },
+    {
+      "id": "W10-04",
+      "slug": "util",
+      "wave": 10,
+      "size": "L",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 54
+    },
+    {
+      "id": "W10-05",
+      "slug": "visual",
+      "wave": 10,
+      "size": "M",
+      "status": "SIGNED OFF",
+      "owner": "codex-sol",
+      "findings": 0,
+      "files": 13
+    }
+  ]
+}

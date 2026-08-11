@@ -1,0 +1,2922 @@
+{
+  "baseline": "39e1210ec5c638d15e3f453a5cc30e846f8057fb",
+  "date": "2026-08-11",
+  "denominator": 255,
+  "units": [
+    {
+      "id": "W1-01",
+      "slug": "auth",
+      "scope": "packages/ax-code/src/auth",
+      "wave": 1,
+      "size": "L",
+      "risk": [
+        "security",
+        "credentials"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W1-02",
+      "slug": "account",
+      "scope": "packages/ax-code/src/account",
+      "wave": 1,
+      "size": "M",
+      "risk": [
+        "security",
+        "persistence"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W1-03",
+      "slug": "config",
+      "scope": "packages/ax-code/src/config",
+      "wave": 1,
+      "size": "L",
+      "risk": [
+        "security",
+        "config"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W1-04",
+      "slug": "hooks",
+      "scope": "packages/ax-code/src/hooks",
+      "wave": 1,
+      "size": "M",
+      "risk": [
+        "security",
+        "trust"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W1-05",
+      "slug": "env",
+      "scope": "packages/ax-code/src/env",
+      "wave": 1,
+      "size": "S",
+      "risk": [
+        "security",
+        "secrets"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W1-06",
+      "slug": "plugin",
+      "scope": "packages/ax-code/src/plugin",
+      "wave": 1,
+      "size": "L",
+      "risk": [
+        "security",
+        "extensibility"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W1-07",
+      "slug": "audit",
+      "scope": "packages/ax-code/src/audit",
+      "wave": 1,
+      "size": "M",
+      "risk": [
+        "security",
+        "persistence"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W1-08",
+      "slug": "risk",
+      "scope": "packages/ax-code/src/risk",
+      "wave": 1,
+      "size": "M",
+      "risk": [
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W1-09",
+      "slug": "control-plane",
+      "scope": "packages/ax-code/src/control-plane",
+      "wave": 1,
+      "size": "L",
+      "risk": [
+        "security",
+        "concurrency"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W1-10",
+      "slug": "installation",
+      "scope": "packages/ax-code/src/installation",
+      "wave": 1,
+      "size": "M",
+      "risk": [
+        "security",
+        "release"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W1-11",
+      "slug": "desktop-bridge",
+      "scope": "packages/ax-code/src/desktop",
+      "wave": 1,
+      "size": "S",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W1-12",
+      "slug": "desktop-electron-security",
+      "scope": "desktop/packages/electron/src (security policies)",
+      "wave": 1,
+      "size": "L",
+      "risk": [
+        "security",
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W1-13",
+      "slug": "desktop-electron-ipc",
+      "scope": "desktop/packages/electron/src (IPC policy/handlers)",
+      "wave": 1,
+      "size": "L",
+      "risk": [
+        "security",
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W1-14",
+      "slug": "desktop-electron-preload",
+      "scope": "desktop/packages/electron/src/preload.js",
+      "wave": 1,
+      "size": "M",
+      "risk": [
+        "security",
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W1-15",
+      "slug": "desktop-web-security",
+      "scope": "desktop/packages/web/server/lib/security",
+      "wave": 1,
+      "size": "M",
+      "risk": [
+        "security",
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W1-16",
+      "slug": "desktop-web-ui-auth",
+      "scope": "desktop/packages/web/server/lib/ui-auth",
+      "wave": 1,
+      "size": "M",
+      "risk": [
+        "security",
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-01a",
+      "slug": "session-prompt-processor",
+      "scope": "packages/ax-code/src/session (prompt/processor)",
+      "wave": 2,
+      "size": "L",
+      "risk": [
+        "hot-path",
+        "correctness"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-01b",
+      "slug": "session-messages-parts",
+      "scope": "packages/ax-code/src/session (messages/parts)",
+      "wave": 2,
+      "size": "L",
+      "risk": [
+        "hot-path",
+        "persistence"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-01c",
+      "slug": "session-compaction",
+      "scope": "packages/ax-code/src/session (compaction)",
+      "wave": 2,
+      "size": "M",
+      "risk": [
+        "hot-path",
+        "correctness"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-01d",
+      "slug": "session-lifecycle-queue",
+      "scope": "packages/ax-code/src/session (lifecycle/queue)",
+      "wave": 2,
+      "size": "L",
+      "risk": [
+        "concurrency",
+        "hot-path"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-01e",
+      "slug": "session-fork-revert",
+      "scope": "packages/ax-code/src/session (fork/revert/rollback)",
+      "wave": 2,
+      "size": "M",
+      "risk": [
+        "correctness",
+        "persistence"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-02",
+      "slug": "runtime",
+      "scope": "packages/ax-code/src/runtime",
+      "wave": 2,
+      "size": "L",
+      "risk": [
+        "hot-path"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-03",
+      "slug": "runtime-headless",
+      "scope": "packages/ax-code/src/runtime/headless",
+      "wave": 2,
+      "size": "M",
+      "risk": [
+        "hot-path"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-04",
+      "slug": "agent",
+      "scope": "packages/ax-code/src/agent",
+      "wave": 2,
+      "size": "L",
+      "risk": [
+        "hot-path",
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-05",
+      "slug": "planner",
+      "scope": "packages/ax-code/src/planner",
+      "wave": 2,
+      "size": "M",
+      "risk": [
+        "correctness"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-06",
+      "slug": "dispatch",
+      "scope": "packages/ax-code/src/dispatch",
+      "wave": 2,
+      "size": "M",
+      "risk": [
+        "concurrency"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-07",
+      "slug": "workflow",
+      "scope": "packages/ax-code/src/workflow",
+      "wave": 2,
+      "size": "L",
+      "risk": [
+        "concurrency",
+        "persistence"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-08",
+      "slug": "context",
+      "scope": "packages/ax-code/src/context",
+      "wave": 2,
+      "size": "M",
+      "risk": [
+        "performance"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-09",
+      "slug": "prompt-history",
+      "scope": "packages/ax-code/src/prompt-history",
+      "wave": 2,
+      "size": "S",
+      "risk": [
+        "persistence"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-10",
+      "slug": "memory",
+      "scope": "packages/ax-code/src/memory",
+      "wave": 2,
+      "size": "M",
+      "risk": [
+        "correctness"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-11",
+      "slug": "replay",
+      "scope": "packages/ax-code/src/replay",
+      "wave": 2,
+      "size": "M",
+      "risk": [
+        "persistence",
+        "correctness"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-12",
+      "slug": "snapshot",
+      "scope": "packages/ax-code/src/snapshot",
+      "wave": 2,
+      "size": "M",
+      "risk": [
+        "persistence"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W2-13",
+      "slug": "bus",
+      "scope": "packages/ax-code/src/bus",
+      "wave": 2,
+      "size": "M",
+      "risk": [
+        "concurrency"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-01",
+      "slug": "permission",
+      "scope": "packages/ax-code/src/permission",
+      "wave": 3,
+      "size": "L",
+      "risk": [
+        "security",
+        "trust"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-02",
+      "slug": "isolation",
+      "scope": "packages/ax-code/src/isolation",
+      "wave": 3,
+      "size": "L",
+      "risk": [
+        "security",
+        "sandbox"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-03a",
+      "slug": "tool-mutation",
+      "scope": "packages/ax-code/src/tool (edit/write/apply_patch/mutation)",
+      "wave": 3,
+      "size": "L",
+      "risk": [
+        "security",
+        "correctness"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-03b",
+      "slug": "tool-execution",
+      "scope": "packages/ax-code/src/tool (bash/shell execution)",
+      "wave": 3,
+      "size": "L",
+      "risk": [
+        "security",
+        "hot-path"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-03c",
+      "slug": "tool-network",
+      "scope": "packages/ax-code/src/tool (webfetch/browser/network)",
+      "wave": 3,
+      "size": "M",
+      "risk": [
+        "security",
+        "network"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-03d",
+      "slug": "tool-orchestration",
+      "scope": "packages/ax-code/src/tool (task/arena/council/orchestration)",
+      "wave": 3,
+      "size": "L",
+      "risk": [
+        "concurrency"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-03e",
+      "slug": "tool-readonly",
+      "scope": "packages/ax-code/src/tool (read/grep/glob/ls)",
+      "wave": 3,
+      "size": "M",
+      "risk": [
+        "correctness"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-04",
+      "slug": "shell",
+      "scope": "packages/ax-code/src/shell",
+      "wave": 3,
+      "size": "L",
+      "risk": [
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-05",
+      "slug": "pty",
+      "scope": "packages/ax-code/src/pty",
+      "wave": 3,
+      "size": "L",
+      "risk": [
+        "security",
+        "resource"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-06",
+      "slug": "file",
+      "scope": "packages/ax-code/src/file",
+      "wave": 3,
+      "size": "L",
+      "risk": [
+        "security",
+        "performance"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-07",
+      "slug": "patch",
+      "scope": "packages/ax-code/src/patch",
+      "wave": 3,
+      "size": "M",
+      "risk": [
+        "correctness"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-08",
+      "slug": "worktree",
+      "scope": "packages/ax-code/src/worktree",
+      "wave": 3,
+      "size": "M",
+      "risk": [
+        "correctness"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-09",
+      "slug": "command",
+      "scope": "packages/ax-code/src/command",
+      "wave": 3,
+      "size": "M",
+      "risk": [
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-10",
+      "slug": "question",
+      "scope": "packages/ax-code/src/question",
+      "wave": 3,
+      "size": "M",
+      "risk": [
+        "correctness"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-11",
+      "slug": "bun",
+      "scope": "packages/ax-code/src/bun",
+      "wave": 3,
+      "size": "S",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-12",
+      "slug": "native",
+      "scope": "packages/ax-code/src/native",
+      "wave": 3,
+      "size": "M",
+      "risk": [
+        "native",
+        "stability"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-13",
+      "slug": "image",
+      "scope": "packages/ax-code/src/image",
+      "wave": 3,
+      "size": "M",
+      "risk": [
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W3-14",
+      "slug": "import",
+      "scope": "packages/ax-code/src/import",
+      "wave": 3,
+      "size": "M",
+      "risk": [
+        "correctness"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-01",
+      "slug": "storage",
+      "scope": "packages/ax-code/src/storage",
+      "wave": 4,
+      "size": "L",
+      "risk": [
+        "persistence",
+        "stability"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-02",
+      "slug": "server",
+      "scope": "packages/ax-code/src/server",
+      "wave": 4,
+      "size": "L",
+      "risk": [
+        "security",
+        "network"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-01",
+      "slug": "server-routes-app-context-checks",
+      "scope": "packages/ax-code/src/server/routes/app-context-checks.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-02",
+      "slug": "server-routes-app-context-schema",
+      "scope": "packages/ax-code/src/server/routes/app-context-schema.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-03",
+      "slug": "server-routes-app-context-templates",
+      "scope": "packages/ax-code/src/server/routes/app-context-templates.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-04",
+      "slug": "server-routes-app-context",
+      "scope": "packages/ax-code/src/server/routes/app-context.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-05",
+      "slug": "server-routes-app",
+      "scope": "packages/ax-code/src/server/routes/app.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-06",
+      "slug": "server-routes-audit",
+      "scope": "packages/ax-code/src/server/routes/audit.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-07",
+      "slug": "server-routes-autonomous",
+      "scope": "packages/ax-code/src/server/routes/autonomous.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-08",
+      "slug": "server-routes-config",
+      "scope": "packages/ax-code/src/server/routes/config.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-09",
+      "slug": "server-routes-dre-graph",
+      "scope": "packages/ax-code/src/server/routes/dre-graph.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-10",
+      "slug": "server-routes-event",
+      "scope": "packages/ax-code/src/server/routes/event.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-11",
+      "slug": "server-routes-experimental",
+      "scope": "packages/ax-code/src/server/routes/experimental.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-12",
+      "slug": "server-routes-file",
+      "scope": "packages/ax-code/src/server/routes/file.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-13",
+      "slug": "server-routes-global",
+      "scope": "packages/ax-code/src/server/routes/global.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-14",
+      "slug": "server-routes-graph",
+      "scope": "packages/ax-code/src/server/routes/graph.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-15",
+      "slug": "server-routes-isolation",
+      "scope": "packages/ax-code/src/server/routes/isolation.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-16",
+      "slug": "server-routes-mcp",
+      "scope": "packages/ax-code/src/server/routes/mcp.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-17",
+      "slug": "server-routes-permission",
+      "scope": "packages/ax-code/src/server/routes/permission.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-18",
+      "slug": "server-routes-project-config",
+      "scope": "packages/ax-code/src/server/routes/project-config.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-19",
+      "slug": "server-routes-project",
+      "scope": "packages/ax-code/src/server/routes/project.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-20",
+      "slug": "server-routes-prompt-history",
+      "scope": "packages/ax-code/src/server/routes/prompt-history.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-21",
+      "slug": "server-routes-provider",
+      "scope": "packages/ax-code/src/server/routes/provider.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-22",
+      "slug": "server-routes-pty",
+      "scope": "packages/ax-code/src/server/routes/pty.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-23",
+      "slug": "server-routes-query",
+      "scope": "packages/ax-code/src/server/routes/query.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-24",
+      "slug": "server-routes-question",
+      "scope": "packages/ax-code/src/server/routes/question.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-25",
+      "slug": "server-routes-route-params",
+      "scope": "packages/ax-code/src/server/routes/route-params.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-26",
+      "slug": "server-routes-runtime-status",
+      "scope": "packages/ax-code/src/server/routes/runtime-status.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-27",
+      "slug": "server-routes-scheduled-task",
+      "scope": "packages/ax-code/src/server/routes/scheduled-task.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-28",
+      "slug": "server-routes-session-impl",
+      "scope": "packages/ax-code/src/server/routes/session-impl.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-29",
+      "slug": "server-routes-session-lookup",
+      "scope": "packages/ax-code/src/server/routes/session-lookup.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-30",
+      "slug": "server-routes-session",
+      "scope": "packages/ax-code/src/server/routes/session.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-31",
+      "slug": "server-routes-skill",
+      "scope": "packages/ax-code/src/server/routes/skill.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-32",
+      "slug": "server-routes-smart-llm",
+      "scope": "packages/ax-code/src/server/routes/smart-llm.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-33",
+      "slug": "server-routes-super-long",
+      "scope": "packages/ax-code/src/server/routes/super-long.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-34",
+      "slug": "server-routes-task-queue",
+      "scope": "packages/ax-code/src/server/routes/task-queue.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-35",
+      "slug": "server-routes-tui",
+      "scope": "packages/ax-code/src/server/routes/tui.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-03-36",
+      "slug": "server-routes-workflow",
+      "scope": "packages/ax-code/src/server/routes/workflow.ts",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "network",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-04",
+      "slug": "project",
+      "scope": "packages/ax-code/src/project",
+      "wave": 4,
+      "size": "M",
+      "risk": [
+        "persistence"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-05",
+      "slug": "id",
+      "scope": "packages/ax-code/src/id",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "correctness"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-06",
+      "slug": "global",
+      "scope": "packages/ax-code/src/global",
+      "wave": 4,
+      "size": "S",
+      "risk": [
+        "config"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-07",
+      "slug": "share",
+      "scope": "packages/ax-code/src/share",
+      "wave": 4,
+      "size": "M",
+      "risk": [
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-08",
+      "slug": "stats",
+      "scope": "packages/ax-code/src/stats",
+      "wave": 4,
+      "size": "M",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-09",
+      "slug": "telemetry",
+      "scope": "packages/ax-code/src/telemetry",
+      "wave": 4,
+      "size": "M",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-10",
+      "slug": "notification",
+      "scope": "packages/ax-code/src/notification",
+      "wave": 4,
+      "size": "M",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W4-11",
+      "slug": "sdk",
+      "scope": "packages/ax-code/src/sdk",
+      "wave": 4,
+      "size": "M",
+      "risk": [
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-01a",
+      "slug": "provider-registry",
+      "scope": "packages/ax-code/src/provider (registry/routing)",
+      "wave": 5,
+      "size": "L",
+      "risk": [
+        "hot-path",
+        "correctness"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-01b",
+      "slug": "provider-stream",
+      "scope": "packages/ax-code/src/provider (stream transforms)",
+      "wave": 5,
+      "size": "L",
+      "risk": [
+        "hot-path",
+        "stability"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-01c",
+      "slug": "provider-auth-caps",
+      "scope": "packages/ax-code/src/provider (auth/capabilities)",
+      "wave": 5,
+      "size": "M",
+      "risk": [
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-01d",
+      "slug": "provider-retry-errors",
+      "scope": "packages/ax-code/src/provider (retry/error translation)",
+      "wave": 5,
+      "size": "M",
+      "risk": [
+        "stability"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-01e",
+      "slug": "provider-models-data",
+      "scope": "packages/ax-code/src/provider (models-snapshot/model data)",
+      "wave": 5,
+      "size": "M",
+      "risk": [
+        "correctness"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-02",
+      "slug": "provider-ax-engine",
+      "scope": "packages/ax-code/src/provider/ax-engine",
+      "wave": 5,
+      "size": "L",
+      "risk": [
+        "hot-path"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-03",
+      "slug": "provider-cli",
+      "scope": "packages/ax-code/src/provider/cli",
+      "wave": 5,
+      "size": "L",
+      "risk": [
+        "stability",
+        "process"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-04",
+      "slug": "provider-xai",
+      "scope": "packages/ax-code/src/provider/xai",
+      "wave": 5,
+      "size": "M",
+      "risk": [
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-05a",
+      "slug": "mcp-lifecycle",
+      "scope": "packages/ax-code/src/mcp (lifecycle/transport)",
+      "wave": 5,
+      "size": "L",
+      "risk": [
+        "security",
+        "process"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-05b",
+      "slug": "mcp-oauth-trust",
+      "scope": "packages/ax-code/src/mcp (OAuth/trust)",
+      "wave": 5,
+      "size": "L",
+      "risk": [
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-05c",
+      "slug": "mcp-tools",
+      "scope": "packages/ax-code/src/mcp (tool conversion)",
+      "wave": 5,
+      "size": "M",
+      "risk": [
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-05d",
+      "slug": "mcp-discovery",
+      "scope": "packages/ax-code/src/mcp (discovery/config/disposal)",
+      "wave": 5,
+      "size": "M",
+      "risk": [
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-06",
+      "slug": "lsp",
+      "scope": "packages/ax-code/src/lsp",
+      "wave": 5,
+      "size": "L",
+      "risk": [
+        "performance",
+        "process"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-07",
+      "slug": "code-intelligence",
+      "scope": "packages/ax-code/src/code-intelligence",
+      "wave": 5,
+      "size": "L",
+      "risk": [
+        "performance",
+        "persistence"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-08",
+      "slug": "graph",
+      "scope": "packages/ax-code/src/graph",
+      "wave": 5,
+      "size": "L",
+      "risk": [
+        "performance"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-09",
+      "slug": "capability",
+      "scope": "packages/ax-code/src/capability",
+      "wave": 5,
+      "size": "M",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-10",
+      "slug": "acp",
+      "scope": "packages/ax-code/src/acp",
+      "wave": 5,
+      "size": "M",
+      "risk": [
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-11",
+      "slug": "ide",
+      "scope": "packages/ax-code/src/ide",
+      "wave": 5,
+      "size": "M",
+      "risk": [
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-12",
+      "slug": "skill",
+      "scope": "packages/ax-code/src/skill",
+      "wave": 5,
+      "size": "L",
+      "risk": [
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-13",
+      "slug": "mode",
+      "scope": "packages/ax-code/src/mode",
+      "wave": 5,
+      "size": "M",
+      "risk": [
+        "correctness"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-14",
+      "slug": "quality",
+      "scope": "packages/ax-code/src/quality",
+      "wave": 5,
+      "size": "M",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-15",
+      "slug": "design-check",
+      "scope": "packages/ax-code/src/design-check",
+      "wave": 5,
+      "size": "M",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-16",
+      "slug": "debug-engine",
+      "scope": "packages/ax-code/src/debug-engine",
+      "wave": 5,
+      "size": "M",
+      "risk": [
+        "correctness"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-17",
+      "slug": "debug",
+      "scope": "packages/ax-code/src/debug",
+      "wave": 5,
+      "size": "S",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-18",
+      "slug": "perf",
+      "scope": "packages/ax-code/src/perf",
+      "wave": 5,
+      "size": "M",
+      "risk": [
+        "performance"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W5-19",
+      "slug": "wiki",
+      "scope": "packages/ax-code/src/wiki",
+      "wave": 5,
+      "size": "M",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-00",
+      "slug": "cli-parent",
+      "scope": "packages/ax-code/src/cli",
+      "wave": 6,
+      "size": "L",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-01",
+      "slug": "cli-cmd-registry",
+      "scope": "packages/ax-code/src/cli/cmd registry/shims",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-02",
+      "slug": "cli-cmd-session",
+      "scope": "packages/ax-code/src/cli/cmd/session",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-03",
+      "slug": "cli-cmd-run",
+      "scope": "packages/ax-code/src/cli/cmd/run",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-04",
+      "slug": "cli-cmd-headless-run",
+      "scope": "packages/ax-code/src/cli/cmd/headless-run",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-05",
+      "slug": "cli-cmd-serve",
+      "scope": "packages/ax-code/src/cli/cmd/serve",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-06",
+      "slug": "cli-cmd-workspace-serve",
+      "scope": "packages/ax-code/src/cli/cmd/workspace-serve",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-07",
+      "slug": "cli-cmd-runtime",
+      "scope": "packages/ax-code/src/cli/cmd/runtime",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-08a",
+      "slug": "cli-cmd-tui-boot",
+      "scope": "packages/ax-code/src/cli/cmd/tui boot/worker",
+      "wave": 6,
+      "size": "L",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-08b",
+      "slug": "cli-cmd-tui-session-route",
+      "scope": "packages/ax-code/src/cli/cmd/tui routes/session",
+      "wave": 6,
+      "size": "L",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-08c",
+      "slug": "cli-cmd-tui-tool-renderers",
+      "scope": "packages/ax-code/src/cli/cmd/tui tool-renderers",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-09",
+      "slug": "cli-cmd-mcp",
+      "scope": "packages/ax-code/src/cli/cmd/mcp",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-10",
+      "slug": "cli-cmd-providers",
+      "scope": "packages/ax-code/src/cli/cmd/providers",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-11",
+      "slug": "cli-cmd-models",
+      "scope": "packages/ax-code/src/cli/cmd/models",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-12",
+      "slug": "cli-cmd-skill",
+      "scope": "packages/ax-code/src/cli/cmd/skill",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-13",
+      "slug": "cli-cmd-workflow",
+      "scope": "packages/ax-code/src/cli/cmd/workflow",
+      "wave": 6,
+      "size": "L",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-14",
+      "slug": "cli-cmd-doctor",
+      "scope": "packages/ax-code/src/cli/cmd/doctor",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-15",
+      "slug": "cli-cmd-github-agent",
+      "scope": "packages/ax-code/src/cli/cmd/github-agent",
+      "wave": 6,
+      "size": "L",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-16",
+      "slug": "cli-cmd-storage",
+      "scope": "packages/ax-code/src/cli/cmd/storage",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-17",
+      "slug": "cli-cmd-debug",
+      "scope": "packages/ax-code/src/cli/cmd/debug",
+      "wave": 6,
+      "size": "L",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-18",
+      "slug": "cli-cmd-release",
+      "scope": "packages/ax-code/src/cli/cmd/release",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-19",
+      "slug": "cli-cmd-webui",
+      "scope": "packages/ax-code/src/cli/cmd/webui",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-20",
+      "slug": "cli-cmd-wiki",
+      "scope": "packages/ax-code/src/cli/cmd/wiki",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-21",
+      "slug": "cli-cmd-pr",
+      "scope": "packages/ax-code/src/cli/cmd/pr",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-22",
+      "slug": "cli-cmd-export",
+      "scope": "packages/ax-code/src/cli/cmd/export",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-23",
+      "slug": "cli-cmd-import",
+      "scope": "packages/ax-code/src/cli/cmd/import",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-24",
+      "slug": "cli-cmd-upgrade",
+      "scope": "packages/ax-code/src/cli/cmd/upgrade",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-25",
+      "slug": "cli-cmd-account",
+      "scope": "packages/ax-code/src/cli/cmd/account",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-26",
+      "slug": "cli-cmd-acp",
+      "scope": "packages/ax-code/src/cli/cmd/acp",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-27",
+      "slug": "cli-cmd-agent",
+      "scope": "packages/ax-code/src/cli/cmd/agent",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-28",
+      "slug": "cli-cmd-audit",
+      "scope": "packages/ax-code/src/cli/cmd/audit",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-29",
+      "slug": "cli-cmd-branch",
+      "scope": "packages/ax-code/src/cli/cmd/branch",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-30",
+      "slug": "cli-cmd-capability",
+      "scope": "packages/ax-code/src/cli/cmd/capability",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-31",
+      "slug": "cli-cmd-compare",
+      "scope": "packages/ax-code/src/cli/cmd/compare",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-32",
+      "slug": "cli-cmd-context",
+      "scope": "packages/ax-code/src/cli/cmd/context",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-33",
+      "slug": "cli-cmd-db",
+      "scope": "packages/ax-code/src/cli/cmd/db",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-34",
+      "slug": "cli-cmd-design-check",
+      "scope": "packages/ax-code/src/cli/cmd/design-check",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-35",
+      "slug": "cli-cmd-dre-graph",
+      "scope": "packages/ax-code/src/cli/cmd/dre-graph",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-36",
+      "slug": "cli-cmd-generate",
+      "scope": "packages/ax-code/src/cli/cmd/generate",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-37",
+      "slug": "cli-cmd-github",
+      "scope": "packages/ax-code/src/cli/cmd/github",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-38",
+      "slug": "cli-cmd-graph",
+      "scope": "packages/ax-code/src/cli/cmd/graph",
+      "wave": 6,
+      "size": "M",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-39",
+      "slug": "cli-cmd-index-graph",
+      "scope": "packages/ax-code/src/cli/cmd/index-graph",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-40",
+      "slug": "cli-cmd-init",
+      "scope": "packages/ax-code/src/cli/cmd/init",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-41",
+      "slug": "cli-cmd-memory",
+      "scope": "packages/ax-code/src/cli/cmd/memory",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-42",
+      "slug": "cli-cmd-replay",
+      "scope": "packages/ax-code/src/cli/cmd/replay",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-43",
+      "slug": "cli-cmd-restart",
+      "scope": "packages/ax-code/src/cli/cmd/restart",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-44",
+      "slug": "cli-cmd-risk",
+      "scope": "packages/ax-code/src/cli/cmd/risk",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-45",
+      "slug": "cli-cmd-rollback",
+      "scope": "packages/ax-code/src/cli/cmd/rollback",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-46",
+      "slug": "cli-cmd-stats",
+      "scope": "packages/ax-code/src/cli/cmd/stats",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-47",
+      "slug": "cli-cmd-trace",
+      "scope": "packages/ax-code/src/cli/cmd/trace",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W6-48",
+      "slug": "cli-cmd-uninstall",
+      "scope": "packages/ax-code/src/cli/cmd/uninstall",
+      "wave": 6,
+      "size": "S",
+      "risk": [
+        "cli"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-01",
+      "slug": "desktop-electron-shell",
+      "scope": "desktop/packages/electron/src (shell/window)",
+      "wave": 7,
+      "size": "L",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-02",
+      "slug": "desktop-electron-server-process",
+      "scope": "desktop/packages/electron/src/server-process.js",
+      "wave": 7,
+      "size": "L",
+      "risk": [
+        "desktop",
+        "stability"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-03",
+      "slug": "desktop-electron-tray",
+      "scope": "desktop/packages/electron/src/tray.mjs",
+      "wave": 7,
+      "size": "S",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-04",
+      "slug": "desktop-electron-updates",
+      "scope": "desktop/packages/electron/src (update)",
+      "wave": 7,
+      "size": "M",
+      "risk": [
+        "desktop",
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-05",
+      "slug": "desktop-web-server",
+      "scope": "desktop/packages/web/server",
+      "wave": 7,
+      "size": "L",
+      "risk": [
+        "desktop",
+        "network"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-06",
+      "slug": "desktop-web-ax-code",
+      "scope": "desktop/packages/web/server/lib/ax-code",
+      "wave": 7,
+      "size": "L",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-07",
+      "slug": "desktop-web-desktop",
+      "scope": "desktop/packages/web/server/lib/desktop",
+      "wave": 7,
+      "size": "M",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-08",
+      "slug": "desktop-web-event-stream",
+      "scope": "desktop/packages/web/server/lib/event-stream",
+      "wave": 7,
+      "size": "L",
+      "risk": [
+        "desktop",
+        "performance"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-09",
+      "slug": "desktop-web-fs",
+      "scope": "desktop/packages/web/server/lib/fs",
+      "wave": 7,
+      "size": "M",
+      "risk": [
+        "desktop",
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-10",
+      "slug": "desktop-web-git",
+      "scope": "desktop/packages/web/server/lib/git",
+      "wave": 7,
+      "size": "L",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-11",
+      "slug": "desktop-web-github",
+      "scope": "desktop/packages/web/server/lib/github",
+      "wave": 7,
+      "size": "L",
+      "risk": [
+        "desktop",
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-12",
+      "slug": "desktop-web-magic-prompts",
+      "scope": "desktop/packages/web/server/lib/magic-prompts",
+      "wave": 7,
+      "size": "S",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-13",
+      "slug": "desktop-web-notifications",
+      "scope": "desktop/packages/web/server/lib/notifications",
+      "wave": 7,
+      "size": "M",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-14",
+      "slug": "desktop-web-preview",
+      "scope": "desktop/packages/web/server/lib/preview",
+      "wave": 7,
+      "size": "M",
+      "risk": [
+        "desktop",
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-15",
+      "slug": "desktop-web-projects",
+      "scope": "desktop/packages/web/server/lib/projects",
+      "wave": 7,
+      "size": "L",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-16",
+      "slug": "desktop-web-quota",
+      "scope": "desktop/packages/web/server/lib/quota",
+      "wave": 7,
+      "size": "L",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-17",
+      "slug": "desktop-web-scheduled-tasks",
+      "scope": "desktop/packages/web/server/lib/scheduled-tasks",
+      "wave": 7,
+      "size": "L",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-18",
+      "slug": "desktop-web-session-folders",
+      "scope": "desktop/packages/web/server/lib/session-folders",
+      "wave": 7,
+      "size": "M",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-19",
+      "slug": "desktop-web-skills-catalog",
+      "scope": "desktop/packages/web/server/lib/skills-catalog",
+      "wave": 7,
+      "size": "M",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-20",
+      "slug": "desktop-web-terminal",
+      "scope": "desktop/packages/web/server/lib/terminal",
+      "wave": 7,
+      "size": "L",
+      "risk": [
+        "desktop",
+        "security"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-21",
+      "slug": "desktop-web-text",
+      "scope": "desktop/packages/web/server/lib/text",
+      "wave": 7,
+      "size": "S",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W7-22",
+      "slug": "desktop-web-src",
+      "scope": "desktop/packages/web/src",
+      "wave": 7,
+      "size": "M",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-01",
+      "slug": "ui-api",
+      "scope": "desktop/packages/ui/src/api",
+      "wave": 8,
+      "size": "L",
+      "risk": [
+        "desktop",
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-02",
+      "slug": "ui-apps",
+      "scope": "desktop/packages/ui/src/apps",
+      "wave": 8,
+      "size": "M",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-01",
+      "slug": "ui-components-auth",
+      "scope": "desktop/packages/ui/src/components/auth",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-02",
+      "slug": "ui-components-chat",
+      "scope": "desktop/packages/ui/src/components/chat",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-03",
+      "slug": "ui-components-comments",
+      "scope": "desktop/packages/ui/src/components/comments",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-04",
+      "slug": "ui-components-dashboard",
+      "scope": "desktop/packages/ui/src/components/dashboard",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-05",
+      "slug": "ui-components-desktop",
+      "scope": "desktop/packages/ui/src/components/desktop",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-06",
+      "slug": "ui-components-files",
+      "scope": "desktop/packages/ui/src/components/files",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-07",
+      "slug": "ui-components-icon",
+      "scope": "desktop/packages/ui/src/components/icon",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-08",
+      "slug": "ui-components-icons",
+      "scope": "desktop/packages/ui/src/components/icons",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-09",
+      "slug": "ui-components-layout",
+      "scope": "desktop/packages/ui/src/components/layout",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-10",
+      "slug": "ui-components-mcp",
+      "scope": "desktop/packages/ui/src/components/mcp",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-11",
+      "slug": "ui-components-mini-chat",
+      "scope": "desktop/packages/ui/src/components/mini-chat",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-12",
+      "slug": "ui-components-model-picker",
+      "scope": "desktop/packages/ui/src/components/model-picker",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-13",
+      "slug": "ui-components-multirun",
+      "scope": "desktop/packages/ui/src/components/multirun",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-14",
+      "slug": "ui-components-notifications",
+      "scope": "desktop/packages/ui/src/components/notifications",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-15",
+      "slug": "ui-components-onboarding",
+      "scope": "desktop/packages/ui/src/components/onboarding",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-16",
+      "slug": "ui-components-projects",
+      "scope": "desktop/packages/ui/src/components/projects",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-17",
+      "slug": "ui-components-providers",
+      "scope": "desktop/packages/ui/src/components/providers",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-18",
+      "slug": "ui-components-sections",
+      "scope": "desktop/packages/ui/src/components/sections",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-19",
+      "slug": "ui-components-session",
+      "scope": "desktop/packages/ui/src/components/session",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-20",
+      "slug": "ui-components-terminal",
+      "scope": "desktop/packages/ui/src/components/terminal",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-21",
+      "slug": "ui-components-ui",
+      "scope": "desktop/packages/ui/src/components/ui",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-22",
+      "slug": "ui-components-update",
+      "scope": "desktop/packages/ui/src/components/update",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-23",
+      "slug": "ui-components-views",
+      "scope": "desktop/packages/ui/src/components/views",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-03-24",
+      "slug": "ui-components-work",
+      "scope": "desktop/packages/ui/src/components/work",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop",
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-04",
+      "slug": "ui-contexts",
+      "scope": "desktop/packages/ui/src/contexts",
+      "wave": 8,
+      "size": "M",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-05",
+      "slug": "ui-hooks",
+      "scope": "desktop/packages/ui/src/hooks",
+      "wave": 8,
+      "size": "L",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-06",
+      "slug": "ui-lib",
+      "scope": "desktop/packages/ui/src/lib",
+      "wave": 8,
+      "size": "L",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-07",
+      "slug": "ui-stores",
+      "scope": "desktop/packages/ui/src/stores",
+      "wave": 8,
+      "size": "L",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-08",
+      "slug": "ui-sync",
+      "scope": "desktop/packages/ui/src/sync",
+      "wave": 8,
+      "size": "L",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W8-09",
+      "slug": "ui-types",
+      "scope": "desktop/packages/ui/src/types",
+      "wave": 8,
+      "size": "S",
+      "risk": [
+        "desktop"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-01",
+      "slug": "pkg-sdk-js",
+      "scope": "packages/sdk/js",
+      "wave": 9,
+      "size": "L",
+      "risk": [
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-02",
+      "slug": "pkg-plugin",
+      "scope": "packages/plugin",
+      "wave": 9,
+      "size": "M",
+      "risk": [
+        "api"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-03",
+      "slug": "pkg-util",
+      "scope": "packages/util",
+      "wave": 9,
+      "size": "M",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-04",
+      "slug": "pkg-script",
+      "scope": "packages/script",
+      "wave": 9,
+      "size": "L",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-05",
+      "slug": "pkg-opentui-core",
+      "scope": "packages/opentui-core",
+      "wave": 9,
+      "size": "L",
+      "risk": [
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-06",
+      "slug": "pkg-opentui-solid",
+      "scope": "packages/opentui-solid",
+      "wave": 9,
+      "size": "L",
+      "risk": [
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-07",
+      "slug": "pkg-opentui-spinner",
+      "scope": "packages/opentui-spinner",
+      "wave": 9,
+      "size": "S",
+      "risk": [
+        "ui"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-08",
+      "slug": "pkg-ax-wiki",
+      "scope": "packages/ax-wiki",
+      "wave": 9,
+      "size": "L",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-09",
+      "slug": "pkg-ax-code-index-core",
+      "scope": "packages/ax-code-index-core",
+      "wave": 9,
+      "size": "M",
+      "risk": [
+        "native"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-10",
+      "slug": "pkg-ax-code-fs-native",
+      "scope": "packages/ax-code-fs-native",
+      "wave": 9,
+      "size": "M",
+      "risk": [
+        "native"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-11",
+      "slug": "pkg-ax-code-diff-native",
+      "scope": "packages/ax-code-diff-native",
+      "wave": 9,
+      "size": "M",
+      "risk": [
+        "native"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-12",
+      "slug": "pkg-ax-code-parser-native",
+      "scope": "packages/ax-code-parser-native",
+      "wave": 9,
+      "size": "M",
+      "risk": [
+        "native"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-13",
+      "slug": "pkg-ax-code-terminal-native",
+      "scope": "packages/ax-code-terminal-native",
+      "wave": 9,
+      "size": "M",
+      "risk": [
+        "native"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-14",
+      "slug": "pkg-ax-code-daemon",
+      "scope": "packages/ax-code-daemon",
+      "wave": 9,
+      "size": "M",
+      "risk": [
+        "native"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-15",
+      "slug": "crate-index",
+      "scope": "crates/ax-code-index",
+      "wave": 9,
+      "size": "L",
+      "risk": [
+        "native",
+        "performance"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-16",
+      "slug": "crate-fs",
+      "scope": "crates/ax-code-fs",
+      "wave": 9,
+      "size": "L",
+      "risk": [
+        "native",
+        "performance"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-17",
+      "slug": "crate-diff",
+      "scope": "crates/ax-code-diff",
+      "wave": 9,
+      "size": "L",
+      "risk": [
+        "native"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-18",
+      "slug": "crate-parser",
+      "scope": "crates/ax-code-parser",
+      "wave": 9,
+      "size": "L",
+      "risk": [
+        "native"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-19",
+      "slug": "crate-terminal",
+      "scope": "crates/ax-code-terminal",
+      "wave": 9,
+      "size": "L",
+      "risk": [
+        "native",
+        "stability"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-20",
+      "slug": "crate-daemon",
+      "scope": "crates/ax-code-daemon",
+      "wave": 9,
+      "size": "L",
+      "risk": [
+        "native"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-21",
+      "slug": "crate-bench",
+      "scope": "crates/ax-code-bench",
+      "wave": 9,
+      "size": "S",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W9-22",
+      "slug": "desktop-docs",
+      "scope": "desktop/packages/docs",
+      "wave": 9,
+      "size": "S",
+      "risk": [
+        "docs"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W10-01",
+      "slug": "constants",
+      "scope": "packages/ax-code/src/constants",
+      "wave": 10,
+      "size": "S",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W10-02",
+      "slug": "flag",
+      "scope": "packages/ax-code/src/flag",
+      "wave": 10,
+      "size": "S",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W10-03",
+      "slug": "format",
+      "scope": "packages/ax-code/src/format",
+      "wave": 10,
+      "size": "S",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W10-04",
+      "slug": "util",
+      "scope": "packages/ax-code/src/util",
+      "wave": 10,
+      "size": "L",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    },
+    {
+      "id": "W10-05",
+      "slug": "visual",
+      "scope": "packages/ax-code/src/visual",
+      "wave": 10,
+      "size": "M",
+      "risk": [
+        "quality"
+      ],
+      "owner": "codex-sol+ax-code-glm"
+    }
+  ]
+}

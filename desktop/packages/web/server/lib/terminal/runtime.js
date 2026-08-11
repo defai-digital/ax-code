@@ -564,7 +564,9 @@ export function createTerminalRuntime({
           console.log(`Cleaning up idle terminal session: ${sessionId}`)
           try {
             killTerminalProcess(session.ptyProcess, "term")
-          } catch (error) {}
+          } catch (error) {
+            console.warn("Failed to kill idle terminal session:", error)
+          }
           terminalSessions.delete(sessionId)
         }
       }
@@ -716,7 +718,9 @@ export function createTerminalRuntime({
 
       try {
         res.end()
-      } catch (error) {}
+      } catch (error) {
+            console.warn("Failed to end terminal SSE response:", error)
+          }
 
       console.log(`Client ${clientId} disconnected from terminal session ${sessionId}`)
     }
@@ -745,7 +749,9 @@ export function createTerminalRuntime({
       try {
         res.write(`data: ${JSON.stringify({ type: "exit", exitCode, signal })}\n\n`)
         res.end()
-      } catch (error) {}
+      } catch (error) {
+            console.warn("Failed to write terminal exit event to client:", error)
+          }
       cleanup()
     }
 
@@ -846,7 +852,9 @@ export function createTerminalRuntime({
     if (existingSession) {
       try {
         killTerminalProcess(existingSession.ptyProcess, "term")
-      } catch (error) {}
+      } catch (error) {
+            console.warn("Failed to kill existing terminal session before restart:", error)
+          }
       terminalSessions.delete(sessionId)
     }
 
@@ -916,7 +924,9 @@ export function createTerminalRuntime({
       if (session) {
         try {
           killTerminalProcess(session.ptyProcess, "kill")
-        } catch (error) {}
+        } catch (error) {
+            console.warn("Failed to kill terminal process:", error)
+          }
         terminalSessions.delete(sessionId)
         killedCount++
       }
@@ -925,7 +935,9 @@ export function createTerminalRuntime({
         if (session.cwd === cwd) {
           try {
             killTerminalProcess(session.ptyProcess, "kill")
-          } catch (error) {}
+          } catch (error) {
+            console.warn("Failed to kill terminal session for cwd cleanup:", error)
+          }
           terminalSessions.delete(id)
           killedCount++
         }
@@ -934,7 +946,9 @@ export function createTerminalRuntime({
       for (const [id, session] of terminalSessions) {
         try {
           killTerminalProcess(session.ptyProcess, "kill")
-        } catch (error) {}
+        } catch (error) {
+            console.warn("Failed to kill terminal session during bulk cleanup:", error)
+          }
         terminalSessions.delete(id)
         killedCount++
       }

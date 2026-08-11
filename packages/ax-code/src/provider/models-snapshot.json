@@ -9024,6 +9024,9 @@
         "limit": {
           "context": 1000000,
           "output": 384000
+        },
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
         }
       },
       "minimax-m2.7": {
