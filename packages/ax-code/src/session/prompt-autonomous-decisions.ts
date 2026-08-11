@@ -395,6 +395,13 @@ export function resolveTurnToolChoice(input: {
   return { toolChoice: undefined, consumedForceTextOnlyTurn: false }
 }
 
+// A forced text-only turn is only consumed after a successful provider turn.
+// If inference errors (for example, a local prefill idle timeout), keep the
+// guard armed so an outer retry cannot silently restore tool schemas/calls.
+export function shouldRestoreForcedTextOnlyTurn(input: { consumed: boolean; errored: boolean }): boolean {
+  return input.consumed && input.errored
+}
+
 /**
  * Selects which cumulative step ceiling bounds the current iteration.
  * Super-Long and goal runs both lift the per-run continuation cap, so both

@@ -15,6 +15,7 @@ import {
   modelTurnFinished,
   readOnlyExplorationDecision,
   resolveTurnToolChoice,
+  shouldRestoreForcedTextOnlyTurn,
   toolOnlyTurnDecision,
   totalStepLimitDecision,
   truncatedModelTurnDecision,
@@ -992,14 +993,11 @@ describe("local read-only exploration convergence", () => {
       forceThreshold: AX_ENGINE_READ_ONLY_TURN_FORCE,
     }
     expect(AX_ENGINE_READ_ONLY_TURN_NUDGE).toBe(1)
-    expect(AX_ENGINE_READ_ONLY_TURN_FORCE).toBe(3)
+    expect(AX_ENGINE_READ_ONLY_TURN_FORCE).toBe(2)
     expect(readOnlyExplorationDecision({ consecutiveTurns: 1, nudged: false, ...config })).toEqual({
       action: "nudge",
     })
     expect(readOnlyExplorationDecision({ consecutiveTurns: 2, nudged: true, ...config })).toEqual({
-      action: "ignore",
-    })
-    expect(readOnlyExplorationDecision({ consecutiveTurns: 3, nudged: true, ...config })).toEqual({
       action: "force_text",
     })
   })
@@ -1054,6 +1052,12 @@ describe("resolve turn tool choice", () => {
       toolChoice: "none",
       consumedForceTextOnlyTurn: true,
     })
+  })
+
+  test("restores a consumed text-only guard only when the provider turn errors", () => {
+    expect(shouldRestoreForcedTextOnlyTurn({ consumed: true, errored: true })).toBe(true)
+    expect(shouldRestoreForcedTextOnlyTurn({ consumed: true, errored: false })).toBe(false)
+    expect(shouldRestoreForcedTextOnlyTurn({ consumed: false, errored: true })).toBe(false)
   })
 
   test("structured output required wins when only it is set", () => {

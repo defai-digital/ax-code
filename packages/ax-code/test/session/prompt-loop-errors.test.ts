@@ -269,6 +269,53 @@ describe("prompt loop error transitions", () => {
     expect(published).toEqual([{ sessionID, message: "The selected model requires a newer Codex CLI" }])
   })
 
+  test("stops an AX Engine stream stall without replaying the oversized local request", async () => {
+    const sessionID = SessionID.descending()
+    const warnings: { message: string; fields: Record<string, unknown> }[] = []
+    const published: { sessionID: SessionID; message: string }[] = []
+
+    const result = await handlePromptLoopError(
+      {
+        sessionID,
+        currentModel: {
+          providerID: ProviderID.make("ax-engine"),
+          modelID: ModelID.make("qwen3.6-27b-axq-6bit"),
+        },
+        error: {
+          name: "UnknownError",
+          data: { message: "Model stream stalled — no data from ax-engine/model for 900s" },
+        },
+        consecutiveErrors: 1,
+        step: 4,
+      },
+      {
+        async findFallback() {
+          throw new Error("fallback lookup must not run")
+        },
+        warn(message, fields) {
+          warnings.push({ message, fields })
+        },
+        publishError(input) {
+          published.push(input)
+        },
+      },
+    )
+
+    expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 1 })
+    expect(warnings).toEqual([
+      {
+        message: "local engine stream stalled, stopping without replay",
+        fields: expect.objectContaining({ errorCode: "AX_ENGINE_STREAM_STALLED", sessionID }),
+      },
+    ])
+    expect(published).toEqual([
+      {
+        sessionID,
+        message: expect.stringContaining("was not replayed automatically"),
+      },
+    ])
+  })
+
   test("publishes stop errors when the consecutive error limit is reached", async () => {
     const sessionID = SessionID.descending()
     const warnings: { message: string; fields: Record<string, unknown> }[] = []

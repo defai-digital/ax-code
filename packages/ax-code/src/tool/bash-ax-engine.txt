@@ -5,6 +5,7 @@ Use Bash for git, builds, tests, package managers, process control, and aggregat
 Minimize local-model round trips:
 - Prefer one single-pass command over shell loops or repeated scans.
 - For repository counts, prefer tracked/source files (for example `git ls-files`) and exclude dependency/generated trees such as .git, node_modules, .venv, venv, dist, build, and target.
+- For factual repository queries, keep the command under 500 characters. Never assume `/testbed` or enumerate dozens of file extensions or exclusion paths.
 - If a command's result answers the request, synthesize the answer instead of running a slightly different version of the same query.
 - Batch independent checks in one call when that keeps output clear and bounded.
 

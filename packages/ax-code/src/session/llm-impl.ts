@@ -37,6 +37,7 @@ import { PromptCachePolicy } from "@/provider/prompt-cache-policy"
 import { LongAgentContextPacker } from "@/context/long-agent-packer"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { resolvePromptIsolationPolicy } from "./prompt-runtime-policy"
+import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 
@@ -342,7 +343,11 @@ export namespace LLM {
     const maxOutputTokens = ProviderTransform.maxOutputTokens(input.model)
 
     const supportsToolCalls = input.model.capabilities.toolcall !== false
-    const tools = supportsToolCalls ? await resolveTools(input, cfg) : {}
+    // A forced text-only turn should not pay to serialize and prefill every tool
+    // schema. This matters especially for local models, where the schemas can add
+    // thousands of tokens to a turn whose sole purpose is to synthesize an answer.
+    const toolsEnabled = supportsToolCalls && input.toolChoice !== "none"
+    const tools = toolsEnabled ? await resolveTools(input, cfg) : {}
     const pacingReservation = await applySuperLongPacing({
       enabled: superLongEnabled,
       providerID: input.model.providerID,
@@ -599,6 +604,11 @@ export namespace LLM {
   // of an indefinite hang. Override with AX_CODE_STREAM_IDLE_TIMEOUT_MS
   // (0 disables the watchdog).
   const STREAM_IDLE_TIMEOUT_MS = 300_000
+  // Local MLX emits no chunks during prompt prefill. A large but valid local
+  // context can exceed five minutes, and aborting it leaves the single engine
+  // slot occupied briefly while an automatic replay receives 429s. Keep a
+  // watchdog, but give local inference enough time to produce its first chunk.
+  const AX_ENGINE_STREAM_IDLE_TIMEOUT_MS = 900_000
   // CLI providers (qoder-cli, claude-code, …) often start long-running local
   // commands (dev servers) and go quiet on the model stream while the child
   // is still healthy. Use a longer default idle window so live-runs are not
@@ -625,6 +635,7 @@ export namespace LLM {
       const parsed = Number(raw)
       if (Number.isFinite(parsed) && parsed >= 0) return parsed
     }
+    if (providerID === AX_ENGINE_PROVIDER_ID) return AX_ENGINE_STREAM_IDLE_TIMEOUT_MS
     if (isCliProviderID(providerID)) return CLI_STREAM_IDLE_TIMEOUT_MS
     return STREAM_IDLE_TIMEOUT_MS
   }
@@ -890,7 +901,11 @@ export namespace LLM {
     const sortedKeys = toolKeys.slice().sort().join(",")
     const stableRuleset = JSON.stringify(ruleset, (_key, value) => {
       if (value && typeof value === "object" && !Array.isArray(value)) {
-        return Object.fromEntries(Object.keys(value).sort().map((k) => [k, value[k]]))
+        return Object.fromEntries(
+          Object.keys(value)
+            .sort()
+            .map((k) => [k, value[k]]),
+        )
       }
       return value
     })

@@ -29,7 +29,8 @@
     "@ax-code/electron#dev": {
       "dependsOn": ["@ax-code/sdk#build"],
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": ["AX_ENGINE_BIN", "AX_ENGINE_PYTHON"]
     },
     "ax-code#test": {
       "dependsOn": ["^build"],

@@ -62,6 +62,7 @@ import {
   modelTurnFinished,
   readOnlyExplorationDecision,
   resolveTurnToolChoice,
+  shouldRestoreForcedTextOnlyTurn,
   toolOnlyTurnDecision,
   type GoalBudgetWrapUp,
 } from "./prompt-autonomous-decisions"
@@ -839,24 +840,7 @@ export namespace SessionPrompt {
       lastProducedAssistantID = processor.message.id
       using _ = defer(() => clearPromptProcessorInstructions(processor))
 
-      const tools = await resolveTools({
-        agent,
-        session,
-        model,
-        tools: lastUser.tools,
-        processor,
-        bypassAgentCheck: shouldBypassAgentCheck(lastUserParts),
-        messages: msgs,
-        isolation: resolvePromptIsolationPolicy({
-          config: cfg.isolation,
-          policy: lastUser.isolation,
-          directory: Instance.directory,
-          worktree: Instance.worktree,
-        }),
-      })
-
       const structuredOutput = createStructuredOutputTurn(request.format)
-      structuredOutput.attachTool(tools)
 
       // Consume the one-shot forced-text-only turn (see the
       // toolOnlyFinalCheckpointHits/forceTextOnlyTurn declarations above) —
@@ -869,6 +853,29 @@ export namespace SessionPrompt {
       })
       const toolChoice = toolChoiceResolution.toolChoice
       if (toolChoiceResolution.consumedForceTextOnlyTurn) forceTextOnlyTurn = false
+
+      // Forced text-only synthesis must not pay for registry/MCP schema
+      // materialization either — only structured-output-required turns need
+      // tools while toolChoice is otherwise "none".
+      const needsTools = toolChoice !== "none" || structuredOutput.toolChoice === "required"
+      const tools = needsTools
+        ? await resolveTools({
+            agent,
+            session,
+            model,
+            tools: lastUser.tools,
+            processor,
+            bypassAgentCheck: shouldBypassAgentCheck(lastUserParts),
+            messages: msgs,
+            isolation: resolvePromptIsolationPolicy({
+              config: cfg.isolation,
+              policy: lastUser.isolation,
+              directory: Instance.directory,
+              worktree: Instance.worktree,
+            }),
+          })
+        : {}
+      if (needsTools) structuredOutput.attachTool(tools)
 
       const result = await processor.process({
         user: lastUser,
@@ -883,6 +890,15 @@ export namespace SessionPrompt {
         toolChoice,
         config: cfg,
       })
+
+      if (
+        shouldRestoreForcedTextOnlyTurn({
+          consumed: toolChoiceResolution.consumedForceTextOnlyTurn,
+          errored: Boolean(processor.message.error),
+        })
+      ) {
+        forceTextOnlyTurn = true
+      }
 
       if (await structuredOutput.saveCaptured(processor.message)) {
         reason = "completed"
@@ -1040,10 +1056,14 @@ export namespace SessionPrompt {
 
         if (truncatedTurnTransition.action === "recover") {
           previousTruncatedModelOutputPrefix = currentTruncatedModelOutputPrefix
+          const axEngineRecovery = model.providerID === AX_ENGINE_PROVIDER_ID
+          if (axEngineRecovery) forceTextOnlyTurn = true
           await createAutonomousTextContinuation({
             sessionID,
             messages: latestMessages,
-            text: truncatedTurnTransition.text,
+            text: axEngineRecovery
+              ? AutonomousContinuationPrompt.axEngineTruncatedModelTurnRecovery()
+              : truncatedTurnTransition.text,
           })
           continue
         }

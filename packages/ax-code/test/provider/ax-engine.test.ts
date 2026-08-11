@@ -1591,6 +1591,8 @@ describe("ax-engine provider integration", () => {
         expect(providerPrompt).toContain("local software-engineering agent")
         expect(providerPrompt.match(/local software-engineering agent/g)).toHaveLength(1)
         expect(providerPrompt).toContain("Minimize model round trips")
+        expect(providerPrompt).toContain("under 500 characters")
+        expect(providerPrompt).toContain("never assume `/testbed`")
         expect(providerPrompt).not.toContain("debug_propose_hypothesis")
         const tools = await ToolRegistry.tools(
           { modelID: ModelID.make(first.api.id), providerID: first.providerID },
@@ -1600,6 +1602,7 @@ describe("ax-engine provider integration", () => {
         expect(ids).toEqual(expect.arrayContaining(["bash", "read", "grep", "edit", "write", "skill"]))
         const bash = tools.find((tool) => tool.id === "bash")
         expect(bash?.description).toContain("Minimize local-model round trips")
+        expect(bash?.description).toContain("under 500 characters")
         expect(bash?.description.length).toBeLessThan(2_000)
         for (const excluded of ["task", "todowrite", "register_finding", "debug_propose_hypothesis"]) {
           expect(ids).not.toContain(excluded)

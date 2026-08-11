@@ -10,6 +10,7 @@ import {
 } from "./prompt-loop-decisions"
 import type { SessionID } from "./schema"
 import { Todo } from "./todo"
+import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -86,6 +87,13 @@ function terminalProviderErrorMessage(error: unknown) {
   return "Provider request failed without a recoverable fallback."
 }
 
+function isAxEngineStreamStall(input: { providerID: string; error: unknown }) {
+  return (
+    input.providerID === AX_ENGINE_PROVIDER_ID &&
+    terminalProviderErrorMessage(input.error).includes("Model stream stalled")
+  )
+}
+
 export async function handlePromptLoopError(
   input: {
     sessionID: SessionID
@@ -97,6 +105,26 @@ export async function handlePromptLoopError(
   },
   deps: PromptLoopErrorDeps = {},
 ): Promise<PromptLoopErrorResult> {
+  // Replaying an idle-timed-out local request is actively harmful: MLX may
+  // still be releasing its single job slot, so the duplicate immediately
+  // receives concurrency-limit 429s and can repeat the same huge prefill.
+  // Surface one actionable failure instead. The AX Engine watchdog is longer
+  // than the generic provider timeout, so reaching it represents a real stall.
+  if (isAxEngineStreamStall({ providerID: input.currentModel.providerID, error: input.error })) {
+    const cause = terminalProviderErrorMessage(input.error)
+    const message = `${cause} The local request was not replayed automatically; reduce the session context or retry after the engine becomes idle.`
+    ;(deps.warn ?? log.warn)("local engine stream stalled, stopping without replay", {
+      command: "session.prompt.loop",
+      status: "error",
+      errorCode: "AX_ENGINE_STREAM_STALLED",
+      consecutiveErrors: input.consecutiveErrors,
+      step: input.step,
+      sessionID: input.sessionID,
+    })
+    ;(deps.publishError ?? Session.publishError)({ sessionID: input.sessionID, message })
+    return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
+  }
+
   // Provider fallback: if the error is a provider API failure (rate limit,
   // no credit, auth error), try switching to another available provider
   // instead of retrying the same broken one.

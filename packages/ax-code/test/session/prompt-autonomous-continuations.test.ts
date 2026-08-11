@@ -1,9 +1,7 @@
 import { describe, expect, test } from "vitest"
 import { AutonomousContinuationPrompt } from "../../src/session/prompt-autonomous-continuations"
 
-const pendingTodos = [
-  { content: "Report confirmed bugs to .internal/bugs/", status: "in_progress", priority: "high" },
-]
+const pendingTodos = [{ content: "Report confirmed bugs to .internal/bugs/", status: "in_progress", priority: "high" }]
 
 describe("autonomous continuation prompt builders", () => {
   test("builds goal continuation guidance", () => {
@@ -87,6 +85,26 @@ describe("autonomous continuation prompt builders", () => {
 
     expect(text).toContain("returned no text and no tool calls")
     expect(text).toContain("empty-turn recovery 1/1")
+  })
+
+  test("builds a concise tool-free AX Engine truncation recovery", () => {
+    const text = AutonomousContinuationPrompt.axEngineTruncatedModelTurnRecovery()
+
+    expect(text).toContain("Tools are disabled")
+    expect(text).toContain("under 300 words")
+    expect(text).toContain("Do not continue or rewrite the truncated command")
+  })
+
+  test("bounds AX Engine read-only follow-up context", () => {
+    const text = AutonomousContinuationPrompt.axEngineReadOnlyCheckpoint({
+      consecutiveTurns: 1,
+      forceThreshold: 2,
+      forced: false,
+    })
+
+    expect(text).toContain("at most 6 representative files")
+    expect(text).toContain("up to 400 lines each")
+    expect(text).toContain("After 2 consecutive read-only turns")
   })
 
   test("builds completion gate retry guidance", () => {

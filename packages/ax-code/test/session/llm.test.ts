@@ -640,6 +640,90 @@ describe("session.llm.stream", () => {
     })
   })
 
+  test("omits tool schemas when tool choice is none", async () => {
+    const providerID = "alibaba-coding-plan"
+    const modelID = "qwen3.6-plus"
+    const fixture = await loadFixture(providerID, modelID)
+    const model = fixture.model
+
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("Hello"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: {
+                  apiKey: "test-key",
+                  baseURL: `${state.server.url.origin}/v1`,
+                },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(model.id))
+        const sessionID = SessionID.make("session-test-tool-choice-none")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+
+        const user = {
+          id: MessageID.make("user-tool-choice-none"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+          tools: { question: true },
+        } satisfies MessageV2.User
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["You are a helpful assistant."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Hello" }],
+          tools: {
+            question: tool({
+              description: "Ask a question",
+              inputSchema: z.object({}),
+              execute: async () => ({ output: "" }),
+            }),
+          },
+          toolChoice: "none",
+        })
+
+        for await (const _ of stream.fullStream) {
+        }
+
+        const capture = await request
+        expect(capture.body.tools).toBeUndefined()
+        expect(capture.body.tool_choice).toBeUndefined()
+      },
+    })
+  })
+
   test("sends required StructuredOutput tool schema for json_schema output", async () => {
     const providerID = "alibaba-coding-plan"
     const modelID = "qwen3.6-plus"
@@ -1802,9 +1886,7 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
     const now = 10_000_000
 
     // Inside the grace window: no reservation, no pacing state recorded.
-    const peekSpy = vi
-      .spyOn(SuperLongRuntime, "peekSessionStartedAt")
-      .mockResolvedValue(now - 60_000)
+    const peekSpy = vi.spyOn(SuperLongRuntime, "peekSessionStartedAt").mockResolvedValue(now - 60_000)
     try {
       const early = await LLM.applySuperLongPacingForTest({ ...base, now: () => now })
       expect(early).toBeUndefined()
@@ -2467,6 +2549,7 @@ describe("session.llm.streamIdleWatchdog", () => {
       expect(LLM.isCliProviderID("qoder-cli")).toBe(true)
       expect(LLM.isCliProviderID("openai")).toBe(false)
       expect(LLM.streamIdleTimeoutMs("qoder-cli")).toBe(900_000)
+      expect(LLM.streamIdleTimeoutMs("ax-engine")).toBe(900_000)
       expect(LLM.streamIdleTimeoutMs("openai")).toBe(300_000)
       // Explicit env still wins for CLI providers.
       process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = "45000"

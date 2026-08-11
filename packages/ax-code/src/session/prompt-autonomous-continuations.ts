@@ -129,6 +129,14 @@ export namespace AutonomousContinuationPrompt {
     )
   }
 
+  export function axEngineTruncatedModelTurnRecovery() {
+    return (
+      `The previous local-model turn hit its output limit. Tools are disabled for this recovery turn. ` +
+      `Do not continue or rewrite the truncated command. Give the user the direct answer from the valid evidence ` +
+      `already collected, state any uncertainty, and keep the entire response under 300 words.`
+    )
+  }
+
   // Wording notes: the streak counts turns whose finish reason was
   // "tool-calls" — the model may well have emitted narration text inside
   // those turns, so do NOT claim it produced "no text response". The streak
@@ -180,7 +188,10 @@ export namespace AutonomousContinuationPrompt {
     return (
       `Local-engine latency checkpoint: the last ${turns} only inspected the workspace. ` +
       `If the latest result answers the request, respond now. Otherwise make only the smallest focused follow-up; ` +
-      `do not repeat or slightly vary a successful repository-wide query. ` +
+      `for a broad review, inspect at most 6 representative files with bounded reads (up to 400 lines each), or run ` +
+      `one focused test/lint command, then synthesize. Do not repeat or slightly vary a successful repository-wide ` +
+      `query. Keep any follow-up shell command under 500 characters; never assume /testbed or enumerate long ` +
+      `extension/exclusion lists. ` +
       `After ${input.forceThreshold} consecutive read-only turns, the next response will be text-only.`
     )
   }
