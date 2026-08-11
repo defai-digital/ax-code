@@ -21,6 +21,9 @@ export async function preparePromptRequest(input: {
   model: Provider.Model
   cache: PromptRequestCache
   structuredPrompt: string
+  requestMessagesSource?: MessageV2.WithParts[]
+  systemOverride?: string[]
+  ephemeralSystem?: string[]
 }) {
   return NativePerf.runAsync(
     "session.preparePromptRequest",
@@ -34,7 +37,13 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
   // Ephemerally wrap queued user messages with a reminder to stay on track.
   if (input.step > 1) messages = remindQueuedMessages(messages, input.lastFinished)
 
-  await Plugin.trigger("experimental.chat.messages.transform", {}, { messages })
+  // A turn profile can project a deliberately small, request-only view of the
+  // durable transcript (for example: previous assistant answer + current user
+  // rewrite request). Clone-based callers keep `messages` as the full loop
+  // history while plugins and model conversion operate on the bounded view.
+  const requestMessagesSource = input.requestMessagesSource ?? messages
+
+  await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: requestMessagesSource })
   // The per-message conversion cache relies on message objects being
   // replaced (never mutated in place) when their content changes. A plugin
   // implementing the transform hook can mutate messages arbitrarily, so
@@ -44,18 +53,21 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
   // Build system prompt and convert messages to model format in parallel.
   // Both walk the same messages/model independently with no side effects.
   const format = input.lastUser.format ?? { type: "text" }
-  const [system, modelMessages] = await Promise.all([
-    getSystemPrompt({
-      agent: input.agent,
-      model: input.model,
-      format,
-      cache: input.cache,
-      messages,
-      sessionID: input.sessionID,
-      structuredPrompt: input.structuredPrompt,
-    }),
-    MessageV2.toModelMessages(messages, input.model, { cache: !hasTransformPlugin }),
+  const [baseSystem, modelMessages] = await Promise.all([
+    input.systemOverride
+      ? Promise.resolve(input.systemOverride)
+      : getSystemPrompt({
+          agent: input.agent,
+          model: input.model,
+          format,
+          cache: input.cache,
+          messages: requestMessagesSource,
+          sessionID: input.sessionID,
+          structuredPrompt: input.structuredPrompt,
+        }),
+    MessageV2.toModelMessages(requestMessagesSource, input.model, { cache: !hasTransformPlugin }),
   ])
+  const system = [...baseSystem, ...(input.ephemeralSystem ?? [])]
   const requestMessages = [
     ...modelMessages,
     ...(input.isLastStep
@@ -70,6 +82,7 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
 
   return {
     messages,
+    requestMessagesSource,
     format,
     system,
     requestMessages,

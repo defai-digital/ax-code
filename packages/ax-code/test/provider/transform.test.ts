@@ -2196,6 +2196,11 @@ describe("ProviderTransform.smallOptions - Alibaba thinking models", () => {
     expect(result).toEqual({})
   })
 
+  test("disables AX Engine chat-template thinking for small response-only turns", () => {
+    const result = ProviderTransform.smallOptions(createModel("ax-engine", "qwen3.6-27b-axq", true))
+    expect(result).toEqual({ chat_template_kwargs: { enable_thinking: false } })
+  })
+
   test("sanitizeOptions preserves an explicit enable_thinking=false and drops budget", () => {
     const model = createModel("alibaba-coding-plan")
     const result = ProviderTransform.sanitizeOptions(model, {

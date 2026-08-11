@@ -635,6 +635,13 @@ export namespace ProviderTransform {
   }
 
   export function smallOptions(model: Provider.Model) {
+    if (model.providerID === AX_ENGINE_PROVIDER_ID) {
+      // AX Engine exposes Qwen's supported chat-template switch directly on
+      // its OpenAI-compatible request. Auxiliary and response-only turns do
+      // not benefit from a long hidden reasoning pass, so prefill the closed
+      // thinking block and generate the answer directly.
+      return { chat_template_kwargs: { enable_thinking: false } }
+    }
     if (model.providerID === "google") {
       return { thinkingConfig: { thinkingLevel: "minimal" } }
     }

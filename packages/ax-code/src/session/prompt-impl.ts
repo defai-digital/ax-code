@@ -81,6 +81,12 @@ import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { resolvePromptIsolationPolicy } from "./prompt-runtime-policy"
 import { createPromptRunState } from "./prompt-run-state"
 import { resolvePromptCache, type PromptCacheEntry } from "./prompt-cache"
+import {
+  detectTurnExecutionProfile,
+  RESPONSE_ONLY_SYSTEM_PROMPT,
+  responseOnlyUsesFastReasoning,
+  type TurnExecutionProfile,
+} from "./prompt-turn-profile"
 import { SystemPrompt } from "./system"
 import {
   AX_ENGINE_READ_ONLY_TURN_FORCE,
@@ -344,6 +350,11 @@ export namespace SessionPrompt {
     // instead of trusting another advisory nudge.
     let toolOnlyFinalCheckpointHits = 0
     let forceTextOnlyTurn = false
+    // AX Engine runtime control is request-local policy, not user content.
+    // Keep the instruction in memory until a provider turn successfully
+    // consumes it; never persist it as a synthetic chat message.
+    let pendingAxEngineTurnInstruction: string | undefined
+    let activeTurnProfile: TurnExecutionProfile | undefined
     let consecutiveAxEngineReadOnlyTurns = 0
     let axEngineReadOnlyNudged = false
     const cachedSystemPrompt: PromptRequestCache = {
@@ -388,6 +399,8 @@ export namespace SessionPrompt {
       toolOnlyNudges = 0
       consecutiveAxEngineReadOnlyTurns = 0
       axEngineReadOnlyNudged = false
+      pendingAxEngineTurnInstruction = undefined
+      activeTurnProfile = undefined
       fallbackModelOverride = undefined
       failedFallbackProviderIDs.clear()
       cachedMsgs = undefined
@@ -761,6 +774,47 @@ export namespace SessionPrompt {
         continue
       }
       const isLastStep = step >= maxSteps
+
+      if (activeTurnProfile?.kind === "response-only" && activeTurnProfile.currentUserID !== lastUser.id) {
+        activeTurnProfile = undefined
+      }
+      if (
+        !activeTurnProfile &&
+        model.providerID === AX_ENGINE_PROVIDER_ID &&
+        step === 1 &&
+        continuations === 0 &&
+        tasks.length === 0 &&
+        (activeGoal === undefined || activeGoal.status === "complete") &&
+        Todo.active(sessionID).length === 0 &&
+        !pendingAxEngineTurnInstruction
+      ) {
+        const profile = detectTurnExecutionProfile({ messages: msgs, currentUser: lastUser })
+        if (profile.kind === "response-only") {
+          activeTurnProfile = profile
+          forceTextOnlyTurn = true
+          log.info("turn execution profile selected", {
+            command: "session.prompt.profile",
+            status: "ok",
+            sessionID,
+            profile: profile.kind,
+            intent: profile.intent,
+            reason: profile.reason,
+            providerID: model.providerID,
+            modelID: model.id,
+            sourceAssistantID: profile.sourceAssistantID,
+            historyMessages: msgs.length,
+            requestMessages: profile.requestMessages.length,
+            sourceTextChars: profile.sourceTextChars,
+            promptTextChars: profile.promptTextChars,
+          })
+        }
+      }
+
+      const responseOnlyProfile = activeTurnProfile?.kind === "response-only" ? activeTurnProfile : undefined
+      const responseOnlyFastReasoning = responseOnlyProfile ? responseOnlyUsesFastReasoning(lastUser) : false
+      const pendingInstructionForRequest =
+        lastUser.format?.type === "json_schema" ? undefined : pendingAxEngineTurnInstruction
+
       msgs = await insertReminders({
         messages: msgs,
         agent,
@@ -782,6 +836,9 @@ export namespace SessionPrompt {
         model,
         cache: cachedSystemPrompt,
         structuredPrompt: STRUCTURED_OUTPUT_SYSTEM_PROMPT,
+        requestMessagesSource: responseOnlyProfile?.requestMessages,
+        systemOverride: responseOnlyProfile ? [RESPONSE_ONLY_SYSTEM_PROMPT] : undefined,
+        ephemeralSystem: pendingInstructionForRequest ? [pendingInstructionForRequest] : undefined,
       })
       msgs = request.messages
       const preflightCompaction = await maybeSchedulePreflightCompaction({
@@ -798,7 +855,7 @@ export namespace SessionPrompt {
           userSystem: lastUser.system,
         }),
         requestMessages: request.requestMessages,
-        tools: lastUser.tools,
+        tools: responseOnlyProfile ? {} : lastUser.tools,
         sessionPermission: session.permission,
       })
       if (preflightCompaction.action === "compact") {
@@ -888,6 +945,7 @@ export namespace SessionPrompt {
         tools,
         model,
         toolChoice,
+        small: responseOnlyFastReasoning,
         config: cfg,
       })
 
@@ -898,6 +956,15 @@ export namespace SessionPrompt {
         })
       ) {
         forceTextOnlyTurn = true
+      }
+
+      if (!processor.message.error) {
+        if (pendingInstructionForRequest && pendingAxEngineTurnInstruction === pendingInstructionForRequest) {
+          pendingAxEngineTurnInstruction = undefined
+        }
+        if (responseOnlyProfile && activeTurnProfile === responseOnlyProfile) {
+          activeTurnProfile = undefined
+        }
       }
 
       if (await structuredOutput.saveCaptured(processor.message)) {
@@ -1057,14 +1124,16 @@ export namespace SessionPrompt {
         if (truncatedTurnTransition.action === "recover") {
           previousTruncatedModelOutputPrefix = currentTruncatedModelOutputPrefix
           const axEngineRecovery = model.providerID === AX_ENGINE_PROVIDER_ID
-          if (axEngineRecovery) forceTextOnlyTurn = true
-          await createAutonomousTextContinuation({
-            sessionID,
-            messages: latestMessages,
-            text: axEngineRecovery
-              ? AutonomousContinuationPrompt.axEngineTruncatedModelTurnRecovery()
-              : truncatedTurnTransition.text,
-          })
+          if (axEngineRecovery) {
+            forceTextOnlyTurn = true
+            pendingAxEngineTurnInstruction = AutonomousContinuationPrompt.axEngineTruncatedModelTurnRecovery()
+          } else {
+            await createAutonomousTextContinuation({
+              sessionID,
+              messages: latestMessages,
+              text: truncatedTurnTransition.text,
+            })
+          }
           continue
         }
 
@@ -1287,14 +1356,10 @@ export namespace SessionPrompt {
               consecutiveTurns: consecutiveAxEngineReadOnlyTurns,
               forced,
             })
-            await createAutonomousTextContinuation({
-              sessionID,
-              messages: msgs,
-              text: AutonomousContinuationPrompt.axEngineReadOnlyCheckpoint({
-                consecutiveTurns: consecutiveAxEngineReadOnlyTurns,
-                forceThreshold: AX_ENGINE_READ_ONLY_TURN_FORCE,
-                forced,
-              }),
+            pendingAxEngineTurnInstruction = AutonomousContinuationPrompt.axEngineReadOnlyCheckpoint({
+              consecutiveTurns: consecutiveAxEngineReadOnlyTurns,
+              forceThreshold: AX_ENGINE_READ_ONLY_TURN_FORCE,
+              forced,
             })
             continue
           }

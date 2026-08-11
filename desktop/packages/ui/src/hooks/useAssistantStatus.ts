@@ -101,7 +101,7 @@ const WORKING_PHRASES = [
   "calibrating",
   "synthesizing",
   "connecting dots",
-  "inspecting logic",
+  "composing response",
   "weighing options",
 ]
 
