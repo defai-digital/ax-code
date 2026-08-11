@@ -137,7 +137,10 @@ export type DesktopAxCodeRuntimeIdentity = {
 
 export const fetchDesktopAxCodeRuntimeIdentity = async (): Promise<DesktopAxCodeRuntimeIdentity> => {
   try {
-    const response = await fetch("/health", { method: "GET", headers: { Accept: "application/json" } })
+    const response = await fetch(API_ENDPOINTS.debug.rootHealth, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    })
     if (!response.ok) return { binaryPath: null, binarySource: null, version: null }
     const body = (await response.json()) as {
       axCodeBinaryResolved?: unknown

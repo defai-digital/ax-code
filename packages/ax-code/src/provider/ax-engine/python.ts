@@ -1,6 +1,7 @@
 import fs from "fs"
 import os from "os"
 import path from "path"
+import { Filesystem } from "@/util/filesystem"
 
 /**
  * Resolve the Python interpreter ax-engine should use for Hugging Face Hub
@@ -18,18 +19,19 @@ export function resolveAxEnginePython(
   const explicit = typeof env.AX_ENGINE_PYTHON === "string" ? env.AX_ENGINE_PYTHON.trim() : ""
   if (explicit && isExecutablePython(explicit)) return explicit
 
-  const candidates =
-    process.platform === "win32"
-      ? [
-          path.join(home, ".ax-engine", "venv", "Scripts", "python.exe"),
-          path.join(home, ".ax-engine", "venv", "Scripts", "python"),
-        ]
-      : [
-          path.join(home, ".ax-engine", "venv", "bin", "python"),
-          path.join(home, ".ax-engine", "venv", "bin", "python3"),
-        ]
+  // Resolve under $HOME only — containment check keeps managed venv paths
+  // from escaping home even if home resolution is unexpected.
+  const managedRoot = path.resolve(home, ".ax-engine", "venv")
+  if (!Filesystem.contains(home, managedRoot)) return undefined
 
-  for (const candidate of candidates) {
+  const relativeBins =
+    process.platform === "win32"
+      ? (["Scripts/python.exe", "Scripts/python"] as const)
+      : (["bin/python", "bin/python3"] as const)
+
+  for (const rel of relativeBins) {
+    const candidate = path.resolve(managedRoot, rel)
+    if (!Filesystem.contains(managedRoot, candidate)) continue
     if (isExecutablePython(candidate)) return candidate
   }
   return undefined

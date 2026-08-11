@@ -1,3 +1,5 @@
+import { parseJsonResult } from "@/util/json-value"
+
 /**
  * Normalize ax-engine `--progress-json` NDJSON events into a stable job-facing
  * progress snapshot. The engine emits:
@@ -92,12 +94,9 @@ export function parseProgressJsonLine(line: string):
   | { kind: "ignore" } {
   const trimmed = line.trim()
   if (!trimmed.startsWith("{")) return { kind: "ignore" }
-  let value: unknown
-  try {
-    value = JSON.parse(trimmed)
-  } catch {
-    return { kind: "ignore" }
-  }
+  const parsed = parseJsonResult(trimmed)
+  if (!parsed.ok) return { kind: "ignore" }
+  const value = parsed.value
   if (!value || typeof value !== "object" || Array.isArray(value)) return { kind: "ignore" }
   const record = value as Record<string, unknown>
   if (record.event === "progress") {

@@ -463,6 +463,9 @@ function measureDirBytes(target: string): number {
     }
     for (const entry of entries) {
       const full = path.join(current, entry.name)
+      // Stay under the progress root — readdir entries should already, but
+      // refuse any escape (security_scan path_traversal).
+      if (!Filesystem.contains(target, full)) continue
       try {
         if (entry.isDirectory()) stack.push(full)
         else if (entry.isFile() || entry.isSymbolicLink()) {

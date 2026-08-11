@@ -61,10 +61,27 @@ jobs:
           queries: +security-extended,security-and-quality
           config-file: ./.github/codeql/codeql-config.yml
 
+      # Run analysis without uploading so a missing Code Security product
+      # feature cannot fail a successful scan. Upload is best-effort below.
       - name: Analyze
         uses: github/codeql-action/analyze@v4
         with:
           category: "/language:javascript-typescript-actions"
+          upload: never
+          output: ${{ runner.temp }}/codeql-sarif-js
+
+      - name: Upload SARIF
+        id: upload-js
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ runner.temp }}/codeql-sarif-js
+          category: "/language:javascript-typescript-actions"
+
+      - name: Note SARIF upload status
+        if: steps.upload-js.outcome == 'failure'
+        run: |
+          echo "::warning::Code scanning SARIF upload failed (often Code Security upload unavailable). Analysis itself completed successfully."
 
   rust:
     name: Rust
@@ -83,3 +100,18 @@ jobs:
         uses: github/codeql-action/analyze@v4
         with:
           category: "/language:rust"
+          upload: never
+          output: ${{ runner.temp }}/codeql-sarif-rust
+
+      - name: Upload SARIF
+        id: upload-rust
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ runner.temp }}/codeql-sarif-rust
+          category: "/language:rust"
+
+      - name: Note SARIF upload status
+        if: steps.upload-rust.outcome == 'failure'
+        run: |
+          echo "::warning::Code scanning SARIF upload failed (often Code Security upload unavailable). Analysis itself completed successfully."
