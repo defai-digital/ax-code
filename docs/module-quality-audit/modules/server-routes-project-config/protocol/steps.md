@@ -1,0 +1,37 @@
+# Review protocol: server-routes-project-config
+
+## Step 1 Scope and surface
+
+The reviewed unit is `server-routes-project-config`, centered on `packages/ax-code/src/server/routes/project-config.ts`. Its public surface includes the shared boolean schema at `packages/ax-code/src/server/routes/project-config.ts:20`, response/persistence adapters at lines 36-80, read/decode helpers at lines 82-136, and the locked mutation primitives at lines 138-172. Call-site tracing found the helpers used by `packages/ax-code/src/server/routes/isolation.ts:8`, `packages/ax-code/src/server/routes/autonomous.ts:8-12`, `packages/ax-code/src/server/routes/smart-llm.ts:6-10`, and `packages/ax-code/src/server/routes/super-long.ts:112-228`. The pre-existing scope record agrees that the candidate itself is one 174-line source file (`docs/module-quality-audit/modules/server-routes-project-config/MODULE-AUDIT.md:5-17`).
+
+## Step 2 Trust boundaries and failure model
+
+The trust boundary is the project-local `ax-code.json`: `filepath()` derives it from `Instance.directory` at `packages/ax-code/src/server/routes/project-config.ts:95-97`. Missing files become `{}`, but other read errors escape (`project-config.ts:99-103`), which prevents permission failures from masquerading as defaults; `packages/ax-code/test/server/project-config.test.ts:49-67` exercises EACCES. Malformed input is tolerated for read-only state at `project-config.ts:123-129`, while mutation rejects malformed or non-object JSON at lines 143-151 before any write. Logging emits an error message or issue count, not configuration values (`project-config.ts:24-27,116-126`), reducing accidental disclosure of provider credentials held elsewhere in the config schema.
+
+## Step 3 Correctness and state transitions
+
+The write path acquires the in-process writer lock and then the cross-process lock before rereading (`packages/ax-code/src/server/routes/project-config.ts:138-143`), invokes the caller exactly once, and writes the mutated object before returning its result (`project-config.ts:152-155`). The response adapter only changes process-global and directory-scoped feature state after persistence succeeds (`project-config.ts:52-63`); callers convert its error union to HTTP 500, for example `packages/ax-code/src/server/routes/isolation.ts:101-118` and `packages/ax-code/src/server/routes/smart-llm.ts:63-75`. This ordering avoids exposing runtime state that disk did not commit. A read reconciles both the process flag and supported scoped flag at `project-config.ts:82-92`, matching the per-directory design documented in `packages/ax-code/src/flag/scoped.ts:3-18`.
+
+## Step 4 Concurrency, atomicity, and cost
+
+Concurrent mutations are serialized by key in `packages/ax-code/src/util/lock.ts:125-150` and across processes through exclusive lock-file creation in `packages/ax-code/src/util/filelock.ts:101-136`. The latter has a ten-second timeout and 50 ms polling interval (`filelock.ts:30-31,105-107,132-135`), bounding a wedged request. Final persistence uses a temporary file followed by rename (`packages/ax-code/src/util/filesystem.ts:83-115`), so unlocked readers do not observe a partially written document. Each GET performs one small file read and each update performs lock acquisition, one read, and one atomic write; no loop scales with route payload size. The remaining test gap is that the focused suite does not directly race two `updateProjectConfig` calls or simulate lock timeout, although the implementation composes established lock utilities.
+
+## Step 5 Validation and compatibility
+
+Top-level configuration is strict (`packages/ax-code/src/config/schema-impl.ts:1078-1082`). `decodeProjectConfigValue` first accepts a fully valid object, then retries with `Config.Info.strip()` to retain recognized keys while removing unknown top-level keys (`packages/ax-code/src/server/routes/project-config.ts:106-118`). If known fields themselves are invalid, it preserves the raw object rather than destroying unrelated user data (`project-config.ts:119-121`); updates still require JSON object shape. Tests pin valid decoding, unknown-key stripping, raw preservation, malformed JSON fallback, and non-object fallback at `packages/ax-code/test/server/project-config.test.ts:13-47`. This policy is asymmetric by design: reads remain available, but writes never overwrite syntactically malformed/non-object input (`project-config.test.ts:69-109`).
+
+## Step 6 Ownership and API design
+
+The module owns project-config mechanics without importing Hono: route-specific handlers provide update closures and response state. `persistProjectConfigBooleanFeatureResponse` removes repeated flag/value/response wiring (`packages/ax-code/src/server/routes/project-config.ts:66-80`), while isolation can use the generic string-or-boolean adapter (`project-config.ts:46-64`). Atomic file replacement remains in `Filesystem.writeJson` (`packages/ax-code/src/util/filesystem.ts:118-120`), and lock algorithms remain in their utility modules, so responsibilities are separated. Two lower-level functions, `persistProjectConfigResponse` and `persistProjectConfig`, are exported but have no external import found in the reviewed callers; this is a modest surface-area observation, not a correctness finding.
+
+## Step 7 Test adequacy
+
+The direct suite verifies decode behavior, unreadable-file propagation, preservation of invalid on-disk text during failed updates, and creation of a missing config (`packages/ax-code/test/server/project-config.test.ts:13-125`). Integration coverage proves helper behavior through isolation persistence and environment reconciliation (`packages/ax-code/test/server/isolation.test.ts:119-149`) and preservation of nested isolation settings (`isolation.test.ts:175-211`). Boolean coercion and autonomous/super-long coupled persistence are covered at `packages/ax-code/test/server/super-long.test.ts:190-224,410-469`. Direct tests for `persistProjectConfig`'s false/onError branch and concurrent writer contention are absent; these are useful future additions but do not establish a present defect.
+
+## Step 8 Findings disposition
+
+No finding file exists under this unit's `findings/` directory, and the existing ledger states `_none accepted_` at `docs/module-quality-audit/modules/server-routes-project-config/MODULE-AUDIT.md:69-73`. Independent review did not uncover a Critical, High, Medium, or Low correctness/security defect requiring a new record. The two residual test opportunities from Steps 4 and 7 and the exported surface observation from Step 6 remain non-blocking audit notes. Because there is no Critical item, the conditional `reverify.md` artifact is not applicable.
+
+## Step 9 Verification and exit decision
+
+The focused command `AX_TEST_FILES=test/server/project-config.test.ts,test/server/isolation.test.ts,test/server/super-long.test.ts pnpm exec vitest run` completed with 3 files and 38 tests passing. `pnpm --dir packages/ax-code run typecheck` also completed successfully. These executions validate the direct cases at `packages/ax-code/test/server/project-config.test.ts:13-125`, route integration at `packages/ax-code/test/server/isolation.test.ts:25-265`, and boolean/autonomous integration at `packages/ax-code/test/server/super-long.test.ts:190-224,410-469`. With no accepted finding and both targeted verification gates green, the reviewer decision for `server-routes-project-config` is pass, subject to the named non-blocking coverage opportunities.

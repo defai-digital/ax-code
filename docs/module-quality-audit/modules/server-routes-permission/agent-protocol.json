@@ -1,0 +1,32 @@
+{
+  "slug": "server-routes-permission",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/permission.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/route-params.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/validation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/lazy.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/permission/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/permission/schema.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/server.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/question.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/session-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/route-validation.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-permission/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Scoped to one Hono router (PermissionRoutes, permission.ts:10) mounted at /permission by server.ts:314; two endpoints POST /:requestID/reply and GET /.",
+    "2": "Mutating surface is the reply POST; requestID is a branded PermissionID (schema.ts:3) and reply is a strict enum once|always|reject (permission/index.ts:70), both enforced by hono-openapi validators before the handler runs.",
+    "3": "Reply handler checks the boolean returned by Permission.reply (permission.ts:39-47) and surfaces 404 PermissionUnavailableError on false; the #341 comment explains why a pre-call pending check would race.",
+    "4": "No shared state owned by the route; pending map, per-instance alwaysReplyQueue mutex, and cross-process FileLock (permission/index.ts:475) all live in the Permission module and are correctly delegated.",
+    "5": "GET / is effectively constant-time (listPromise is an Array.from over the in-memory map, permission/index.ts:531-534); POST pays the file-lock + DB transaction cost only for always replies, owned by the module not the route.",
+    "6": "operationIds permission.reply and permission.list are unique; POST documents 200/400/404 via errors(400,404); GET documents only 200 (minor asymmetry, LOW). Sibling duplication of the same envelope at session-impl.ts:1562-1582 is intentional.",
+    "7": "No dead code; all eight imports (Hono, describeRoute, resolver, validator, z, Permission, errors/notFound, lazy, route-params helpers) are used; zero empty catches, zero TODOs.",
+    "8": "Stale-request 404 path is directly tested in route-validation.test.ts:594-625 against the exact envelope shape; happy paths and Permission.list are covered transitively via next.test.ts and acp/event-subscription.test.ts; gap: no HTTP-layer GET / serialization assertion.",
+    "9": "No Critical/High/Medium findings; two LOW notes only (uncapped message string at permission.ts:31, missing 5xx envelope in GET / OpenAPI). No reverify.md required."
+  },
+  "date": "2026-08-11"
+}

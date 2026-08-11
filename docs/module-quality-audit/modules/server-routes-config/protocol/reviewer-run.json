@@ -1,0 +1,27 @@
+{
+  "agentId": "codex-sol-server-routes-config-20260811T193425Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:34:25Z",
+  "finishedAt": "2026-08-11T19:38:59Z",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/config.ts",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/src/server/routes/global.ts",
+    "packages/ax-code/src/server/routes/provider.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/server/error.ts",
+    "packages/ax-code/src/config/config.ts",
+    "packages/ax-code/src/config/config-impl.ts",
+    "packages/ax-code/src/config/schema-impl.ts",
+    "packages/ax-code/src/provider/provider.ts",
+    "packages/ax-code/src/provider/provider-impl.ts",
+    "packages/ax-code/src/provider/model-info.ts",
+    "packages/ax-code/test/AGENTS.md",
+    "packages/ax-code/test/server/global-config.test.ts",
+    "packages/ax-code/test/server/provider-routes.test.ts",
+    "packages/ax-code/package.json",
+    "docs/module-quality-audit/modules/server-routes-config/MODULE-AUDIT.md"
+  ],
+  "slug": "server-routes-config"
+}

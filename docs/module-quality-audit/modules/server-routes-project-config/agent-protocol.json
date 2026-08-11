@@ -1,0 +1,36 @@
+{
+  "slug": "server-routes-project-config",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/project-config.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-project-config/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/AGENTS.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/project-config.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/isolation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/autonomous.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/smart-llm.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/super-long.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/config/schema-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/filelock.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/lock.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/filesystem.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/flag/scoped.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/feature-flags.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/isolation.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/super-long.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Traced the ten exports from project-config.ts into isolation, autonomous, smart-LLM, and Super-Long route consumers.",
+    "2": "Examined project-directory path resolution, non-ENOENT propagation, value-free warning logs, and malformed-input behavior.",
+    "3": "Confirmed persistence precedes process and directory-scoped feature state changes and that route callers map failure to HTTP 500.",
+    "4": "Checked in-process serialization, exclusive cross-process locking, bounded lock waits, and temp-file rename atomicity.",
+    "5": "Compared strict Config.Info validation with the valid, stripped, raw-preserving, and malformed JSON decode branches.",
+    "6": "Reviewed responsibility boundaries among route adapters, project-config mechanics, filesystem writes, and lock utilities.",
+    "7": "Matched direct decode/update tests with isolation and Super-Long integration coverage and identified non-blocking contention gaps.",
+    "8": "Reconciled the empty findings directory with the audit ledger and found no severity-bearing defect or Critical recheck trigger.",
+    "9": "Ran three focused Vitest files with 38 passing tests and completed the core tsgo typecheck successfully."
+  },
+  "date": "2026-08-11"
+}

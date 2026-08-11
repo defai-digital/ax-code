@@ -1,0 +1,37 @@
+{
+  "slug": "server-routes-prompt-history",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/prompt-history.ts",
+    "packages/ax-code/src/prompt-history/index.ts",
+    "packages/ax-code/src/prompt-history/schema.ts",
+    "packages/ax-code/src/prompt-history/prompt-history.sql.ts",
+    "packages/ax-code/src/server/routes/query.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/src/server/error.ts",
+    "packages/ax-code/src/server/request-directory.ts",
+    "packages/ax-code/src/server/runtime-auth.ts",
+    "packages/ax-code/src/runtime/listen-security.ts",
+    "packages/ax-code/src/server/middleware.ts",
+    "packages/ax-code/src/cli/cmd/tui/component/prompt/history.tsx",
+    "packages/sdk/js/src/gen/types.gen.ts",
+    "packages/ax-code/test/server/prompt-history.test.ts",
+    "packages/ax-code/test/AGENTS.md",
+    "docs/module-quality-audit/modules/server-routes-prompt-history/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "PromptHistoryRoutes is a lazy Hono sub-app with GET and POST handlers (prompt-history.ts:15-64), mounted at /prompt-history by server.ts:306 and documented with distinct list/append operation IDs.",
+    "2": "Prompt data crosses an HTTP-to-SQLite boundary after requestDirectory establishes a validated Instance (server.ts:258-277); storage filters by Instance.project.id (prompt-history/index.ts:36,60-66), and network listen is loopback-only (runtime/listen-security.ts:27-31).",
+    "3": "GET validates limit as a positive integer capped at MAX_ENTRIES and defaults through storage to 50; POST validates PromptHistoryEntry, whose mode enum and parts default are defined at schema.ts:9-15; response schemas match both handler values.",
+    "4": "List orders newest-first in SQL then reverses for chronological delivery (index.ts:32-42); append suppresses only consecutive duplicates and prunes beyond 50 inside the same transaction (index.ts:62-98).",
+    "5": "GET returns at most 50 indexed rows and append pruning operates over the maintained project bound (prompt-history.sql.ts:23; index.ts:88-97); per-entry strings/part values have no explicit byte ceiling, noted as local-only defense-in-depth.",
+    "6": "HTTP metadata/validation, persistence policy, and shared schema have separate owners (route lines 11-64, index lines 7-100, schema lines 3-17); the TUI consumes the route at history.tsx:35-51 and generated types agree at types.gen.ts:4680-4766.",
+    "7": "Validation failures become 400 via validation.ts:4-13 and unexpected exceptions use server.ts:155-165; direct tests cover scoping, retention/order, non-finite direct limits, and dedupe, but not malformed route requests or explicit valid limit slicing.",
+    "8": "MODULE-AUDIT.md:60-64 contains no accepted findings and findings/ has no files; review found no severity-bearing defect, only an informational route-test gap, so Critical re-verification was not triggered.",
+    "9": "Focused Vitest execution passed 4/4 tests from test/server/prompt-history.test.ts:26-125, and the core package typecheck passed; reviewer protocol is complete with ax-code-glm retained as the assigned independent verifier."
+  },
+  "date": "2026-08-11"
+}

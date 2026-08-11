@@ -1,0 +1,32 @@
+{
+  "slug": "server-routes-dre-graph",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/dre-graph.ts",
+    "packages/ax-code/src/server/routes/route-params.ts",
+    "packages/ax-code/src/server/routes/session-lookup.ts",
+    "packages/ax-code/src/server/routes/query.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/quality/dre-graph-format.ts",
+    "packages/ax-code/src/quality/dre-graph-fingerprint.ts",
+    "packages/ax-code/src/quality/dre-graph-widgets.ts",
+    "packages/ax-code/src/quality/dre-graph-index-page.ts",
+    "packages/ax-code/src/session/index.ts",
+    "packages/ax-code/src/session/graph.ts",
+    "docs/module-quality-audit/modules/server-routes-dre-graph/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single-file unit; DreGraphRoutes at dre-graph.ts:163 wraps a Hono router with four GET routes (/, /fingerprint, /session/:sessionID, /session/:sessionID/fingerprint).",
+    "2": "HTML surfaces use esc() for title/dir (lines 87-88) and inside link() (line 94); query+param validated via DRE_GRAPH_QUALITY_QUERY and SESSION_ID_PARAM.",
+    "3": "requireCurrentProjectSession is invoked on both session-scoped routes (lines 182, 207) — cross-project guard yields HTTP 409; Session.get is fetched twice per request (once in loader, once in the guard).",
+    "4": "loadSessionGraphContext parallelizes five loaders via Promise.all (line 49); index path runs Risk.fromSession synchronously per row for up to 50 sessions (line 71).",
+    "5": "SessionGraphContext bundles the snapshot cleanly; page() still inlines nav/hero markup (108-139) while delegating every other section, leaving one raw-HTML pocket in an otherwise thin route file.",
+    "6": "No empty catches; the two .catch blocks (lines 53-60) log via log.warn and fall back to undefined / [] so rank or rollback failure degrades instead of 500-ing.",
+    "7": "No route-level test asserts the 409 path on /session/:sessionID or its fingerprint sibling; section rendering is covered by test/quality/dre-graph-activity-section.test.ts.",
+    "8": "No findings accepted; the duplicate Session.get read and O(n) Risk.fromSession are LOW observations, not blocking entries.",
+    "9": "No Critical findings in findings/, so no reverify.md second-pass is triggered; typecheck via pnpm --dir packages/ax-code run typecheck, script tests via pnpm run test:scripts."
+  },
+  "date": "2026-08-11"
+}

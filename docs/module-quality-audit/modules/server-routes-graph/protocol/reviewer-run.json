@@ -1,0 +1,27 @@
+{
+  "agentId": "codex-sol-server-routes-graph-20260811T193555Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:35:55Z",
+  "finishedAt": "2026-08-11T19:38:47Z",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/graph.ts",
+    "packages/ax-code/src/server/routes/session-lookup.ts",
+    "packages/ax-code/src/server/routes/route-params.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/server/error.ts",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/src/graph/index.ts",
+    "packages/ax-code/src/graph/format.ts",
+    "packages/ax-code/src/session/index.ts",
+    "packages/ax-code/src/replay/query.ts",
+    "packages/ax-code/src/risk/score.ts",
+    "packages/ax-code/src/util/lazy.ts",
+    "packages/ax-code/test/graph/execution-graph.test.ts",
+    "packages/ax-code/test/server/project-identity.test.ts",
+    "packages/ax-code/package.json",
+    "packages/sdk/openapi.json",
+    "docs/module-quality-audit/modules/server-routes-graph/MODULE-AUDIT.md"
+  ],
+  "slug": "server-routes-graph"
+}

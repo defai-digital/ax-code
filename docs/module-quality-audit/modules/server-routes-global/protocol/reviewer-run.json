@@ -1,0 +1,19 @@
+{
+  "agentId": "ax-code-glm-server-routes-global-20260811T193138Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:31:38Z",
+  "finishedAt": "2026-08-11T19:48:12Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/global.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-global/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/config.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/validation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/sse-queue.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/queue.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/event.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/sse-queue.ts"
+  ],
+  "slug": "server-routes-global"
+}

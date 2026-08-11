@@ -1,0 +1,28 @@
+{
+  "slug": "server-routes-experimental",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "date": "2026-08-11",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/experimental.ts",
+    "packages/ax-code/src/server/routes/query.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/server/error.ts",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/src/session/index.ts",
+    "packages/ax-code/src/worktree/index-impl.ts",
+    "docs/module-quality-audit/modules/server-routes-experimental/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "ExperimentalRoutes is a lazy Hono singleton exported at experimental.ts:26 and mounted once at /experimental in server.ts:312; seven routes (tool ids/list, worktree CRUD+reset, session list, mcp resources) plus the module-local canonicalSandboxDirectory helper at line 19.",
+    "2": "Network/api risk concentrated in DELETE /worktree (client-driven directory deletion + Project.removeSandbox at line 170-172), GET /session global cross-project listing, and POST /worktree startup-script execution; validation delegated to server/validation.ts invalidRequest path, and the only .catch is the intentional realpath fallback at line 21.",
+    "3": "Real defect: at experimental.ts:242 the /session handler maps `directory: query.directory ? Instance.directory : undefined`, discarding the client value and substituting the current project's directory; downstream Session.listGlobal (session/index.ts:674) honors parsed.directory correctly, so the bug is local to argument shaping. Secondary: canonicalSandboxDirectory runs on DELETE only, not on POST create.",
+    "4": "Pagination is sound: limit+1 probe (line 247), default 100 (line 239), max 1000 (line 231), x-next-cursor keyed on time.updated (line 254) matches the desc(time_updated,id) ordering in session/index.ts:703. Minor recompute cost: GET /tool calls zodToJsonSchema per tool per request with no cache (line 97).",
+    "5": "Layering is correct for a routes file: validate -> delegate to ToolRegistry/Worktree/Project/Instance/MCP/Session -> serialize, with no direct storage or provider-internal access. The /experimental prefix is the right namespace. At 280 lines / 7 routes the three resource families do not yet justify splitting into sub-routers.",
+    "6": "No dead exports or unused imports; every symbol is referenced. The `(t.parameters as any)?._def` probe at line 97 couples to Zod's private _def field (fragile across Zod majors) but is correct today. No TODO/FIXME markers; the win32 lowercasing at line 23 is intentional case normalization.",
+    "7": "No test file targets experimental.ts directly; the audit's server/test/* inventory covers other routes only. Highest-value missing coverage is a regression test for the Step 3 directory-filter substitution and the create/remove sandbox-key round trip through canonicalSandboxDirectory.",
+    "8": "No findings/ files exist yet; this is the first disposition pass. One MEDIUM candidate (directory filter ignored, experimental.ts:242) and three LOW candidates (uneven OpenAPI errors(...) on GET routes; Zod _def internal probe; canonicalization on delete-only). None Critical/High, so no reverify.md is triggered.",
+    "9": "Evidence confirmed by reading the primary source plus six related modules (query/validation/error/server/session/worktree). The Step 3 defect is reproducible by inspection of experimental.ts:242 against session/index.ts:674-676. 9 steps complete; awaiting codex-sol verifier lane for dual-agent sign-off."
+  }
+}

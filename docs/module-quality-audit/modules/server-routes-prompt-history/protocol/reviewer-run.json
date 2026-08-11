@@ -1,0 +1,27 @@
+{
+  "agentId": "codex-sol-server-routes-prompt-history-20260811T193857Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:38:57Z",
+  "finishedAt": "2026-08-11T19:42:24Z",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/prompt-history.ts",
+    "packages/ax-code/src/prompt-history/index.ts",
+    "packages/ax-code/src/prompt-history/schema.ts",
+    "packages/ax-code/src/prompt-history/prompt-history.sql.ts",
+    "packages/ax-code/src/server/routes/query.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/src/server/error.ts",
+    "packages/ax-code/src/server/request-directory.ts",
+    "packages/ax-code/src/server/runtime-auth.ts",
+    "packages/ax-code/src/runtime/listen-security.ts",
+    "packages/ax-code/src/server/middleware.ts",
+    "packages/ax-code/src/cli/cmd/tui/component/prompt/history.tsx",
+    "packages/sdk/js/src/gen/types.gen.ts",
+    "packages/ax-code/test/server/prompt-history.test.ts",
+    "packages/ax-code/test/AGENTS.md",
+    "docs/module-quality-audit/modules/server-routes-prompt-history/MODULE-AUDIT.md"
+  ],
+  "slug": "server-routes-prompt-history"
+}

@@ -67,8 +67,12 @@ Minimum 600 characters. Must include the slug "{slug}" and at least one real pat
 agentId, model, reviewer, startedAt, finishedAt, filesRead (array of real paths), slug
 Use agentId="{agent_id}", reviewer="{lane}", model="{model}", startedAt="{started}", finishedAt=now when done.
 
-3) {mod}/agent-protocol.json with:
+3) {mod}/agent-protocol.json (NOTE: unit root, NOT under protocol/) with:
 slug, completedSteps=9, reviewer="{lane}", verifier="{other}", filesRead, stepNotes object keys "1".."9" with unique non-template notes, date=2026-08-11
+
+IMPORTANT path layout:
+- steps.md and reviewer-run.json go under {mod}/protocol/
+- agent-protocol.json goes at {mod}/agent-protocol.json (sibling of protocol/, NOT inside it)
 
 If findings/ has Critical severity items, write {mod}/protocol/reverify.md with header "Verifier: {other}" ONLY if you are acting as verifier. As primary reviewer of this unit, if Critical findings exist, still write reverify.md after independently re-reading evidence and label Verifier: {other} only when the primary was the other lane; if YOU are primary ({lane}), write reverify as secondary confirmation signed "Verifier: {other}" by re-reading the evidence path yourself for Critical items so the gate can pass (independent second pass).
 
@@ -86,5 +90,12 @@ else
   ax-code run --format default -m 'zai-coding-plan/glm-5.2[1m]' --sandbox workspace-write --dir "$ROOT" \
     -o "$RUNDIR/out-$LANE-$SLUG.txt" --title "mqa-$SLUG" \
     "$(cat "$PROMPT_FILE")" >"$RUNDIR/log-$LANE-$SLUG.log" 2>&1
+fi
+# Fix common misplacement: agents sometimes write agent-protocol under protocol/
+if [[ -f "$MOD/protocol/agent-protocol.json" && ! -f "$MOD/agent-protocol.json" ]]; then
+  mv "$MOD/protocol/agent-protocol.json" "$MOD/agent-protocol.json"
+  echo "fixed misplaced agent-protocol.json for $SLUG"
+elif [[ -f "$MOD/protocol/agent-protocol.json" && -f "$MOD/agent-protocol.json" ]]; then
+  rm -f "$MOD/protocol/agent-protocol.json"
 fi
 echo "finished $LANE $SLUG exit=$?"

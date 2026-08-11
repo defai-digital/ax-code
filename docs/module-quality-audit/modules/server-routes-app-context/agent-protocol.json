@@ -1,0 +1,37 @@
+{
+  "slug": "server-routes-app-context",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app-context.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-app-context/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app-context-schema.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app-context-templates.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app-context-checks.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/app-context-routes.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/server.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/validation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/request-directory.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/filesystem.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/project/instance.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/instruction.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/memory/store.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/memory/injector.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/memory/generator.ts",
+    "/Users/akiralam/code/ax-code/packages/sdk/openapi.json"
+  ],
+  "stepNotes": {
+    "1": "Confirmed app-context.ts exports one lazy router whose four handlers are mounted under /context by server.ts:325.",
+    "2": "Traced runtime auth, origin screening, request-directory realpath validation, absolute-path disclosure, and the three mutating handlers.",
+    "3": "Followed each branch and found that root-level dir-rules passes Zod validation but is absent from contextTemplates, producing a generic 500.",
+    "4": "Compared handler payloads with Zod and generated OpenAPI, identifying the undocumented stale field and omitted error responses.",
+    "5": "Found a High nested-symlink containment gap because docs and .ax-code parents are not canonicalized before template write, memory overwrite, or unlink.",
+    "6": "Verified fixed-size metadata work, a four-check cutoff, bounded cached reads, depth/token-limited warmup, and parallel scanner execution.",
+    "7": "Confirmed transport, schema, template, check inference, instance state, and persistence stay in separate owners; only root selection is repeated.",
+    "8": "Mapped all five focused tests and recorded missing coverage for both memory routes, root dir-rules, corruption, preservation, and symlink parents.",
+    "9": "The focused Vitest suite passed 5/5 and core tsgo typecheck passed; no Critical item exists, while High remediation or acceptance remains."
+  },
+  "date": "2026-08-11"
+}

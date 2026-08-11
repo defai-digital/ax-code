@@ -1,6 +1,6 @@
 {
-  "signed": 54,
-  "reviewing": 198,
+  "signed": 80,
+  "reviewing": 172,
   "findingsWritten": 34,
   "results": [
     {
@@ -227,12 +227,12 @@
       "id": "W2-01e",
       "slug": "session-fork-revert",
       "wave": 2,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 5,
       "lines": 1096,
       "empty": 0,
       "fingerprint": "06fce53738b59a56",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W2-02",
@@ -546,23 +546,23 @@
       "id": "W3-13",
       "slug": "image",
       "wave": 3,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 2,
       "lines": 218,
       "empty": 0,
       "fingerprint": "4c999a2fba6b7ae1",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W3-14",
       "slug": "import",
       "wave": 3,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 163,
       "empty": 0,
       "fingerprint": "21e366940c20309e",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-01",
@@ -623,199 +623,199 @@
       "id": "W4-03-04",
       "slug": "server-routes-app-context",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 182,
       "empty": 0,
       "fingerprint": "54021eb97b977ac9",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-05",
       "slug": "server-routes-app",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 274,
       "empty": 0,
       "fingerprint": "4541e486e0127175",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-06",
       "slug": "server-routes-audit",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 159,
       "empty": 0,
       "fingerprint": "881b692dcbc17edc",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-07",
       "slug": "server-routes-autonomous",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 111,
       "empty": 0,
       "fingerprint": "85468db909ea225a",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-08",
       "slug": "server-routes-config",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 214,
       "empty": 0,
       "fingerprint": "6201e8c238adab16",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-09",
       "slug": "server-routes-dre-graph",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 225,
       "empty": 0,
       "fingerprint": "b2cadcf9609ddd75",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-10",
       "slug": "server-routes-event",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 135,
       "empty": 0,
       "fingerprint": "a807f8508430686a",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-11",
       "slug": "server-routes-experimental",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 281,
       "empty": 0,
       "fingerprint": "bd7d9598164fb83a",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-12",
       "slug": "server-routes-file",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 192,
       "empty": 0,
       "fingerprint": "f4872e3fb9d97e67",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-13",
       "slug": "server-routes-global",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 504,
       "empty": 0,
       "fingerprint": "c6d9e45c94c725d8",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-14",
       "slug": "server-routes-graph",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 90,
       "empty": 0,
       "fingerprint": "5563cae27c3dd158",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-15",
       "slug": "server-routes-isolation",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 122,
       "empty": 0,
       "fingerprint": "375a333776e36a0e",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-16",
       "slug": "server-routes-mcp",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 306,
       "empty": 0,
       "fingerprint": "50c79af359bf5a26",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-17",
       "slug": "server-routes-permission",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 73,
       "empty": 0,
       "fingerprint": "b83baf4dd1cca47d",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-18",
       "slug": "server-routes-project-config",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 174,
       "empty": 0,
       "fingerprint": "df1f6c06c5931d58",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-19",
       "slug": "server-routes-project",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 120,
       "empty": 0,
       "fingerprint": "a9f3ea519064197f",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-20",
       "slug": "server-routes-prompt-history",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 66,
       "empty": 0,
       "fingerprint": "d8ea1d5215c8fe30",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-21",
       "slug": "server-routes-provider",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 728,
       "empty": 0,
       "fingerprint": "c1467b9b1a296ab2",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-22",
@@ -832,12 +832,12 @@
       "id": "W4-03-23",
       "slug": "server-routes-query",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 33,
       "empty": 0,
       "fingerprint": "6cc9cc2dfc956518",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-24",
@@ -854,12 +854,12 @@
       "id": "W4-03-25",
       "slug": "server-routes-route-params",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 75,
       "empty": 0,
       "fingerprint": "5cb2288aa89f6cf5",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-26",
@@ -876,12 +876,12 @@
       "id": "W4-03-27",
       "slug": "server-routes-scheduled-task",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 191,
       "empty": 0,
       "fingerprint": "fc0d83abd70163aa",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-28",
@@ -898,12 +898,12 @@
       "id": "W4-03-29",
       "slug": "server-routes-session-lookup",
       "wave": 4,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 1,
       "lines": 34,
       "empty": 0,
       "fingerprint": "be858cabeef76faa",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W4-03-30",
@@ -1129,12 +1129,12 @@
       "id": "W5-02",
       "slug": "provider-ax-engine",
       "wave": 5,
-      "status": "REVIEWING",
+      "status": "SIGNED OFF",
       "files": 20,
       "lines": 4483,
       "empty": 0,
       "fingerprint": "7b8fda0396a9494e",
-      "protocol": false
+      "protocol": true
     },
     {
       "id": "W5-03",

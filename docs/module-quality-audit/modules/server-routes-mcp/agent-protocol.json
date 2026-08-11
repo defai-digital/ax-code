@@ -1,0 +1,37 @@
+{
+  "slug": "server-routes-mcp",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/mcp.ts",
+    "packages/ax-code/src/server/routes/route-params.ts",
+    "packages/ax-code/src/server/runtime-auth.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/server/error.ts",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/src/server/request-directory.ts",
+    "packages/ax-code/src/runtime/listen-security.ts",
+    "packages/ax-code/src/config/schema-impl.ts",
+    "packages/ax-code/src/mcp/index.ts",
+    "packages/ax-code/src/mcp/impl.ts",
+    "packages/ax-code/src/mcp/oauth-callback.ts",
+    "packages/ax-code/src/util/lazy.ts",
+    "packages/ax-code/test/server/route-validation.test.ts",
+    "packages/sdk/openapi.json",
+    "packages/ax-code/package.json",
+    "docs/module-quality-audit/modules/server-routes-mcp/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Enumerated the ten lazy Hono operations, their /mcp mount, and the MCP namespace delegation boundary.",
+    "2": "Followed runtime-token, Basic Auth, origin, CORS, directory, name, URI, and discriminated config validation layers.",
+    "3": "Traced status/add maps, resource absence-to-404 conversion, OAuth prerequisites, callbacks, and connection state changes.",
+    "4": "Checked router memoization, parallel resource listing, per-name connection serialization, transport timeouts, and callback caps.",
+    "5": "Separated HTTP/OpenAPI responsibilities from shared validation, parameter extraction, SSRF, trust, OAuth, and transport ownership.",
+    "6": "Reviewed structured failures and identified low-risk false-success connect and missing-flow callback response discrepancies.",
+    "7": "Matched 43 focused HTTP tests to input rejection, mutation authorization, resource success, and resource-not-found behavior.",
+    "8": "Reconciled the empty findings location and no-accepted-items register, with no Critical issue requiring re-verification.",
+    "9": "Completed the exact route-validation Vitest file and the core tsgo typecheck successfully."
+  },
+  "date": "2026-08-11"
+}

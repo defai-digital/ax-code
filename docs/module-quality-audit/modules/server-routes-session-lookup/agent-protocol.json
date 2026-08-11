@@ -1,0 +1,30 @@
+{
+  "slug": "server-routes-session-lookup",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/session-lookup.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/route-params.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/session-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/super-long.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/tui.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/dre-graph.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/session-messages.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-session-lookup/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "33-line module, 3 exports; 7 route modules consume it (session-impl, graph, audit, dre-graph, super-long, tui, route-params) — shared critical-path guard, not a leaf.",
+    "2": "Three failure modes traced through server/error.ts: 404 via NotFoundError for missing rows, 409 via HTTPException for cross-project conflict mapped to retryable ServiceUnavailableError, happy path returns Info or id.",
+    "3": "assertSessionExists relies on Session.get throwing NotFoundError for both no-row and unparseable-row cases (session/index.ts:470-472); requireCurrentProjectSession delegates to isCompatibleWithCurrentProject (projectID + directory overlap); parseCurrentProjectSessionID returns the verified id rather than the raw route param by design.",
+    "4": "Each helper does at most one primary-key indexed SQLite read; no loops, no fan-out; O(1) per request on every session route — no memoization or batching opportunity.",
+    "5": "Three-function ladder (existence -> existence+ownership -> route-bound+ownership) is well-factored; mild bidirectional import cycle between session-lookup.ts and route-params.ts via assertSessionExists, which dissolves if that export is removed.",
+    "6": "assertSessionExists (session-lookup.ts:6-8) has one caller — parseExistingSessionID (route-params.ts:40) — which itself has zero production callers and is policed away by session-messages.test.ts:379; transitively dead, and it offers the existence-without-ownership bypass this module exists to prevent.",
+    "7": "No direct unit test; only structural source-text assertions in session-messages.test.ts:362-400 enforce which helper is wired into session-impl.ts routes; no behavioral test of the 409 or 404 paths through these helpers.",
+    "8": "Four findings: MEDIUM dead guard-bypassing assertSessionExists export, LOW 409->retryable-ServiceUnavailableError mismatch, LOW existence oracle via raw sessionID in 409 message, LOW missing behavioral tests; no Critical.",
+    "9": "findings/ empty and no Critical raised so no reverify.md second pass; gate is typecheck + session-messages.test.ts after removing assertSessionExists; finding 1 is the only action item this wave."
+  },
+  "date": "2026-08-11"
+}

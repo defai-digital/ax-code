@@ -6,9 +6,9 @@
 | Active wave | Dual-agent 9-step reviews (static extract complete) |
 | Overall | Wave 0 frozen; sign-off only via agent-protocol.json |
 | Inventory | **Frozen leaf denominator: 255** |
-| Baseline commit | `046510f0ca8a215f632e99fa92aa0633d684cbb9` |
-| Signed off | **54** / 255 |
-| Reviewing (mapped, protocol pending) | **198** |
+| Baseline commit | `ad9a854c3f8f6cc3ffc48c356a2546d3f23e9945` |
+| Signed off | **80** / 255 |
+| Reviewing (mapped, protocol pending) | **172** |
 
 ## Dual-agent ownership
 
@@ -24,8 +24,8 @@ Sign-off rule: `modules/<slug>/agent-protocol.json` must record `completedSteps:
 | Metric | Baseline | Current | Target | Measured |
 |--------|----------|---------|--------|----------|
 | Frozen denominator | 255 | 255 | frozen | 2026-08-11 |
-| Units signed off (protocol-complete) | 0 | 54 | 100% | 2026-08-11 |
-| Units reviewing (extract only) | — | 198 | → signed via agents | 2026-08-11 |
+| Units signed off (protocol-complete) | 0 | 80 | 100% | 2026-08-11 |
+| Units reviewing (extract only) | — | 172 | → signed via agents | 2026-08-11 |
 | Empty-catch scan (static) | 107 | 107 | disposition 100% | 2026-08-11 |
 | Unhandled-rejection / empty-.catch patterns | 203 | 203 | downward / no Crit | 2026-08-11 |
 | Coverage proxy (ax-code test file count) | 822 | 822 | + on fixed gaps | 2026-08-11 |
@@ -39,10 +39,10 @@ Sign-off rule: `modules/<slug>/agent-protocol.json` must record `completedSteps:
 | Wave | Total | Signed | Reviewing | Status |
 |------|------:|-------:|----------:|--------|
 | 1 | 16 | 16 | 0 | GATE PASSED |
-| 2 | 17 | 16 | 1 | IN PROGRESS |
-| 3 | 18 | 16 | 2 | IN PROGRESS |
-| 4 | 46 | 4 | 42 | IN PROGRESS |
-| 5 | 26 | 2 | 24 | IN PROGRESS |
+| 2 | 17 | 17 | 0 | GATE PASSED |
+| 3 | 18 | 18 | 0 | GATE PASSED |
+| 4 | 46 | 26 | 20 | IN PROGRESS |
+| 5 | 26 | 3 | 23 | IN PROGRESS |
 | 6 | 51 | 0 | 51 | IN PROGRESS |
 | 7 | 22 | 0 | 22 | IN PROGRESS |
 | 8 | 32 | 0 | 32 | IN PROGRESS |

@@ -1,0 +1,29 @@
+{
+  "slug": "server-routes-global",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/global.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-global/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/config.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/validation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/sse-queue.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/queue.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/event.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/sse-queue.ts"
+  ],
+  "stepNotes": {
+    "1": "Single lazy Hono sub-app at global.ts:231 mounting 7 routes (/health, /capabilities, /event, /config GET+PATCH, /dispose, /upgrade); lone unit-level export is GlobalRoutes.",
+    "2": "Loopback trust model exposes three hotspots: /health?directory probing at :251-255, unguarded /upgrade binary swap at :485-501, and /dispose with no idempotency at :444-454.",
+    "3": "SERVER_STARTED_AT (:23) is module-eval time not process start; SSE stop() at :315 is idempotent via the done flag and double-registered on abort+finally; semver coerce-then-valid ordering at :488 is correct.",
+    "4": "Each /health request computes ServiceManager.snapshot() three times (:112 then again inside readinessFromServices at :141 for both providers :173 and index :174); heartbeat is unref-ed at :361 and control frames cap at 256 (:335).",
+    "5": "GlobalCapabilitiesInfo schema (:61-108) and getGlobalCapabilitiesInfo producer (:180-229) duplicate every endpoint path, feature flag, and event name as paired literals — single source of truth would prevent drift.",
+    "6": "Zero empty catches and zero TODOs; every import (streamSSE, pushSseFrame, redactConfig, stripRedactedConfig, errors, invalidRequest, Event) has a live call site; minDesktopVersion:null is intentional, not dead.",
+    "7": "No dedicated global.test.ts; dispose-emit branch (:445-453), upgrade rejection branch (:488-491), and SSE double-teardown (:315-325) lack direct unit coverage signals; SSE backpressure partly covered by workspace-server-sse.test.ts.",
+    "8": "Six findings accepted: F1 MEDIUM design/duplication, F2 MEDIUM security/trust-boundary on /upgrade, F3 LOW perf (triple snapshot), F4 LOW timing (SERVER_STARTED_AT), F5 LOW enumeration (/health?directory), F6 INFO test gaps; no Critical so no reverify.md.",
+    "9": "Verification path: pnpm --dir packages/ax-code run typecheck, pnpm run test:scripts, plus AX_TEST_FILES targeting capability/app-context-routes/workspace-server-sse tests; SDK drift check via pnpm --dir packages/sdk/js run build."
+  },
+  "date": "2026-08-11"
+}

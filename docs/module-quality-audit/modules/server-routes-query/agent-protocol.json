@@ -1,0 +1,26 @@
+{
+  "slug": "server-routes-query",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/schema.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/query.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/route-validation.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/session-impl.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-query/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Scoped to packages/ax-code/src/server/routes/query.ts (32 LOC, 4 exports); mapped 11 importing route files including session-impl.ts:48 and audit.ts:22 — no dead exports.",
+    "2": "Attacker-controlled query strings flow through Zod preprocessors; unknown booleans and unsafe integers fail-closed (query.ts:10 returns value, query.ts:16 returns NaN). No secrets/IO/process surface in this file.",
+    "3": "Hand-traced QueryBoolean, normalizeQueryNumberValue, and the double-optional in OptionalQueryNumber against the regex ^[+-]?(?:\\d+\\.?\\d*|\\d+)$ at query.ts:20 — control flow is correct and the inner/outer optional pairing is required for undefined propagation.",
+    "4": "Each preprocessor is O(len) with anchored regex, single Number() call, no loops or GC pressure; no catastrophic-backtracking risk on hostile input. No change warranted.",
+    "5": "query.ts correctly owns query-string-specific empty-string semantics and intentionally diverges from src/util/schema.ts JsonBoolean/JsonNumber (JSON-body path); JsonBoolean re-export at query.ts:13 keeps route-layer imports shallow for project-config.ts, isolation.ts, session-impl.ts.",
+    "6": "No dead code — all four exports have live consumers. Structural overlap with util/schema.ts is intentional divergence (empty-string handling differs), below the 3-identical-sites extraction threshold; documented, not merged.",
+    "7": "query.test.ts covers the number helpers (5/5 green, verified by run); QueryBoolean has zero direct unit tests in test/ — its empty-string-to-true branch is only asserted indirectly, which is the residual test-gap.",
+    "8": "One MEDIUM finding open (QueryBoolean missing direct unit tests); one LOW observation (duplication with util/schema.ts, accepted); one INFO (JsonBoolean re-export shim, accepted). No Critical findings, so no reverify.md emitted.",
+    "9": "Ran AX_TEST_FILES=test/server/query.test.ts pnpm exec vitest run → 1 file, 5 tests passed in 775ms; combined with end-to-end coverage in route-validation.test.ts:1173 this is sufficient verification for the pure 32-LOC module; MEDIUM test-gap logged as follow-up, not a blocker."
+  },
+  "date": "2026-08-11"
+}

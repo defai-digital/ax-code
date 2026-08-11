@@ -1,0 +1,27 @@
+{
+  "agentId": "codex-sol-server-routes-mcp-20260811T193555Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:35:55Z",
+  "finishedAt": "2026-08-11T19:40:17Z",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/mcp.ts",
+    "packages/ax-code/src/server/routes/route-params.ts",
+    "packages/ax-code/src/server/runtime-auth.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/server/error.ts",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/src/server/request-directory.ts",
+    "packages/ax-code/src/runtime/listen-security.ts",
+    "packages/ax-code/src/config/schema-impl.ts",
+    "packages/ax-code/src/mcp/index.ts",
+    "packages/ax-code/src/mcp/impl.ts",
+    "packages/ax-code/src/mcp/oauth-callback.ts",
+    "packages/ax-code/src/util/lazy.ts",
+    "packages/ax-code/test/server/route-validation.test.ts",
+    "packages/sdk/openapi.json",
+    "packages/ax-code/package.json",
+    "docs/module-quality-audit/modules/server-routes-mcp/MODULE-AUDIT.md"
+  ],
+  "slug": "server-routes-mcp"
+}

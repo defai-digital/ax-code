@@ -1,0 +1,37 @@
+{
+  "slug": "server-routes-graph",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/graph.ts",
+    "packages/ax-code/src/server/routes/session-lookup.ts",
+    "packages/ax-code/src/server/routes/route-params.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/server/error.ts",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/src/graph/index.ts",
+    "packages/ax-code/src/graph/format.ts",
+    "packages/ax-code/src/session/index.ts",
+    "packages/ax-code/src/replay/query.ts",
+    "packages/ax-code/src/risk/score.ts",
+    "packages/ax-code/src/util/lazy.ts",
+    "packages/ax-code/test/graph/execution-graph.test.ts",
+    "packages/ax-code/test/server/project-identity.test.ts",
+    "packages/ax-code/package.json",
+    "packages/sdk/openapi.json",
+    "docs/module-quality-audit/modules/server-routes-graph/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Bound the unit to two lazy read-only graph endpoints and confirmed their /graph application mount.",
+    "2": "Followed branded session validation through current-project compatibility checks and upstream server middleware.",
+    "3": "Traced the format discriminator, text branches, JSON fallthrough, topology schema, and normalized error path.",
+    "4": "Measured the capped replay reads, duplicate risk scan, single builder pass, and repeated formatter lookups for large graphs.",
+    "5": "Separated HTTP adaptation from replay interpretation, visualization policy, session authorization, and lazy initialization.",
+    "6": "Identified undocumented 409 and SVG media-type responses while checking catches, suppressions, markers, and mutations.",
+    "7": "Matched builder and project-identity tests to behavior and isolated the absence of direct graph-route format checks.",
+    "8": "Classified both contract mismatches as Low, recorded performance and coverage follow-ups, and found no Critical evidence.",
+    "9": "Completed the focused six-test run and the core package typecheck successfully before protocol closure."
+  },
+  "date": "2026-08-11"
+}

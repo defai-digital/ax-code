@@ -1,0 +1,30 @@
+{
+  "slug": "server-routes-isolation",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/isolation.ts",
+    "packages/ax-code/src/server/routes/project-config.ts",
+    "packages/ax-code/src/server/routes/query.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/util/feature-flags.ts",
+    "packages/ax-code/src/isolation/index.ts",
+    "packages/ax-code/src/flag/scoped.ts",
+    "packages/ax-code/src/flag/flag.ts",
+    "packages/ax-code/test/server/isolation.test.ts",
+    "docs/module-quality-audit/modules/server-routes-isolation/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single Hono route module, 122 LOC, one lazy export IsolationRoutes (isolation.ts:33) with GET isolation.get and PUT isolation.set; owns only IsolationMode/IsolationState Zod schemas.",
+    "2": "Asset surface is the process-global AX_CODE_ISOLATION_MODE/NETWORK env vars; isolation flags are absent from ScopedFlagName (scoped.ts:21,31), so writes are last-writer-wins across directories — the dominant cross-project contamination threat.",
+    "3": "GET re-derives from config every call and force-syncs env; PUT uses the requested mode/network for the response because env holds the stale value until persistProjectConfigFeatureResponse updates it (isolation.ts:94-100), both verified by passing tests.",
+    "4": "No sync CPU work or loops; persist is serialized by Lock.write + FileLock.acquire (project-config.ts:140-141). System-level concern is that every GET mutates a process-global env var, invalidating other directories' policy.",
+    "5": "Dual state derivation (route-local isolationConfigState vs Isolation.resolve) reconciled by one-way env overwrite on GET; cleanest long-term fix is the scoped-flag pattern already used for autonomous/super-long, but that change is larger than this unit.",
+    "6": "No dead exports, empty catches, or TODOs; the only contract gap is the undeclared 500 response on PUT persist failure (isolation.ts:74-84 vs line 116), leaving the generated SDK without an error schema.",
+    "7": "test/server/isolation.test.ts has 9 focused tests covering config-over-env authority, backend/protected preservation, stale-env PUT response, and string network parsing; gaps are the 500 path, the read-only+network:true coercion, and any multi-directory scenario.",
+    "8": "Five findings registered (F1 MEDIUM cross-project env contamination; F2 LOW missing 500 schema; F3 LOW GET side-effect; F4 LOW silent network coercion; F5 INFO redundant valid() call); no Critical or High.",
+    "9": "Read source plus four local deps, runtime authority, scoped-flag layer, and the dedicated test; inline comments map 1:1 to passing tests, so documented behavior is enforced. Cleared at MEDIUM-or-below; no blocking issues for sign-off."
+  },
+  "date": "2026-08-11"
+}

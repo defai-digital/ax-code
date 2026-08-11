@@ -1,0 +1,29 @@
+{
+  "slug": "server-routes-provider",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/provider.ts",
+    "packages/ax-code/src/server/routes/config.ts",
+    "packages/ax-code/src/server/routes/route-params.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/server/error.ts",
+    "packages/ax-code/src/provider/ax-engine/connection.ts",
+    "packages/ax-code/src/provider/ax-engine/download-job.ts",
+    "packages/ax-code/test/server/provider-routes.test.ts",
+    "docs/module-quality-audit/modules/server-routes-provider/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Scoped to a single 728-line Hono module; 6 exports and 13 operations identified (provider.list, six ax-engine lifecycle, two download-job, auth.methods, oauth.authorize/callback).",
+    "2": "SSRF boundary confirmed in ax-engine/connection.ts:39 (local-hostname only, no userinfo/query/fragment); attach key stored via Auth.set, plaintext config writes empty apiKey — asserted by provider-routes.test.ts:254.",
+    "3": "PUT /ax-engine/connection auth-rollback ordering is correct (snapshot at :285, restore on Config.updateGlobal failure :295/:339). Defect F1: prepare/start handlers omit the axEngineInvalidRequest wrapper that download/delete/install use.",
+    "4": "Every mutating route registers a body or param validator; OAuth method index uses JsonNumber(...).int().min(0) and is coercion-tested; download jobID is unvalidated but cancelDownloadJob does a safe map lookup returning 400 on miss.",
+    "5": "List/connection/auth/OAuth endpoints use concrete zod schemas; nine ax-engine endpoints use resolver(z.any()), so the SDK and OpenAPI drift gate cannot see their shapes (F2).",
+    "6": "No layer violation (no direct SQLite/Drizzle/LSP access); shouldShowProviderInList is a correctly-extracted pure helper tested across three test files; lazy() registry defers construction.",
+    "7": "hasApiKey boolean expression triplicated at :148/:163/:172 (F3); AxEnginePrepareBody vs AxEngineStartBody kept separate is defensible; download passes body.quantization raw while delete normalizes — readability asymmetry only.",
+    "8": "Findings: F1 MEDIUM (prepare/start leak AX_ENGINE domain errors as 500, contract mismatch with declared errors(400)); F2 MEDIUM (nine resolver(z.any()) response schemas); F3 LOW (hasApiKey triplication). Zero Critical/High.",
+    "9": "Corroborated against provider-routes.test.ts (filter, OAuth 400, schema coercion, attach->managed credential round-trip, unknown-model 400, delete 400, redactProviderInfo). No Critical findings so no reverify.md emitted; unit ready for codex-sol independent pass."
+  },
+  "date": "2026-08-11"
+}

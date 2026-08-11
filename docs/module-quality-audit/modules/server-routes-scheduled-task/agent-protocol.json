@@ -1,0 +1,27 @@
+{
+  "slug": "server-routes-scheduled-task",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/scheduled-task.ts",
+    "packages/ax-code/src/server/routes/query.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/server/error.ts",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/src/session/scheduled-task.ts",
+    "docs/module-quality-audit/modules/server-routes-scheduled-task/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single export ScheduledTaskRoutes at scheduled-task.ts:29 mounts once at server.ts:308; nine endpoints, clean boundary with no storage/bus leakage.",
+    "2": "Every body/query/param surface is zod-validated via validation.ts:4 → invalidRequest 400; update omits id from body (line 23) and re-injects path param, blocking identity tampering.",
+    "3": "Handlers are pure delegators; runNow forwards to session.runNow:375 whose disabled-guard (HTTPException 409) and recordRunFailure path need no route-side try/catch.",
+    "4": "list forwards limit (capped at 500) into a SQL LIMIT at scheduled-task.ts:263; run-due relies on list's per-row safeParse (line 267) so corrupt rows never wedge a tick.",
+    "5": "Strict HTTP/logic split: scheduling, transactions, and publishUpdated live in the ScheduledTask namespace; errors centralised through appErrorEnvelope wired at server.ts:155.",
+    "6": "No dead code; SCHEDULED_TASK_ID_PARAM and scheduledTaskID helper are reused across all six param-validated handlers; route-local schemas are each used exactly once as expected.",
+    "7": "No dedicated /scheduled-task route test exists under packages/ax-code/test/server/; validator wiring (id-omission, limit cap, now forwarding) is only indirectly covered — LOW coverage gap.",
+    "8": "Zero findings accepted; findings/ is empty and matches the MODULE-AUDIT _none accepted_ row; the Step 7 coverage note stays prose, not a findings/ file.",
+    "9": "Docs-only pass with no source edits; module remains covered by pnpm --dir packages/ax-code run typecheck; second-pass confirmation belongs to codex-sol, and no Critical findings exist so reverify.md is not required."
+  },
+  "date": "2026-08-11"
+}

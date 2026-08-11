@@ -1,0 +1,18 @@
+{
+  "agentId": "ax-code-glm-server-routes-experimental-20260811T193138Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:31:38Z",
+  "finishedAt": "2026-08-11T19:48:00Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/experimental.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/validation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/server.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/worktree/index-impl.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-experimental/MODULE-AUDIT.md"
+  ],
+  "slug": "server-routes-experimental"
+}

@@ -28,6 +28,7 @@
     "packages/ax-code/src/util/lock.ts",
     "packages/ax-code/test/AGENTS.md",
     "packages/ax-code/test/cli/memory.test.ts",
+    "packages/ax-code/test/memory/abort-leak.test.ts",
     "packages/ax-code/test/memory/applicability.test.ts",
     "packages/ax-code/test/memory/doctor.test.ts",
     "packages/ax-code/test/memory/evaluation.test.ts",
@@ -37,15 +38,15 @@
     "packages/ax-code/test/memory/store.test.ts"
   ],
   "stepNotes": {
-    "1": "The unit owns project/global JSON memory, scanning, mutation, applicability, recall, diagnostics, evaluation, and prompt rendering across CLI, session, tool, and server adapters.",
-    "2": "Reviewed assets include curated preferences and rules, scope metadata, durable JSON integrity, and the project-memory system-prompt boundary.",
-    "3": "Recorder writes are process- and cross-process-serialized and atomically renamed; the separate generate-then-save warmup path can still overwrite a concurrent curated mutation.",
-    "4": "A 32-entry metadata cache, same-snapshot in-flight coalescing, bounded scan depth, parallel scanners, and token truncation constrain steady-state and warmup cost.",
-    "5": "Domain concerns are split cleanly and shared applicability/hash policy is centralized, but lock ownership is private to recorder and unavailable to warmup orchestration.",
-    "6": "The barrel usage comment names nonexistent namespace/warmup APIs, while directory/README scan catches and allSettled intentionally trade diagnostics for best-effort context.",
-    "7": "Nine focused files passed 104 tests across filters, diagnostics, evaluation, ranking, mutation, corruption, caches, prompt rendering, and CLI contracts; warmup-versus-mutation interleaving is uncovered.",
-    "8": "No finding records or Critical severity items exist; the warmup lost-update sequence is a Medium candidate with a domain-level locked warmup and deterministic race test as the minimal plan.",
-    "9": "Focused tests and the core package typecheck passed at HEAD, and the reviewed memory paths match the recorded audit baseline."
+    "1": "The memory unit connects CLI, tool, route, and session adapters to scanning, curated mutation, prompt rendering, recall, diagnostics, evaluation, and two JSON-backed stores.",
+    "2": "Curated rules and scope metadata cross user/model and filesystem boundaries; scanned repository text is also untrusted input when rendered into the system-prompt wrapper.",
+    "3": "Recorder writes hold process and file locks and use atomic rename, but warmup loads before scanning and later saves outside those locks, allowing a concurrent curated entry to be lost.",
+    "4": "The 32-path read cache and in-flight coalescing bound steady-state metadata, while persisted entry size and the pre-truncation directory listing remain workload-dependent.",
+    "5": "Applicability and hashing have single policy owners; the missing domain-level warmup transaction forces CLI and server adapters to repeat an unsafe generate-then-save sequence.",
+    "6": "The barrel example advertises nonexistent APIs, scanner failures can degrade without diagnostics, and abort-leak.test.ts is misplaced because it imports only src/util/abort.",
+    "7": "Nine selected files passed 104 tests for filtering, diagnostics, ranking, mutation, corruption, caching, rendering, and CLI behavior, with no warmup-versus-record interleaving case.",
+    "8": "The empty ledger contains no Critical item; the demonstrated lost-update sequence is a Medium candidate whose minimal fix is shared locking plus a deterministic race regression.",
+    "9": "The exact focused Vitest selection and packages/ax-code typecheck passed, and no reviewed memory source file has a worktree delta."
   },
   "date": "2026-08-11"
 }

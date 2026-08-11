@@ -1,0 +1,37 @@
+{
+  "slug": "server-routes-config",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/config.ts",
+    "packages/ax-code/src/server/server.ts",
+    "packages/ax-code/src/server/routes/global.ts",
+    "packages/ax-code/src/server/routes/provider.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/server/error.ts",
+    "packages/ax-code/src/config/config.ts",
+    "packages/ax-code/src/config/config-impl.ts",
+    "packages/ax-code/src/config/schema-impl.ts",
+    "packages/ax-code/src/provider/provider.ts",
+    "packages/ax-code/src/provider/provider-impl.ts",
+    "packages/ax-code/src/provider/model-info.ts",
+    "packages/ax-code/test/AGENTS.md",
+    "packages/ax-code/test/server/global-config.test.ts",
+    "packages/ax-code/test/server/provider-routes.test.ts",
+    "packages/ax-code/package.json",
+    "docs/module-quality-audit/modules/server-routes-config/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Bound the unit to five helper/router exports, three project routes, their mount point, and reuse by global/provider discovery endpoints.",
+    "2": "Followed server authentication and origin middleware, then catalogued top-level provider and MCP credential masking boundaries.",
+    "3": "Traced GET and PATCH through validation, sentinel removal, locked raw-JSONC merging, instance reload, and redacted response loading.",
+    "4": "Checked provider enumeration cost, cached registry access, per-provider sorting, response copying, timing, and absence of retained resources.",
+    "5": "Separated route, validation, persistence, and provider-registry ownership while identifying schema drift against shallow route-local policy.",
+    "6": "Verified 400 translation, lock-backed write failures, export reachability, and the absence of swallowed errors or maintenance suppressions.",
+    "7": "Matched 20 passing focused tests to primitive provider/MCP masking and sentinel preservation, then enumerated uncovered nested secret shapes.",
+    "8": "Reconciled the empty ledger with a newly observed High candidate affecting nested provider/model/header plus formatter and LSP environment data; no Critical reverify trigger exists.",
+    "9": "Completed focused Vitest and package typecheck successfully, while withholding clean security sign-off pending registration and remediation of the redaction gap."
+  },
+  "date": "2026-08-11"
+}

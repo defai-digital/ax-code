@@ -1,0 +1,30 @@
+{
+  "slug": "server-routes-audit",
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "completedSteps": 9,
+  "date": "2026-08-11",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/audit.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/audit/export.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/audit/json.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/session-lookup.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/route-params.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/project/instance.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/risk/score.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/replay/replay.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/index.ts"
+  ],
+  "stepNotes": {
+    "1": "Single Hono router module; three exports confirmed at audit.ts:44, audit.ts:53, audit.ts:89 against MODULE-AUDIT inventory.",
+    "2": "Cross-project isolation is the boundary that matters; per-session routes go through parseCurrentProjectSessionID and the cross-session route builds an allow-list from Instance.directory + Session.list.",
+    "3": "Traced each route handler: per-session guards throw 409 on foreign project (session-lookup.ts:16-22); /export drops non-allowed records at audit.ts:71 but inherits Session.list default limit=100.",
+    "4": "parseAuditJsonLine is null-on-failure and never throws (audit.ts:44-51); collectAuditExportRecords accepts Iterable<string> so it is reusable; operationIds feed the SDK; response descriptions claim JSON Lines but handlers return c.json({data}) envelopes.",
+    "5": "Linear scan with limit break at audit.ts:83 bounds the common path; risk-filtered path dynamically imports Risk once but invokes RiskEngine.fromSession per unique session (audit.ts:66-79), each call doing a full EventQuery.bySession + diff-file read.",
+    "6": "Collaborator ownership is coherent (AuditExport, audit/json, session-lookup, Instance, risk/score); no database or UI imports from the route file.",
+    "7": "AUDIT_EXPORT_DEFAULT_LIMIT and _MAX_LIMIT both equal 10_000 (audit.ts:18-19); isAuditRecord only checks key presence; record.session_id is unsafely cast to SessionID at audit.ts:76.",
+    "8": "Five findings raised: F1 HIGH (Session.list default limit=100 truncates allowedSessions for /export), F2 MEDIUM (per-session Risk recomputation), F3 MEDIUM (uncapped replay response), F4 LOW (unsafe SessionID cast), F5 LOW (JSON Lines description vs JSON envelope handler).",
+    "9": "Cross-referenced each finding against its source (session/index.ts:629, risk/score.ts:395-510, replay.ts:169-177, audit.ts:95/107/114/136); no Critical items, no findings/ directory present, no reverify.md required."
+  }
+}

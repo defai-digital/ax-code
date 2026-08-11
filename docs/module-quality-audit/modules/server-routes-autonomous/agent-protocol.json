@@ -1,0 +1,29 @@
+{
+  "slug": "server-routes-autonomous",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/autonomous.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/project-config.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/super-long.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/validation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/feature-flags.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/flag/scoped.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/server.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/cli/cmd/tui/routes/session/autonomous-active.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-autonomous/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Scoped to one Hono router factory AutonomousRoutes (autonomous.ts:20) mounted at /autonomous (server.ts:303); two endpoints on /, GET and PUT, both using BooleanFeatureState.",
+    "2": "Network route mutating process env (FeatureFlag.set is process.env write per feature-flags.ts:2-4) and ax-code.json; cross-project env contamination mitigated by ScopedFlag (scoped.ts:51-61). No auth in-file; relies on upstream middleware.",
+    "3": "GET always reconciles env from disk (project-config.ts:82-93). PUT persists before mutating env and short-circuits 500 on persist error (autonomous.ts:96), the correct order documented at lines 72-75.",
+    "4": "MEDIUM finding: enable branch (lines 70-95) does not clear AX_CODE_SUPER_LONG env, unlike disable branch (lines 102-104); stale base env can resurrect Super-Long per super-long.ts:62-76 precedence until next GET /super-long reconciles.",
+    "5": "GET does one unlocked file read per call with no cache; no DB, no N+1, no fan-out. PUT serializes via in-process Lock.write + cross-process FileLock (project-config.ts:138-156). No perf concern.",
+    "6": "LOW finding: SUPER_LONG_OVERRIDE/SUPER_LONG_BASE constants duplicated between autonomous.ts:15-16 and super-long.ts:19-20; canonical owner is flag.ts:257. Should be exported from flag module.",
+    "7": "No empty catches, no TODOs, all six imports used. Error path logged inside persistProjectConfigResponse via createPersistErrorLogger (project-config.ts:24-28), not swallowed.",
+    "8": "No test directly exercises AutonomousRoutes handlers; autonomous-active.test.ts covers an unrelated TUI view-model. The disable+super_long coupling invariant at lines 89-104 is comment-documented only.",
+    "9": "Three findings (one MEDIUM, two LOW), no Critical, so no reverify.md required by gate. Verifier codex-sol can reproduce the MEDIUM finding by seeding super_long.enabled=true + AX_CODE_SUPER_LONG=true env and toggling autonomous false then true."
+  },
+  "date": "2026-08-11"
+}

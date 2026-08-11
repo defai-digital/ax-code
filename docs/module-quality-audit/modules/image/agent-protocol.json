@@ -1,0 +1,30 @@
+{
+  "slug": "image",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "packages/ax-code/src/image/index.ts",
+    "packages/ax-code/src/image/provider.ts",
+    "packages/ax-code/src/tool/image_gen.ts",
+    "packages/ax-code/src/config/schema-impl.ts",
+    "packages/ax-code/src/util/ssrf.ts",
+    "packages/ax-code/test/image/provider.test.ts",
+    "packages/ax-code/test/tool/image-gen.test.ts",
+    "docs/module-quality-audit/modules/image/MODULE-AUDIT.md",
+    "docs/module-quality-audit/README.md",
+    "docs/prd/PRD-2026-08-11-module-by-module-quality-audit.md"
+  ],
+  "stepNotes": {
+    "1": "The image barrel exports the factory and four contracts at index.ts:1-7; concrete adapters are in provider.ts:42,93,133, the tool caller caches selection at tool/image_gen.ts:25-35, and schema ownership is config/schema-impl.ts:1060-1077.",
+    "2": "API keys flow from config or environment through resolveApiKey (provider.ts:33-40) into provider headers without logging; custom second-hop URLs cross an untrusted boundary protected by Ssrf.pinnedFetch at provider.ts:169-180 and util/ssrf.ts:361-493.",
+    "3": "OpenAI payload compatibility is selected at provider.ts:59-67, Stability derives aspect ratio at 108-113, custom handles base64 or URL at 166-182, and the factory's explicit/baseURL/environment precedence is fixed at 192-208; abort signals propagate on all requests.",
+    "4": "A generation makes one request or two for a custom URL result; provider.ts:81-89,128-129,166-180 buffers full responses and tool/image_gen.ts:137-155 adds a base64 copy, while the tool's five-minute timer is cleared in finally at 119-130.",
+    "5": "Provider adapters own wire translation behind ImageProvider.generate (provider.ts:18-21), shared SSRF owns URL safety, and tool/image_gen.ts:49-112 owns permissions and filesystem writes; schema fields at schema-impl.ts:1060-1077 match ImageProviderConfig at provider.ts:23-30.",
+    "6": "Candidate sources contain no TODO/FIXME/HACK, unsafe suppression, commented implementation, or empty catch; provider.ts:78,125,163 only falls back when reading an error body and still throws, while the unused name input at 6-10 is minor contract noise.",
+    "7": "provider.test.ts:12-118 covers modern OpenAI, DALL-E, cancellation, and loopback SSRF rejection; tool/image-gen.test.ts:39-149 covers collision-safe writes, pre-request read-only denial, and abort-before-write; the focused run passed all 7 tests.",
+    "8": "MODULE-AUDIT.md:55-59 and the empty findings directory establish no accepted item and no Critical item; direct Stability size validation and bounded response reads remain non-accepted hardening candidates tied to provider.ts:108-113,128-129,166-180.",
+    "9": "Core typecheck passed, the exact two-file Vitest selection passed 7/7, and abort-timer cleanup was rechecked at tool/image_gen.ts:119-130; no reverify.md is needed because the Critical precondition was not met."
+  },
+  "date": "2026-08-11"
+}

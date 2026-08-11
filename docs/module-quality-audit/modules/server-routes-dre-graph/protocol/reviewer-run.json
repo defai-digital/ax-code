@@ -1,0 +1,22 @@
+{
+  "agentId": "ax-code-glm-server-routes-dre-graph-20260811T193138Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:31:38Z",
+  "finishedAt": "2026-08-11T19:42:05Z",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/dre-graph.ts",
+    "packages/ax-code/src/server/routes/route-params.ts",
+    "packages/ax-code/src/server/routes/session-lookup.ts",
+    "packages/ax-code/src/server/routes/query.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/quality/dre-graph-format.ts",
+    "packages/ax-code/src/quality/dre-graph-fingerprint.ts",
+    "packages/ax-code/src/quality/dre-graph-widgets.ts",
+    "packages/ax-code/src/quality/dre-graph-index-page.ts",
+    "packages/ax-code/src/session/index.ts",
+    "packages/ax-code/src/session/graph.ts",
+    "docs/module-quality-audit/modules/server-routes-dre-graph/MODULE-AUDIT.md"
+  ],
+  "slug": "server-routes-dre-graph"
+}

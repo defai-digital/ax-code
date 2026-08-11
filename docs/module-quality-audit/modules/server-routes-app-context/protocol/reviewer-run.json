@@ -1,0 +1,27 @@
+{
+  "agentId": "codex-sol-server-routes-app-context-20260811T193425Z",
+  "model": "gpt-5.6-sol-xhigh",
+  "reviewer": "codex-sol",
+  "startedAt": "2026-08-11T19:34:25Z",
+  "finishedAt": "2026-08-11T19:38:56Z",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app-context.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-app-context/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app-context-schema.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app-context-templates.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app-context-checks.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/app-context-routes.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/server.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/validation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/request-directory.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/filesystem.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/project/instance.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/session/instruction.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/memory/store.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/memory/injector.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/memory/generator.ts",
+    "/Users/akiralam/code/ax-code/packages/sdk/openapi.json"
+  ],
+  "slug": "server-routes-app-context"
+}

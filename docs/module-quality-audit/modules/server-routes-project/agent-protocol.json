@@ -1,0 +1,31 @@
+{
+  "slug": "server-routes-project",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/project.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-project/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/route-params.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/validation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/project/project.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/project/instance.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/project/bootstrap.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/lazy.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/server.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/project-init-git.test.ts"
+  ],
+  "stepNotes": {
+    "1": "Single export ProjectRoutes built inside lazy() at project.ts:12; four routes (list/current/git-init/update) mounted at /project by server.ts:299.",
+    "2": "Client-controlled inputs are the :projectID path segment and the PATCH json body; both validated via PROJECT_ID_PARAM (route-params.ts:25) and Project.UpdateInput.omit({projectID:true}) (project.ts:112). No secrets or shell input cross this boundary.",
+    "3": "POST /git/init short-circuits on prev.vcs==='git' (project.ts:77) and gates Instance.reload behind a triple equality check (project.ts:83) so idempotent calls skip the reboot; PATCH delegates to Project.update which throws a bare Error on miss (project.ts:382).",
+    "4": "PATCH documents errors(400,404) but Project.update's plain Error('Project not found') is not matched by plainErrorEnvelope (error.ts:189-240), so clients get 500 not 404 — accepted as the unit's one MEDIUM finding.",
+    "5": "No N+1; Project.list is a single select().all() filtered through safe() (project.ts:450); Instance.reload is heavy but guarded by the change-detection gate so repeats stay cheap.",
+    "6": "Clean layering: route file owns only HTTP/validation concerns and delegates domain logic to Project/Instance; the route-level vcs guard at project.ts:77 mildly duplicates Project.initGit's internal guard (project.ts:476) but is justified to avoid an await round-trip.",
+    "7": "No empty catches, no TODOs, all ten imports (Hono, describeRoute, validator, resolver, Instance, Project, errors, lazy, InstanceBootstrap, PROJECT_ID_PARAM, withProjectID) are used; UpdateInput.omit prevents body-driven projectID override.",
+    "8": "project-init-git.test.ts covers POST /git/init with three cases (reload-on-init, skip-when-already-git, nested-subdir-noop); GET /, GET /current, and PATCH have no route-level tests, so the Step-4 status-code bug is uncaught.",
+    "9": "One MEDIUM finding (404-vs-500 on PATCH); below Critical threshold so no reverify.md required; remediation is a one-line NotFoundError throw at project.ts:382 plus a route-level test, pending codex-sol verification."
+  },
+  "date": "2026-08-11"
+}

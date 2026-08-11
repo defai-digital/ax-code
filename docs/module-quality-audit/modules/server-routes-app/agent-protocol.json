@@ -1,0 +1,30 @@
+{
+  "slug": "server-routes-app",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/app.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/validation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/server.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/project/instance.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/project/vcs.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/lazy.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/app-context-routes.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/capability.test.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-app/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Confirmed AppRoutes is the single export at app.ts:34, lazy-memoised, mounted once at server.ts:324; grep found no other AppRoutes symbol in src/.",
+    "2": "POST /log (app.ts:190-250) is the network-reachable log-injection sink; mitigated by service regex, 64-char cap, clean() control-char strip and depth/key-bounded cleanExtra (EXTRA_MAX_DEPTH=5, EXTRA_MAX_KEYS=50).",
+    "3": "Instance.dispose (instance.ts:309-341) and Instance.reload (instance.ts:274-308) re-throw, so 500s flow through appErrorEnvelope (error.ts:242-254); /log switch (app.ts:233-246) is exhaustive because the zod enum (app.ts:216) restricts level at runtime.",
+    "4": "All handlers async/await; cleanExtra caps log POST CPU and volume; AppRoutes is lazy-built once per process; no N+1, timers, or listeners introduced.",
+    "5": "Thin registration shell delegating to Instance/Vcs/Log/Command/Capability/Agent plus validator and error helpers; instance-scoped routes lack a ?directory= param unlike /context, an observation relevant to the multi-project Desktop scenario in server.ts:93-98.",
+    "6": "No TODOs, no empty catches, no dead code; minor nit that cleanExtra slices arrays/objects at 50 entries silently (app.ts:26,28) while depth overflow is marked '[truncated]' (app.ts:24).",
+    "7": "Only packages/ax-code/test/server/capability.test.ts:12 hits a route in this module directly; seven of eight routes (dispose, restart, path, vcs, command, log, agent) lack direct HTTP-level tests; dispose is indirectly covered by SSE assertions in test/server/project-init-git.test.ts:47,101,149.",
+    "8": "No Critical or High findings; two LOW observations: (a) dispose/restart describeRoute blocks omit errors(500) despite throwable backing code, (b) route-level test gap for seven handlers. findings/ is empty so the Critical reverify gate is not triggered.",
+    "9": "Cross-read validation.ts, error.ts, instance.ts, vcs.ts, server.ts, and route tests; static fingerprint 4541e486e0127175 matches the 274-line single-export module; ax-code-glm lane complete, cross-lane confirmation pending from codex-sol."
+  },
+  "date": "2026-08-11"
+}

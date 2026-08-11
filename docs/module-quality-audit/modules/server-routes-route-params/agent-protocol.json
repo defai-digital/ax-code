@@ -1,0 +1,31 @@
+{
+  "slug": "server-routes-route-params",
+  "completedSteps": 9,
+  "reviewer": "ax-code-glm",
+  "verifier": "codex-sol",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/route-params.ts",
+    "packages/ax-code/src/server/routes/session-lookup.ts",
+    "packages/ax-code/src/server/routes/session-impl.ts",
+    "packages/ax-code/src/server/routes/mcp.ts",
+    "packages/ax-code/src/server/routes/question.ts",
+    "packages/ax-code/src/server/routes/permission.ts",
+    "packages/ax-code/src/session/schema.ts",
+    "packages/ax-code/src/id/branded.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/test/server/session-messages.test.ts",
+    "docs/module-quality-audit/modules/server-routes-route-params/MODULE-AUDIT.md"
+  ],
+  "stepNotes": {
+    "1": "Single 74-line module, 16 exports, consumed by 12 route files under src/server/routes — a shared request-param dependency, not a leaf.",
+    "2": "First trust boundary after the network read: branded-id casting via SessionID.make (branded.ts:19-21) is unchecked, so all validation burden sits on the upstream validator() mount.",
+    "3": "parseSessionID is correct only if SESSION_ID_PARAM is registered upstream; withRouteParam reads params[key] with no fallback so a missing key yields undefined typed as TValue. No active key-mismatch in consumers read.",
+    "4": "No hot-path issue: closures + one record lookup; zod schemas are module-level constants; parseExistingSessionID is a single indexed Session.get read.",
+    "5": "withRouteParam/with* family earns its keep (12 consumers) but is typed c:any, diverging from the SessionRouteContext used by the parse* helpers; PROVIDER_ID_PARAM is the only schema with OpenAPI .meta description.",
+    "6": "parseExistingSessionID (route-params.ts:38) is dead — zero callers repo-wide and policed away by session-messages.test.ts:379; it also bypasses the 409 cross-project guard that its replacement parseCurrentProjectSessionID enforces.",
+    "7": "No direct unit test; coverage is structural (session-messages.test.ts:362-400 greps session-impl.ts source to force parseCurrentProjectSessionID and forbid parseExistingSessionID/parseSessionID on destructive+detail routes). withRouteParam generic path and withProviderID/withPtyID/withProjectID adapters have no behavioral test.",
+    "8": "Four findings recorded: MEDIUM dead guard-bypassing export (parseExistingSessionID), LOW implicit-validation precondition, LOW inconsistent OpenAPI descriptions, INFO parallel context contracts. No Critical.",
+    "9": "No Critical findings -> no reverify.md second pass required; gate before sign-off is typecheck + session-messages.test.ts after removing parseExistingSessionID; finding 1 is the only one worth acting on this wave."
+  },
+  "date": "2026-08-11"
+}

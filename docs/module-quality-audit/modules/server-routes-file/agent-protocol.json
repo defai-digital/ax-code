@@ -1,0 +1,42 @@
+{
+  "slug": "server-routes-file",
+  "completedSteps": 9,
+  "reviewer": "codex-sol",
+  "verifier": "ax-code-glm",
+  "filesRead": [
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/file.ts",
+    "/Users/akiralam/code/ax-code/docs/module-quality-audit/modules/server-routes-file/MODULE-AUDIT.md",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/file/index.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/file/ripgrep.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/validation.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/routes/query.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/constants.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/constants/server.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/server.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/error.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/middleware.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/server/request-directory.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/runtime/listen-security.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/util/filesystem.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/lsp/index-impl.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/src/lsp/workspace-symbol.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/file-routes.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/server/route-validation.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/file/path-traversal.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/file/ripgrep.test.ts",
+    "/Users/akiralam/code/ax-code/packages/ax-code/test/lsp/workspace-symbol.test.ts",
+    "/Users/akiralam/code/ax-code/packages/sdk/openapi.json"
+  ],
+  "stepNotes": {
+    "1": "Enumerated the lazy router's six GET operations and confirmed their root-level mount in Server.createApp.",
+    "2": "Traced loopback enforcement, request-directory screening, project containment, symlink defense, and 403 translation.",
+    "3": "Matched validated query fields and handler defaults to downstream calls, response schemas, and generated OpenAPI bounds.",
+    "4": "Reviewed search cardinality, LSP timeout behavior, cache use, git-status concurrency, and full-file read costs.",
+    "5": "Confirmed HTTP concerns remain in the route while filesystem, ripgrep, and LSP policies stay in their owning modules.",
+    "6": "Checked imports, operation IDs, shared schemas, exception handling, mutable state, and dead-code indicators.",
+    "7": "Read focused HTTP, traversal, query-normalization, and ripgrep tests and identified only non-blocking coverage gaps.",
+    "8": "Reconciled the empty findings directory with the module ledger and accepted no severity-rated defect.",
+    "9": "Passed four focused Vitest files with 78 tests and the packages/ax-code TypeScript typecheck."
+  },
+  "date": "2026-08-11"
+}

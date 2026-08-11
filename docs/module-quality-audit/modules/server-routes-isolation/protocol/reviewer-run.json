@@ -1,0 +1,20 @@
+{
+  "agentId": "ax-code-glm-server-routes-isolation-20260811T193555Z",
+  "model": "zai-coding-plan/glm-5.2[1m]",
+  "reviewer": "ax-code-glm",
+  "startedAt": "2026-08-11T19:35:55Z",
+  "finishedAt": "2026-08-11T19:37:28Z",
+  "filesRead": [
+    "packages/ax-code/src/server/routes/isolation.ts",
+    "packages/ax-code/src/server/routes/project-config.ts",
+    "packages/ax-code/src/server/routes/query.ts",
+    "packages/ax-code/src/server/validation.ts",
+    "packages/ax-code/src/util/feature-flags.ts",
+    "packages/ax-code/src/isolation/index.ts",
+    "packages/ax-code/src/flag/scoped.ts",
+    "packages/ax-code/src/flag/flag.ts",
+    "packages/ax-code/test/server/isolation.test.ts",
+    "docs/module-quality-audit/modules/server-routes-isolation/MODULE-AUDIT.md"
+  ],
+  "slug": "server-routes-isolation"
+}
