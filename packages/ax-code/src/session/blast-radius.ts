@@ -293,7 +293,7 @@ export namespace BlastRadius {
     if (result.blocked) {
       const message =
         `Refusing to write ${filePath}: matches autonomous blocked-path pattern "${result.pattern}". ` +
-        `Adjust experimental.autonomous_caps.blockedPaths to allow.`
+        `Adjust autonomy.budget.changes.blocked_paths (or experimental.autonomous_caps.blockedPaths) to allow.`
       // current/limit are not meaningful for blocked_path — the
       // information that matters is the pattern, which is captured in
       // `message`. The schema requires both fields as int; emit 0/0

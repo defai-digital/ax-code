@@ -1,5 +1,6 @@
 import type { Config } from "@/config/config"
-import { GLOBAL_STEP_LIMIT, GOAL_TOTAL_STEP_HEADROOM, SUPER_LONG_TOTAL_STEP_HEADROOM } from "@/constants/session"
+import { GLOBAL_STEP_LIMIT } from "@/constants/session"
+import { resolveAutonomyBudget, type ResolvedAutonomyBudget } from "./autonomy-budget"
 
 export const MAX_EMPTY_MODEL_TURN_RETRIES = 1
 // Nudge threshold: after this many consecutive tool-only turns, inject a
@@ -37,27 +38,35 @@ export const AX_ENGINE_READ_ONLY_TURN_FORCE = 2
 // that span multiple output windows.
 export const MAX_TRUNCATED_MODEL_TURN_RETRIES = 3
 
-export function promptLoopLimits(config: Pick<Config.Info, "session">) {
-  const maxTodoRetries = config.session?.max_todo_retries ?? 10
-  const sessionStepLimit = config.session?.max_steps ?? GLOBAL_STEP_LIMIT
-  const maxContinuations = config.session?.max_continuations ?? 3
+export type PromptLoopLimits = {
+  sessionStepLimit: number
+  maxContinuations: number
+  maxTotalSteps: number
+  maxTotalStepsSuperLong: number
+  maxTotalStepsGoal: number
+  maxTodoRetries: number
+  maxCompletionGateRetries: number
+  maxEmptyModelTurnRetries: number
+  maxTruncatedModelTurnRetries: number
+  /** Full resolved budget (tool-only, burst, blast caps, profile). */
+  autonomy: ResolvedAutonomyBudget
+}
+
+export function promptLoopLimits(
+  config: Pick<Config.Info, "session" | "experimental" | "autonomy">,
+): PromptLoopLimits {
+  const autonomy = resolveAutonomyBudget(config)
   return {
-    sessionStepLimit,
-    maxContinuations,
-    // Cumulative ceiling across ALL continuations — the one bound that active
-    // goals and Super-Long mode cannot lift or reset. Defaults preserve the
-    // documented behavior (step limit × every permitted continuation) while
-    // closing the previously unbounded goal/Super-Long paths.
-    maxTotalSteps: config.session?.max_total_steps ?? sessionStepLimit * (maxContinuations + 1),
-    maxTotalStepsSuperLong: config.session?.max_total_steps ?? sessionStepLimit * SUPER_LONG_TOTAL_STEP_HEADROOM,
-    // Active goals lift the continuation cap like Super-Long, so they get the
-    // same long-run backstop instead of the plain-autonomous ceiling above —
-    // otherwise long goal runs end in a step-limit error instead of completing.
-    maxTotalStepsGoal: config.session?.max_total_steps ?? sessionStepLimit * GOAL_TOTAL_STEP_HEADROOM,
-    maxTodoRetries,
-    maxCompletionGateRetries: Math.min(maxTodoRetries, 2),
-    maxEmptyModelTurnRetries: MAX_EMPTY_MODEL_TURN_RETRIES,
-    maxTruncatedModelTurnRetries: MAX_TRUNCATED_MODEL_TURN_RETRIES,
+    sessionStepLimit: autonomy.modelTurnsPerSegment,
+    maxContinuations: autonomy.maxContinuations,
+    maxTotalSteps: autonomy.modelTurnsTotal,
+    maxTotalStepsSuperLong: autonomy.modelTurnsTotalSuperLong,
+    maxTotalStepsGoal: autonomy.modelTurnsTotalGoal,
+    maxTodoRetries: autonomy.maxTodoRetries,
+    maxCompletionGateRetries: autonomy.maxCompletionGateRetries,
+    maxEmptyModelTurnRetries: autonomy.maxEmptyModelTurnRetries,
+    maxTruncatedModelTurnRetries: autonomy.maxTruncatedModelTurnRetries,
+    autonomy,
   }
 }
 

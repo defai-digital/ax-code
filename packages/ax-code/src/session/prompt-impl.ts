@@ -91,9 +91,6 @@ import { SystemPrompt } from "./system"
 import {
   AX_ENGINE_READ_ONLY_TURN_FORCE,
   AX_ENGINE_READ_ONLY_TURN_NUDGE,
-  TOOL_ONLY_TURN_NUDGE,
-  TOOL_ONLY_TURN_FINAL_NUDGE,
-  MAX_TOOL_ONLY_TURNS,
   effectivePacingMaxSteps,
   promptLoopLimits,
 } from "./prompt-loop-config"
@@ -312,7 +309,11 @@ export namespace SessionPrompt {
       maxCompletionGateRetries,
       maxEmptyModelTurnRetries,
       maxTruncatedModelTurnRetries,
+      autonomy: autonomyBudget,
     } = promptLoopLimits(cfg)
+    const toolOnlyNudgeThreshold = autonomyBudget.toolOnly.nudge
+    const toolOnlyFinalNudgeThreshold = autonomyBudget.toolOnly.finalNudge
+    const maxToolOnlyTurns = autonomyBudget.toolOnly.maxTurns
     // One-shot guard for the goal ceiling-approach convergence warning: warn
     // once per goal (keyed by the goal's creation time, so a replacement goal
     // started later in the same run still gets its own warning), then let the
@@ -1389,9 +1390,9 @@ export namespace SessionPrompt {
         const toolOnlyTransition = toolOnlyTurnDecision({
           consecutiveToolOnlyTurns,
           toolOnlyNudges,
-          nudgeThreshold: TOOL_ONLY_TURN_NUDGE,
-          finalNudgeThreshold: TOOL_ONLY_TURN_FINAL_NUDGE,
-          maxToolOnlyTurns: MAX_TOOL_ONLY_TURNS,
+          nudgeThreshold: toolOnlyNudgeThreshold,
+          finalNudgeThreshold: toolOnlyFinalNudgeThreshold,
+          maxToolOnlyTurns,
           finalCheckpointHits: toolOnlyFinalCheckpointHits,
         })
         if (toolOnlyTransition.action === "nudge") {
@@ -1416,7 +1417,7 @@ export namespace SessionPrompt {
             messages: msgs,
             text: AutonomousContinuationPrompt.toolOnlyTurnNudge({
               consecutiveToolOnlyTurns,
-              maxToolOnlyTurns: MAX_TOOL_ONLY_TURNS,
+              maxToolOnlyTurns,
               final: toolOnlyTransition.final,
               forced: toolOnlyTransition.forced,
             }),
@@ -1431,7 +1432,7 @@ export namespace SessionPrompt {
             errorCode: "TOOL_ONLY_TURN_LIMIT",
             sessionID,
             consecutiveToolOnlyTurns,
-            maxToolOnlyTurns: MAX_TOOL_ONLY_TURNS,
+            maxToolOnlyTurns,
           })
           // This circuit breaker runs in both supervised and autonomous
           // sessions, so the message must not claim "autonomous mode", and

@@ -11,6 +11,7 @@ import { Plugin } from "@/plugin"
 import { ScopedFlag } from "@/flag/scoped"
 import { DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN } from "@/constants/session"
 import { BlastRadius } from "./blast-radius"
+import { resolveAutonomyBudget } from "./autonomy-budget"
 import { detectCycle, type RingEntry } from "./cycle-detection"
 import type { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
@@ -156,10 +157,10 @@ export namespace SessionProcessor {
     const stepTouchedFilePaths = new Set<string>()
     let stepToolObservations: AgentOptimizationTrace.ToolObservation[] = []
     const fileTouchingTools = new Set(["read", "edit", "write", "multiedit", "apply_patch"])
-    // Per-session sliding-window rate limiter: max 30 tool calls per 10-second window.
-    // Prevents runaway agent loops from exhausting resources or burning LLM quota.
-    const RATE_LIMIT_WINDOW_MS = 10_000
-    const RATE_LIMIT_MAX_CALLS = 30
+    // Per-session sliding-window rate limiter. Defaults 30 calls / 10s;
+    // overridable via autonomy.budget.tool_calls.rate (resolved at turn start).
+    let rateLimitWindowMs = 10_000
+    let rateLimitMaxCalls = 30
     const toolCallTimestamps: number[] = []
     const deltaBatcher = createDeltaBatcher({
       sessionID: input.sessionID,
@@ -252,10 +253,19 @@ export namespace SessionProcessor {
         const autonomous = ScopedFlag.autonomous()
         const shouldBreak = autonomous ? false : (await Config.get()).experimental?.continue_loop_on_deny !== true
         if (autonomous) {
-          // Apply per-session cap overrides from config so users can widen
-          // limits for long refactors without code changes.
-          const caps = (await Config.get()).experimental?.autonomous_caps
-          if (caps) BlastRadius.applyConfigCaps(input.sessionID, caps)
+          // Resolve first-class autonomy.budget (+ legacy experimental caps)
+          // so users can widen limits for long refactors without code changes.
+          const cfg = await Config.get()
+          const budget = resolveAutonomyBudget(cfg)
+          BlastRadius.applyConfigCaps(input.sessionID, {
+            steps: budget.toolCallsPerSegment,
+            files: budget.filesTotal,
+            lines: budget.linesTotal,
+            blockedPaths: budget.blockedPaths,
+            perTool: budget.perTool,
+          })
+          rateLimitMaxCalls = budget.toolCallRate.count
+          rateLimitWindowMs = budget.toolCallRate.windowSeconds * 1000
           // Per-tool counters reset every turn — tool-call cap is meant
           // to catch a single runaway loop, not the cumulative total
           // across many user turns. Cumulative caps (steps/files/lines)
@@ -406,18 +416,21 @@ export namespace SessionProcessor {
                   })
                   // Rate limit: prune timestamps outside the window, then check
                   const now = Date.now()
-                  while (toolCallTimestamps.length > 0 && toolCallTimestamps[0]! < now - RATE_LIMIT_WINDOW_MS) {
+                  while (toolCallTimestamps.length > 0 && toolCallTimestamps[0]! < now - rateLimitWindowMs) {
                     toolCallTimestamps.shift()
                   }
-                  if (toolCallTimestamps.length >= RATE_LIMIT_MAX_CALLS) {
+                  if (toolCallTimestamps.length >= rateLimitMaxCalls) {
                     log.warn("tool call rate limit exceeded", {
                       sessionID: input.sessionID,
                       tool: value.toolName,
                       callsInWindow: toolCallTimestamps.length,
+                      limit: rateLimitMaxCalls,
+                      windowSeconds: rateLimitWindowMs / 1000,
                     })
                     throw new Error(
-                      `Tool call rate limit exceeded: ${RATE_LIMIT_MAX_CALLS} calls in ${RATE_LIMIT_WINDOW_MS / 1000}s. ` +
-                        "This may indicate a runaway agent loop.",
+                      `Tool call rate limit exceeded: ${rateLimitMaxCalls} calls in ${rateLimitWindowMs / 1000}s. ` +
+                        "This may indicate a runaway agent loop. " +
+                        'Raise via autonomy.budget.tool_calls.rate in ax-code.json (or /limits to inspect).',
                     )
                   }
                   toolCallTimestamps.push(now)

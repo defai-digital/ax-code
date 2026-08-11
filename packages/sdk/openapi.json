@@ -42550,6 +42550,146 @@
             "description": "Enable autonomous mode (default: true)",
             "type": "boolean"
           },
+          "autonomy": {
+            "description": "Autonomous workload budgets and stall breakers. Prefer this over scattering limits across session and experimental keys. See /limits.",
+            "type": "object",
+            "properties": {
+              "profile": {
+                "description": "Named workload profile that seeds budget defaults: quick (tight), standard (shipped defaults), long (multi-file batches), goal (goal-scale headroom), custom (no profile seeds). Explicit autonomy.budget / session.* fields always win over the profile.",
+                "type": "string",
+                "enum": [
+                  "quick",
+                  "standard",
+                  "long",
+                  "goal",
+                  "custom"
+                ]
+              },
+              "budget": {
+                "description": "First-class autonomy budgets. Takes precedence over session.* and experimental.autonomous_caps when set.",
+                "type": "object",
+                "properties": {
+                  "model_turns": {
+                    "type": "object",
+                    "properties": {
+                      "per_segment": {
+                        "description": "Outer-loop steps per auto-continuation segment (alias: session.max_steps; default 500)",
+                        "type": "integer",
+                        "minimum": 10,
+                        "maximum": 9007199254740991
+                      },
+                      "total": {
+                        "description": "Cumulative outer-loop steps across continuations, goals, and Super-Long (alias: session.max_total_steps)",
+                        "type": "integer",
+                        "minimum": 10,
+                        "maximum": 9007199254740991
+                      }
+                    }
+                  },
+                  "continuations": {
+                    "description": "Auto-continuations after a per-segment step limit (alias: session.max_continuations; default 3)",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "todo_retries": {
+                    "description": "Auto-continuations while todos remain pending (alias: session.max_todo_retries; default 10)",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "tool_calls": {
+                    "type": "object",
+                    "properties": {
+                      "per_segment": {
+                        "description": "Blast-radius tool-call ceiling per continuation (alias: experimental.autonomous_caps.steps; default 500)",
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "rate": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "description": "Max tool calls in a rolling window (default 30). Protects against parallel tool floods.",
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "window_seconds": {
+                            "description": "Rolling window length in seconds for the tool-call rate limit (default 10)",
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        }
+                      },
+                      "per_tool": {
+                        "description": "Per-tool call-count caps (alias: experimental.autonomous_caps.perTool). 0 or negative disables.",
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      }
+                    }
+                  },
+                  "changes": {
+                    "type": "object",
+                    "properties": {
+                      "files_total": {
+                        "description": "Max distinct files changed in an autonomous run (alias: experimental.autonomous_caps.files)",
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "lines_total": {
+                        "description": "Max instrumented line-change total (alias: experimental.autonomous_caps.lines)",
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "blocked_paths": {
+                        "description": "Glob patterns that refuse writes (alias: experimental.autonomous_caps.blockedPaths)",
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "stall": {
+                "description": "Stall / loop breakers that are independent of workload step ceilings",
+                "type": "object",
+                "properties": {
+                  "tool_only_turns": {
+                    "description": "Hard stop after this many consecutive tool-only model finishes (default 35)",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "tool_only_nudge": {
+                    "description": "First synthesis checkpoint during a tool-only streak (default 15)",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "tool_only_final_nudge": {
+                    "description": "Final warning checkpoint before the hard stop (default max-5)",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                }
+              }
+            }
+          },
           "super_long": {
             "description": "Enable Super-Long supervised long-run mode (default: on for models with a 64k+ context window, thinking, and prompt caching — e.g. Qwen 3.7 Max/Plus; off otherwise)",
             "anyOf": [

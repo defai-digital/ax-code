@@ -116,22 +116,40 @@ Environment variable > config file > default (on)
 
 Autonomous mode does **not** mean unlimited execution. Several independent caps apply. Defaults below are the shipped constants; raise or lower them in `ax-code.json` when a workload needs more room.
 
-| Cap | Default | Unit | Config |
-| --- | --- | --- | --- |
-| Per-segment session steps | 500 | Outer loop iterations per continuation segment | `session.max_steps` |
-| Auto-continuations | 3 | Segments after a step ceiling (ordinary autonomous) | `session.max_continuations` (`0` disables) |
-| Cumulative total steps | 2,000 ordinary · 20,000 goal / Super-Long | Sum across continuations | `session.max_total_steps` |
-| Per-agent steps | Unbounded for native agents | Outer iterations for that agent | `agent.<name>.steps` (optional) |
-| Todo auto-retries | 10 | Continuations while todos remain pending | `session.max_todo_retries` |
-| Blast-radius tool calls | 500 / segment | Tool invocations in autonomous mode | `experimental.autonomous_caps.steps` |
-| Blast-radius files / lines | 50 files · 5,000 lines | Change footprint (survives continuations) | `experimental.autonomous_caps.files` / `.lines` |
-| Per-tool flood caps | e.g. bash 50, edit 100 | Calls per model turn | `experimental.autonomous_caps.perTool` |
-| Tool-only streak breaker | Nudge 15 · warn 30 · stop ~36 | Consecutive tool-only model finishes | Runtime constant |
-| Tool-call burst limiter | 30 calls / 10s | Rolling window per processor turn | Runtime constant |
+Prefer the first-class **`autonomy`** object. Legacy `session.*` and `experimental.autonomous_caps.*` keys still work as aliases (lower precedence).
 
-**What the TUI shows:** during a multi-step run the header chip reports `step current/max` where `max` is the **effective pacing cap** for the active agent — `min(agent.steps, session.max_steps)` when the agent is capped, otherwise `session.max_steps`. It is not a total-run counter across auto-continuations.
+| Cap | Default | Unit | Preferred config | Legacy alias |
+| --- | --- | --- | --- | --- |
+| Per-segment session steps | 500 | Outer loop iterations per continuation segment | `autonomy.budget.model_turns.per_segment` | `session.max_steps` |
+| Auto-continuations | 3 | Segments after a step ceiling (ordinary autonomous) | `autonomy.budget.continuations` | `session.max_continuations` (`0` disables) |
+| Cumulative total steps | 2,000 ordinary · 20,000 goal / Super-Long | Sum across continuations | `autonomy.budget.model_turns.total` | `session.max_total_steps` |
+| Per-agent steps | Unbounded for native agents | Outer iterations for that agent | `agent.<name>.steps` (optional) | — |
+| Todo auto-retries | 10 | Continuations while todos remain pending | `autonomy.budget.todo_retries` | `session.max_todo_retries` |
+| Blast-radius tool calls | 500 / segment | Tool invocations in autonomous mode | `autonomy.budget.tool_calls.per_segment` | `experimental.autonomous_caps.steps` |
+| Blast-radius files / lines | 50 files · 5,000 lines | Change footprint (survives continuations) | `autonomy.budget.changes.files_total` / `.lines_total` | `experimental.autonomous_caps.files` / `.lines` |
+| Per-tool flood caps | e.g. bash 50, edit 100 | Calls per model turn | `autonomy.budget.tool_calls.per_tool` | `experimental.autonomous_caps.perTool` |
+| Tool-only streak breaker | Nudge 15 · final ~30 · stop 35 | Consecutive tool-only model finishes | `autonomy.stall.tool_only_*` | — |
+| Tool-call burst limiter | 30 calls / 10s | Rolling window per processor turn | `autonomy.budget.tool_calls.rate` | — |
 
-**Auto-routing:** keyword routing may switch the session to a specialist agent (Debug, Security, DevOps, …). Specialists no longer ship a hidden 25/30-step default (see ADR-051); they share the session budgets above unless you set `agent.<name>.steps`. Disable routing with `"routing": { "disable": true }` if you want the Dev agent only.
+### Profiles
+
+Set `autonomy.profile` to seed several fields at once (explicit fields still win):
+
+| Profile | Intent |
+| --- | --- |
+| `standard` | Shipped defaults (500 / 3 continuations / 30·10s burst / tool-only 35) |
+| `quick` | Short fixes: 80 steps/segment, 1 continuation, tighter tool-only and burst |
+| `long` | Multi-file batches: 10 continuations, 10k total, wider tool-only/burst |
+| `goal` | Goal-scale headroom without requiring `/goal` |
+| `custom` | No profile seeds — only explicit keys and constants |
+
+### Inspect with `/limits`
+
+In a session, run **`/limits`** to print the resolved budget stack, effective TUI denominator for the active agent, config sources, and doctor warnings (for example when `agent.steps` is tighter than the session segment). Use `/limits help` for key names.
+
+**What the TUI shows:** during a multi-step run the header chip reports `step current/max` where `max` is the **effective pacing cap** for the active agent — `min(agent.steps, session.max_steps)` when the agent is capped, otherwise the per-segment limit. It is not a total-run counter across auto-continuations.
+
+**Auto-routing:** keyword routing may switch the session to a specialist agent (Debug, Security, DevOps, …). Specialists share the same unbounded-by-default agent step policy as Dev unless you set `agent.<name>.steps`. Disable routing with `"routing": { "disable": true }` if you want the Dev agent only.
 
 **Long runs:** use `/goal` or Super-Long for multi-hour work — they lift ordinary continuation caps and use the larger cumulative ceiling (default 20,000), with verification / pause semantics documented in [Loop Mode](loop-mode.md).
 
@@ -140,20 +158,24 @@ Autonomous mode does **not** mean unlimited execution. Several independent caps 
 ```json
 {
   "autonomous": true,
-  "session": {
-    "max_steps": 500,
-    "max_continuations": 10,
-    "max_total_steps": 20000
+  "autonomy": {
+    "profile": "long",
+    "budget": {
+      "model_turns": { "per_segment": 500, "total": 20000 },
+      "tool_calls": {
+        "per_segment": 1000,
+        "rate": { "count": 40, "window_seconds": 10 },
+        "per_tool": { "bash": 80, "edit": 150 }
+      },
+      "changes": { "files_total": 100, "lines_total": 10000 }
+    },
+    "stall": {
+      "tool_only_turns": 50,
+      "tool_only_nudge": 20
+    }
   },
   "agent": {
     "debug": { "steps": 200 }
-  },
-  "experimental": {
-    "autonomous_caps": {
-      "steps": 1000,
-      "files": 100,
-      "lines": 10000
-    }
   }
 }
 ```
