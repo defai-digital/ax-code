@@ -111,7 +111,13 @@ ensure_minisign_available() {
         fi
         unzip -q "$tmp_dir/$archive" -d "$tmp_dir"
     else
-        tar -xzf "$tmp_dir/$archive" -C "$tmp_dir"
+        # jedisct1's Linux tarball is packed with libarchive on macOS, so GNU tar
+        # warns about unused Apple PAX xattrs (com.apple.provenance).
+        if tar --help 2>&1 | grep -q -- '--warning'; then
+            tar --warning=no-unknown-keyword -xzf "$tmp_dir/$archive" -C "$tmp_dir"
+        else
+            tar -xzf "$tmp_dir/$archive" -C "$tmp_dir"
+        fi
     fi
 
     local found=""

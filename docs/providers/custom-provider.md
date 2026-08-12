@@ -23,7 +23,7 @@ Custom providers also need an explicit **`models`** map: unlike the built-in reg
 
 Dedicated private GPU clouds are an exception: they are first-class providers under `/connect` → **Private GPU cloud**. Paste the OpenAI-compatible URL and token (`alibaba-pai`, `runpod`, `huggingface-endpoints`, `sagemaker`, `volcengine-ark`, `modelarts`, `tencent-ti`); AX Code calls `GET …/models` and uses the deployed model IDs automatically.
 
-Hosted GPU catalogs (`fireworks-ai`, `togetherai`, `baseten`, `nvidia`, `deepinfra`) use an API key and the bundled model snapshot, the same pattern OpenCode uses.
+Hosted GPU catalogs (`nebius`, `fireworks-ai`, `togetherai`, `baseten`, `nvidia`, `deepinfra`) use an API key and the bundled model snapshot, the same pattern OpenCode uses.
 
 ## OpenAI-compatible gateway
 

@@ -82,6 +82,7 @@ describe("provider routes", () => {
     expect(ids).toContain("alibaba-pai")
     expect(ids).toContain("runpod")
     expect(ids).toContain("huggingface-endpoints")
+    expect(ids).toContain("nebius")
     expect(ids).toContain("fireworks-ai")
     expect(ids).toContain("togetherai")
     expect(ids).toContain("baseten")
@@ -136,6 +137,13 @@ describe("provider routes", () => {
       body: JSON.stringify({ providerID: "fireworks-ai", baseURL: "https://example.com", apiKey: "key" }),
     })
     expect(response.status).toBe(400)
+
+    const nebius = await Server.Default().request(`/provider/private-gpu/connection?directory=${directory}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ providerID: "nebius", baseURL: "https://api.tokenfactory.nebius.com/v1", apiKey: "key" }),
+    })
+    expect(nebius.status).toBe(400)
   })
 
   test("allows explicitly enabled Grok Cloud API in provider list", () => {

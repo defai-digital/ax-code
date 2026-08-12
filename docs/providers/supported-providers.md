@@ -57,13 +57,14 @@ These providers appear in `/connect` under **Private GPU cloud**, after Local ru
 
 OpenCode-style hosted GPU catalogs. Models come from the bundled models.dev snapshot. Connect with an API key.
 
-| Provider id    | Display name  | Credential environment variables |
-| -------------- | ------------- | -------------------------------- |
-| `fireworks-ai` | Fireworks AI  | `FIREWORKS_API_KEY`              |
-| `togetherai`   | Together AI   | `TOGETHER_API_KEY`               |
-| `baseten`      | Baseten       | `BASETEN_API_KEY`                |
-| `nvidia`       | NVIDIA NIM    | `NVIDIA_API_KEY`                 |
-| `deepinfra`    | Deep Infra    | `DEEPINFRA_API_KEY`              |
+| Provider id    | Display name          | Credential environment variables |
+| -------------- | --------------------- | -------------------------------- |
+| `nebius`       | Nebius Token Factory  | `NEBIUS_API_KEY`                 |
+| `fireworks-ai` | Fireworks AI          | `FIREWORKS_API_KEY`              |
+| `togetherai`   | Together AI           | `TOGETHER_API_KEY`               |
+| `baseten`      | Baseten               | `BASETEN_API_KEY`                |
+| `nvidia`       | NVIDIA NIM            | `NVIDIA_API_KEY`                 |
+| `deepinfra`    | Deep Infra            | `DEEPINFRA_API_KEY`              |
 
 The hosted Hugging Face router (`huggingface` / `HF_TOKEN`) stays in Cloud API Providers. Dedicated Hugging Face Inference Endpoints are listed below.
 

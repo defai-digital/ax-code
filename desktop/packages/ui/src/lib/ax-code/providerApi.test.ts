@@ -104,6 +104,7 @@ describe("isDedicatedPrivateGpuProvider", () => {
     expect(isDedicatedPrivateGpuProvider("runpod")).toBe(true)
     expect(isDedicatedPrivateGpuProvider("huggingface-endpoints")).toBe(true)
     expect(isDedicatedPrivateGpuProvider("huggingface")).toBe(false)
+    expect(isDedicatedPrivateGpuProvider("nebius")).toBe(false)
     expect(isDedicatedPrivateGpuProvider("fireworks-ai")).toBe(false)
     expect(isDedicatedPrivateGpuProvider("openai")).toBe(false)
   })

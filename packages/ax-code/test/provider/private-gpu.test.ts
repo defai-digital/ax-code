@@ -6,15 +6,32 @@ import { Config } from "../../src/config/config"
 import {
   connectPrivateGpu,
   disconnectPrivateGpu,
+  isDedicatedPrivateGpuProviderID,
+  isPrivateGpuProviderID,
   normalizePrivateGpuBaseURL,
+  privateGpuVendor,
   reservedOutputTokens,
   requireDedicatedPrivateGpuVendor,
 } from "../../src/provider/private-gpu"
+import { DEFAULT_SETUP_PROVIDER_IDS } from "../../src/provider/default-setup-providers"
 
 const originalFetch = globalThis.fetch
 
 afterEach(() => {
   globalThis.fetch = originalFetch
+})
+
+describe("private-gpu catalog", () => {
+  test("exposes Nebius Token Factory as a hosted API-key catalog", () => {
+    const vendor = privateGpuVendor("nebius")
+    expect(vendor?.mode).toBe("catalog")
+    expect(vendor?.envKey).toBe("NEBIUS_API_KEY")
+    expect(vendor?.defaultApi).toBe("https://api.tokenfactory.nebius.com/v1")
+    expect(isPrivateGpuProviderID("nebius")).toBe(true)
+    expect(isDedicatedPrivateGpuProviderID("nebius")).toBe(false)
+    expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("nebius")
+    expect(() => requireDedicatedPrivateGpuVendor("nebius")).toThrow(/API key/)
+  })
 })
 
 describe("private-gpu endpoint", () => {

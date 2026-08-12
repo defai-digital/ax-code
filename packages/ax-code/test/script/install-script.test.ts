@@ -62,6 +62,7 @@ describe("install script", () => {
     expect(text).toContain('aarch64|arm64) minisign_arch="aarch64"')
     expect(text).toContain('-path "*/${minisign_arch}/minisign" -print -quit')
     expect(text).not.toContain('find "$tmp_dir" -type f -name minisign | head -n 1')
+    expect(text).toContain("tar --warning=no-unknown-keyword")
   })
 
   test("warns when the installed binary is not first on PATH", async () => {

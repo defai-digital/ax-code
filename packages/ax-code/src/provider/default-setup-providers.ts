@@ -19,6 +19,7 @@ export const DEFAULT_SETUP_PROVIDER_IDS = [
   "alibaba-token-plan",
   "alibaba-token-plan-cn",
   // Private GPU cloud — catalog (OpenCode / models.dev API-key vendors)
+  "nebius",
   "fireworks-ai",
   "togetherai",
   "baseten",
