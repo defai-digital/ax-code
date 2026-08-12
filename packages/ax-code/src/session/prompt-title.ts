@@ -11,6 +11,7 @@ import { Token } from "../util/token"
 import { Session } from "."
 import { LLM } from "./llm"
 import { MessageV2 } from "./message-v2"
+import { stripThinkTags } from "@/provider/think-tags"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -66,9 +67,7 @@ export function titleContextMessages(contextMessages: MessageV2.WithParts[]): Mo
 
 /** Normalize model output into a single-line session title, or undefined if unusable. */
 export function cleanGeneratedTitle(text: string): string | undefined {
-  const withoutBlocks = text
-    .replace(/<think>[\s\S]*?<\/think>\s*/gi, "")
-    .replace(/<thinking>[\s\S]*?<\/thinking>\s*/gi, "")
+  const withoutBlocks = stripThinkTags(text)
     .replace(/```[\s\S]*?```/g, "")
     .trim()
   if (!withoutBlocks) return undefined
@@ -148,7 +147,13 @@ export async function ensureTitle(input: {
   const subtaskParts = firstRealUser.parts.filter((p) => p.type === "subtask") as MessageV2.SubtaskPart[]
   const hasOnlySubtaskParts = subtaskParts.length > 0 && firstRealUser.parts.every((p) => p.type === "subtask")
 
-  let title: string | undefined
+  // Apply a deterministic title immediately so MiniMax-style thinking (or a
+  // hung title request that ignores abort) cannot leave "New session - …".
+  let title = fallbackTitleFromUserText(userText)
+  if (title) {
+    log.info("using fallback session title", { sessionID: input.session.id, title })
+    await applyTitle(input.session.id, title)
+  }
 
   try {
     const agent = await Agent.get("title")
@@ -186,12 +191,16 @@ export async function ensureTitle(input: {
         ],
       })
       const text = await Promise.resolve(result.text)
-      title = text ? cleanGeneratedTitle(text) : undefined
-      if (text && !title) {
+      const generated = text ? cleanGeneratedTitle(text) : undefined
+      if (text && !generated) {
         log.warn("title model returned no usable title text", {
           sessionID: input.session.id,
           preview: text.slice(0, 120),
         })
+      }
+      if (generated && generated !== title) {
+        title = generated
+        return applyTitle(input.session.id, generated)
       }
     }
   } catch (err: unknown) {
@@ -200,14 +209,4 @@ export async function ensureTitle(input: {
       error: DiagnosticLog.redactForLog(err),
     })
   }
-
-  if (!title) {
-    title = fallbackTitleFromUserText(userText)
-    if (title) {
-      log.info("using fallback session title", { sessionID: input.session.id, title })
-    }
-  }
-
-  if (!title) return
-  return applyTitle(input.session.id, title)
 }

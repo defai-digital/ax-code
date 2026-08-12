@@ -19,6 +19,8 @@ describe("session prompt title", () => {
     expect(cleanGeneratedTitle('"Debugging production 500s"')).toBe("Debugging production 500s")
     expect(cleanGeneratedTitle("Title: Auth refresh token support")).toBe("Auth refresh token support")
     expect(cleanGeneratedTitle("<think>only thinking</think>")).toBeUndefined()
+    expect(cleanGeneratedTitle("<mm:think>pondering MiniMax style</mm:think>\nQuality review")).toBe("Quality review")
+    expect(cleanGeneratedTitle("<mm:think>only thinking</mm:think>")).toBeUndefined()
     expect(cleanGeneratedTitle("   ")).toBeUndefined()
   })
 

@@ -10,6 +10,7 @@ import { isQwen37MaxOrPlusModel } from "./model-capabilities"
 import { modelIdFinalSegment } from "./model-id"
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
 import { cliEffortVariants } from "./cli/effort"
+import { wrapThinkTagText } from "./think-tags"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -86,6 +87,12 @@ export namespace ProviderTransform {
   ): ModelMessage[] {
     const interleavedField =
       typeof model.capabilities.interleaved === "object" ? model.capabilities.interleaved.field : undefined
+
+    // MiniMax on OpenAI-compat / private GPU emits <mm:think> in the text
+    // stream. We parse those into reasoning parts for the UI, then fold them
+    // back into tagged text on the next turn so vLLM does not see
+    // `reasoning_content` (which MiniMax-M3 on PAI rejects).
+    if (usesThinkTags(model)) return foldThinkTagReasoning(msgs)
 
     // Whether we need to strip reasoning parts from assistant messages.
     //
@@ -296,6 +303,46 @@ export namespace ProviderTransform {
     if (hasFamily(model, "minimax-m2")) return true
     const segment = modelIdFinalSegment(model.id).toLowerCase()
     return /^minimax-m2\d/.test(segment)
+  }
+
+  function isMinimax(model: Provider.Model): boolean {
+    if (hasFamily(model, "minimax")) return true
+    const segment = modelIdFinalSegment(model.id).toLowerCase()
+    const api = model.api.id.toLowerCase()
+    return segment.includes("minimax") || api.includes("minimax")
+  }
+
+  // Tag-style thinking: MiniMax-M3 on dedicated GPU (PAI/vLLM) writes
+  // `<mm:think>` into the text stream. DashScope MiniMax uses enable_thinking
+  // instead and must keep the existing Alibaba path.
+  function usesThinkTags(model: Provider.Model): boolean {
+    if (isAlibabaPlanProvider(model.providerID)) return false
+    return isMinimax(model)
+  }
+
+  function foldThinkTagReasoning(msgs: ModelMessage[]): ModelMessage[] {
+    return msgs.map((msg) => {
+      if (msg.role !== "assistant" || !Array.isArray(msg.content)) return msg
+      let reasoningText = ""
+      const rest: typeof msg.content = []
+      for (const part of msg.content as Array<{ type: string; text?: string }>) {
+        if (part.type === "reasoning") {
+          if (part.text) reasoningText += part.text
+        } else {
+          rest.push(part as (typeof msg.content)[number])
+        }
+      }
+      if (!reasoningText) return msg
+      const tagged = wrapThinkTagText(reasoningText)
+      const firstText = rest.findIndex((part) => part.type === "text")
+      if (firstText >= 0) {
+        const part = rest[firstText] as { type: "text"; text: string }
+        rest[firstText] = { ...part, text: `${tagged}\n${part.text}` }
+      } else {
+        rest.unshift({ type: "text", text: tagged } as (typeof msg.content)[number])
+      }
+      return { ...msg, content: rest }
+    })
   }
 
   // DashScope Coding Plan / Token Plan only. Dedicated PAI-EAS GPU services
@@ -660,6 +707,11 @@ export namespace ProviderTransform {
     // explicit `false` and skips re-establishing thinking_budget.
     if (isAlibabaThinkingModel(model)) {
       return { enable_thinking: false }
+    }
+    // MiniMax on vLLM / PAI still thinks for title/summary calls unless the
+    // chat template is told not to. Harmless if the backend ignores it.
+    if (isMinimax(model) && model.api.npm === "@ai-sdk/openai-compatible") {
+      return { chat_template_kwargs: { enable_thinking: false } }
     }
 
     return {}

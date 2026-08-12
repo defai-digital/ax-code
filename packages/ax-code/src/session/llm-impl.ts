@@ -38,6 +38,7 @@ import { LongAgentContextPacker } from "@/context/long-agent-packer"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { resolvePromptIsolationPolicy } from "./prompt-runtime-policy"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
+import { attachThinkTagStream } from "@/provider/think-tags"
 
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 
@@ -496,7 +497,7 @@ export namespace LLM {
       providerID: input.model.providerID,
       modelID: input.model.id,
     })
-    return attachSuperLongPacingReservation(guarded, pacingReservation, input.abort)
+    return attachSuperLongPacingReservation(attachThinkTagStream(guarded), pacingReservation, input.abort)
   }
 
   export type SuperLongPacingReservation = {

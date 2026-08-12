@@ -631,6 +631,64 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
     expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBe("Let me think about this...")
   })
 
+  test("MiniMax on PAI folds reasoning back into <mm:think> text", () => {
+    const msgs = [
+      {
+        role: "assistant",
+        content: [
+          { type: "reasoning", text: "plan the edit" },
+          { type: "text", text: "Now call bash" },
+          {
+            type: "tool-call",
+            toolCallId: "test",
+            toolName: "bash",
+            input: { command: "echo hello" },
+          },
+        ],
+      },
+    ] as any[]
+
+    const result = ProviderTransform.message(
+      msgs,
+      {
+        id: ModelID.make("alibaba-pai/MiniMax-M3-MXFP8"),
+        providerID: ProviderID.make("alibaba-pai"),
+        api: {
+          id: "MiniMax-M3-MXFP8",
+          url: "http://127.0.0.1:18099/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+        name: "MiniMax-M3-MXFP8",
+        capabilities: {
+          temperature: true,
+          reasoning: true,
+          attachment: false,
+          toolcall: true,
+          input: { text: true, audio: false, image: false, video: false, pdf: false },
+          output: { text: true, audio: false, image: false, video: false, pdf: false },
+          interleaved: { field: "reasoning_content" },
+        },
+        limit: { context: 128000, output: 8192 },
+        status: "active",
+        options: {},
+        headers: {},
+        release_date: "",
+      },
+      {},
+    )
+
+    expect(result[0].content).toEqual([
+      { type: "text", text: "<mm:think>plan the edit</mm:think>\nNow call bash" },
+      {
+        type: "tool-call",
+        toolCallId: "test",
+        toolName: "bash",
+        input: { command: "echo hello" },
+      },
+    ])
+    expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBeUndefined()
+  })
+
   test("Non-DeepSeek providers leave reasoning content unchanged", () => {
     const msgs = [
       {
@@ -2210,6 +2268,11 @@ describe("ProviderTransform.smallOptions - Alibaba thinking models", () => {
 
   test("disables AX Engine chat-template thinking for small response-only turns", () => {
     const result = ProviderTransform.smallOptions(createModel("ax-engine", "qwen3.6-27b-axq", true))
+    expect(result).toEqual({ chat_template_kwargs: { enable_thinking: false } })
+  })
+
+  test("disables MiniMax chat-template thinking on dedicated GPU title calls", () => {
+    const result = ProviderTransform.smallOptions(createModel("alibaba-pai", "MiniMax-M3-MXFP8", true))
     expect(result).toEqual({ chat_template_kwargs: { enable_thinking: false } })
   })
 
