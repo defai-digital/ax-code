@@ -5,6 +5,7 @@
  * Generates contextual prompts that help the LLM analyze failures and propose fixes
  */
 
+import { Instance } from "../../project/instance"
 import type { FailureSignal, RecoveryStrategy } from "./detector"
 
 const STRATEGY_GUIDES: Record<RecoveryStrategy, string> = {
@@ -12,7 +13,7 @@ const STRATEGY_GUIDES: Record<RecoveryStrategy, string> = {
   reread_and_retry:
     "Re-read the file to get its current content, then retry the operation with the correct data. Do not guess — always verify before editing.",
   search_alternative:
-    "The target was not found. Search for alternative paths or names. Use glob or grep to locate the correct file or content.",
+    "The target was not found. Search for alternative paths or names. Use glob or grep to locate the correct file or content. Prefer the session working directory; omit path/workdir to default to it — do not invent /home/user or /testbed roots.",
   broaden_search:
     "The search returned no results. Try broader terms, partial matches, or search in parent directories. Consider alternative naming conventions.",
   simplify:
@@ -23,6 +24,17 @@ const STRATEGY_GUIDES: Record<RecoveryStrategy, string> = {
     "Check prerequisites before retrying. Verify the file exists, read its content, and confirm your assumptions match reality.",
   escalate:
     "This failure cannot be recovered automatically. Inform the user about the issue and suggest manual steps they can take.",
+}
+
+function sessionCwdHint(): string | undefined {
+  try {
+    const directory = Instance.directory
+    if (!directory) return undefined
+    return `Session working directory: ${directory}. Prefer paths under it; omit path/workdir to use it as the default.`
+  } catch {
+    // Instance ALS may be unset in unit tests that call reflection helpers directly.
+    return undefined
+  }
 }
 
 /**
@@ -46,6 +58,12 @@ export function build(signal: FailureSignal, recentContext?: string): string {
     parts.push(`**Hint:** ${signal.suggestion}`)
   }
 
+  const cwdHint = sessionCwdHint()
+  if (cwdHint && (signal.strategy === "search_alternative" || signal.strategy === "verify_first")) {
+    parts.push("")
+    parts.push(`**${cwdHint}**`)
+  }
+
   if (recentContext) {
     parts.push("")
     parts.push("**Recent context:**")
@@ -62,5 +80,10 @@ export function build(signal: FailureSignal, recentContext?: string): string {
  * Build a quick one-line reflection for simple retries
  */
 export function quick(signal: FailureSignal): string {
-  return `The \`${signal.toolName}\` operation failed: ${signal.error}. This has happened ${signal.attempt} time(s). ${signal.suggestion}`
+  const cwdHint = sessionCwdHint()
+  const cwdSuffix =
+    cwdHint && (signal.strategy === "search_alternative" || signal.strategy === "verify_first")
+      ? ` ${cwdHint}`
+      : ""
+  return `The \`${signal.toolName}\` operation failed: ${signal.error}. This has happened ${signal.attempt} time(s). ${signal.suggestion}${cwdSuffix}`
 }

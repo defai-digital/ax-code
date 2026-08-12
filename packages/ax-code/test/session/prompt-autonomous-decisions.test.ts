@@ -9,6 +9,7 @@ import {
   emptyModelTurnDecision,
   globalStepLimitDecision,
   goalContinuationDecision,
+  hasUsableReadOnlyEvidence,
   isEmptyModelTurn,
   isTruncatedModelTurn,
   isReadOnlyExplorationTurn,
@@ -21,8 +22,13 @@ import {
   truncatedModelTurnDecision,
   hasSuccessfulGoalCompleteTool,
   goalCompleteForceTextDecision,
+  unexecutableToolTextRecoveryDecision,
 } from "../../src/session/prompt-autonomous-decisions"
-import { AX_ENGINE_READ_ONLY_TURN_FORCE, AX_ENGINE_READ_ONLY_TURN_NUDGE } from "../../src/session/prompt-loop-config"
+import {
+  AX_ENGINE_READ_ONLY_TURN_FORCE,
+  AX_ENGINE_READ_ONLY_TURN_NUDGE,
+  MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
+} from "../../src/session/prompt-loop-config"
 
 function unfinishedTodosGate() {
   return {
@@ -987,19 +993,86 @@ describe("local read-only exploration convergence", () => {
     expect(isReadOnlyExplorationTurn([])).toBe(false)
   })
 
-  test("nudges once, then forces synthesis at the shipped ax-engine thresholds", () => {
+  test("nudges, then forces synthesis at the shipped ax-engine thresholds when evidence exists", () => {
     const config = {
       nudgeThreshold: AX_ENGINE_READ_ONLY_TURN_NUDGE,
       forceThreshold: AX_ENGINE_READ_ONLY_TURN_FORCE,
     }
-    expect(AX_ENGINE_READ_ONLY_TURN_NUDGE).toBe(1)
-    expect(AX_ENGINE_READ_ONLY_TURN_FORCE).toBe(2)
-    expect(readOnlyExplorationDecision({ consecutiveTurns: 1, nudged: false, ...config })).toEqual({
+    expect(AX_ENGINE_READ_ONLY_TURN_NUDGE).toBe(2)
+    expect(AX_ENGINE_READ_ONLY_TURN_FORCE).toBe(4)
+    expect(
+      readOnlyExplorationDecision({ consecutiveTurns: 1, nudged: false, hasUsableEvidence: true, ...config }),
+    ).toEqual({
+      action: "ignore",
+    })
+    expect(
+      readOnlyExplorationDecision({ consecutiveTurns: 2, nudged: false, hasUsableEvidence: true, ...config }),
+    ).toEqual({
       action: "nudge",
     })
-    expect(readOnlyExplorationDecision({ consecutiveTurns: 2, nudged: true, ...config })).toEqual({
+    expect(
+      readOnlyExplorationDecision({ consecutiveTurns: 4, nudged: true, hasUsableEvidence: true, ...config }),
+    ).toEqual({
       action: "force_text",
     })
+  })
+
+  test("delays force_text while the read-only streak has no usable evidence", () => {
+    const config = {
+      nudgeThreshold: AX_ENGINE_READ_ONLY_TURN_NUDGE,
+      forceThreshold: AX_ENGINE_READ_ONLY_TURN_FORCE,
+      hasUsableEvidence: false,
+    }
+    expect(readOnlyExplorationDecision({ consecutiveTurns: 4, nudged: true, ...config })).toEqual({
+      action: "nudge",
+    })
+    expect(readOnlyExplorationDecision({ consecutiveTurns: 5, nudged: true, ...config })).toEqual({
+      action: "nudge",
+    })
+    // Hard ceiling: forceThreshold + 2 even without evidence
+    expect(readOnlyExplorationDecision({ consecutiveTurns: 6, nudged: true, ...config })).toEqual({
+      action: "force_text",
+    })
+  })
+
+  test("detects usable read-only evidence from completed tools only", () => {
+    expect(
+      hasUsableReadOnlyEvidence([
+        { type: "tool", tool: "glob", state: { status: "error" } },
+        { type: "tool", tool: "bash", state: { status: "error" } },
+      ]),
+    ).toBe(false)
+    expect(
+      hasUsableReadOnlyEvidence([
+        { type: "tool", tool: "glob", state: { status: "error" } },
+        { type: "tool", tool: "bash", state: { status: "completed" } },
+      ]),
+    ).toBe(true)
+  })
+
+  test("recovers unexecutable tool text only after a forced text-only turn within budget", () => {
+    expect(MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES).toBe(1)
+    expect(
+      unexecutableToolTextRecoveryDecision({
+        lastTurnWasForceTextOnly: true,
+        recoveriesUsed: 0,
+        maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
+      }),
+    ).toEqual({ action: "recover" })
+    expect(
+      unexecutableToolTextRecoveryDecision({
+        lastTurnWasForceTextOnly: true,
+        recoveriesUsed: 1,
+        maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
+      }),
+    ).toEqual({ action: "stop" })
+    expect(
+      unexecutableToolTextRecoveryDecision({
+        lastTurnWasForceTextOnly: false,
+        recoveriesUsed: 0,
+        maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
+      }),
+    ).toEqual({ action: "stop" })
   })
 })
 

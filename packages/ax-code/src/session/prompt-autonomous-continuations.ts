@@ -182,7 +182,9 @@ export namespace AutonomousContinuationPrompt {
       return (
         `Local-engine convergence checkpoint: ${turns} produced no source change or completed answer. ` +
         `Tools are disabled for the next turn. Use the evidence already collected to answer now, ` +
-        `including any uncertainty or blocker instead of running another repository scan.`
+        `including any uncertainty or blocker instead of running another repository scan. ` +
+        `Do not paste tool-call XML or <tool_call> blocks — tools will not execute. ` +
+        `If you have no usable evidence yet, say what blocked you (for example wrong paths) in plain language.`
       )
     }
     return (
@@ -190,9 +192,23 @@ export namespace AutonomousContinuationPrompt {
       `If the latest result answers the request, respond now. Otherwise make only the smallest focused follow-up; ` +
       `for a broad review, inspect at most 6 representative files with bounded reads (up to 400 lines each), or run ` +
       `one focused test/lint command, then synthesize. Do not repeat or slightly vary a successful repository-wide ` +
-      `query. Keep any follow-up shell command under 500 characters; never assume /testbed or enumerate long ` +
-      `extension/exclusion lists. ` +
-      `After ${input.forceThreshold} consecutive read-only turns, the next response will be text-only.`
+      `query. Keep any follow-up shell command under 500 characters; never assume /testbed, /home/user, or other ` +
+      `invented sandbox roots — use the Working directory from <env> (omit path/workdir to default to it). ` +
+      `After ${input.forceThreshold} consecutive successful-evidence read-only turns, the next response may be text-only.`
+    )
+  }
+
+  /**
+   * Injected when a forced text-only turn still emitted unexecutable tool markup.
+   * Tools are re-enabled for the next turn so the model can finish real work.
+   */
+  export function unexecutableToolTextRecovery() {
+    return (
+      `Control-plane recovery: the previous turn was forced text-only and the model returned tool-call markup ` +
+      `as plain text (for example <tool_call>…</tool_call>), which is not executable. ` +
+      `Tools are available again for this turn. Either (1) call real AX Code tools via the tool protocol ` +
+      `(prefer the Working directory from <env>; omit path/workdir to use it), or (2) answer the user in plain ` +
+      `language without tool markup. Do not paste XML or fake tool calls as text.`
     )
   }
 

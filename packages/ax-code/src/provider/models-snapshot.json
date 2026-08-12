@@ -47394,7 +47394,8 @@
         "limit": {
           "context": 190000,
           "output": 64000
-        }
+        },
+        "status": "deprecated"
       },
       "claude-sonnet-4": {
         "id": "claude-sonnet-4",

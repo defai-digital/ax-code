@@ -262,6 +262,9 @@ type ToolOnlyTurnDecision =
 type ToolActivityPart = {
   type?: string
   tool?: string
+  state?: {
+    status?: string
+  }
 }
 
 // These tools can inspect or control an inspection process without directly
@@ -276,17 +279,59 @@ export function isReadOnlyExplorationTurn(parts: readonly ToolActivityPart[] | u
   return tools.length > 0 && tools.every((part) => READ_ONLY_EXPLORATION_TOOLS.has(part.tool ?? ""))
 }
 
+/** True when at least one read-only tool finished successfully this turn. */
+export function hasUsableReadOnlyEvidence(parts: readonly ToolActivityPart[] | undefined): boolean {
+  if (!parts?.length) return false
+  return parts.some(
+    (part) =>
+      part.type === "tool" &&
+      READ_ONLY_EXPLORATION_TOOLS.has(part.tool ?? "") &&
+      part.state?.status === "completed",
+  )
+}
+
 type ReadOnlyExplorationDecision = { action: "ignore" } | { action: "nudge" } | { action: "force_text" }
 
+/**
+ * Local-engine read-only convergence. Force synthesis once the model has had
+ * a chance to gather evidence — but do not strip tools while every probe is
+ * still failing (wrong invented paths), or pure Q&A never gets a working call.
+ * A hard ceiling still forces text eventually so latency cannot run away.
+ */
 export function readOnlyExplorationDecision(input: {
   consecutiveTurns: number
   nudged: boolean
   nudgeThreshold: number
   forceThreshold: number
+  /** True when this streak has at least one successful read-only tool result. */
+  hasUsableEvidence?: boolean
 }): ReadOnlyExplorationDecision {
-  if (input.consecutiveTurns >= input.forceThreshold) return { action: "force_text" }
+  const hardCeiling = input.forceThreshold + 2
+  if (input.consecutiveTurns >= hardCeiling) return { action: "force_text" }
+  if (input.consecutiveTurns >= input.forceThreshold && input.hasUsableEvidence) {
+    return { action: "force_text" }
+  }
+  // At/over force threshold but no usable evidence yet: keep tools on and
+  // re-issue path/cwd guidance instead of force-texting empty failures.
+  if (input.consecutiveTurns >= input.forceThreshold && !input.hasUsableEvidence) {
+    return { action: "nudge" }
+  }
   if (!input.nudged && input.consecutiveTurns >= input.nudgeThreshold) return { action: "nudge" }
   return { action: "ignore" }
+}
+
+/**
+ * After a forced text-only turn, unexecutable tool markup should recover with
+ * tools re-enabled once — not hard-stop on the trap we just created.
+ */
+export function unexecutableToolTextRecoveryDecision(input: {
+  lastTurnWasForceTextOnly: boolean
+  recoveriesUsed: number
+  maxRecoveries: number
+}): { action: "recover" } | { action: "stop" } {
+  if (!input.lastTurnWasForceTextOnly) return { action: "stop" }
+  if (input.recoveriesUsed >= input.maxRecoveries) return { action: "stop" }
+  return { action: "recover" }
 }
 
 // Circuit breaker for streaks of turns that end in further tool calls without

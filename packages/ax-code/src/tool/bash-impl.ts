@@ -297,7 +297,10 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       await assertSymlinkInsideProject(requestedCwd)
       const cwd = params.workdir
         ? await fs.realpath(requestedCwd).catch(() => {
-            throw new Error(`Working directory does not exist: ${params.workdir}`)
+            throw new Error(
+              `Working directory does not exist: ${params.workdir}. ` +
+                `Session working directory: ${Instance.directory}. Omit workdir or pass a path under it.`,
+            )
           })
         : Instance.directory
       if (params.timeout !== undefined && (!Number.isFinite(params.timeout) || params.timeout < 1)) {
@@ -637,7 +640,8 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         const unique = uniqueStrings(missingPaths)
         throw new Error(
           `Path does not exist: ${unique.slice(0, 3).join(", ")}${unique.length > 3 ? ` (and ${unique.length - 3} more)` : ""}.\n` +
-            `Hint: use the Glob or Read tool to discover available files before running commands against them.`,
+            `Hint: use the Glob or Read tool to discover available files before running commands against them.\n` +
+            `Session working directory: ${Instance.directory}. Prefer paths under it; omit workdir to use it as the default.`,
         )
       }
 

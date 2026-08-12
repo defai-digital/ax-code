@@ -24,12 +24,16 @@ export const MAX_TOOL_ONLY_TURNS = 35
 // stop 20 turns later with no further signal.
 export const TOOL_ONLY_TURN_FINAL_NUDGE = MAX_TOOL_ONLY_TURNS - 5
 // Local MLX prefill makes every extra model/tool round comparatively
-// expensive. Prompt once after the first read-only round, allow one bounded
-// evidence-gathering follow-up, then force synthesis before another batch can
-// inflate the prompt past the local stream-idle window. Mutating/editing turns
-// use the normal tool-only limits above.
-export const AX_ENGINE_READ_ONLY_TURN_NUDGE = 1
-export const AX_ENGINE_READ_ONLY_TURN_FORCE = 2
+// expensive. Still bound open-ended inspection, but allow a real evidence
+// window first: pure Q&A (LOC counts, greps) is read-only work and must not
+// be force-texted after two failed path probes. Mutating/editing turns use
+// the normal tool-only limits above. When the streak has no successful tool
+// results, force is delayed further (see readOnlyExplorationDecision).
+export const AX_ENGINE_READ_ONLY_TURN_NUDGE = 2
+export const AX_ENGINE_READ_ONLY_TURN_FORCE = 4
+// After a forced text-only turn, if the model pastes unexecutable tool XML,
+// re-enable tools once instead of hard-stopping (self-inflicted trap).
+export const MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES = 1
 // Truncated turns (finish=length) are a normal consequence of output-token
 // limits — the model was actively generating useful content that exceeded its
 // budget. Recovery ("continue from where you left off") is usually effective,

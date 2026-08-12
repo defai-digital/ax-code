@@ -97,14 +97,34 @@ describe("autonomous continuation prompt builders", () => {
 
   test("bounds AX Engine read-only follow-up context", () => {
     const text = AutonomousContinuationPrompt.axEngineReadOnlyCheckpoint({
-      consecutiveTurns: 1,
-      forceThreshold: 2,
+      consecutiveTurns: 2,
+      forceThreshold: 4,
       forced: false,
     })
 
     expect(text).toContain("at most 6 representative files")
     expect(text).toContain("up to 400 lines each")
-    expect(text).toContain("After 2 consecutive read-only turns")
+    expect(text).toContain("Working directory")
+    expect(text).toContain("After 4 consecutive successful-evidence read-only turns")
+  })
+
+  test("forced AX Engine checkpoint forbids pasting tool XML", () => {
+    const text = AutonomousContinuationPrompt.axEngineReadOnlyCheckpoint({
+      consecutiveTurns: 4,
+      forceThreshold: 4,
+      forced: true,
+    })
+
+    expect(text).toContain("Tools are disabled")
+    expect(text).toContain("Do not paste tool-call XML")
+  })
+
+  test("builds unexecutable tool text recovery guidance", () => {
+    const text = AutonomousContinuationPrompt.unexecutableToolTextRecovery()
+
+    expect(text).toContain("Tools are available again")
+    expect(text).toContain("Do not paste XML")
+    expect(text).toContain("Working directory")
   })
 
   test("builds completion gate retry guidance", () => {
