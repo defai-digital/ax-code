@@ -46,6 +46,19 @@ export const MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES = 1
 // rarely recover). 3 attempts covers typical large code-generation responses
 // that span multiple output windows.
 export const MAX_TRUNCATED_MODEL_TURN_RETRIES = 3
+// Local MLX (ax-engine) decode is ~10–20 tok/s for large packs. Three full
+// 2048-token recovery windows can burn ~10 minutes while the model re-pastes
+// code the soft "continue briefly" instruction already asked it not to. Cap
+// retries and recovery output hard for local engines; cloud providers keep the
+// wider default above.
+export const AX_ENGINE_MAX_TRUNCATED_MODEL_TURN_RETRIES = 1
+// Hard ceiling for ax-engine truncated-recovery turns (soft word limits are
+// ignored by weaker local models). Keeps a runaway re-paste under ~30s.
+export const AX_ENGINE_TRUNCATED_RECOVERY_MAX_OUTPUT_TOKENS = 512
+// When the truncated turn already dumped a large code paste, allow a slightly
+// larger window so `write` tool args can fit while still forbidding multi-minute
+// chat re-pastes.
+export const AX_ENGINE_TRUNCATED_CODE_RECOVERY_MAX_OUTPUT_TOKENS = 768
 
 export type PromptLoopLimits = {
   sessionStepLimit: number

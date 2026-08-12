@@ -32,7 +32,11 @@ import { handlePromptLoopAgentStepLimit } from "./prompt-loop-agent-step-limit"
 import { emitPromptLoopCompletionGateDecision } from "./prompt-loop-completion-gate"
 import { handlePromptLoopCompletionGateRetry } from "./prompt-loop-completion-gate-retry"
 import { handlePromptLoopEmptyTurn } from "./prompt-loop-empty-turn"
-import { handlePromptLoopTruncatedTurn, truncatedModelOutputPrefix } from "./prompt-loop-truncated-turn"
+import {
+  handlePromptLoopTruncatedTurn,
+  isLargeTruncatedCodePaste,
+  truncatedModelOutputPrefix,
+} from "./prompt-loop-truncated-turn"
 import { handlePromptLoopTodoConvergence } from "./prompt-loop-todo-convergence"
 import { handlePromptLoopTodoContinuation } from "./prompt-loop-todo-continuation"
 import { appendNewerMessages, loopMessages, scanLoopMessages } from "./prompt-loop-messages"
@@ -94,8 +98,11 @@ import {
 import { SystemPrompt } from "./system"
 import {
   AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS,
+  AX_ENGINE_MAX_TRUNCATED_MODEL_TURN_RETRIES,
   AX_ENGINE_READ_ONLY_TURN_FORCE,
   AX_ENGINE_READ_ONLY_TURN_NUDGE,
+  AX_ENGINE_TRUNCATED_CODE_RECOVERY_MAX_OUTPUT_TOKENS,
+  AX_ENGINE_TRUNCATED_RECOVERY_MAX_OUTPUT_TOKENS,
   MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
   effectivePacingMaxSteps,
   promptLoopLimits,
@@ -372,6 +379,10 @@ export namespace SessionPrompt {
     // Keep the instruction in memory until a provider turn successfully
     // consumes it; never persist it as a synthetic chat message.
     let pendingAxEngineTurnInstruction: string | undefined
+    // Hard max_tokens ceiling for the next provider request only (ax-engine
+    // truncated recovery). Soft "keep it short" text is not enough on local
+    // models that ignore word limits and re-fill the full model output budget.
+    let pendingMaxOutputTokens: number | undefined
     let activeTurnProfile: TurnExecutionProfile | undefined
     let consecutiveAxEngineReadOnlyTurns = 0
     let axEngineReadOnlyNudged = false
@@ -434,6 +445,7 @@ export namespace SessionPrompt {
       lastTurnForceTextReason = undefined
       unexecutableToolTextRecoveries = 0
       pendingAxEngineTurnInstruction = undefined
+      pendingMaxOutputTokens = undefined
       activeTurnProfile = undefined
       fallbackModelOverride = undefined
       failedFallbackProviderIDs.clear()
@@ -991,6 +1003,7 @@ export namespace SessionPrompt {
         : {}
       if (needsTools) structuredOutput.attachTool(tools)
 
+      const maxOutputTokensForRequest = pendingMaxOutputTokens
       const result = await processor.process({
         user: lastUser,
         agent,
@@ -1004,6 +1017,7 @@ export namespace SessionPrompt {
         toolChoice,
         small: responseOnlyFastReasoning,
         config: cfg,
+        maxOutputTokens: maxOutputTokensForRequest,
       })
 
       if (
@@ -1019,6 +1033,9 @@ export namespace SessionPrompt {
       if (!processor.message.error) {
         if (pendingInstructionForRequest && pendingAxEngineTurnInstruction === pendingInstructionForRequest) {
           pendingAxEngineTurnInstruction = undefined
+        }
+        if (maxOutputTokensForRequest !== undefined && pendingMaxOutputTokens === maxOutputTokensForRequest) {
+          pendingMaxOutputTokens = undefined
         }
         if (responseOnlyProfile && activeTurnProfile === responseOnlyProfile) {
           activeTurnProfile = undefined
@@ -1161,15 +1178,25 @@ export namespace SessionPrompt {
           continue
         }
 
-        const currentTruncatedModelOutputPrefix = truncatedModelTurn
-          ? truncatedModelOutputPrefix(modelOutputText(latestMessages, processor.message.id))
+        const truncatedOutputText = truncatedModelTurn
+          ? modelOutputText(latestMessages, processor.message.id)
           : undefined
+        const currentTruncatedModelOutputPrefix = truncatedModelTurn
+          ? truncatedModelOutputPrefix(truncatedOutputText)
+          : undefined
+        // Local engines pay ~minutes per full output window. Cap recovery
+        // attempts so a soft-ignored "keep it short" instruction cannot burn
+        // three full 2k generations on a single user prompt.
+        const effectiveMaxTruncatedModelTurnRetries =
+          model.providerID === AX_ENGINE_PROVIDER_ID
+            ? Math.min(maxTruncatedModelTurnRetries, AX_ENGINE_MAX_TRUNCATED_MODEL_TURN_RETRIES)
+            : maxTruncatedModelTurnRetries
         const truncatedTurnTransition = await handlePromptLoopTruncatedTurn({
           sessionID,
           assistant: processor.message,
           truncatedModelTurn,
           truncatedModelTurnRetries,
-          maxTruncatedModelTurnRetries,
+          maxTruncatedModelTurnRetries: effectiveMaxTruncatedModelTurnRetries,
           pendingCount: pendingTodos.length,
           previousOutputPrefix: previousTruncatedModelOutputPrefix,
           currentOutputPrefix: currentTruncatedModelOutputPrefix,
@@ -1185,8 +1212,33 @@ export namespace SessionPrompt {
           previousTruncatedModelOutputPrefix = currentTruncatedModelOutputPrefix
           const axEngineRecovery = model.providerID === AX_ENGINE_PROVIDER_ID
           if (axEngineRecovery) {
-            armForceTextOnlyTurn("truncated_recovery")
-            pendingAxEngineTurnInstruction = AutonomousContinuationPrompt.axEngineTruncatedModelTurnRecovery()
+            const largeCodePaste = isLargeTruncatedCodePaste(truncatedOutputText)
+            if (largeCodePaste) {
+              // Keep tools so the model can finish via write/edit instead of
+              // another multi-minute in-chat re-paste of the same program.
+              forceTextOnlyTurn = false
+              forceTextReason = undefined
+              pendingAxEngineTurnInstruction = AutonomousContinuationPrompt.axEngineTruncatedCodeWorkRecovery({
+                attempt: truncatedTurnTransition.truncatedModelTurnRetries,
+                maxAttempts: effectiveMaxTruncatedModelTurnRetries,
+              })
+              pendingMaxOutputTokens = AX_ENGINE_TRUNCATED_CODE_RECOVERY_MAX_OUTPUT_TOKENS
+            } else {
+              armForceTextOnlyTurn("truncated_recovery")
+              pendingAxEngineTurnInstruction = AutonomousContinuationPrompt.axEngineTruncatedModelTurnRecovery()
+              pendingMaxOutputTokens = AX_ENGINE_TRUNCATED_RECOVERY_MAX_OUTPUT_TOKENS
+            }
+            log.info("ax-engine truncated turn recovery armed", {
+              command: "session.prompt.loop",
+              status: "retry",
+              errorCode: "TRUNCATED_MODEL_TURN",
+              sessionID,
+              largeCodePaste,
+              maxOutputTokens: pendingMaxOutputTokens,
+              toolsEnabled: largeCodePaste,
+              attempt: truncatedTurnTransition.truncatedModelTurnRetries,
+              maxAttempts: effectiveMaxTruncatedModelTurnRetries,
+            })
           } else {
             await createAutonomousTextContinuation({
               sessionID,
@@ -1219,6 +1271,7 @@ export namespace SessionPrompt {
             axEngineReadOnlyHasEvidence = false
             axEngineLargeEvidenceGraceUsed = false
             pendingAxEngineTurnInstruction = undefined
+            pendingMaxOutputTokens = undefined
             log.info("autonomous completion gate recovery after forced text-only turn", {
               command: "session.prompt.loop",
               status: "recover",

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import type { MessageV2 } from "../../src/session/message-v2"
 import {
   handlePromptLoopTruncatedTurn,
+  isLargeTruncatedCodePaste,
   isRepeatedTruncatedModelOutput,
   truncatedModelOutputPrefix,
 } from "../../src/session/prompt-loop-truncated-turn"
@@ -12,6 +13,33 @@ function assistant(id = MessageID.ascending()) {
 }
 
 describe("prompt loop truncated model turn", () => {
+  test("detects large truncated in-chat code pastes", () => {
+    const fence =
+      "Here is a complete Python script that wraps 7-Zip:\n\n```python\n" +
+      "def compress(src, dest):\n    subprocess.run(['7z', 'a', dest, src], check=True)\n\n".repeat(50) +
+      "```\n"
+    expect(fence.length).toBeGreaterThan(1500)
+    expect(isLargeTruncatedCodePaste(fence)).toBe(true)
+    expect(isLargeTruncatedCodePaste("short answer")).toBe(false)
+    expect(isLargeTruncatedCodePaste("```\nok\n```")).toBe(false)
+
+    const unfenced = [
+      "import os",
+      "import sys",
+      "from pathlib import Path",
+      "def main():",
+      "class App:",
+      "const x = 1",
+      "export function run() {}",
+      "function helper() {}",
+      "package main",
+      "#include <stdio.h>",
+      ...Array.from({ length: 120 }, () => "    value = value + 1  # pad the dump so length exceeds the threshold"),
+    ].join("\n")
+    expect(unfenced.length).toBeGreaterThan(1500)
+    expect(isLargeTruncatedCodePaste(unfenced)).toBe(true)
+  })
+
   test("detects only repeated substantial normalized output prefixes", () => {
     const repeated = "The Journal of Modern African Studies has additional publication details. ".repeat(8)
 

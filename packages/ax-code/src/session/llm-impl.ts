@@ -77,6 +77,12 @@ export namespace LLM {
     retries?: number
     toolChoice?: "auto" | "required" | "none"
     config?: Awaited<ReturnType<typeof Config.get>>
+    /**
+     * Optional hard ceiling for this request only. Used for local-engine
+     * truncated-turn recovery so soft "keep it short" instructions cannot burn
+     * multi-minute full max_tokens windows when the model ignores them.
+     */
+    maxOutputTokens?: number
   }
 
   export type StreamOutput = StreamTextResult<ToolSet, any>
@@ -340,7 +346,11 @@ export namespace LLM {
       },
     )
 
-    const maxOutputTokens = ProviderTransform.maxOutputTokens(input.model)
+    const modelMaxOutputTokens = ProviderTransform.maxOutputTokens(input.model)
+    const maxOutputTokens =
+      typeof input.maxOutputTokens === "number" && Number.isFinite(input.maxOutputTokens) && input.maxOutputTokens > 0
+        ? Math.min(modelMaxOutputTokens, Math.floor(input.maxOutputTokens))
+        : modelMaxOutputTokens
 
     const supportsToolCalls = input.model.capabilities.toolcall !== false
     // A forced text-only turn should not pay to serialize and prefill every tool

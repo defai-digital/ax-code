@@ -12,6 +12,11 @@ const log = Log.create({ service: "session.prompt" })
 // The observed local-engine failure restarts byte-for-byte from the beginning;
 // retain only this bounded prefix between turns and never log its content.
 const REPEATED_OUTPUT_PREFIX_CHARS = 256
+// Large in-chat code dumps that hit finish=length are a common local-engine
+// failure mode: recovery then re-generates another multi-kB paste instead of
+// writing a file. Detect enough substance to switch recovery strategy.
+const LARGE_CODE_PASTE_MIN_CHARS = 1_500
+const LARGE_CODE_FENCE_BODY_MIN_CHARS = 200
 
 function normalizedOutput(text: string | undefined) {
   return text?.normalize("NFKC").replace(/\s+/g, " ").trim() ?? ""
@@ -27,6 +32,19 @@ export function isRepeatedTruncatedModelOutput(input: { previousOutputPrefix?: s
   if (input.previousOutputPrefix?.length !== REPEATED_OUTPUT_PREFIX_CHARS) return false
   if (input.currentOutputPrefix?.length !== REPEATED_OUTPUT_PREFIX_CHARS) return false
   return input.previousOutputPrefix === input.currentOutputPrefix
+}
+
+/** True when truncated assistant text looks like a large unfinished code paste. */
+export function isLargeTruncatedCodePaste(text: string | undefined): boolean {
+  if (!text) return false
+  const trimmed = text.trim()
+  if (trimmed.length < LARGE_CODE_PASTE_MIN_CHARS) return false
+  if (new RegExp(`\`\`\`[\\s\\S]{${LARGE_CODE_FENCE_BODY_MIN_CHARS},}`).test(trimmed)) return true
+  // Unfenced but still a long source-looking dump (common after a bad tool name).
+  const codeyLines = trimmed
+    .split("\n")
+    .filter((line) => /^(def |class |import |from |function |const |export |package |using |#include )/i.test(line.trim()))
+  return codeyLines.length >= 8
 }
 
 type PromptLoopTruncatedTurnTransition =

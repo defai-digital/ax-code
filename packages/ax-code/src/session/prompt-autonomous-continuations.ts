@@ -129,11 +129,28 @@ export namespace AutonomousContinuationPrompt {
     )
   }
 
+  // Soft word limits alone fail on local engines (they still emit full max_tokens).
+  // Pair this instruction with a hard maxOutputTokens cap on the recovery turn.
   export function axEngineTruncatedModelTurnRecovery() {
     return (
       `The previous local-model turn hit its output limit. Tools are disabled for this recovery turn. ` +
-      `Do not continue or rewrite the truncated command. Give the user the direct answer from the valid evidence ` +
-      `already collected, state any uncertainty, and keep the entire response under 300 words.`
+      `Do not continue, rewrite, or re-paste the truncated response. ` +
+      `Give the user a brief direct answer from evidence already collected, note that the prior turn was ` +
+      `truncated, state any uncertainty, and stop. Keep the entire response under 120 words.`
+    )
+  }
+
+  // Used when the truncated turn was a large in-chat code dump. Tools stay enabled
+  // so the model can finish via write/edit instead of another multi-minute paste.
+  export function axEngineTruncatedCodeWorkRecovery(input: { attempt: number; maxAttempts: number }) {
+    return (
+      `The previous local-model turn hit its output limit while pasting a large code block in chat. ` +
+      `Do NOT re-paste or rewrite the full program in the assistant message. ` +
+      `If a file still needs to be created or updated, call the write or edit tool once with the complete ` +
+      `concise implementation (prefer a short focused script). ` +
+      `If the truncated chat already contains enough code for the user, stop with a short note that the ` +
+      `response was truncated and point them at the usable portion — do not regenerate it. ` +
+      `This is local truncated-code recovery ${input.attempt}/${input.maxAttempts}.`
     )
   }
 

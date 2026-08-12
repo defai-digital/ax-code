@@ -91,8 +91,20 @@ describe("autonomous continuation prompt builders", () => {
     const text = AutonomousContinuationPrompt.axEngineTruncatedModelTurnRecovery()
 
     expect(text).toContain("Tools are disabled")
-    expect(text).toContain("under 300 words")
-    expect(text).toContain("Do not continue or rewrite the truncated command")
+    expect(text).toContain("under 120 words")
+    expect(text).toContain("Do not continue, rewrite, or re-paste")
+  })
+
+  test("builds an AX Engine truncated code-work recovery that keeps tools available", () => {
+    const text = AutonomousContinuationPrompt.axEngineTruncatedCodeWorkRecovery({
+      attempt: 1,
+      maxAttempts: 1,
+    })
+
+    expect(text).toContain("write or edit tool")
+    expect(text).toContain("Do NOT re-paste")
+    expect(text).toContain("local truncated-code recovery 1/1")
+    expect(text).not.toContain("Tools are disabled")
   })
 
   test("bounds AX Engine read-only follow-up context", () => {
