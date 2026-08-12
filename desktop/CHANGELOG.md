@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.5.1] - 2026-08-11
+
+### Added
+
+- Autonomy: adds `autonomy.budget` configuration for token limits, stall detection, burst control, and a `/limits` command that explains the active budget.
+
+### Changed
+
+- Quality: completes a module-by-module runtime and Desktop audit with reproducible reviewer evidence and focused regression coverage.
+
+### Fixed
+
+- Autonomy: reports specialist step caps honestly and keeps configured token, stall, and burst limits aligned across execution and the TUI.
+- Authentication: prevents migration races from overwriting newer credentials, preserves newly-created lock files, and surfaces encryption fallback conditions.
+- Desktop: shuts down the backend cleanly after fatal errors, prevents orphaned child processes, and reports terminal cleanup failures that were previously silent.
+- Installation: selects the Minisign bootstrap executable for the host CPU, fixing verified installs on Linux ARM64.
+
 ## [7.5.0] - 2026-08-11
 
 ### Added
