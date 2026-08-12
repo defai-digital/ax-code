@@ -108,6 +108,8 @@ import type {
   PromptHistoryAppendResponses,
   PromptHistoryListErrors,
   PromptHistoryListResponses,
+  ProviderAlibabaPaiConnectionUpdateErrors,
+  ProviderAlibabaPaiConnectionUpdateResponses,
   ProviderAuthResponses,
   ProviderAxEngineConnectionResponses,
   ProviderAxEngineConnectionUpdateErrors,
@@ -133,6 +135,8 @@ import type {
   ProviderOauthAuthorizeResponses,
   ProviderOauthCallbackErrors,
   ProviderOauthCallbackResponses,
+  ProviderPrivateGpuConnectionUpdateErrors,
+  ProviderPrivateGpuConnectionUpdateResponses,
   PtyConnectErrors,
   PtyConnectResponses,
   PtyCreateErrors,
@@ -5358,6 +5362,94 @@ export class Question extends HeyApiClient {
   }
 }
 
+export class PrivateGpu extends HeyApiClient {
+  /**
+   * Connect a dedicated private GPU endpoint
+   *
+   * Validate a dedicated GPU vendor URL and token, persist credentials, and discover model IDs from GET /models.
+   */
+  public connectionUpdate<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      providerID: string
+      baseURL: string
+      apiKey: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "providerID" },
+            { in: "body", key: "baseURL" },
+            { in: "body", key: "apiKey" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<
+      ProviderPrivateGpuConnectionUpdateResponses,
+      ProviderPrivateGpuConnectionUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/provider/private-gpu/connection",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class AlibabaPai extends HeyApiClient {
+  /**
+   * Connect Alibaba PAI-EAS
+   *
+   * Compatibility alias for PUT /provider/private-gpu/connection with providerID=alibaba-pai.
+   */
+  public connectionUpdate<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      baseURL: string
+      apiKey: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "baseURL" },
+            { in: "body", key: "apiKey" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<
+      ProviderAlibabaPaiConnectionUpdateResponses,
+      ProviderAlibabaPaiConnectionUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/provider/alibaba-pai/connection",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Model extends HeyApiClient {
   /**
    * Download ax-engine local model
@@ -5872,6 +5964,16 @@ export class Provider extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  private _privateGpu?: PrivateGpu
+  get privateGpu(): PrivateGpu {
+    return (this._privateGpu ??= new PrivateGpu({ client: this.client }))
+  }
+
+  private _alibabaPai?: AlibabaPai
+  get alibabaPai(): AlibabaPai {
+    return (this._alibabaPai ??= new AlibabaPai({ client: this.client }))
   }
 
   private _axEngine?: AxEngine

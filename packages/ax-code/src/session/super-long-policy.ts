@@ -1,4 +1,5 @@
 import { getModelCapabilities, supportsLongAgent } from "@/provider/model-capabilities"
+import { isDedicatedPrivateGpuProviderID } from "@/provider/private-gpu/presets"
 import { Env } from "@/util/env"
 import { isLocalHostname } from "@/util/local-host"
 
@@ -133,6 +134,7 @@ export namespace SuperLongPolicy {
     options?: { baseURL?: string; modelID?: string },
   ): PacingPolicy | undefined {
     if (LOCAL_PROVIDER_IDS.has(providerID)) return undefined
+    if (isDedicatedPrivateGpuProviderID(providerID)) return undefined
     if (options?.baseURL !== undefined && isLocalBaseURL(options.baseURL)) return undefined
     // Honor the capability registry's rateLimitTier when the model is known —
     // it was declared per model/provider but never wired in, leaving this

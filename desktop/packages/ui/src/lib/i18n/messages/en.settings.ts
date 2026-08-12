@@ -1082,6 +1082,11 @@ export const settingsDict = {
   "settings.providers.page.auth.apiKeyTooltip":
     "Keys are sent directly to AX Code and never stored by AX Code.",
   "settings.providers.page.auth.apiKeyPlaceholder": "sk-...",
+  "settings.providers.page.auth.privateGpuEndpointLabel": "Endpoint URL",
+  "settings.providers.page.auth.privateGpuTokenLabel": "Token",
+  "settings.providers.page.auth.privateGpuConnect": "Connect",
+  "settings.providers.page.toast.privateGpuEndpointRequired": "Endpoint URL is required",
+  "settings.providers.page.toast.privateGpuConnected": "Connected {name} and discovered models",
   "settings.providers.page.auth.localProviderHint":
     "This is a local inference provider. No cloud API key is required — AX Code runs models on this machine.",
   "settings.providers.page.auth.oauthMethodFallback": "OAuth method {index}",

@@ -11,6 +11,7 @@ import { useTheme } from "../context/theme"
 import { TextAttributes } from "@ax-code/opentui-core"
 import type { ProviderAuthAuthorization, ProviderAuthMethod } from "@ax-code/sdk/v2"
 import { DialogModel } from "./dialog-model"
+import { DialogPrivateGpuConnect } from "./dialog-private-gpu"
 import { useKeyboard } from "@ax-code/opentui-solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
@@ -20,6 +21,7 @@ import { Log } from "@/util/log"
 import {
   CLI_BINARIES,
   CLI_PROVIDERS,
+  DEDICATED_PRIVATE_GPU_PROVIDERS,
   OFFLINE_PROVIDERS,
   axEngineAttachBaseURLPreset,
   axEngineConnectModeFromConfig,
@@ -32,6 +34,7 @@ import {
   providerDialogProviders,
   selectableProviderDefaultModelID,
 } from "./dialog-provider-options"
+import { requireDedicatedPrivateGpuVendor } from "@/provider/private-gpu/presets"
 
 const OFFLINE_PROVIDER_HOSTS: Record<string, { envVar: string; defaultHost: string }> = {
   "ax-studio": { envVar: "AX_STUDIO_HOST", defaultHost: "http://localhost:18080" },
@@ -135,6 +138,39 @@ async function axEngineRequest<T>(
     throw new Error(text || `AX Engine request failed with HTTP ${response.status}`)
   }
   return (await response.json()) as T
+}
+
+type PrivateGpuConnectionView = {
+  providerID?: string
+  baseURL: string
+  models: string[]
+}
+
+async function privateGpuConnectionRequest(
+  sdk: ReturnType<typeof useSDK>,
+  body: { providerID: string; baseURL: string; apiKey: string },
+): Promise<PrivateGpuConnectionView> {
+  const response = await sdk.fetch(new URL("/provider/private-gpu/connection", sdk.url), {
+    method: "PUT",
+    headers: directoryRequestHeaders({
+      directory: sdk.directory,
+      contentType: "application/json",
+    }),
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => undefined)) as { message?: string } | undefined
+    throw new Error(payload?.message ?? `Private GPU connection failed with HTTP ${response.status}`)
+  }
+  return (await response.json()) as PrivateGpuConnectionView
+}
+
+function privateGpuBaseURLPreset(providerID: string, config: unknown) {
+  const vendor = requireDedicatedPrivateGpuVendor(providerID)
+  const providerConfig = (config as { provider?: Record<string, { options?: { baseURL?: string } }> } | undefined)
+    ?.provider?.[providerID]
+  const fromEnv = vendor.envBaseURL ? process.env[vendor.envBaseURL] : undefined
+  return providerConfig?.options?.baseURL ?? fromEnv ?? vendor.defaultApi ?? ""
 }
 
 async function axEngineConnectionRequest(
@@ -252,6 +288,35 @@ export function createDialogProviderOptions() {
 
   async function updateConfig(config: Record<string, unknown>) {
     await sdk.client.config.update(configUpdateParams(config) as any, { throwOnError: true })
+  }
+
+  function promptPrivateGpu(providerID: string, providerName: string) {
+    const vendor = requireDedicatedPrivateGpuVendor(providerID)
+    dialog.replace(() => (
+      <DialogPrivateGpuConnect
+        vendor={vendor}
+        title={`Connect ${providerName}`}
+        defaultBaseURL={privateGpuBaseURLPreset(providerID, sync.data.config)}
+        onConfirm={({ baseURL, apiKey }) =>
+          runProviderDialogAction({
+            providerID,
+            action: "private-gpu-connect",
+            fallbackMessage: `Failed to connect ${providerName}`,
+            toast,
+            run: async () => {
+              const connection = await privateGpuConnectionRequest(sdk, { providerID, baseURL, apiKey })
+              await sdk.client.instance.dispose()
+              await sync.bootstrap()
+              toast.show({
+                variant: "success",
+                message: `Connected ${providerName} (${connection.models.join(", ") || "no models"})`,
+              })
+              await openModelDialogForProvider(providerID, providerName)
+            },
+          })
+        }
+      />
+    ))
   }
 
   function promptAxEngineAttach(providerName: string) {
@@ -426,6 +491,60 @@ export function createDialogProviderOptions() {
                   connected: sync.data.provider_next.connected,
                   configured: sync.data.provider,
                 })
+
+                if (DEDICATED_PRIVATE_GPU_PROVIDERS.has(provider.id)) {
+                  if (isConnected) {
+                    const action = await new Promise<"use" | "replace" | "remove" | null>((resolve) => {
+                      dialog.replace(
+                        () => (
+                          <DialogSelect
+                            title={`${provider.name} — connected`}
+                            options={[
+                              {
+                                title: "Select a model",
+                                value: "use" as const,
+                                description: "Use models discovered from /models",
+                              },
+                              {
+                                title: "Replace endpoint",
+                                value: "replace" as const,
+                                description:
+                                  privateGpuBaseURLPreset(provider.id, sync.data.config) ||
+                                  "Enter a new URL and token",
+                              },
+                              {
+                                title: "Disconnect",
+                                value: "remove" as const,
+                                description: "Remove saved credentials and endpoint",
+                              },
+                            ]}
+                            onSelect={(option) => resolve(option.value)}
+                          />
+                        ),
+                        () => resolve(null),
+                      )
+                    })
+                    if (action === null) return
+                    if (action === "use") {
+                      await openModelDialogForProvider(provider.id, provider.name)
+                      return
+                    }
+                    if (action === "remove") {
+                      const removed = await sdk.client.auth.remove({ providerID: provider.id })
+                      if (removed.error) {
+                        toast.show({ variant: "error", message: JSON.stringify(removed.error) })
+                        return
+                      }
+                      await sdk.client.instance.dispose()
+                      await sync.bootstrap()
+                      toast.show({ variant: "success", message: `Disconnected ${provider.name}` })
+                      dialog.clear()
+                      return
+                    }
+                  }
+                  promptPrivateGpu(provider.id, provider.name)
+                  return
+                }
 
                 if (provider.id === "ax-engine") {
                   const status = await axEngineRequest<AxEngineTuiStatus>(sdk, "status")

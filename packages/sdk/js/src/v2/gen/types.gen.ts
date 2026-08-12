@@ -12561,6 +12561,78 @@ export type ProviderListResponses = {
 
 export type ProviderListResponse = ProviderListResponses[keyof ProviderListResponses]
 
+export type ProviderPrivateGpuConnectionUpdateData = {
+  body?: {
+    providerID: string
+    baseURL: string
+    apiKey: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/provider/private-gpu/connection"
+}
+
+export type ProviderPrivateGpuConnectionUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+export type ProviderPrivateGpuConnectionUpdateError =
+  ProviderPrivateGpuConnectionUpdateErrors[keyof ProviderPrivateGpuConnectionUpdateErrors]
+
+export type ProviderPrivateGpuConnectionUpdateResponses = {
+  /**
+   * Connected private GPU endpoint
+   */
+  200: {
+    providerID: string
+    baseURL: string
+    models: Array<string>
+  }
+}
+
+export type ProviderPrivateGpuConnectionUpdateResponse =
+  ProviderPrivateGpuConnectionUpdateResponses[keyof ProviderPrivateGpuConnectionUpdateResponses]
+
+export type ProviderAlibabaPaiConnectionUpdateData = {
+  body?: {
+    baseURL: string
+    apiKey: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/provider/alibaba-pai/connection"
+}
+
+export type ProviderAlibabaPaiConnectionUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+export type ProviderAlibabaPaiConnectionUpdateError =
+  ProviderAlibabaPaiConnectionUpdateErrors[keyof ProviderAlibabaPaiConnectionUpdateErrors]
+
+export type ProviderAlibabaPaiConnectionUpdateResponses = {
+  /**
+   * Connected PAI-EAS endpoint
+   */
+  200: {
+    baseURL: string
+    models: Array<string>
+  }
+}
+
+export type ProviderAlibabaPaiConnectionUpdateResponse =
+  ProviderAlibabaPaiConnectionUpdateResponses[keyof ProviderAlibabaPaiConnectionUpdateResponses]
+
 export type ProviderAxEngineConnectionData = {
   body?: never
   path?: never

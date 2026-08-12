@@ -19,12 +19,82 @@ const CLI_PROVIDER_IDS = new Set([
 // local runtime by default (ollama, ax-studio, ax-engine), rather than a metered cloud API.
 const LOCAL_PROVIDER_IDS = new Set(["ollama", "ax-studio", "ax-engine"])
 
+export type DedicatedPrivateGpuVendor = {
+  id: string
+  name: string
+  urlPlaceholder: string
+  tokenPlaceholder: string
+  hint: string
+  defaultApi?: string
+}
+
+export const DEDICATED_PRIVATE_GPU_VENDORS: DedicatedPrivateGpuVendor[] = [
+  {
+    id: "alibaba-pai",
+    name: "Alibaba PAI-EAS",
+    urlPlaceholder: "http://xxxx.pai-eas.aliyuncs.com/api/predict/your_service",
+    tokenPlaceholder: "EAS token",
+    hint: "EAS access address. AX Code adds /v1 if omitted and discovers models from GET /v1/models.",
+  },
+  {
+    id: "runpod",
+    name: "RunPod",
+    urlPlaceholder: "https://api.runpod.ai/v2/your-endpoint-id",
+    tokenPlaceholder: "RunPod API key",
+    hint: "Serverless OpenAI URL or proxy host. /openai/v1 is added for api.runpod.ai/v2/{id}.",
+  },
+  {
+    id: "huggingface-endpoints",
+    name: "Hugging Face Endpoints",
+    urlPlaceholder: "https://xxxx.endpoints.huggingface.cloud",
+    tokenPlaceholder: "hf_...",
+    hint: "Dedicated Inference Endpoint (TGI / vLLM). Not the hosted Hugging Face router.",
+  },
+  {
+    id: "sagemaker",
+    name: "Amazon SageMaker",
+    urlPlaceholder: "https://your-sagemaker-openai-compatible.example/v1",
+    tokenPlaceholder: "Bearer token",
+    hint: "OpenAI-compatible SageMaker URL (vLLM / TGI / API Gateway). Not AWS SigV4.",
+  },
+  {
+    id: "volcengine-ark",
+    name: "Volcengine Ark",
+    urlPlaceholder: "https://ark.cn-beijing.volces.com/api/v3",
+    tokenPlaceholder: "Ark API key",
+    hint: "Ark OpenAI-compatible root or a dedicated inference URL.",
+    defaultApi: "https://ark.cn-beijing.volces.com/api/v3",
+  },
+  {
+    id: "modelarts",
+    name: "Huawei ModelArts",
+    urlPlaceholder: "https://xxxx.modelarts.huaweicloud.com/v1",
+    tokenPlaceholder: "ModelArts token",
+    hint: "Dedicated ModelArts OpenAI-compatible infer endpoint.",
+  },
+  {
+    id: "tencent-ti",
+    name: "Tencent TI",
+    urlPlaceholder: "https://api.lkeap.cloud.tencent.com/v1",
+    tokenPlaceholder: "Tencent TI / LKEAP key",
+    hint: "Tencent TI-ONE / LKEAP OpenAI-compatible URL, or a dedicated TI endpoint.",
+    defaultApi: "https://api.lkeap.cloud.tencent.com/v1",
+  },
+]
+
+const DEDICATED_PRIVATE_GPU_IDS = new Set(DEDICATED_PRIVATE_GPU_VENDORS.map((vendor) => vendor.id))
+
 export { PROVIDER_REQUEST_RETRY_DELAYS_MS, PROVIDER_RESTART_POLL_MS }
 export { isRecord }
 
 export const isCliProvider = (providerId: string): boolean => CLI_PROVIDER_IDS.has(providerId)
 
 export const isLocalProvider = (providerId: string): boolean => LOCAL_PROVIDER_IDS.has(providerId)
+
+export const isDedicatedPrivateGpuProvider = (providerId: string): boolean => DEDICATED_PRIVATE_GPU_IDS.has(providerId)
+
+export const dedicatedPrivateGpuVendor = (providerId: string) =>
+  DEDICATED_PRIVATE_GPU_VENDORS.find((vendor) => vendor.id === providerId)
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -255,6 +325,25 @@ export const saveProviderAuth = async (providerId: string, key: string, director
       body: JSON.stringify({ type: "api", key }),
     },
   )
+}
+
+export const connectPrivateGpu = async (
+  input: { providerID: string; baseURL: string; apiKey: string },
+  directory: string | null,
+) => {
+  const url = buildDirectoryUrl(API_ENDPOINTS.provider.privateGpuConnection, directory)
+  return fetchProviderJsonWithRetry(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  })
+}
+
+export const connectAlibabaPai = async (
+  input: { baseURL: string; apiKey: string },
+  directory: string | null,
+) => {
+  return connectPrivateGpu({ providerID: "alibaba-pai", ...input }, directory)
 }
 
 export const disconnectProviderAuth = async (providerId: string, directory: string | null, scope = "all") => {

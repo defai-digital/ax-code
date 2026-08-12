@@ -101,6 +101,10 @@ describe("SuperLongPolicy.providerPacing", () => {
   test("skips pacing for local inference providers", () => {
     expect(SuperLongPolicy.providerPacing("ollama")).toBeUndefined()
     expect(SuperLongPolicy.providerPacing("ax-studio")).toBeUndefined()
+    expect(SuperLongPolicy.providerPacing("alibaba-pai")).toBeUndefined()
+    expect(SuperLongPolicy.providerPacing("alibaba-pai", { modelID: "GLM-5.2-FP8" })).toBeUndefined()
+    expect(SuperLongPolicy.providerPacing("runpod")).toBeUndefined()
+    expect(SuperLongPolicy.providerPacing("huggingface-endpoints")).toBeUndefined()
   })
 
   test("honors the capability registry's rateLimitTier when the model is known", () => {

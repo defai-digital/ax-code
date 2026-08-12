@@ -33,7 +33,12 @@ async function setProviderAuth(provider: string, info: Auth.Info) {
 }
 
 async function removeProviderAuth(provider: string) {
-  await Auth.remove(provider)
+  const { disconnectPrivateGpu, isDedicatedPrivateGpuProviderID } = await import("../../provider/private-gpu")
+  if (isDedicatedPrivateGpuProviderID(provider)) {
+    await disconnectPrivateGpu(provider)
+  } else {
+    await Auth.remove(provider)
+  }
   const { Provider } = await import("../../provider/provider")
   await Provider.invalidate().catch(() => {})
 }

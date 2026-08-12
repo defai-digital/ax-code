@@ -298,6 +298,13 @@ export namespace ProviderTransform {
     return /^minimax-m2\d/.test(segment)
   }
 
+  // DashScope Coding Plan / Token Plan only. Dedicated PAI-EAS GPU services
+  // use the same `alibaba-` prefix but are not subject to Model Studio
+  // short-window reservation or DashScope thinking params.
+  function isAlibabaPlanProvider(providerID: string) {
+    return providerID.startsWith("alibaba-coding-plan") || providerID.startsWith("alibaba-token-plan")
+  }
+
   // Any reasoning-capable Alibaba model on an OpenAI-compat endpoint goes
   // through DashScope's documented `enable_thinking` + `thinking_budget`
   // params. Capability-driven so newly added reasoning models pick up
@@ -305,17 +312,16 @@ export namespace ProviderTransform {
   // Alibaba endpoint from accidentally matching this path — that endpoint
   // would need the Anthropic `thinking` block instead.
   function isAlibabaThinkingModel(model: Provider.Model) {
-    if (!model.providerID.startsWith("alibaba")) return false
+    if (!isAlibabaPlanProvider(model.providerID)) return false
     if (model.api.npm !== "@ai-sdk/openai-compatible") return false
     return Boolean(model.capabilities.reasoning)
   }
 
-  // Any Alibaba-backed provider (Token Plan or Coding Plan / DashScope) is
-  // subject to short-window token reservation throttling. The cap applies
-  // regardless of model family because reservation is computed by the
-  // platform, not the model.
+  // Token Plan / Coding Plan (DashScope) short-window token reservation.
+  // The cap applies regardless of model family because reservation is
+  // computed by the platform, not the model. PAI-EAS is excluded.
   function isAlibabaShortWindowProvider(model: Provider.Model) {
-    return model.providerID.startsWith("alibaba-")
+    return isAlibabaPlanProvider(model.providerID)
   }
 
   function supportsAnthropicEffort(model: Provider.Model) {

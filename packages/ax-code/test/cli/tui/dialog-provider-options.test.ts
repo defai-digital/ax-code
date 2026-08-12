@@ -3,6 +3,8 @@ import {
   AX_ENGINE_DEFAULT_ATTACH_API_KEY,
   CLI_BINARIES,
   CLI_PROVIDERS,
+  DEDICATED_PRIVATE_GPU_PROVIDERS,
+  PRIVATE_GPU_PROVIDERS,
   axEngineAttachApiKeyPreset,
   axEngineAttachBaseURLPreset,
   axEngineAttachProviderConfig,
@@ -141,31 +143,55 @@ describe("provider dialog options", () => {
     expect(CLI_BINARIES["qoder-cli"]).toBe("qodercli")
   })
 
-  test("includes Antigravity CLI as a CLI provider", () => {
-    expect(CLI_PROVIDERS.has("antigravity-cli")).toBe(true)
-    expect(CLI_BINARIES["antigravity-cli"]).toBe("agy")
-  })
-
   test("includes Kimi Code CLI as a CLI provider", () => {
     expect(CLI_PROVIDERS.has("kimi-cli")).toBe(true)
     expect(CLI_BINARIES["kimi-cli"]).toBe("kimi")
   })
 
-  test("shows Antigravity as a Google CLI provider", () => {
-    const [item] = providerDialogProviders({
-      available: [provider("antigravity-cli", "Google (Antigravity CLI)")],
-      configured: [],
-    })
-    expect(item).toMatchObject({ id: "antigravity-cli", name: "Google (Antigravity CLI)" })
+  test("hides Gemini CLI and Antigravity CLI from the connect dialog", () => {
+    expect(
+      providerDialogProviders({
+        available: [
+          provider("gemini-cli", "Google (Gemini CLI)"),
+          provider("antigravity-cli", "Google (Antigravity CLI)"),
+          provider("kimi-cli", "Kimi Code CLI"),
+        ],
+        configured: [],
+      }).map((item) => item.id),
+    ).toEqual(["kimi-cli"])
   })
 
-  test("separates API, CLI, and local provider categories", () => {
+  test("separates API, CLI, local, and private GPU provider categories", () => {
     expect(providerDialogCategory("xai")).toBe("API plan")
     expect(providerDialogCategory("grok-build-cli")).toBe("CLI plan")
     expect(providerDialogCategory("qoder-cli")).toBe("CLI plan")
     expect(providerDialogCategory("antigravity-cli")).toBe("CLI plan")
     expect(providerDialogCategory("kimi-cli")).toBe("CLI plan")
     expect(providerDialogCategory("ollama")).toBe("Local runtime")
+    expect(providerDialogCategory("alibaba-pai")).toBe("Private GPU cloud")
+    expect(providerDialogCategory("runpod")).toBe("Private GPU cloud")
+    expect(providerDialogCategory("fireworks-ai")).toBe("Private GPU cloud")
+    expect(providerDialogCategory("togetherai")).toBe("Private GPU cloud")
+    expect(providerDialogCategory("huggingface")).toBe("API plan")
+    expect(providerDialogCategory("huggingface-endpoints")).toBe("Private GPU cloud")
+    expect(PRIVATE_GPU_PROVIDERS.has("alibaba-pai")).toBe(true)
+    expect(PRIVATE_GPU_PROVIDERS.has("huggingface")).toBe(false)
+    expect(DEDICATED_PRIVATE_GPU_PROVIDERS.has("runpod")).toBe(true)
+    expect(DEDICATED_PRIVATE_GPU_PROVIDERS.has("huggingface")).toBe(false)
+  })
+
+  test("sorts private GPU cloud after local runtime and before CLI/API plans", () => {
+    expect(
+      providerDialogProviders({
+        available: [
+          provider("xai", "xAI"),
+          provider("alibaba-pai", "Alibaba PAI-EAS"),
+          provider("grok-build-cli", "Grok Build CLI"),
+          provider("ax-engine", "AX Engine (Local)"),
+        ],
+        configured: [],
+      }).map((item) => item.id),
+    ).toEqual(["ax-engine", "alibaba-pai", "grok-build-cli", "xai"])
   })
 
   test("requires normal tool-call capability for local runtime models", () => {

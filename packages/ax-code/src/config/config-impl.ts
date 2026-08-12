@@ -1458,6 +1458,16 @@ export namespace Config {
     return candidates[0]
   }
 
+  function applyUndefinedDeletions(target: unknown, source: unknown): unknown {
+    if (!isRecord(source) || !isRecord(target)) return target
+    const next = { ...target }
+    for (const [key, value] of Object.entries(source)) {
+      if (value === undefined) delete next[key]
+      else if (isRecord(value) && isRecord(next[key])) next[key] = applyUndefinedDeletions(next[key], value)
+    }
+    return next
+  }
+
   function patchJsonc(input: string, patch: unknown, path: string[] = []): string {
     if (!isRecord(patch)) {
       const edits = modify(input, path, patch, {
@@ -1520,7 +1530,7 @@ export namespace Config {
     const next = await (async () => {
       if (!filepath.endsWith(".jsonc")) {
         const existing = parseConfig(before, filepath)
-        const merged = mergeDeep(existing, config)
+        const merged = applyUndefinedDeletions(mergeDeep(existing, config), config)
         const parsed = parseConfig(JSON.stringify(merged), filepath)
         await Filesystem.writeJson(filepath, parsed)
         return parsed

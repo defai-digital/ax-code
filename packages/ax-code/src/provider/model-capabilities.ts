@@ -408,6 +408,32 @@ const MODEL_REGISTRY: ModelRegistration[] = [
     },
   },
 
+  // Dedicated private GPU endpoints (vLLM / SGLang / TGI). Discovered
+  // max_model_len can be 1M+; treat the whole family as large-context and
+  // unpaced so unknown model IDs do not collapse to DEFAULT_CAPABILITIES.
+  {
+    pattern: /.*/,
+    providerIds: [
+      "alibaba-pai",
+      "runpod",
+      "huggingface-endpoints",
+      "sagemaker",
+      "volcengine-ark",
+      "modelarts",
+      "tencent-ti",
+    ],
+    capabilities: {
+      contextWindow: 1_048_576,
+      thinking: "supported",
+      preserveThinking: "supported",
+      promptCache: "supported",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "unlimited",
+    },
+  },
+
   // Ollama models (local inference)
   {
     pattern: /.*/,

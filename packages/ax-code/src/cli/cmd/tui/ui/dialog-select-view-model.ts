@@ -1,4 +1,4 @@
-import * as fuzzysort from "fuzzysort"
+import fuzzysort from "fuzzysort"
 import { entries, flatMap, groupBy, pipe } from "remeda"
 
 export type DialogSelectViewOption<T = unknown> = {

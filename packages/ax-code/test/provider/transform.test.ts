@@ -1902,6 +1902,18 @@ describe("ProviderTransform.maxOutputTokens", () => {
     }
   })
 
+  test("does not apply DashScope short-window cap to dedicated PAI-EAS GPUs", () => {
+    const model = {
+      id: "GLM-5.2-FP8",
+      family: "glm",
+      providerID: ProviderID.make("alibaba-pai"),
+      api: { id: "GLM-5.2-FP8", npm: "@ai-sdk/openai-compatible" },
+      capabilities: { reasoning: true },
+      limit: { output: 32_000 },
+    } as any
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(32_000)
+  })
+
   test("keeps Alibaba quota cap for GLM routed through a DashScope plan", () => {
     const model = {
       id: "glm-5.1",

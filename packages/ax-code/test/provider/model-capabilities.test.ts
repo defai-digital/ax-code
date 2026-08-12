@@ -241,6 +241,13 @@ describe("Model Capability Registry", () => {
       expect(getContextPackBudget("gpt-5", "openai")).toBe(128_000)
     })
 
+    it("should return 128k for dedicated Alibaba PAI-EAS models", () => {
+      expect(getContextPackBudget("GLM-5.2-FP8", "alibaba-pai")).toBe(128_000)
+      expect(getContextPackBudget("MiniMax-M3-MXFP8", "alibaba-pai")).toBe(128_000)
+      expect(getContextPackBudget("custom-deploy", "runpod")).toBe(128_000)
+      expect(getContextPackBudget("custom-deploy", "huggingface-endpoints")).toBe(128_000)
+    })
+
     it("should return 8k for unknown models", () => {
       expect(getContextPackBudget("unknown-model")).toBe(8_000)
     })

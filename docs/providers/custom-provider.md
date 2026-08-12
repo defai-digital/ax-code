@@ -21,6 +21,10 @@ For each request AX Code needs three things from a provider entry:
 
 Custom providers also need an explicit **`models`** map: unlike the built-in registry, AX Code does not know which models a private endpoint exposes, so you declare them.
 
+Dedicated private GPU clouds are an exception: they are first-class providers under `/connect` → **Private GPU cloud**. Paste the OpenAI-compatible URL and token (`alibaba-pai`, `runpod`, `huggingface-endpoints`, `sagemaker`, `volcengine-ark`, `modelarts`, `tencent-ti`); AX Code calls `GET …/models` and uses the deployed model IDs automatically.
+
+Hosted GPU catalogs (`fireworks-ai`, `togetherai`, `baseten`, `nvidia`, `deepinfra`) use an API key and the bundled model snapshot, the same pattern OpenCode uses.
+
 ## OpenAI-compatible gateway
 
 Most aggregators (LiteLLM, one-api, new-api, free/self-hosted gateways) expose an OpenAI-compatible surface. Add this to your `ax-code.json` (global at `~/.config/ax-code/ax-code.json`, or per-project at the repo root):

@@ -9,6 +9,7 @@ import {
   fetchProviderJsonWithRetry,
   fetchProviderSources,
   isCliProvider,
+  isDedicatedPrivateGpuProvider,
   isLocalProvider,
   isRestartingError,
   parseAuthMethodsPayload,
@@ -94,6 +95,17 @@ describe("isCliProvider", () => {
     expect(isCliProvider("antigravity-cli")).toBe(true)
     expect(isCliProvider("kimi-cli")).toBe(true)
     expect(isCliProvider("openai")).toBe(false)
+  })
+})
+
+describe("isDedicatedPrivateGpuProvider", () => {
+  test("recognizes dedicated URL+token GPU vendors and not hosted catalogs", () => {
+    expect(isDedicatedPrivateGpuProvider("alibaba-pai")).toBe(true)
+    expect(isDedicatedPrivateGpuProvider("runpod")).toBe(true)
+    expect(isDedicatedPrivateGpuProvider("huggingface-endpoints")).toBe(true)
+    expect(isDedicatedPrivateGpuProvider("huggingface")).toBe(false)
+    expect(isDedicatedPrivateGpuProvider("fireworks-ai")).toBe(false)
+    expect(isDedicatedPrivateGpuProvider("openai")).toBe(false)
   })
 })
 

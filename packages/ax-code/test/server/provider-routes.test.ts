@@ -79,10 +79,63 @@ describe("provider routes", () => {
     // Cloud API providers (DeepSeek official + Meta Muse Spark)
     expect(ids).toContain("deepseek")
     expect(ids).toContain("meta")
+    expect(ids).toContain("alibaba-pai")
+    expect(ids).toContain("runpod")
+    expect(ids).toContain("huggingface-endpoints")
+    expect(ids).toContain("fireworks-ai")
+    expect(ids).toContain("togetherai")
+    expect(ids).toContain("baseten")
+    expect(ids).toContain("nvidia")
+    expect(ids).toContain("deepinfra")
+    expect(ids).toContain("volcengine-ark")
+    expect(ids).toContain("modelarts")
+    expect(ids).toContain("tencent-ti")
+    expect(ids).toContain("sagemaker")
     expect(ids).toContain("grok-build-cli")
     expect(ids).toContain("qoder-cli")
-    expect(ids).toContain("antigravity-cli")
+    expect(ids).not.toContain("gemini-cli")
+    expect(ids).not.toContain("antigravity-cli")
     expect(ids).toContain("kimi-cli")
+  })
+
+  test("rejects an empty PAI-EAS connection body", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const directory = encodeURIComponent(tmp.path)
+    const response = await Server.Default().request(`/provider/alibaba-pai/connection?directory=${directory}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ baseURL: "", apiKey: "" }),
+    })
+    expect(response.status).toBe(400)
+  })
+
+  test("rejects an empty or unknown private GPU connection body", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const directory = encodeURIComponent(tmp.path)
+    const empty = await Server.Default().request(`/provider/private-gpu/connection?directory=${directory}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ providerID: "alibaba-pai", baseURL: "", apiKey: "" }),
+    })
+    expect(empty.status).toBe(400)
+
+    const unknown = await Server.Default().request(`/provider/private-gpu/connection?directory=${directory}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ providerID: "openai", baseURL: "http://127.0.0.1:9", apiKey: "token" }),
+    })
+    expect(unknown.status).toBe(400)
+  })
+
+  test("rejects a catalog vendor on the dedicated private GPU connection route", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const directory = encodeURIComponent(tmp.path)
+    const response = await Server.Default().request(`/provider/private-gpu/connection?directory=${directory}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ providerID: "fireworks-ai", baseURL: "https://example.com", apiKey: "key" }),
+    })
+    expect(response.status).toBe(400)
   })
 
   test("allows explicitly enabled Grok Cloud API in provider list", () => {

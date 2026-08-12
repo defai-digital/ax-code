@@ -96,6 +96,8 @@ export const API_ENDPOINTS = {
     axEngineStart: `${API_PATHS.base}/provider/ax-engine/start`,
     axEngineStop: `${API_PATHS.base}/provider/ax-engine/stop`,
     axEngineInstall: `${API_PATHS.base}/provider/ax-engine/install`,
+    alibabaPaiConnection: `${API_PATHS.base}/provider/alibaba-pai/connection`,
+    privateGpuConnection: `${API_PATHS.base}/provider/private-gpu/connection`,
     authByProvider: `${API_PATHS.base}/auth/:providerId`,
     oauthAuthorize: `${API_PATHS.base}/provider/:providerId/oauth/authorize`,
     oauthCallback: `${API_PATHS.base}/provider/:providerId/oauth/callback`,

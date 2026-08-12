@@ -1,4 +1,5 @@
 import { filter, pipe, sortBy } from "remeda"
+import { DEDICATED_PRIVATE_GPU_PROVIDER_IDS, PRIVATE_GPU_PROVIDER_IDS } from "@/provider/private-gpu/presets"
 import {
   AX_ENGINE_CONNECTION_MODES,
   axEngineAttachProviderConfig as buildAxEngineAttachProviderConfig,
@@ -72,6 +73,9 @@ export const CLI_BINARIES: Record<string, string> = {
 }
 
 export const OFFLINE_PROVIDERS = new Set(["ax-engine", "ax-studio", "ollama"])
+/** Hugging Face router stays an API-plan catalog; dedicated HF endpoints are Private GPU. */
+export const PRIVATE_GPU_PROVIDERS = new Set(PRIVATE_GPU_PROVIDER_IDS.filter((id) => id !== "huggingface"))
+export const DEDICATED_PRIVATE_GPU_PROVIDERS = new Set(DEDICATED_PRIVATE_GPU_PROVIDER_IDS)
 export const CLI_PROVIDERS = new Set([
   "claude-code",
   "gemini-cli",
@@ -82,7 +86,14 @@ export const CLI_PROVIDERS = new Set([
   "kimi-cli",
 ])
 
-const HIDDEN_PROVIDERS = new Set(["google", "github-copilot"])
+const HIDDEN_PROVIDERS = new Set(["google", "github-copilot", "gemini-cli", "antigravity-cli"])
+
+function providerDialogSortKey(providerID: string) {
+  if (OFFLINE_PROVIDERS.has(providerID)) return 0
+  if (PRIVATE_GPU_PROVIDERS.has(providerID)) return 1
+  if (CLI_PROVIDERS.has(providerID)) return 2
+  return 3
+}
 
 export function providerDialogProviders(input: {
   available: ProviderDialogProvider[]
@@ -92,15 +103,13 @@ export function providerDialogProviders(input: {
   return pipe(
     providers,
     filter((provider) => !HIDDEN_PROVIDERS.has(provider.id)),
-    sortBy(
-      (provider) => (OFFLINE_PROVIDERS.has(provider.id) ? 0 : CLI_PROVIDERS.has(provider.id) ? 1 : 2),
-      (provider) => provider.name,
-    ),
+    sortBy((provider) => providerDialogSortKey(provider.id), (provider) => provider.name),
   )
 }
 
 export function providerDialogCategory(providerID: string) {
   if (OFFLINE_PROVIDERS.has(providerID)) return "Local runtime"
+  if (PRIVATE_GPU_PROVIDERS.has(providerID)) return "Private GPU cloud"
   if (CLI_PROVIDERS.has(providerID)) return "CLI plan"
   return "API plan"
 }

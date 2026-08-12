@@ -30,6 +30,9 @@ import {
   parseAvailableProvidersPayload,
   PROVIDER_RESTART_POLL_MS,
   saveProviderAuth,
+  connectPrivateGpu,
+  dedicatedPrivateGpuVendor,
+  isDedicatedPrivateGpuProvider,
   type AuthMethod,
   type ProviderOption,
 } from "@/lib/ax-code/providerApi"
@@ -95,6 +98,7 @@ export const ProvidersPage: React.FC = () => {
   const [authMethodsByProvider, setAuthMethodsByProvider] = React.useState<Record<string, AuthMethod[]>>({})
   const [authLoading, setAuthLoading] = React.useState(false)
   const [apiKeyInputs, setApiKeyInputs] = React.useState<Record<string, string>>({})
+  const [privateGpuEndpointInputs, setPrivateGpuEndpointInputs] = React.useState<Record<string, string>>({})
   const [authBusyKey, setAuthBusyKey] = React.useState<string | null>(null)
   const [modelQuery, setModelQuery] = React.useState("")
   const [pendingOAuth, setPendingOAuth] = React.useState<{ providerId: string; methodIndex: number } | null>(null)
@@ -361,6 +365,93 @@ export const ProvidersPage: React.FC = () => {
       // Still try to refresh the active project from the server.
       await loadProviders({ directory }).catch(() => undefined)
     }
+  }
+
+  const handleConnectPrivateGpu = async (providerId: string) => {
+    const vendor = dedicatedPrivateGpuVendor(providerId)
+    const baseURL = privateGpuEndpointInputs[providerId]?.trim() || vendor?.defaultApi || ""
+    const apiKey = apiKeyInputs[providerId]?.trim() ?? ""
+    if (!baseURL) {
+      toast.error(t("settings.providers.page.toast.privateGpuEndpointRequired"))
+      return
+    }
+    if (!apiKey) {
+      toast.error(t("settings.providers.page.toast.apiKeyRequired"))
+      return
+    }
+
+    const busyKey = `api:${providerId}`
+    setAuthBusyKey(busyKey)
+    try {
+      await connectPrivateGpu({ providerID: providerId, baseURL, apiKey }, directory)
+      setApiKeyInputs((prev) => ({ ...prev, [providerId]: "" }))
+      await reloadAfterProviderAuthSave(
+        t("settings.providers.page.toast.privateGpuConnected", { name: vendor?.name ?? providerId }),
+      )
+      setSelectedProvider(providerId)
+    } catch (error) {
+      console.error(`Failed to connect ${vendor?.name ?? providerId}:`, error)
+      toast.error(error instanceof Error ? error.message : t("settings.providers.page.toast.apiKeySaveFailed"))
+    } finally {
+      setAuthBusyKey(null)
+    }
+  }
+
+  const renderDedicatedPrivateGpuForm = (providerId: string) => {
+    const vendor = dedicatedPrivateGpuVendor(providerId)
+    if (!vendor) return null
+    const endpointValue = privateGpuEndpointInputs[providerId] ?? vendor.defaultApi ?? ""
+    return (
+      <div className="py-1.5 space-y-2">
+        <label className="typography-ui-label text-foreground flex items-center gap-1.5">
+          {t("settings.providers.page.auth.privateGpuEndpointLabel")}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent sideOffset={8} className="max-w-xs">
+              {vendor.hint}
+            </TooltipContent>
+          </Tooltip>
+        </label>
+        <Input
+          value={endpointValue}
+          onChange={(event) =>
+            setPrivateGpuEndpointInputs((prev) => ({
+              ...prev,
+              [providerId]: event.target.value,
+            }))
+          }
+          placeholder={vendor.urlPlaceholder}
+          className="font-mono typography-micro"
+        />
+        <label className="typography-ui-label text-foreground">{t("settings.providers.page.auth.privateGpuTokenLabel")}</label>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <Input
+            type="password"
+            value={apiKeyInputs[providerId] ?? ""}
+            onChange={(event) =>
+              setApiKeyInputs((prev) => ({
+                ...prev,
+                [providerId]: event.target.value,
+              }))
+            }
+            placeholder={vendor.tokenPlaceholder}
+            className="flex-1 font-mono typography-micro"
+          />
+          <Button
+            size="xs"
+            className="!font-normal shrink-0"
+            onClick={() => handleConnectPrivateGpu(providerId)}
+            disabled={authBusyKey === `api:${providerId}`}
+          >
+            {authBusyKey === `api:${providerId}`
+              ? t("settings.providers.page.actions.saving")
+              : t("settings.providers.page.auth.privateGpuConnect")}
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   const handleSaveApiKey = async (providerId: string) => {
@@ -804,6 +895,8 @@ export const ProvidersPage: React.FC = () => {
                           : t("settings.providers.page.actions.enableLocal")}
                       </Button>
                     </div>
+                  ) : isDedicatedPrivateGpuProvider(candidateProviderId) ? (
+                    renderDedicatedPrivateGpuForm(candidateProviderId)
                   ) : (
                     <div className="py-1.5">
                       <label className="typography-ui-label text-foreground flex items-center gap-1.5">
@@ -1098,6 +1191,8 @@ export const ProvidersPage: React.FC = () => {
                         : t("settings.providers.page.actions.enableLocal")}
                     </Button>
                   </div>
+                ) : isDedicatedPrivateGpuProvider(selectedProvider.id) ? (
+                  renderDedicatedPrivateGpuForm(selectedProvider.id)
                 ) : (
                   <div className="py-1.5">
                     <label className="typography-ui-label text-foreground flex items-center gap-1.5">

@@ -13,6 +13,7 @@ import { URL } from "url"
 import { Log } from "@/util/log"
 import { isLocalHostname } from "@/util/local-host"
 import { axEngineLoader } from "./ax-engine/provider-loader"
+import { PRIVATE_GPU_LOADERS } from "./private-gpu/loader"
 import { isRecord } from "@/util/record"
 
 const log = Log.create({ service: "provider.loaders" })
@@ -493,6 +494,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   ollama: ollamaCompatibleLoader("ollama", "OLLAMA_HOST", "http://localhost:11434"),
   "ax-studio": openAICompatibleLoader("ax-studio", "AX_STUDIO_HOST", "http://localhost:18080"),
   "ax-engine": axEngineLoader(),
+  ...PRIVATE_GPU_LOADERS,
   "claude-code": cliLoader({
     providerID: "claude-code",
     binary: claudeCode.binary,

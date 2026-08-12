@@ -17,6 +17,7 @@ import {
   AX_ENGINE_MODEL_IDS,
   AX_ENGINE_PROVIDER_ID,
 } from "./ax-engine/constants"
+import { DEDICATED_PRIVATE_GPU_VENDORS } from "./private-gpu/presets"
 import type { AxEngineModelID } from "./ax-engine/constants"
 import fs from "fs/promises"
 
@@ -133,12 +134,24 @@ export namespace ModelsDev {
     models: Object.fromEntries(AX_ENGINE_MODEL_IDS.map((modelID) => [modelID, builtinAxEngineModel(modelID)])),
   }
 
-  function withBuiltIns(input: Record<string, Provider>) {
-    if (input[AX_ENGINE_PROVIDER_ID]) return input
+  function builtinDedicatedPrivateGpuProvider(vendor: (typeof DEDICATED_PRIVATE_GPU_VENDORS)[number]): Provider {
     return {
-      ...input,
-      [AX_ENGINE_PROVIDER_ID]: BUILTIN_AX_ENGINE_PROVIDER,
+      id: vendor.id,
+      env: [vendor.envKey],
+      npm: vendor.npm,
+      name: vendor.name,
+      ...(vendor.defaultApi ? { api: vendor.defaultApi } : {}),
+      models: {},
     }
+  }
+
+  function withBuiltIns(input: Record<string, Provider>) {
+    const next = { ...input }
+    if (!next[AX_ENGINE_PROVIDER_ID]) next[AX_ENGINE_PROVIDER_ID] = BUILTIN_AX_ENGINE_PROVIDER
+    for (const vendor of DEDICATED_PRIVATE_GPU_VENDORS) {
+      if (!next[vendor.id]) next[vendor.id] = builtinDedicatedPrivateGpuProvider(vendor)
+    }
+    return next
   }
 
   /**

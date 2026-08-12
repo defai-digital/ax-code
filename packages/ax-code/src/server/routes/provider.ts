@@ -40,6 +40,9 @@ import { normalizeModelID, normalizeQuantization } from "@/provider/ax-engine/mo
 import { JsonBoolean, JsonNumber } from "@/util/schema"
 import { toErrorMessage } from "@/util/error-message"
 import { DEFAULT_SETUP_PROVIDER_IDS } from "@/provider/default-setup-providers"
+import { connectAlibabaPai } from "@/provider/alibaba-pai"
+import { connectPrivateGpu } from "@/provider/private-gpu/connect"
+import { isDedicatedPrivateGpuProviderID } from "@/provider/private-gpu/presets"
 
 const log = Log.create({ service: "server" })
 
@@ -90,6 +93,30 @@ export const AxEngineModelActionBody = z
   })
   .optional()
   .default({})
+
+export const AlibabaPaiConnectionBody = z.object({
+  baseURL: z.string().min(1).max(2_048),
+  apiKey: z.string().min(1).max(16_384),
+})
+
+export const PrivateGpuConnectionBody = z.object({
+  providerID: z.string().refine(isDedicatedPrivateGpuProviderID, {
+    message: "Unknown dedicated private GPU provider",
+  }),
+  baseURL: z.string().min(1).max(2_048),
+  apiKey: z.string().min(1).max(16_384),
+})
+
+const PrivateGpuConnectionView = z.object({
+  providerID: z.string(),
+  baseURL: z.string(),
+  models: z.array(z.string()),
+})
+
+const AlibabaPaiConnectionView = z.object({
+  baseURL: z.string(),
+  models: z.array(z.string()),
+})
 
 export const AxEngineConnectionBody = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("managed") }),
@@ -237,6 +264,67 @@ export const ProviderRoutes = lazy(() =>
           default: mapValues(providers, (item) => Provider.sort(Object.values(item.models))[0]?.id ?? ""),
           connected: Object.keys(connected),
         })
+      },
+    )
+    .put(
+      "/private-gpu/connection",
+      describeRoute({
+        summary: "Connect a dedicated private GPU endpoint",
+        description:
+          "Validate a dedicated GPU vendor URL and token, persist credentials, and discover model IDs from GET /models.",
+        operationId: "provider.privateGpu.connectionUpdate",
+        responses: {
+          200: {
+            description: "Connected private GPU endpoint",
+            content: {
+              "application/json": {
+                schema: resolver(PrivateGpuConnectionView),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("json", PrivateGpuConnectionBody),
+      async (c) => {
+        try {
+          return c.json(await connectPrivateGpu(c.req.valid("json")))
+        } catch (error) {
+          return invalidRequest(c, {
+            message: toErrorMessage(error),
+            details: { resource: "privateGpuConnection" },
+          })
+        }
+      },
+    )
+    .put(
+      "/alibaba-pai/connection",
+      describeRoute({
+        summary: "Connect Alibaba PAI-EAS",
+        description: "Compatibility alias for PUT /provider/private-gpu/connection with providerID=alibaba-pai.",
+        operationId: "provider.alibabaPai.connectionUpdate",
+        responses: {
+          200: {
+            description: "Connected PAI-EAS endpoint",
+            content: {
+              "application/json": {
+                schema: resolver(AlibabaPaiConnectionView),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("json", AlibabaPaiConnectionBody),
+      async (c) => {
+        try {
+          return c.json(await connectAlibabaPai(c.req.valid("json")))
+        } catch (error) {
+          return invalidRequest(c, {
+            message: toErrorMessage(error),
+            details: { resource: "alibabaPaiConnection" },
+          })
+        }
       },
     )
     .get(
