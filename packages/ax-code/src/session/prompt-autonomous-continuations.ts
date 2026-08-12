@@ -181,8 +181,11 @@ export namespace AutonomousContinuationPrompt {
     if (input.forced) {
       return (
         `Local-engine convergence checkpoint: ${turns} produced no source change or completed answer. ` +
-        `Tools are disabled for the next turn. Use the evidence already collected to answer now, ` +
-        `including any uncertainty or blocker instead of running another repository scan. ` +
+        `Tools are disabled for the next turn. Answer the user request now from evidence already collected. ` +
+        `Structure the response as: (1) Verdict — one-sentence answer, (2) Findings — severity and file path ` +
+        `for each issue (or "none"), (3) Evidence — short cites from tool results only, (4) Gaps — what was ` +
+        `not reviewed or remains uncertain. ` +
+        `Do not paste large code blocks, invent modules/paths, or re-emit tests as the answer. ` +
         `Do not paste tool-call XML or <tool_call> blocks — tools will not execute. ` +
         `If you have no usable evidence yet, say what blocked you (for example wrong paths) in plain language.`
       )

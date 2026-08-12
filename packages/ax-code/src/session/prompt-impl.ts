@@ -56,6 +56,7 @@ import {
   goalLongRunActive,
   emptyModelTurnIncompleteMessage,
   hasSuccessfulGoalCompleteTool,
+  hasLargeSuccessfulReadOnlyOutput,
   hasUsableReadOnlyEvidence,
   isReadOnlyExplorationTurn,
   isEmptyModelTurn,
@@ -66,6 +67,7 @@ import {
   shouldRestoreForcedTextOnlyTurn,
   toolOnlyTurnDecision,
   unexecutableToolTextRecoveryDecision,
+  type ForceTextReason,
   type GoalBudgetWrapUp,
 } from "./prompt-autonomous-decisions"
 import { toErrorMessage } from "../util/error-message"
@@ -91,6 +93,7 @@ import {
 } from "./prompt-turn-profile"
 import { SystemPrompt } from "./system"
 import {
+  AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS,
   AX_ENGINE_READ_ONLY_TURN_FORCE,
   AX_ENGINE_READ_ONLY_TURN_NUDGE,
   MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
@@ -355,11 +358,15 @@ export namespace SessionPrompt {
     // instead of trusting another advisory nudge.
     let toolOnlyFinalCheckpointHits = 0
     let forceTextOnlyTurn = false
+    // Why the current/pending force-text turn was requested. Recovery that
+    // re-enables tools is only valid for ax_engine_read_only.
+    let forceTextReason: ForceTextReason | undefined
     // True when the provider request currently being processed applied
     // toolChoice:"none" because forceTextOnlyTurn was consumed. Used to
     // recover once if the model pastes unexecutable tool markup instead of
     // answering — tools must be re-enabled for that recovery turn.
     let lastTurnWasForceTextOnly = false
+    let lastTurnForceTextReason: ForceTextReason | undefined
     let unexecutableToolTextRecoveries = 0
     // AX Engine runtime control is request-local policy, not user content.
     // Keep the instruction in memory until a provider turn successfully
@@ -370,6 +377,13 @@ export namespace SessionPrompt {
     let axEngineReadOnlyNudged = false
     // Across the current ax-engine read-only streak: any successful tool.
     let axEngineReadOnlyHasEvidence = false
+    // One-shot: deferred force after a large successful tool result this streak.
+    let axEngineLargeEvidenceGraceUsed = false
+
+    function armForceTextOnlyTurn(reason: ForceTextReason) {
+      forceTextOnlyTurn = true
+      forceTextReason = reason
+    }
     const cachedSystemPrompt: PromptRequestCache = {
       environment: undefined,
       environmentModelKey: undefined,
@@ -413,7 +427,11 @@ export namespace SessionPrompt {
       consecutiveAxEngineReadOnlyTurns = 0
       axEngineReadOnlyNudged = false
       axEngineReadOnlyHasEvidence = false
+      axEngineLargeEvidenceGraceUsed = false
+      forceTextOnlyTurn = false
+      forceTextReason = undefined
       lastTurnWasForceTextOnly = false
+      lastTurnForceTextReason = undefined
       unexecutableToolTextRecoveries = 0
       pendingAxEngineTurnInstruction = undefined
       activeTurnProfile = undefined
@@ -816,7 +834,7 @@ export namespace SessionPrompt {
         const profile = detectTurnExecutionProfile({ messages: msgs, currentUser: lastUser })
         if (profile.kind === "response-only") {
           activeTurnProfile = profile
-          forceTextOnlyTurn = true
+          armForceTextOnlyTurn("response_only")
           log.info("turn execution profile selected", {
             command: "session.prompt.profile",
             status: "ok",
@@ -944,7 +962,11 @@ export namespace SessionPrompt {
       })
       const toolChoice = toolChoiceResolution.toolChoice
       lastTurnWasForceTextOnly = toolChoiceResolution.consumedForceTextOnlyTurn
-      if (toolChoiceResolution.consumedForceTextOnlyTurn) forceTextOnlyTurn = false
+      lastTurnForceTextReason = toolChoiceResolution.consumedForceTextOnlyTurn ? forceTextReason : undefined
+      if (toolChoiceResolution.consumedForceTextOnlyTurn) {
+        forceTextOnlyTurn = false
+        forceTextReason = undefined
+      }
 
       // Forced text-only synthesis must not pay for registry/MCP schema
       // materialization either — only structured-output-required turns need
@@ -990,7 +1012,8 @@ export namespace SessionPrompt {
           errored: Boolean(processor.message.error),
         })
       ) {
-        forceTextOnlyTurn = true
+        // Restore the same force reason that was just consumed.
+        armForceTextOnlyTurn(lastTurnForceTextReason ?? "other")
       }
 
       if (!processor.message.error) {
@@ -1033,6 +1056,7 @@ export namespace SessionPrompt {
         consecutiveAxEngineReadOnlyTurns = 0
         axEngineReadOnlyNudged = false
         axEngineReadOnlyHasEvidence = false
+        axEngineLargeEvidenceGraceUsed = false
       }
 
       // A provider turn that returns finish="other" with zero tokens is a
@@ -1161,7 +1185,7 @@ export namespace SessionPrompt {
           previousTruncatedModelOutputPrefix = currentTruncatedModelOutputPrefix
           const axEngineRecovery = model.providerID === AX_ENGINE_PROVIDER_ID
           if (axEngineRecovery) {
-            forceTextOnlyTurn = true
+            armForceTextOnlyTurn("truncated_recovery")
             pendingAxEngineTurnInstruction = AutonomousContinuationPrompt.axEngineTruncatedModelTurnRecovery()
           } else {
             await createAutonomousTextContinuation({
@@ -1182,14 +1206,18 @@ export namespace SessionPrompt {
             lastTurnWasForceTextOnly,
             recoveriesUsed: unexecutableToolTextRecoveries,
             maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
+            forceReason: lastTurnForceTextReason,
           })
           if (unexecutableRecovery.action === "recover") {
             unexecutableToolTextRecoveries += 1
             forceTextOnlyTurn = false
+            forceTextReason = undefined
             lastTurnWasForceTextOnly = false
+            lastTurnForceTextReason = undefined
             consecutiveAxEngineReadOnlyTurns = 0
             axEngineReadOnlyNudged = false
             axEngineReadOnlyHasEvidence = false
+            axEngineLargeEvidenceGraceUsed = false
             pendingAxEngineTurnInstruction = undefined
             log.info("autonomous completion gate recovery after forced text-only turn", {
               command: "session.prompt.loop",
@@ -1380,12 +1408,13 @@ export namespace SessionPrompt {
           goalCompletedThisTurn: hasSuccessfulGoalCompleteTool(currentParts),
         })
         if (goalForce.action === "force_text") {
-          forceTextOnlyTurn = true
+          armForceTextOnlyTurn("goal_complete")
           consecutiveToolOnlyTurns = 0
           toolOnlyNudges = 0
           consecutiveAxEngineReadOnlyTurns = 0
           axEngineReadOnlyNudged = false
           axEngineReadOnlyHasEvidence = false
+          axEngineLargeEvidenceGraceUsed = false
           log.info("goal complete forces text-only final turn", {
             command: "session.prompt.loop",
             status: "force_text",
@@ -1405,17 +1434,35 @@ export namespace SessionPrompt {
         if (axEngineReadOnlyTurn) {
           consecutiveAxEngineReadOnlyTurns += 1
           if (hasUsableReadOnlyEvidence(currentParts)) axEngineReadOnlyHasEvidence = true
+          const freshLargeEvidence = hasLargeSuccessfulReadOnlyOutput(
+            currentParts,
+            AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS,
+          )
           const readOnlyTransition = readOnlyExplorationDecision({
             consecutiveTurns: consecutiveAxEngineReadOnlyTurns,
             nudged: axEngineReadOnlyNudged,
             nudgeThreshold: AX_ENGINE_READ_ONLY_TURN_NUDGE,
             forceThreshold: AX_ENGINE_READ_ONLY_TURN_FORCE,
             hasUsableEvidence: axEngineReadOnlyHasEvidence,
+            freshLargeEvidence,
+            largeEvidenceGraceUsed: axEngineLargeEvidenceGraceUsed,
           })
           if (readOnlyTransition.action !== "ignore") {
             const forced = readOnlyTransition.action === "force_text"
-            if (forced) forceTextOnlyTurn = true
-            else axEngineReadOnlyNudged = true
+            if (forced) {
+              armForceTextOnlyTurn("ax_engine_read_only")
+            } else {
+              axEngineReadOnlyNudged = true
+              // Grace: force deferred because a large tool payload just landed.
+              if (
+                freshLargeEvidence &&
+                !axEngineLargeEvidenceGraceUsed &&
+                consecutiveAxEngineReadOnlyTurns >= AX_ENGINE_READ_ONLY_TURN_FORCE &&
+                axEngineReadOnlyHasEvidence
+              ) {
+                axEngineLargeEvidenceGraceUsed = true
+              }
+            }
             log.info("ax-engine read-only turn checkpoint", {
               command: "session.prompt.loop",
               status: forced ? "force_text" : "nudge",
@@ -1423,6 +1470,8 @@ export namespace SessionPrompt {
               consecutiveTurns: consecutiveAxEngineReadOnlyTurns,
               forced,
               hasUsableEvidence: axEngineReadOnlyHasEvidence,
+              freshLargeEvidence,
+              largeEvidenceGraceUsed: axEngineLargeEvidenceGraceUsed,
             })
             pendingAxEngineTurnInstruction = AutonomousContinuationPrompt.axEngineReadOnlyCheckpoint({
               consecutiveTurns: consecutiveAxEngineReadOnlyTurns,
@@ -1435,6 +1484,7 @@ export namespace SessionPrompt {
           consecutiveAxEngineReadOnlyTurns = 0
           axEngineReadOnlyNudged = false
           axEngineReadOnlyHasEvidence = false
+          axEngineLargeEvidenceGraceUsed = false
         }
         const toolOnlyTransition = toolOnlyTurnDecision({
           consecutiveToolOnlyTurns,
@@ -1450,7 +1500,7 @@ export namespace SessionPrompt {
           // grace period and resumed tool-only calling anyway, so this time
           // force the next turn to be text-only instead of nudging again.
           if (toolOnlyTransition.final) toolOnlyFinalCheckpointHits += 1
-          if (toolOnlyTransition.forced) forceTextOnlyTurn = true
+          if (toolOnlyTransition.forced) armForceTextOnlyTurn("tool_only_breaker")
           log.info("tool-only turn nudge", {
             command: "session.prompt.loop",
             status: "nudge",

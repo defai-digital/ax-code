@@ -31,6 +31,11 @@ export const TOOL_ONLY_TURN_FINAL_NUDGE = MAX_TOOL_ONLY_TURNS - 5
 // results, force is delayed further (see readOnlyExplorationDecision).
 export const AX_ENGINE_READ_ONLY_TURN_NUDGE = 2
 export const AX_ENGINE_READ_ONLY_TURN_FORCE = 4
+// When force would fire on the same turn that just produced a large successful
+// tool payload (e.g. multi-file git diff), defer force once so the model can
+// absorb/analyze with tools still available. 8k chars is well below the
+// 26k+ diffs that otherwise get force-texted mid-review.
+export const AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS = 8_000
 // After a forced text-only turn, if the model pastes unexecutable tool XML,
 // re-enable tools once instead of hard-stopping (self-inflicted trap).
 export const MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES = 1

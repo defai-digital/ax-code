@@ -119,6 +119,23 @@ describe("AutonomousCompletionGate", () => {
     ).toMatchObject({ status: "blocked", reason: "unexecutable_tool_text" })
   })
 
+  test("a later clean text answer supersedes prior unexecutable tool markup", () => {
+    const pseudoToolText = {
+      info: { role: "assistant" },
+      parts: [{ type: "text", text: "<tool_call><function=bash></tool_call>" }],
+    }
+    const cleanAnswer = {
+      info: { role: "assistant" },
+      parts: [{ type: "text", text: "There are about 120k lines of TypeScript in this repo." }],
+    }
+    expect(
+      AutonomousCompletionGate.evaluate({
+        pendingTodos: [],
+        messages: [pseudoToolText, cleanAnswer],
+      }),
+    ).toEqual({ status: "allow" })
+  })
+
   test("ignores synthetic text when checking for unexecutable tool text", () => {
     const decision = AutonomousCompletionGate.evaluate({
       pendingTodos: [],

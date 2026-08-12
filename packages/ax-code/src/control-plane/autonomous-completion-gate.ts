@@ -103,6 +103,10 @@ export namespace AutonomousCompletionGate {
 
     for (const message of messages) {
       if (!isAssistantMessage(message)) continue
+      // Track per-assistant-message so a later clean answer can clear a prior
+      // pseudo-call without requiring a real tool (recovery option: plain text).
+      let messageHasUnexecutable = false
+      let messageHasCleanText = false
       for (const part of message.parts ?? []) {
         const record = asRecord(part)
         if (!record) continue
@@ -113,11 +117,23 @@ export namespace AutonomousCompletionGate {
         // session forever — every later turn, however productive, re-blocked.
         if (record["type"] === "tool" && asRecord(record["state"])?.["status"] === "completed") {
           latest = undefined
+          messageHasUnexecutable = false
+          messageHasCleanText = false
           continue
         }
         if (record["type"] !== "text" || typeof record["text"] !== "string") continue
         if (record["synthetic"] === true || record["ignored"] === true) continue
-        if (looksLikeUnexecutableToolText(record["text"])) latest = record["text"]
+        if (looksLikeUnexecutableToolText(record["text"])) {
+          latest = record["text"]
+          messageHasUnexecutable = true
+          continue
+        }
+        if (record["text"].trim().length > 0) messageHasCleanText = true
+      }
+      // A later assistant turn with real prose and no tool markup supersedes
+      // a prior unexecutable pseudo-call (plain-language recovery).
+      if (!messageHasUnexecutable && messageHasCleanText) {
+        latest = undefined
       }
     }
 

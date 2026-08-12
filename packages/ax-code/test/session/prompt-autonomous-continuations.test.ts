@@ -108,7 +108,7 @@ describe("autonomous continuation prompt builders", () => {
     expect(text).toContain("After 4 consecutive successful-evidence read-only turns")
   })
 
-  test("forced AX Engine checkpoint forbids pasting tool XML", () => {
+  test("forced AX Engine checkpoint forbids pasting tool XML and requires structured findings", () => {
     const text = AutonomousContinuationPrompt.axEngineReadOnlyCheckpoint({
       consecutiveTurns: 4,
       forceThreshold: 4,
@@ -117,6 +117,9 @@ describe("autonomous continuation prompt builders", () => {
 
     expect(text).toContain("Tools are disabled")
     expect(text).toContain("Do not paste tool-call XML")
+    expect(text).toContain("Verdict")
+    expect(text).toContain("Findings")
+    expect(text).toContain("Do not paste large code blocks")
   })
 
   test("builds unexecutable tool text recovery guidance", () => {

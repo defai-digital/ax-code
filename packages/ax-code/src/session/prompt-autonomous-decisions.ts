@@ -264,6 +264,7 @@ type ToolActivityPart = {
   tool?: string
   state?: {
     status?: string
+    output?: string
   }
 }
 
@@ -290,13 +291,44 @@ export function hasUsableReadOnlyEvidence(parts: readonly ToolActivityPart[] | u
   )
 }
 
+/** True when this turn completed a read-only tool with a large output payload. */
+export function hasLargeSuccessfulReadOnlyOutput(
+  parts: readonly ToolActivityPart[] | undefined,
+  minChars: number,
+): boolean {
+  if (!parts?.length || !Number.isFinite(minChars) || minChars <= 0) return false
+  return parts.some(
+    (part) =>
+      part.type === "tool" &&
+      READ_ONLY_EXPLORATION_TOOLS.has(part.tool ?? "") &&
+      part.state?.status === "completed" &&
+      typeof part.state.output === "string" &&
+      part.state.output.length >= minChars,
+  )
+}
+
 type ReadOnlyExplorationDecision = { action: "ignore" } | { action: "nudge" } | { action: "force_text" }
+
+/**
+ * Why the loop forced a text-only turn. Unexecutable-tool recovery must only
+ * re-enable tools for the ax-engine read-only trap — not response-only /
+ * goal-complete / truncated recovery paths that intentionally stay tool-free.
+ */
+export type ForceTextReason =
+  | "ax_engine_read_only"
+  | "response_only"
+  | "goal_complete"
+  | "tool_only_breaker"
+  | "truncated_recovery"
+  | "other"
 
 /**
  * Local-engine read-only convergence. Force synthesis once the model has had
  * a chance to gather evidence — but do not strip tools while every probe is
  * still failing (wrong invented paths), or pure Q&A never gets a working call.
- * A hard ceiling still forces text eventually so latency cannot run away.
+ * When force would fire on the same turn as a large successful tool result,
+ * grant one tools-on grace turn so the model can absorb the payload. A hard
+ * ceiling still forces text eventually so latency cannot run away.
  */
 export function readOnlyExplorationDecision(input: {
   consecutiveTurns: number
@@ -305,10 +337,19 @@ export function readOnlyExplorationDecision(input: {
   forceThreshold: number
   /** True when this streak has at least one successful read-only tool result. */
   hasUsableEvidence?: boolean
+  /** This turn completed a large read-only tool payload. */
+  freshLargeEvidence?: boolean
+  /** Already deferred force once this streak for large evidence. */
+  largeEvidenceGraceUsed?: boolean
 }): ReadOnlyExplorationDecision {
   const hardCeiling = input.forceThreshold + 2
   if (input.consecutiveTurns >= hardCeiling) return { action: "force_text" }
   if (input.consecutiveTurns >= input.forceThreshold && input.hasUsableEvidence) {
+    // Large payload just landed: keep tools on once so the model can analyze
+    // instead of force-texting raw diffs into hallucinated answers.
+    if (input.freshLargeEvidence && !input.largeEvidenceGraceUsed) {
+      return { action: "nudge" }
+    }
     return { action: "force_text" }
   }
   // At/over force threshold but no usable evidence yet: keep tools on and
@@ -321,15 +362,18 @@ export function readOnlyExplorationDecision(input: {
 }
 
 /**
- * After a forced text-only turn, unexecutable tool markup should recover with
- * tools re-enabled once — not hard-stop on the trap we just created.
+ * After a forced text-only turn from ax-engine read-only convergence,
+ * unexecutable tool markup should recover with tools re-enabled once.
+ * Other force reasons stay tool-free.
  */
 export function unexecutableToolTextRecoveryDecision(input: {
   lastTurnWasForceTextOnly: boolean
   recoveriesUsed: number
   maxRecoveries: number
+  forceReason?: ForceTextReason
 }): { action: "recover" } | { action: "stop" } {
   if (!input.lastTurnWasForceTextOnly) return { action: "stop" }
+  if (input.forceReason !== "ax_engine_read_only") return { action: "stop" }
   if (input.recoveriesUsed >= input.maxRecoveries) return { action: "stop" }
   return { action: "recover" }
 }

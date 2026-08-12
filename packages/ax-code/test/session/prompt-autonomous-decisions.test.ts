@@ -9,6 +9,7 @@ import {
   emptyModelTurnDecision,
   globalStepLimitDecision,
   goalContinuationDecision,
+  hasLargeSuccessfulReadOnlyOutput,
   hasUsableReadOnlyEvidence,
   isEmptyModelTurn,
   isTruncatedModelTurn,
@@ -25,6 +26,7 @@ import {
   unexecutableToolTextRecoveryDecision,
 } from "../../src/session/prompt-autonomous-decisions"
 import {
+  AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS,
   AX_ENGINE_READ_ONLY_TURN_FORCE,
   AX_ENGINE_READ_ONLY_TURN_NUDGE,
   MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
@@ -1035,6 +1037,39 @@ describe("local read-only exploration convergence", () => {
     })
   })
 
+  test("defers force_text once when force lands on a large tool payload", () => {
+    const base = {
+      nudgeThreshold: AX_ENGINE_READ_ONLY_TURN_NUDGE,
+      forceThreshold: AX_ENGINE_READ_ONLY_TURN_FORCE,
+      hasUsableEvidence: true,
+      consecutiveTurns: 4,
+      nudged: true,
+    }
+    expect(
+      readOnlyExplorationDecision({
+        ...base,
+        freshLargeEvidence: true,
+        largeEvidenceGraceUsed: false,
+      }),
+    ).toEqual({ action: "nudge" })
+    expect(
+      readOnlyExplorationDecision({
+        ...base,
+        freshLargeEvidence: true,
+        largeEvidenceGraceUsed: true,
+      }),
+    ).toEqual({ action: "force_text" })
+    // Hard ceiling still wins even with fresh large evidence.
+    expect(
+      readOnlyExplorationDecision({
+        ...base,
+        consecutiveTurns: 6,
+        freshLargeEvidence: true,
+        largeEvidenceGraceUsed: false,
+      }),
+    ).toEqual({ action: "force_text" })
+  })
+
   test("detects usable read-only evidence from completed tools only", () => {
     expect(
       hasUsableReadOnlyEvidence([
@@ -1050,20 +1085,52 @@ describe("local read-only exploration convergence", () => {
     ).toBe(true)
   })
 
-  test("recovers unexecutable tool text only after a forced text-only turn within budget", () => {
+  test("detects large successful read-only tool output", () => {
+    expect(AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS).toBe(8_000)
+    expect(
+      hasLargeSuccessfulReadOnlyOutput(
+        [{ type: "tool", tool: "bash", state: { status: "completed", output: "x".repeat(100) } }],
+        AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS,
+      ),
+    ).toBe(false)
+    expect(
+      hasLargeSuccessfulReadOnlyOutput(
+        [
+          {
+            type: "tool",
+            tool: "bash",
+            state: { status: "completed", output: "x".repeat(AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS) },
+          },
+        ],
+        AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS,
+      ),
+    ).toBe(true)
+  })
+
+  test("recovers unexecutable tool text only after ax-engine read-only force within budget", () => {
     expect(MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES).toBe(1)
     expect(
       unexecutableToolTextRecoveryDecision({
         lastTurnWasForceTextOnly: true,
         recoveriesUsed: 0,
         maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
+        forceReason: "ax_engine_read_only",
       }),
     ).toEqual({ action: "recover" })
     expect(
       unexecutableToolTextRecoveryDecision({
         lastTurnWasForceTextOnly: true,
+        recoveriesUsed: 0,
+        maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
+        forceReason: "response_only",
+      }),
+    ).toEqual({ action: "stop" })
+    expect(
+      unexecutableToolTextRecoveryDecision({
+        lastTurnWasForceTextOnly: true,
         recoveriesUsed: 1,
         maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
+        forceReason: "ax_engine_read_only",
       }),
     ).toEqual({ action: "stop" })
     expect(
@@ -1071,6 +1138,7 @@ describe("local read-only exploration convergence", () => {
         lastTurnWasForceTextOnly: false,
         recoveriesUsed: 0,
         maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
+        forceReason: "ax_engine_read_only",
       }),
     ).toEqual({ action: "stop" })
   })
