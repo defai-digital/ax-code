@@ -1,0 +1,46 @@
+Diagnose the issue described below. Confirm the root cause before changing any code. If $ARGUMENTS is empty, use the current conversation, failing tests, and recent diffs to identify the symptom.
+
+$ARGUMENTS
+
+## Phase 1 — Reproduce
+
+- Identify the entry point (CLI command, API, test, UI action) and the expected vs observed behavior.
+- Capture a concrete failure signal: command, input, output/error, or failing test.
+- If it cannot be reproduced, continue as an investigation and label every cause as unconfirmed.
+
+## Bug reality gate
+
+Classify before editing:
+
+- **Confirmed bug**: a command, test, log, or runtime probe demonstrates the failure.
+- **Confirmed by existing failing test**: a targeted test already fails and matches the symptom.
+- **Unconfirmed hypothesis**: static reading suggests a cause, but nothing has failed yet.
+- **Not reproduced**: the attempted path does not fail.
+
+Do not treat a code smell or call-chain guess as proof.
+
+## Phase 2 — Fix
+
+Implement a fix only for a confirmed bug or a failing test. If the user asked to diagnose only, stop after the report.
+
+- Make the smallest change that addresses the confirmed root cause.
+- Prefer a regression test that fails before the fix and passes after it.
+- Do not refactor unrelated code.
+
+## Phase 3 — Verify
+
+- Re-run the original failure path.
+- Run the most specific relevant test or typecheck for the touched code.
+- In the final report, include pre-fix evidence and post-fix verification.
+
+## Report
+
+**Status**: confirmed bug | confirmed by failing test | unconfirmed hypothesis | not reproduced
+
+**Evidence**: command, test, or log that established the status.
+
+**Root cause**: one sentence with file:line. Omit unless confirmed.
+
+**Change**: what was edited, or "none — diagnose only".
+
+**Verification**: commands run and their results.

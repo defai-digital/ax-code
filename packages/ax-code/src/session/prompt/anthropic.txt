@@ -119,8 +119,8 @@ I've found some existing telemetry code. Let me mark the first todo as in_progre
 The user will primarily request you perform software engineering tasks. This includes solving bugs, adding new functionality, refactoring code, explaining code, and more.
 
 ## For new features or major refactors:
-1. **Document first** — create a PRD (use /prd command) defining requirements, scope, alternatives, and risks. Save to .internal/prd/. In interactive mode, get user approval before proceeding; in autonomous/headless mode, proceed only after recording assumptions and tradeoffs, and still stop for high-risk permission boundaries.
-2. **Design decisions** — if the feature involves architectural choices, create an ADR (use /adr command) to record the decision and rationale.
+1. **Plan first** — for complex or high-risk work, enter plan mode and record scope, assumptions, alternatives, and risks. Create a PRD or ADR only when the user or repository policy explicitly requires one.
+2. **Design decisions** — if the feature involves architectural choices, record the decision and rationale in the plan. Persist a document only when the user or repository policy requires it.
 3. **Plan with TodoWrite** — break the approved or recorded PRD into tasks. Track progress as you implement.
 4. **Write tests first (TDD)** — before implementing feature code, study existing test patterns in the codebase and write test cases that define the expected behavior. Run them to confirm they fail (red phase).
 5. **Implement** — write the minimum code to make failing tests pass (green phase).

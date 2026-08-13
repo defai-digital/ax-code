@@ -11,9 +11,8 @@ import { uniqueStrings } from "../util/string-list"
 import { FileCommand } from "./file-command"
 import PROMPT_INITIALIZE from "./template/initialize.txt"
 import PROMPT_REVIEW from "./template/review.txt"
-import PROMPT_ADR from "./template/adr.txt"
-import PROMPT_IMPACT from "./template/impact.txt"
-import PROMPT_PRD from "./template/prd.txt"
+import PROMPT_PLAN from "./template/plan.txt"
+import PROMPT_DEBUG from "./template/debug.txt"
 import PROMPT_COUNCIL from "./template/council.txt"
 import PROMPT_ARENA from "./template/arena.txt"
 import PROMPT_MODE from "./template/mode.txt"
@@ -116,9 +115,8 @@ export namespace Command {
   export const Default = {
     INIT: "init",
     REVIEW: "review",
-    ADR: "adr",
-    IMPACT: "impact",
-    PRD: "prd",
+    PLAN: "plan",
+    DEBUG: "debug",
     GOAL: "goal",
     LOOP: "loop",
     LIMITS: "limits",
@@ -168,38 +166,31 @@ export namespace Command {
       subtask: true,
       hints: hints(PROMPT_REVIEW),
     }
-    commands[Default.ADR] = {
-      name: Default.ADR,
-      description: "generate an Architecture Decision Record",
+    commands[Default.PLAN] = {
+      name: Default.PLAN,
+      description: "create a read-only implementation plan [task]",
       source: "command",
       sourceTool: "builtin",
       scope: "builtin",
+      agent: "plan",
+      argumentHint: "[task]",
       get template() {
-        return PROMPT_ADR.replace("${path}", () => ctx.worktree)
+        return PROMPT_PLAN
       },
-      hints: hints(PROMPT_ADR),
+      hints: hints(PROMPT_PLAN),
     }
-    commands[Default.IMPACT] = {
-      name: Default.IMPACT,
-      description: "generate an Impact Assessment for a proposed change",
+    commands[Default.DEBUG] = {
+      name: Default.DEBUG,
+      description: "diagnose a bug, then fix only after the cause is confirmed [symptom]",
       source: "command",
       sourceTool: "builtin",
       scope: "builtin",
+      agent: "debug",
+      argumentHint: "[symptom, error message, or failing test]",
       get template() {
-        return PROMPT_IMPACT.replace("${path}", () => ctx.worktree)
+        return PROMPT_DEBUG
       },
-      hints: hints(PROMPT_IMPACT),
-    }
-    commands[Default.PRD] = {
-      name: Default.PRD,
-      description: "generate a Product Requirements Document for a feature",
-      source: "command",
-      sourceTool: "builtin",
-      scope: "builtin",
-      get template() {
-        return PROMPT_PRD.replace("${path}", () => ctx.worktree)
-      },
-      hints: hints(PROMPT_PRD),
+      hints: hints(PROMPT_DEBUG),
     }
     commands[Default.GOAL] = {
       name: Default.GOAL,
@@ -372,6 +363,9 @@ export namespace Command {
     }
 
     for (const skill of await Skill.all()) {
+      // Agent-only builtins stay loadable via the skill tool, but they are not
+      // first-class slash commands. Users invoke /debug or /plan instead.
+      if (skill.scope === "builtin" && Skill.SLASH_HIDDEN_BUILTIN_SKILLS.has(skill.name)) continue
       if (commands[skill.name] && !isOverridableBuiltin(commands[skill.name])) continue
       commands[skill.name] = {
         name: skill.name,

@@ -26,9 +26,9 @@ export const BUILTIN_STARTERS: readonly BuiltInStarter[] = [
   { name: "explore", icon: "compass-3", labelKey: "chat.draftPresets.explore.label", command: "/explore" },
   { name: "catch-up", icon: "history", labelKey: "chat.draftPresets.catchup.label", command: "/catch-up" },
   { name: "weigh", icon: "scales-3", labelKey: "chat.draftPresets.weigh.label", command: "/weigh" },
-  { name: "plan-feature", icon: "survey", labelKey: "chat.draftPresets.plan.label", command: "/plan-feature" },
+  { name: "plan-feature", icon: "survey", labelKey: "chat.draftPresets.plan.label", command: "/plan" },
   { name: "debug", icon: "bug", labelKey: "chat.draftPresets.debug.label", command: "/debug" },
-  { name: "review", icon: "search-eye", labelKey: "chat.draftPresets.review.label", command: "/workspace-review" },
+  { name: "review", icon: "search-eye", labelKey: "chat.draftPresets.review.label", command: "/review" },
   {
     name: "summarise",
     icon: "code-ai",

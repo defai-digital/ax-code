@@ -1,0 +1,40 @@
+Create a code-grounded implementation plan for the following request. Do not write source files, PRDs, ADRs, or other permanent documents unless the user or repository policy explicitly requires one.
+
+$ARGUMENTS
+
+## Goal
+
+Produce a concise, reviewable plan the user can approve or adjust before implementation.
+
+## Process
+
+1. Research the current codebase with search tools. Cite specific files, symbols, and existing patterns.
+2. Restate the problem, constraints, and non-goals.
+3. List assumptions. If a missing fact would change the design, ask a small batch of clarifying questions instead of guessing.
+4. Propose one recommended approach and at most two alternatives, with tradeoffs.
+5. Identify blast radius: modules, APIs, data, tests, and user-visible behavior that change.
+6. Break the work into ordered implementation steps. Each step should be independently verifiable.
+7. Name the tests or checks that will prove the change works.
+
+## Constraints
+
+- Stay in plan mode. Do not edit, create, or delete project files.
+- Do not create `.internal/prd/`, `.internal/adr/`, or similar documents by default.
+- Prefer the smallest change that solves the request.
+- If the request is already small and unambiguous, keep the plan short.
+
+## Output
+
+Use this shape:
+
+**Problem** — one or two sentences.
+
+**Assumptions** — bullets.
+
+**Recommended approach** — the plan, with file-level references.
+
+**Alternatives** — only if they are real choices.
+
+**Steps** — numbered, each with a verification note.
+
+**Risks** — what could go wrong and how we will catch it.

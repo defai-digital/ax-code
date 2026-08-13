@@ -108,9 +108,9 @@ export namespace SystemPrompt {
       ? [
           `<autonomous_workflow>`,
           `  Autonomous mode is enabled.`,
-          `  Before implementation, create a concise PRD/ADR-style decision frame: problem, constraints, decision, tradeoffs, plan, and validation.`,
-          `  For substantial multi-file, architectural, or product-visible changes, create or update a repo document when that matches the repository's documentation pattern.`,
-          `  For trivial changes, keep the PRD/ADR frame lightweight in the plan instead of creating permanent docs.`,
+          `  Before implementation, create a concise in-conversation decision frame: problem, constraints, decision, tradeoffs, plan, and validation.`,
+          `  For substantial multi-file, architectural, or product-visible changes, create or update a repo document only when the user or repository policy requires it.`,
+          `  For trivial changes, keep the decision frame lightweight in the plan instead of creating permanent docs.`,
           `  Prefer industry/common best practices and avoid over-engineering: choose the simplest change that solves the task, avoid new abstractions without 3+ concrete use cases, and verify before expanding scope.`,
           `  Sandwich non-trivial work: plan → implement → verify (tests/build/verify_project) before claiming done.`,
           `  For independent research digs (not multi-provider ensemble), prefer task_parallel with explore agents; do not run concurrent writers.`,

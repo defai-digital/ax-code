@@ -119,17 +119,31 @@ test.skipIf(process.platform === "win32")("surfaces unreadable file-backed comma
   })
 })
 
-test("exposes skill agent metadata on skill-backed commands", async () => {
+test("exposes plan and debug builtins and hides document-generator commands", async () => {
   await using tmp = await tmpdir({ git: true })
 
   await withTestHome(path.join(tmp.path, "home"), async () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const command = await Command.get("debug-n-fix")
-        expect(command).toBeDefined()
-        expect(command!.source).toBe("skill")
-        expect(command!.agent).toBe("debug")
+        const names = (await Command.list()).map((command) => command.name)
+        expect(names).toContain("plan")
+        expect(names).toContain("debug")
+        expect(names).toContain("review")
+        expect(names).not.toContain("adr")
+        expect(names).not.toContain("prd")
+        expect(names).not.toContain("impact")
+        expect(names).not.toContain("debug-n-fix")
+        expect(names).not.toContain("debug-only")
+
+        const debug = await Command.get("debug")
+        expect(debug).toBeDefined()
+        expect(debug!.source).toBe("command")
+        expect(debug!.agent).toBe("debug")
+
+        const plan = await Command.get("plan")
+        expect(plan).toBeDefined()
+        expect(plan!.agent).toBe("plan")
       },
     })
   })

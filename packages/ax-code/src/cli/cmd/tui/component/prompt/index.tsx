@@ -760,6 +760,7 @@ export function Prompt(props: PromptProps) {
         value: "prompt.editor",
         slash: {
           name: "editor",
+          hidden: true,
         },
         onSelect: async (dialog) => {
           dialog.clear()
@@ -816,6 +817,7 @@ export function Prompt(props: PromptProps) {
         category: "Prompt",
         slash: {
           name: "skills",
+          hidden: true,
         },
         onSelect: () => {
           const marker = dialog.stack.at(-1)

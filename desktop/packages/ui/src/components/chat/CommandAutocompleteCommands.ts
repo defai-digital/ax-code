@@ -14,7 +14,6 @@ interface BuiltInCommandsInput {
 export const buildBuiltInCommands = ({
   hasSession,
   hasMessagesInCurrentSession,
-  canStartSessionCommand,
   t,
 }: BuiltInCommandsInput): CommandInfo[] => {
   const commands: CommandInfo[] = []
@@ -71,53 +70,6 @@ export const buildBuiltInCommands = ({
       description: t("chat.commandAutocomplete.command.summaryDescription"),
       isOpenChamber: true,
     })
-  }
-
-  if (canStartSessionCommand) {
-    commands.push(
-      {
-        id: "openchamber:workspace-review",
-        name: "workspace-review",
-        source: "openchamber",
-        description: t("chat.commandAutocomplete.command.workspaceReviewDescription"),
-        isOpenChamber: true,
-      },
-      {
-        id: "openchamber:plan-feature",
-        name: "plan-feature",
-        source: "openchamber",
-        description: t("chat.commandAutocomplete.command.featurePlanDescription"),
-        isOpenChamber: true,
-      },
-      {
-        id: "openchamber:catch-up",
-        name: "catch-up",
-        source: "openchamber",
-        description: t("chat.commandAutocomplete.command.catchUpDescription"),
-        isOpenChamber: true,
-      },
-      {
-        id: "openchamber:debug",
-        name: "debug",
-        source: "openchamber",
-        description: t("chat.commandAutocomplete.command.debugDescription"),
-        isOpenChamber: true,
-      },
-      {
-        id: "openchamber:weigh",
-        name: "weigh",
-        source: "openchamber",
-        description: t("chat.commandAutocomplete.command.weighDescription"),
-        isOpenChamber: true,
-      },
-      {
-        id: "openchamber:explore",
-        name: "explore",
-        source: "openchamber",
-        description: t("chat.commandAutocomplete.command.exploreDescription"),
-        isOpenChamber: true,
-      },
-    )
   }
 
   return commands

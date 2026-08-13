@@ -970,8 +970,10 @@ describe("tui OpenTUI stability guardrails", () => {
     // Server-side Command.Default builtins must be allowlisted or "/" autocomplete hides them.
     expect(autocomplete).toContain('"goal"')
     expect(autocomplete).toContain('"council"')
-    expect(autocomplete).toContain('"arena"')
-    expect(autocomplete).toContain('"mode"')
+    expect(autocomplete).toContain('"plan"')
+    expect(autocomplete).toContain('"debug"')
+    expect(autocomplete).not.toContain('"adr"')
+    expect(autocomplete).not.toContain('"prd"')
     expect(autocomplete).toContain("defaultCommandSlashAllowlist")
     expect(autocomplete).not.toContain('serverCommand.source === "skill") continue')
     expect(displayCommands).toContain('title: "View session goal"')

@@ -108,25 +108,29 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
         setLoading(true)
         try {
           const skillNames = new Set(skills.map((skill) => skill.name))
-          const customCommands: CommandInfo[] = commandsWithMetadata.map((cmd, index) => ({
-            id: `ax-code:${cmd.scope ?? "global"}:${cmd.name}:${cmd.agent ?? ""}:${cmd.model ?? ""}:${index}`,
-            name: cmd.name,
-            source: "ax-code",
-            description: cmd.description,
-            agent: cmd.agent ?? undefined,
-            model: cmd.model ?? undefined,
-            isBuiltIn: cmd.name === "init" || cmd.name === "review",
-            isSkill: cmd.source === "skill" || skillNames.has(cmd.name),
-            scope: cmd.scope,
-          }))
-          const skillCommands: CommandInfo[] = skills.map((skill, index) => ({
-            id: `skill:${skill.scope}:${skill.source ?? "ax-code"}:${skill.name}:${index}`,
-            name: skill.name,
-            source: "skill",
-            description: skill.description,
-            isSkill: true,
-            scope: skill.scope,
-          }))
+          const customCommands: CommandInfo[] = commandsWithMetadata
+            .filter((cmd) => cmd.source !== "skill" || cmd.scope !== "builtin")
+            .map((cmd, index) => ({
+              id: `ax-code:${cmd.scope ?? "global"}:${cmd.name}:${cmd.agent ?? ""}:${cmd.model ?? ""}:${index}`,
+              name: cmd.name,
+              source: "ax-code",
+              description: cmd.description,
+              agent: cmd.agent ?? undefined,
+              model: cmd.model ?? undefined,
+              isBuiltIn: cmd.name === "init" || cmd.name === "review" || cmd.name === "plan" || cmd.name === "debug",
+              isSkill: cmd.source === "skill" || skillNames.has(cmd.name),
+              scope: cmd.scope,
+            }))
+          const skillCommands: CommandInfo[] = skills
+            .filter((skill) => skill.scope !== "builtin")
+            .map((skill, index) => ({
+              id: `skill:${skill.scope}:${skill.source ?? "ax-code"}:${skill.name}:${index}`,
+              name: skill.name,
+              source: "skill",
+              description: skill.description,
+              isSkill: true,
+              scope: skill.scope,
+            }))
 
           const builtInCommands = buildBuiltInCommands({
             hasSession,

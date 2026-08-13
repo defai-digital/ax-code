@@ -106,6 +106,7 @@ export function displayCommands(input: {
       category: "Session",
       slash: {
         name: "rename",
+        hidden: true,
       },
       onSelect: (dialog: DialogContext) => input.dialogReplaceRename(dialog),
     },
@@ -128,6 +129,7 @@ export function displayCommands(input: {
       slash: {
         name: "capabilities",
         aliases: ["capability"],
+        hidden: true,
       },
       onSelect: (dialog: DialogContext) => input.dialogReplaceCapability(dialog),
     },
@@ -153,6 +155,7 @@ export function displayCommands(input: {
       slash: {
         name: "workflows",
         aliases: ["workflow"],
+        hidden: true,
       },
       onSelect: (dialog: DialogContext) => input.dialogReplaceWorkflow(dialog),
     },
@@ -209,6 +212,7 @@ export function displayCommands(input: {
       category: "Session",
       slash: {
         name: "diff",
+        hidden: true,
       },
       onSelect: (dialog: DialogContext) => input.dialogReplaceDiffViewer(dialog),
     },
@@ -219,6 +223,7 @@ export function displayCommands(input: {
       category: "Session",
       slash: {
         name: "timeline",
+        hidden: true,
       },
       onSelect: (dialog: DialogContext) => input.dialogReplaceTimeline(dialog),
     },
@@ -229,6 +234,7 @@ export function displayCommands(input: {
       category: "Session",
       slash: {
         name: "fork",
+        hidden: true,
       },
       onSelect: (dialog: DialogContext) => input.dialogReplaceFork(dialog),
     },
@@ -289,6 +295,7 @@ export function displayCommands(input: {
       slash: {
         name: "sidebar",
         aliases: ["toggle-sidebar"],
+        hidden: true,
       },
       onSelect: (dialog: DialogContext) => {
         batch(() => {
@@ -515,6 +522,7 @@ export function displayCommands(input: {
       category: "Session",
       slash: {
         name: "copy",
+        hidden: true,
       },
       onSelect: async (dialog: DialogContext) => {
         try {
@@ -545,6 +553,7 @@ export function displayCommands(input: {
       category: "Session",
       slash: {
         name: "export",
+        hidden: true,
       },
       onSelect: async (dialog: DialogContext) => {
         try {

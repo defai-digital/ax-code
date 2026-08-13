@@ -503,13 +503,10 @@ export function Autocomplete(props: {
     const defaultCommandSlashAllowlist = new Set([
       "init",
       "review",
-      "adr",
-      "impact",
-      "prd",
+      "plan",
+      "debug",
       "goal",
       "council",
-      "arena",
-      "mode",
     ])
 
     // Collect slash names already registered client-side so we skip duplicates

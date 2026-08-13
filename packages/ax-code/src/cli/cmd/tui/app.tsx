@@ -956,6 +956,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       slash: {
         name: "agent",
         aliases: ["agents"],
+        hidden: true,
       },
       onSelect: () => {
         void showAgentDialog()
@@ -965,6 +966,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: "Toggle MCPs",
       value: "mcp.list",
       category: "Agent",
+      slash: {
+        name: "mcp",
+      },
       onSelect: () => {
         void showMcpDialog()
       },
@@ -986,6 +990,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       slash: {
         name: "effort",
         aliases: ["variant", "thinking"],
+        hidden: true,
       },
       onSelect: () => {
         void showEffortDialog()
@@ -1041,6 +1046,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: "View status",
       keybind: "status_view",
       value: "ax-code.status",
+      slash: {
+        name: "status",
+      },
       onSelect: () => {
         void showStatusDialog()
       },
@@ -1053,6 +1061,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       slash: {
         name: "theme",
         aliases: ["themes"],
+        hidden: true,
       },
       onSelect: () => {
         void showThemeListDialog()
@@ -1111,6 +1120,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       value: "webui.open",
       slash: {
         name: "webui",
+        hidden: true,
       },
       description: "Start or open the AX Code browser UI",
       category: "System",
@@ -1140,6 +1150,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       value: "desktop.handoff",
       slash: {
         name: "desktop",
+        hidden: true,
       },
       description: "Get guidance for AX Code Desktop dashboards and workflow supervision",
       category: "System",
@@ -1163,6 +1174,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       slash: {
         name: "exit",
         aliases: ["quit", "q"],
+        hidden: true,
       },
       onSelect: () => exit(),
       category: "System",
@@ -1293,6 +1305,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       slash: {
         name: "work-mode",
         aliases: ["workmode"],
+        hidden: true,
       },
       onSelect: (dialog) => {
         const current = WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT))

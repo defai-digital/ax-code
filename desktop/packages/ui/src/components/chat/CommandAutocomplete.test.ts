@@ -23,12 +23,6 @@ describe("buildBuiltInCommands", () => {
       "timeline",
       "compact",
       "summary",
-      "workspace-review",
-      "plan-feature",
-      "catch-up",
-      "debug",
-      "weigh",
-      "explore",
     ])
   })
 
@@ -51,7 +45,7 @@ describe("buildBuiltInCommands", () => {
         canStartSessionCommand: true,
         t,
       }),
-    ).toEqual(["compact", "workspace-review", "plan-feature", "catch-up", "debug", "weigh", "explore"])
+    ).toEqual(["compact"])
   })
 
   test("falls back to compact when there is no active session or draft", () => {

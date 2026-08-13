@@ -2,20 +2,25 @@
 
 Status: Active
 Scope: public, current-state
-Last reviewed: 2026-07-19
+Last reviewed: 2026-08-12
 Owner: AX Code runtime
 
 Discoverable registry of built-in skills and how to add project skills.
 
+The default `/` menu is a control plane (`/plan`, `/review`, `/debug`, `/status`, `/model`). Built-in skills stay available to the agent through the skill tool; they are not listed as slash commands.
+
 ## Built-in skills (shipped under `packages/ax-code/skills/`)
 
-| Skill              | Purpose                            |
-| ------------------ | ---------------------------------- |
-| `debug-n-fix`      | Debug then fix with verification   |
-| `debug-only`       | Investigation without code changes |
-| `improve-overall`  | Broad quality improvements         |
-| `improve-security` | Security-focused improvements      |
-| `mcp`              | MCP setup guidance                 |
+| Skill              | Purpose                            | Slash        |
+| ------------------ | ---------------------------------- | ------------ |
+| `debug-n-fix`      | Debug then fix with verification   | Use `/debug` |
+| `debug-only`       | Investigation without code changes | Agent-only   |
+| `improve-overall`  | Broad quality improvements         | Agent-only   |
+| `improve-security` | Security-focused improvements      | Agent-only   |
+| `mcp`              | MCP setup guidance                 | Use `/mcp`   |
+| `run`              | Launch and observe the app         | Agent-only   |
+| `simplify`         | Tighten recently changed code      | Agent-only   |
+| `verify`           | Runtime verification report        | Agent-only   |
 
 Skills use `SKILL.md` with YAML frontmatter (`name`, `description`, optional `paths`, `allowed-tools`).
 

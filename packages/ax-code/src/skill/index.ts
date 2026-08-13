@@ -179,7 +179,18 @@ export namespace Skill {
     "simplify",
     "verify",
     "run",
-    "loop",
+  ])
+
+  /** Built-in skills the agent can load, but that must not appear in `/` autocomplete. */
+  export const SLASH_HIDDEN_BUILTIN_SKILLS = new Set([
+    "debug-only",
+    "debug-n-fix",
+    "improve-overall",
+    "improve-security",
+    "mcp",
+    "simplify",
+    "verify",
+    "run",
   ])
 
   declare const AX_CODE_BUILTIN_SKILLS: unknown

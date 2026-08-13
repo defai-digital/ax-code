@@ -16,7 +16,7 @@ When behavior changes, verify against:
 - `packages/ax-code/src/tool/arena.ts` and `arena-implement.ts` — plan and implement arena
 - `packages/ax-code/src/session/prompt-routing.ts` — hybrid placement when `modes.default` is `hybrid`
 - `packages/ax-code/src/config/schema-impl.ts` — `modes` config schema
-- `packages/ax-code/src/command/template/{council,arena,mode}.txt` — `/council`, `/arena`, `/mode`
+- `packages/ax-code/src/command/template/{council,arena,mode}.txt` — `/council` is in the default slash menu; `/arena` and `/mode` remain typeable but are hidden from autocomplete
 
 ## Work mode selector (Agent | Council | Arena)
 

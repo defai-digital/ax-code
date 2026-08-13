@@ -28,6 +28,8 @@ const ctx = createContext<Context>()
 export type Slash = {
   name: string
   aliases?: string[]
+  /** Typeable via `/name`, but omitted from `/` autocomplete. */
+  hidden?: boolean
 }
 
 export type CommandOption = DialogSelectOption<string> & {
@@ -166,7 +168,7 @@ function init() {
     slashes() {
       return visibleOptions().flatMap((option) => {
         const slash = option.slash
-        if (!slash) return []
+        if (!slash || slash.hidden) return []
         return {
           display: "/" + slash.name,
           value: "/" + slash.name,

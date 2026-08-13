@@ -1065,6 +1065,7 @@ export function Session() {
       category: "Session",
       slash: {
         name: "search",
+        hidden: true,
       },
       onSelect: (dialog) => runTranscriptSearch(dialog),
     },

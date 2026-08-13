@@ -1014,6 +1014,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
       "summary",
       "workspace-review",
       "plan-feature",
+      "plan",
       "catch-up",
       "debug",
       "weigh",
@@ -1668,7 +1669,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
           toast.error(error instanceof Error ? error.message : t("chat.chatInput.toast.reviewFailed"))
         }
         return
-      } else if (commandName === "plan-feature" && (currentSessionId || newSessionDraftOpen)) {
+      } else if ((commandName === "plan" || commandName === "plan-feature") && (currentSessionId || newSessionDraftOpen)) {
         try {
           await sessionActions.waitForConnectionOrThrow()
           const visibleText = await renderMagicPrompt("session.plan.visible")
