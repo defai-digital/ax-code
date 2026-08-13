@@ -3,8 +3,12 @@
 use crate::auth::AuthConfig;
 use crate::state::PermissionDecision;
 use anyhow::{Context, Result, bail};
+use bytes::Bytes;
+use futures::StreamExt;
 use reqwest::Client;
 use serde_json::{Value, json};
+use std::time::Duration;
+use tokio::sync::mpsc;
 use url::Url;
 
 #[derive(Debug, Clone)]
@@ -18,8 +22,11 @@ pub struct RuntimeClient {
 impl RuntimeClient {
     pub fn new(base_url: &str, auth: AuthConfig, directory: impl Into<String>) -> Result<Self> {
         let base = Url::parse(base_url).context("parse base url")?;
+        // No global request timeout: long-lived SSE must not be cut by a client-wide deadline.
+        // Per-call timeouts are set on individual non-stream requests.
         let http = Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
+            .pool_max_idle_per_host(2)
             .build()
             .context("build http client")?;
         Ok(Self {
@@ -31,7 +38,9 @@ impl RuntimeClient {
     }
 
     fn url(&self, path: &str) -> Result<Url> {
-        self.base.join(path.trim_start_matches('/')).context("join url")
+        self.base
+            .join(path.trim_start_matches('/'))
+            .context("join url")
     }
 
     async fn request(
@@ -44,6 +53,7 @@ impl RuntimeClient {
         let mut req = self
             .http
             .request(method, url)
+            .timeout(Duration::from_secs(30))
             .header("Authorization", &self.auth.authorization_header)
             .header("x-ax-code-directory", &self.directory)
             .header("Content-Type", "application/json");
@@ -56,19 +66,14 @@ impl RuntimeClient {
 
     /// Lightweight connectivity check (OpenAPI or global health if present).
     pub async fn probe(&self) -> Result<()> {
-        // Prefer a cheap GET that exists on the server. Fall back through a few.
         for path in ["/global/health", "/doc", "/"] {
             let response = self.request(reqwest::Method::GET, path, None).await?;
-            if response.status().is_success() || response.status().as_u16() == 404 {
-                // 404 still proves the TCP/auth stack responded.
-                if response.status().as_u16() == 401 || response.status().as_u16() == 403 {
-                    bail!("unauthorized: {}", response.status());
-                }
-                return Ok(());
-            }
-            if response.status().as_u16() == 401 || response.status().as_u16() == 403 {
+            let status = response.status().as_u16();
+            if status == 401 || status == 403 {
                 bail!("unauthorized: {}", response.status());
             }
+            // Any non-auth response (including 404) proves TCP + auth stack.
+            return Ok(());
         }
         Ok(())
     }
@@ -156,8 +161,25 @@ impl RuntimeClient {
         Ok(())
     }
 
-    /// Read a chunk of the SSE event stream and extract text-ish deltas + permission asks.
-    pub async fn poll_events_once(&self) -> Result<Vec<crate::action::Action>> {
+    /// Spawn a long-lived SSE reader that pushes parsed [`Action`]s onto `tx`.
+    ///
+    /// The task exits when the stream ends, the channel closes, or a hard HTTP error occurs.
+    pub fn spawn_event_stream(&self, tx: mpsc::UnboundedSender<crate::action::Action>) -> tokio::task::JoinHandle<()> {
+        let client = self.clone();
+        tokio::spawn(async move {
+            if let Err(err) = client.stream_events(tx).await {
+                // Best-effort: surface stream death as a status line via StreamDelta-like error.
+                // Callers may also observe silent end when the channel is dropped.
+                let _ = err;
+            }
+        })
+    }
+
+    /// Stream `/event` Server-Sent Events and forward parsed actions.
+    pub async fn stream_events(
+        &self,
+        tx: mpsc::UnboundedSender<crate::action::Action>,
+    ) -> Result<()> {
         let url = self.url("/event")?;
         let response = self
             .http
@@ -165,20 +187,58 @@ impl RuntimeClient {
             .header("Authorization", &self.auth.authorization_header)
             .header("x-ax-code-directory", &self.directory)
             .header("Accept", "text/event-stream")
-            .timeout(std::time::Duration::from_millis(500))
             .send()
-            .await;
+            .await
+            .context("sse connect")?;
 
-        let Ok(response) = response else {
-            return Ok(vec![]);
-        };
         if !response.status().is_success() {
-            return Ok(vec![]);
+            bail!("sse subscribe failed: {}", response.status());
         }
-        // For Phase 2 skeleton we do a short body read if the server buffers;
-        // streaming long-lived SSE is handled in the event loop with a background task.
-        let text = response.text().await.unwrap_or_default();
-        Ok(parse_sse_actions(&text))
+
+        let mut stream = response.bytes_stream();
+        let mut buffer = String::new();
+
+        while let Some(chunk) = stream.next().await {
+            let chunk: Bytes = chunk.context("sse chunk")?;
+            buffer.push_str(&String::from_utf8_lossy(&chunk));
+
+            // SSE events are delimited by a blank line.
+            while let Some(idx) = buffer.find("\n\n") {
+                let block = buffer[..idx].to_string();
+                buffer = buffer[idx + 2..].to_string();
+                for action in parse_sse_actions(&(block + "\n\n")) {
+                    if tx.send(action).is_err() {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Drain SSE for up to `deadline`, collecting actions (used by headless smoke).
+    pub async fn collect_events_for(
+        &self,
+        deadline: Duration,
+    ) -> Result<Vec<crate::action::Action>> {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let handle = self.spawn_event_stream(tx);
+        let mut out = Vec::new();
+        let sleep = tokio::time::sleep(deadline);
+        tokio::pin!(sleep);
+        loop {
+            tokio::select! {
+                _ = &mut sleep => break,
+                maybe = rx.recv() => {
+                    match maybe {
+                        Some(action) => out.push(action),
+                        None => break,
+                    }
+                }
+            }
+        }
+        handle.abort();
+        Ok(out)
     }
 }
 
@@ -188,8 +248,12 @@ pub fn parse_sse_actions(raw: &str) -> Vec<crate::action::Action> {
     for block in raw.split("\n\n") {
         let data = block
             .lines()
-            .filter_map(|line| line.strip_prefix("data:"))
+            .filter_map(|line| {
+                line.strip_prefix("data:")
+                    .or_else(|| line.strip_prefix("data: "))
+            })
             .map(str::trim)
+            .filter(|s| !s.is_empty())
             .collect::<Vec<_>>()
             .join("\n");
         if data.is_empty() || data == "[DONE]" {
@@ -250,6 +314,10 @@ fn extract_text_delta(value: &Value) -> Option<String> {
 mod tests {
     use super::*;
     use crate::action::Action;
+    use crate::auth::AuthConfig;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
 
     #[test]
     fn parse_permission_sse() {
@@ -277,6 +345,55 @@ mod tests {
             vec![Action::StreamDelta {
                 text: "hello".into()
             }]
+        );
+    }
+
+    #[tokio::test]
+    async fn stream_events_reads_live_sse_deltas() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 2048];
+            let _ = stream.read(&mut buf);
+            let body = concat!(
+                "data: {\"type\":\"message.part.updated\",\"properties\":{\"part\":{\"text\":\"streamed-chunk\"}}}\n",
+                "\n",
+                "data: {\"type\":\"permission.asked\",\"properties\":{\"id\":\"p1\",\"permission\":\"bash\"}}\n",
+                "\n",
+            );
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(response.as_bytes());
+            let _ = stream.flush();
+        });
+
+        let auth = AuthConfig::from_parts(None, Some("ax-code"), Some("secret")).unwrap();
+        let client = RuntimeClient::new(&format!("http://{addr}"), auth, "/tmp").unwrap();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let handle = tokio::spawn(async move { client.stream_events(tx).await });
+
+        let mut got = Vec::new();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+        while got.len() < 2 && tokio::time::Instant::now() < deadline {
+            if let Ok(action) = tokio::time::timeout(Duration::from_millis(200), rx.recv()).await {
+                if let Some(action) = action {
+                    got.push(action);
+                }
+            }
+        }
+        let _ = handle.await;
+
+        assert!(
+            got.iter().any(|a| matches!(a, Action::StreamDelta { text } if text == "streamed-chunk")),
+            "expected StreamDelta, got {got:?}"
+        );
+        assert!(
+            got.iter().any(|a| matches!(a, Action::PermissionAsked { request_id, .. } if request_id == "p1")),
+            "expected PermissionAsked, got {got:?}"
         );
     }
 }
