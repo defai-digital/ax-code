@@ -28,18 +28,25 @@ export namespace PromptCachePolicy {
     debugLines: string[]
   }
 
-  // Route-verified providers where Alibaba explicit-cache is known to work.
-  // Off by default for unverified routes; extend after live probe confirms support.
+  // Providers that honor DashScope/Anthropic-style per-block cache_control.
+  // Coding/token plans are first-party DashScope. alibaba-pai is the dedicated
+  // OpenAI-compat GPU route (Kimi/Qwen/etc. on PAI-EAS); without this stamp
+  // plus a session promptCacheKey, later turns report cache.read = 0.
   const ALIBABA_EXPLICIT_CACHE_PROVIDERS = new Set<string>([
     "alibaba-coding-plan",
     "alibaba-coding-plan-cn",
     "alibaba-token-plan",
     "alibaba-token-plan-cn",
+    "alibaba-pai",
   ])
 
   export function policyMode(providerID: string): PolicyMode {
     if (ALIBABA_EXPLICIT_CACHE_PROVIDERS.has(providerID)) return "alibaba-explicit"
     return "off"
+  }
+
+  export function honorsExplicitCache(providerID: string): boolean {
+    return policyMode(providerID) === "alibaba-explicit"
   }
 
   // Block classifiers — callers assign labels; the policy decides stability.

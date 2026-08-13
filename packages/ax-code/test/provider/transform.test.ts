@@ -67,6 +67,224 @@ describe("ProviderTransform.options - setCacheKey", () => {
   })
 })
 
+describe("ProviderTransform.options - Kimi / alibaba-pai promptCacheKey", () => {
+  const sessionID = "ses_kimi_cache"
+
+  function mkModel(overrides: { providerID: string; id: string; apiID?: string; url?: string }) {
+    return {
+      id: overrides.id,
+      providerID: ProviderID.make(overrides.providerID),
+      api: {
+        id: overrides.apiID ?? overrides.id.split("/").pop() ?? overrides.id,
+        url: overrides.url ?? "https://example.com/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+      capabilities: { reasoning: true },
+      limit: { output: 8192 },
+    } as any
+  }
+
+  test("sets promptCacheKey for Kimi on alibaba-pai without setCacheKey or longAgent", () => {
+    const result = ProviderTransform.options({
+      model: mkModel({ providerID: "alibaba-pai", id: "alibaba-pai/Kimi-K2.7-Code", apiID: "Kimi-K2.7-Code" }),
+      sessionID,
+      providerOptions: {},
+    })
+    expect(result.promptCacheKey).toBe(sessionID)
+  })
+
+  test("sets promptCacheKey for moonshot-hosted Kimi", () => {
+    const result = ProviderTransform.options({
+      model: mkModel({
+        providerID: "moonshotai",
+        id: "moonshotai/kimi-k2.7-code",
+        apiID: "kimi-k2.7-code",
+        url: "https://api.moonshot.ai/v1",
+      }),
+      sessionID,
+      providerOptions: {},
+    })
+    expect(result.promptCacheKey).toBe(sessionID)
+  })
+
+  test("sets promptCacheKey for alibaba-pai even when the model id is not Kimi", () => {
+    const result = ProviderTransform.options({
+      model: mkModel({ providerID: "alibaba-pai", id: "alibaba-pai/GLM-5.2-FP8", apiID: "GLM-5.2-FP8" }),
+      sessionID,
+      providerOptions: {},
+    })
+    expect(result.promptCacheKey).toBe(sessionID)
+  })
+
+  test("setCacheKey: false opts out for Kimi on alibaba-pai", () => {
+    const result = ProviderTransform.options({
+      model: mkModel({ providerID: "alibaba-pai", id: "alibaba-pai/Kimi-K2.7-Code", apiID: "Kimi-K2.7-Code" }),
+      sessionID,
+      providerOptions: { setCacheKey: false },
+    })
+    expect(result.promptCacheKey).toBeUndefined()
+  })
+
+  test("Kimi on Anthropic defaults to adaptive thinking + high effort", () => {
+    const result = ProviderTransform.options({
+      model: {
+        id: "moonshotai/kimi-k2.7-code",
+        providerID: ProviderID.make("moonshotai"),
+        api: { id: "kimi-k2.7-code", url: "https://api.moonshot.ai", npm: "@ai-sdk/anthropic" },
+        capabilities: { reasoning: true },
+        limit: { output: 8192 },
+      } as any,
+      sessionID,
+      providerOptions: {},
+    })
+    expect(result.thinking).toEqual({ type: "adaptive", display: "summarized" })
+    expect(result.effort).toBe("high")
+  })
+})
+
+describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
+  test("Kimi K2.5 uses temperature 1.0 and topP 0.95", () => {
+    const model = {
+      id: "moonshotai/kimi-k2.5",
+      providerID: ProviderID.make("moonshotai"),
+      api: { id: "kimi-k2.5", url: "https://api.moonshot.ai/v1", npm: "@ai-sdk/openai-compatible" },
+    } as any
+    expect(ProviderTransform.temperature(model)).toBe(1.0)
+    expect(ProviderTransform.topP(model)).toBe(0.95)
+  })
+
+  test("base Kimi K2 uses temperature 0.6", () => {
+    const model = {
+      id: "moonshotai/kimi-k2",
+      providerID: ProviderID.make("moonshotai"),
+      api: { id: "kimi-k2", url: "https://api.moonshot.ai/v1", npm: "@ai-sdk/openai-compatible" },
+    } as any
+    expect(ProviderTransform.temperature(model)).toBe(0.6)
+  })
+
+  test("DeepSeek V4 Flash uses topP 0.95", () => {
+    const model = {
+      id: "deepseek/deepseek-v4-flash",
+      providerID: ProviderID.make("deepseek"),
+      api: { id: "deepseek-v4-flash", url: "https://api.deepseek.com", npm: "@ai-sdk/openai-compatible" },
+    } as any
+    expect(ProviderTransform.topP(model)).toBe(0.95)
+  })
+})
+
+describe("ProviderTransform.message - applyCaching", () => {
+  function mkClaude() {
+    return {
+      id: "anthropic/claude-sonnet-4-6",
+      providerID: ProviderID.make("anthropic"),
+      api: { id: "claude-sonnet-4-6", url: "https://api.anthropic.com", npm: "@ai-sdk/anthropic" },
+      capabilities: {
+        temperature: true,
+        reasoning: false,
+        attachment: true,
+        toolcall: true,
+        input: { text: true, audio: false, image: true, video: false, pdf: true },
+        output: { text: true, audio: false, image: false, video: false, pdf: false },
+        interleaved: false,
+      },
+      limit: { context: 200000, output: 8192 },
+      status: "active",
+      options: {},
+      headers: {},
+    } as any
+  }
+
+  function mkPaiKimi() {
+    return {
+      id: "alibaba-pai/Kimi-K2.7-Code",
+      providerID: ProviderID.make("alibaba-pai"),
+      api: { id: "Kimi-K2.7-Code", url: "http://127.0.0.1:8000/v1", npm: "@ai-sdk/openai-compatible" },
+      capabilities: {
+        temperature: true,
+        reasoning: true,
+        attachment: false,
+        toolcall: true,
+        input: { text: true, audio: false, image: false, video: false, pdf: false },
+        output: { text: true, audio: false, image: false, video: false, pdf: false },
+        interleaved: false,
+      },
+      limit: { context: 128000, output: 8192 },
+      status: "active",
+      options: {},
+      headers: {},
+    } as any
+  }
+
+  test("stamps cacheControl on Claude system and last user messages", () => {
+    const result = ProviderTransform.message(
+      [
+        { role: "system", content: "You are a coding agent." },
+        { role: "user", content: "count loc" },
+      ] as any,
+      mkClaude(),
+      {},
+    )
+    expect(result[0].providerOptions?.anthropic?.cacheControl).toEqual({ type: "ephemeral" })
+    expect(result[1].providerOptions?.anthropic?.cacheControl).toEqual({ type: "ephemeral" })
+  })
+
+  test("stamps openaiCompatible cache_control on alibaba-pai messages", () => {
+    const result = ProviderTransform.message(
+      [
+        { role: "system", content: "You are a coding agent." },
+        { role: "user", content: "count loc" },
+      ] as any,
+      mkPaiKimi(),
+      {},
+    )
+    expect(result[0].providerOptions?.openaiCompatible?.cache_control).toEqual({ type: "ephemeral" })
+    expect(result[1].providerOptions?.openaiCompatible?.cache_control).toEqual({ type: "ephemeral" })
+  })
+
+  test("does not stamp cache_control on groq", () => {
+    const result = ProviderTransform.message(
+      [
+        { role: "system", content: "sys" },
+        { role: "user", content: "hi" },
+      ] as any,
+      {
+        id: ModelID.make("groq/llama-3.1-8b"),
+        providerID: ProviderID.make("groq"),
+        api: { id: "llama-3.1-8b-instant", url: "https://api.groq.com", npm: "@ai-sdk/groq" },
+        name: "Llama",
+        capabilities: {
+          temperature: true,
+          reasoning: false,
+          attachment: true,
+          toolcall: true,
+          input: { text: true, audio: false, image: true, video: false, pdf: false },
+          output: { text: true, audio: false, image: false, video: false, pdf: false },
+          interleaved: false,
+        },
+        limit: { context: 128000, output: 4096 },
+        status: "active",
+        options: {},
+        headers: {},
+      } as any,
+      {},
+    )
+    expect(result[0].providerOptions?.openaiCompatible?.cache_control).toBeUndefined()
+    expect(result[0].providerOptions?.anthropic?.cacheControl).toBeUndefined()
+  })
+
+  test("skips applyCaching when Anthropic automatic cacheControl is already set", () => {
+    const result = ProviderTransform.message(
+      [
+        { role: "system", content: "sys" },
+        { role: "user", content: "hi" },
+      ] as any,
+      mkClaude(),
+      { cacheControl: { type: "ephemeral" } },
+    )
+    expect(result[0].providerOptions?.anthropic?.cacheControl).toBeUndefined()
+  })
+})
+
 describe("ProviderTransform.options - google thinkingConfig gating", () => {
   const sessionID = "test-session-123"
 
@@ -196,6 +414,35 @@ describe("ProviderTransform.providerOptions", () => {
     expect(ProviderTransform.providerOptions(model, options)).toEqual({
       openai: options,
     })
+  })
+})
+
+describe("ProviderTransform.schema - Moonshot / Kimi", () => {
+  const kimiModel = {
+    id: "moonshotai/kimi-k2.7-code",
+    providerID: "moonshotai",
+    api: { id: "kimi-k2.7-code", url: "https://api.moonshot.ai/v1", npm: "@ai-sdk/openai-compatible" },
+  } as any
+
+  test("drops sibling keywords on $ref nodes", () => {
+    const result = ProviderTransform.schema(kimiModel, {
+      type: "object",
+      properties: {
+        file: { $ref: "#/$defs/path", description: "file to edit" },
+      },
+      $defs: { path: { type: "string" } },
+    } as any) as any
+    expect(result.properties.file).toEqual({ $ref: "#/$defs/path" })
+  })
+
+  test("collapses tuple-style items to a single schema", () => {
+    const result = ProviderTransform.schema(kimiModel, {
+      type: "object",
+      properties: {
+        pair: { type: "array", items: [{ type: "string" }, { type: "number" }] },
+      },
+    } as any) as any
+    expect(result.properties.pair.items).toEqual({ type: "string" })
   })
 })
 
@@ -894,6 +1141,33 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
     ])
     expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBeUndefined()
   })
+
+  test("DeepSeek assistant messages without reasoning get an empty reasoning part", () => {
+    const result = ProviderTransform.message(
+      [{ role: "assistant", content: [{ type: "text", text: "ok" }] }] as any,
+      {
+        id: ModelID.make("deepseek/deepseek-chat"),
+        providerID: ProviderID.make("deepseek"),
+        api: { id: "deepseek-chat", url: "https://api.deepseek.com", npm: "@ai-sdk/openai-compatible" },
+        capabilities: {
+          temperature: true,
+          reasoning: true,
+          attachment: false,
+          toolcall: true,
+          input: { text: true, audio: false, image: false, video: false, pdf: false },
+          output: { text: true, audio: false, image: false, video: false, pdf: false },
+          interleaved: { field: "reasoning_content" },
+        },
+        limit: { context: 128000, output: 8192 },
+        status: "active",
+        options: {},
+        headers: {},
+      } as any,
+      {},
+    )
+    expect(result[0].content).toEqual([{ type: "text", text: "ok" }])
+    expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBe("")
+  })
 })
 
 describe("ProviderTransform.message - empty image handling", () => {
@@ -1131,6 +1405,64 @@ describe("ProviderTransform.variants", () => {
     })
     const result = ProviderTransform.variants(model)
     expect(result).toEqual({})
+  })
+
+  test("GLM 5.2 on openai-compatible publishes high/max reasoningEffort", () => {
+    const model = createMockModel({
+      id: "togetherai/glm-5.2",
+      providerID: "togetherai",
+      api: { id: "glm-5.2", url: "https://api.together.xyz", npm: "@ai-sdk/openai-compatible" },
+    })
+    expect(ProviderTransform.variants(model)).toEqual({
+      high: { reasoningEffort: "high" },
+      max: { reasoningEffort: "max" },
+    })
+  })
+
+  test("GLM 5.2 on z.ai and alibaba-pai stay variant-empty", () => {
+    for (const [providerID, npm] of [
+      ["zai-coding-plan", "@ai-sdk/openai-compatible"],
+      ["alibaba-pai", "@ai-sdk/openai-compatible"],
+    ] as const) {
+      const model = createMockModel({
+        id: `${providerID}/glm-5.2`,
+        providerID,
+        api: { id: "glm-5.2", url: "https://example.com", npm },
+      })
+      expect(ProviderTransform.variants(model)).toEqual({})
+    }
+  })
+
+  test("MiniMax M3 on Anthropic publishes none/thinking variants", () => {
+    const model = createMockModel({
+      id: "minimax/minimax-m3",
+      providerID: "minimax",
+      api: { id: "minimax-m3", url: "https://api.minimax.io/anthropic", npm: "@ai-sdk/anthropic" },
+    })
+    expect(ProviderTransform.variants(model)).toEqual({
+      none: { thinking: { type: "disabled" } },
+      thinking: { thinking: { type: "adaptive" } },
+    })
+  })
+
+  test("MiniMax M3 on alibaba-pai stays variant-empty (think tags)", () => {
+    const model = createMockModel({
+      id: "alibaba-pai/MiniMax-M3-MXFP8",
+      providerID: "alibaba-pai",
+      api: { id: "MiniMax-M3-MXFP8", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
+    })
+    expect(ProviderTransform.variants(model)).toEqual({})
+  })
+
+  test("Kimi on Anthropic publishes adaptive effort variants", () => {
+    const model = createMockModel({
+      id: "moonshotai/kimi-k2.7-code",
+      providerID: "moonshotai",
+      api: { id: "kimi-k2.7-code", url: "https://api.moonshot.ai", npm: "@ai-sdk/anthropic" },
+    })
+    const result = ProviderTransform.variants(model)
+    expect(Object.keys(result)).toEqual(["low", "medium", "high", "xhigh", "max"])
+    expect(result.high).toEqual({ thinking: { type: "adaptive", display: "summarized" }, effort: "high" })
   })
 
   test("mistral returns empty object", () => {

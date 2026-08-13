@@ -8,8 +8,39 @@ import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
 import { SystemPrompt } from "../../src/session/system"
 import { tmpdir } from "../fixture/fixture"
+import PROMPT_KIMI from "../../src/session/prompt/kimi.txt"
+import PROMPT_DEFAULT from "../../src/session/prompt/default.txt"
 
 describe("session.system", () => {
+  test("routes Kimi / Moonshot models to the Kimi action-first prompt", () => {
+    const kimi = SystemPrompt.provider({
+      id: "alibaba-pai/Kimi-K2.7-Code",
+      providerID: "alibaba-pai",
+      api: { id: "Kimi-K2.7-Code", url: "http://127.0.0.1/v1" },
+    } as any)
+    expect(kimi).toEqual([PROMPT_KIMI])
+    expect(kimi[0]).toContain("treat it as a task")
+    expect(kimi[0]).not.toContain("fewer than 4 lines")
+
+    const moonshot = SystemPrompt.provider({
+      id: "moonshotai/kimi-k2.7-code",
+      providerID: "moonshotai",
+      api: { id: "kimi-k2.7-code", url: "https://api.moonshot.ai/v1" },
+    } as any)
+    expect(moonshot).toEqual([PROMPT_KIMI])
+
+    const qwen = SystemPrompt.provider({
+      id: "alibaba-coding-plan/qwen3.7-max",
+      providerID: "alibaba-coding-plan",
+      api: { id: "qwen3.7-max", url: "https://dashscope.aliyuncs.com" },
+    } as any)
+    expect(qwen).toEqual([PROMPT_DEFAULT])
+    expect(PROMPT_DEFAULT).not.toContain("fewer than 4 lines")
+    expect(PROMPT_DEFAULT).not.toContain("One word answers are best")
+    expect(PROMPT_DEFAULT).toContain("Default to doing the work")
+    expect(PROMPT_KIMI).toContain("doing the work without asking questions")
+  })
+
   test("extractFilePaths extracts paths from tool call inputs", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -86,7 +117,6 @@ describe("session.system", () => {
 
           const text = result.join("\n")
           expect(text).toContain("<autonomous_workflow>")
-          expect(text).toContain("PRD/ADR-style")
           expect(text).toContain("avoid over-engineering")
           expect(text).toContain("plan → implement → verify")
           expect(text).toContain("task_parallel")

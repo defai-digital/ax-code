@@ -33,6 +33,7 @@ import { isNonEmptyRecord } from "@/util/record"
 import { SuperLongPolicy } from "./super-long-policy"
 import { SuperLongRuntime } from "./super-long-runtime"
 import { longAgentProfileForModel } from "@/provider/agent-optimization-profile"
+import { getModelCapabilities } from "@/provider/model-capabilities"
 import { PromptCachePolicy } from "@/provider/prompt-cache-policy"
 import { LongAgentContextPacker } from "@/context/long-agent-packer"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
@@ -290,11 +291,14 @@ export namespace LLM {
       })
     }
 
-    // Phase 3: classify finalized system blocks and apply provider-specific
-    // message annotations. All system blocks are stable (provider instructions,
-    // rules, reminders, long-agent context pack).
+    // Classify finalized system blocks and apply provider-specific cache
+    // annotations whenever the model reports prompt-cache support. Super-Long
+    // used to be the only caller; that left ordinary PAI/Kimi turns sending
+    // a 36k system prefix with cache.read = 0.
     let systemMessages = system.map((content) => systemMessage(content))
-    if (superLongEnabled && longAgentProfile.promptCacheEligible) {
+    const cacheCaps = getModelCapabilities(input.model.id, input.model.providerID)
+    const promptCacheEligible = cacheCaps.promptCache === "supported" || cacheCaps.promptCache === "experimental"
+    if (promptCacheEligible) {
       const cacheBlocks = PromptCachePolicy.buildBlocks(
         system.map((content, i) => ({ label: i === 0 ? "system" : "stable-rules", content })),
       )

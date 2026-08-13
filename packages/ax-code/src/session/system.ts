@@ -8,9 +8,11 @@ import PROMPT_DEFAULT from "./prompt/default.txt"
 import PROMPT_AX_ENGINE from "./prompt/ax-engine.txt"
 import PROMPT_BEAST from "./prompt/beast.txt"
 import PROMPT_GEMINI from "./prompt/gemini.txt"
+import PROMPT_KIMI from "./prompt/kimi.txt"
 
 import PROMPT_TRINITY from "./prompt/trinity.txt"
 import type { Provider } from "@/provider/provider"
+import { ProviderTransform } from "@/provider/transform"
 import type { Agent } from "@/agent/agent"
 import { Permission } from "@/permission"
 import { supportsLiveSearch } from "@/provider/xai/server-tools"
@@ -46,6 +48,7 @@ export namespace SystemPrompt {
     if (model.api.id.includes("gemini-")) return [PROMPT_GEMINI]
     if (model.api.id.includes("claude")) return [PROMPT_ANTHROPIC]
     if (model.api.id.toLowerCase().includes("trinity")) return [PROMPT_TRINITY]
+    if (ProviderTransform.isKimiFamily(model)) return [PROMPT_KIMI]
     return [PROMPT_DEFAULT]
   }
 

@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai"
 import type { JSONSchema7 } from "@ai-sdk/provider"
 import type { JSONSchema } from "zod/v4/core"
+import { mergeDeep } from "remeda"
 import type { Provider } from "./provider"
 import type { ModelsDev } from "./models"
 import { Flag } from "@/flag/flag"
@@ -11,6 +12,7 @@ import { modelIdFinalSegment } from "./model-id"
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
 import { cliEffortVariants } from "./cli/effort"
 import { wrapThinkTagText } from "./think-tags"
+import { PromptCachePolicy } from "./prompt-cache-policy"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -94,6 +96,10 @@ export namespace ProviderTransform {
     // `reasoning_content` (which MiniMax-M3 on PAI rejects).
     if (usesThinkTags(model)) return foldThinkTagReasoning(msgs)
 
+    // DeepSeek requires a reasoning part on every assistant message, even when
+    // empty. OpenCode injects one; without it some DeepSeek endpoints 400.
+    if (isDeepSeekFamily(model)) msgs = padDeepSeekReasoning(msgs)
+
     // Whether we need to strip reasoning parts from assistant messages.
     //
     // Case 1 — interleaved.field declared (e.g. Kimi/Moonshot,
@@ -137,12 +143,10 @@ export namespace ProviderTransform {
       // through providerOptions so the provider receives it in its expected
       // top-level position. Otherwise the parts are simply dropped (the
       // provider rejects reasoning_content, so there is nothing to carry).
-      if (field && reasoningText) {
-        // Read the extension field through a narrow structural
-        // shape instead of `as any`. Keeps the rest of the object
-        // fully type-checked while acknowledging openaiCompatible
-        // is an openai-compatible extension not modelled by the
-        // core ModelMessage type.
+      if (field) {
+        // Always set the interleaved field, including when empty. DeepSeek
+        // (and some GLM/Kimi routes) reject a missing reasoning_content on
+        // follow-up assistant turns even if this turn had no thinking.
         const existing = (msg.providerOptions as { openaiCompatible?: Record<string, string> } | undefined)
           ?.openaiCompatible
         return {
@@ -238,7 +242,117 @@ export namespace ProviderTransform {
   export function message(msgs: ModelMessage[], model: Provider.Model, options: Record<string, unknown>) {
     msgs = unsupportedParts(msgs, model)
     msgs = normalizeMessages(msgs, model, options)
+    if (shouldApplyCaching(model, options)) {
+      msgs = applyCaching(msgs, model)
+    }
     return msgs
+  }
+
+  // Mirrors OpenCode: stamp cache_control on the first two system messages and
+  // the last two non-system messages so the stable prefix can be reused.
+  function applyCaching(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {
+    const system = msgs.filter((msg) => msg.role === "system").slice(0, 2)
+    const final = msgs.filter((msg) => msg.role !== "system").slice(-2)
+
+    const providerOptions = {
+      anthropic: {
+        cacheControl: { type: "ephemeral" },
+      },
+      openrouter: {
+        cacheControl: { type: "ephemeral" },
+      },
+      bedrock: {
+        cachePoint: { type: "default" },
+      },
+      openaiCompatible: {
+        cache_control: { type: "ephemeral" },
+      },
+      alibaba: {
+        cacheControl: { type: "ephemeral" },
+      },
+    }
+
+    const seen = new Set<ModelMessage>()
+    for (const msg of [...system, ...final]) {
+      if (seen.has(msg)) continue
+      seen.add(msg)
+
+      const useMessageLevelOptions =
+        model.providerID === "anthropic" ||
+        model.providerID.includes("bedrock") ||
+        model.api.npm === "@ai-sdk/amazon-bedrock"
+      const shouldUseContentOptions = !useMessageLevelOptions && Array.isArray(msg.content) && msg.content.length > 0
+
+      if (shouldUseContentOptions) {
+        const lastContent = msg.content[msg.content.length - 1] as { type?: string; providerOptions?: object }
+        const attachable =
+          lastContent &&
+          typeof lastContent === "object" &&
+          lastContent.type !== "tool-approval-request" &&
+          lastContent.type !== "tool-approval-response" &&
+          lastContent.type !== "tool-call" &&
+          lastContent.type !== "tool-result"
+        if (attachable) {
+          lastContent.providerOptions = mergeDeep(lastContent.providerOptions ?? {}, providerOptions)
+          continue
+        }
+      }
+
+      msg.providerOptions = mergeDeep(msg.providerOptions ?? {}, providerOptions)
+    }
+
+    return msgs
+  }
+
+  function shouldApplyCaching(model: Provider.Model, options: Record<string, unknown>): boolean {
+    const usesAnthropicAutomaticCaching =
+      options.cacheControl !== undefined &&
+      (model.api.npm === "@ai-sdk/anthropic" || model.api.npm === "@ai-sdk/google-vertex/anthropic")
+    if (usesAnthropicAutomaticCaching) return false
+    if (model.api.npm === "@ai-sdk/gateway") return false
+    if (PromptCachePolicy.honorsExplicitCache(model.providerID)) return true
+    return (
+      model.providerID === "anthropic" ||
+      model.providerID === "google-vertex-anthropic" ||
+      model.api.id.includes("anthropic") ||
+      model.api.id.includes("claude") ||
+      model.id.includes("anthropic") ||
+      model.id.includes("claude") ||
+      model.api.npm === "@ai-sdk/anthropic" ||
+      model.api.npm === "@ai-sdk/alibaba"
+    )
+  }
+
+  export function isKimiFamily(model: {
+    id?: string
+    providerID: string
+    api: { id: string; url?: string }
+  }): boolean {
+    const ids = [model.providerID, model.api.id, model.id]
+    if (
+      ids.some((id) => {
+        if (!id) return false
+        const value = id.toLowerCase()
+        return value.includes("kimi") || value.includes("moonshot")
+      })
+    ) {
+      return true
+    }
+    const url = (model.api.url ?? "").toLowerCase()
+    return ["api.kimi.com", "api.moonshot.ai", "api.moonshot.cn", "api.moonshotai.cn"].some((host) => url.includes(host))
+  }
+
+  function shouldSetPromptCacheKey(input: {
+    model: Provider.Model
+    providerOptions?: Record<string, any>
+    longAgent?: boolean
+  }): boolean {
+    if (input.providerOptions?.setCacheKey === true) return true
+    if (isKimiFamily(input.model)) return true
+    if (input.model.providerID === "alibaba-pai") return true
+    if (input.model.providerID === "venice") return true
+    if (isAlibabaThinkingModel(input.model) && input.longAgent) return true
+    return false
   }
 
   export function temperature(model: Provider.Model) {
@@ -246,12 +360,21 @@ export namespace ProviderTransform {
     if (hasFamily(model, "gemini")) return 1.0
     if (hasFamily(model, "glm")) return 1.0
     if (isMinimaxM2(model)) return 1.0
+    if (isKimiFamily(model)) {
+      const id = `${model.id} ${model.api.id}`.toLowerCase()
+      // K2.5 / thinking / k2p follow OpenCode (1.0). Base K2 stays 0.6.
+      if (["thinking", "k2.", "k2p", "k2-5"].some((token) => id.includes(token))) return 1.0
+      if (id.includes("kimi-k2")) return 0.6
+    }
     return undefined
   }
 
   export function topP(model: Provider.Model) {
     if (hasFamily(model, "qwen")) return 1
     if (isMinimaxM2(model) || hasFamily(model, "gemini")) return 0.95
+    const id = `${model.id} ${model.api.id}`.toLowerCase()
+    if (["kimi-k2.5", "kimi-k2p5", "kimi-k2-5"].some((token) => id.includes(token))) return 0.95
+    if (id.includes("deepseek-v4-flash")) return 0.95
     return undefined
   }
 
@@ -310,6 +433,55 @@ export namespace ProviderTransform {
     const segment = modelIdFinalSegment(model.id).toLowerCase()
     const api = model.api.id.toLowerCase()
     return segment.includes("minimax") || api.includes("minimax")
+  }
+
+  function isMinimaxM3(model: Provider.Model): boolean {
+    const id = `${model.id} ${model.api.id}`.toLowerCase()
+    return id.includes("minimax-m3")
+  }
+
+  function isGlm52(model: Provider.Model): boolean {
+    const id = `${model.id} ${model.api.id}`.toLowerCase()
+    return ["glm-5.2", "glm-5-2", "glm-5p2"].some((token) => id.includes(token))
+  }
+
+  function isZaiProvider(providerID: string): boolean {
+    return providerID.startsWith("zai") || providerID.startsWith("zhipuai")
+  }
+
+  function isPrivateGpuProvider(providerID: string): boolean {
+    return (
+      providerID === "alibaba-pai" ||
+      providerID === "runpod" ||
+      providerID === "huggingface-endpoints" ||
+      providerID === "sagemaker" ||
+      providerID === "volcengine-ark" ||
+      providerID === "modelarts" ||
+      providerID === "tencent-ti"
+    )
+  }
+
+  function isDeepSeekFamily(model: Provider.Model): boolean {
+    if (hasFamily(model, "deepseek")) return true
+    const id = `${model.id} ${model.api.id}`.toLowerCase()
+    return id.includes("deepseek")
+  }
+
+  function padDeepSeekReasoning(msgs: ModelMessage[]): ModelMessage[] {
+    return msgs.map((msg) => {
+      if (msg.role !== "assistant") return msg
+      if (Array.isArray(msg.content)) {
+        if (msg.content.some((part) => part.type === "reasoning")) return msg
+        return { ...msg, content: [...msg.content, { type: "reasoning", text: "" }] }
+      }
+      return {
+        ...msg,
+        content: [
+          ...(msg.content ? [{ type: "text" as const, text: msg.content }] : []),
+          { type: "reasoning" as const, text: "" },
+        ],
+      }
+    })
   }
 
   // Tag-style thinking: MiniMax-M3 on dedicated GPU (PAI/vLLM) writes
@@ -405,6 +577,60 @@ export namespace ProviderTransform {
     return Math.min(Math.floor(value), max, budgetCap)
   }
 
+  function glm52ReasoningVariants(model: Provider.Model): Record<string, Record<string, any>> | undefined {
+    if (!isGlm52(model)) return undefined
+    // z.ai wire shape is locked empty until ADR-040 M2. Private GPU / vLLM
+    // rejects OpenAI reasoningEffort (think-tags or native reasoning_content).
+    if (isZaiProvider(model.providerID) || isPrivateGpuProvider(model.providerID)) return undefined
+    if (model.api.npm === "@openrouter/ai-sdk-provider") {
+      return {
+        high: { reasoning: { effort: "high" } },
+        xhigh: { reasoning: { effort: "xhigh" } },
+      }
+    }
+    if (model.api.npm === "@ai-sdk/openai-compatible") {
+      return {
+        high: { reasoningEffort: "high" },
+        max: { reasoningEffort: "max" },
+      }
+    }
+    if (model.api.npm === "@ai-sdk/anthropic") {
+      return {
+        high: { effort: "high" },
+        max: { effort: "max" },
+      }
+    }
+    return undefined
+  }
+
+  function minimaxM3ReasoningVariants(model: Provider.Model): Record<string, Record<string, any>> | undefined {
+    if (!isMinimaxM3(model)) return undefined
+    if (!["@ai-sdk/anthropic", "@ai-sdk/openai-compatible"].includes(model.api.npm)) return undefined
+    // PAI / vLLM MiniMax uses <mm:think> tags, not Anthropic thinking blocks.
+    if (isPrivateGpuProvider(model.providerID)) return undefined
+    if (["nvidia", "lilac"].includes(model.providerID)) {
+      return {
+        none: { chat_template_kwargs: { thinking_mode: "disabled" } },
+        thinking: { chat_template_kwargs: { thinking_mode: "enabled" } },
+      }
+    }
+    return {
+      none: { thinking: { type: "disabled" } },
+      thinking: { thinking: { type: "adaptive" } },
+    }
+  }
+
+  function kimiAnthropicReasoningVariants(model: Provider.Model): Record<string, Record<string, any>> | undefined {
+    if (!isKimiFamily(model)) return undefined
+    if (!["@ai-sdk/anthropic", "@ai-sdk/google-vertex/anthropic"].includes(model.api.npm)) return undefined
+    return Object.fromEntries(
+      ["low", "medium", "high", "xhigh", "max"].map((effort) => [
+        effort,
+        { thinking: { type: "adaptive", display: "summarized" }, effort },
+      ]),
+    )
+  }
+
   export function variants(model: Provider.Model): Record<string, Record<string, any>> {
     // CLI providers report reasoning=false because their output is opaque to
     // the AI SDK, but several CLIs expose a documented effort flag. Publish
@@ -415,6 +641,16 @@ export namespace ProviderTransform {
     if (!model.capabilities.reasoning) return {}
 
     const id = model.id.toLowerCase()
+
+    // GLM 5.2 / MiniMax M3 / Kimi-on-Anthropic have documented effort knobs.
+    // Keep the older family-wide empty return below for everything else.
+    const glm52Variants = glm52ReasoningVariants(model)
+    if (glm52Variants) return glm52Variants
+    const minimaxM3Variants = minimaxM3ReasoningVariants(model)
+    if (minimaxM3Variants) return minimaxM3Variants
+    const kimiAnthropicVariants = kimiAnthropicReasoningVariants(model)
+    if (kimiAnthropicVariants) return kimiAnthropicVariants
+
     if (
       hasFamily(model, "deepseek") ||
       isAlibabaThinkingModel(model) ||
@@ -540,13 +776,17 @@ export namespace ProviderTransform {
     const result: Record<string, any> = {}
 
     // z.ai: no special provider options. v3.1.0 added a `thinking`
-    // parameter that was reverted through v3.1.1 and v3.1.2. The
-    // lesson: don't add provider-specific options without a concrete
-    // user-facing need. The v2.x behavior (no thinking, no
-    // reasoningEffort) works correctly and should not be changed
-    // unless z.ai publishes a documented opt-in mechanism.
+    // parameter that was reverted through v3.1.1 and v3.1.2. OpenCode
+    // currently sends `thinking: { type: "enabled", clear_thinking: false }`
+    // on zai/zhipuai OpenAI-compat; we keep the empty shape until a live
+    // wire probe (ADR-040 M2) confirms it. Do not copy that block back.
 
-    if (input.providerOptions?.setCacheKey) {
+    // Session-scoped cache key. OpenCode defaults this on for OpenAI-family
+    // SDKs; we keep the generic default off (unknown OpenAI-compat servers
+    // 400 on extra fields) but turn it on for routes that document the
+    // hint: Kimi/Moonshot (replica affinity), alibaba-pai, venice, explicit
+    // setCacheKey, and Super-Long Alibaba thinking models below.
+    if (input.providerOptions?.setCacheKey !== false && shouldSetPromptCacheKey(input)) {
       result["promptCacheKey"] = input.sessionID
     }
 
@@ -564,6 +804,21 @@ export namespace ProviderTransform {
     // `enable_thinking` + `thinking_budget` params. The Anthropic-shaped
     // `thinking` block belongs to the separate `/apps/anthropic/v1`
     // endpoint, which this provider does not target.
+    // MiniMax's Anthropic interface defaults thinking off, unlike Chat Completions.
+    if (isMinimaxM3(input.model) && input.model.api.npm === "@ai-sdk/anthropic") {
+      result["thinking"] = { type: "adaptive" }
+    }
+
+    // Moonshot's Anthropic-compatible API uses adaptive effort, not token budgets.
+    if (
+      ["@ai-sdk/anthropic", "@ai-sdk/google-vertex/anthropic"].includes(input.model.api.npm) &&
+      isKimiFamily(input.model) &&
+      input.model.capabilities.reasoning
+    ) {
+      result["thinking"] = { type: "adaptive", display: "summarized" }
+      result["effort"] = "high"
+    }
+
     if (isAlibabaThinkingModel(input.model)) {
       result["enable_thinking"] = true
       // No explicit `requested` — alibabaThinkingBudget picks the model-aware
@@ -578,15 +833,7 @@ export namespace ProviderTransform {
         if (input.providerOptions?.preserveThinking !== false) {
           result["preserve_thinking"] = true
         }
-        // Key-based prompt cache for Super-Long sessions.
-        // DashScope context caching is keyed by session ID; per-block cache_control
-        // requires a live route probe before enabling (Phase 3 acceptance criterion).
-        result["promptCacheKey"] = input.sessionID
       }
-    }
-
-    if (input.model.providerID === "venice") {
-      result["promptCacheKey"] = input.sessionID
     }
 
     // xAI Live Search: opt grok-4+ chat models into automatic real-world
@@ -749,6 +996,26 @@ export namespace ProviderTransform {
   }
 
   export function schema(model: Provider.Model, schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 {
+    // Moonshot expands $ref before validation and rejects sibling keywords
+    // (description on the same node) plus tuple-style `items` arrays.
+    if (isKimiFamily(model)) {
+      const sanitizeMoonshot = (obj: unknown): unknown => {
+        if (obj === null || typeof obj !== "object") return obj
+        if (Array.isArray(obj)) return obj.map(sanitizeMoonshot)
+        const record = obj as Record<string, unknown>
+        if ("$ref" in record && typeof record.$ref === "string") return { $ref: record.$ref }
+        const result = Object.fromEntries(
+          Object.entries(record).map(([key, value]) => [key, sanitizeMoonshot(value)]),
+        ) as Record<string, unknown>
+        if (Array.isArray(result.items)) result.items = result.items[0] ?? {}
+        return result
+      }
+      const sanitized = sanitizeMoonshot(schema)
+      if (typeof sanitized === "object" && sanitized !== null && !Array.isArray(sanitized)) {
+        schema = sanitized as JSONSchema.BaseSchema | JSONSchema7
+      }
+    }
+
     // Convert integer enums to string enums for Google/Gemini
     if (model.providerID === "google" || model.api.id.includes("gemini")) {
       const isPlainObject = (node: unknown): node is Record<string, any> => isRecord(node)

@@ -1473,11 +1473,14 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
         const capture = await request
         expect(capture.body.preserve_thinking).toBeUndefined()
         expect(capture.body.promptCacheKey).toBeUndefined()
-        const systemText = (capture.body.messages as Array<{ role: string; content: string }>)
-          .filter((m) => m.role === "system")
-          .map((m) => m.content)
-          .join("\n")
+        const systemMessages = (
+          capture.body.messages as Array<{ role: string; content: string; cache_control?: { type?: string } }>
+        ).filter((m) => m.role === "system")
+        const systemText = systemMessages.map((m) => m.content).join("\n")
         expect(systemText).not.toContain("Super-Long mode")
+        // Prompt-cache stamps are independent of Super-Long. DashScope-style
+        // routes must still mark the stable system prefix on ordinary turns.
+        expect(systemMessages.some((m) => m.cache_control?.type === "ephemeral")).toBe(true)
       },
     })
   })

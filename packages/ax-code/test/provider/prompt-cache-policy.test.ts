@@ -10,8 +10,14 @@ describe("PromptCachePolicy.policyMode", () => {
     expect(PromptCachePolicy.policyMode("alibaba-token-plan-cn")).toBe("alibaba-explicit")
   })
 
+  test("returns alibaba-explicit for alibaba-pai", () => {
+    expect(PromptCachePolicy.policyMode("alibaba-pai")).toBe("alibaba-explicit")
+    expect(PromptCachePolicy.honorsExplicitCache("alibaba-pai")).toBe(true)
+  })
+
   test("returns off for unverified providers", () => {
     expect(PromptCachePolicy.policyMode("togetherai")).toBe("off")
+    expect(PromptCachePolicy.honorsExplicitCache("togetherai")).toBe(false)
   })
 
   test("returns off for anthropic", () => {
