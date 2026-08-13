@@ -11,6 +11,10 @@ import { tmpdir } from "../fixture/fixture"
 import PROMPT_KIMI from "../../src/session/prompt/kimi.txt"
 import PROMPT_DEFAULT from "../../src/session/prompt/default.txt"
 import PROMPT_CRAFT from "../../src/session/prompt/craft.txt"
+import PROMPT_BEAST from "../../src/session/prompt/beast.txt"
+import PROMPT_TRINITY from "../../src/session/prompt/trinity.txt"
+import PROMPT_ANTHROPIC from "../../src/session/prompt/anthropic.txt"
+import PROMPT_GEMINI from "../../src/session/prompt/gemini.txt"
 
 describe("session.system", () => {
   test("routes Kimi / Moonshot models to the Kimi action-first prompt", () => {
@@ -44,6 +48,60 @@ describe("session.system", () => {
     expect(PROMPT_DEFAULT).not.toContain("One word answers are best")
     expect(PROMPT_DEFAULT).toContain("Default to doing the work")
     expect(PROMPT_KIMI).toContain("doing the work without asking questions")
+  })
+
+  test("family prompts stay action-first and reject over-process", () => {
+    const gpt = SystemPrompt.provider({
+      id: "openai/gpt-5",
+      providerID: "openai",
+      api: { id: "gpt-5", url: "https://api.openai.com" },
+    } as any)
+    expect(gpt).toEqual([PROMPT_BEAST, PROMPT_CRAFT])
+    expect(PROMPT_BEAST).toContain("Default to doing the work")
+    expect(PROMPT_BEAST).toContain("Don't over-engineer")
+    expect(PROMPT_BEAST).not.toContain("EXTENSIVE INTERNET RESEARCH")
+    expect(PROMPT_BEAST).not.toContain("Always read 2000 lines")
+    expect(PROMPT_BEAST).not.toContain("sequential thinking")
+    expect(PROMPT_BEAST).not.toContain("memory.instruction.md")
+    expect(PROMPT_BEAST).toContain("Never ask permission questions")
+
+    const trinity = SystemPrompt.provider({
+      id: "custom/trinity-large",
+      providerID: "custom",
+      api: { id: "trinity-large", url: "http://127.0.0.1/v1" },
+    } as any)
+    expect(trinity).toEqual([PROMPT_TRINITY, PROMPT_CRAFT])
+    expect(PROMPT_TRINITY).toContain("Default to doing the work")
+    expect(PROMPT_TRINITY).not.toContain("fewer than 4 lines")
+    expect(PROMPT_TRINITY).not.toContain("One word answers are best")
+    expect(PROMPT_TRINITY).not.toContain("one tool per message")
+    expect(PROMPT_TRINITY).not.toContain("Use exactly one tool per assistant message")
+
+    const claude = SystemPrompt.provider({
+      id: "anthropic/claude-sonnet-4-6",
+      providerID: "anthropic",
+      api: { id: "claude-sonnet-4-6", url: "https://api.anthropic.com" },
+    } as any)
+    expect(claude).toEqual([PROMPT_ANTHROPIC, PROMPT_CRAFT])
+    expect(PROMPT_ANTHROPIC).toContain("Default to doing the work")
+    expect(PROMPT_ANTHROPIC).toContain("avoid over-engineering")
+    expect(PROMPT_ANTHROPIC).not.toContain("Use these tools VERY frequently")
+    expect(PROMPT_ANTHROPIC).not.toContain("Always use the TodoWrite tool")
+    expect(PROMPT_ANTHROPIC).toContain("Never ask permission questions")
+
+    const gemini = SystemPrompt.provider({
+      id: "google/gemini-3-pro",
+      providerID: "google",
+      api: { id: "gemini-3-pro", url: "https://generativelanguage.googleapis.com" },
+    } as any)
+    expect(gemini).toEqual([PROMPT_GEMINI, PROMPT_CRAFT])
+    expect(PROMPT_GEMINI).toContain("Default to doing the work")
+    expect(PROMPT_GEMINI).toContain("avoid over-engineering")
+    expect(PROMPT_GEMINI).not.toContain("fewer than 3 lines")
+    expect(PROMPT_GEMINI).not.toContain("Should I proceed with refactor_apply")
+    expect(PROMPT_GEMINI).not.toContain("create-react-app")
+    expect(PROMPT_GEMINI).not.toContain("Solicit Feedback")
+    expect(PROMPT_GEMINI).toContain("Never ask permission questions")
   })
 
   test("extractFilePaths extracts paths from tool call inputs", async () => {
