@@ -62,15 +62,21 @@ describe("script.workspace-metadata", () => {
       types: "./scripts/solid-transform.d.ts",
       import: "./scripts/solid-transform.js",
     })
-    expect(Object.keys(corePackage.optionalDependencies ?? {}).sort()).toEqual([
-      "@opentui/core-darwin-arm64",
-      "@opentui/core-darwin-x64",
-      "@opentui/core-linux-arm64",
-      "@opentui/core-linux-arm64-musl",
-      "@opentui/core-linux-x64",
-      "@opentui/core-linux-x64-musl",
-      "@opentui/core-win32-arm64",
-      "@opentui/core-win32-x64",
+    // The native Zig libraries are vendored in-repo (packages/opentui-core/vendor/),
+    // not resolved from upstream @opentui/core-<platform> optional dependencies.
+    expect(corePackage.optionalDependencies ?? {}).toEqual({})
+    const vendorManifest = JSON.parse(
+      await readFile(path.join(repoRoot, "packages/opentui-core/vendor/manifest.json"), "utf8"),
+    )
+    expect(Object.keys(vendorManifest.targets ?? {}).sort()).toEqual([
+      "darwin-arm64",
+      "darwin-x64",
+      "linux-arm64",
+      "linux-arm64-musl",
+      "linux-x64",
+      "linux-x64-musl",
+      "win32-arm64",
+      "win32-x64",
     ])
 
     const { transformSolidSource } = await import("@ax-code/opentui-solid/transform")

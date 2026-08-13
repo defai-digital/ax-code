@@ -1,5 +1,6 @@
 import fs from "fs"
 import path from "path"
+import { createHash } from "node:crypto"
 import { createRequire } from "module"
 import { fileURLToPath } from "url"
 import { spawnSync } from "node:child_process"
@@ -314,11 +315,10 @@ await writeText(
 // The bundle externalizes the native FFI/.node packages and OpenTUI; ship them
 // in node_modules beside the bundle so the dist runs anywhere `node` is present.
 const deps = pkg.dependencies as Record<string, string>
-// Read the vendored opentui-core's optionalDependencies to find the native platform packages.
+// Read the vendored opentui packages to collect their runtime dependencies.
 const opentuiCorePkg = JSON.parse(fs.readFileSync(path.join(dir, "..", "opentui-core", "package.json"), "utf8")) as {
   dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
-  optionalDependencies?: Record<string, string>
 }
 const opentuiSolidPkg = JSON.parse(fs.readFileSync(path.join(dir, "..", "opentui-solid", "package.json"), "utf8")) as {
   dependencies?: Record<string, string>
@@ -330,9 +330,6 @@ const opentuiSpinnerPkg = JSON.parse(
   dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
 }
-const currentNativePkg = Object.keys(opentuiCorePkg.optionalDependencies ?? {}).find((name) =>
-  name.includes(`-${process.platform}-${process.arch}`),
-)
 const distDeps: Record<string, string> = {
   ...collectPackageRuntimeDependencies([opentuiCorePkg, opentuiSolidPkg, opentuiSpinnerPkg]),
   "node-pty-prebuilt-multiarch": deps["node-pty-prebuilt-multiarch"],
@@ -345,11 +342,6 @@ const distDeps: Record<string, string> = {
   // (SyntacticExtractor) — resolved the same way at runtime.
   "tree-sitter-javascript": deps["tree-sitter-javascript"],
   "tree-sitter-typescript": deps["tree-sitter-typescript"],
-}
-// The vendored @ax-code/opentui-core dynamically imports @opentui/core-<platform>
-// for the native .dylib/.so. Ship the matching platform package.
-if (currentNativePkg) {
-  distDeps[currentNativePkg] = opentuiCorePkg.optionalDependencies![currentNativePkg]
 }
 // @ax-code/opentui-* are workspace packages (not on npm); copy them directly
 // into the distribution instead of npm install.
@@ -422,6 +414,33 @@ for (const [pkgName, srcDir] of vendoredOpentuiPackages) {
   })
   console.log(`Copied vendored ${pkgName} into the distribution`)
 }
+
+// The vendored @ax-code/opentui-core carries all 8 upstream native targets
+// under vendor/<target>/. Stage only the build target's library into the
+// distribution (every archive must not ship all ~30 MB of binaries) and
+// verify it against the committed manifest BEFORE codesigning — signing
+// rewrites the dylib bytes, so hash checks must happen pre-sign.
+const vendorDistDir = path.join(distAxScope, "opentui-core", "vendor")
+const buildTargetKey = `${process.platform}-${arch}`
+const vendorManifest = JSON.parse(await readText(path.join(vendorDistDir, "manifest.json"))) as {
+  targets?: Record<string, { lib: { file: string; sha256: string } }>
+}
+for (const entry of fs.readdirSync(vendorDistDir)) {
+  if (entry === "manifest.json" || entry === buildTargetKey) continue
+  fs.rmSync(path.join(vendorDistDir, entry), { recursive: true, force: true })
+}
+const stagedTarget = vendorManifest.targets?.[buildTargetKey]
+const stagedLib = stagedTarget ? path.join(vendorDistDir, buildTargetKey, stagedTarget.lib.file) : undefined
+if (!stagedTarget || !stagedLib || !fs.existsSync(stagedLib)) {
+  console.error(`Vendored OpenTUI native library for ${buildTargetKey} is missing from the distribution`)
+  process.exit(1)
+}
+const stagedHash = createHash("sha256").update(fs.readFileSync(stagedLib)).digest("hex")
+if (stagedHash !== stagedTarget.lib.sha256) {
+  console.error(`Vendored OpenTUI native library for ${buildTargetKey} does not match vendor/manifest.json`)
+  process.exit(1)
+}
+console.log(`Staged vendored OpenTUI native library for ${buildTargetKey} (hash verified)`)
 // node-pty ships a node-gyp addon; build it for this platform (no abi prebuild
 // for newer Node yet). Cross-platform builds run this on each target in CI.
 const ptyDir = path.join(outRoot, "node_modules", "node-pty-prebuilt-multiarch")

@@ -16,9 +16,9 @@ const obj = new TextRenderable(renderer, { id: "my-obj", content: "Hello, world!
 renderer.root.add(obj)
 ```
 
-## Native Platform Packages
+## Vendored Native Libraries
 
-This package dynamically loads the matching native binary from `@opentui/core-<platform>` via `optionalDependencies`. Those upstream packages contain the compiled Zig `.dylib`/`.so`/`.dll` and are not renamed.
+The compiled Zig native libraries (`libopentui.dylib`/`.so`, `opentui.dll`) are vendored in-repo under `vendor/<target>/` and hash-pinned by `vendor/manifest.json`. The runtime resolves them relative to this package — there is no dependency on the upstream `@opentui/core-<platform>` npm packages. Refresh with `pnpm vendor:opentui-native`; verify with `pnpm check:opentui-vendor`.
 
 ## Maintenance
 

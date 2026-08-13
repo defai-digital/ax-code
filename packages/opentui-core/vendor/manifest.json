@@ -1,0 +1,116 @@
+{
+  "upstream": {
+    "version": "0.4.1",
+    "repository": "https://github.com/sst/opentui",
+    "license": "MIT"
+  },
+  "retrievedAt": "2026-08-13T23:02:55.719Z",
+  "targets": {
+    "darwin-arm64": {
+      "package": "@opentui/core-darwin-arm64",
+      "os": "darwin",
+      "cpu": "arm64",
+      "tarball": "https://registry.npmjs.org/@opentui/core-darwin-arm64/-/core-darwin-arm64-0.4.1.tgz",
+      "tarballIntegrity": "sha512-ocs73hj9n0zLArOTpUWIXCWU6ERThG+3wQzO78EvfaR4hb5FRrDHGKWTzXpr6ukSKsUtKdztK5XYTPsJ5e3vww==",
+      "lib": {
+        "file": "libopentui.dylib",
+        "size": 3756336,
+        "sha256": "6872bc02c7bf2a1acaad6fc3f2bb5c544dfbb2600ffaf466fe94ae3c8e5183ef"
+      },
+      "licenseSha256": "d9c397a5dc5ac77a2a08fc967ea06a65317a4b5b8de48f6f732ffcb21737e3d2"
+    },
+    "darwin-x64": {
+      "package": "@opentui/core-darwin-x64",
+      "os": "darwin",
+      "cpu": "x64",
+      "tarball": "https://registry.npmjs.org/@opentui/core-darwin-x64/-/core-darwin-x64-0.4.1.tgz",
+      "tarballIntegrity": "sha512-YogRtDBfxGeOkcSHDMsGkKFBIt3cWPMPGNu2AmEN6a5KKjDYwAZCudwbDJaUbZDCJjfAUHz9iXjhJVXJBXs9vQ==",
+      "lib": {
+        "file": "libopentui.dylib",
+        "size": 3733238,
+        "sha256": "319adf998ddf791295364b463b206cde0c93a7ada78be7b181dd5b6f319df716"
+      },
+      "licenseSha256": "d9c397a5dc5ac77a2a08fc967ea06a65317a4b5b8de48f6f732ffcb21737e3d2"
+    },
+    "linux-arm64": {
+      "package": "@opentui/core-linux-arm64",
+      "os": "linux",
+      "cpu": "arm64",
+      "tarball": "https://registry.npmjs.org/@opentui/core-linux-arm64/-/core-linux-arm64-0.4.1.tgz",
+      "tarballIntegrity": "sha512-sBZTS1eEGeVSQ8fAmDALKQcT7FckrhK64oHfEO7W0lJ+lXapfJuOKtTM33na54V56GAM9guk4RD4cbPeTXEh4g==",
+      "lib": {
+        "file": "libopentui.so",
+        "size": 13753472,
+        "sha256": "c7c738552d79f9ced2ec8142c3b16a4b4253c2a78dac447bae653adc655b1070"
+      },
+      "licenseSha256": "d9c397a5dc5ac77a2a08fc967ea06a65317a4b5b8de48f6f732ffcb21737e3d2"
+    },
+    "linux-arm64-musl": {
+      "package": "@opentui/core-linux-arm64-musl",
+      "os": "linux",
+      "cpu": "arm64",
+      "libc": "musl",
+      "tarball": "https://registry.npmjs.org/@opentui/core-linux-arm64-musl/-/core-linux-arm64-musl-0.4.1.tgz",
+      "tarballIntegrity": "sha512-Eps9qB+vQ/Lel4ZYqMH87Um9oiU17Vu4oWzvRi40Yf+69vA1a3R4D7KUCeY3OxKWnRnwAHkMU9TxNnjKngPH/w==",
+      "lib": {
+        "file": "libopentui.so",
+        "size": 13627096,
+        "sha256": "a26ecc519f05c69a6836947f9eb46800f659a73aaa2bd9572b80c57d3f00cbd9"
+      },
+      "licenseSha256": "d9c397a5dc5ac77a2a08fc967ea06a65317a4b5b8de48f6f732ffcb21737e3d2"
+    },
+    "linux-x64": {
+      "package": "@opentui/core-linux-x64",
+      "os": "linux",
+      "cpu": "x64",
+      "tarball": "https://registry.npmjs.org/@opentui/core-linux-x64/-/core-linux-x64-0.4.1.tgz",
+      "tarballIntegrity": "sha512-9/xjYGzX5RdUl0qmGQY0OCayjJ4VffDhsBmApQdseUkMT6LGL3RumI4zPK3Y9vo1fuy6ffLnriLFOktOgutXDg==",
+      "lib": {
+        "file": "libopentui.so",
+        "size": 13521024,
+        "sha256": "7f360d5518bbccb871b95f8371955dbb75595a4f5e373912ab1a9cd3424d255a"
+      },
+      "licenseSha256": "d9c397a5dc5ac77a2a08fc967ea06a65317a4b5b8de48f6f732ffcb21737e3d2"
+    },
+    "linux-x64-musl": {
+      "package": "@opentui/core-linux-x64-musl",
+      "os": "linux",
+      "cpu": "x64",
+      "libc": "musl",
+      "tarball": "https://registry.npmjs.org/@opentui/core-linux-x64-musl/-/core-linux-x64-musl-0.4.1.tgz",
+      "tarballIntegrity": "sha512-UYcp8XGX4DZXN+VYUVuCrJkbFMJ0L+VUVu0t5KqqaeJ74fI4NZ+DmwNqPPg1+C+EIzoW4QChlEUdhlZRdiEQiA==",
+      "lib": {
+        "file": "libopentui.so",
+        "size": 13396232,
+        "sha256": "75637377c7968a26654e271a6ecefbdd8256bb06338f7877caeceeef026d9950"
+      },
+      "licenseSha256": "d9c397a5dc5ac77a2a08fc967ea06a65317a4b5b8de48f6f732ffcb21737e3d2"
+    },
+    "win32-arm64": {
+      "package": "@opentui/core-win32-arm64",
+      "os": "win32",
+      "cpu": "arm64",
+      "tarball": "https://registry.npmjs.org/@opentui/core-win32-arm64/-/core-win32-arm64-0.4.1.tgz",
+      "tarballIntegrity": "sha512-hkIbpUJcKd4iLetTygPlFS45teOBTto49aXuxNeafYQUNd3ehiSwJENNBlAGULLfq+KP3dMJoWUiOcbuPVOQRA==",
+      "lib": {
+        "file": "opentui.dll",
+        "size": 3537288,
+        "sha256": "98aba0fba20443340469f75c6bb1b20ae2ec787bccb888074b9e985cd4399786"
+      },
+      "licenseSha256": "d9c397a5dc5ac77a2a08fc967ea06a65317a4b5b8de48f6f732ffcb21737e3d2"
+    },
+    "win32-x64": {
+      "package": "@opentui/core-win32-x64",
+      "os": "win32",
+      "cpu": "x64",
+      "tarball": "https://registry.npmjs.org/@opentui/core-win32-x64/-/core-win32-x64-0.4.1.tgz",
+      "tarballIntegrity": "sha512-s1kGBcloy4ksl3wFCMqqOUFtXWlTTpzxe6pkLFhFhzgqKsMXHE9pwebiS3pzJkkFUxah5MYG+kbcn2Dw2Gdncg==",
+      "lib": {
+        "file": "opentui.dll",
+        "size": 3753864,
+        "sha256": "254890dcfd1ae4b998d13063d5babac67b15bc6c270973dd257335e9c693d91e"
+      },
+      "licenseSha256": "d9c397a5dc5ac77a2a08fc967ea06a65317a4b5b8de48f6f732ffcb21737e3d2"
+    }
+  }
+}

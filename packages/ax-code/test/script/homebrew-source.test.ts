@@ -81,7 +81,7 @@ describe("distribution support guardrails", () => {
     // which runs after fix_dynamic_linkage — restores it. `preserve_rpath` is not a
     // real Homebrew DSL method and would raise NoMethodError on formula load.
     expect(text).not.toContain("preserve_rpath")
-    expect(text).toContain("node_modules/@opentui/core-darwin-arm64/libopentui.dylib")
+    expect(text).toContain("node_modules/@ax-code/opentui-core/vendor/darwin-arm64/libopentui.dylib")
     expect(text).toContain('system "gzip"')
     expect(text).toContain("def post_install")
     expect(text).toContain('system "gunzip"')

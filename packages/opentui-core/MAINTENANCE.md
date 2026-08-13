@@ -14,9 +14,13 @@ application should import the `@ax-code/opentui-*` packages only.
 
 `@ax-code/opentui-core` contains the vendored JavaScript, type declarations,
 runtime-plugin glue, tree-sitter assets, and ax-code-specific renderer fixes.
-It does not vendor the compiled Zig native libraries. Those still come from the
-upstream `@opentui/core-<platform>` optional dependency packages and are pinned
-in `packages/opentui-core/package.json`.
+It also vendors the compiled Zig native libraries: they live in-repo under
+`packages/opentui-core/vendor/<target>/` (one directory per upstream target),
+fetched from the upstream `@opentui/core-<platform>` npm packages and
+hash-pinned by `vendor/manifest.json`. The runtime resolver loads the library
+relative to the package root, so nothing is resolved through `node_modules`
+at runtime. Re-fetch or upgrade with `pnpm vendor:opentui-native`; verify the
+committed tree offline with `pnpm check:opentui-vendor`.
 
 `@ax-code/opentui-solid` contains the vendored SolidJS renderer and the Node/Bun
 preload and plugin support used by source and bundled TUI builds.
@@ -59,6 +63,22 @@ The regression test for the pin is:
 pnpm --dir packages/ax-code exec vitest run test/cli/tui/opentui-ffi-pointer-pin.test.ts
 ```
 
+The vendored core must also preserve the vendored native resolver. Upstream
+resolves the Zig shared library by dynamically importing the
+`@opentui/core-<platform>` npm packages; ax-code instead maps
+`(platform, arch, OPENTUI_LIBC)` to a target key and loads
+`vendor/<target>/libopentui.{dylib,so,dll}` relative to the package root, with
+an actionable error (target, absolute path, `pnpm vendor:opentui-native`
+remedy) when the file is missing. The eager dlopen at module load remains
+non-fatal so headless commands keep working; the raised initialization error
+carries the target, path, and original `cause`.
+
+The regression test for the resolver is:
+
+```sh
+pnpm --dir packages/ax-code exec vitest run test/cli/tui/opentui-vendored-native-resolver.test.ts
+```
+
 OpenTUI has one renderer path: the upstream Zig native library. The ADR-046
 `@ax-code/render` N-API overlay and its `yoga` routing scope are retired, and
 the experimental standalone Rust/Ratatui UI (`crates/ax-code-tui`) was removed
@@ -81,17 +101,20 @@ When syncing from upstream OpenTUI:
    `packages/opentui-solid`.
 2. Keep the `@ax-code/opentui-*` package names and exports stable unless the
    TUI build scripts are updated in the same change.
-3. Update the upstream native `@opentui/core-<platform>` optional dependency
-   versions in `packages/opentui-core/package.json` if the core ABI changes.
-4. Re-apply ax-code-specific fixes, especially the FFI geometry guard.
+3. Update the vendored native libraries if the core ABI changes: bump
+   `VERSION` in `script/vendor-opentui.ts`, run `pnpm vendor:opentui-native`,
+   and commit the refreshed `vendor/` tree and manifest.
+4. Re-apply ax-code-specific fixes, especially the FFI geometry guard, the FFI
+   pointer pin, and the vendored native resolver.
 5. Verify source, bundled, and startup paths before merging.
 
 Minimum verification for an OpenTUI sync or local renderer fix:
 
 ```sh
+pnpm run check:opentui-vendor
 pnpm --dir packages/ax-code run check:tui-layering
 pnpm --dir packages/ax-code run check:tui-snapshot
-pnpm --dir packages/ax-code exec vitest run test/cli/tui/opentui-ffi-coordinate-guard.test.ts test/cli/tui/opentui-spinner.test.ts test/script/tui-startup-smoke.test.ts test/script/check-tui-layering.test.ts
+pnpm --dir packages/ax-code exec vitest run test/cli/tui/opentui-ffi-coordinate-guard.test.ts test/cli/tui/opentui-ffi-pointer-pin.test.ts test/cli/tui/opentui-vendored-native-resolver.test.ts test/cli/tui/opentui-spinner.test.ts test/script/tui-startup-smoke.test.ts test/script/check-tui-layering.test.ts
 pnpm --dir packages/ax-code run tui:startup-smoke
 pnpm --dir packages/ax-code run tui:startup-smoke -- --terminal-profile advanced
 ```

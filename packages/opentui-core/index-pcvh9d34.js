@@ -11780,45 +11780,37 @@ function validateLinuxLibcOverride() {
     return;
   throw new Error(`On Linux, OPENTUI_LIBC must be unset, empty, "glibc", or "musl", got "${libc}"`);
 }
-async function resolveNativePackage() {
-  if (process.platform === "darwin") {
-    if (process.arch === "x64")
-      return await import("@opentui/core-darwin-x64");
-    if (process.arch === "arm64")
-      return await import("@opentui/core-darwin-arm64");
+// AX Code vendored native resolver (required local fix — see MAINTENANCE.md).
+// The Zig shared libraries are vendored in-repo under vendor/<target>/
+// (vendor/manifest.json records provenance and hashes) instead of resolving
+// the upstream @opentui/core-<platform> npm packages through node_modules.
+// Paths resolve relative to this file, so the lookup is independent of the
+// package-manager store layout (pnpm .pnpm store, copied dist, libexec).
+const VENDORED_NATIVE_LIB_FILE = { darwin: "libopentui.dylib", linux: "libopentui.so", win32: "opentui.dll" };
+function resolveVendoredNativeTarget() {
+  if (process.platform === "darwin" || process.platform === "win32") {
+    if (process.arch === "x64" || process.arch === "arm64")
+      return `${process.platform}-${process.arch}`;
   }
   if (process.platform === "linux") {
     validateLinuxLibcOverride();
-    if (process.arch === "x64") {
-      if (process.env.OPENTUI_LIBC === "musl") {
-        return await import("@opentui/core-linux-x64-musl");
-      } else {
-        return await import("@opentui/core-linux-x64");
-      }
+    if (process.arch === "x64" || process.arch === "arm64") {
+      return process.env.OPENTUI_LIBC === "musl" ? `linux-${process.arch}-musl` : `linux-${process.arch}`;
     }
-    if (process.arch === "arm64") {
-      if (process.env.OPENTUI_LIBC === "musl") {
-        return await import("@opentui/core-linux-arm64-musl");
-      } else {
-        return await import("@opentui/core-linux-arm64");
-      }
-    }
-  }
-  if (process.platform === "win32") {
-    if (process.arch === "x64")
-      return await import("@opentui/core-win32-x64");
-    if (process.arch === "arm64")
-      return await import("@opentui/core-win32-arm64");
   }
   throw new Error(`opentui is not supported on the current platform: ${process.platform}-${process.arch}`);
 }
-var nativePackage = await resolveNativePackage();
-var targetLibPath = nativePackage.default;
+var vendoredNativeTarget = resolveVendoredNativeTarget();
+var targetLibPath = fileURLToPath(
+  new URL(`./vendor/${vendoredNativeTarget}/${VENDORED_NATIVE_LIB_FILE[process.platform]}`, import.meta.url)
+);
 if (isBunfsPath(targetLibPath)) {
   targetLibPath = targetLibPath.replace("../", "");
 }
 if (!existsSync3(targetLibPath)) {
-  throw new Error(`opentui is not supported on the current platform: ${process.platform}-${process.arch}`);
+  throw new Error(
+    `OpenTUI native library missing for target ${vendoredNativeTarget}: ${targetLibPath} — restore it with \`pnpm vendor:opentui-native\` (provenance: packages/opentui-core/vendor/manifest.json)`
+  );
 }
 registerEnvVar({
   name: "OTUI_DEBUG_FFI",
@@ -15095,7 +15087,13 @@ function resolveRenderLib() {
     try {
       opentuiLib = new FFIRenderLib(opentuiLibPath);
     } catch (error) {
-      throw new Error(`Failed to initialize OpenTUI render library: ${error instanceof Error ? error.message : "Unknown error"}`);
+      // AX Code: include the resolved vendored target/path and the original
+      // cause — the eager dlopen below is swallowed so headless commands keep
+      // working, and this is the error users actually see in the TUI.
+      throw new Error(
+        `Failed to initialize OpenTUI render library (target ${vendoredNativeTarget}, path ${opentuiLibPath ?? targetLibPath}): ${error instanceof Error ? error.message : "Unknown error"}`,
+        { cause: error }
+      );
     }
   }
   renderLibResolved = true;

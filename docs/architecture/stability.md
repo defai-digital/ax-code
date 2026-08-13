@@ -23,10 +23,14 @@ How AX Code stays reliable for long interactive sessions and headless runs.
 The supported runtime stack is:
 
 - Runtime: Node bundled
-- UI: OpenTUI + Solid
-- Render: Zig (production)
-- The experimental Rust/Ratatui UI was removed; Zig/OpenTUI is the only engine
+- UI: **OpenTUI + Solid** (primary default)
+- Render: Zig (production); the native libraries are fully vendored in-repo
+  (`packages/opentui-core/vendor/`, hash-pinned by `vendor/manifest.json`) —
+  no upstream `@opentui/*` npm packages are involved at install or runtime
 - Yoga is not a selectable mode; Zig/OpenTUI remains the default
+- **Experimental only:** an immature Ratatui sidecar exists behind
+  `AX_CODE_TUI_ENGINE=ratatui` (ADR-054). It is **not** production-supported
+  and must never be the default. Unset the env var for the supported OpenTUI path.
 
 ## Cancellations vs crashes
 

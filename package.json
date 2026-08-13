@@ -40,6 +40,8 @@
     "typecheck": "pnpm -r --if-present run typecheck",
     "build:native": "tsx script/build-native.ts",
     "build:native:debug": "tsx script/build-native.ts --debug",
+    "vendor:opentui-native": "tsx script/vendor-opentui.ts",
+    "check:opentui-vendor": "tsx script/vendor-opentui.ts --check",
     "publish:github": "tsx script/publish-github-release.ts",
     "sign:release": "tsx script/sign-release-assets.ts",
     "winget:generate": "tsx tools/winget/generate-manifests.ts",

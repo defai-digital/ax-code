@@ -158,7 +158,7 @@ class AxCode < Formula
   # library by absolute path at runtime, so its install id is irrelevant. Gzip it
   # during install so the Mach-O linkage scan skips it, then restore it in
   # post_install, which runs after fix_dynamic_linkage.
-  OPENTUI_DYLIB = "node_modules/@opentui/core-darwin-arm64/libopentui.dylib"
+  OPENTUI_DYLIB = "node_modules/@ax-code/opentui-core/vendor/darwin-arm64/libopentui.dylib"
 
   def install
     libexec.install Dir["*"]

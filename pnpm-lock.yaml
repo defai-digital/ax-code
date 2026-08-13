@@ -1219,31 +1219,6 @@ importers:
       web-tree-sitter:
         specifier: 0.25.10
         version: 0.25.10
-    optionalDependencies:
-      '@opentui/core-darwin-arm64':
-        specifier: 0.4.1
-        version: 0.4.1
-      '@opentui/core-darwin-x64':
-        specifier: 0.4.1
-        version: 0.4.1
-      '@opentui/core-linux-arm64':
-        specifier: 0.4.1
-        version: 0.4.1
-      '@opentui/core-linux-arm64-musl':
-        specifier: 0.4.1
-        version: 0.4.1
-      '@opentui/core-linux-x64':
-        specifier: 0.4.1
-        version: 0.4.1
-      '@opentui/core-linux-x64-musl':
-        specifier: 0.4.1
-        version: 0.4.1
-      '@opentui/core-win32-arm64':
-        specifier: 0.4.1
-        version: 0.4.1
-      '@opentui/core-win32-x64':
-        specifier: 0.4.1
-        version: 0.4.1
 
   packages/opentui-solid:
     dependencies:
@@ -3248,48 +3223,6 @@ packages:
   '@opentelemetry/semantic-conventions@1.40.0':
     resolution: {integrity: sha512-cifvXDhcqMwwTlTK04GBNeIe7yyo28Mfby85QXFe1Yk8nmi36Ab/5UQwptOx84SsoGNRg+EVSjwzfSZMy6pmlw==}
     engines: {node: '>=14'}
-
-  '@opentui/core-darwin-arm64@0.4.1':
-    resolution: {integrity: sha512-ocs73hj9n0zLArOTpUWIXCWU6ERThG+3wQzO78EvfaR4hb5FRrDHGKWTzXpr6ukSKsUtKdztK5XYTPsJ5e3vww==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@opentui/core-darwin-x64@0.4.1':
-    resolution: {integrity: sha512-YogRtDBfxGeOkcSHDMsGkKFBIt3cWPMPGNu2AmEN6a5KKjDYwAZCudwbDJaUbZDCJjfAUHz9iXjhJVXJBXs9vQ==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@opentui/core-linux-arm64-musl@0.4.1':
-    resolution: {integrity: sha512-Eps9qB+vQ/Lel4ZYqMH87Um9oiU17Vu4oWzvRi40Yf+69vA1a3R4D7KUCeY3OxKWnRnwAHkMU9TxNnjKngPH/w==}
-    cpu: [arm64]
-    os: [linux]
-    libc: [musl]
-
-  '@opentui/core-linux-arm64@0.4.1':
-    resolution: {integrity: sha512-sBZTS1eEGeVSQ8fAmDALKQcT7FckrhK64oHfEO7W0lJ+lXapfJuOKtTM33na54V56GAM9guk4RD4cbPeTXEh4g==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@opentui/core-linux-x64-musl@0.4.1':
-    resolution: {integrity: sha512-UYcp8XGX4DZXN+VYUVuCrJkbFMJ0L+VUVu0t5KqqaeJ74fI4NZ+DmwNqPPg1+C+EIzoW4QChlEUdhlZRdiEQiA==}
-    cpu: [x64]
-    os: [linux]
-    libc: [musl]
-
-  '@opentui/core-linux-x64@0.4.1':
-    resolution: {integrity: sha512-9/xjYGzX5RdUl0qmGQY0OCayjJ4VffDhsBmApQdseUkMT6LGL3RumI4zPK3Y9vo1fuy6ffLnriLFOktOgutXDg==}
-    cpu: [x64]
-    os: [linux]
-
-  '@opentui/core-win32-arm64@0.4.1':
-    resolution: {integrity: sha512-hkIbpUJcKd4iLetTygPlFS45teOBTto49aXuxNeafYQUNd3ehiSwJENNBlAGULLfq+KP3dMJoWUiOcbuPVOQRA==}
-    cpu: [arm64]
-    os: [win32]
-
-  '@opentui/core-win32-x64@0.4.1':
-    resolution: {integrity: sha512-s1kGBcloy4ksl3wFCMqqOUFtXWlTTpzxe6pkLFhFhzgqKsMXHE9pwebiS3pzJkkFUxah5MYG+kbcn2Dw2Gdncg==}
-    cpu: [x64]
-    os: [win32]
 
   '@oxc-project/types@0.133.0':
     resolution: {integrity: sha512-KzkdCd6Uxqnf6l3HOw1xfatAlUURA0g14cvBYFyJ5SaNOQbOUvBr9PKArcPcrNIeRsBdgcUzOGrhKveVpvOIGA==}
@@ -11957,30 +11890,6 @@ snapshots:
       '@opentelemetry/sdk-trace-base': 2.6.1(@opentelemetry/api@1.9.1)
 
   '@opentelemetry/semantic-conventions@1.40.0': {}
-
-  '@opentui/core-darwin-arm64@0.4.1':
-    optional: true
-
-  '@opentui/core-darwin-x64@0.4.1':
-    optional: true
-
-  '@opentui/core-linux-arm64-musl@0.4.1':
-    optional: true
-
-  '@opentui/core-linux-arm64@0.4.1':
-    optional: true
-
-  '@opentui/core-linux-x64-musl@0.4.1':
-    optional: true
-
-  '@opentui/core-linux-x64@0.4.1':
-    optional: true
-
-  '@opentui/core-win32-arm64@0.4.1':
-    optional: true
-
-  '@opentui/core-win32-x64@0.4.1':
-    optional: true
 
   '@oxc-project/types@0.133.0': {}
 
