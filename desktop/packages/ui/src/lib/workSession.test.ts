@@ -1,23 +1,20 @@
 import { describe, expect, test } from "vitest"
-import { resolveWorkSurfaceAgent, workSurfaceSessionIntent } from "./workSession"
+import { findSessionById, isLegacyWorkSession } from "./workSession"
 
-describe("workSurfaceSessionIntent", () => {
-  test("Work surface creates a Work agent session with product metadata", () => {
-    expect(workSurfaceSessionIntent("work")).toEqual({
-      agent: "work",
-      metadata: { work: { version: 1, computer: false } },
-    })
+describe("legacy Work session detection", () => {
+  test("detects metadata.work", () => {
+    expect(isLegacyWorkSession({ metadata: { work: { version: 1, computer: false } } })).toBe(true)
+    expect(isLegacyWorkSession({ metadata: { review: { kind: "pr" } } })).toBe(false)
+    expect(isLegacyWorkSession({ metadata: {} })).toBe(false)
+    expect(isLegacyWorkSession(undefined)).toBe(false)
   })
 
-  test("Code surface does not attach Work metadata", () => {
-    expect(workSurfaceSessionIntent("code")).toBeNull()
-  })
-
-  test("resolveWorkSurfaceAgent prefers explicit agent then Work default", () => {
-    expect(resolveWorkSurfaceAgent({ surface: "work", fallbackAgent: "build" })).toBe("work")
-    expect(resolveWorkSurfaceAgent({ surface: "work", explicitAgent: "explore", fallbackAgent: "build" })).toBe(
-      "explore",
-    )
-    expect(resolveWorkSurfaceAgent({ surface: "code", fallbackAgent: "build" })).toBe("build")
+  test("finds a session by id", () => {
+    const sessions = [
+      { id: "ses_a", metadata: {} },
+      { id: "ses_b", metadata: { work: { version: 1, computer: true } } },
+    ]
+    expect(findSessionById("ses_b", sessions)?.metadata?.work).toEqual({ version: 1, computer: true })
+    expect(findSessionById("missing", sessions)).toBeUndefined()
   })
 })

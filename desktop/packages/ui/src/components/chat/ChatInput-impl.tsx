@@ -69,7 +69,8 @@ import { GitHubPrPickerDialog } from "@/components/session/GitHubPrPickerDialog"
 import { Icon } from "@/components/icon/Icon"
 import { DraftPresetChips } from "./DraftPresetChips"
 import { useProjectKnowledge, projectKnowledgeFileLabel } from "@/hooks/useProjectKnowledge"
-import { useDesktopSurfaceStore } from "@/stores/useDesktopSurfaceStore"
+import { isLegacyWorkSession, WORK_SESSION_SEND_DISABLED } from "@/lib/workSession"
+import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useChatSearchDirectory } from "@/hooks/useChatSearchDirectory"
 import { axCodeClient } from "@/lib/ax-code/client"
 import { useProjectsStore } from "@/stores/useProjectsStore"
@@ -846,10 +847,18 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     useSessionUIStore.getState().sendMessage(...args),
   ).current
   const currentSessionId = useSessionUIStore((s) => s.currentSessionId)
+  const activeSessions = useGlobalSessionsStore((s) => s.activeSessions)
+  const archivedSessions = useGlobalSessionsStore((s) => s.archivedSessions)
+  const workSendDisabled = React.useMemo(() => {
+    if (!currentSessionId) return false
+    const session =
+      activeSessions.find((entry) => entry.id === currentSessionId) ??
+      archivedSessions.find((entry) => entry.id === currentSessionId)
+    return isLegacyWorkSession(session)
+  }, [activeSessions, archivedSessions, currentSessionId])
   const currentDirectory = useDirectoryStore((s) => s.currentDirectory)
   const homeDirectory = useDirectoryStore((s) => s.homeDirectory)
   const projectKnowledge = useProjectKnowledge(currentDirectory)
-  const isCodeSurface = useDesktopSurfaceStore((s) => s.surface) === "code"
   const currentSessionDirectoryForSync = useSessionUIStore(
     React.useCallback(
       (s) => (currentSessionId ? s.getDirectoryForSession(currentSessionId) : null),
@@ -1320,7 +1329,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
   const hasContent = message.trim().length > 0 || sendableAttachedFiles.length > 0 || hasDrafts
   const hasQueuedMessages = queuedMessages.length > 0
-  const canSend = hasContent || hasQueuedMessages
+  const canSend = !workSendDisabled && (hasContent || hasQueuedMessages)
 
   const canAbort = sessionPhase !== "idle"
 
@@ -1417,6 +1426,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
   }, [])
 
   const handleSubmit = async (options?: SubmitOptions) => {
+    if (workSendDisabled) {
+      toast.error(WORK_SESSION_SEND_DISABLED)
+      return
+    }
     const queuedOnly = options?.queuedOnly ?? false
     const queuedMessageId = options?.queuedMessageId
     const inputSnapshot = getCurrentInputSnapshot()
@@ -3548,6 +3561,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         )}
         style={isMobile && inputBarOffset > 0 ? { marginBottom: `${inputBarOffset}px` } : undefined}
       >
+        {workSendDisabled ? (
+          <div className="chat-input-column mb-3 rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-center typography-meta text-status-warning">
+            {WORK_SESSION_SEND_DISABLED}
+          </div>
+        ) : null}
         {newSessionDraftOpen && !isDesktopExpanded && !isMobile && !isMiniChatSurface ? (
           <div className="chat-input-column mb-7 text-center">
             <h1 className="text-balance text-2xl font-normal tracking-tight text-foreground md:text-3xl">
@@ -3558,7 +3576,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 draftProjectLabel,
               )}
             </h1>
-            {isCodeSurface && !projectKnowledge.isLoading && (
+            {!projectKnowledge.isLoading && (
               <div className="mt-3 flex items-center justify-center gap-2">
                 {projectKnowledge.exists ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 typography-micro text-emerald-600 dark:text-emerald-400">

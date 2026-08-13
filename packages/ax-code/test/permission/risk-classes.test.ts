@@ -15,9 +15,6 @@ const riskPermissions = [
   "codesearch",
   "monitor",
   "image_gen",
-  "computer_capture",
-  "computer_input",
-  "computer_commit",
 ]
 
 describe("permission risk classification", () => {
@@ -74,9 +71,6 @@ describe("permission risk classification", () => {
       "websearch",
       "monitor",
       "image_gen",
-      "computer_capture",
-      "computer_input",
-      "computer_commit",
     ])
     for (const p of safePermissions) {
       expect(realPermissionNames.has(p)).toBe(true)

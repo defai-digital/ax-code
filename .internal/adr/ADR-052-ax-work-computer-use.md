@@ -1,13 +1,18 @@
-Status: Active
+Status: Partially superseded
 Scope: planning
 Last reviewed: 2026-08-12
 Owner: AX Code Desktop + runtime
 
 # ADR-052: AX Work Computer Use
 
+> **D1 superseded** by [ADR-053](ADR-053-ax-work-product-split.md): do not
+> complete a Work surface inside AX Code Desktop. **D2–D8** (helper, a11y,
+> two tools, exact grant, never autonomous, cloud qualification, macOS
+> foreground) relocate to `~/code/ax-work`.
+
 | Field | Value |
 |-------|-------|
-| Status | Accepted |
+| Status | Accepted (D1 superseded by ADR-053) |
 | Date | 2026-08-12 |
 | Deciders | AX Code maintainers |
 | Supersedes | Informal "ADR-047" comments on visual/browser tools (official ADR-047 remains TUI Stability) |

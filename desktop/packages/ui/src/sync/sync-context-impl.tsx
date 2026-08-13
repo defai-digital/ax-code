@@ -1277,6 +1277,12 @@ export function SyncProvider(props: { sdk: AxCodeClient; directory: string; chil
         return resolveDirectoryFromRoutingIndex(routingIndex, directory, payload, childStores)
       },
       onEvent: (directory, payload) => {
+        if (payload.type === "provider.updated") {
+          // Dedicated private GPU models (PAI-EAS, etc.) arrive from background
+          // /v1/models discovery after connect. Refresh the picker the same way
+          // the TUI does — otherwise Desktop keeps the empty pre-discovery list.
+          void useConfigStore.getState().loadProviders()
+        }
         if (payload.type === "installation.update-available") {
           const version =
             typeof (payload.properties as { version?: unknown })?.version === "string"

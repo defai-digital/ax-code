@@ -774,7 +774,6 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
         perf: { disable: true },
         devops: { disable: true },
         test: { disable: true },
-        work: { disable: true },
       },
     },
   })
@@ -787,12 +786,23 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
   })
 })
 
+test("does not register the retired work agent", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const names = (await Agent.list()).map((agent) => agent.name)
+      expect(names).not.toContain("work")
+    },
+  })
+})
+
 test("native agents have correct tier assignments", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const core = ["build", "plan", "react", "work"]
+      const core = ["build", "plan", "react"]
       for (const name of core) {
         const agent = await Agent.get(name)
         expect(Agent.resolveTier(agent!)).toBe("core")

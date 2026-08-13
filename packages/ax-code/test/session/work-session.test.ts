@@ -1,32 +1,22 @@
 import { describe, expect, test } from "vitest"
-import path from "path"
-import { Instance } from "../../src/project/instance"
-import { Session } from "../../src/session"
-import { createWorkSession, isWorkSessionMetadata, workSessionCreateIntent } from "../../src/session/work-session"
-import { Log } from "../../src/util/log"
+import {
+  isWorkSessionMetadata,
+  workSessionSendBlockedReason,
+  WORK_SESSION_SEND_DISABLED,
+} from "../../src/session/work-session"
 
-const projectRoot = path.join(__dirname, "../..")
-Log.init({ print: false })
-
-describe("createWorkSession", () => {
-  test("intent is the Work agent plus Work product metadata", () => {
-    expect(workSessionCreateIntent({ computer: true, providerID: "openai", modelID: "gpt-5.6-sol" })).toEqual({
-      agent: "work",
-      metadata: {
-        work: { version: 1, computer: true, providerID: "openai", modelID: "gpt-5.6-sol" },
-      },
-    })
+describe("legacy Work session send policy", () => {
+  test("detects Work product metadata", () => {
+    expect(isWorkSessionMetadata({ work: { version: 1, computer: false } })).toBe(true)
+    expect(isWorkSessionMetadata({ review: { reviewId: "rev_1" } })).toBe(false)
+    expect(isWorkSessionMetadata(undefined)).toBe(false)
   })
 
-  test("createWorkSession writes Work metadata on the shipped session", async () => {
-    await Instance.provide({
-      directory: projectRoot,
-      fn: async () => {
-        const session = await createWorkSession({ computer: false })
-        expect(session.metadata?.work).toEqual({ version: 1, computer: false })
-        expect(isWorkSessionMetadata(session.metadata)).toBe(true)
-        await Session.remove(session.id)
-      },
-    })
+  test("blocks send for Work metadata or the retired work agent", () => {
+    expect(workSessionSendBlockedReason({ metadata: { work: { version: 1, computer: true } } })).toBe(
+      WORK_SESSION_SEND_DISABLED,
+    )
+    expect(workSessionSendBlockedReason({ agent: "work" })).toBe(WORK_SESSION_SEND_DISABLED)
+    expect(workSessionSendBlockedReason({ agent: "build" })).toBeUndefined()
   })
 })

@@ -6,12 +6,8 @@ type Rule = {
   action: "allow" | "deny" | "ask"
 }
 
-/** Allow rules must name the permission and pattern exactly (ADR-052). Deny may still wildcard. */
-export const EXACT_GRANT_ONLY: ReadonlySet<string> = new Set([
-  "computer_capture",
-  "computer_input",
-  "computer_commit",
-])
+/** Relocated to AX Work. AX Code no longer has computer-use permissions. */
+export const EXACT_GRANT_ONLY: ReadonlySet<string> = new Set()
 
 export function evaluate(permission: string, pattern: string, ...rulesets: Rule[][]): Rule {
   const rules = rulesets.flat()

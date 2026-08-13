@@ -204,51 +204,16 @@ const AddStarterPicker: React.FC<{
   )
 }
 
-const WorkStarterChip: React.FC<{
-  item: ResolvedStarter
-  onSubmit: (text: string) => void
-}> = ({ item, onSubmit }) => {
-  const { currentTheme } = useThemeSystem()
-  const chipStyle: React.CSSProperties = {
-    backgroundColor: currentTheme?.colors?.surface?.elevated,
-    borderColor: currentTheme?.colors?.interactive?.border,
-  }
-  return (
-    <button
-      type="button"
-      onClick={() => onSubmit(item.submitText)}
-      className="group inline-flex select-none items-center gap-1.5 rounded-full border px-3 py-1.5 typography-ui-label text-muted-foreground transition-colors hover:bg-[var(--interactive-hover)] hover:text-foreground"
-      style={chipStyle}
-    >
-      <Icon name={item.icon} className="h-3.5 w-3.5 shrink-0 opacity-70 transition-opacity group-hover:opacity-100" />
-      <span className="whitespace-nowrap">{item.label}</span>
-    </button>
-  )
-}
-
 /**
  * The editable row of starter chips on the draft welcome screen. Shows the
  * global group then the project group (each reorderable within itself), plus a
  * "+" picker to pin existing commands/skills. The surface owns how a chip click
  * is submitted via `onSubmit`.
- *
- * Work surface swaps in daily-work presets (read-only, no pin/edit).
  */
 export const DraftPresetChips: React.FC<DraftPresetChipsProps> = ({ onSubmit, className }) => {
   const { t } = useI18n()
-  const { global, project, pinnable, isWorkSurface, ensureLoaded, addStarter, removeStarter, reorder } =
-    useDraftStarters()
+  const { global, project, pinnable, ensureLoaded, addStarter, removeStarter, reorder } = useDraftStarters()
   const hasChips = global.length > 0 || project.length > 0
-
-  if (isWorkSurface) {
-    return (
-      <div className={cn("flex flex-wrap items-center justify-center gap-2", className)}>
-        {global.map((item) => (
-          <WorkStarterChip key={item.id} item={item} onSubmit={onSubmit} />
-        ))}
-      </div>
-    )
-  }
 
   return (
     <div className={cn("flex flex-wrap items-center justify-center gap-2", className)}>

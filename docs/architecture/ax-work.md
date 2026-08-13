@@ -1,13 +1,21 @@
 # AX Work
 
-Desktop computer-use for the existing Work surface. Product and planning docs live under `.internal/` (local-only):
+AX Work is a **separate product** (`~/code/ax-work`), not a tab inside AX
+Code Desktop. Combining office Work with coding tools in one app is
+rejected (ADR-053).
 
-- `.internal/prd/PRD-2026-08-12-ax-work.md`
-- `.internal/adr/ADR-052-ax-work-computer-use.md`
-- `.internal/spec/SPEC-2026-08-12-ax-work.md`
+Planning docs live under `.internal/` (local-only):
+
+- `.internal/prd/PRD-2026-08-12-ax-work-split.md`
+- `.internal/adr/ADR-053-ax-work-product-split.md`
+- `.internal/spec/SPEC-2026-08-12-ax-work-split.md`
 - `.internal/reports/planning/ax-work/PHASES.md`
+- `.internal/reports/planning/ax-work/SPLIT-REVIEW.md`
 
-Runtime contract (Phase 1) is in `packages/ax-code/src/visual/computer/` and
-`packages/ax-code/src/tool/computer/`. Enable with
-`AX_CODE_EXPERIMENTAL_COMPUTER_AGENT=1`. Tools fail closed until a native host
-is bound (Phase 3+).
+AX Code Desktop is Code-only (Track A complete). The Phase 1 computer
+contract was copied into `~/code/ax-work` and deleted from this repo
+(Track A3). AX Code keeps vision (see-only), agentic coding, CLI/TUI,
+and session-scoped `browser_*`.
+
+Legacy `metadata.work` / `agent: "work"` sessions stay readable with
+send disabled. They are not auto-mapped to `build`.

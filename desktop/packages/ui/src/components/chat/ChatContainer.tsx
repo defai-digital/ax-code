@@ -51,7 +51,7 @@ import { usePlanDetection } from "@/hooks/usePlanDetection"
 import { getAllSyncSessions } from "@/sync/sync-refs"
 import { useI18n } from "@/lib/i18n"
 import { useProjectKnowledge, projectKnowledgeFileLabel } from "@/hooks/useProjectKnowledge"
-import { useDesktopSurfaceStore } from "@/stores/useDesktopSurfaceStore"
+
 
 const EMPTY_MESSAGES: Array<{ info: Message; parts: Part[] }> = []
 const IDLE_SESSION_STATUS = { type: "idle" as const }
@@ -396,7 +396,6 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
   const sync = useSync()
   const syncDirectory = useSyncDirectory()
   const projectKnowledge = useProjectKnowledge(syncDirectory)
-  const isCodeSurface = useDesktopSurfaceStore((s) => s.surface) === "code"
   const ensureSessionRenderable = React.useCallback(
     (sessionId: string) => sync.ensureSessionRenderable(sessionId),
     [sync],
@@ -854,7 +853,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
                 draftProjectLabel,
               )}
             </h1>
-            {isCodeSurface && !projectKnowledge.isLoading && (
+            {!projectKnowledge.isLoading && (
               <div className="mt-3 flex items-center gap-2">
                 {projectKnowledge.exists ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 typography-micro text-emerald-600 dark:text-emerald-400">

@@ -1,13 +1,18 @@
-Status: Active
+Status: Superseded
 Scope: planning
 Last reviewed: 2026-08-12
 Owner: AX Code Desktop
 
 # PRD: AX Work (Desktop Computer Use)
 
+> **Superseded** by [PRD-2026-08-12-ax-work-split](PRD-2026-08-12-ax-work-split.md)
+> and [ADR-053](../adr/ADR-053-ax-work-product-split.md). Combining Work with
+> AX Code Desktop is rejected. Computer-use safety (old R6–R23) relocates;
+> G1 / Work tab / coding ladder do not.
+
 | Field | Value |
 |-------|-------|
-| Status | Active |
+| Status | Superseded |
 | Owner | AX Code Desktop + runtime |
 | Created | 2026-08-12 |
 | Related | Dual review (Codex Sol Max + QoderCLI Qwen 3.8 Max + Kimi k3, 2026-08-12); ADR-052; `.internal/spec/SPEC-2026-08-12-ax-work.md`; `.internal/reports/planning/ax-work/PHASES.md` |

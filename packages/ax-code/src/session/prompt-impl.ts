@@ -18,6 +18,7 @@ import { Todo } from "./todo"
 import { SessionGoal } from "./goal"
 import { Config } from "@/config/config"
 import { fn } from "@/util/fn"
+import { assertWorkSessionSendable } from "./work-session"
 import { agentInfo, modelInfo } from "./prompt-agent-model-info"
 import { processorLoopDecision } from "./prompt-loop-decisions"
 import {
@@ -159,6 +160,7 @@ export namespace SessionPrompt {
 
   export const prompt = fn(PromptInput, async (input) => {
     const session = await Session.get(input.sessionID)
+    assertWorkSessionSendable({ metadata: session.metadata, agent: input.agent })
 
     // User lifecycle hooks (UserPromptSubmit): a blockOnFailure hook can veto
     // the prompt before the user message is persisted. This must run BEFORE

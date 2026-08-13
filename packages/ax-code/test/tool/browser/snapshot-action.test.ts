@@ -61,7 +61,7 @@ function ctx(sessionID: string): Tool.Context {
   return {
     sessionID: SessionID.make(sessionID),
     messageID: MessageID.make("msg_browser_snap"),
-    agent: "work",
+    agent: "build",
     abort: new AbortController().signal,
     messages: [],
     metadata() {},

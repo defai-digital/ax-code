@@ -32,8 +32,8 @@ import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
 import { useCommandsStore } from "@/stores/useCommandsStore"
 import { useWorkModeStore } from "@/stores/useWorkModeStore"
-import { useDesktopSurfaceStore } from "@/stores/useDesktopSurfaceStore"
 import { resolveWorkModeSend, workModeFallbackPrompt } from "@/lib/workMode"
+import { isLegacyWorkSession, WORK_SESSION_SEND_DISABLED } from "@/lib/workSession"
 import { toast } from "@/components/ui"
 import { getSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
@@ -917,9 +917,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
       const configState = useConfigStore.getState()
       const draftAgentName = configState.currentAgentName
-      const surface = useDesktopSurfaceStore.getState().surface
-      const effectiveDraftAgent =
-        trimmedAgent ?? (surface === "work" ? "work" : draftAgentName)
+      const effectiveDraftAgent = trimmedAgent ?? draftAgentName
 
       if (configState.currentProviderId && configState.currentModelId) {
         useSelectionStore
@@ -1005,9 +1003,15 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
     const sessionAgentSelection = useSelectionStore.getState().getSessionAgentSelection(targetSessionId)
     const configAgentName = useConfigStore.getState().currentAgentName
-    const surface = useDesktopSurfaceStore.getState().surface
-    const effectiveAgent =
-      trimmedAgent || sessionAgentSelection || (surface === "work" ? "work" : undefined) || configAgentName || undefined
+    const existingSession =
+      getAllSyncSessions().find((session) => session.id === targetSessionId) ??
+      useGlobalSessionsStore.getState().activeSessions.find((session) => session.id === targetSessionId) ??
+      useGlobalSessionsStore.getState().archivedSessions.find((session) => session.id === targetSessionId)
+    if (isLegacyWorkSession(existingSession) || sessionAgentSelection === "work" || trimmedAgent === "work") {
+      set({ error: WORK_SESSION_SEND_DISABLED })
+      throw new Error(WORK_SESSION_SEND_DISABLED)
+    }
+    const effectiveAgent = trimmedAgent || sessionAgentSelection || configAgentName || undefined
 
     if (effectiveAgent) {
       useSelectionStore.getState().saveSessionAgentSelection(targetSessionId, effectiveAgent)

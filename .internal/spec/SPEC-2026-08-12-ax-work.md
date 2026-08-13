@@ -1,13 +1,18 @@
-Status: Active
+Status: Superseded as product spec
 Scope: planning
 Last reviewed: 2026-08-12
 Owner: AX Code Desktop + runtime
 
 # Tech Spec: AX Work Computer Use
 
+> **Product spec superseded** by
+> [SPEC-2026-08-12-ax-work-split](SPEC-2026-08-12-ax-work-split.md).
+> This file remains the as-built note for the in-tree Phase 1 contract
+> until Track A3 deletes it.
+
 | Field | Value |
 |-------|-------|
-| Status | Active (Phase 1 implemented in-tree; later phases flagged) |
+| Status | Superseded as product spec (Phase 1 still in-tree until A3) |
 | Date | 2026-08-12 |
 | PRD | [PRD-2026-08-12-ax-work](../prd/PRD-2026-08-12-ax-work.md) |
 | ADR | [ADR-052](../adr/ADR-052-ax-work-computer-use.md) |

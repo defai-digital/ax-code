@@ -1,7 +1,0 @@
-Perform one desktop input primitive against the most recent computer_snapshot frame.
-
-Require frameID from the latest snapshot. Prefer elementID. Image-pixel x/y is fallback only.
-Execute exactly one action. After success the previous frame is invalid — read the returned observation.
-If the frame is stale, recapture with computer_snapshot. Do not guess coordinates.
-Use computer_commit-class actions (send, submit, purchase, delete, account changes) only when the user asked for that outcome.
-Never drive AX Code itself, lock screens, password managers, or secure text fields.

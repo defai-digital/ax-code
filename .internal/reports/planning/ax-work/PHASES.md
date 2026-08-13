@@ -1,98 +1,67 @@
 Status: Active
 Scope: planning
 Last reviewed: 2026-08-12
-Owner: AX Code Desktop + runtime
+Owner: AX Work + AX Code Desktop
 
-# AX Work — multiphase plan
+# AX Work — dual-track plan (product split)
 
-Related: PRD-2026-08-12-ax-work, ADR-052, SPEC-2026-08-12-ax-work.
+Related: PRD-2026-08-12-ax-work-split, ADR-053, SPEC-2026-08-12-ax-work-split,
+SPLIT-REVIEW.md.
 
-## Phase 1 — Contract (this change)
+Supersedes the in-app 8-phase plan that assumed Work | Code in one Desktop.
 
-In-tree, no native code.
+**Status 2026-08-12:** A1–A4 implemented in this repo. Track B lives in
+`~/code/ax-work` (protocol copied, helper crate, closed allowlist,
+qualification evidence checked in).
 
-- ADR-052 / PRD / spec / this plan
-- Protocol, errors, fake host
-- Permission exact-grant + never-autonomous + `computer_commit`
-- `work` agent + tools behind `AX_CODE_EXPERIMENTAL_COMPUTER_AGENT`
-- `SessionMetadata.work`
-- Unit tests
+## Track A — this repo (ax-code)
 
-**Exit:** tools fail closed without a host; wildcards/autonomous cannot grant.
+### A1 — Remove the Work product surface **(done)**
 
-## Phase 2 — Browser session hardening
+Deleted, not hidden: Work tab, `DesktopSurfaceToggle`,
+`useDesktopSurfaceStore`, `WorkHome`, `desktopSurface.ts`, header / empty
+state / session-action Work branches, i18n `header.surface.work` and
+`work.home.*`.
 
-Depends on: 1 (router can prefer `browser_*` safely).
+Legacy `workSession.ts` remains only as a send-block for old rows.
 
-- `BrowserRuntime.forSession(sessionID)`
-- `browser_snapshot` returns `snapshotID`
-- `browser_action` requires it and returns a fresh snapshot
-- Tests: two sessions, stale snapshot
+### A2 — Remove Work runtime productization **(done)**
 
-## Phase 3 — macOS observe-only helper
+`work` agent + `PROMPT_WORK` + `work.txt` removed. Server cannot resolve
+agent `work`. `work-session.ts` only disables send on legacy rows.
+`SessionMetadata.Work` is still readable.
 
-Depends on: 1.
+### A3 — Relocate computer-use runtime **(done)**
 
-- `crates/ax-code-computer` + `packages/ax-code-computer-native`
-- Electron utility host, capability transport
-- ScreenCaptureKit + pruned AX tree, image budget, secure-surface mask
-- Signed packaged identity
+Copied into `~/code/ax-work`, then deleted:
 
-**Exit:** approved Calendar window observed; raw image never on renderer IPC.
+- `src/visual/computer/*`
+- `src/tool/computer/*`
+- `AX_CODE_EXPERIMENTAL_COMPUTER_AGENT` and registry gates
 
-## Phase 4 — Snapshot tool + Work session UX (observe)
+Kept: `visual/native.ts` and session-scoped `browser_*`.
 
-Depends on: 1, 3.
+### A4 — Docs + regression gates **(done)**
 
-- Bind host to `computer_snapshot`
-- Ephemeral/model-only attachments
-- `WorkHome` creates `agent:"work"` sessions
-- Observe-only status UI
+Old PRD / ADR-052 D1 / SPEC marked superseded. Tests assert absence of
+surface, agent, flag, and computer tool IDs.
 
-## Phase 5 — Local permission plane
+## Track B — `~/code/ax-work`
 
-Depends on: 1, 4.
+B1 repository scaffold, B2 slim sessions + Alibaba pin, B3 protocol +
+permission plane, B4 helper crate, B5 input/safety contract, B6
+restricted browser, B7 qualification evidence — implemented in that
+repo. Native ScreenCaptureKit / CGEvent actuation remains the live
+helper upgrade path; the host state machine and fake backend are the
+tested contract.
 
-- User-scoped `ComputerPermission` table
-- `desktop_work_get_capabilities|request_os_access|authorize|emergency_stop`
-- `ComputerPermissionCard` + TCC handoff
-- Tests: wildcard / autonomous / full-access / project config / remote reply
+## Copy versus rewrite
 
-## Phase 6 — macOS input
+**Copied as seed:** protocol / frame / fake-host, stale-frame / image
+budget tests, exact-allow algorithm.
 
-Depends on: 3, 5.
+**Rewritten:** registry, prompt, permission store, computer tools
+(`resolveTarget` first, ephemeral image channel), model pin, UI, helper.
 
-- AX actions first, CGEvent fallback
-- `computer_action`, lease, 50-action cap, Esc/human pause
-- Flag still not on for ordinary users
-
-## Phase 7 — Safety loop + control UX
-
-Depends on: 6.
-
-- `computer_commit` semantic classes
-- Injection labels; 3-repeat no-progress
-- Control bar, overlay ring, provider disclosure
-
-## Phase 8 — Model qualification + opt-in
-
-Depends on: 7.
-
-- Qualify `openai/gpt-5.6-sol`, `xai/grok-4.5`; pin session model and disable provider fallback (R25/R26)
-- Gate Alibaba `qwen3.8-max` on image-in-tool-result probe
-- Enable `AX_CODE_EXPERIMENTAL_COMPUTER_AGENT` as macOS Desktop opt-in
-
-## PR mapping
-
-| PR | Phase | Title |
-|----|-------|-------|
-| 1 | 1 | AX Work contract, Work agent, computer tools (fail closed) |
-| 2 | 2 | Session-scoped browser snapshots |
-| 3 | 3 | macOS observe-only computer host |
-| 4 | 4 | Work session observe UX |
-| 5 | 5 | User-scoped computer permissions + local IPC |
-| 6 | 6 | macOS computer_action primitives |
-| 7 | 7 | Commit gates, overlay, pause/stop |
-| 8 | 8 | Qualified cloud models + opt-in flag |
-
-Windows/Linux backends are post-v1 and reuse the Phase 1 contract unchanged.
+**Never ported:** bash/edit/write/patch/grep/glob/read/lsp/code-intelligence/
+graph/isolation/mcp/plugin/terminal/PTY/git.
