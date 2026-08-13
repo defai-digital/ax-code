@@ -10,6 +10,7 @@ import { SystemPrompt } from "../../src/session/system"
 import { tmpdir } from "../fixture/fixture"
 import PROMPT_KIMI from "../../src/session/prompt/kimi.txt"
 import PROMPT_DEFAULT from "../../src/session/prompt/default.txt"
+import PROMPT_CRAFT from "../../src/session/prompt/craft.txt"
 
 describe("session.system", () => {
   test("routes Kimi / Moonshot models to the Kimi action-first prompt", () => {
@@ -18,7 +19,7 @@ describe("session.system", () => {
       providerID: "alibaba-pai",
       api: { id: "Kimi-K2.7-Code", url: "http://127.0.0.1/v1" },
     } as any)
-    expect(kimi).toEqual([PROMPT_KIMI])
+    expect(kimi).toEqual([PROMPT_KIMI, PROMPT_CRAFT])
     expect(kimi[0]).toContain("treat it as a task")
     expect(kimi[0]).not.toContain("fewer than 4 lines")
 
@@ -27,14 +28,18 @@ describe("session.system", () => {
       providerID: "moonshotai",
       api: { id: "kimi-k2.7-code", url: "https://api.moonshot.ai/v1" },
     } as any)
-    expect(moonshot).toEqual([PROMPT_KIMI])
+    expect(moonshot).toEqual([PROMPT_KIMI, PROMPT_CRAFT])
 
     const qwen = SystemPrompt.provider({
       id: "alibaba-coding-plan/qwen3.7-max",
       providerID: "alibaba-coding-plan",
       api: { id: "qwen3.7-max", url: "https://dashscope.aliyuncs.com" },
     } as any)
-    expect(qwen).toEqual([PROMPT_DEFAULT])
+    expect(qwen).toEqual([PROMPT_DEFAULT, PROMPT_CRAFT])
+    expect(PROMPT_CRAFT).toContain("Compute. Do not estimate")
+    expect(PROMPT_CRAFT).toContain("Search, then open the page")
+    expect(PROMPT_CRAFT).toContain("You are the orchestrator")
+    expect(PROMPT_CRAFT).toContain("Do not ask permission to delegate")
     expect(PROMPT_DEFAULT).not.toContain("fewer than 4 lines")
     expect(PROMPT_DEFAULT).not.toContain("One word answers are best")
     expect(PROMPT_DEFAULT).toContain("Default to doing the work")

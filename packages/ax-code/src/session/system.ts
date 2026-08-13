@@ -9,6 +9,7 @@ import PROMPT_AX_ENGINE from "./prompt/ax-engine.txt"
 import PROMPT_BEAST from "./prompt/beast.txt"
 import PROMPT_GEMINI from "./prompt/gemini.txt"
 import PROMPT_KIMI from "./prompt/kimi.txt"
+import PROMPT_CRAFT from "./prompt/craft.txt"
 
 import PROMPT_TRINITY from "./prompt/trinity.txt"
 import type { Provider } from "@/provider/provider"
@@ -36,20 +37,24 @@ import { maybeRenderAxWikiProtocol } from "@ax-code/ax-wiki"
 export namespace SystemPrompt {
   const log = Log.create({ service: "session.system-prompt" })
 
+  function withCraft(prompt: string) {
+    return [prompt, PROMPT_CRAFT]
+  }
+
   export function provider(model: Provider.Model) {
-    if (model.providerID === "ax-engine") return [PROMPT_AX_ENGINE]
+    if (model.providerID === "ax-engine") return withCraft(PROMPT_AX_ENGINE)
     if (
       model.api.id.includes("gpt-4") ||
       model.api.id.includes("o1") ||
       model.api.id.includes("o3") ||
       model.api.id.includes("gpt")
     )
-      return [PROMPT_BEAST]
-    if (model.api.id.includes("gemini-")) return [PROMPT_GEMINI]
-    if (model.api.id.includes("claude")) return [PROMPT_ANTHROPIC]
-    if (model.api.id.toLowerCase().includes("trinity")) return [PROMPT_TRINITY]
-    if (ProviderTransform.isKimiFamily(model)) return [PROMPT_KIMI]
-    return [PROMPT_DEFAULT]
+      return withCraft(PROMPT_BEAST)
+    if (model.api.id.includes("gemini-")) return withCraft(PROMPT_GEMINI)
+    if (model.api.id.includes("claude")) return withCraft(PROMPT_ANTHROPIC)
+    if (model.api.id.toLowerCase().includes("trinity")) return withCraft(PROMPT_TRINITY)
+    if (ProviderTransform.isKimiFamily(model)) return withCraft(PROMPT_KIMI)
+    return withCraft(PROMPT_DEFAULT)
   }
 
   export function request(input: {
