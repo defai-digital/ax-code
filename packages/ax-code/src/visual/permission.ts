@@ -16,13 +16,13 @@ export type BrowserSitePermission = {
   grantedAt: string
 }
 
+export type ComputerGrantMode = "allow-session" | "always-allow" | "deny"
+
 export type ComputerAppPermission = {
   appID: string
   displayName: string
-  mode: BrowserSiteMode
-  canCapture: boolean
-  canInput: boolean
-  grantedAt: string
+  capture: { mode: ComputerGrantMode; grantedAt: string }
+  input: { mode: ComputerGrantMode; grantedAt: string }
 }
 
 export namespace BrowserPermission {

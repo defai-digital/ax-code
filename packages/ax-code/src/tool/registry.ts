@@ -32,6 +32,8 @@ import { ProviderID, type ModelID } from "../provider/schema"
 import { WebSearchTool } from "./websearch"
 import { CodeSearchTool } from "./codesearch"
 import { Flag } from "@/flag/flag"
+import { ComputerSnapshotTool } from "./computer/snapshot"
+import { ComputerActionTool } from "./computer/action"
 import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { LspTool } from "./lsp"
@@ -193,6 +195,7 @@ export namespace ToolRegistry {
       Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
       Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE,
       Flag.AX_CODE_EXPERIMENTAL_BROWSER_AGENT,
+      Flag.AX_CODE_EXPERIMENTAL_COMPUTER_AGENT,
       input.cfg.provider?.[AX_ENGINE_PROVIDER_ID]?.options?.toolProfile ?? "core",
       experimental,
     ].join(":")
@@ -287,6 +290,7 @@ export namespace ToolRegistry {
             VisualSnapshotTool,
           ]
         : []),
+      ...(Flag.AX_CODE_EXPERIMENTAL_COMPUTER_AGENT ? [ComputerSnapshotTool, ComputerActionTool] : []),
       ...custom,
     ]
   }
@@ -344,6 +348,10 @@ export namespace ToolRegistry {
             model.modelID.includes("gpt-") && !model.modelID.includes("oss") && !model.modelID.includes("gpt-4")
           if (tool.id === "apply_patch") return usePatch
           if (tool.id === "edit" || tool.id === "write") return !usePatch
+
+          if (tool.id === "computer_snapshot" || tool.id === "computer_action") {
+            return agent?.name === "work" && agent.options?.computer === true
+          }
 
           return true
         })

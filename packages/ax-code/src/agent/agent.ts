@@ -19,7 +19,9 @@ import PROMPT_PERF from "./prompt/perf.txt"
 import PROMPT_TEST from "./prompt/test.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
+import PROMPT_WORK from "./prompt/work.txt"
 import { Permission } from "@/permission"
+import { Flag } from "@/flag/flag"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"
 import path from "path"
@@ -142,6 +144,7 @@ export namespace Agent {
       "compaction",
       "title",
       "summary",
+      ...(Flag.AX_CODE_EXPERIMENTAL_COMPUTER_AGENT ? (["work"] as const) : []),
       ...Object.keys(cfg.agent ?? {}),
     ]
     await Promise.all(
@@ -351,6 +354,35 @@ export namespace Agent {
         permission: Permission.merge(defaults, policy("summary"), denyAll, user),
         prompt: PROMPT_SUMMARY,
       },
+      ...(Flag.AX_CODE_EXPERIMENTAL_COMPUTER_AGENT
+        ? {
+            work: {
+              name: "work",
+              displayName: "Work",
+              description:
+                "AX Work desktop agent. Prefers connectors and files; uses computer_snapshot/computer_action only as a last resort.",
+              prompt: PROMPT_WORK,
+              tier: "core" as const,
+              options: { computer: true },
+              permission: Permission.merge(
+                defaults,
+                policy("work"),
+                Permission.fromConfig({
+                  task: "deny",
+                  task_parallel: "deny",
+                  council: "deny",
+                  arena: "deny",
+                  computer_capture: "ask",
+                  computer_input: "ask",
+                  computer_commit: "ask",
+                }),
+                user,
+              ),
+              mode: "primary" as const,
+              native: true,
+            },
+          }
+        : {}),
     }
 
     for (const [key, value] of Object.entries(cfg.agent ?? {})) {

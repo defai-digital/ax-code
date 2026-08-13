@@ -57,6 +57,17 @@ export namespace SessionMetadata {
     .meta({ ref: "AppSessionMetadata" })
   export type App = z.output<typeof App>
 
+  export const Work = z
+    .object({
+      version: z.literal(1),
+      computer: z.boolean(),
+      providerID: OptionalID,
+      modelID: OptionalID,
+    })
+    .strict()
+    .meta({ ref: "WorkSessionMetadata" })
+  export type Work = z.output<typeof Work>
+
   export const Product = z
     .object({
       queue: Queue.optional(),
@@ -64,12 +75,13 @@ export namespace SessionMetadata {
       automation: Automation.optional(),
       review: Review.optional(),
       app: App.optional(),
+      work: Work.optional(),
     })
     .strict()
     .meta({ ref: "SessionProductMetadata" })
   export type Product = z.output<typeof Product>
 
-  export const Namespace = z.enum(["queue", "multiRun", "automation", "review", "app"])
+  export const Namespace = z.enum(["queue", "multiRun", "automation", "review", "app", "work"])
   export type Namespace = z.output<typeof Namespace>
 
   const namespaceSchemas = {
@@ -78,6 +90,7 @@ export namespace SessionMetadata {
     automation: Automation,
     review: Review,
     app: App,
+    work: Work,
   } satisfies Record<Namespace, z.ZodType>
 
   export const Metadata = z

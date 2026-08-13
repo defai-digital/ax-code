@@ -15,7 +15,7 @@ import { Filesystem } from "@/util/filesystem"
 import os from "os"
 import path from "path"
 import z from "zod"
-import { evaluate as evalRule } from "./evaluate"
+import { evaluate as evalRule, EXACT_GRANT_ONLY } from "./evaluate"
 import { classify as classifyRisk } from "./risk-classes"
 import { PermissionID } from "./schema"
 import { Flag } from "@/flag/flag"
@@ -203,10 +203,27 @@ export namespace Permission {
   // auto-reply. This prevents agent default rules like
   // {permission:"*",action:"allow",pattern:"*"} and headless projection
   // from silently bypassing critical safety checks.
-  export const INTERACTIVE_ONLY: ReadonlySet<string> = new Set(["isolation_escalation", "bash_destructive"])
+  export const INTERACTIVE_ONLY: ReadonlySet<string> = new Set([
+    "isolation_escalation",
+    "bash_destructive",
+    "computer_commit",
+  ])
+
+  export const EXACT_GRANT_ONLY_PERMISSIONS: ReadonlySet<string> = EXACT_GRANT_ONLY
+
+  /** Computer capture/input/commit never auto-approve, including full-access autonomous (ADR-052). */
+  export const NEVER_AUTONOMOUS_AUTOAPPROVE: ReadonlySet<string> = new Set([
+    "computer_capture",
+    "computer_input",
+    "computer_commit",
+  ])
 
   export function isInteractiveOnly(permission: string): boolean {
     return INTERACTIVE_ONLY.has(permission)
+  }
+
+  export function isNeverAutonomousAutoApprove(permission: string): boolean {
+    return NEVER_AUTONOMOUS_AUTOAPPROVE.has(permission)
   }
 
   async function serializeAlwaysReply<T>(s: State, fn: () => Promise<T>) {
@@ -331,7 +348,11 @@ export namespace Permission {
     // explicitly opted out of all restrictions. In that posture, risk-class
     // permissions are auto-approved so the sandbox toggle meaningfully
     // controls whether the agent runs without approval prompts.
-    if (ScopedFlag.autonomous() && !INTERACTIVE_ONLY.has(request.permission)) {
+    if (
+      ScopedFlag.autonomous() &&
+      !INTERACTIVE_ONLY.has(request.permission) &&
+      !NEVER_AUTONOMOUS_AUTOAPPROVE.has(request.permission)
+    ) {
       const riskClass = classifyRisk(request.permission)
       if (riskClass === "safe") {
         log.info("autonomous auto-approve (safe)", { permission: request.permission, patterns: request.patterns })

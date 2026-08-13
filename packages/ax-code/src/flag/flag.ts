@@ -215,6 +215,8 @@ export namespace Flag {
   // local web UI review and repair. Gated behind feature flag until the
   // Playwright runtime dependency and permission model are stable.
   export const AX_CODE_EXPERIMENTAL_BROWSER_AGENT = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_BROWSER_AGENT")
+  // AX Work computer-use (ADR-052). Opt-in only — not implied by AX_CODE_EXPERIMENTAL.
+  export const AX_CODE_EXPERIMENTAL_COMPUTER_AGENT = truthy("AX_CODE_EXPERIMENTAL_COMPUTER_AGENT")
   // Visual artifact storage: enables `.ax-code/visual-runs/` directory
   // for screenshot, DOM, console, and network evidence from visual runs.
   export const AX_CODE_EXPERIMENTAL_VISUAL_ARTIFACTS =
