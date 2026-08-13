@@ -689,8 +689,23 @@ export const TuiThreadCommand = cmd({
       // inherits the environment.
       process.env.AX_CODE_NATIVE_RENDER = "0"
       process.env.AX_CODE_NATIVE_RENDER_SCOPE = ""
+
+      // ADR-054 dogfood: provision loopback Basic auth *before* backend spawn so
+      // Flag.AX_CODE_SERVER_PASSWORD (module-load snapshot in the child) and the
+      // server middleware see a password. Parent keeps the value for the sidecar.
+      const { isRatatuiDogfood } = await import("./ratatui-engine")
+      let ratatuiDogfoodPassword: string | undefined
+      if (isRatatuiDogfood()) {
+        const { ensureDogfoodPassword } = await import("./ratatui-launch")
+        ratatuiDogfoodPassword = ensureDogfoodPassword(process.env)
+        process.env.AX_CODE_SERVER_PASSWORD = ratatuiDogfoodPassword
+        process.env.AX_CODE_SERVER_USERNAME = process.env.AX_CODE_SERVER_USERNAME ?? "ax-code"
+        process.env.AX_CODE_TUI_PASSWORD = ratatuiDogfoodPassword
+      }
+
       DiagnosticLog.recordProcess("tui.threadStarted", {
         args: process.argv.slice(2),
+        engine: isRatatuiDogfood() ? "ratatui" : "opentui",
       })
 
       // Resolve relative --project paths from the caller's original cwd, then
@@ -896,8 +911,14 @@ export const TuiThreadCommand = cmd({
       })
 
       const network = await resolveNetworkOptions(args)
+      const ratatuiDogfood = isRatatuiDogfood()
+      // Ratatui sidecar needs a real HTTP loopback server (not the worker-fetch bridge).
       const external =
-        hasExplicitNetworkBindFlag() || network.mdns || network.port !== 0 || network.hostname !== "127.0.0.1"
+        ratatuiDogfood ||
+        hasExplicitNetworkBindFlag() ||
+        network.mdns ||
+        network.port !== 0 ||
+        network.hostname !== "127.0.0.1"
 
       const transport = external
         ? {
@@ -913,6 +934,7 @@ export const TuiThreadCommand = cmd({
       DiagnosticLog.recordProcess("tui.threadTransportSelected", {
         mode: external ? "external" : "internal",
         url: transport.url,
+        engine: ratatuiDogfood ? "ratatui" : "opentui",
       })
 
       const upgradeDelayMs = tuiUpgradeCheckDelayMs()
@@ -939,6 +961,29 @@ export const TuiThreadCommand = cmd({
       upgradeTimer?.unref?.()
 
       try {
+        if (ratatuiDogfood) {
+          const { launchRatatuiTui } = await import("./ratatui-launch")
+          const password =
+            ratatuiDogfoodPassword ??
+            process.env.AX_CODE_TUI_PASSWORD ??
+            process.env.AX_CODE_SERVER_PASSWORD
+          if (!password) {
+            UI.error("Ratatui dogfood requires runtime authorization (password missing).")
+            process.exitCode = 2
+            return
+          }
+          const code = await launchRatatuiTui({
+            url: transport.url,
+            directory: cwd,
+            sessionID: args.session,
+            prompt,
+            password,
+            smoke: process.env.AX_CODE_TUI_SMOKE === "1",
+          })
+          process.exitCode = code
+          return
+        }
+
         const appImportStartedAt = performance.now()
         DiagnosticLog.recordProcess("tui.appImportStarted", {})
         const app = await import("./app").catch((error) => {

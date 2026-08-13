@@ -13,3 +13,4 @@ Canonical index for local-only product requirements. New PRDs use the filename f
 | [Module-by-Module Quality Audit](PRD-2026-08-11-module-by-module-quality-audit.md) | Active | AX Code CLI & Desktop maintainers |
 | [AX Work (Desktop Computer Use)](PRD-2026-08-12-ax-work.md) | Superseded | AX Code Desktop + runtime |
 | [AX Work product split](PRD-2026-08-12-ax-work-split.md) | Active | AX Work + AX Code Desktop |
+| [TUI Revamp 2 — Ratatui presentation](PRD-2026-08-13-tui-revamp-2-ratatui.md) | Active | AX Code CLI |
