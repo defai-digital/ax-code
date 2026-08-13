@@ -6,7 +6,7 @@ describe("browser_action tool", () => {
     const tool = await BrowserActionTool.init()
     await expect(
       tool.execute(
-        { action: "navigate", url: "file:///etc/passwd" },
+        { action: "navigate", snapshotID: "snap_unused", url: "file:///etc/passwd" },
         {
           sessionID: "ses_test" as never,
           messageID: "msg_test" as never,

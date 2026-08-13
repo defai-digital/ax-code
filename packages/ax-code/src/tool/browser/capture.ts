@@ -12,7 +12,7 @@ export const BrowserCaptureTool = Tool.define("browser_capture", {
     uid: z.string().optional().describe("Element UID from the latest snapshot (captures specific element)"),
   }),
   async execute(params, ctx) {
-    const runtime = BrowserRuntime.get()
+    const runtime = BrowserRuntime.forSession(ctx.sessionID)
     const screenshot = await runtime.screenshot("latest", {
       fullPage: params.fullPage,
       format: params.format,

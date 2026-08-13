@@ -26,6 +26,9 @@ import { stripMessageDiffSnapshots } from "./sanitize"
 import { sessionEvents } from "@/lib/sessionEvents"
 import { toast } from "@/components/ui"
 import { useI18nStore, formatMessage } from "@/lib/i18n/store"
+import { useDesktopSurfaceStore } from "@/stores/useDesktopSurfaceStore"
+import { workSurfaceSessionIntent } from "@/lib/workSession"
+import { useSelectionStore } from "@/sync/selection-store"
 
 const MESSAGE_REFETCH_LIMIT = 200
 const MESSAGE_REFETCH_SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
@@ -554,6 +557,22 @@ export async function createSession(
     if (result.error) throw new Error(`Failed to create session: ${formatSdkError(result.error)}`)
     const session = result.data
     if (!session) throw new Error("Failed to create session: response did not include session data")
+
+    const workIntent = workSurfaceSessionIntent(useDesktopSurfaceStore.getState().surface)
+    if (workIntent) {
+      const updated = await client.session.update({
+        sessionID: session.id,
+        directory,
+        metadata: {
+          ...(session.metadata ?? {}),
+          ...workIntent.metadata,
+        },
+      })
+      if (!updated.error && updated.data) {
+        Object.assign(session, updated.data)
+      }
+      useSelectionStore.getState().saveSessionAgentSelection(session.id, workIntent.agent)
+    }
 
     const sessionDirectory = (session as { directory?: string }).directory ?? directory ?? null
     // Pre-populate routing index so SSE events arriving before session.created

@@ -28,6 +28,7 @@ export type BrowserPage = {
 
 export type BrowserSnapshot = {
   pageID: string
+  snapshotID: string
   elements: { uid: string; role: string; name: string; value?: string }[]
   text: string
 }
@@ -194,12 +195,14 @@ const SNAPSHOT_SCRIPT = `
 
 export class BrowserRuntime {
   private static instance: BrowserRuntime | undefined
+  private static bySession = new Map<string, BrowserRuntime>()
 
   private browser: PwBrowser | undefined
   private pages = new Map<string, PageEntry>()
   private consoleBuffers = new Map<string, BrowserConsoleMessage[]>()
   private networkBuffers = new Map<string, BrowserNetworkRequest[]>()
   private uidRegistry = new Map<string, { pageID: string; uid: string }>()
+  private snapshots = new Map<string, { pageID: string; consumed: boolean }>()
   private latestPageID: string | undefined
   private pageCounter = 0
   private launchPromise: Promise<PwBrowser> | undefined
@@ -216,6 +219,9 @@ export class BrowserRuntime {
         if (BrowserRuntime.instance) {
           BrowserRuntime.instance.close().catch(() => {})
         }
+        for (const runtime of BrowserRuntime.bySession.values()) {
+          runtime.close().catch(() => {})
+        }
       }
       // NOTE: "exit" handler removed — async close() cannot complete
       // during the synchronous exit event. SIGINT/SIGTERM work because
@@ -226,9 +232,21 @@ export class BrowserRuntime {
     return BrowserRuntime.instance
   }
 
-  /** Reset singleton (test-only). */
+  /** Isolated runtime for one AX session (Work / browser tools). */
+  static forSession(sessionID: string): BrowserRuntime {
+    if (!sessionID) return BrowserRuntime.get()
+    let runtime = BrowserRuntime.bySession.get(sessionID)
+    if (!runtime) {
+      runtime = new BrowserRuntime()
+      BrowserRuntime.bySession.set(sessionID, runtime)
+    }
+    return runtime
+  }
+
+  /** Reset singleton and per-session runtimes (test-only). */
   static _reset(): void {
     BrowserRuntime.instance = undefined
+    BrowserRuntime.bySession.clear()
   }
 
   // ---- helpers ----
@@ -373,16 +391,33 @@ export class BrowserRuntime {
     }
 
     const text = lines.length > 0 ? lines.join("\n") : "(empty page — no interactive elements found)"
+    const snapshotID = crypto.randomUUID()
+    this.snapshots.set(snapshotID, { pageID: entry.pageID, consumed: false })
 
     return {
       pageID: entry.pageID,
+      snapshotID,
       elements: elements.map(({ uid, role, name, value }) => ({ uid, role, name, value })),
       text,
     }
   }
 
+  consumeSnapshot(snapshotID: string): { pageID: string } {
+    const snap = this.snapshots.get(snapshotID)
+    if (!snap || snap.consumed) {
+      throw new Error(`BROWSER_STALE_SNAPSHOT: snapshot "${snapshotID}" is missing, consumed, or belongs to another session`)
+    }
+    snap.consumed = true
+    return { pageID: snap.pageID }
+  }
+
   async action(pageID: string, actionType: string, params: Record<string, unknown>): Promise<string> {
-    const entry = this.resolvePage(pageID)
+    const snapshotID = params.snapshotID
+    if (typeof snapshotID !== "string" || snapshotID.length === 0) {
+      throw new Error("BROWSER_STALE_SNAPSHOT: snapshotID from the latest browser_snapshot is required")
+    }
+    const bound = this.consumeSnapshot(snapshotID)
+    const entry = this.resolvePage(bound.pageID)
     const pwPage = entry.pwPage
 
     const uid = params.uid as string | undefined

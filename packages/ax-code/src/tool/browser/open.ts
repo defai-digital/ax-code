@@ -32,7 +32,7 @@ export const BrowserOpenTool = Tool.define("browser_open", {
       },
     })
 
-    const runtime = BrowserRuntime.get()
+    const runtime = BrowserRuntime.forSession(ctx.sessionID)
     const page = await runtime.open(params.url, params.viewport)
 
     return {

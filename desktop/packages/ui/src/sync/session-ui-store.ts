@@ -32,6 +32,7 @@ import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
 import { useCommandsStore } from "@/stores/useCommandsStore"
 import { useWorkModeStore } from "@/stores/useWorkModeStore"
+import { useDesktopSurfaceStore } from "@/stores/useDesktopSurfaceStore"
 import { resolveWorkModeSend, workModeFallbackPrompt } from "@/lib/workMode"
 import { toast } from "@/components/ui"
 import { getSafeStorage } from "@/stores/utils/safeStorage"
@@ -916,7 +917,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
       const configState = useConfigStore.getState()
       const draftAgentName = configState.currentAgentName
-      const effectiveDraftAgent = trimmedAgent ?? draftAgentName
+      const surface = useDesktopSurfaceStore.getState().surface
+      const effectiveDraftAgent =
+        trimmedAgent ?? (surface === "work" ? "work" : draftAgentName)
 
       if (configState.currentProviderId && configState.currentModelId) {
         useSelectionStore
@@ -1002,7 +1005,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
     const sessionAgentSelection = useSelectionStore.getState().getSessionAgentSelection(targetSessionId)
     const configAgentName = useConfigStore.getState().currentAgentName
-    const effectiveAgent = trimmedAgent || sessionAgentSelection || configAgentName || undefined
+    const surface = useDesktopSurfaceStore.getState().surface
+    const effectiveAgent =
+      trimmedAgent || sessionAgentSelection || (surface === "work" ? "work" : undefined) || configAgentName || undefined
 
     if (effectiveAgent) {
       useSelectionStore.getState().saveSessionAgentSelection(targetSessionId, effectiveAgent)

@@ -29,7 +29,7 @@ export const BrowserNetworkTool = Tool.define("browser_network", {
     pageSize: z.number().int().min(1).max(100).default(50).describe("Number of requests per page"),
   }),
   async execute(params, ctx) {
-    const runtime = BrowserRuntime.get()
+    const runtime = BrowserRuntime.forSession(ctx.sessionID)
     const requests = await runtime.network("latest", {
       resourceTypes: params.resourceTypes,
       pageIdx: params.pageIdx,

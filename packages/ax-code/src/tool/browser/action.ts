@@ -10,6 +10,7 @@ export const BrowserActionTool = Tool.define("browser_action", {
     action: z
       .enum(["click", "fill", "press", "hover", "scroll", "select", "navigate", "waitFor", "drag", "uploadFile"])
       .describe("The action to perform"),
+    snapshotID: z.string().min(1).describe("snapshotID from the latest browser_snapshot in this session"),
     uid: z
       .string()
       .optional()
@@ -42,15 +43,24 @@ export const BrowserActionTool = Tool.define("browser_action", {
       })
     }
 
-    const runtime = BrowserRuntime.get()
+    const runtime = BrowserRuntime.forSession(ctx.sessionID)
     const result = await runtime.action("latest", params.action, params as Record<string, unknown>)
+    let nextSnapshotID: string | undefined
+    try {
+      const next = await runtime.snapshot("latest", false)
+      nextSnapshotID = next.snapshotID
+    } catch {
+      nextSnapshotID = undefined
+    }
 
     return {
       title: `${params.action}${params.uid ? ` [${params.uid}]` : ""}`,
-      output: result || `${params.action} completed`,
+      output: nextSnapshotID ? `${result}\n\nsnapshotID=${nextSnapshotID}` : result || `${params.action} completed`,
       metadata: {
         action: params.action,
         uid: params.uid,
+        consumedSnapshotID: params.snapshotID,
+        snapshotID: nextSnapshotID,
       },
     }
   },

@@ -774,6 +774,7 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
         perf: { disable: true },
         devops: { disable: true },
         test: { disable: true },
+        work: { disable: true },
       },
     },
   })
@@ -791,7 +792,7 @@ test("native agents have correct tier assignments", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const core = ["build", "plan", "react"]
+      const core = ["build", "plan", "react", "work"]
       for (const name of core) {
         const agent = await Agent.get(name)
         expect(Agent.resolveTier(agent!)).toBe("core")

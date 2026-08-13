@@ -144,7 +144,7 @@ export namespace Agent {
       "compaction",
       "title",
       "summary",
-      ...(Flag.AX_CODE_EXPERIMENTAL_COMPUTER_AGENT ? (["work"] as const) : []),
+      "work",
       ...Object.keys(cfg.agent ?? {}),
     ]
     await Promise.all(
@@ -354,35 +354,31 @@ export namespace Agent {
         permission: Permission.merge(defaults, policy("summary"), denyAll, user),
         prompt: PROMPT_SUMMARY,
       },
-      ...(Flag.AX_CODE_EXPERIMENTAL_COMPUTER_AGENT
-        ? {
-            work: {
-              name: "work",
-              displayName: "Work",
-              description:
-                "AX Work desktop agent. Prefers connectors and files; uses computer_snapshot/computer_action only as a last resort.",
-              prompt: PROMPT_WORK,
-              tier: "core" as const,
-              options: { computer: true },
-              permission: Permission.merge(
-                defaults,
-                policy("work"),
-                Permission.fromConfig({
-                  task: "deny",
-                  task_parallel: "deny",
-                  council: "deny",
-                  arena: "deny",
-                  computer_capture: "ask",
-                  computer_input: "ask",
-                  computer_commit: "ask",
-                }),
-                user,
-              ),
-              mode: "primary" as const,
-              native: true,
-            },
-          }
-        : {}),
+      work: {
+        name: "work",
+        displayName: "Work",
+        description:
+          "AX Work desktop agent. Prefers connectors and files; uses computer_snapshot/computer_action only as a last resort.",
+        prompt: PROMPT_WORK,
+        tier: "core",
+        options: { computer: Flag.AX_CODE_EXPERIMENTAL_COMPUTER_AGENT },
+        permission: Permission.merge(
+          defaults,
+          policy("work"),
+          Permission.fromConfig({
+            task: "deny",
+            task_parallel: "deny",
+            council: "deny",
+            arena: "deny",
+            computer_capture: "ask",
+            computer_input: "ask",
+            computer_commit: "ask",
+          }),
+          user,
+        ),
+        mode: "primary",
+        native: true,
+      },
     }
 
     for (const [key, value] of Object.entries(cfg.agent ?? {})) {

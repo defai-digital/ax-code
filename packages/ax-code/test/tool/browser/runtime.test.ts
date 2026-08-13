@@ -99,6 +99,17 @@ function injectPage(
   internals.latestPageID = pageID
 }
 
+async function act(
+  rt: BrowserRuntime,
+  page: ReturnType<typeof createMockPage>,
+  actionType: string,
+  params: Record<string, unknown> = {},
+) {
+  page.evaluate.mockResolvedValueOnce([])
+  const snap = await rt.snapshot("latest", false)
+  return rt.action("latest", actionType, { ...params, snapshotID: snap.snapshotID })
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -150,6 +161,7 @@ describe("browser runtime", () => {
     page2.evaluate.mockResolvedValueOnce([])
     const snapshot = await runtime.snapshot("latest", false)
     expect(snapshot.pageID).toBe("page_2")
+    expect(snapshot.snapshotID).toMatch(/^[0-9a-f-]{36}$/i)
   })
 
   // -- snapshot tests --
@@ -168,6 +180,7 @@ describe("browser runtime", () => {
     const snapshot = await runtime.snapshot("latest", false)
 
     expect(snapshot.pageID).toBe("page_1")
+    expect(snapshot.snapshotID).toBeTruthy()
     expect(snapshot.elements).toHaveLength(3)
     expect(snapshot.elements[0]).toEqual({ uid: "uid_1", role: "heading", name: "Welcome", value: undefined })
     expect(snapshot.text).toContain("heading")
@@ -195,7 +208,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    const result = await runtime.action("latest", "click", { uid: "uid_1" })
+    const result = await act(runtime, page, "click", { uid: "uid_1" })
     expect(result).toBe("Clicked element uid_1")
     expect(page.locator).toHaveBeenCalledWith('[data-uid="uid_1"]')
   })
@@ -205,7 +218,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    const result = await runtime.action("latest", "click", { uid: "uid_1", dblClick: true })
+    const result = await act(runtime, page, "click", { uid: "uid_1", dblClick: true })
     expect(result).toBe("Clicked element uid_1")
     expect(page._locator.dblclick).toHaveBeenCalled()
   })
@@ -215,7 +228,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    const result = await runtime.action("latest", "fill", { uid: "uid_2", value: "hello" })
+    const result = await act(runtime, page, "fill", { uid: "uid_2", value: "hello" })
     expect(result).toBe('Filled element uid_2 with "hello"')
     expect(page._locator.fill).toHaveBeenCalledWith("hello")
   })
@@ -225,7 +238,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    const result = await runtime.action("latest", "press", { key: "Enter", uid: "uid_1" })
+    const result = await act(runtime, page, "press", { key: "Enter", uid: "uid_1" })
     expect(result).toBe("Pressed Enter")
     expect(page._locator.press).toHaveBeenCalledWith("Enter")
   })
@@ -235,7 +248,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    const result = await runtime.action("latest", "press", { key: "Escape" })
+    const result = await act(runtime, page, "press", { key: "Escape" })
     expect(result).toBe("Pressed Escape")
     expect(page.keyboard.press).toHaveBeenCalledWith("Escape")
   })
@@ -245,7 +258,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    const result = await runtime.action("latest", "hover", { uid: "uid_3" })
+    const result = await act(runtime, page, "hover", { uid: "uid_3" })
     expect(result).toBe("Hovered over element uid_3")
   })
 
@@ -254,7 +267,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    const result = await runtime.action("latest", "scroll", { direction: "down", amount: 500 })
+    const result = await act(runtime, page, "scroll", { direction: "down", amount: 500 })
     expect(result).toBe("Scrolled down by 500px")
     expect(page.evaluate).toHaveBeenCalled()
   })
@@ -264,7 +277,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    const result = await runtime.action("latest", "select", { uid: "uid_4", value: "option2" })
+    const result = await act(runtime, page, "select", { uid: "uid_4", value: "option2" })
     expect(result).toBe('Selected "option2" in element uid_4')
     expect(page._locator.selectOption).toHaveBeenCalledWith("option2")
   })
@@ -274,7 +287,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    const result = await runtime.action("latest", "navigate", { type: "back" })
+    const result = await act(runtime, page, "navigate", { type: "back" })
     expect(result).toBe("Navigated back")
     expect(page.goBack).toHaveBeenCalled()
   })
@@ -284,7 +297,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    const result = await runtime.action("latest", "navigate", { type: "forward" })
+    const result = await act(runtime, page, "navigate", { type: "forward" })
     expect(result).toBe("Navigated forward")
     expect(page.goForward).toHaveBeenCalled()
   })
@@ -294,7 +307,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    const result = await runtime.action("latest", "navigate", { type: "reload" })
+    const result = await act(runtime, page, "navigate", { type: "reload" })
     expect(result).toBe("Page reloaded")
     expect(page.reload).toHaveBeenCalled()
   })
@@ -304,7 +317,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    const result = await runtime.action("latest", "navigate", { url: "http://localhost:3000/about" })
+    const result = await act(runtime, page, "navigate", { url: "http://localhost:3000/about" })
     expect(result).toBe("Navigated to http://localhost:3000/about")
     expect(page.goto).toHaveBeenCalledWith("http://localhost:3000/about", {
       waitUntil: "domcontentloaded",
@@ -316,7 +329,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    const result = await runtime.action("latest", "waitFor", { text: "Hello", timeout: 5000 })
+    const result = await act(runtime, page, "waitFor", { text: "Hello", timeout: 5000 })
     expect(result).toBe('Waited for text "Hello"')
     expect(page.waitForSelector).toHaveBeenCalledWith("text=Hello", { timeout: 5000 })
   })
@@ -326,7 +339,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    const result = await runtime.action("latest", "drag", { fromUid: "uid_1", toUid: "uid_2" })
+    const result = await act(runtime, page, "drag", { fromUid: "uid_1", toUid: "uid_2" })
     expect(result).toBe("Dragged uid_1 to uid_2")
   })
 
@@ -335,7 +348,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    const result = await runtime.action("latest", "uploadFile", {
+    const result = await act(runtime, page, "uploadFile", {
       uid: "uid_5",
       filePaths: ["/tmp/test.txt", "/tmp/test2.txt"],
     })
@@ -348,7 +361,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    await expect(runtime.action("latest", "explode", {})).rejects.toThrow(/Unknown browser action/)
+    await expect(act(runtime, page, "explode", {})).rejects.toThrow(/Unknown browser action/)
   })
 
   test('action "click" without uid throws', async () => {
@@ -356,7 +369,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    await expect(runtime.action("latest", "click", {})).rejects.toThrow(/requires a uid/)
+    await expect(act(runtime, page, "click", {})).rejects.toThrow(/requires a uid/)
   })
 
   // -- screenshot tests --
@@ -610,7 +623,7 @@ describe("browser runtime", () => {
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
 
-    await runtime.action("latest", "click", { uid: 'uid_1"; malicious' })
+    await act(runtime, page, "click", { uid: 'uid_1"; malicious' })
     expect(page.locator).toHaveBeenCalledWith('[data-uid="uid_1\\"; malicious"]')
   })
 
@@ -626,5 +639,34 @@ describe("browser runtime", () => {
     expect(result).toBe("result")
     // Should pass the string directly, not a parsed function
     expect(page.evaluate).toHaveBeenCalledWith("() => document.title")
+  })
+
+  test("forSession isolates snapshot IDs across sessions", async () => {
+    const a = BrowserRuntime.forSession("ses_a")
+    const b = BrowserRuntime.forSession("ses_b")
+    const pageA = createMockPage()
+    const pageB = createMockPage()
+    injectPage(a, "page_a", pageA, createMockContext())
+    injectPage(b, "page_b", pageB, createMockContext())
+
+    pageA.evaluate.mockResolvedValueOnce([])
+    const snapA = await a.snapshot("latest", false)
+
+    await expect(b.action("latest", "click", { snapshotID: snapA.snapshotID, uid: "uid_1" })).rejects.toThrow(
+      /BROWSER_STALE_SNAPSHOT/,
+    )
+
+    await expect(a.action("latest", "click", { snapshotID: snapA.snapshotID, uid: "uid_1" })).resolves.toBe(
+      "Clicked element uid_1",
+    )
+    await expect(a.action("latest", "click", { snapshotID: snapA.snapshotID, uid: "uid_1" })).rejects.toThrow(
+      /BROWSER_STALE_SNAPSHOT/,
+    )
+  })
+
+  test("action without snapshotID is rejected", async () => {
+    const page = createMockPage()
+    injectPage(runtime, "page_1", page, createMockContext())
+    await expect(runtime.action("latest", "click", { uid: "uid_1" })).rejects.toThrow(/snapshotID/)
   })
 })

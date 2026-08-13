@@ -1,6 +1,6 @@
 - Performs an action on a page element in the browser
 - Actions: click, fill, press, hover, scroll, select, navigate, waitFor, drag, uploadFile
-- IMPORTANT: Always call browser_snapshot first to get element UIDs before using click, fill, hover, select, or drag
+- IMPORTANT: Always call browser_snapshot first and pass its snapshotID. A consumed or foreign snapshotID is rejected.
 - click: clicks an element by UID (supports dblClick)
 - fill: types text into an input, textarea, or selects an option
 - press: presses a key or key combination (e.g. "Enter", "Control+A", "Escape")

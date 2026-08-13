@@ -17,7 +17,7 @@ export const BrowserEvaluateTool = Tool.define("browser_evaluate", {
       .describe("Arguments to pass to the function (elements referenced by UID)"),
   }),
   async execute(params, ctx) {
-    const runtime = BrowserRuntime.get()
+    const runtime = BrowserRuntime.forSession(ctx.sessionID)
     const result = await runtime.evaluate("latest", params.function, params.args)
 
     return {

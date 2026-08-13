@@ -178,6 +178,10 @@ const mockSdk = {
       createSessionCalls.push({ client: "global", params })
       return Promise.resolve({ data: { id: "ses_global", directory: params.directory } })
     }),
+    update: vi.fn((params: Record<string, unknown>) => {
+      sessionCalls.push({ method: "session.update", params })
+      return Promise.resolve({ data: { id: params.sessionID, directory: params.directory, metadata: params.metadata } })
+    }),
   },
   permission: {
     reply: vi.fn((params: Record<string, unknown>) => {

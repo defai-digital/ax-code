@@ -14,7 +14,7 @@ export const BrowserConsoleTool = Tool.define("browser_console", {
     pageSize: z.number().int().min(1).max(100).default(50).describe("Number of messages per page"),
   }),
   async execute(params, ctx) {
-    const runtime = BrowserRuntime.get()
+    const runtime = BrowserRuntime.forSession(ctx.sessionID)
     const messages = await runtime.console("latest", {
       types: params.types,
       pageIdx: params.pageIdx,

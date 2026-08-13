@@ -45,5 +45,7 @@ describe("computer tools", () => {
     await expect(
       (await ComputerActionTool.init()).execute({ frameID, action: "click", elementID: "e1" }, ctx()),
     ).rejects.toThrow("COMPUTER_STALE_FRAME")
+    expect(action.attachments).toBeUndefined()
+    expect(snapshot.attachments).toBeUndefined()
   })
 })

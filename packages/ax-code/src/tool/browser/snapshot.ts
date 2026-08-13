@@ -12,8 +12,8 @@ export const BrowserSnapshotTool = Tool.define("browser_snapshot", {
       .describe("Include additional element details (computed styles, bounding boxes)"),
   }),
   async execute(params, ctx) {
-    const runtime = BrowserRuntime.get()
-    // Use the most recently opened page
+    const runtime = BrowserRuntime.forSession(ctx.sessionID)
+    // Use the most recently opened page for this session
     const snapshot = await runtime.snapshot("latest", params.verbose)
 
     return {
@@ -21,6 +21,7 @@ export const BrowserSnapshotTool = Tool.define("browser_snapshot", {
       output: snapshot.text,
       metadata: {
         pageID: snapshot.pageID,
+        snapshotID: snapshot.snapshotID,
         elementCount: snapshot.elements.length,
       },
     }

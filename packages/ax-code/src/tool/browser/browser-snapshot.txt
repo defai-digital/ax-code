@@ -2,5 +2,5 @@
 - Each interactive element receives a unique identifier (UID)
 - ALWAYS call this tool before interacting with page elements
 - The snapshot is more token-efficient than a screenshot for understanding page structure
-- Use UIDs from the latest snapshot to target elements in click, fill, hover, and other actions
+- The result metadata includes snapshotID. Pass that snapshotID to browser_action. Snapshot IDs are session-scoped and single-use.
 - Set verbose=true for additional element details (computed styles, bounding boxes)
