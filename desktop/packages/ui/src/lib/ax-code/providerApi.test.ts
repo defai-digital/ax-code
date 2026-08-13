@@ -8,9 +8,13 @@ import {
   disconnectProviderAuth,
   fetchProviderJsonWithRetry,
   fetchProviderSources,
+  defaultProviderConnectCategory,
   isCliProvider,
   isDedicatedPrivateGpuProvider,
   isLocalProvider,
+  providerConnectCategoriesPresent,
+  providerConnectCategory,
+  providersInConnectCategory,
   isRestartingError,
   parseAuthMethodsPayload,
   parseAvailableProvidersPayload,
@@ -117,6 +121,22 @@ describe("isLocalProvider", () => {
     expect(isLocalProvider("ax-studio")).toBe(true)
     expect(isLocalProvider("openai")).toBe(false)
     expect(isLocalProvider("anthropic")).toBe(false)
+  })
+})
+
+describe("provider connect type filter", () => {
+  test("shares the TUI connect taxonomy and filters the second picker", () => {
+    expect(providerConnectCategory("ax-engine")).toBe("local")
+    expect(providerConnectCategory("nebius")).toBe("private-gpu")
+    expect(providerConnectCategory("grok-build-cli")).toBe("cli")
+    expect(providerConnectCategory("huggingface")).toBe("api")
+    expect(providerConnectCategoriesPresent(["openai", "ollama", "runpod"])).toEqual(["local", "private-gpu", "api"])
+    expect(defaultProviderConnectCategory(["openai", "ollama"])).toBe("local")
+    expect(
+      providersInConnectCategory([{ id: "openai" }, { id: "ollama" }, { id: "nebius" }], "private-gpu").map(
+        (item) => item.id,
+      ),
+    ).toEqual(["nebius"])
   })
 })
 

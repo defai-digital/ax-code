@@ -107161,7 +107161,7 @@
             ]
           }
         ],
-        "tool_call": false,
+        "tool_call": true,
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-11",
@@ -109761,7 +109761,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 65536
         }
       },
       "qwen/qwen-2.5-coder-32b-instruct": {

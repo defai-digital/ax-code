@@ -1,5 +1,19 @@
 import { filter, pipe, sortBy } from "remeda"
-import { DEDICATED_PRIVATE_GPU_PROVIDER_IDS, PRIVATE_GPU_PROVIDER_IDS } from "@/provider/private-gpu/presets"
+import {
+  CLI_PLAN_PROVIDER_IDS,
+  DEDICATED_PRIVATE_GPU_PROVIDER_IDS,
+  LOCAL_RUNTIME_PROVIDER_IDS,
+  PRIVATE_GPU_CLOUD_PROVIDER_IDS,
+  type ProviderConnectCategory,
+  providerConnectCategoriesPresent,
+  providerConnectCategory,
+  providerConnectCategoryHint,
+  providerConnectCategoryLabel,
+  providerConnectCategoryMeta,
+  providerConnectCategorySortKey,
+  providerConnectTypeOptionDescription,
+  providersInConnectCategory,
+} from "@/mode/provider-category"
 import {
   AX_ENGINE_CONNECTION_MODES,
   axEngineAttachProviderConfig as buildAxEngineAttachProviderConfig,
@@ -72,27 +86,18 @@ export const CLI_BINARIES: Record<string, string> = {
   "kimi-cli": "kimi",
 }
 
-export const OFFLINE_PROVIDERS = new Set(["ax-engine", "ax-studio", "ollama"])
+export const OFFLINE_PROVIDERS = new Set<string>(LOCAL_RUNTIME_PROVIDER_IDS)
 /** Hugging Face router stays an API-plan catalog; dedicated HF endpoints are Private GPU. */
-export const PRIVATE_GPU_PROVIDERS = new Set(PRIVATE_GPU_PROVIDER_IDS.filter((id) => id !== "huggingface"))
-export const DEDICATED_PRIVATE_GPU_PROVIDERS = new Set(DEDICATED_PRIVATE_GPU_PROVIDER_IDS)
-export const CLI_PROVIDERS = new Set([
-  "claude-code",
-  "gemini-cli",
-  "codex-cli",
-  "grok-build-cli",
-  "qoder-cli",
-  "antigravity-cli",
-  "kimi-cli",
-])
+export const PRIVATE_GPU_PROVIDERS = new Set<string>(PRIVATE_GPU_CLOUD_PROVIDER_IDS)
+export const DEDICATED_PRIVATE_GPU_PROVIDERS = new Set<string>(DEDICATED_PRIVATE_GPU_PROVIDER_IDS)
+export const CLI_PROVIDERS = new Set<string>(CLI_PLAN_PROVIDER_IDS)
+
+export const PROVIDER_DIALOG_CHANGE_TYPE_VALUE = "__change_type__"
 
 const HIDDEN_PROVIDERS = new Set(["google", "github-copilot", "gemini-cli", "antigravity-cli"])
 
 function providerDialogSortKey(providerID: string) {
-  if (OFFLINE_PROVIDERS.has(providerID)) return 0
-  if (PRIVATE_GPU_PROVIDERS.has(providerID)) return 1
-  if (CLI_PROVIDERS.has(providerID)) return 2
-  return 3
+  return providerConnectCategorySortKey(providerID)
 }
 
 export function providerDialogProviders(input: {
@@ -103,15 +108,34 @@ export function providerDialogProviders(input: {
   return pipe(
     providers,
     filter((provider) => !HIDDEN_PROVIDERS.has(provider.id)),
-    sortBy((provider) => providerDialogSortKey(provider.id), (provider) => provider.name),
+    sortBy(
+      (provider) => providerDialogSortKey(provider.id),
+      (provider) => provider.name,
+    ),
   )
 }
 
 export function providerDialogCategory(providerID: string) {
-  if (OFFLINE_PROVIDERS.has(providerID)) return "Local runtime"
-  if (PRIVATE_GPU_PROVIDERS.has(providerID)) return "Private GPU cloud"
-  if (CLI_PROVIDERS.has(providerID)) return "CLI plan"
-  return "API plan"
+  return providerConnectCategoryLabel(providerID)
+}
+
+export function providerDialogTypeOptions(providerIDs: readonly string[]) {
+  return providerConnectCategoriesPresent(providerIDs).map((id) => {
+    const count = providerIDs.filter((providerID) => providerConnectCategory(providerID) === id).length
+    return {
+      title: providerConnectCategoryMeta(id).label,
+      value: id,
+      description: providerConnectTypeOptionDescription(id, count),
+      hint: providerConnectCategoryHint(id),
+    }
+  })
+}
+
+export function providerDialogProvidersForType<T extends { id: string }>(
+  providers: readonly T[],
+  category: ProviderConnectCategory,
+) {
+  return providersInConnectCategory(providers, category)
 }
 
 export function configUpdateParams<T extends Record<string, unknown>>(config: T) {

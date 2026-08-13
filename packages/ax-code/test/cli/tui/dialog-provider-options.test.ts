@@ -18,6 +18,8 @@ import {
   providerDialogCategory,
   providerDialogConnected,
   providerDialogProviders,
+  providerDialogProvidersForType,
+  providerDialogTypeOptions,
   providerModelSelectable,
   selectableProviderDefaultModelID,
 } from "../../../src/cli/cmd/tui/component/dialog-provider-options"
@@ -181,6 +183,25 @@ describe("provider dialog options", () => {
     expect(DEDICATED_PRIVATE_GPU_PROVIDERS.has("runpod")).toBe(true)
     expect(DEDICATED_PRIVATE_GPU_PROVIDERS.has("nebius")).toBe(false)
     expect(DEDICATED_PRIVATE_GPU_PROVIDERS.has("huggingface")).toBe(false)
+  })
+
+  test("builds type-first connect options and filters the provider list", () => {
+    expect(
+      providerDialogTypeOptions(["ax-engine", "openai", "grok-build-cli", "nebius"]).map((item) => item.value),
+    ).toEqual(["local", "private-gpu", "cli", "api"])
+    expect(providerDialogTypeOptions(["openai", "groq"])).toEqual([
+      {
+        title: "API plan",
+        value: "api",
+        description: "2 providers · Hosted API key",
+        hint: "Hosted API key",
+      },
+    ])
+    expect(
+      providerDialogProvidersForType([provider("openai"), provider("ollama"), provider("nebius")], "private-gpu").map(
+        (item) => item.id,
+      ),
+    ).toEqual(["nebius"])
   })
 
   test("sorts private GPU cloud after local runtime and before CLI/API plans", () => {

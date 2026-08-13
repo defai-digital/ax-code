@@ -29,11 +29,18 @@ import {
   normalizeAxEngineEndpointBaseURL,
   normalizeConfiguredProvidersPayload,
   normalizeProviderListPayload,
+  PROVIDER_DIALOG_CHANGE_TYPE_VALUE,
   providerDialogCategory,
   providerDialogConnected,
   providerDialogProviders,
+  providerDialogTypeOptions,
   selectableProviderDefaultModelID,
 } from "./dialog-provider-options"
+import {
+  type ProviderConnectCategory,
+  providerConnectCategory,
+  providerConnectCategoryMeta,
+} from "@/mode/provider-category"
 import { requireDedicatedPrivateGpuVendor } from "@/provider/private-gpu/presets"
 
 const OFFLINE_PROVIDER_HOSTS: Record<string, { envVar: string; defaultHost: string }> = {
@@ -509,8 +516,7 @@ export function createDialogProviderOptions() {
                                 title: "Replace endpoint",
                                 value: "replace" as const,
                                 description:
-                                  privateGpuBaseURLPreset(provider.id, sync.data.config) ||
-                                  "Enter a new URL and token",
+                                  privateGpuBaseURLPreset(provider.id, sync.data.config) || "Enter a new URL and token",
                               },
                               {
                                 title: "Disconnect",
@@ -1022,7 +1028,43 @@ export function createDialogProviderOptions() {
 
 export function DialogProvider() {
   const options = createDialogProviderOptions()
-  return <DialogSelect title="Providers" options={options()} />
+  const [category, setCategory] = createSignal<ProviderConnectCategory | undefined>()
+
+  const typeOptions = createMemo(() =>
+    providerDialogTypeOptions(options().map((option) => option.value)).map((option) => ({
+      ...option,
+      onSelect() {
+        setCategory(option.value)
+      },
+    })),
+  )
+
+  const providerOptions = createMemo(() => {
+    const selected = category()
+    if (!selected) return []
+    return [
+      {
+        title: "Change type",
+        value: PROVIDER_DIALOG_CHANGE_TYPE_VALUE,
+        description: "Back to Local runtime, Private GPU, CLI, API",
+        onSelect() {
+          setCategory(undefined)
+        },
+      },
+      ...options()
+        .filter((option) => providerConnectCategory(option.value) === selected)
+        .map((option) => ({
+          ...option,
+          category: undefined,
+        })),
+    ]
+  })
+
+  return (
+    <Show when={category()} fallback={<DialogSelect title="Provider type" options={typeOptions()} />}>
+      <DialogSelect title={providerConnectCategoryMeta(category() ?? "api").label} options={providerOptions()} />
+    </Show>
+  )
 }
 
 interface AutoMethodProps {

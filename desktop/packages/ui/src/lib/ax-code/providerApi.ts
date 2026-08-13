@@ -2,22 +2,21 @@ import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 import { isRecord } from "@/lib/record"
 import { axCodeClient } from "./client"
 import type { ProviderSources } from "@/components/sections/providers/types"
+import { providerConnectCategory } from "ax-code/mode/provider-category"
+
+export {
+  defaultProviderConnectCategory,
+  providerConnectCategoriesPresent,
+  providerConnectCategory,
+  providerConnectCategoryHint,
+  providerConnectCategoryMeta,
+  providersInConnectCategory,
+  PROVIDER_CONNECT_CATEGORIES,
+  type ProviderConnectCategory,
+} from "ax-code/mode/provider-category"
 
 const PROVIDER_REQUEST_RETRY_DELAYS_MS = [250, 500, 750, 1000, 1500, 2000, 2500, 3000, 3000, 3000]
 const PROVIDER_RESTART_POLL_MS = 2000
-const CLI_PROVIDER_IDS = new Set([
-  "claude-code",
-  "gemini-cli",
-  "codex-cli",
-  "grok-build-cli",
-  "qoder-cli",
-  "antigravity-cli",
-  "kimi-cli",
-])
-
-// Providers whose CUSTOM_LOADERS entry (packages/ax-code/src/provider/loaders.ts) talks to a
-// local runtime by default (ollama, ax-studio, ax-engine), rather than a metered cloud API.
-const LOCAL_PROVIDER_IDS = new Set(["ollama", "ax-studio", "ax-engine"])
 
 export type DedicatedPrivateGpuVendor = {
   id: string
@@ -87,9 +86,9 @@ const DEDICATED_PRIVATE_GPU_IDS = new Set(DEDICATED_PRIVATE_GPU_VENDORS.map((ven
 export { PROVIDER_REQUEST_RETRY_DELAYS_MS, PROVIDER_RESTART_POLL_MS }
 export { isRecord }
 
-export const isCliProvider = (providerId: string): boolean => CLI_PROVIDER_IDS.has(providerId)
+export const isCliProvider = (providerId: string): boolean => providerConnectCategory(providerId) === "cli"
 
-export const isLocalProvider = (providerId: string): boolean => LOCAL_PROVIDER_IDS.has(providerId)
+export const isLocalProvider = (providerId: string): boolean => providerConnectCategory(providerId) === "local"
 
 export const isDedicatedPrivateGpuProvider = (providerId: string): boolean => DEDICATED_PRIVATE_GPU_IDS.has(providerId)
 
@@ -339,10 +338,7 @@ export const connectPrivateGpu = async (
   })
 }
 
-export const connectAlibabaPai = async (
-  input: { baseURL: string; apiKey: string },
-  directory: string | null,
-) => {
+export const connectAlibabaPai = async (input: { baseURL: string; apiKey: string }, directory: string | null) => {
   return connectPrivateGpu({ providerID: "alibaba-pai", ...input }, directory)
 }
 
