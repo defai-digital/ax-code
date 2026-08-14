@@ -116,6 +116,41 @@ describe("ProviderTransform.options - Kimi / alibaba-pai promptCacheKey", () => 
     expect(result.promptCacheKey).toBe(sessionID)
   })
 
+  test("enables Ornith chat-template thinking on local 35B and PAI 397B", () => {
+    const sessionID = "ses_ornith"
+    const local = ProviderTransform.options({
+      model: mkModel({ providerID: "ax-engine", id: "ax-engine/ornith-35b", apiID: "ornith-35b" }),
+      sessionID,
+      providerOptions: {},
+    })
+    expect(local.chat_template_kwargs).toEqual({ enable_thinking: true })
+
+    const cloud = ProviderTransform.options({
+      model: mkModel({
+        providerID: "alibaba-pai",
+        id: "alibaba-pai/Ornith-1.0-397B-FP8",
+        apiID: "Ornith-1.0-397B-FP8",
+      }),
+      sessionID,
+      providerOptions: {},
+      longAgent: true,
+    })
+    expect(cloud.promptCacheKey).toBe(sessionID)
+    expect(cloud.chat_template_kwargs).toEqual({ enable_thinking: true, preserve_thinking: true })
+
+    const optedOut = ProviderTransform.options({
+      model: mkModel({
+        providerID: "alibaba-pai",
+        id: "alibaba-pai/Ornith-1.0-397B-FP8",
+        apiID: "Ornith-1.0-397B-FP8",
+      }),
+      sessionID,
+      providerOptions: { preserveThinking: false },
+      longAgent: true,
+    })
+    expect(optedOut.chat_template_kwargs).toEqual({ enable_thinking: true })
+  })
+
   test("setCacheKey: false opts out for Kimi on alibaba-pai", () => {
     const result = ProviderTransform.options({
       model: mkModel({ providerID: "alibaba-pai", id: "alibaba-pai/Kimi-K2.7-Code", apiID: "Kimi-K2.7-Code" }),
@@ -169,6 +204,59 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
       api: { id: "deepseek-v4-flash", url: "https://api.deepseek.com", npm: "@ai-sdk/openai-compatible" },
     } as any
     expect(ProviderTransform.topP(model)).toBe(0.95)
+  })
+
+  test("collapses multiple Ornith system messages into one leading system turn", () => {
+    const model = {
+      id: "alibaba-pai/Ornith-1.0-397B-FP8",
+      providerID: ProviderID.make("alibaba-pai"),
+      api: { id: "Ornith-1.0-397B-FP8", url: "https://pai-eas.example/v1", npm: "@ai-sdk/openai-compatible" },
+      capabilities: {
+        reasoning: true,
+        input: { text: true, audio: false, image: false, video: false, pdf: false },
+      },
+    } as any
+    const result = ProviderTransform.message(
+      [
+        { role: "system", content: "You are powered by Ornith-1.0-397B-FP8" },
+        { role: "system", content: "You are AX Code, a software-engineering agent." },
+        { role: "system", content: "# Craft\nHow you work on every turn." },
+        { role: "user", content: "please review the ax-code support to ornith" },
+      ],
+      model,
+      {},
+    )
+    expect(result).toHaveLength(2)
+    expect(result[0]).toMatchObject({
+      role: "system",
+      content: [
+        "You are powered by Ornith-1.0-397B-FP8",
+        "You are AX Code, a software-engineering agent.",
+        "# Craft\nHow you work on every turn.",
+      ].join("\n\n"),
+    })
+    expect(result[1]).toMatchObject({ role: "user", content: "please review the ax-code support to ornith" })
+    expect(result.filter((msg) => msg.role === "system")).toHaveLength(1)
+  })
+
+  test("Ornith uses official 0.6 / 0.95 sampling even when family is qwen", () => {
+    const local = {
+      id: "ax-engine/ornith-35b",
+      providerID: ProviderID.make("ax-engine"),
+      family: "qwen",
+      api: { id: "ornith-35b", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
+    } as any
+    const cloud = {
+      id: "alibaba-pai/Ornith-1.0-397B-FP8",
+      providerID: ProviderID.make("alibaba-pai"),
+      family: "qwen",
+      api: { id: "Ornith-1.0-397B-FP8", url: "https://pai-eas.example/v1", npm: "@ai-sdk/openai-compatible" },
+    } as any
+    for (const model of [local, cloud]) {
+      expect(ProviderTransform.isOrnithFamily(model)).toBe(true)
+      expect(ProviderTransform.temperature(model)).toBe(0.6)
+      expect(ProviderTransform.topP(model)).toBe(0.95)
+    }
   })
 })
 
@@ -2601,6 +2689,15 @@ describe("ProviderTransform.smallOptions - Alibaba thinking models", () => {
   test("disables AX Engine chat-template thinking for small response-only turns", () => {
     const result = ProviderTransform.smallOptions(createModel("ax-engine", "qwen3.6-27b-axq", true))
     expect(result).toEqual({ chat_template_kwargs: { enable_thinking: false } })
+  })
+
+  test("disables Ornith chat-template thinking on local and PAI title calls", () => {
+    expect(ProviderTransform.smallOptions(createModel("ax-engine", "ornith-35b", true))).toEqual({
+      chat_template_kwargs: { enable_thinking: false },
+    })
+    expect(ProviderTransform.smallOptions(createModel("alibaba-pai", "Ornith-1.0-397B-FP8", true))).toEqual({
+      chat_template_kwargs: { enable_thinking: false },
+    })
   })
 
   test("disables MiniMax chat-template thinking on dedicated GPU title calls", () => {

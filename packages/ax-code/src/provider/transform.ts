@@ -242,10 +242,40 @@ export namespace ProviderTransform {
   export function message(msgs: ModelMessage[], model: Provider.Model, options: Record<string, unknown>) {
     msgs = unsupportedParts(msgs, model)
     msgs = normalizeMessages(msgs, model, options)
+    // Official Ornith jinja raises "System message must be at the beginning"
+    // when any system turn is not messages[0]. AX Code emits several system
+    // blocks (env, family prompt, craft, cache slices). Collapse them.
+    if (isOrnithFamily(model)) msgs = collapseToSingleLeadingSystem(msgs)
     if (shouldApplyCaching(model, options)) {
       msgs = applyCaching(msgs, model)
     }
     return msgs
+  }
+
+  function systemText(content: ModelMessage["content"]): string {
+    if (typeof content === "string") return content
+    if (!Array.isArray(content)) return ""
+    return content
+      .map((part) => {
+        if (typeof part === "string") return part
+        if (part && typeof part === "object" && "text" in part && typeof (part as { text?: unknown }).text === "string") {
+          return (part as { text: string }).text
+        }
+        return ""
+      })
+      .filter(Boolean)
+      .join("\n")
+  }
+
+  function collapseToSingleLeadingSystem(msgs: ModelMessage[]): ModelMessage[] {
+    const systems = msgs.filter((msg) => msg.role === "system")
+    if (systems.length <= 1) return msgs
+    const merged = systems
+      .map((msg) => systemText(msg.content).trim())
+      .filter(Boolean)
+      .join("\n\n")
+    const [first] = systems
+    return [{ ...first, role: "system", content: merged }, ...msgs.filter((msg) => msg.role !== "system")]
   }
 
   // Mirrors OpenCode: stamp cache_control on the first two system messages and
@@ -342,6 +372,10 @@ export namespace ProviderTransform {
     return ["api.kimi.com", "api.moonshot.ai", "api.moonshot.cn", "api.moonshotai.cn"].some((host) => url.includes(host))
   }
 
+  export function isOrnithFamily(model: { id?: string; providerID: string; api: { id: string } }): boolean {
+    return [model.providerID, model.api.id, model.id].some((id) => id?.toLowerCase().includes("ornith"))
+  }
+
   function shouldSetPromptCacheKey(input: {
     model: Provider.Model
     providerOptions?: Record<string, any>
@@ -356,6 +390,9 @@ export namespace ProviderTransform {
   }
 
   export function temperature(model: Provider.Model) {
+    // Official Ornith serving recipes use 0.6 / 0.95. Check before the Qwen
+    // family match so a declared qwen* family does not override it.
+    if (isOrnithFamily(model)) return 0.6
     if (hasFamily(model, "qwen")) return 0.55
     if (hasFamily(model, "gemini")) return 1.0
     if (hasFamily(model, "glm")) return 1.0
@@ -370,6 +407,7 @@ export namespace ProviderTransform {
   }
 
   export function topP(model: Provider.Model) {
+    if (isOrnithFamily(model)) return 0.95
     if (hasFamily(model, "qwen")) return 1
     if (isMinimaxM2(model) || hasFamily(model, "gemini")) return 0.95
     const id = `${model.id} ${model.api.id}`.toLowerCase()
@@ -836,6 +874,18 @@ export namespace ProviderTransform {
       }
     }
 
+    // Ornith hub jinja (35B local and 397B-FP8 on PAI/vLLM) defaults thinking
+    // on via chat_template_kwargs. Send the switch explicitly so a generic
+    // Qwen server default cannot close the think channel.
+    if (isOrnithFamily(input.model) && input.model.api.npm === "@ai-sdk/openai-compatible") {
+      result["chat_template_kwargs"] = {
+        enable_thinking: true,
+        ...(input.longAgent && input.providerOptions?.preserveThinking !== false
+          ? { preserve_thinking: true }
+          : {}),
+      }
+    }
+
     // xAI Live Search: opt grok-4+ chat models into automatic real-world
     // search so current-events queries (weather, news, X chatter) work out of
     // the box. The model decides per-turn whether to actually search (mode:
@@ -935,10 +985,10 @@ export namespace ProviderTransform {
   }
 
   export function smallOptions(model: Provider.Model) {
-    if (model.providerID === AX_ENGINE_PROVIDER_ID) {
-      // AX Engine exposes Qwen's supported chat-template switch directly on
-      // its OpenAI-compatible request. Auxiliary and response-only turns do
-      // not benefit from a long hidden reasoning pass, so prefill the closed
+    if (isOrnithFamily(model) || model.providerID === AX_ENGINE_PROVIDER_ID) {
+      // AX Engine and Ornith (local 35B or PAI 397B) expose Qwen's
+      // chat-template switch. Auxiliary and response-only turns do not
+      // benefit from a long hidden reasoning pass, so prefill the closed
       // thinking block and generate the answer directly.
       return { chat_template_kwargs: { enable_thinking: false } }
     }

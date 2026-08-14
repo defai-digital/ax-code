@@ -9,6 +9,7 @@ import PROMPT_AX_ENGINE from "./prompt/ax-engine.txt"
 import PROMPT_BEAST from "./prompt/beast.txt"
 import PROMPT_GEMINI from "./prompt/gemini.txt"
 import PROMPT_KIMI from "./prompt/kimi.txt"
+import PROMPT_ORNITH from "./prompt/ornith.txt"
 import PROMPT_CRAFT from "./prompt/craft.txt"
 
 import PROMPT_TRINITY from "./prompt/trinity.txt"
@@ -42,6 +43,9 @@ export namespace SystemPrompt {
   }
 
   export function provider(model: Provider.Model) {
+    // Ornith 35B (local / ax-engine) and 397B (cloud / Alibaba PAI) share one
+    // family prompt. Match the model id before the ax-engine provider blanket.
+    if (ProviderTransform.isOrnithFamily(model)) return withCraft(PROMPT_ORNITH)
     if (model.providerID === "ax-engine") return withCraft(PROMPT_AX_ENGINE)
     if (
       model.api.id.includes("gpt-4") ||

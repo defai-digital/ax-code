@@ -11,6 +11,8 @@ import { tmpdir } from "../fixture/fixture"
 import PROMPT_KIMI from "../../src/session/prompt/kimi.txt"
 import PROMPT_DEFAULT from "../../src/session/prompt/default.txt"
 import PROMPT_CRAFT from "../../src/session/prompt/craft.txt"
+import PROMPT_ORNITH from "../../src/session/prompt/ornith.txt"
+import PROMPT_AX_ENGINE from "../../src/session/prompt/ax-engine.txt"
 import PROMPT_BEAST from "../../src/session/prompt/beast.txt"
 import PROMPT_TRINITY from "../../src/session/prompt/trinity.txt"
 import PROMPT_ANTHROPIC from "../../src/session/prompt/anthropic.txt"
@@ -48,6 +50,43 @@ describe("session.system", () => {
     expect(PROMPT_DEFAULT).not.toContain("One word answers are best")
     expect(PROMPT_DEFAULT).toContain("Default to doing the work")
     expect(PROMPT_KIMI).toContain("doing the work without asking questions")
+  })
+
+  test("routes local 35B and cloud 397B Ornith to the same lean prompt", () => {
+    const local = SystemPrompt.provider({
+      id: "ax-engine/ornith-35b",
+      providerID: "ax-engine",
+      api: { id: "ornith-35b", url: "http://127.0.0.1/v1" },
+    } as any)
+    const cloud = SystemPrompt.provider({
+      id: "alibaba-pai/Ornith-1.0-397B-FP8",
+      providerID: "alibaba-pai",
+      api: { id: "Ornith-1.0-397B-FP8", url: "https://pai-eas.example/v1" },
+    } as any)
+    expect(local).toEqual([PROMPT_ORNITH, PROMPT_CRAFT])
+    expect(cloud).toEqual([PROMPT_ORNITH, PROMPT_CRAFT])
+    expect(PROMPT_ORNITH).toContain("software-engineering agent")
+    expect(PROMPT_ORNITH).not.toContain("local software-engineering agent")
+    expect(PROMPT_ORNITH).toContain("Do not invent a second harness")
+    expect(PROMPT_ORNITH).toContain("After a tool result, continue from that evidence")
+    expect(PROMPT_ORNITH).not.toContain("fewer than 4 lines")
+    expect(PROMPT_ORNITH).not.toContain("Always use the TodoWrite tool")
+    expect(PROMPT_ORNITH.length).toBeLessThan(PROMPT_DEFAULT.length)
+    expect(PROMPT_ORNITH.length).toBeLessThan(PROMPT_AX_ENGINE.length + 400)
+
+    const packed = SystemPrompt.provider({
+      id: "custom/AX-Ornith-1.0-35B-MLX-AXQ-4bit",
+      providerID: "custom",
+      api: { id: "AX-Ornith-1.0-35B-MLX-AXQ-4bit", url: "http://127.0.0.1:8000/v1" },
+    } as any)
+    expect(packed).toEqual([PROMPT_ORNITH, PROMPT_CRAFT])
+
+    const localQwen = SystemPrompt.provider({
+      id: "ax-engine/qwen3.6-27b",
+      providerID: "ax-engine",
+      api: { id: "qwen3.6-27b", url: "http://127.0.0.1/v1" },
+    } as any)
+    expect(localQwen).toEqual([PROMPT_AX_ENGINE, PROMPT_CRAFT])
   })
 
   test("family prompts stay action-first and reject over-process", () => {
