@@ -142,6 +142,57 @@ async function writeCliPrompt(
   }
 }
 
+/**
+ * CLI providers have no structured-output API, so a generateObject call's
+ * `responseFormat: {type: "json"}` must travel inside the prompt text —
+ * without this the CLI answers in prose and the SDK's JSON parse fails
+ * ("No object generated: response did not match schema") for every
+ * council/arena member backed by a CLI bridge.
+ */
+function jsonResponseInstruction(responseFormat: LanguageModelV3CallOptions["responseFormat"]): string | undefined {
+  if (responseFormat?.type !== "json") return undefined
+  const schema = responseFormat.schema
+    ? `\nThe JSON must validate against this JSON Schema:\n${JSON.stringify(responseFormat.schema)}`
+    : ""
+  return [
+    "<json_output>",
+    "Respond with ONLY a single valid JSON value — no prose before or after, no markdown code fences." + schema,
+    "</json_output>",
+  ].join("\n")
+}
+
+/**
+ * Best-effort extraction of a JSON payload from CLI output. Coding CLIs
+ * routinely wrap JSON in ```json fences or surround it with a sentence of
+ * prose despite instructions; returning the raw text in those cases fails
+ * the SDK's strict parse. Falls back to the original text when nothing
+ * parseable is found so the caller's own error surfaces unchanged.
+ */
+export function extractJsonPayload(text: string): string {
+  const trimmed = text.trim()
+  const fence = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)```/i)
+  const candidate = (fence?.[1] ?? trimmed).trim()
+  if (!candidate) return text
+  try {
+    JSON.parse(candidate)
+    return candidate
+  } catch {
+    // fall through to brace scan
+  }
+  const start = candidate.search(/[{[]/)
+  if (start === -1) return text
+  const close = candidate[start] === "{" ? "}" : "]"
+  const end = candidate.lastIndexOf(close)
+  if (end <= start) return text
+  const slice = candidate.slice(start, end + 1)
+  try {
+    JSON.parse(slice)
+    return slice
+  } catch {
+    return text
+  }
+}
+
 function autonomousCliArgs(providerID: string): string[] {
   if (!ScopedFlag.autonomous()) return []
   if (providerID === "claude-code") return ["--dangerously-skip-permissions"]
@@ -259,10 +310,12 @@ export class CliLanguageModel implements LanguageModelV3 {
     if (options.abortSignal?.aborted) throw readAbortError(options.abortSignal)
 
     const attachments = await materializeCliAttachments(options.prompt)
-    const text = promptToText(options.prompt, {
+    const promptText = promptToText(options.prompt, {
       providerID: this.config.providerID,
       attachments: attachments.refs,
     })
+    const jsonInstruction = jsonResponseInstruction(options.responseFormat)
+    const text = jsonInstruction ? `${promptText}\n\n${jsonInstruction}` : promptText
     const proc = Process.spawn(this.buildCmd(text, options.providerOptions), {
       cwd: currentInstanceDirectory(),
       stdin: this.useStdin() ? "pipe" : "ignore",
@@ -355,10 +408,11 @@ export class CliLanguageModel implements LanguageModelV3 {
     const parsed = this.config.parser.parseComplete(stdout.toString())
     if (!parsed.text.trim()) throw new Error(formatCliNoOutput(stdout, stderr))
 
+    const outputText = jsonInstruction ? extractJsonPayload(parsed.text) : parsed.text
     return {
-      content: [{ type: "text" as const, text: parsed.text }],
+      content: [{ type: "text" as const, text: outputText }],
       finishReason: { unified: "stop" as const, raw: undefined },
-      usage: estimatedUsage(text, parsed.text),
+      usage: estimatedUsage(text, outputText),
       warnings: [],
     }
   }

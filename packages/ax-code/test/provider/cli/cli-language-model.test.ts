@@ -1,5 +1,5 @@
 import { test, expect, describe, vi } from "vitest"
-import { buildCliCommand, cliEnv, CliLanguageModel } from "../../../src/provider/cli/cli-language-model"
+import { buildCliCommand, cliEnv, CliLanguageModel, extractJsonPayload } from "../../../src/provider/cli/cli-language-model"
 import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
 import { claudeCodeParser, grokBuildCliParser, qoderCliParser } from "../../../src/provider/cli/parser"
 import { usageSource } from "../../../src/provider/usage"
@@ -129,6 +129,64 @@ describe("CliLanguageModel", () => {
     expect(finish.usage.outputTokens.text).toBe(finish.usage.outputTokens.total)
     expect(finish.usage.outputTokens.reasoning).toBe(0)
     expect(usageSource(finish.usage)).toBe("estimated")
+  })
+
+  test("doGenerate forwards responseFormat json as a prompt instruction and unwraps fenced output", async () => {
+    const fenced = '```json\n{"overall":"fine","issues":[]}\n```'
+    const spawn = vi
+      .spyOn(Process, "spawn")
+      .mockImplementation(() => successfulChild(JSON.stringify({ type: "result", result: fenced }) + "\n"))
+
+    try {
+      const model = makeModel()
+      const result = await model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "review this" }] }],
+        responseFormat: {
+          type: "json",
+          schema: { type: "object", properties: { overall: { type: "string" } } },
+        },
+      })
+
+      const cmd = spawn.mock.calls[0]?.[0] as string[]
+      const promptArg = cmd[cmd.indexOf("-p") + 1]
+      expect(promptArg).toContain("<json_output>")
+      expect(promptArg).toContain('"overall"')
+
+      const textPart = result.content.find((part: { type: string }) => part.type === "text") as { text: string }
+      expect(textPart.text).toBe('{"overall":"fine","issues":[]}')
+      expect(JSON.parse(textPart.text)).toEqual({ overall: "fine", issues: [] })
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doGenerate leaves output untouched without responseFormat json", async () => {
+    const spawn = vi
+      .spyOn(Process, "spawn")
+      .mockImplementation(() => successfulChild('{"type":"result","result":"plain prose"}\n'))
+
+    try {
+      const model = makeModel()
+      const result = await model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+      })
+      const cmd = spawn.mock.calls[0]?.[0] as string[]
+      const promptArg = cmd[cmd.indexOf("-p") + 1]
+      expect(promptArg).not.toContain("<json_output>")
+      const textPart = result.content.find((part: { type: string }) => part.type === "text") as { text: string }
+      expect(textPart.text).toBe("plain prose")
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("extractJsonPayload handles fences, prose wrapping, and non-JSON", () => {
+    expect(extractJsonPayload('{"a":1}')).toBe('{"a":1}')
+    expect(extractJsonPayload('```json\n{"a":1}\n```')).toBe('{"a":1}')
+    expect(extractJsonPayload('```\n[1,2]\n```')).toBe("[1,2]")
+    expect(extractJsonPayload('Here is the review: {"a":{"b":2}} Hope that helps!')).toBe('{"a":{"b":2}}')
+    expect(extractJsonPayload("no json here at all")).toBe("no json here at all")
+    expect(extractJsonPayload("unbalanced { not json")).toBe("unbalanced { not json")
   })
 
   test("runs CLI providers in the current instance directory", async () => {
