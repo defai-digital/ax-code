@@ -31,3 +31,25 @@ export function footerLivenessIndicator(input: {
 export function footerLivenessTextFrame(indicator: FooterLivenessIndicator): string {
   return indicator.type === "text" ? indicator.frame : "[...]"
 }
+
+export type StreamConnectionPhase = "connecting" | "connected" | "reconnecting" | "stopped" | string
+export type ProjectedStreamHealth = "fixture" | "connecting" | "connected" | "unavailable" | "error"
+
+// Footer connection chip: undefined while the event stream is healthy, a
+// short label while connecting/reconnecting, after a terminal stop, or when
+// the backend reports itself unavailable/error through control events — so a
+// dead backend behind a healthy socket no longer looks like "the model is
+// thinking" (the SSE socket can stay green while the server is gone).
+export function connectionChipText(input: {
+  phase?: StreamConnectionPhase
+  connected?: boolean
+  streamHealth?: ProjectedStreamHealth
+}): string | undefined {
+  if (input.streamHealth === "unavailable") return "Backend unavailable"
+  if (input.streamHealth === "error") return "Backend error"
+  if (!input.phase || input.connected) return undefined
+  if (input.phase === "reconnecting") return "Reconnecting…"
+  if (input.phase === "connecting") return "Connecting…"
+  if (input.phase === "stopped") return "Disconnected"
+  return undefined
+}

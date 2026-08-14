@@ -101,7 +101,7 @@ import {
   pendingSubmitStatusText,
   type SubmitStage,
 } from "./submit-state"
-import { footerLivenessIndicator, footerLivenessTextFrame } from "./liveness-view-model"
+import { connectionChipText, footerLivenessIndicator, footerLivenessTextFrame } from "./liveness-view-model"
 import { parsePastedFilePath } from "./prompt-filepath"
 import { responseErrorMessage } from "@tui/util/error-message"
 import {
@@ -163,14 +163,15 @@ export function Prompt(props: PromptProps) {
   // Connection health chip for the footer: undefined while the event stream is
   // healthy, a short label while connecting/reconnecting or after a terminal
   // stop — so a silent SSE drop no longer looks like "the model is thinking".
-  const connectionChip = createMemo(() => {
-    const status = sdk.connectionStatus
-    if (!status || status.connected) return undefined
-    if (status.phase === "reconnecting") return "Reconnecting…"
-    if (status.phase === "connecting") return "Connecting…"
-    if (status.phase === "stopped") return "Disconnected"
-    return undefined
-  })
+  // Also surfaces the backend-reported stream health (server control events),
+  // which covers the dead-backend-behind-a-healthy-socket case.
+  const connectionChip = createMemo(() =>
+    connectionChipText({
+      phase: sdk.connectionStatus?.phase,
+      connected: sdk.connectionStatus?.connected,
+      streamHealth: sync.data.stream_health,
+    }),
+  )
 
   // ADR-028: interactive follow-up queueing. While the session is busy, plain
   // prompts are buffered client-side and replayed when the session goes idle,

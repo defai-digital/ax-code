@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
   FOOTER_LIVENESS_FRAMES,
+  connectionChipText,
   footerLivenessIndicator,
   footerLivenessTextFrame,
 } from "../../../src/cli/cmd/tui/component/prompt/liveness-view-model"
@@ -46,5 +47,31 @@ describe("prompt footer liveness indicator", () => {
         frame: FOOTER_LIVENESS_FRAMES[0],
       },
     )
+  })
+})
+
+describe("prompt footer connection chip", () => {
+  test("stays hidden while the stream is healthy", () => {
+    expect(connectionChipText({ phase: "connected", connected: true, streamHealth: "connected" })).toBeUndefined()
+    expect(connectionChipText({})).toBeUndefined()
+  })
+
+  test("labels socket-level phases", () => {
+    expect(connectionChipText({ phase: "connecting", connected: false, streamHealth: "connecting" })).toBe(
+      "Connecting…",
+    )
+    expect(connectionChipText({ phase: "reconnecting", connected: false, streamHealth: "connected" })).toBe(
+      "Reconnecting…",
+    )
+    expect(connectionChipText({ phase: "stopped", connected: false, streamHealth: "connected" })).toBe("Disconnected")
+  })
+
+  test("surfaces backend-reported health even when the socket looks connected", () => {
+    // The SSE socket can stay green while the server instance is gone; the
+    // projected stream_health is the only signal in that case.
+    expect(connectionChipText({ phase: "connected", connected: true, streamHealth: "unavailable" })).toBe(
+      "Backend unavailable",
+    )
+    expect(connectionChipText({ phase: "connected", connected: true, streamHealth: "error" })).toBe("Backend error")
   })
 })

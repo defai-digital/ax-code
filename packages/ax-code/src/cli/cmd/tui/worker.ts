@@ -19,6 +19,7 @@ import path from "node:path"
 import { tmpdir } from "node:os"
 import fs from "node:fs/promises"
 import { runResilientStream, type StreamConnectionStatus } from "./util/resilient-stream"
+import { createStreamDeltaCoalescer } from "./util/coalesce-stream-events"
 import { registerShutdownSignals } from "@/util/signals"
 import { toErrorMessage } from "@/util/error-message"
 import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
@@ -158,6 +159,23 @@ const startEventStream = async (input: { directory?: string }) => {
     Rpc.emit("event.status", status)
   }
 
+  // Coalesce high-frequency text deltas BEFORE the RPC boundary: forwarding
+  // every raw delta pays RPC serialization + transport + main-process
+  // dispatch per event, and the TUI-side coalescer then merges what already
+  // crossed. Merging here keeps ordering (pending deltas flush before any
+  // non-delta event) and cuts per-window RPC churn to one emit per part.
+  const coalescer = createStreamDeltaCoalescer({
+    emit(events) {
+      for (const event of events) {
+        if (signal.aborted) return
+        Rpc.emit("event", event)
+      }
+    },
+  })
+  // Teardown drops still-buffered deltas — the stream is dead, so flushing
+  // them after abort would emit events for a workspace that no longer exists.
+  signal.addEventListener("abort", () => coalescer.dispose(), { once: true })
+
   const done = runResilientStream<AxCodeEvent>({
     signal,
     subscribe: (connectionSignal) =>
@@ -169,7 +187,7 @@ const startEventStream = async (input: { directory?: string }) => {
       ),
     onEvent: (event) => {
       if (signal.aborted) return
-      Rpc.emit("event", event)
+      coalescer.push(event)
     },
     onStatus: publishStatus,
     onError: (error, status) => {

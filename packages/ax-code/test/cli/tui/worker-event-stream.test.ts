@@ -7,12 +7,18 @@ import { describe, expect, test, vi } from "vitest"
 // the process lifetime and survived shutdown's drain. The fix mirrors the
 // sseGeneration guard from context/sdk.tsx.
 
-const streamState = vi.hoisted(() => ({ active: 0, started: 0 }))
+const streamState = vi.hoisted(() => ({
+  active: 0,
+  started: 0,
+  emitted: [] as unknown[],
+  onEvent: undefined as undefined | ((event: unknown) => void),
+}))
 
 vi.mock("@tui/util/resilient-stream", () => ({
-  runResilientStream: (opts: { signal: AbortSignal }) => {
+  runResilientStream: (opts: { signal: AbortSignal; onEvent?: (event: unknown) => void }) => {
     streamState.started++
     streamState.active++
+    streamState.onEvent = opts.onEvent
     return new Promise<void>((resolve) => {
       const finish = () => {
         streamState.active--
@@ -47,7 +53,15 @@ vi.mock("@/util/log", () => {
 })
 vi.mock("@/project/instance", () => ({ Instance: { provide: async () => {}, disposeAll: async () => {} } }))
 vi.mock("@/project/bootstrap", () => ({ InstanceBootstrap: async () => {} }))
-vi.mock("@/util/rpc", () => ({ Rpc: { emit: () => {}, listen: () => {}, listenStdio: async () => {} } }))
+vi.mock("@/util/rpc", () => ({
+  Rpc: {
+    emit: (channel: string, event: unknown) => {
+      if (channel === "event") streamState.emitted.push(event)
+    },
+    listen: () => {},
+    listenStdio: async () => {},
+  },
+}))
 vi.mock("@/cli/upgrade", () => ({ upgrade: async () => {} }))
 vi.mock("@/config/config", () => ({ Config: { global: { reset: () => {} } } }))
 vi.mock("@/bus/global", () => ({ GlobalBus: { on: () => {}, off: () => {} } }))
@@ -82,5 +96,35 @@ describe("worker event stream lifecycle", () => {
 
     await rpc.shutdown()
     expect(streamState.active).toBe(0)
+  })
+
+  test("text deltas coalesce before crossing the RPC boundary; teardown drops the buffer", async () => {
+    const { rpc } = await import("@tui/worker")
+    await rpc.setWorkspace({ workspaceID: "/workspace/coalesce" })
+    const onEvent = streamState.onEvent!
+
+    const delta = (text: string) => ({
+      type: "message.part.delta",
+      properties: { sessionID: "ses_1", messageID: "msg_1", partID: "prt_1", field: "text", delta: text },
+    })
+
+    streamState.emitted.length = 0
+    onEvent(delta("hel"))
+    onEvent(delta("lo"))
+    // A non-delta event flushes pending deltas first, preserving order.
+    onEvent({ type: "session.status", properties: { sessionID: "ses_1", status: { type: "idle" } } })
+
+    expect(streamState.emitted).toEqual([
+      delta("hello"),
+      { type: "session.status", properties: { sessionID: "ses_1", status: { type: "idle" } } },
+    ])
+
+    // Buffered deltas still in the window are dropped (not flushed) when the
+    // stream is torn down — the workspace they belong to is gone.
+    onEvent(delta("stale"))
+    await rpc.shutdown()
+    expect(streamState.emitted.some((e) => (e as { properties?: { delta?: string } }).properties?.delta === "stale")).toBe(
+      false,
+    )
   })
 })
