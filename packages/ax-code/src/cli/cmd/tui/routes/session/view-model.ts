@@ -227,3 +227,18 @@ export function codeDisplayView(input: { filePath?: string; content?: string }):
     content: input.content ?? "",
   }
 }
+
+export type StreamingTextRenderMode = "plain" | "markdown" | "code"
+
+// While a text/reasoning part is still streaming, paint the throttled
+// snapshot as plain text (a cheap wrap + buffer write per frame) and mount
+// the rich markdown/code renderer exactly once at finalize. Re-running the
+// full markdown/highlight pipeline per painted frame is what made long
+// streams look frozen (see the 2026-08-13 Kimi-vs-engine review, principle A).
+export function streamingTextRenderMode(input: {
+  final: boolean
+  experimentalMarkdown: boolean
+}): StreamingTextRenderMode {
+  if (!input.final) return "plain"
+  return input.experimentalMarkdown ? "markdown" : "code"
+}

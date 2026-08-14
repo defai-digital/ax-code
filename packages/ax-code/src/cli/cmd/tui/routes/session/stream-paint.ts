@@ -2,18 +2,19 @@ import { createEffect, createSignal, onCleanup } from "solid-js"
 import { scheduleTuiTimeout } from "../../util/timer"
 
 // Base paint interval while streaming (~25 Hz). Store deltas can arrive much
-// faster; re-parsing the full accumulated markdown every delta dominates the
-// TUI main-thread cost.
+// faster; repainting every delta would dominate the TUI main-thread cost.
 export const STREAM_PAINT_MS = 40
-// Upper bound for long documents — beyond this the transcript would feel frozen.
-export const STREAM_PAINT_MAX_MS = 250
+// Upper bound for long documents. Streaming paints are plain text (the rich
+// markdown/code renderer mounts once at finalize), so a paint is a cheap
+// wrap + buffer write — a high cap would only make long streams look frozen
+// without saving meaningful work.
+export const STREAM_PAINT_MAX_MS = 120
 // Document length step (chars) that adds STREAM_PAINT_STEP_MS to the interval.
 export const STREAM_PAINT_LENGTH_STEP = 2000
 export const STREAM_PAINT_STEP_MS = 20
 
-// Each paint re-parses the whole accumulated document (O(length)), so a fixed
-// paint interval makes total streaming work O(n²). Scaling the interval with
-// document length keeps it near-linear while short responses stay snappy.
+// Scaling the interval with document length keeps total streaming work
+// near-linear while short responses stay snappy.
 export function streamPaintIntervalMs(length: number) {
   return Math.min(
     STREAM_PAINT_MAX_MS,

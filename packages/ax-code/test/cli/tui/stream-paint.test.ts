@@ -14,11 +14,12 @@ describe("streamPaintIntervalMs", () => {
 
   test("the interval grows with document length", () => {
     expect(streamPaintIntervalMs(2000)).toBe(STREAM_PAINT_MS + 20)
-    expect(streamPaintIntervalMs(10_000)).toBe(STREAM_PAINT_MS + 100)
+    expect(streamPaintIntervalMs(4000)).toBe(STREAM_PAINT_MS + 40)
   })
 
   test("the interval is capped for very long documents", () => {
     expect(streamPaintIntervalMs(1_000_000)).toBe(STREAM_PAINT_MAX_MS)
+    expect(streamPaintIntervalMs(10_000)).toBe(STREAM_PAINT_MAX_MS)
   })
 })
 
@@ -43,11 +44,11 @@ describe("streamPaintDecision", () => {
   })
 
   test("longer documents schedule against the scaled interval, not the base", () => {
-    // 10k chars -> 40 + 5*20 = 140ms interval; 100ms elapsed -> 40ms remaining,
-    // which the old fixed 40ms interval would have painted immediately.
-    expect(streamPaintDecision({ final: false, now: 100, lastPaintAt: 0, length: 10_000 })).toEqual({
+    // 4k chars -> 40 + 2*20 = 80ms interval; 30ms elapsed -> 50ms remaining,
+    // which the base 40ms interval would have painted immediately.
+    expect(streamPaintDecision({ final: false, now: 30, lastPaintAt: 0, length: 4_000 })).toEqual({
       action: "schedule",
-      delayMs: 40,
+      delayMs: 50,
     })
   })
 })

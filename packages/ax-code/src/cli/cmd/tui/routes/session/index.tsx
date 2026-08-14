@@ -97,6 +97,7 @@ import {
   assistantToolSummary,
   codeDisplayView,
   compactDelegatedLabel,
+  streamingTextRenderMode,
   userMessageMetadataDensity,
 } from "./view-model"
 import { SessionCodeRenderer } from "./render-adapter"
@@ -1862,6 +1863,7 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
   )
   // Show while streaming even before first delta arrives (time.end undefined = still active)
   const visible = createMemo(() => (content() || props.part.time.end === undefined) && ctx.showThinking())
+  const streaming = createMemo(() => props.part.time.end === undefined)
   return (
     <Show when={visible()}>
       <box
@@ -1873,13 +1875,24 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
         customBorderChars={SplitBorder.customBorderChars}
         borderColor={theme.borderSubtle}
       >
-        <SessionCodeRenderer
-          display={display()}
-          streaming={true}
-          syntaxStyle={subtleSyntax()}
-          conceal={ctx.conceal()}
-          fg={theme.textMuted}
-        />
+        <Switch>
+          {/* Plain text while reasoning streams (same paint discipline as
+              TextPart); the styled renderer mounts once at finalize. */}
+          <Match when={streaming()}>
+            <text wrapMode="word" fg={theme.textMuted}>
+              {"_Thinking:_ " + paintedContent()}
+            </text>
+          </Match>
+          <Match when={true}>
+            <SessionCodeRenderer
+              display={display()}
+              streaming={false}
+              syntaxStyle={subtleSyntax()}
+              conceal={ctx.conceal()}
+              fg={theme.textMuted}
+            />
+          </Match>
+        </Switch>
       </box>
     </Show>
   )
@@ -1907,6 +1920,15 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
     if (expanded() || !overflow()) return trimmed()
     return lines().slice(0, 50).join("\n") + "\n…"
   })
+
+  // While streaming, paint the throttled snapshot as plain text — a cheap
+  // wrap + buffer write per frame instead of a full markdown parse/highlight
+  // (which re-processes the whole accumulated document per paint). The rich
+  // renderer mounts exactly once when the message finalizes; the outer box
+  // (id text-<part.id>) stays mounted so only the inner renderable swaps.
+  const renderMode = createMemo(() =>
+    streamingTextRenderMode({ final: isFinal(), experimentalMarkdown: Flag.AX_CODE_EXPERIMENTAL_MARKDOWN }),
+  )
 
   // Autonomous-mode visual: in-flight text inside an active loop gets a
   // diff-add green background (max signal that the run is producing
@@ -1960,20 +1982,25 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
         borderColor={showStripe() ? theme.warning : undefined}
       >
         <Switch>
-          <Match when={Flag.AX_CODE_EXPERIMENTAL_MARKDOWN}>
+          <Match when={renderMode() === "plain"}>
+            <text wrapMode="word" fg={theme.text} bg={isLiveAutonomous() ? autonomousBg() : undefined}>
+              {visibleText()}
+            </text>
+          </Match>
+          <Match when={renderMode() === "markdown"}>
             <markdown
               syntaxStyle={syntax()}
-              streaming={true}
+              streaming={false}
               content={visibleText()}
               conceal={ctx.conceal()}
               fg={theme.markdownText}
               bg={isLiveAutonomous() ? autonomousBg() : theme.background}
             />
           </Match>
-          <Match when={!Flag.AX_CODE_EXPERIMENTAL_MARKDOWN}>
+          <Match when={true}>
             <SessionCodeRenderer
               display={codeDisplayView({ filePath: "message.md", content: visibleText() })}
-              streaming={true}
+              streaming={false}
               syntaxStyle={syntax()}
               conceal={ctx.conceal()}
               fg={theme.text}

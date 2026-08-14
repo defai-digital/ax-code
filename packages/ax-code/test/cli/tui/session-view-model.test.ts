@@ -9,6 +9,7 @@ import {
   parseTodoOutput,
   parseTodoViewItems,
   sessionTaskSummary,
+  streamingTextRenderMode,
   userMessageMetadataDensity,
   todoWriteView,
   userMessageView,
@@ -242,5 +243,14 @@ describe("tui session view model", () => {
       filetype: "markdown",
       content: "# AX Code",
     })
+  })
+
+  test("streaming text paints plain until finalize, then mounts the rich renderer once", () => {
+    // The streaming frame cost is wrap + buffer write; markdown/code only
+    // mounts at finalize, so per-paint work no longer re-parses the document.
+    expect(streamingTextRenderMode({ final: false, experimentalMarkdown: true })).toBe("plain")
+    expect(streamingTextRenderMode({ final: false, experimentalMarkdown: false })).toBe("plain")
+    expect(streamingTextRenderMode({ final: true, experimentalMarkdown: true })).toBe("markdown")
+    expect(streamingTextRenderMode({ final: true, experimentalMarkdown: false })).toBe("code")
   })
 })
