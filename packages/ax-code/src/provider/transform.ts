@@ -258,7 +258,12 @@ export namespace ProviderTransform {
     return content
       .map((part) => {
         if (typeof part === "string") return part
-        if (part && typeof part === "object" && "text" in part && typeof (part as { text?: unknown }).text === "string") {
+        if (
+          part &&
+          typeof part === "object" &&
+          "text" in part &&
+          typeof (part as { text?: unknown }).text === "string"
+        ) {
           return (part as { text: string }).text
         }
         return ""
@@ -353,11 +358,7 @@ export namespace ProviderTransform {
     )
   }
 
-  export function isKimiFamily(model: {
-    id?: string
-    providerID: string
-    api: { id: string; url?: string }
-  }): boolean {
+  export function isKimiFamily(model: { id?: string; providerID: string; api: { id: string; url?: string } }): boolean {
     const ids = [model.providerID, model.api.id, model.id]
     if (
       ids.some((id) => {
@@ -369,7 +370,9 @@ export namespace ProviderTransform {
       return true
     }
     const url = (model.api.url ?? "").toLowerCase()
-    return ["api.kimi.com", "api.moonshot.ai", "api.moonshot.cn", "api.moonshotai.cn"].some((host) => url.includes(host))
+    return ["api.kimi.com", "api.moonshot.ai", "api.moonshot.cn", "api.moonshotai.cn"].some((host) =>
+      url.includes(host),
+    )
   }
 
   export function isOrnithFamily(model: {
@@ -915,12 +918,16 @@ export namespace ProviderTransform {
     // Qwen server default cannot close the think channel. This request-body
     // extension is specific to @ai-sdk/openai-compatible; a future Ornith
     // transport must add its native equivalent instead of relying on this path.
-    if (isOrnithFamily(input.model) && input.model.api.npm === "@ai-sdk/openai-compatible") {
+    //
+    // else-if (not a separate if): isAlibabaThinkingModel requires
+    // isAlibabaPlanProvider (alibaba-coding-plan* / alibaba-token-plan*),
+    // which excludes alibaba-pai where Ornith lives. Keeping them exclusive
+    // here prevents a future provider from accidentally receiving both
+    // DashScope enable_thinking and Ornith chat_template_kwargs.
+    else if (isOrnithFamily(input.model) && input.model.api.npm === "@ai-sdk/openai-compatible") {
       result["chat_template_kwargs"] = {
         enable_thinking: true,
-        ...(input.longAgent && input.providerOptions?.preserveThinking !== false
-          ? { preserve_thinking: true }
-          : {}),
+        ...(input.longAgent && input.providerOptions?.preserveThinking !== false ? { preserve_thinking: true } : {}),
       }
     }
 
