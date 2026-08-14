@@ -124,11 +124,11 @@ describe("Env.sanitize", () => {
       process.env.XAI_API_KEY = "xai-key"
       process.env.KIMI_API_KEY = "kimi-key"
 
-      const env = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), "gemini-cli")
+      const env = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), "codex-cli")
 
       expect(env.PATH).toBe("/bin")
-      expect(env.GEMINI_API_KEY).toBe("gemini-key")
-      expect(env.OPENAI_API_KEY).toBeUndefined()
+      expect(env.OPENAI_API_KEY).toBe("openai-key")
+      expect(env.GEMINI_API_KEY).toBeUndefined()
       expect(env.ANTHROPIC_API_KEY).toBeUndefined()
       expect(env.XAI_API_KEY).toBeUndefined()
       expect(env.KIMI_API_KEY).toBeUndefined()
