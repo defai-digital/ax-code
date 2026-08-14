@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest"
-import { buildSubagentStatusView } from "../../../src/cli/cmd/tui/routes/session/subagent-status-view"
+import {
+  buildSubagentStatusView,
+  mergeSubagentRollupTasks,
+  queueItemsForSessionTree,
+  queueStatusToTaskStatus,
+  taskQueueItemsToRollupTasks,
+} from "../../../src/cli/cmd/tui/routes/session/subagent-status-view"
 
 describe("buildSubagentStatusView", () => {
   test("rolls child session activity into a parent-visible active subagent label", () => {
@@ -168,6 +174,104 @@ describe("buildSubagentStatusView", () => {
     expect(view.done).toBe(1)
     expect(view.items[0]?.active).toBe(false)
     expect(view.items[0]?.done).toBe(true)
-    expect(view.items[0]?.label).toBe("reviewer: Completed · 1m10s")
+    expect(view.items[0]?.label).toBe("reviewer: Completed · 1m00s")
+  })
+
+  test("maps TaskQueue rows onto the same rollup as live task parts", () => {
+    const queueTasks = taskQueueItemsToRollupTasks([
+      {
+        id: "task_queue_1",
+        sessionID: "child",
+        kind: "subagent",
+        status: "running",
+        title: "Review PR",
+        agent: "reviewer",
+        model: { modelID: "kimi-k2", providerID: "moonshot" },
+        time: { started: 10_000, updated: 40_000 },
+      },
+      {
+        id: "task_queue_prompt",
+        sessionID: "other",
+        kind: "prompt",
+        status: "running",
+        title: "Should be ignored",
+      },
+    ])
+
+    expect(queueTasks).toHaveLength(1)
+    expect(queueTasks[0]).toMatchObject({
+      sessionID: "child",
+      title: "Review PR",
+      agent: "reviewer",
+      modelID: "kimi-k2",
+      status: "running",
+    })
+
+    const view = buildSubagentStatusView({
+      now: 50_000,
+      parentSessionID: "parent",
+      childSessions: [{ id: "child", parentID: "parent", title: "Review PR (@reviewer subagent)" }],
+      tasks: queueTasks,
+      statuses: {
+        child: {
+          type: "busy",
+          startedAt: 10_000,
+          lastActivityAt: 45_000,
+          waitState: "llm",
+        },
+      },
+    })
+
+    expect(view.running).toBe(1)
+    expect(view.items[0]?.title).toBe("Review PR")
+    expect(view.items[0]?.model).toBe("kimi-k2")
+    expect(view.items[0]?.label).toBe("reviewer: Thinking · 40s")
+  })
+
+  test("prefers a live tool-part task when a queue row shares the session", () => {
+    const merged = mergeSubagentRollupTasks(
+      [
+        {
+          id: "part",
+          sessionID: "child",
+          title: "From tool",
+          agent: "explore",
+          status: "running",
+        },
+      ],
+      [
+        {
+          id: "queue",
+          sessionID: "child",
+          title: "From queue",
+          agent: "reviewer",
+          status: "pending",
+        },
+      ],
+    )
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0]?.title).toBe("From tool")
+    expect(merged[0]?.agent).toBe("explore")
+  })
+
+  test("keeps queue rows scoped to the current session tree", () => {
+    const scoped = queueItemsForSessionTree(
+      [
+        { id: "a", sessionID: "child", kind: "subagent" },
+        { id: "b", sessionID: "foreign", kind: "subagent" },
+        { id: "c", kind: "automation" },
+      ],
+      { parentSessionID: "parent", childSessionIDs: ["child"] },
+    )
+
+    expect(scoped.map((item) => item.id)).toEqual(["a", "c"])
+  })
+
+  test("maps queue lifecycle statuses onto rollup task statuses", () => {
+    expect(queueStatusToTaskStatus("waiting_for_idle")).toBe("pending")
+    expect(queueStatusToTaskStatus("blocked_permission")).toBe("running")
+    expect(queueStatusToTaskStatus("failed")).toBe("error")
+    expect(queueStatusToTaskStatus("cancelled")).toBe("cancelled")
   })
 })

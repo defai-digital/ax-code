@@ -14,3 +14,4 @@ Canonical index for local-only product requirements. New PRDs use the filename f
 | [AX Work (Desktop Computer Use)](PRD-2026-08-12-ax-work.md) | Superseded | AX Code Desktop + runtime |
 | [AX Work product split](PRD-2026-08-12-ax-work-split.md) | Active | AX Work + AX Code Desktop |
 | [TUI Revamp 2 — Ratatui presentation](PRD-2026-08-13-tui-revamp-2-ratatui.md) | Active | AX Code CLI |
+| [Agentic Coding Task Supervision](PRD-2026-08-14-agentic-coding-task-supervision.md) | Active | AX Code runtime + CLI |

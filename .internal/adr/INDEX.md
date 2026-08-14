@@ -12,3 +12,4 @@ Local-only index (not tracked in git). Published product docs live under `docs/g
 | [ADR-052](ADR-052-ax-work-computer-use.md) | AX Work Computer Use | Accepted (D1 superseded) | 2026-08-12 |
 | [ADR-053](ADR-053-ax-work-product-split.md) | AX Work is a separate product | Accepted | 2026-08-12 |
 | [ADR-054](ADR-054-tui-revamp-2-ratatui-engine.md) | TUI Revamp 2 — Ratatui presentation engine | Accepted | 2026-08-13 |
+| [ADR-055](ADR-055-agentic-coding-task-supervision.md) | Agentic Coding Task Supervision | Accepted | 2026-08-14 |

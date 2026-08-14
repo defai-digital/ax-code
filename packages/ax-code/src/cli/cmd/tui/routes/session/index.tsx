@@ -113,7 +113,15 @@ import {
   nextSessionEntrySyncRetry,
   type SessionEntrySyncRetryState,
 } from "./entry-sync"
-import { buildSubagentStatusView, type SubagentRollupTask } from "./subagent-status-view"
+import {
+  buildSubagentStatusView,
+  mergeSubagentRollupTasks,
+  queueItemsForSessionTree,
+  taskQueueItemsToRollupTasks,
+  type SubagentRollupTask,
+  type SubagentStatusItem,
+} from "./subagent-status-view"
+import { SubagentStatusPanel } from "./subagent-status-panel"
 import { SessionRouteContext as context, useSessionRouteContext as use } from "./context"
 import { coalescedToolLabel } from "./tool-rendering"
 import { toolRendererComponent } from "./tool-renderers"
@@ -219,8 +227,14 @@ export function Session() {
   const subagentTasks = createMemo(() => {
     const tasks = taskPartsByMessage().flatMap((tasksForMessage) => tasksForMessage())
     const parentID = session()?.parentID ?? route.sessionID
+    const childSessionIDs = children()
+      .filter((item) => item.parentID === parentID)
+      .map((item) => item.id)
+    const queueTasks = taskQueueItemsToRollupTasks(
+      queueItemsForSessionTree(sync.data.task_queue, { parentSessionID: parentID, childSessionIDs }),
+    )
     return buildSubagentStatusView({
-      tasks,
+      tasks: mergeSubagentRollupTasks(tasks, queueTasks),
       childSessions: children(),
       statuses: sync.data.session_status,
       parentSessionID: parentID,
@@ -291,6 +305,8 @@ export function Session() {
   const [showHeader, setShowHeader] = kv.signal("header_visible", true)
   const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
   const [showGenericToolOutput, setShowGenericToolOutput] = kv.signal("generic_tool_output_visibility", false)
+  const [subagentPanelCollapsed, setSubagentPanelCollapsed] = kv.signal("subagent_panel_collapsed", false)
+  const [stoppingSubagents, setStoppingSubagents] = createSignal<ReadonlySet<string>>(new Set())
   const [statusTick, setStatusTick] = createSignal(0)
 
   const wide = createMemo(() => dimensions().width > 120)
@@ -352,6 +368,33 @@ export function Session() {
   createEffect(() => {
     sdk.setWorkspace(session()?.directory)
   })
+
+  function openSubagent(item: SubagentStatusItem) {
+    if (!item.sessionID) return
+    navigate({ type: "session", sessionID: item.sessionID })
+  }
+
+  async function stopSubagent(item: SubagentStatusItem) {
+    if (!item.sessionID || stoppingSubagents().has(item.sessionID)) return
+    const sessionID = item.sessionID
+    setStoppingSubagents((prev) => new Set(prev).add(sessionID))
+    try {
+      const aborted = await sdk.client.session.abort({ sessionID })
+      if (aborted.error) {
+        log.warn("subagent stop failed", { error: aborted.error, sessionID })
+        toast.show({
+          message: sdkErrorMessage(aborted.error, "Failed to stop the subagent"),
+          variant: "error",
+        })
+      }
+    } finally {
+      setStoppingSubagents((prev) => {
+        const next = new Set(prev)
+        next.delete(sessionID)
+        return next
+      })
+    }
+  }
 
   let sessionSyncGeneration = 0
   const sessionSyncRetryTimers = new Set<() => void>()
@@ -1224,46 +1267,16 @@ export function Session() {
             <Show when={showHeader() && (!sidebarVisible() || !wide())}>
               <Header />
             </Show>
-            <Show when={subagentTasks().total > 0}>
-              <box flexShrink={0} paddingLeft={1} gap={0}>
-                <Show
-                  when={subagentTasks().running > 0}
-                  fallback={
-                    <text fg={theme.textMuted}>
-                      ◇ {Locale.pluralize(subagentTasks().total, "{} subagent", "{} subagents")}
-                      {subagentTasks().done > 0 ? (
-                        <span style={{ fg: theme.success }}> · {subagentTasks().done} done</span>
-                      ) : null}
-                    </text>
-                  }
-                >
-                  <Spinner color={subagentTasks().items.some((item) => item.stale) ? theme.warning : theme.primary}>
-                    <span>
-                      {Locale.pluralize(subagentTasks().running, "{} subagent", "{} subagents")} active
-                      {subagentTasks().done > 0 ? (
-                        <span style={{ fg: theme.success }}> · {subagentTasks().done} done</span>
-                      ) : null}
-                    </span>
-                  </Spinner>
-                </Show>
-                <For
-                  each={subagentTasks()
-                    .items.filter((item) => item.active)
-                    .slice(0, 2)}
-                >
-                  {(item) => (
-                    <text paddingLeft={3} fg={item.stale ? theme.warning : theme.textMuted}>
-                      ↳ {item.label}
-                    </text>
-                  )}
-                </For>
-                <Show when={subagentTasks().items.filter((item) => item.active).length > 2}>
-                  <text paddingLeft={3} fg={theme.textMuted}>
-                    ↳ +{subagentTasks().items.filter((item) => item.active).length - 2} more active
-                  </text>
-                </Show>
-              </box>
-            </Show>
+            <SubagentStatusPanel
+              view={subagentTasks()}
+              collapsed={subagentPanelCollapsed()}
+              terminalHeight={dimensions().height}
+              width={contentWidth()}
+              stopping={stoppingSubagents()}
+              onToggle={() => setSubagentPanelCollapsed(!subagentPanelCollapsed())}
+              onOpen={openSubagent}
+              onStop={stopSubagent}
+            />
             <scrollbox
               ref={(r: ScrollBoxRenderable) => (scroll = r)}
               viewportOptions={{

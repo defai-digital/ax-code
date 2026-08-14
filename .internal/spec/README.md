@@ -9,3 +9,4 @@ when a durable decision is involved, an ADR.
 | [Loop Mode (`/loop`)](SPEC-2026-07-25-loop-mode.md) | Implemented | PRD-2026-07-25, ADR-050 |
 | [AX Work Computer Use](SPEC-2026-08-12-ax-work.md) | Superseded as product spec | PRD-2026-08-12, ADR-052 |
 | [AX Work product split](SPEC-2026-08-12-ax-work-split.md) | Implemented | PRD-2026-08-12-ax-work-split, ADR-053 |
+| [Agentic Coding Task Supervision](SPEC-2026-08-14-agentic-coding-task-supervision.md) | Phase 1 | PRD-2026-08-14, ADR-055 |
