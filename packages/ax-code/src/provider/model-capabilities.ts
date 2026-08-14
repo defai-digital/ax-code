@@ -408,10 +408,38 @@ const MODEL_REGISTRY: ModelRegistration[] = [
     },
   },
 
-  // Ornith 1.0 35B — managed AX Engine build. The local catalog uses the
-  // short `ornith-35b` id while external AX Engine servers may advertise the
-  // full upstream/AXQuant name, so the pattern accepts both forms. Prefix
-  // caching is runtime-managed by AX Engine and remains experimental here.
+  // Ornith 1.0 35B — managed AX Engine build. Explicit IDs for the well-known
+  // variants (fast path) followed by a regex catch-all for future AXQuant
+  // builds and aliased deployments. Prefix caching is runtime-managed by
+  // AX Engine and remains experimental here.
+  {
+    pattern: "ornith-35b",
+    providerIds: ["ax-engine"],
+    capabilities: {
+      contextWindow: 262_144,
+      thinking: "supported",
+      preserveThinking: "supported",
+      promptCache: "experimental",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "unlimited",
+    },
+  },
+  {
+    pattern: "AX-Ornith-1.0-35B-MLX-AXQ-4bit",
+    providerIds: ["ax-engine"],
+    capabilities: {
+      contextWindow: 262_144,
+      thinking: "supported",
+      preserveThinking: "supported",
+      promptCache: "experimental",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "unlimited",
+    },
+  },
   {
     pattern: /ornith(?:[\.\-_]?1[\.\-_]?0)?[\.\-_]?35b/i,
     providerIds: ["ax-engine"],
@@ -428,10 +456,25 @@ const MODEL_REGISTRY: ModelRegistration[] = [
   },
 
   // Ornith 1.0 397B-FP8 — Alibaba PAI-EAS dedicated GPU deployment. Shares
-  // the same 262K context architecture as the local 35B AXQ build. Listed
+  // the same 262K context architecture as the local 35B AXQ build. Explicit
+  // IDs for the canonical variant followed by a regex catch-all. Listed
   // separately from the generic private-GPU catch-all so the reported
   // context window reflects the actual model capacity rather than the
   // open-ended 1M placeholder used for undiscovered vLLM/SGLang endpoints.
+  {
+    pattern: "Ornith-1.0-397B-FP8",
+    providerIds: ["alibaba-pai"],
+    capabilities: {
+      contextWindow: 262_144,
+      thinking: "supported",
+      preserveThinking: "supported",
+      promptCache: "supported",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "unlimited",
+    },
+  },
   {
     pattern: /ornith(?:[\.\-_]?1[\.\-_]?0)?[\.\-_]?397b/i,
     providerIds: ["alibaba-pai"],

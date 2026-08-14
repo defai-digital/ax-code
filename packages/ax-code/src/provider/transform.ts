@@ -379,15 +379,26 @@ export namespace ProviderTransform {
     id?: string
     providerID: string
     api: { id: string; url?: string }
+    family?: string
   }): boolean {
+    // Check the declared family first — fastest path and consistent with how
+    // hasFamily() resolves other model families (qwen, gemini, etc.).
+    if (model.family?.toLowerCase() === "ornith") return true
+
     if ([model.providerID, model.api.id, model.id].some((id) => id?.toLowerCase().includes("ornith"))) return true
 
     // Some OpenAI-compatible gateways expose an alias as the model id while
     // retaining the upstream family in the route URL. Keep this secondary
-    // signal boundary-aware so a hostname such as `ornithology.example` does
-    // not accidentally select Ornith-specific request shaping.
-    const url = (model.api.url ?? "").toLowerCase()
-    return /(?:^|[/?#&=._:-])ornith(?:$|[/?#&=._:-])/.test(url)
+    // signal boundary-aware so a hostname such as `ornithology.example` or
+    // `ornith-api.example` does not accidentally select Ornith-specific
+    // request shaping. Only match `ornith` in the URL path or query string,
+    // not in the hostname.
+    try {
+      const parsed = new URL(model.api.url ?? "")
+      return /\/ornith(?:[\.\-_]|$)/.test(parsed.pathname) || /[?&]ornith=/i.test(parsed.search)
+    } catch {
+      return false
+    }
   }
 
   // Official Qwen 3.x ChatML (and Ornith / Holo3 fine-tunes) reject any

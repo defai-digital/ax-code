@@ -293,7 +293,10 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
         } as any,
         {},
       )
-      expect(result.filter((msg) => msg.role === "system"), id).toHaveLength(2)
+      expect(
+        result.filter((msg) => msg.role === "system"),
+        id,
+      ).toHaveLength(2)
     }
   })
 
@@ -345,6 +348,59 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
     } as any
 
     expect(ProviderTransform.variants(model)).toEqual({})
+  })
+
+  test("detects Ornith from declared family field", () => {
+    const model = {
+      id: "custom/some-alias",
+      providerID: ProviderID.make("custom"),
+      api: { id: "some-alias", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
+      family: "ornith",
+    } as any
+
+    expect(ProviderTransform.isOrnithFamily(model)).toBe(true)
+  })
+
+  test("does not match hostname with ornith prefix (e.g. ornith-api.example)", () => {
+    const model = {
+      id: "custom/coding-model",
+      providerID: ProviderID.make("custom"),
+      api: {
+        id: "coding-model",
+        url: "https://ornith-api.example.com/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+    } as any
+
+    expect(ProviderTransform.isOrnithFamily(model)).toBe(false)
+  })
+
+  test("does not match ornithology hostname", () => {
+    const model = {
+      id: "custom/coding-model",
+      providerID: ProviderID.make("custom"),
+      api: {
+        id: "coding-model",
+        url: "https://ornithology.example/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+    } as any
+
+    expect(ProviderTransform.isOrnithFamily(model)).toBe(false)
+  })
+
+  test("matches ornith as a path segment in URL", () => {
+    const model = {
+      id: "custom/coding-model",
+      providerID: ProviderID.make("custom"),
+      api: {
+        id: "coding-model",
+        url: "https://gateway.example/v1/models/ornith-35b",
+        npm: "@ai-sdk/openai-compatible",
+      },
+    } as any
+
+    expect(ProviderTransform.isOrnithFamily(model)).toBe(true)
   })
 })
 
