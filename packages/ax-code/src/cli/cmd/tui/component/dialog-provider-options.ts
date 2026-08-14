@@ -138,6 +138,27 @@ export function providerDialogProvidersForType<T extends { id: string }>(
   return providersInConnectCategory(providers, category)
 }
 
+export function providerDialogChangeTypeOption() {
+  return {
+    title: "Change type",
+    value: PROVIDER_DIALOG_CHANGE_TYPE_VALUE,
+    description: "Back to Local runtime, Private GPU, CLI, API",
+  }
+}
+
+/** Providers first so residual Enter after type select cannot bounce back via Change type. */
+export function providerDialogOptionsForType<T extends { value: string; category?: string }>(
+  providers: readonly T[],
+  category: ProviderConnectCategory,
+) {
+  return [
+    ...providers
+      .filter((provider) => providerConnectCategory(provider.value) === category)
+      .map((provider) => ({ ...provider, category: undefined })),
+    providerDialogChangeTypeOption(),
+  ]
+}
+
 export function configUpdateParams<T extends Record<string, unknown>>(config: T) {
   return { config }
 }

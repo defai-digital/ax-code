@@ -32,15 +32,12 @@ import {
   PROVIDER_DIALOG_CHANGE_TYPE_VALUE,
   providerDialogCategory,
   providerDialogConnected,
+  providerDialogOptionsForType,
   providerDialogProviders,
   providerDialogTypeOptions,
   selectableProviderDefaultModelID,
 } from "./dialog-provider-options"
-import {
-  type ProviderConnectCategory,
-  providerConnectCategory,
-  providerConnectCategoryMeta,
-} from "@/mode/provider-category"
+import { providerConnectCategoryMeta } from "@/mode/provider-category"
 import { requireDedicatedPrivateGpuVendor } from "@/provider/private-gpu/presets"
 
 const OFFLINE_PROVIDER_HOSTS: Record<string, { envVar: string; defaultHost: string }> = {
@@ -1028,43 +1025,36 @@ export function createDialogProviderOptions() {
 
 export function DialogProvider() {
   const options = createDialogProviderOptions()
-  const [category, setCategory] = createSignal<ProviderConnectCategory | undefined>()
+  const dialog = useDialog()
 
   const typeOptions = createMemo(() =>
-    providerDialogTypeOptions(options().map((option) => option.value)).map((option) => ({
-      ...option,
+    providerDialogTypeOptions(options().map((option) => option.value)).map((type) => ({
+      ...type,
       onSelect() {
-        setCategory(option.value)
+        // Replace the dialog instead of swapping DialogSelect in place. An
+        // in-place remount kept the residual Enter from this confirm and
+        // immediately activated the first filtered row (previously Change
+        // type), so type select looked like a no-op.
+        dialog.replace(() => (
+          <DialogSelect
+            title={providerConnectCategoryMeta(type.value).label}
+            options={providerDialogOptionsForType(options(), type.value).map((option) =>
+              option.value === PROVIDER_DIALOG_CHANGE_TYPE_VALUE
+                ? {
+                    ...option,
+                    onSelect() {
+                      dialog.replace(() => <DialogProvider />)
+                    },
+                  }
+                : option,
+            )}
+          />
+        ))
       },
     })),
   )
 
-  const providerOptions = createMemo(() => {
-    const selected = category()
-    if (!selected) return []
-    return [
-      {
-        title: "Change type",
-        value: PROVIDER_DIALOG_CHANGE_TYPE_VALUE,
-        description: "Back to Local runtime, Private GPU, CLI, API",
-        onSelect() {
-          setCategory(undefined)
-        },
-      },
-      ...options()
-        .filter((option) => providerConnectCategory(option.value) === selected)
-        .map((option) => ({
-          ...option,
-          category: undefined,
-        })),
-    ]
-  })
-
-  return (
-    <Show when={category()} fallback={<DialogSelect title="Provider type" options={typeOptions()} />}>
-      <DialogSelect title={providerConnectCategoryMeta(category() ?? "api").label} options={providerOptions()} />
-    </Show>
-  )
+  return <DialogSelect title="Provider type" options={typeOptions()} />
 }
 
 interface AutoMethodProps {

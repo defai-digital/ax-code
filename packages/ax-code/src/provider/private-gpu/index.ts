@@ -21,6 +21,7 @@ export { privateGpuAuthPlugin, PRIVATE_GPU_AUTH_PLUGIN_BY_ID, PRIVATE_GPU_AUTH_P
 export {
   connectPrivateGpu,
   disconnectPrivateGpu,
+  privateGpuConfigModels,
   privateGpuProviderConfig,
   removePrivateGpuProviderConfig,
   type PrivateGpuConnection,

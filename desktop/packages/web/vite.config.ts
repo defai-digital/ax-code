@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url"
 import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 import { themeStoragePlugin } from "../../vite-theme-plugin"
+import { createDesktopApiWsProxyPlugin } from "./vite-api-ws-proxy"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const requireFromUi = createRequire(path.resolve(__dirname, "../ui/package.json"))
@@ -142,6 +143,7 @@ export default defineConfig({
     },
     themeStoragePlugin(),
     ghosttyWasmAssetPlugin(),
+    createDesktopApiWsProxyPlugin(),
   ],
   resolve: {
     alias: [
@@ -179,7 +181,6 @@ export default defineConfig({
       "/api": {
         target: `http://127.0.0.1:${process.env.AX_CODE_DESKTOP_PORT || 3001}`,
         changeOrigin: true,
-        ws: true,
       },
       // The Project/DRE Dashboard iframe loads the backend-served /dre-graph app
       // (and its /graph assets). Without these the vite SPA fallback returns

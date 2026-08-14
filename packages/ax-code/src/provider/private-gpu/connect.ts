@@ -6,7 +6,7 @@ import {
   requireDedicatedPrivateGpuVendor,
   isDedicatedPrivateGpuProviderID,
 } from "./presets"
-import { discoverPrivateGpuModels } from "./discover"
+import { discoverPrivateGpuModels, type PrivateGpuDiscoveredModel } from "./discover"
 import { normalizeVendorBaseURL } from "./endpoint"
 
 export type PrivateGpuConnection = {
@@ -15,7 +15,37 @@ export type PrivateGpuConnection = {
   models: string[]
 }
 
-export function privateGpuProviderConfig(vendor: PrivateGpuVendor, baseURL: string) {
+export function privateGpuConfigModels(models: readonly PrivateGpuDiscoveredModel[]) {
+  return Object.fromEntries(
+    models.map((model) => [
+      model.id,
+      {
+        id: model.id,
+        name: model.name,
+        release_date: "",
+        attachment: false,
+        reasoning: true,
+        temperature: true,
+        tool_call: true,
+        interleaved: { field: "reasoning_content" as const },
+        limit: {
+          context: model.context,
+          output: model.output,
+        },
+        modalities: {
+          input: ["text" as const],
+          output: ["text" as const],
+        },
+      },
+    ]),
+  )
+}
+
+export function privateGpuProviderConfig(
+  vendor: PrivateGpuVendor,
+  baseURL: string,
+  models: readonly PrivateGpuDiscoveredModel[] = [],
+) {
   return {
     [vendor.id]: {
       name: vendor.name,
@@ -25,6 +55,7 @@ export function privateGpuProviderConfig(vendor: PrivateGpuVendor, baseURL: stri
         baseURL: normalizeVendorBaseURL(baseURL, vendor),
         timeout: PRIVATE_GPU_REQUEST_TIMEOUT_MS,
       },
+      ...(models.length > 0 ? { models: privateGpuConfigModels(models) } : {}),
     },
   }
 }
@@ -46,7 +77,7 @@ export async function connectPrivateGpu(input: {
   })
   try {
     await Config.updateGlobal({
-      provider: privateGpuProviderConfig(vendor, discovered.baseURL),
+      provider: privateGpuProviderConfig(vendor, discovered.baseURL, discovered.models),
     })
   } catch (error) {
     await Auth.remove(vendor.id).catch(() => undefined)

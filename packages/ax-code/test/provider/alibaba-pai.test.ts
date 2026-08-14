@@ -160,6 +160,51 @@ describe("alibaba-pai provider surface", () => {
 
         const global = await Config.getGlobal()
         expect(global.provider?.[ALIBABA_PAI_PROVIDER_ID]?.options?.baseURL).toBe("http://127.0.0.1:18100/v1")
+        expect(global.provider?.[ALIBABA_PAI_PROVIDER_ID]?.models?.["GLM-5.2-FP8"]?.id).toBe("GLM-5.2-FP8")
+        expect(global.provider?.[ALIBABA_PAI_PROVIDER_ID]?.models?.["GLM-5.2-FP8"]?.tool_call).toBe(true)
+      },
+    })
+  })
+
+  test("keeps connected models visible if later /v1/models discovery fails", async () => {
+    let modelsCalls = 0
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) === "http://127.0.0.1:18101/v1/models") {
+        modelsCalls += 1
+        if (modelsCalls === 1) {
+          return new Response(JSON.stringify({ data: [{ id: "GLM-5.2-FP8" }] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          })
+        }
+        return new Response("unavailable", { status: 503 })
+      }
+      return originalFetch(input, init)
+    }) as typeof fetch
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await connectAlibabaPai({
+          baseURL: "http://127.0.0.1:18101",
+          apiKey: "eas-token",
+        })
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const beforeDiscovery = await Provider.list()
+        expect(Object.keys(beforeDiscovery[ProviderID.make(ALIBABA_PAI_PROVIDER_ID)]?.models ?? {})).toContain(
+          "GLM-5.2-FP8",
+        )
+        await Provider.ready()
+        const afterDiscovery = await Provider.list()
+        expect(Object.keys(afterDiscovery[ProviderID.make(ALIBABA_PAI_PROVIDER_ID)]?.models ?? {})).toContain(
+          "GLM-5.2-FP8",
+        )
       },
     })
   })

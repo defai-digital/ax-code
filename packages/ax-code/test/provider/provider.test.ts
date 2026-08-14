@@ -2210,10 +2210,19 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
         "wan2.7-image",
         "wan2.7-image-pro",
       ]
+      const expectedTokenPlanModels = [
+        ...expectedAlibabaPlanModels,
+        "qwen3.8-max",
+        "qwen3.8-max-preview",
+      ].sort()
       expect(Object.keys(codingPlan.models).sort()).toEqual(expectedAlibabaPlanModels)
       expect(Object.keys(codingPlanCn.models).sort()).toEqual(expectedAlibabaPlanModels)
-      expect(Object.keys(tokenPlan.models).sort()).toEqual(expectedAlibabaPlanModels)
-      expect(Object.keys(tokenPlanCn.models).sort()).toEqual(expectedAlibabaPlanModels)
+      expect(Object.keys(tokenPlan.models).sort()).toEqual(expectedTokenPlanModels)
+      expect(Object.keys(tokenPlanCn.models).sort()).toEqual(expectedTokenPlanModels)
+      for (const modelID of ["qwen3.8-max", "qwen3.8-max-preview"] as const) {
+        expect(tokenPlan.models[modelID].capabilities.input.image).toBe(true)
+        expect(tokenPlan.models[modelID].capabilities.toolcall).toBe(true)
+      }
       expect(codingPlan.models["qwen3.6-plus"].api.url).toBe("https://coding-intl.dashscope.aliyuncs.com/v1")
       expect(codingPlanCn.models["qwen3.6-plus"].api.url).toBe("https://coding.dashscope.aliyuncs.com/v1")
       expect(tokenPlan.models["qwen3.6-plus"].api.url).toBe(

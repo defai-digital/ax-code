@@ -99,7 +99,10 @@ describe("private-gpu connect and disconnect", () => {
           models: ["kimi-k3"],
         })
         expect(await Auth.get("alibaba-pai")).toEqual({ type: "api", key: "eas-token" })
-        expect((await Config.getGlobal()).provider?.["alibaba-pai"]?.options?.baseURL).toBe("http://127.0.0.1:18110/v1")
+        const saved = (await Config.getGlobal()).provider?.["alibaba-pai"]
+        expect(saved?.options?.baseURL).toBe("http://127.0.0.1:18110/v1")
+        expect(saved?.models?.["kimi-k3"]?.id).toBe("kimi-k3")
+        expect(saved?.models?.["kimi-k3"]?.tool_call).toBe(true)
 
         await disconnectPrivateGpu("alibaba-pai")
         expect(await Auth.get("alibaba-pai")).toBeUndefined()

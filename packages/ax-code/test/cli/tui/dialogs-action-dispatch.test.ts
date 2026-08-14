@@ -72,6 +72,15 @@ describe("tui dialog action dispatch", () => {
     expect(dialogProvider).not.toMatch(/void Promise\.resolve\(\)\s*\.then\(input\.run\)/)
   })
 
+  test("provider type select replaces the dialog instead of remounting DialogSelect in place", async () => {
+    const dialogProvider = await fs.readFile(DIALOG_PROVIDER_SRC, "utf8")
+
+    expect(dialogProvider).toContain('title="Provider type"')
+    expect(dialogProvider).toContain("dialog.replace(() => (")
+    expect(dialogProvider).toContain("providerDialogOptionsForType(")
+    expect(dialogProvider).not.toMatch(/<Show when=\{category\(\)\}/)
+  })
+
   test("heap snapshot palette action cannot float an unhandled rejection", async () => {
     const app = await fs.readFile(APP_SRC, "utf8")
 

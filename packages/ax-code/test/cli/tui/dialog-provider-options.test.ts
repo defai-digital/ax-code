@@ -15,8 +15,10 @@ import {
   normalizeAxEngineEndpointBaseURL,
   normalizeConfiguredProvidersPayload,
   normalizeProviderListPayload,
+  PROVIDER_DIALOG_CHANGE_TYPE_VALUE,
   providerDialogCategory,
   providerDialogConnected,
+  providerDialogOptionsForType,
   providerDialogProviders,
   providerDialogProvidersForType,
   providerDialogTypeOptions,
@@ -202,6 +204,15 @@ describe("provider dialog options", () => {
         (item) => item.id,
       ),
     ).toEqual(["nebius"])
+    expect(
+      providerDialogOptionsForType(
+        [
+          { title: "OpenAI", value: "openai", category: "API plan" },
+          { title: "Ollama", value: "ollama", category: "Local runtime" },
+        ],
+        "local",
+      ).map((item) => item.value),
+    ).toEqual(["ollama", PROVIDER_DIALOG_CHANGE_TYPE_VALUE])
   })
 
   test("sorts private GPU cloud after local runtime and before CLI/API plans", () => {

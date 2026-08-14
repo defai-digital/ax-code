@@ -935,6 +935,54 @@ for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-toke
   fetched[id].models = kept
 }
 
+// Token Plan Team Edition allowlist (not Coding Plan): Qwen 3.8 Max.
+// Official ID is qwen3.8-max-preview; some consoles also expose qwen3.8-max.
+const tokenPlanOnlyModels = ["qwen3.8-max-preview", "qwen3.8-max"] as const
+const tokenPlanQwen38: RawModel = {
+  id: "qwen3.8-max",
+  name: "Qwen3.8 Max",
+  description:
+    "2.4-trillion-parameter multimodal flagship for coding, professional work, and long-horizon agentic workflows",
+  family: "qwen",
+  attachment: true,
+  reasoning: true,
+  tool_call: true,
+  structured_output: true,
+  temperature: true,
+  release_date: "2026-08-03",
+  last_updated: "2026-08-03",
+  modalities: {
+    input: ["text", "image", "video"],
+    output: ["text"],
+  },
+  open_weights: false,
+  limit: {
+    context: 1000000,
+    output: 131072,
+  },
+  status: "active",
+}
+for (const id of ["alibaba-token-plan", "alibaba-token-plan-cn"]) {
+  if (!fetched[id]) continue
+  const models = fetched[id].models ?? {}
+  for (const mid of tokenPlanOnlyModels) {
+    if (models[mid]) continue
+    const fallback =
+      fetched["opencode-go"]?.models?.["qwen3.8-max"] ??
+      existing["opencode-go"]?.models?.["qwen3.8-max"] ??
+      existing[id]?.models?.[mid]
+    const base = fallback ? cloneJsonValue(fallback) : cloneJsonValue(tokenPlanQwen38)
+    models[mid] = {
+      ...base,
+      id: mid,
+      name: mid === "qwen3.8-max-preview" ? "Qwen3.8 Max Preview" : "Qwen3.8 Max",
+      family: "qwen",
+    }
+    delete (models[mid] as { provider?: unknown }).provider
+  }
+  fetched[id].models = models
+}
+
 // Kimi Cloud Plan is a first-party Moonshot endpoint surfaced as a narrow plan
 // provider. Keep it separate from the generic upstream Moonshot provider so the
 // picker only shows the currently validated coding model instead of every legacy
