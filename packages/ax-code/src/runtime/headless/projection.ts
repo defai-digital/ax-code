@@ -321,10 +321,31 @@ function removeRequest<TRequest extends { id: string }>(
 function upsertByID<T extends { id: string }>(list: T[], item: T) {
   const result = Binary.search(list, item.id, (entry) => entry.id)
   if (result.found) {
-    list[result.index] = item
+    mergeSnapshotInPlace(list[result.index], item)
     return
   }
   list.splice(result.index, 0, item)
+}
+
+// Merge snapshot fields onto the existing entry instead of replacing it.
+// Replacing the object (`list[i] = item`) swaps the Solid store proxy
+// identity, which makes identity-keyed consumers (`<For>` rows,
+// `sameDisplayPart` caches) destroy and recreate the whole message/part
+// component subtree — during streaming that meant a remount + full markdown
+// re-lex every part-snapshot window (the "backend is running, screen looks
+// frozen" storm). Merging keeps the row mounted and lets fine-grained field
+// tracking update only what actually changed.
+function mergeSnapshotInPlace<T extends { id: string }>(existing: T, incoming: T) {
+  for (const key of Object.keys(incoming) as Array<keyof T>) {
+    // A stale streaming snapshot must not rewind deltas that were already
+    // applied: never shrink accumulated text/reasoning content.
+    if (key === "text") {
+      const prev = (existing as { text?: unknown }).text
+      const next = (incoming as { text?: unknown }).text
+      if (typeof prev === "string" && typeof next === "string" && next.length < prev.length) continue
+    }
+    existing[key] = incoming[key]
+  }
 }
 
 function deleteSessionState<

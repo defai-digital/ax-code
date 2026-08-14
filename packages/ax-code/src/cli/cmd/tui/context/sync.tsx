@@ -5,7 +5,7 @@ import { createSimpleContext } from "./helper"
 import type { Snapshot } from "@/snapshot"
 import { useExit } from "./exit"
 import { useArgs } from "./args"
-import { createEffect, on, onMount, onCleanup } from "solid-js"
+import { createEffect, on, onMount, onCleanup, batch } from "solid-js"
 import { Log } from "@/util/log"
 import type { SessionGoal } from "@/session/goal"
 import { withTimeout } from "@/util/timeout"
@@ -198,6 +198,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       listen: sdk.event.listen,
       getAutonomous: () => store.autonomous,
       getAutoReplyRequests: () => store.superLong,
+      batch,
       setStore,
       clearSessionSyncState: sessionSync.clear,
       replyPermission(payload) {

@@ -3,6 +3,7 @@ import path from "path"
 import fs from "fs/promises"
 import {
   SESSION_TOOL_RENDERER_KEYS,
+  bashDisplayMode,
   coalescedToolLabel,
   isKnownSessionToolRenderer,
   sessionToolRendererKey,
@@ -29,6 +30,15 @@ describe("tui session tool rendering policy", () => {
     expect(coalescedToolLabel("glob", 4)).toBe("Glob · 4 searches")
     expect(coalescedToolLabel("grep", 5)).toBe("Grep · 5 searches")
     expect(coalescedToolLabel("custom_tool", 6)).toBe("custom_tool · 6")
+  })
+
+  test("bash rows stay a stable one-liner while running, block only after completion", () => {
+    // Streamed output must not grow the transcript mid-call (transcript reflow
+    // per output chunk); the block appears exactly once, when the call ends.
+    expect(bashDisplayMode({ running: true, hasOutput: false })).toBe("inline")
+    expect(bashDisplayMode({ running: true, hasOutput: true })).toBe("inline")
+    expect(bashDisplayMode({ running: false, hasOutput: false })).toBe("inline")
+    expect(bashDisplayMode({ running: false, hasOutput: true })).toBe("block")
   })
 
   test("keeps extracted renderer modules independent from the route index", async () => {

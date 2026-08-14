@@ -430,4 +430,53 @@ describe("headless projection", () => {
 
     expect(state.session_error.ses_1).toBeUndefined()
   })
+
+  test("part and message snapshots merge in place (stable identity) and stale text never rewinds", () => {
+    const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
+
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "prt_1", messageID: "msg_1", type: "text", text: "hello" } },
+    })
+    const originalPart = state.part["msg_1"]?.[0]
+    expect(originalPart?.text).toBe("hello")
+
+    // Delta appends keep the same object.
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.delta",
+      properties: { sessionID: "ses_1", messageID: "msg_1", partID: "prt_1", field: "text", delta: " world" },
+    })
+    expect(state.part["msg_1"]?.[0]).toBe(originalPart)
+    expect(originalPart?.text).toBe("hello world")
+
+    // A fresh snapshot merges onto the same object instead of replacing it —
+    // replacing would swap the Solid store proxy identity and remount the
+    // whole message row in the TUI on every part-snapshot window.
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "prt_1", messageID: "msg_1", type: "text", text: "hello world!" } },
+    })
+    expect(state.part["msg_1"]?.[0]).toBe(originalPart)
+    expect(originalPart?.text).toBe("hello world!")
+
+    // A stale snapshot (shorter than the already-applied deltas) must not
+    // rewind accumulated text.
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "prt_1", messageID: "msg_1", type: "text", text: "hel" } },
+    })
+    expect(originalPart?.text).toBe("hello world!")
+
+    // Same identity guarantee for messages.
+    applyHeadlessProjectionEvent(state, {
+      type: "message.updated",
+      properties: { info: { id: "msg_1", sessionID: "ses_1" } },
+    })
+    const originalMessage = state.message["ses_1"]?.[0]
+    applyHeadlessProjectionEvent(state, {
+      type: "message.updated",
+      properties: { info: { id: "msg_1", sessionID: "ses_1" } },
+    })
+    expect(state.message["ses_1"]?.[0]).toBe(originalMessage)
+  })
 })

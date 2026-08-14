@@ -40,3 +40,10 @@ export function coalescedToolLabel(tool: string, count: number): string {
   if (tool === "grep") return `Grep · ${count} searches`
   return `${tool} · ${count}`
 }
+
+// While a bash call is running the row stays a stable one-liner (Kimi-style
+// tool status); the output block only replaces it once the call finishes, so
+// streamed output chunks never reflow the transcript mid-call.
+export function bashDisplayMode(input: { running: boolean; hasOutput: boolean }): "inline" | "block" {
+  return !input.running && input.hasOutput ? "block" : "inline"
+}

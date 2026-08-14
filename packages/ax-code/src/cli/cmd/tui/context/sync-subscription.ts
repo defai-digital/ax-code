@@ -127,6 +127,9 @@ export function subscribeStoreBackedSyncEvents<
     TStore
   >["maxSessionMessages"]
   onHandlerError: (input: { type: string | undefined; error: string }) => void
+  // Reactive batching boundary (Solid `batch`) injected by the caller so this
+  // module stays framework-free per the TUI layering guardrails.
+  batch?: (fn: () => void) => void
   dispatch?: (
     input: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>,
   ) => boolean
@@ -159,16 +162,22 @@ export function subscribeStoreBackedSyncEvents<
   // full-frame TUI flicker while streaming (#376).
   const coalescer = createStreamDeltaCoalescer({
     emit(events) {
-      for (const event of events) {
-        try {
-          applyEvent(event as SyncEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart>)
-        } catch (error) {
-          input.onHandlerError({
-            type: eventType(event),
-            error: toErrorMessage(error),
-          })
+      // One reactive batch per flush window: without it each event's store
+      // projection runs its own synchronous propagation pass, so a window
+      // carrying delta + status + todo updates pays N render trees.
+      const run = input.batch ?? ((fn: () => void) => fn())
+      run(() => {
+        for (const event of events) {
+          try {
+            applyEvent(event as SyncEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart>)
+          } catch (error) {
+            input.onHandlerError({
+              type: eventType(event),
+              error: toErrorMessage(error),
+            })
+          }
         }
-      }
+      })
     },
   })
 

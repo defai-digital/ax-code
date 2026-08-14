@@ -10,6 +10,7 @@ import { Global } from "@/global"
 import { Locale } from "@/util/locale"
 import { detail, diagnostics, diffSummary, capLines, normalize, workdir } from "../format"
 import { codeDisplayView, diffDisplayView } from "../view-model"
+import { bashDisplayMode } from "../tool-rendering"
 import { SessionCodeRenderer, SessionDiffRenderer } from "../render-adapter"
 import { useSessionRouteContext } from "../context"
 import { BlockTool, InlineTool, type ToolProps } from "./primitives"
@@ -45,7 +46,7 @@ export function Bash(props: ToolProps<typeof BashTool>) {
 
   return (
     <Switch>
-      <Match when={props.metadata.output !== undefined}>
+      <Match when={bashDisplayMode({ running: isRunning(), hasOutput: props.metadata.output !== undefined }) === "block"}>
         <BlockTool
           title={title()}
           part={props.part}

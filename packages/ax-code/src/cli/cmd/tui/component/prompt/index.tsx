@@ -2098,7 +2098,7 @@ export function Prompt(props: PromptProps) {
                       </text>
                     }
                   >
-                    <OpenTuiSpinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
+                    <OpenTuiSpinner color={spinnerDef().color} frames={spinnerDef().frames} interval={160} />
                   </Show>
                   <Show when={status().type === "busy" && busyStatus()?.stale}>
                     <text fg={theme.warning}>!</text>

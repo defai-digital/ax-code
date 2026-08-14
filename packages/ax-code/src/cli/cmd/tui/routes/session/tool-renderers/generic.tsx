@@ -22,7 +22,7 @@ export function GenericTool(props: ToolProps<any>) {
     <Show
       when={props.output && ctx.showGenericToolOutput()}
       fallback={
-        <InlineTool icon="⚙" pending="Writing command..." complete={true} part={props.part}>
+        <InlineTool icon="⚙" pending="Writing command..." complete={props.part.state.status !== "running"} part={props.part}>
           {props.tool} {detail(props.input)}
         </InlineTool>
       }

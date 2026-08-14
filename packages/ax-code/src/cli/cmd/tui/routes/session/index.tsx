@@ -248,8 +248,16 @@ export function Session() {
   // the indexed, agent.route-filtered query a single time and builds a
   // Map<messageID, routeInfo>; RouteIndicator just does a Map.get. The
   // primary-row selection matches the original per-message logic exactly.
+  //
+  // Re-query only when the message set structurally changes (ids added or
+  // removed): agent.route rows arrive alongside new messages, and tracking
+  // the raw array would re-run a full SQLite scan on every streamed
+  // message.updated field write.
+  const messageStructureKey = createMemo(() =>
+    (sync.data.message[route.sessionID] ?? []).map((message) => message.id).join(""),
+  )
   const routeInfoByMessage = createMemo(() => {
-    void sync.data.message[route.sessionID] // re-evaluate when messages update
+    void messageStructureKey()
     const sid = route.sessionID as Parameters<typeof EventQuery.bySessionAndTypeWithTimestamp>[0]
     const rows = EventQuery.bySessionAndTypeWithTimestamp(sid, "agent.route")
     return buildRouteInfoByMessage(rows, sync.data.agent)
