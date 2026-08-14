@@ -765,8 +765,15 @@ export const ProvidersLogoutCommand = cmd({
     const { ModelsDev } = await import("../../provider/models")
     UI.empty()
     const credentials = await Auth.all().then((x) => Object.entries(x))
+    // Auth.all() drops entries whose keys no longer decrypt (machine key or
+    // crypto runtime changed). Those records still occupy auth.json and are
+    // exactly the ones a user wants to log out of, so offer them for removal
+    // instead of claiming no credential exists.
+    const undecryptable = (await Auth.decryptionFailures()).filter(
+      (id) => !credentials.some(([key]) => key === id),
+    )
     prompts.intro("Remove credential")
-    if (credentials.length === 0) {
+    if (credentials.length === 0 && undecryptable.length === 0) {
       prompts.log.error("No credentials found")
       return
     }
@@ -775,11 +782,11 @@ export const ProvidersLogoutCommand = cmd({
     let providerID: string
     if (requestedProvider) {
       const match = credentials.find(([key]) => key === requestedProvider)
-      if (!match) {
+      if (!match && !undecryptable.includes(requestedProvider)) {
         prompts.log.error(`No credential found for ${requestedProvider}`)
         return
       }
-      providerID = match[0]
+      providerID = match?.[0] ?? requestedProvider
     } else {
       if (!process.stdin.isTTY) {
         prompts.log.error(
@@ -789,10 +796,16 @@ export const ProvidersLogoutCommand = cmd({
       }
       const selected = await prompts.select({
         message: "Select provider",
-        options: credentials.map(([key, value]) => ({
-          label: (database[key]?.name || key) + UI.Style.TEXT_DIM + " (" + value.type + ")",
-          value: key,
-        })),
+        options: [
+          ...credentials.map(([key, value]) => ({
+            label: (database[key]?.name || key) + UI.Style.TEXT_DIM + " (" + value.type + ")",
+            value: key,
+          })),
+          ...undecryptable.map((key) => ({
+            label: (database[key]?.name || key) + UI.Style.TEXT_DIM + " (undecryptable)",
+            value: key,
+          })),
+        ],
       })
       if (prompts.isCancel(selected)) throw new UI.CancelledError()
       providerID = selected

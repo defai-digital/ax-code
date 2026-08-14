@@ -146,6 +146,42 @@ describe("providers command", () => {
     }
   })
 
+  test("providers logout removes a credential whose key no longer decrypts", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
+    const invalidateSpy = vi.spyOn(Provider, "invalidate").mockResolvedValue()
+
+    try {
+      // A well-formed EncryptedValue whose ciphertext cannot decrypt with any
+      // derivable key — the shape Auth.all() silently drops. Logout must still
+      // be able to remove the raw record from auth.json.
+      const undecryptable = {
+        type: "api",
+        key: {
+          encrypted: Buffer.alloc(24).toString("base64"),
+          iv: Buffer.alloc(16).toString("base64"),
+          salt: Buffer.alloc(32).toString("base64"),
+          tag: Buffer.alloc(16).toString("base64"),
+          version: 2,
+        },
+      }
+      await fs.writeFile(authFile, JSON.stringify({ "stale-provider": undecryptable }))
+
+      await ProvidersLogoutCommand.handler({ provider: "stale-provider" } as any)
+
+      expect(errorSpy).not.toHaveBeenCalledWith("No credential found for stale-provider")
+      expect(outroSpy).toHaveBeenCalledWith("Logout successful")
+      const remaining = JSON.parse(await fs.readFile(authFile, "utf-8"))
+      expect(remaining["stale-provider"]).toBeUndefined()
+    } finally {
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      errorSpy.mockRestore()
+      invalidateSpy.mockRestore()
+    }
+  })
+
   test("providers logout accepts a provider argument without opening selector", async () => {
     const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
     const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
