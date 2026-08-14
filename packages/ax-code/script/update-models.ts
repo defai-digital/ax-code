@@ -938,7 +938,7 @@ for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-toke
 // Token Plan Team Edition allowlist (not Coding Plan): Qwen 3.8 Max.
 // Official ID is qwen3.8-max-preview; some consoles also expose qwen3.8-max.
 const tokenPlanOnlyModels = ["qwen3.8-max-preview", "qwen3.8-max"] as const
-const tokenPlanQwen38: RawModel = {
+const tokenPlanQwen38 = {
   id: "qwen3.8-max",
   name: "Qwen3.8 Max",
   description:
@@ -961,7 +961,7 @@ const tokenPlanQwen38: RawModel = {
     output: 131072,
   },
   status: "active",
-}
+} as RawModel
 for (const id of ["alibaba-token-plan", "alibaba-token-plan-cn"]) {
   if (!fetched[id]) continue
   const models = fetched[id].models ?? {}
