@@ -915,16 +915,20 @@ export namespace ProviderTransform {
 
     // Ornith hub jinja (35B local and 397B-FP8 on PAI/vLLM) defaults thinking
     // on via chat_template_kwargs. Send the switch explicitly so a generic
-    // Qwen server default cannot close the think channel. This request-body
-    // extension is specific to @ai-sdk/openai-compatible; a future Ornith
-    // transport must add its native equivalent instead of relying on this path.
+    // Qwen server default cannot close the think channel.
+    //
+    // No npm guard: chat_template_kwargs is harmless if the backend ignores it,
+    // and most OpenAI-compatible servers accept it. Removing the guard ensures
+    // thinking stays on even if Ornith is deployed through a non-standard SDK
+    // (e.g., direct fetch, custom gateway). A future native transport can
+    // override this by clearing chat_template_kwargs in its own transform.
     //
     // else-if (not a separate if): isAlibabaThinkingModel requires
     // isAlibabaPlanProvider (alibaba-coding-plan* / alibaba-token-plan*),
     // which excludes alibaba-pai where Ornith lives. Keeping them exclusive
     // here prevents a future provider from accidentally receiving both
     // DashScope enable_thinking and Ornith chat_template_kwargs.
-    else if (isOrnithFamily(input.model) && input.model.api.npm === "@ai-sdk/openai-compatible") {
+    else if (isOrnithFamily(input.model)) {
       result["chat_template_kwargs"] = {
         enable_thinking: true,
         ...(input.longAgent && input.providerOptions?.preserveThinking !== false ? { preserve_thinking: true } : {}),
