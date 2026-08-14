@@ -565,7 +565,7 @@ function queueItemExecution(item: TaskQueue.Info): QueueExecution | undefined {
       }
     }
     case "subagent":
-      return workflowSubagentExecution(item)
+      return subagentExecution(item)
     case "review":
       return undefined
   }
@@ -617,16 +617,16 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
   }
 }
 
-function workflowSubagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
-  if (!isWorkflowQueueItem(item)) return undefined
+function subagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
+  if (!item.sessionID) return undefined
   const body = promptBodyFromQueueItem(item)
   if (!body) return undefined
   return {
-    sessionID: item.sessionID!,
+    sessionID: item.sessionID,
     run: () =>
       runInQueueItemInstance(item, async () => {
         const result = await SessionPrompt.prompt({ ...body, sessionID: item.sessionID! })
-        await recordWorkflowSubagentUsage(item, result)
+        if (isWorkflowQueueItem(item)) await recordWorkflowSubagentUsage(item, result)
         return result
       }),
   }

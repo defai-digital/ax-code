@@ -3,8 +3,8 @@
 | Field | Value |
 |-------|-------|
 | Last updated | 2026-08-14 |
-| Active phase | Phase 2 — non-blocking `task` |
-| Overall | Phase 1 shipped locally; next is detach spawn |
+| Active phase | Phase 3 — push completion |
+| Overall | Phase 2 shipped; next is parent handoff |
 
 ---
 
@@ -14,7 +14,7 @@
 |-------|--------|
 | 0 Documentation | DONE |
 | 1 Ship existing abilities | DONE |
-| 2 Non-blocking `task` | TODO |
+| 2 Non-blocking `task` | DONE |
 | 3 Push completion | TODO |
 | 4 Cancel / concurrency / restart | TODO |
 | 5 CLI / Desktop | TODO |

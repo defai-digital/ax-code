@@ -62728,6 +62728,33 @@
           "output": 32768
         }
       },
+      "meta/llama-3.1-8b-instruct": {
+        "id": "meta/llama-3.1-8b-instruct",
+        "name": "Llama 3.1 8B",
+        "description": "Compact open Llama model for lightweight chat, drafting, and self-hosting",
+        "family": "llama",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "knowledge": "2023-12",
+        "release_date": "2024-07-23",
+        "last_updated": "2024-07-23",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 128000,
+          "output": 2048
+        }
+      },
       "meta/muse-spark-1.2": {
         "id": "meta/muse-spark-1.2",
         "name": "Muse Spark 1.2",
@@ -65031,6 +65058,37 @@
         "limit": {
           "context": 256000,
           "output": 64000
+        }
+      },
+      "qwen/qwen3-30b-a3b": {
+        "id": "qwen/qwen3-30b-a3b",
+        "name": "Qwen3 30B A3B",
+        "description": "Sparse MoE Qwen model with 3B active parameters for efficient chat and reasoning",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2025-04-28",
+        "last_updated": "2025-04-28",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 32768
         }
       },
       "qwen/qwen3.5-397b-a17b": {

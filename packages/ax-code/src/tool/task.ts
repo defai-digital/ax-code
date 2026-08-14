@@ -14,6 +14,7 @@ import { Config } from "../config/config"
 import { Permission } from "@/permission"
 import { Log } from "@/util/log"
 import { withTimeout } from "@/util/timeout"
+import { ToolBoolean } from "./schema"
 
 const MAX_DEPTH = 5
 // 10 minutes: subagent tasks that exceed this are likely stuck on a
@@ -90,7 +91,101 @@ const parameters = z.object({
     )
     .optional(),
   command: z.string().describe("The command that triggered this task").optional(),
+  background: ToolBoolean.optional().describe(
+    "Run the agent in the background. Returns immediately with a task_id. You will be notified when it completes. DO NOT sleep, poll, or proactively check on its progress. Default false.",
+  ),
 })
+
+const BACKGROUND_STARTED = [
+  "The task is working in the background. You will be notified when it finishes.",
+  "DO NOT sleep, poll for progress, ask the task for status, or duplicate this task's work — avoid working with the same files or topics it is using.",
+  "Work on non-overlapping tasks, or briefly tell the user what you launched and end your response.",
+].join("\n")
+
+async function startBackgroundSubagent(input: {
+  params: z.infer<typeof parameters>
+  ctx: Tool.Context
+  session: Awaited<ReturnType<typeof Session.create>>
+  agent: Agent.Info
+  model: { modelID: string; providerID: string }
+  taskTools: Record<string, boolean>
+  promptParts: Awaited<ReturnType<typeof resolvePromptParts>>
+  ensureNotAborted: () => void
+}) {
+  const { params, ctx, session, agent, model, taskTools, promptParts, ensureNotAborted } = input
+  ensureNotAborted()
+  const { TaskQueue } = await import("../session/task-queue")
+  const { TaskQueueExecutor } = await import("../session/task-queue-executor")
+
+  const queued = await TaskQueue.enqueue({
+    sessionID: session.id,
+    kind: "subagent",
+    title: params.description,
+    agent: agent.name,
+    model,
+    sourceMessageID: ctx.messageID,
+    executionTimeoutMs: SUBAGENT_TIMEOUT_MS,
+    payload: {
+      source: "task",
+      resumeOnRestart: true,
+      parentSessionID: ctx.sessionID,
+      subagentType: params.subagent_type,
+      command: params.command,
+      prompt: params.prompt,
+      body: {
+        parts: promptParts,
+        agent: agent.name,
+        model,
+        tools: taskTools,
+        toolsScope: "turn",
+        agentRouting: "preserve",
+      },
+    },
+  })
+  ensureNotAborted()
+
+  try {
+    await TaskQueueExecutor.start(queued)
+  } catch (error) {
+    log.warn("failed to start background subagent queue item", {
+      sessionID: session.id,
+      queueID: queued.id,
+      error,
+    })
+  }
+
+  const metadata = {
+    sessionId: session.id,
+    model,
+    background: true,
+    queueID: queued.id,
+  }
+  ctx.metadata({
+    title: params.description,
+    metadata,
+  })
+
+  return {
+    title: params.description,
+    metadata: {
+      ...metadata,
+      emptyResult: false,
+      finalizeAttempted: false,
+      recoveredFromEmpty: false,
+      recoveredResultNeedsReview: false,
+      subagentError: false,
+    },
+    output: [
+      `task_id: ${session.id} (for resuming to continue this task if needed)`,
+      "state: running",
+      `queue_id: ${queued.id}`,
+      "",
+      "<task_result>",
+      BACKGROUND_STARTED,
+      "</task_result>",
+    ].join("\n"),
+  }
+}
 
 export const TaskTool = Tool.define("task", async (ctx) => {
   const agents = await Agent.list().then((x) =>
@@ -254,6 +349,19 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         const messageID = MessageID.ascending()
         ensureNotAborted()
         const promptParts = await resolvePromptParts(params.prompt)
+
+        if (params.background) {
+          return await startBackgroundSubagent({
+            params,
+            ctx,
+            session,
+            agent,
+            model,
+            taskTools,
+            promptParts,
+            ensureNotAborted,
+          })
+        }
 
         result = await withTimeout(
           SessionPrompt.prompt({

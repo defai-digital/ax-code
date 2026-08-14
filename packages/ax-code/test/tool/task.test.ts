@@ -3,9 +3,10 @@ import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
-import { MessageID, SessionID } from "../../src/session/schema"
+import { MessageID, SessionID, TaskQueueID } from "../../src/session/schema"
 import { TaskTool } from "../../src/tool/task"
 import { MessageV2 } from "../../src/session/message-v2"
+import { TaskQueue } from "../../src/session/task-queue"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
@@ -748,6 +749,193 @@ describe("tool.task", () => {
           expect(result.metadata.subagentError).toBe(true)
           expect(result.metadata.errorName).toBe("APIError")
           expect(result.metadata.errorMessage).toBe("provider failed")
+        } finally {
+          promptSpy.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("background spawn returns before the child prompt finishes and writes a TaskQueue row", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        let childFinished = false
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          await new Promise((resolve) => setTimeout(resolve, 150))
+          childFinished = true
+          return {
+            info: {
+              id: input.messageID ?? MessageID.ascending(),
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: Date.now(), completed: Date.now() },
+            },
+            parts: [{ type: "text", text: "background child done" }],
+          } as any
+        }) as any)
+
+        try {
+          const result = await (
+            await TaskTool.init()
+          ).execute(
+            {
+              description: "Explore the repo",
+              prompt: "find the auth entrypoint",
+              subagent_type: "explore",
+              background: true,
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+
+          expect(childFinished).toBe(false)
+          expect(result.metadata.background).toBe(true)
+          expect(result.output).toContain("state: running")
+          expect(result.output).toContain("DO NOT sleep")
+          const taskID = String(result.metadata.sessionId)
+          expect(taskID).toMatch(/^ses_/)
+          const queueID = String(result.metadata.queueID)
+          expect(queueID).toMatch(/^tsk_/)
+
+          const child = await Session.get(SessionID.make(taskID))
+          expect(child.parentID).toBe(parent.id)
+
+          const queued = await TaskQueue.get(TaskQueueID.make(queueID))
+          expect(queued.kind).toBe("subagent")
+          expect(queued.sessionID).toBe(taskID)
+          expect(queued.title).toBe("Explore the repo")
+          expect(["queued", "waiting_for_idle", "running", "completed"]).toContain(queued.status)
+
+          await vi.waitFor(() => {
+            expect(childFinished).toBe(true)
+            expect(promptSpy).toHaveBeenCalled()
+          })
+        } finally {
+          promptSpy.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("foreground task still waits for the child prompt", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        let childFinished = false
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          await new Promise((resolve) => setTimeout(resolve, 50))
+          childFinished = true
+          return {
+            info: {
+              id: input.messageID,
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: Date.now(), completed: Date.now() },
+            },
+            parts: [{ type: "text", text: "foreground child done" }],
+          } as any
+        }) as any)
+
+        try {
+          const result = await (
+            await TaskTool.init()
+          ).execute(
+            {
+              description: "Review code",
+              prompt: "review the code",
+              subagent_type: "general",
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+
+          expect(childFinished).toBe(true)
+          expect(result.metadata.background).toBeUndefined()
+          expect(result.output).toContain("foreground child done")
+          expect(result.output).not.toContain("state: running")
         } finally {
           promptSpy.mockRestore()
         }

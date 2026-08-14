@@ -50,18 +50,18 @@ Legend: **TODO** · **IN PROGRESS** · **DONE**
 
 ## Phase 2 — Non-blocking `task` (P0)
 
-**Status:** TODO
+**Status:** DONE (2026-08-14)
 
 Depends on Phase 1 (rail must exist before detach is useful).
 
 ### Work
 
-1. [ ] `background?: boolean` on `task.ts` (default false)
-2. [ ] Enqueue `TaskQueue.kind = "subagent"` and start without awaiting
-3. [ ] Return `{ task_id, state: "running" }` immediately
-4. [ ] `task.txt`: do not poll / sleep / duplicate
-5. [ ] Executor path for non-workflow subagent rows
-6. [ ] Tests: background returns before child completes; queue row exists
+1. [x] `background?: boolean` on `task.ts` (default false)
+2. [x] Enqueue `TaskQueue.kind = "subagent"` and start without awaiting
+3. [x] Return `{ task_id, state: "running" }` immediately
+4. [x] `task.txt`: do not poll / sleep / duplicate
+5. [x] Executor path for non-workflow subagent rows
+6. [x] Tests: background returns before child completes; queue row exists
 
 ### Exit criteria
 
