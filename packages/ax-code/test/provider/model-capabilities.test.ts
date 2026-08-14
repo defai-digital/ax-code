@@ -174,6 +174,47 @@ describe("Model Capability Registry", () => {
         expect(caps.rateLimitTier).toBe("unlimited")
       }
     })
+
+    it("registers MiniMax M2/M2.x/M3 on first-party routes with snapshot context windows", () => {
+      for (const providerID of ["minimax", "minimax-coding-plan", "minimax-cn", "minimax-cn-coding-plan"]) {
+        expect(getModelCapabilities("MiniMax-M2", providerID).contextWindow).toBe(196_608)
+        expect(getModelCapabilities("MiniMax-M2.5", providerID).contextWindow).toBe(204_800)
+        expect(getModelCapabilities("minimax-m2.7-highspeed", providerID).contextWindow).toBe(204_800)
+        expect(getModelCapabilities("MiniMax-M3", providerID).contextWindow).toBe(1_000_000)
+
+        const caps = getModelCapabilities("MiniMax-M3", providerID)
+        expect(caps.thinking).toBe("supported")
+        expect(caps.preserveThinking).toBe("experimental")
+        expect(caps.promptCache).toBe("experimental")
+        expect(caps.toolCalling).toBe("supported")
+        expect(caps.structuredOutput).toBe("supported")
+        expect(caps.webOrBuiltInTools).toBe("blocked")
+        expect(caps.rateLimitTier).toBe("standard")
+      }
+    })
+
+    it("does not register MiniMax-M1 (non-reasoning SKU)", () => {
+      const caps = getModelCapabilities("MiniMax-M1", "minimax")
+      expect(caps.contextWindow).toBe(32_000)
+      expect(caps.thinking).toBe("blocked")
+    })
+
+    it("keeps the dedicated private-GPU catch-all authoritative for MiniMax on alibaba-pai", () => {
+      const caps = getModelCapabilities("MiniMax-M3", "alibaba-pai")
+      expect(caps.contextWindow).toBe(1_048_576)
+      expect(caps.rateLimitTier).toBe("unlimited")
+    })
+
+    it("keeps the Ollama catch-all authoritative for MiniMax on ollama", () => {
+      const caps = getModelCapabilities("MiniMax-M3", "ollama")
+      expect(caps.contextWindow).toBe(32_000)
+      expect(caps.rateLimitTier).toBe("unlimited")
+    })
+
+    it("falls back to MiniMax capabilities on unknown gateway providers", () => {
+      expect(getModelCapabilities("minimax-m2.5", "some-gateway").contextWindow).toBe(204_800)
+      expect(getModelCapabilities("MiniMax-M3", "some-gateway").contextWindow).toBe(1_000_000)
+    })
   })
 
   describe("supportsLongAgent", () => {
@@ -256,6 +297,13 @@ describe("Model Capability Registry", () => {
     it("supports the long-agent profile for cloud Ornith 397B on Alibaba PAI", () => {
       expect(supportsLongAgent("Ornith-1.0-397B-FP8", "alibaba-pai")).toBe(true)
       expect(supportsLongAgent("ornith-397b", "alibaba-pai")).toBe(true)
+    })
+
+    it("supports the long-agent profile for MiniMax M2.x/M3 on first-party routes", () => {
+      expect(supportsLongAgent("MiniMax-M3", "minimax")).toBe(true)
+      expect(supportsLongAgent("minimax-m2.5", "minimax-cn-coding-plan")).toBe(true)
+      // M1 is not registered — it must keep the narrow default profile.
+      expect(supportsLongAgent("MiniMax-M1", "minimax")).toBe(false)
     })
   })
 

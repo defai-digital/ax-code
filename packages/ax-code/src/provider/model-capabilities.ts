@@ -16,7 +16,11 @@ import { normalizeProviderModelId } from "./model-id"
 import {
   isQwen37MaxModel as isQwen37MaxReadinessModel,
   isQwen37PlusModel as isQwen37PlusReadinessModel,
+  QWEN37_ALIBABA_PROVIDER_IDS,
+  qwen37MaxReadiness,
+  qwen37PlusReadiness,
 } from "./qwen37-readiness"
+import { DEDICATED_PRIVATE_GPU_PROVIDER_IDS } from "./private-gpu/presets"
 
 /**
  * Rate limit tier for pacing policy selection.
@@ -141,6 +145,53 @@ const DEFAULT_CAPABILITIES: ModelCapabilities = {
  * Order matters: first matching registration wins.
  * More specific registrations (with providerIds) should come before general ones.
  */
+// Build a Qwen 3.7 Max/Plus registration from the qwen37-readiness.ts route
+// matrices so the registry's per-route feature flags can never drift from
+// them — previously both files hand-maintained the same values and had
+// already diverged on the unknown-route row. Patterns, context windows, and
+// rate-limit tiers stay here; the matrices own feature readiness per route.
+// `routeProviderId` selects the readiness row for the entry's route class
+// (each entry is scoped to exactly one route).
+function qwen37Registration(input: {
+  pattern: RegExp
+  providerIds?: string[]
+  routeProviderId: string
+  tier: "max" | "plus"
+  contextWindow: number
+  rateLimitTier: RateLimitTier
+}): ModelRegistration {
+  const matrix =
+    input.tier === "max" ? qwen37MaxReadiness(input.routeProviderId) : qwen37PlusReadiness(input.routeProviderId)
+  return {
+    pattern: input.pattern,
+    providerIds: input.providerIds,
+    capabilities: {
+      contextWindow: input.contextWindow,
+      ...matrix,
+      rateLimitTier: input.rateLimitTier,
+    },
+  }
+}
+
+// First-party MiniMax providers from the models.dev snapshot: minimax.io and
+// minimaxi.com plus their token/coding plans.
+const MINIMAX_FIRST_PARTY_PROVIDER_IDS = ["minimax", "minimax-coding-plan", "minimax-cn", "minimax-cn-coding-plan"]
+
+// Reasoning-capable MiniMax M2/M2.x/M3 shape. preserveThinking/promptCache
+// are experimental until probe-verified (see registry comment below).
+function minimaxCapabilities(contextWindow: number): ModelCapabilities {
+  return {
+    contextWindow,
+    thinking: "supported",
+    preserveThinking: "experimental",
+    promptCache: "experimental",
+    toolCalling: "supported",
+    structuredOutput: "supported",
+    webOrBuiltInTools: "blocked",
+    rateLimitTier: "standard",
+  }
+}
+
 const MODEL_REGISTRY: ModelRegistration[] = [
   // Qwen 3.7+ Max - Alibaba Cloud (official routes)
   // models-snapshot.json declares limit.context: 991k–1M for this model.
@@ -156,133 +207,85 @@ const MODEL_REGISTRY: ModelRegistration[] = [
   // family-wide below 3.7: qwen 3.6-max-preview ships different
   // capabilities. Gateway/aggregator entries stay 3.7-pinned because
   // their support genuinely varies per model.
-  {
+  qwen37Registration({
     pattern: /qwen[\.\-_]?3[\.\-_]?[789][\.\-_]?max/i,
-    providerIds: ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"],
-    capabilities: {
-      contextWindow: 1_000_000,
-      thinking: "supported",
-      preserveThinking: "supported",
-      promptCache: "supported",
-      toolCalling: "supported",
-      structuredOutput: "supported",
-      webOrBuiltInTools: "supported",
-      rateLimitTier: "extended",
-    },
-  },
+    providerIds: [...QWEN37_ALIBABA_PROVIDER_IDS],
+    routeProviderId: "alibaba-coding-plan",
+    tier: "max",
+    contextWindow: 1_000_000,
+    rateLimitTier: "extended",
+  }),
 
   // Qwen 3.7 Max - Together AI
-  {
+  qwen37Registration({
     pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?max/i,
     providerIds: ["togetherai"],
-    capabilities: {
-      contextWindow: 1_000_000,
-      thinking: "supported",
-      preserveThinking: "experimental",
-      promptCache: "experimental",
-      toolCalling: "supported",
-      structuredOutput: "supported",
-      webOrBuiltInTools: "blocked",
-      rateLimitTier: "standard",
-    },
-  },
+    routeProviderId: "togetherai",
+    tier: "max",
+    contextWindow: 1_000_000,
+    rateLimitTier: "standard",
+  }),
 
   // Qwen 3.7 Max - Gateway routes (Vercel, LLM Gateway)
-  {
+  qwen37Registration({
     pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?max/i,
     providerIds: ["llmgateway", "vercel"],
-    capabilities: {
-      contextWindow: 1_000_000,
-      thinking: "experimental",
-      preserveThinking: "experimental",
-      promptCache: "blocked",
-      toolCalling: "experimental",
-      structuredOutput: "experimental",
-      webOrBuiltInTools: "blocked",
-      rateLimitTier: "standard",
-    },
-  },
+    routeProviderId: "llmgateway",
+    tier: "max",
+    contextWindow: 1_000_000,
+    rateLimitTier: "standard",
+  }),
 
   // Qwen 3.7 Max - Other providers (fallback)
-  {
+  qwen37Registration({
     pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?max/i,
-    capabilities: {
-      contextWindow: 1_000_000,
-      thinking: "supported",
-      preserveThinking: "experimental",
-      promptCache: "experimental",
-      toolCalling: "supported",
-      structuredOutput: "supported",
-      webOrBuiltInTools: "blocked",
-      rateLimitTier: "standard",
-    },
-  },
+    routeProviderId: "unknown-provider",
+    tier: "max",
+    contextWindow: 1_000_000,
+    rateLimitTier: "standard",
+  }),
 
   // Qwen 3.7+ Plus - Alibaba Cloud (official routes)
   // Same 1M context window as Max; reasoning supported. webOrBuiltInTools
   // is "blocked" because enable_search evidence is Max-only in the snapshot.
   // 3.7–3.9 for the same forward-compat reason as the Max entry above.
-  {
+  qwen37Registration({
     pattern: /qwen[\.\-_]?3[\.\-_]?[789][\.\-_]?plus/i,
-    providerIds: ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"],
-    capabilities: {
-      contextWindow: 1_000_000,
-      thinking: "supported",
-      preserveThinking: "supported",
-      promptCache: "supported",
-      toolCalling: "supported",
-      structuredOutput: "supported",
-      webOrBuiltInTools: "blocked",
-      rateLimitTier: "extended",
-    },
-  },
+    providerIds: [...QWEN37_ALIBABA_PROVIDER_IDS],
+    routeProviderId: "alibaba-coding-plan",
+    tier: "plus",
+    contextWindow: 1_000_000,
+    rateLimitTier: "extended",
+  }),
 
   // Qwen 3.7 Plus - Together AI
-  {
+  qwen37Registration({
     pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?plus/i,
     providerIds: ["togetherai"],
-    capabilities: {
-      contextWindow: 1_000_000,
-      thinking: "supported",
-      preserveThinking: "experimental",
-      promptCache: "experimental",
-      toolCalling: "supported",
-      structuredOutput: "supported",
-      webOrBuiltInTools: "blocked",
-      rateLimitTier: "standard",
-    },
-  },
+    routeProviderId: "togetherai",
+    tier: "plus",
+    contextWindow: 1_000_000,
+    rateLimitTier: "standard",
+  }),
 
   // Qwen 3.7 Plus - Gateway routes (Vercel, LLM Gateway)
-  {
+  qwen37Registration({
     pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?plus/i,
     providerIds: ["llmgateway", "vercel"],
-    capabilities: {
-      contextWindow: 1_000_000,
-      thinking: "experimental",
-      preserveThinking: "experimental",
-      promptCache: "blocked",
-      toolCalling: "experimental",
-      structuredOutput: "experimental",
-      webOrBuiltInTools: "blocked",
-      rateLimitTier: "standard",
-    },
-  },
+    routeProviderId: "llmgateway",
+    tier: "plus",
+    contextWindow: 1_000_000,
+    rateLimitTier: "standard",
+  }),
 
   // Qwen 3.7 Plus - Other providers (fallback)
-  {
+  qwen37Registration({
     pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?plus/i,
-    capabilities: {
-      contextWindow: 1_000_000,
-      thinking: "supported",
-      preserveThinking: "experimental",
-      promptCache: "experimental",
-      toolCalling: "supported",
-      structuredOutput: "supported",
-      webOrBuiltInTools: "blocked",
-      rateLimitTier: "standard",
-    },
-  },
+    routeProviderId: "unknown-provider",
+    tier: "plus",
+    contextWindow: 1_000_000,
+    rateLimitTier: "standard",
+  }),
 
   // Claude 3.7 Sonnet - Anthropic
   {
@@ -493,17 +496,11 @@ const MODEL_REGISTRY: ModelRegistration[] = [
   // Dedicated private GPU endpoints (vLLM / SGLang / TGI). Discovered
   // max_model_len can be 1M+; treat the whole family as large-context and
   // unpaced so unknown model IDs do not collapse to DEFAULT_CAPABILITIES.
+  // The provider list is owned by private-gpu/presets.ts so this entry and
+  // transform.ts's private-GPU shaping cannot drift apart.
   {
     pattern: /.*/,
-    providerIds: [
-      "alibaba-pai",
-      "runpod",
-      "huggingface-endpoints",
-      "sagemaker",
-      "volcengine-ark",
-      "modelarts",
-      "tencent-ti",
-    ],
+    providerIds: [...DEDICATED_PRIVATE_GPU_PROVIDER_IDS],
     capabilities: {
       contextWindow: 1_048_576,
       thinking: "supported",
@@ -533,6 +530,51 @@ const MODEL_REGISTRY: ModelRegistration[] = [
       webOrBuiltInTools: "blocked",
       rateLimitTier: "unlimited",
     },
+  },
+
+  // MiniMax M2 / M2.x / M3 — first-party routes (minimax.io / minimaxi.com and
+  // their token plans). Snapshot limits: M2 196 608 ctx / 128k out, M2.x
+  // (M2.1/M2.5/M2.7 and highspeed variants) 204 800 / 131k, M3 1M / 128k.
+  // transform.ts already ships first-class MiniMax support (mm:think folding,
+  // M2 sampling, M3 reasoning variants), so without these entries the models
+  // collapsed to DEFAULT_CAPABILITIES (32k, non-reasoning) and lost long-agent
+  // / Super-Long on the official routes. M1 is deliberately NOT matched:
+  // snapshot rows list reasoning:false for it. preserveThinking/promptCache
+  // stay experimental (cross-turn carry-over and cache support unverified),
+  // mirroring the GLM 5.x honesty level (ADR-040). Ordering within the family:
+  // m3 first, then the versioned m2.x pattern, then base m2 (its pattern is a
+  // prefix of the other two).
+  {
+    pattern: /minimax[\.\-_]?m3/i,
+    providerIds: MINIMAX_FIRST_PARTY_PROVIDER_IDS,
+    capabilities: minimaxCapabilities(1_000_000),
+  },
+  {
+    pattern: /minimax[\.\-_]?m2[\.\-_]?\d/i,
+    providerIds: MINIMAX_FIRST_PARTY_PROVIDER_IDS,
+    capabilities: minimaxCapabilities(204_800),
+  },
+  {
+    pattern: /minimax[\.\-_]?m2/i,
+    providerIds: MINIMAX_FIRST_PARTY_PROVIDER_IDS,
+    capabilities: minimaxCapabilities(196_608),
+  },
+
+  // MiniMax — gateway / reseller fallback (mirrors the GLM 5.x gateway
+  // fallback). Placed at the very END of the registry so the dedicated
+  // private-GPU and Ollama catch-alls above keep winning on their providers
+  // (alibaba-pai stays 1M/unlimited; ollama stays 32k local).
+  {
+    pattern: /minimax[\.\-_]?m3/i,
+    capabilities: minimaxCapabilities(1_000_000),
+  },
+  {
+    pattern: /minimax[\.\-_]?m2[\.\-_]?\d/i,
+    capabilities: minimaxCapabilities(204_800),
+  },
+  {
+    pattern: /minimax[\.\-_]?m2/i,
+    capabilities: minimaxCapabilities(196_608),
   },
 ]
 
@@ -646,8 +688,10 @@ export function getContextPackBudget(modelId: string, providerId?: string): numb
 /**
  * Check if a model is Qwen 3.7 Max.
  *
- * @deprecated Use `getModelCapabilities()` instead. This function is provided
- * for backward compatibility during the migration period.
+ * Identity predicate (not a capability lookup): transform.ts uses it to pick
+ * model-specific output-token and thinking-budget ceilings, which the
+ * capability registry does not express. The detection logic lives in
+ * qwen37-readiness.ts; this wrapper keeps the historical import path stable.
  *
  * @param modelId - The model identifier
  * @returns true if the model is Qwen 3.7 Max
@@ -659,8 +703,7 @@ export function isQwen37MaxModel(modelId: string): boolean {
 /**
  * Check if a model is Qwen 3.7 Plus.
  *
- * @deprecated Use `getModelCapabilities()` instead. This function is provided
- * for backward compatibility during the migration period.
+ * Identity predicate (not a capability lookup) — see isQwen37MaxModel.
  *
  * @param modelId - The model identifier
  * @returns true if the model is Qwen 3.7 Plus

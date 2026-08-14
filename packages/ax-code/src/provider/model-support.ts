@@ -56,7 +56,7 @@ export function isModelSupportedForProvider(providerID: string, modelID: string,
     return supportsOpenAIGptModels(probes)
   }
   if (providerID === "xai") {
-    return supportsGrok41OrAllowedCodingModel(probes)
+    return supportsAllowedGrokModel(probes)
   }
   if (GLM_PROVIDER_IDS.has(providerID)) {
     return supportsGlmModels(probes)
@@ -74,6 +74,19 @@ function hasGlmMajorVersionAtLeastFive(probes: readonly string[]) {
   return false
 }
 
+// Semantic GLM major-version probe (shared with transform.ts's output-token
+// gate). True when any probe spells a GLM with the exact given major version
+// — e.g. probesHaveGlmMajorVersion(probes, 5) matches "glm-5.2" / "glm5.2"
+// / "glm-5.1[1m]" but not "glm-4.7-flash" or versionless aliases.
+export function probesHaveGlmMajorVersion(probes: readonly string[], major: number): boolean {
+  for (const probe of probes) {
+    const m = probe.match(GLM_MAJOR_VERSION)
+    if (!m) continue
+    if (Number.parseInt(m[1], 10) === major) return true
+  }
+  return false
+}
+
 export function supportsOpenAIGptModels(probes: readonly string[]) {
   if (!probes.some((probe) => probe.includes("gpt"))) return true
   if (probes.some((probe) => probe.includes("gpt-oss"))) return true
@@ -84,10 +97,13 @@ export function supportsOpenAIGptModels(probes: readonly string[]) {
 
 // Grok allow-list: only Grok 4.5 (and official aliases). Final-segment match so
 // reseller-prefixed ids like "x-ai/grok-4.5" still resolve.
-export function supportsGrok41OrAllowedCodingModel(probes: readonly string[]) {
+export function supportsAllowedGrokModel(probes: readonly string[]) {
   if (!probes.some((probe) => probe.includes("grok"))) return true
   return probes.some((probe) => GROK_ALLOWED_FINAL_SEGMENTS.has(modelIdFinalSegment(probe)))
 }
+
+/** @deprecated Use {@link supportsAllowedGrokModel} — the allow-list is Grok 4.5, not 4.1. */
+export const supportsGrok41OrAllowedCodingModel = supportsAllowedGrokModel
 
 export function supportsGlmModels(probes: readonly string[]) {
   if (!probes.some((probe) => probe.includes("glm"))) return true

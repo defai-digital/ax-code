@@ -2561,6 +2561,42 @@ describe("ProviderTransform.maxOutputTokens", () => {
     }
   })
 
+  test("keeps GLM 4.x at the generic cap when output metadata is missing", () => {
+    const model = {
+      id: "glm-4.7-flash",
+      family: "glm",
+      providerID: ProviderID.make("ax-engine"),
+      api: { id: "glm-4.7-flash", npm: "@ai-sdk/openai-compatible" },
+      limit: { output: 0 },
+    } as any
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(OUTPUT_TOKEN_MAX)
+  })
+
+  test("grants GLM 5 the 131 072 fallback when output metadata is missing", () => {
+    const model = {
+      id: "glm-5.2",
+      family: "glm",
+      providerID: ProviderID.make("some-gateway"),
+      api: { id: "glm-5.2", npm: "@ai-sdk/openai-compatible" },
+      limit: { output: 0 },
+    } as any
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(131_072)
+  })
+
+  test("versionless glm aliases fall back to the generic cap without output metadata", () => {
+    const model = {
+      id: "my-glm-endpoint",
+      family: "glm",
+      providerID: ProviderID.make("custom"),
+      api: { id: "my-glm-endpoint", npm: "@ai-sdk/openai-compatible" },
+      limit: { output: 0 },
+    } as any
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(OUTPUT_TOKEN_MAX)
+    // A snapshot-declared limit stays authoritative for the same alias.
+    const withLimit = { ...model, limit: { output: 131_072 } } as any
+    expect(ProviderTransform.maxOutputTokens(withLimit)).toBe(131_072)
+  })
+
   test("does not apply DashScope short-window cap to dedicated PAI-EAS GPUs", () => {
     const model = {
       id: "GLM-5.2-FP8",

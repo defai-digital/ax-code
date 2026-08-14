@@ -2,6 +2,8 @@ import { describe, expect, test } from "vitest"
 import {
   buildModelProbes,
   isModelSupportedForProvider,
+  probesHaveGlmMajorVersion,
+  supportsAllowedGrokModel,
   supportsGlmModels,
   supportsGrok41OrAllowedCodingModel,
   supportsOpenAIGptModels,
@@ -16,7 +18,7 @@ function neutralProbes(modelID: string, family: string) {
   return buildModelProbes(modelID, { id: modelID, name: modelID, family })
 }
 
-describe("supportsGrok41OrAllowedCodingModel", () => {
+describe("supportsAllowedGrokModel", () => {
   // Grok is restricted to an explicit allow-list.
   // Anything else with "grok" in its probes is dropped, regardless of version.
   test.each([
@@ -25,7 +27,7 @@ describe("supportsGrok41OrAllowedCodingModel", () => {
     ["grok-4.5-latest", true],
     ["grok-build-latest", true],
   ])("accepts %s", (id, expected) => {
-    expect(supportsGrok41OrAllowedCodingModel(probes(id))).toBe(expected)
+    expect(supportsAllowedGrokModel(probes(id))).toBe(expected)
   })
 
   test.each([
@@ -48,13 +50,32 @@ describe("supportsGrok41OrAllowedCodingModel", () => {
     ["grok-beta", false],
     ["grok-vision-beta", false],
   ])("rejects %s", (id, expected) => {
-    expect(supportsGrok41OrAllowedCodingModel(probes(id))).toBe(expected)
+    expect(supportsAllowedGrokModel(probes(id))).toBe(expected)
   })
 
   test("passes non-grok probes through", () => {
-    expect(supportsGrok41OrAllowedCodingModel(neutralProbes("claude-opus-4-7", "claude-opus"))).toBe(true)
+    expect(supportsAllowedGrokModel(neutralProbes("claude-opus-4-7", "claude-opus"))).toBe(true)
     expect(supportsOpenAIGptModels(neutralProbes("gpt-5", "gpt"))).toBe(true)
     expect(supportsGlmModels(neutralProbes("glm-5", "glm"))).toBe(true)
+  })
+
+  test("supportsGrok41OrAllowedCodingModel is a deprecated alias", () => {
+    expect(supportsGrok41OrAllowedCodingModel).toBe(supportsAllowedGrokModel)
+  })
+})
+
+describe("probesHaveGlmMajorVersion", () => {
+  test("matches the exact major version across separator spellings", () => {
+    expect(probesHaveGlmMajorVersion(buildModelProbes("glm-5.2"), 5)).toBe(true)
+    expect(probesHaveGlmMajorVersion(buildModelProbes("glm5.2"), 5)).toBe(true)
+    expect(probesHaveGlmMajorVersion(buildModelProbes("glm-5.1[1m]"), 5)).toBe(true)
+    expect(probesHaveGlmMajorVersion(buildModelProbes("glm-4.7-flash"), 5)).toBe(false)
+    expect(probesHaveGlmMajorVersion(buildModelProbes("glm-4.7-flash"), 4)).toBe(true)
+  })
+
+  test("returns false for versionless glm aliases", () => {
+    expect(probesHaveGlmMajorVersion(buildModelProbes("glm-zero-preview"), 5)).toBe(false)
+    expect(probesHaveGlmMajorVersion(buildModelProbes("my-glm", { family: "glm" }), 5)).toBe(false)
   })
 })
 

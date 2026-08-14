@@ -19,12 +19,17 @@ export type Qwen37RouteClassification = "alibaba" | "together" | "gateway" | "un
 /** @deprecated Use {@link Qwen37RouteClassification} instead. */
 export type Qwen37MaxRouteClassification = Qwen37RouteClassification
 
-const ALIBABA_PROVIDER_IDS = new Set([
+// First-party Alibaba plan providers serving Qwen 3.7 Max/Plus. Exported so
+// the capability registry (model-capabilities.ts) derives its providerIds from
+// this same list instead of hand-maintaining a second copy.
+export const QWEN37_ALIBABA_PROVIDER_IDS = [
   "alibaba-coding-plan",
   "alibaba-coding-plan-cn",
   "alibaba-token-plan",
   "alibaba-token-plan-cn",
-])
+] as const
+
+const ALIBABA_PROVIDER_IDS = new Set<string>(QWEN37_ALIBABA_PROVIDER_IDS)
 
 export function classifyQwen37Route(providerId: string): Qwen37RouteClassification {
   if (ALIBABA_PROVIDER_IDS.has(providerId)) return "alibaba"
@@ -65,12 +70,19 @@ const GATEWAY_READINESS: Qwen37ReadinessMatrix = {
   webOrBuiltInTools: "blocked",
 }
 
+// Reconciled with the live registry fallback in model-capabilities.ts. The
+// Qwen 3.7 Max/Plus "other providers" entries grant the optimistic
+// Together-tier values (thinking supported, cache/preserve experimental), and
+// the MODEL_REGISTRY now derives its per-route feature flags from these
+// matrices — so this row must mirror the registry fallback, not an
+// all-blocked conservatism. An all-blocked row here would silently disable
+// long-agent / Super-Long for unknown-provider Qwen 3.7 routes.
 const UNKNOWN_READINESS: Qwen37ReadinessMatrix = {
-  thinking: "blocked",
-  preserveThinking: "blocked",
-  toolCalling: "blocked",
-  structuredOutput: "blocked",
-  promptCache: "blocked",
+  thinking: "supported",
+  preserveThinking: "experimental",
+  toolCalling: "supported",
+  structuredOutput: "supported",
+  promptCache: "experimental",
   webOrBuiltInTools: "blocked",
 }
 

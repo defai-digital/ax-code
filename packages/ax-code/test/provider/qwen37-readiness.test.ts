@@ -71,13 +71,18 @@ describe("qwen37MaxReadiness — Together AI", () => {
 })
 
 describe("qwen37MaxReadiness — unknown provider", () => {
-  test("all features are blocked", () => {
+  // Reconciled with the registry's "other providers" fallback: optimistic
+  // Together-tier values (thinking supported, cache/preserve experimental).
+  // The registry derives its per-route flags from these matrices, and an
+  // all-blocked row here would silently disable long-agent / Super-Long for
+  // unknown-provider Qwen 3.7 routes.
+  test("falls back to the optimistic fallback-tier values", () => {
     const matrix = qwen37MaxReadiness("unknown-provider")
-    expect(matrix.thinking).toBe("blocked")
-    expect(matrix.preserveThinking).toBe("blocked")
-    expect(matrix.toolCalling).toBe("blocked")
-    expect(matrix.structuredOutput).toBe("blocked")
-    expect(matrix.promptCache).toBe("blocked")
+    expect(matrix.thinking).toBe("supported")
+    expect(matrix.preserveThinking).toBe("experimental")
+    expect(matrix.toolCalling).toBe("supported")
+    expect(matrix.structuredOutput).toBe("supported")
+    expect(matrix.promptCache).toBe("experimental")
     expect(matrix.webOrBuiltInTools).toBe("blocked")
   })
 })
@@ -119,13 +124,13 @@ describe("qwen37PlusReadiness — Together AI", () => {
 })
 
 describe("qwen37PlusReadiness — unknown provider", () => {
-  test("all features are blocked", () => {
+  test("falls back to the optimistic fallback-tier values", () => {
     const matrix = qwen37PlusReadiness("unknown-provider")
-    expect(matrix.thinking).toBe("blocked")
-    expect(matrix.preserveThinking).toBe("blocked")
-    expect(matrix.toolCalling).toBe("blocked")
-    expect(matrix.structuredOutput).toBe("blocked")
-    expect(matrix.promptCache).toBe("blocked")
+    expect(matrix.thinking).toBe("supported")
+    expect(matrix.preserveThinking).toBe("experimental")
+    expect(matrix.toolCalling).toBe("supported")
+    expect(matrix.structuredOutput).toBe("supported")
+    expect(matrix.promptCache).toBe("experimental")
     expect(matrix.webOrBuiltInTools).toBe("blocked")
   })
 })

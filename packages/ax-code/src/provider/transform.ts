@@ -9,6 +9,8 @@ import { isRecord } from "@/util/record"
 import { buildSearchParameters, type LiveSearchConfig } from "./xai/server-tools"
 import { isQwen37MaxOrPlusModel } from "./model-capabilities"
 import { modelIdFinalSegment } from "./model-id"
+import { buildModelProbes, probesHaveGlmMajorVersion } from "./model-support"
+import { isDedicatedPrivateGpuProviderID } from "./private-gpu/presets"
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
 import { cliEffortVariants } from "./cli/effort"
 import { wrapThinkTagText } from "./think-tags"
@@ -526,15 +528,10 @@ export namespace ProviderTransform {
   }
 
   function isPrivateGpuProvider(providerID: string): boolean {
-    return (
-      providerID === "alibaba-pai" ||
-      providerID === "runpod" ||
-      providerID === "huggingface-endpoints" ||
-      providerID === "sagemaker" ||
-      providerID === "volcengine-ark" ||
-      providerID === "modelarts" ||
-      providerID === "tencent-ti"
-    )
+    // Dedicated private-GPU vendors (PAI-EAS-style endpoints). The provider
+    // list is owned by private-gpu/presets.ts so this shaping and the
+    // capability registry's catch-all cannot drift apart.
+    return isDedicatedPrivateGpuProviderID(providerID)
   }
 
   function isDeepSeekFamily(model: Provider.Model): boolean {
@@ -1102,7 +1099,22 @@ export namespace ProviderTransform {
       : hasFamily(model, "glm")
         ? GLM_OUTPUT_TOKEN_MAX
         : OUTPUT_TOKEN_MAX
-    return limit > 0 ? Math.min(limit, cap) : cap
+    if (limit > 0) return Math.min(limit, cap)
+    // Missing/zero output metadata: the 131 072 GLM ceiling is documented for
+    // GLM 5.x only. Older or unversioned glm ids (glm-4.x, glm-zero, a bare
+    // family "glm") must not inherit it as a fabricated default — they fall
+    // back to the generic cap. `limit > 0` above stays authoritative, so any
+    // snapshot-declared output limit is still honored for every glm model.
+    if (isQwen37MaxOrPlusModel(model.id ?? "")) return QWEN37_MAX_OUTPUT_TOKENS
+    if (hasFamily(model, "glm")) {
+      const probes = buildModelProbes(model.id ?? "", {
+        id: model.api.id,
+        name: model.name,
+        family: model.family,
+      })
+      if (probesHaveGlmMajorVersion(probes, 5)) return GLM_OUTPUT_TOKEN_MAX
+    }
+    return OUTPUT_TOKEN_MAX
   }
 
   export function schema(model: Provider.Model, schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 {
