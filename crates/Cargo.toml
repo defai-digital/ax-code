@@ -8,7 +8,6 @@ members = [
   "ax-code-daemon",
   "ax-code-terminal",
   "ax-code-bench",
-  "ax-code-tui",
 ]
 
 [workspace.package]
@@ -51,19 +50,6 @@ unicode-normalization = "0.1"
 # Phase 4: parser
 tree-sitter = "0.24"
 rayon = "1"
-
-# TUI Revamp 2 (ADR-054) — presentation client
-ratatui = { version = "0.29", default-features = false, features = ["crossterm"] }
-crossterm = { version = "0.28", features = ["event-stream"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "signal", "io-util"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
-futures = "0.3"
-anyhow = "1"
-bytes = "1"
-unicode-width = "0.2"
-base64 = "0.22"
-url = "2"
-clap = { version = "4", features = ["derive", "env"] }
 
 [profile.release]
 lto = true

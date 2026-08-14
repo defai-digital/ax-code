@@ -64,11 +64,6 @@ export namespace Flag {
   // probes, Kitty keyboard negotiation, and a native render thread. Keep
   // that profile opt-in until it is stable across direct-TTY environments.
   export const AX_CODE_TUI_ADVANCED_TERMINAL = truthy("AX_CODE_TUI_ADVANCED_TERMINAL")
-  /**
-   * Dogfood interactive engine (ADR-054). Values: unset/opentui (default) | ratatui.
-   * Not a supported production default until Phase 6 graduation.
-   */
-  export declare const AX_CODE_TUI_ENGINE: string | undefined
   export const AX_CODE_PERMISSION = process.env["AX_CODE_PERMISSION"]
   export const AX_CODE_DISABLE_DEFAULT_PLUGINS = truthy("AX_CODE_DISABLE_DEFAULT_PLUGINS")
   export const AX_CODE_DISABLE_LSP_DOWNLOAD = truthy("AX_CODE_DISABLE_LSP_DOWNLOAD")
@@ -303,9 +298,6 @@ defineBooleanFlag("AX_CODE_ALLOW_INSECURE_NETWORK_AUTH")
 // This must be evaluated at access time, not module load time,
 // because tests and external tooling may set this env var at runtime
 defineStringFlag("AX_CODE_TUI_CONFIG")
-
-// ADR-054 dogfood engine: "ratatui" | unset (OpenTUI default).
-defineStringFlag("AX_CODE_TUI_ENGINE")
 
 // This must be evaluated at access time, not module load time,
 // because external tooling may set this env var at runtime
