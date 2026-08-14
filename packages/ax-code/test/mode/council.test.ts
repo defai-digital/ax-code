@@ -145,6 +145,129 @@ describe("Council.aggregateCouncil", () => {
     expect(md).toContain("timeout")
   })
 
+  test("merges paraphrased findings from different members into consensus", () => {
+    // Real transcript shape: grok and codex flagged the same Set.add()
+    // truthiness concern with different wording but near-identical fixes.
+    const report = Council.aggregateCouncil([
+      {
+        memberId: "grok-build-cli/grok-build-cli",
+        providerID: "grok-build-cli",
+        modelID: "grok-build-cli",
+        issues: [
+          {
+            memberId: "grok-build-cli/grok-build-cli",
+            severity: "low",
+            category: "maintainability",
+            summary:
+              "Side-effecting `filter` plus relying on `Set.add()` being truthy is correct but opaque; readers often miss why the expression is boolean.",
+            suggestedFix:
+              "Prefer an explicit predicate: `items.filter(x => { if (seen.has(x.id)) return false; seen.add(x.id); return true })`.",
+          },
+          {
+            memberId: "grok-build-cli/grok-build-cli",
+            severity: "low",
+            category: "correctness",
+            summary:
+              "Items whose `id` is `undefined`/`null` (or otherwise identical) collapse to a single entry; missing ids are treated as one key.",
+            suggestedFix: "If that is not intended, skip or key missing ids separately before inserting into `seen`.",
+          },
+        ],
+      },
+      {
+        memberId: "codex-cli/gpt-5.6-sol",
+        providerID: "codex-cli",
+        modelID: "gpt-5.6-sol",
+        issues: [
+          {
+            memberId: "codex-cli/gpt-5.6-sol",
+            severity: "medium",
+            category: "maintainability",
+            summary:
+              "The predicate relies on the truthy return value and side effect of Set.prototype.add, making the intent less obvious.",
+            suggestedFix:
+              "Use an explicit callback: items.filter(x => { if (seen.has(x.id)) return false; seen.add(x.id); return true })",
+          },
+        ],
+      },
+    ])
+
+    expect(report.consensus).toHaveLength(1)
+    expect(report.consensus[0]?.memberIds).toEqual(["codex-cli/gpt-5.6-sol", "grok-build-cli/grok-build-cli"])
+    expect(report.consensus[0]?.supportCount).toBe(2)
+    // Merge keeps the worst severity across members
+    expect(report.consensus[0]?.severity).toBe("medium")
+    // The unrelated correctness finding stays a singleton
+    expect(report.singleton).toHaveLength(1)
+    expect(report.singleton[0]?.category).toBe("correctness")
+  })
+
+  test("does not similarity-merge terse or unrelated findings", () => {
+    const report = Council.aggregateCouncil([
+      {
+        memberId: "m1",
+        providerID: "p1",
+        modelID: "a",
+        issues: [
+          { memberId: "m1", severity: "high", category: "security", summary: "SQL injection" },
+          { memberId: "m1", severity: "low", category: "style", summary: "Naming nit" },
+        ],
+      },
+      {
+        memberId: "m2",
+        providerID: "p2",
+        modelID: "b",
+        issues: [
+          { memberId: "m2", severity: "high", category: "security", summary: "XSS injection" },
+          {
+            memberId: "m2",
+            severity: "low",
+            category: "performance",
+            summary: "The nested loop over all repository files re-reads every entry on each iteration of the outer scan.",
+          },
+        ],
+      },
+    ])
+
+    // Terse summaries share too few tokens to merge; everything stays singleton.
+    expect(report.consensus).toHaveLength(0)
+    expect(report.singleton).toHaveLength(4)
+  })
+
+  test("does not similarity-merge findings anchored to different locations", () => {
+    const summary =
+      "The request handler awaits each provider sequentially instead of fanning out, so total latency is the sum of member latencies."
+    const suggestedFix = "Fan the provider calls out with Promise.all and aggregate the settled results."
+    const report = Council.aggregateCouncil([
+      {
+        memberId: "m1",
+        providerID: "p1",
+        modelID: "a",
+        issues: [{ memberId: "m1", severity: "medium", category: "performance", location: "src/a.ts:10", summary, suggestedFix }],
+      },
+      {
+        memberId: "m2",
+        providerID: "p2",
+        modelID: "b",
+        issues: [{ memberId: "m2", severity: "medium", category: "performance", location: "src/b.ts:99", summary, suggestedFix }],
+      },
+    ])
+
+    expect(report.consensus).toHaveLength(0)
+    expect(report.singleton).toHaveLength(2)
+  })
+
+  test("issueTokens and tokenSimilarity expose the clustering primitives", () => {
+    const a = Council.issueTokens({
+      category: "maintainability",
+      summary: "Relies on the truthy return of Set.add inside filter.",
+      suggestedFix: "Use an explicit predicate with seen.has and seen.add.",
+    })
+    expect(a.has("truthy")).toBe(true)
+    expect(a.has("the")).toBe(false)
+    expect(Council.tokenSimilarity(a, a)).toBe(1)
+    expect(Council.tokenSimilarity(a, new Set(["unrelated", "tokens"]))).toBe(0)
+  })
+
   test("classifyMemberFailure distinguishes timeout and JSON schema errors", () => {
     expect(Council.classifyMemberFailure("timeout or aborted: AbortError")).toBe("timeout")
     expect(Council.classifyMemberFailure("timeout: member exceeded 60000ms")).toBe("timeout")

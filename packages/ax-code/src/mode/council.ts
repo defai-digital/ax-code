@@ -69,6 +69,64 @@ export namespace Council {
     return `${loc}|${cat}|${sum}`
   }
 
+  // --- Similarity merging -------------------------------------------------
+  //
+  // Exact issueKey grouping only clusters byte-identical wording, which
+  // independent models essentially never produce — in practice every finding
+  // landed in "singleton" and the consensus/majority tiers never fired
+  // (observed: grok and codex flagging the same Set.add() truthiness concern
+  // with near-identical suggested fixes, reported as two singletons). After
+  // exact bucketing, buckets whose content-token overlap (Dice coefficient
+  // over category + summary + suggestedFix) clears a threshold are merged.
+  // Pure and deterministic: no model calls, stable scan order, ties broken
+  // by bucket insertion order.
+
+  /** Dice-coefficient threshold at or above which two buckets merge. */
+  export const SIMILARITY_MERGE_THRESHOLD = 0.5
+  /**
+   * Buckets with fewer content tokens than this never similarity-merge:
+   * terse summaries ("SQL injection") share too few tokens to distinguish
+   * agreement from coincidence.
+   */
+  export const SIMILARITY_MIN_TOKENS = 5
+
+  const TOKEN_STOPWORDS = new Set([
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "it", "its", "this", "that",
+    "these", "those", "of", "in", "on", "at", "to", "for", "with", "and", "or", "but", "not", "no",
+    "by", "as", "if", "so", "than", "then", "too", "very", "can", "could", "should", "would", "may",
+    "might", "will", "just", "also", "when", "while", "which", "what", "why", "how", "less", "more",
+    "most", "often", "make", "makes", "making", "made", "use", "using", "used", "prefer", "instead",
+    "rather", "here", "there", "into", "from", "your", "you", "one", "any", "all", "some", "such",
+  ])
+
+  /** Content tokens of an issue: category + summary + suggestedFix, lowercased, stopwords dropped. */
+  export function issueTokens(issue: Pick<CouncilIssue, "category" | "summary" | "suggestedFix">): Set<string> {
+    const text = `${issue.category} ${issue.summary} ${issue.suggestedFix ?? ""}`.toLowerCase()
+    const tokens = new Set<string>()
+    for (const raw of text.split(/[^\p{L}\p{N}]+/u)) {
+      if (raw.length < 2) continue
+      if (TOKEN_STOPWORDS.has(raw)) continue
+      tokens.add(raw)
+    }
+    return tokens
+  }
+
+  /** Dice coefficient over two token sets: 2·|A∩B| / (|A|+|B|), in [0, 1]. */
+  export function tokenSimilarity(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
+    if (a.size === 0 || b.size === 0) return 0
+    let shared = 0
+    for (const token of a) if (b.has(token)) shared++
+    return (2 * shared) / (a.size + b.size)
+  }
+
+  /** Locations must agree when both sides name one; a missing location matches anything. */
+  function locationsCompatible(a?: string, b?: string): boolean {
+    const left = (a ?? "").trim().toLowerCase()
+    const right = (b ?? "").trim().toLowerCase()
+    if (!left || !right) return true
+    return left === right
+  }
+
   function worstSeverity(a: Severity, b: Severity): Severity {
     return SEVERITY_RANK[a] <= SEVERITY_RANK[b] ? a : b
   }
@@ -124,12 +182,51 @@ export namespace Council {
       }
     }
 
+    // Similarity pass: greedily merge the most-similar compatible bucket
+    // pair until none clears the threshold. Fixpoint over at most n-1
+    // merges; issue counts are small (≤ 20 per member).
+    type ScoredBucket = { bucket: Bucket; tokens: Set<string> }
+    const scored: ScoredBucket[] = [...buckets.values()].map((bucket) => ({
+      bucket,
+      tokens: issueTokens(bucket),
+    }))
+    for (;;) {
+      let bestI = -1
+      let bestJ = -1
+      let bestScore = 0
+      for (let i = 0; i < scored.length; i++) {
+        for (let j = i + 1; j < scored.length; j++) {
+          const a = scored[i]!
+          const b = scored[j]!
+          if (a.tokens.size < SIMILARITY_MIN_TOKENS || b.tokens.size < SIMILARITY_MIN_TOKENS) continue
+          if (!locationsCompatible(a.bucket.location, b.bucket.location)) continue
+          const score = tokenSimilarity(a.tokens, b.tokens)
+          if (score >= SIMILARITY_MERGE_THRESHOLD && score > bestScore) {
+            bestScore = score
+            bestI = i
+            bestJ = j
+          }
+        }
+      }
+      if (bestI === -1) break
+      const target = scored[bestI]!
+      const source = scored[bestJ]!
+      for (const memberId of source.bucket.memberIds) target.bucket.memberIds.add(memberId)
+      target.bucket.severity = worstSeverity(target.bucket.severity, source.bucket.severity)
+      if (source.bucket.summary.length > target.bucket.summary.length) target.bucket.summary = source.bucket.summary
+      if (!target.bucket.suggestedFix && source.bucket.suggestedFix)
+        target.bucket.suggestedFix = source.bucket.suggestedFix
+      if (!target.bucket.location && source.bucket.location) target.bucket.location = source.bucket.location
+      for (const token of source.tokens) target.tokens.add(token)
+      scored.splice(bestJ, 1)
+    }
+
     const consensus: AggregatedIssue[] = []
     const majority: AggregatedIssue[] = []
     const minority: AggregatedIssue[] = []
     const singleton: AggregatedIssue[] = []
 
-    for (const bucket of buckets.values()) {
+    for (const { bucket } of scored) {
       const supportCount = bucket.memberIds.size
       const tier = incomplete ? "singleton" : classifyTier(supportCount, total)
       const item: AggregatedIssue = {
