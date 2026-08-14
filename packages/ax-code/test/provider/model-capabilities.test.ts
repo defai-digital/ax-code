@@ -161,6 +161,19 @@ describe("Model Capability Registry", () => {
         expect(caps.rateLimitTier).toBe("unlimited")
       }
     })
+
+    it("returns explicit Ornith 397B-FP8 capabilities for Alibaba PAI ids", () => {
+      for (const id of ["Ornith-1.0-397B-FP8", "ornith-397b", "Ornith-397B"]) {
+        const caps = getModelCapabilities(id, "alibaba-pai")
+        expect(caps.contextWindow).toBe(262_144)
+        expect(caps.thinking).toBe("supported")
+        expect(caps.preserveThinking).toBe("supported")
+        expect(caps.promptCache).toBe("supported")
+        expect(caps.toolCalling).toBe("supported")
+        expect(caps.structuredOutput).toBe("supported")
+        expect(caps.rateLimitTier).toBe("unlimited")
+      }
+    })
   })
 
   describe("supportsLongAgent", () => {
@@ -239,6 +252,11 @@ describe("Model Capability Registry", () => {
     it("supports the long-agent profile for local Ornith 35B", () => {
       expect(supportsLongAgent("ornith-35b", "ax-engine")).toBe(true)
     })
+
+    it("supports the long-agent profile for cloud Ornith 397B on Alibaba PAI", () => {
+      expect(supportsLongAgent("Ornith-1.0-397B-FP8", "alibaba-pai")).toBe(true)
+      expect(supportsLongAgent("ornith-397b", "alibaba-pai")).toBe(true)
+    })
   })
 
   describe("getContextPackBudget", () => {
@@ -275,6 +293,11 @@ describe("Model Capability Registry", () => {
 
     it("should return 128k for local Ornith 35B", () => {
       expect(getContextPackBudget("ornith-35b", "ax-engine")).toBe(128_000)
+    })
+
+    it("should return 128k for cloud Ornith 397B on Alibaba PAI", () => {
+      expect(getContextPackBudget("Ornith-1.0-397B-FP8", "alibaba-pai")).toBe(128_000)
+      expect(getContextPackBudget("ornith-397b", "alibaba-pai")).toBe(128_000)
     })
   })
 

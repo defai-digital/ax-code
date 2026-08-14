@@ -427,6 +427,26 @@ const MODEL_REGISTRY: ModelRegistration[] = [
     },
   },
 
+  // Ornith 1.0 397B-FP8 — Alibaba PAI-EAS dedicated GPU deployment. Shares
+  // the same 262K context architecture as the local 35B AXQ build. Listed
+  // separately from the generic private-GPU catch-all so the reported
+  // context window reflects the actual model capacity rather than the
+  // open-ended 1M placeholder used for undiscovered vLLM/SGLang endpoints.
+  {
+    pattern: /ornith(?:[\.\-_]?1[\.\-_]?0)?[\.\-_]?397b/i,
+    providerIds: ["alibaba-pai"],
+    capabilities: {
+      contextWindow: 262_144,
+      thinking: "supported",
+      preserveThinking: "supported",
+      promptCache: "supported",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "unlimited",
+    },
+  },
+
   // Dedicated private GPU endpoints (vLLM / SGLang / TGI). Discovered
   // max_model_len can be 1M+; treat the whole family as large-context and
   // unpaced so unknown model IDs do not collapse to DEFAULT_CAPABILITIES.
