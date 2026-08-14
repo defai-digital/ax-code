@@ -3,7 +3,7 @@ import { CliRenderer, createCliRenderer, engine as engine2 } from "@ax-code/open
 import { createTestRenderer } from "@ax-code/opentui-core/testing";
 
 // src/elements/catalogue.ts
-import { ASCIIFontRenderable, BoxRenderable, CodeRenderable, DiffRenderable, InputRenderable, LineNumberRenderable, MarkdownRenderable, ScrollBoxRenderable, SelectRenderable, TabSelectRenderable, TextareaRenderable, TextAttributes, TextNodeRenderable, TextRenderable } from "@ax-code/opentui-core";
+import { BoxRenderable, CodeRenderable, DiffRenderable, InputRenderable, LineNumberRenderable, MarkdownRenderable, ScrollBoxRenderable, TextareaRenderable, TextAttributes, TextNodeRenderable, TextRenderable } from "@ax-code/opentui-core";
 
 class SpanRenderable extends TextNodeRenderable {
   constructor(_ctx, options) {
@@ -70,10 +70,7 @@ var baseComponents = {
   box: BoxRenderable,
   text: TextRenderable,
   input: InputRenderable,
-  select: SelectRenderable,
   textarea: TextareaRenderable,
-  ascii_font: ASCIIFontRenderable,
-  tab_select: TabSelectRenderable,
   scrollbox: ScrollBoxRenderable,
   code: CodeRenderable,
   diff: DiffRenderable,

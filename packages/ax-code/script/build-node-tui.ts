@@ -11,6 +11,7 @@ import { solidEsbuildPlugin } from "./esbuild-solid-plugin"
 import { readText, writeText } from "./fs-compat"
 import { resolveLegacyNodeGypPython } from "./node-gyp-python"
 import { WINDOWS_UTF8_WARNING } from "./source-launcher"
+import { shouldCopyOpentuiDistPath, withoutOpentuiBuildOnlyDependencies } from "../../../script/opentui-dist"
 import pkg from "../package.json"
 
 // Full Node distribution build INCLUDING the interactive TUI. Bundles
@@ -188,7 +189,10 @@ const result = await esbuild.build({
   conditions: ["node"],
   // Native / Bun-only ids kept external, loaded at runtime from node_modules
   // shipped beside the bundle (OpenTUI FFI lib, node-pty .node, bun:* are
-  // never hit on Node).
+  // never hit on Node). Do not inline @ax-code/opentui-core: the native
+  // library and tree-sitter assets resolve via import.meta.url on the
+  // hashed vendor chunks. Bundling a narrow source entry is a follow-up
+  // (see packages/opentui-core/MAINTENANCE.md).
   external: ["bun:ffi", "bun:sqlite", "node-pty-prebuilt-multiarch", "@ax-code/opentui-core", "@ax-code/opentui-solid"],
   plugins: [
     {
@@ -331,7 +335,14 @@ const opentuiSpinnerPkg = JSON.parse(
   peerDependencies?: Record<string, string>
 }
 const distDeps: Record<string, string> = {
-  ...collectPackageRuntimeDependencies([opentuiCorePkg, opentuiSolidPkg, opentuiSpinnerPkg]),
+  ...collectPackageRuntimeDependencies([
+    opentuiCorePkg,
+    {
+      dependencies: withoutOpentuiBuildOnlyDependencies(opentuiSolidPkg.dependencies),
+      peerDependencies: opentuiSolidPkg.peerDependencies,
+    },
+    opentuiSpinnerPkg,
+  ]),
   "node-pty-prebuilt-multiarch": deps["node-pty-prebuilt-multiarch"],
   // .wasm files are kept external (esbuild) and resolved at runtime via
   // createRequire — ship the tree-sitter packages beside the bundle so the bash
@@ -410,7 +421,7 @@ for (const [pkgName, srcDir] of vendoredOpentuiPackages) {
   fs.cpSync(srcDir, destDir, {
     recursive: true,
     dereference: true,
-    filter: (src) => path.basename(src) !== "node_modules",
+    filter: (src) => shouldCopyOpentuiDistPath(src, srcDir),
   })
   console.log(`Copied vendored ${pkgName} into the distribution`)
 }

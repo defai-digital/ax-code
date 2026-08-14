@@ -1,4 +1,4 @@
-import { ASCIIFontRenderable, BoxRenderable, CodeRenderable, DiffRenderable, InputRenderable, LineNumberRenderable, MarkdownRenderable, ScrollBoxRenderable, SelectRenderable, TabSelectRenderable, TextareaRenderable, TextNodeRenderable, TextRenderable, type RenderContext, type TextNodeOptions } from "@ax-code/opentui-core";
+import { BoxRenderable, CodeRenderable, DiffRenderable, InputRenderable, LineNumberRenderable, MarkdownRenderable, ScrollBoxRenderable, TextareaRenderable, TextNodeRenderable, TextRenderable, type RenderContext, type TextNodeOptions } from "@ax-code/opentui-core";
 import type { RenderableConstructor } from "../types/elements.js";
 declare class SpanRenderable extends TextNodeRenderable {
     private readonly _ctx;
@@ -32,10 +32,7 @@ export declare const baseComponents: {
     box: typeof BoxRenderable;
     text: typeof TextRenderable;
     input: typeof InputRenderable;
-    select: typeof SelectRenderable;
     textarea: typeof TextareaRenderable;
-    ascii_font: typeof ASCIIFontRenderable;
-    tab_select: typeof TabSelectRenderable;
     scrollbox: typeof ScrollBoxRenderable;
     code: typeof CodeRenderable;
     diff: typeof DiffRenderable;

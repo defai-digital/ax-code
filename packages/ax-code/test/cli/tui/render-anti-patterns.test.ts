@@ -117,6 +117,8 @@ describe("tui OpenTUI stability guardrails", () => {
   test("keeps release dependency install from running optional native lifecycle scripts", async () => {
     const build = await fs.readFile(BUILD_NODE_TUI_SRC, "utf8")
 
+    expect(build).toContain("shouldCopyOpentuiDistPath")
+    expect(build).toContain("withoutOpentuiBuildOnlyDependencies")
     expect(build).toContain('spawnSync("npm", args')
     expect(build).toContain('shell: process.platform === "win32"')
     expect(build).not.toContain('"npm.cmd"')

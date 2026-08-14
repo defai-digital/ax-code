@@ -7868,8 +7868,6 @@ async function loadParsers() {
   const markdown_injections = await resolveBundledFilePath(() => import("./assets/markdown/injections.scm", { with: { type: "file" } }), "./assets/markdown/injections.scm", import.meta.url);
   const markdown_inline_highlights = await resolveBundledFilePath(() => import("./assets/markdown_inline/highlights.scm", { with: { type: "file" } }), "./assets/markdown_inline/highlights.scm", import.meta.url);
   const markdown_inline_language = await resolveBundledFilePath(() => import("./assets/markdown_inline/tree-sitter-markdown_inline.wasm", { with: { type: "file" } }), "./assets/markdown_inline/tree-sitter-markdown_inline.wasm", import.meta.url);
-  const zig_highlights = await resolveBundledFilePath(() => import("./assets/zig/highlights.scm", { with: { type: "file" } }), "./assets/zig/highlights.scm", import.meta.url);
-  const zig_language = await resolveBundledFilePath(() => import("./assets/zig/tree-sitter-zig.wasm", { with: { type: "file" } }), "./assets/zig/tree-sitter-zig.wasm", import.meta.url);
   return [
     {
       filetype: "javascript",
@@ -7919,13 +7917,6 @@ async function loadParsers() {
         highlights: [markdown_inline_highlights]
       },
       wasm: markdown_inline_language
-    },
-    {
-      filetype: "zig",
-      queries: {
-        highlights: [zig_highlights]
-      },
-      wasm: zig_language
     }
   ];
 }

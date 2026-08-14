@@ -1,6 +1,5 @@
 // src/elements/catalogue.ts
 import {
-  ASCIIFontRenderable,
   BoxRenderable,
   CodeRenderable,
   DiffRenderable,
@@ -8,8 +7,6 @@ import {
   LineNumberRenderable,
   MarkdownRenderable,
   ScrollBoxRenderable,
-  SelectRenderable,
-  TabSelectRenderable,
   TextareaRenderable,
   TextAttributes,
   TextNodeRenderable,
@@ -78,10 +75,7 @@ var baseComponents = {
   box: BoxRenderable,
   text: TextRenderable,
   input: InputRenderable,
-  select: SelectRenderable,
   textarea: TextareaRenderable,
-  ascii_font: ASCIIFontRenderable,
-  tab_select: TabSelectRenderable,
   scrollbox: ScrollBoxRenderable,
   code: CodeRenderable,
   diff: DiffRenderable,

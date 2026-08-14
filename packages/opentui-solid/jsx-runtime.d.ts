@@ -1,5 +1,4 @@
 import type {
-  AsciiFontProps,
   BoxProps,
   CodeProps,
   ExtendedIntrinsicElements,
@@ -8,9 +7,7 @@ import type {
   MarkdownProps,
   OpenTUIComponents,
   ScrollBoxProps,
-  SelectProps,
   SpanProps,
-  TabSelectProps,
   TextareaProps,
   TextProps,
 } from "./src/types/elements.js"
@@ -31,9 +28,6 @@ export declare namespace JSX {
     text: TextProps
     span: SpanProps
     input: InputProps
-    select: SelectProps
-    ascii_font: AsciiFontProps
-    tab_select: TabSelectProps
     scrollbox: ScrollBoxProps
     code: CodeProps
     textarea: TextareaProps

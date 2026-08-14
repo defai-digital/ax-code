@@ -10,6 +10,28 @@ TUI:
 These packages are vendored forks, not direct upstream dependencies. The
 application should import the `@ax-code/opentui-*` packages only.
 
+Required JS fixes live as named, idempotent patches under
+`packages/opentui-core/patches/` (and the Solid catalogue slim under
+`packages/opentui-solid/patches/`). After dropping in upstream JS:
+
+```sh
+pnpm apply:opentui-patches
+pnpm check:opentui-patches
+```
+
+Do not re-discover the insertion points by hand-editing hashed `index-*.js`
+chunks. The shipping Node TUI copies these packages through
+`shouldCopyOpentuiDistPath()` so tests, type-only files, unused Zig highlight
+assets, and patch docs stay out of the archive.
+
+The core is still a pre-bundled JS dump. Unused renderable *classes* therefore
+remain in the hashed chunks; the Solid catalogue is the TUI-facing allowlist
+and must not register `ascii_font`, `tab_select`, or the stock `select`
+widget. Vendoring OpenTUI TypeScript source and bundling a narrow entry into
+the TUI is a separate follow-up — it cannot be done by tree-shaking these
+chunks, and bundling them today would break `import.meta.url` resolution for
+the native library and tree-sitter assets.
+
 ## Ownership Boundary
 
 `@ax-code/opentui-core` contains the vendored JavaScript, type declarations,
@@ -104,14 +126,16 @@ When syncing from upstream OpenTUI:
 3. Update the vendored native libraries if the core ABI changes: bump
    `VERSION` in `script/vendor-opentui.ts`, run `pnpm vendor:opentui-native`,
    and commit the refreshed `vendor/` tree and manifest.
-4. Re-apply ax-code-specific fixes, especially the FFI geometry guard, the FFI
-   pointer pin, and the vendored native resolver.
+4. Re-apply ax-code-specific fixes with `pnpm apply:opentui-patches` (FFI
+   geometry guard, FFI pointer pin, vendored native resolver, drop Zig parser,
+   slim Solid catalogue). Do not hand-edit hashed chunks.
 5. Verify source, bundled, and startup paths before merging.
 
 Minimum verification for an OpenTUI sync or local renderer fix:
 
 ```sh
 pnpm run check:opentui-vendor
+pnpm run check:opentui-patches
 pnpm --dir packages/ax-code run check:tui-layering
 pnpm --dir packages/ax-code run check:tui-snapshot
 pnpm --dir packages/ax-code exec vitest run test/cli/tui/opentui-ffi-coordinate-guard.test.ts test/cli/tui/opentui-ffi-pointer-pin.test.ts test/cli/tui/opentui-vendored-native-resolver.test.ts test/cli/tui/opentui-spinner.test.ts test/script/tui-startup-smoke.test.ts test/script/check-tui-layering.test.ts

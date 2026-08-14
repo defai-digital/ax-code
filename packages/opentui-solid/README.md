@@ -48,8 +48,8 @@ extend({ customBox: CustomBoxRenderable })
 
 OpenTUI Solid exposes intrinsic JSX elements that map to OpenTUI renderables:
 
-- **Layout & Display:** `text`, `box`, `scrollbox`, `ascii_font`
-- **Input:** `input`, `textarea`, `select`, `tab_select`
+- **Layout & Display:** `text`, `box`, `scrollbox`
+- **Input:** `input`, `textarea`
 - **Code & Diff:** `code`, `line_number`, `diff`
 - **Text Modifiers:** `span`, `strong`, `b`, `em`, `i`, `u`, `br`, `a`
 
@@ -133,7 +133,6 @@ import { Dynamic } from "@ax-code/opentui-solid"
 - `text`: styled text container
 - `box`: layout container with borders, padding, and flex settings
 - `scrollbox`: scrollable container
-- `ascii_font`: ASCII art text renderer
 
 QR code support is available from `@opentui/qrcode/solid` and must be registered explicitly with `registerQRCode()`.
 
@@ -141,8 +140,6 @@ QR code support is available from `@opentui/qrcode/solid` and must be registered
 
 - `input`: single-line text input
 - `textarea`: multi-line text input
-- `select`: list selection
-- `tab_select`: tab-based selection
 
 ### Code & Diff
 
