@@ -421,10 +421,16 @@ export function readOnlyExplorationDecision(input: {
 }
 
 /**
- * After a forced text-only turn from ax-engine read-only convergence,
- * unexecutable tool markup should recover with tools re-enabled once.
- * Other force reasons stay tool-free.
+ * After a forced text-only turn, unexecutable tool markup should recover
+ * with tools re-enabled once. Applies to ax-engine read-only convergence
+ * and the generic tool-only / backstop breaker (models often paste
+ * <function=edit> as chat). Intentional text-only paths stay tool-free.
  */
+const RECOVERABLE_UNEXECUTABLE_FORCE_REASONS = new Set<ForceTextReason>([
+  "ax_engine_read_only",
+  "tool_only_breaker",
+])
+
 export function unexecutableToolTextRecoveryDecision(input: {
   lastTurnWasForceTextOnly: boolean
   recoveriesUsed: number
@@ -432,7 +438,9 @@ export function unexecutableToolTextRecoveryDecision(input: {
   forceReason?: ForceTextReason
 }): { action: "recover" } | { action: "stop" } {
   if (!input.lastTurnWasForceTextOnly) return { action: "stop" }
-  if (input.forceReason !== "ax_engine_read_only") return { action: "stop" }
+  if (!input.forceReason || !RECOVERABLE_UNEXECUTABLE_FORCE_REASONS.has(input.forceReason)) {
+    return { action: "stop" }
+  }
   if (input.recoveriesUsed >= input.maxRecoveries) return { action: "stop" }
   return { action: "recover" }
 }

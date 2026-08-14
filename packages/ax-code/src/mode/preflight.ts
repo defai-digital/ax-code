@@ -80,6 +80,7 @@ export namespace EnsemblePreflight {
       "",
       "Multi-model verification did not run. You may continue as a single-provider implementation.",
       "Tell the user which providers were requested vs connected, and that verification was skipped.",
+      "The connected list above is authoritative. Do not grep models-snapshot or re-probe credentials.",
       "Do not retry arena/council with the same unavailable providers.",
     ]
       .filter((line) => line !== undefined)
@@ -105,6 +106,8 @@ export namespace EnsemblePreflight {
       "Council needs connected providers with selectable models.",
       "For consensus tiers, aim for **≥2** successful members.",
       "Connect providers via `/connect` or `ax-code providers login`, then re-run.",
+      "The connected list above is authoritative. Do not grep models-snapshot or re-probe credentials.",
+      "Do not retry council with the same unavailable providers.",
     ].join("\n")
   }
 

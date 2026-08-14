@@ -366,6 +366,9 @@ export const ArenaTool = Tool.define("arena", async () => {
             EnsemblePreflight.arenaInsufficientProvidersMessage(providerSnap) +
             (resolution.rejected.length
               ? `\n\nRequested selections skipped:\n${resolution.rejected.map((error) => `- ${error}`).join("\n")}`
+              : "") +
+            (resolution.notes?.length
+              ? `\n\nSelection notes:\n${resolution.notes.map((note) => `- ${note}`).join("\n")}`
               : ""),
           metadata,
         }

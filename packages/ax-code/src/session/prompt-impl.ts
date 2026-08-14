@@ -1280,6 +1280,9 @@ export namespace SessionPrompt {
             forceTextReason = undefined
             lastTurnWasForceTextOnly = false
             lastTurnForceTextReason = undefined
+            consecutiveToolOnlyTurns = 0
+            consecutiveToolCallingTurns = 0
+            toolOnlyNudges = 0
             consecutiveAxEngineReadOnlyTurns = 0
             axEngineReadOnlyNudged = false
             axEngineReadOnlyHasEvidence = false
@@ -1629,11 +1632,9 @@ export namespace SessionPrompt {
           await createAutonomousTextContinuation({
             sessionID,
             messages: msgs,
-            text: AutonomousContinuationPrompt.toolOnlyTurnNudge({
-              consecutiveToolOnlyTurns: consecutiveToolCallingTurns,
+            text: AutonomousContinuationPrompt.toolCallingBackstopNudge({
+              consecutiveToolCallingTurns,
               maxToolOnlyTurns,
-              final: true,
-              forced: true,
               repeat: repeatForced,
             }),
           })

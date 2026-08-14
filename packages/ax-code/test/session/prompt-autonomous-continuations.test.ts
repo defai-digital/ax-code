@@ -214,6 +214,18 @@ describe("autonomous continuation prompt builders", () => {
     expect(text).not.toContain("FINAL checkpoint before that stop")
   })
 
+  test("tool-calling backstop wrap-up does not claim no progress", () => {
+    const text = AutonomousContinuationPrompt.toolCallingBackstopNudge({
+      consecutiveToolCallingTurns: 36,
+      maxToolOnlyTurns: 35,
+    })
+    expect(text).toContain("last 36 turns each ended with further tool calls")
+    expect(text).toContain("not a no-progress stall")
+    expect(text).toContain("Tools are disabled")
+    expect(text).toContain("Do not paste tool-call XML")
+    expect(text).not.toContain("no new progress")
+  })
+
   test("repeat forced wrap-up mentions the earlier attempt", () => {
     const text = AutonomousContinuationPrompt.toolOnlyTurnNudge({
       consecutiveToolOnlyTurns: 36,

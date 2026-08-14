@@ -67724,7 +67724,9 @@
             "values": [
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -67786,12 +67788,8 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
+            "type": "budget_tokens",
+            "min": 1024
           }
         ],
         "tool_call": true,
@@ -67823,6 +67821,9 @@
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
+          {
+            "type": "toggle"
+          },
           {
             "type": "effort",
             "values": [
@@ -67921,12 +67922,8 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
+            "type": "budget_tokens",
+            "min": 1024
           }
         ],
         "tool_call": true,
@@ -68001,7 +67998,8 @@
             "values": [
               "low",
               "medium",
-              "high"
+              "high",
+              "max"
             ]
           }
         ],
@@ -68039,12 +68037,8 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
+            "type": "budget_tokens",
+            "min": 1024
           }
         ],
         "tool_call": true,
@@ -68077,12 +68071,8 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
+            "type": "budget_tokens",
+            "min": 1024
           }
         ],
         "tool_call": true,
@@ -68147,7 +68137,9 @@
             "values": [
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -68209,12 +68201,8 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
+            "type": "budget_tokens",
+            "min": 1024
           }
         ],
         "tool_call": true,
@@ -68279,7 +68267,8 @@
             "values": [
               "low",
               "medium",
-              "high"
+              "high",
+              "max"
             ]
           }
         ],
@@ -68496,7 +68485,9 @@
               "none",
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -68575,7 +68566,9 @@
               "none",
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -68820,7 +68813,9 @@
               "none",
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -115040,7 +115035,7 @@
         "tool_call": true,
         "structured_output": true,
         "temperature": true,
-        "release_date": "2026-04-23",
+        "release_date": "2026-08-12",
         "last_updated": "2026-08-12",
         "modalities": {
           "input": [

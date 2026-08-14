@@ -47,8 +47,19 @@ describe("EnsemblePreflight", () => {
     expect(msg).toContain("ax-engine")
     expect(msg).toContain("You may continue as a single-provider implementation")
     expect(msg).toContain("Do not retry arena/council")
+    expect(msg).toContain("models-snapshot")
     expect(msg).not.toContain("Do not continue as a single-provider implementation")
     expect(msg).toContain("not eligible")
+  })
+
+  test("council insufficient message tells the model not to re-probe catalogs", () => {
+    const msg = EnsemblePreflight.councilInsufficientProvidersMessage({
+      count: 7,
+      ids: ["alibaba-pai", "grok-build-cli"],
+    })
+    expect(msg).toContain("**7**")
+    expect(msg).toContain("models-snapshot")
+    expect(msg).toContain("Do not retry council")
   })
 
   test("forbidsTaskParallelFirst detects council/arena turns", () => {

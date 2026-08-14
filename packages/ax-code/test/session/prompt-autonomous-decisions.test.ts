@@ -1196,7 +1196,7 @@ describe("local read-only exploration convergence", () => {
     ).toBe(true)
   })
 
-  test("recovers unexecutable tool text only after ax-engine read-only force within budget", () => {
+  test("recovers unexecutable tool text after ax-engine or tool-only force within budget", () => {
     expect(MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES).toBe(1)
     expect(
       unexecutableToolTextRecoveryDecision({
@@ -1204,6 +1204,14 @@ describe("local read-only exploration convergence", () => {
         recoveriesUsed: 0,
         maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
         forceReason: "ax_engine_read_only",
+      }),
+    ).toEqual({ action: "recover" })
+    expect(
+      unexecutableToolTextRecoveryDecision({
+        lastTurnWasForceTextOnly: true,
+        recoveriesUsed: 0,
+        maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
+        forceReason: "tool_only_breaker",
       }),
     ).toEqual({ action: "recover" })
     expect(
@@ -1219,7 +1227,7 @@ describe("local read-only exploration convergence", () => {
         lastTurnWasForceTextOnly: true,
         recoveriesUsed: 1,
         maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
-        forceReason: "ax_engine_read_only",
+        forceReason: "tool_only_breaker",
       }),
     ).toEqual({ action: "stop" })
     expect(

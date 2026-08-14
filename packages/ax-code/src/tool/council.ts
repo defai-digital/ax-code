@@ -320,6 +320,9 @@ export const CouncilTool = Tool.define("council", async () => {
             EnsemblePreflight.councilInsufficientProvidersMessage(providerSnap) +
             (resolution.rejected.length
               ? `\n\nRequested selections skipped:\n${resolution.rejected.map((error) => `- ${error}`).join("\n")}`
+              : "") +
+            (resolution.notes?.length
+              ? `\n\nSelection notes:\n${resolution.notes.map((note) => `- ${note}`).join("\n")}`
               : ""),
           metadata,
         }
@@ -395,6 +398,9 @@ export const CouncilTool = Tool.define("council", async () => {
       const parts = [markdown]
       if (resolution.rejected.length) {
         parts.push("", "## Skipped member selections", ...resolution.rejected.map((error) => `- ${error}`))
+      }
+      if (resolution.notes?.length) {
+        parts.push("", "## Selection notes", ...resolution.notes.map((note) => `- ${note}`))
       }
       if (overallLines.length) {
         parts.push("", "## Member overall assessments", ...overallLines)

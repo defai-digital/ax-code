@@ -43,6 +43,53 @@ export function resolveConnectedProviderID(
   return undefined
 }
 
+export type ExplicitMemberResolution =
+  | { member: { providerID: string; modelID: string }; note?: string }
+  | { rejected: string }
+
+/**
+ * Resolve a user-typed provider/model pair against connected providers.
+ * Unknown colloquial names alias first; if the requested model is missing
+ * on the resolved provider, fall back to that provider's first selectable
+ * model instead of rejecting the whole member.
+ */
+export function resolveExplicitMemberSelection(input: {
+  requestedProvider: string
+  requestedModel?: string
+  connectedIDs: readonly string[]
+  /** Provider ID → selectable model IDs, already preference-sorted. */
+  selectableModels: Readonly<Record<string, readonly string[]>>
+}): ExplicitMemberResolution {
+  const connected = [...input.connectedIDs].sort()
+  const connectedLabel = connected.join(", ") || "(none)"
+  const resolvedProvider = resolveConnectedProviderID(input.requestedProvider, input.connectedIDs)
+  if (!resolvedProvider) {
+    return {
+      rejected:
+        `Unknown provider ${JSON.stringify(input.requestedProvider)}. Connected: ${connectedLabel}. ` +
+        `The connected list is authoritative — do not grep models-snapshot or re-probe credentials.`,
+    }
+  }
+  const models = input.selectableModels[resolvedProvider] ?? []
+  if (models.length === 0) {
+    return {
+      rejected: `No selectable coding model for ${JSON.stringify(resolvedProvider)}. Connected: ${connectedLabel}.`,
+    }
+  }
+  if (!input.requestedModel) {
+    return { member: { providerID: resolvedProvider, modelID: models[0]! } }
+  }
+  const requestedModel = input.requestedModel
+  const exact = models.find((id) => id === requestedModel || id.toLowerCase() === requestedModel.toLowerCase())
+  if (exact) return { member: { providerID: resolvedProvider, modelID: exact } }
+  return {
+    member: { providerID: resolvedProvider, modelID: models[0]! },
+    note:
+      `Requested ${JSON.stringify(`${input.requestedProvider}/${requestedModel}`)} is not selectable; ` +
+      `using ${resolvedProvider}/${models[0]}.`,
+  }
+}
+
 export namespace EnsembleShared {
   export interface MemberSpec {
     providerID: ProviderID
@@ -53,6 +100,7 @@ export namespace EnsembleShared {
   export interface MemberResolution {
     members: MemberSpec[]
     rejected: string[]
+    notes?: string[]
   }
 
   export interface ResolveConfig {
@@ -123,48 +171,33 @@ export namespace EnsembleShared {
     if (explicit?.length) {
       const out: MemberSpec[] = []
       const rejected: string[] = []
+      const notes: string[] = []
       const connectedIDs = Object.keys(providers)
+      const selectableModels: Record<string, string[]> = {}
+      for (const id of connectedIDs) {
+        const provider = providers[ProviderID.make(id)]
+        if (!provider) continue
+        selectableModels[id] = Provider.sort(
+          Object.values(provider.models).filter(
+            (model) =>
+              modelSelectableForProvider(provider.id, model) && !String(model.id).toLowerCase().includes("embed"),
+          ),
+        ).map((model) => String(model.id))
+      }
       for (const item of explicit) {
-        const resolved = resolveConnectedProviderID(item.providerID, connectedIDs)
-        if (!resolved) {
-          rejected.push(
-            `Unknown provider ${JSON.stringify(item.providerID)}. Connected: ${connectedIDs.sort().join(", ") || "(none)"}.`,
-          )
+        const resolved = resolveExplicitMemberSelection({
+          requestedProvider: item.providerID,
+          requestedModel: item.modelID,
+          connectedIDs,
+          selectableModels,
+        })
+        if ("rejected" in resolved) {
+          rejected.push(resolved.rejected)
           continue
         }
-        const providerID = ProviderID.make(resolved)
-        const provider = providers[providerID]
-        if (!provider) {
-          rejected.push(
-            `Unknown provider ${JSON.stringify(item.providerID)}. Connected: ${connectedIDs.sort().join(", ") || "(none)"}.`,
-          )
-          continue
-        }
-        let modelID: ModelID | undefined
-        if (item.modelID) {
-          const model = Object.values(provider.models).find(
-            (candidate) =>
-              String(candidate.id) === item.modelID &&
-              modelSelectableForProvider(providerID, candidate) &&
-              !String(candidate.id).toLowerCase().includes("embed"),
-          )
-          modelID = model?.id
-          if (!modelID) {
-            rejected.push(`Unknown or unselectable model ${JSON.stringify(`${item.providerID}/${item.modelID}`)}`)
-          }
-        } else {
-          const sorted = Provider.sort(
-            Object.values(provider.models).filter(
-              (model) =>
-                modelSelectableForProvider(providerID, model) && !String(model.id).toLowerCase().includes("embed"),
-            ),
-          )
-          modelID = sorted[0]?.id
-        }
-        if (!modelID) {
-          if (!item.modelID) rejected.push(`No selectable coding model for ${JSON.stringify(item.providerID)}`)
-          continue
-        }
+        if (resolved.note) notes.push(resolved.note)
+        const providerID = ProviderID.make(resolved.member.providerID)
+        const modelID = ModelID.make(resolved.member.modelID)
         out.push({ providerID, modelID, memberId: `${providerID}/${modelID}` })
       }
       if (config.requireDistinctProviders) {
@@ -173,7 +206,7 @@ export namespace EnsembleShared {
           throw new Error("Council requires distinct providers \u2014 duplicate providerID found")
         }
       }
-      return { members: Council.dedupeMembers(out).slice(0, maxMembers), rejected }
+      return { members: Council.dedupeMembers(out).slice(0, maxMembers), rejected, notes }
     }
 
     let candidates: Array<{ providerID: string; modelID: ModelID }> = []
@@ -209,6 +242,7 @@ export namespace EnsembleShared {
         memberId: `${c.providerID}/${c.modelID}`,
       })),
       rejected: [],
+      notes: [],
     }
   }
 }

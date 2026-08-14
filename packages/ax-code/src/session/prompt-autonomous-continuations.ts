@@ -192,6 +192,22 @@ export namespace AutonomousContinuationPrompt {
     )
   }
 
+  /** Absolute tool-calling cap: productive implement/test/commit runs, not a stall. */
+  export function toolCallingBackstopNudge(input: {
+    consecutiveToolCallingTurns: number
+    maxToolOnlyTurns: number
+    repeat?: boolean
+  }) {
+    return (
+      `Agent-loop checkpoint: your last ${input.consecutiveToolCallingTurns} turns each ended with further tool calls ` +
+      `(finish=tool-calls). This is a turn-count wrap-up, not a no-progress stall — you may have been implementing productively. ` +
+      `After ${input.maxToolOnlyTurns} such turns the loop disables tools so you can summarize. ` +
+      (input.repeat ? `You already received a wrap-up this run. ` : "") +
+      `Tools are disabled for your next turn. Write a text summary of what was accomplished, what remains, and any blockers. ` +
+      `Do not paste tool-call XML, <tool_call> blocks, or <function=...> markup — those will not execute.`
+    )
+  }
+
   export function axEngineReadOnlyCheckpoint(input: {
     consecutiveTurns: number
     forceThreshold: number
