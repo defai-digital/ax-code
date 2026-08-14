@@ -1,15 +1,22 @@
 import { modelIdFinalSegment } from "./model-id"
 
-const GLM_MAJOR_VERSION = /glm-(\d+)/
-const GLM_HIDDEN_FINAL_SEGMENTS = new Set<string>(["glm-5.1", "glm-5-1", "glm-5.1[1m]", "glm-5.1-1m", "glm-5-turbo"])
-const GLM_HIDDEN_FINAL_PATTERN = /(?:^|[^a-z0-9])glm-5[.-]1(?:$|[^0-9])/
-// Only Grok 4.5 and its official xAI aliases. Older Grok chat/coding SKUs are dropped.
-const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>([
-  "grok-4.5",
-  "grok-4-5",
-  "grok-4.5-latest",
-  "grok-build-latest",
+const GLM_MAJOR_VERSION = /glm-?(\d+)/
+const GLM_HIDDEN_FINAL_SEGMENTS = new Set<string>([
+  "glm-5.1",
+  "glm-5-1",
+  "glm-5.1[1m]",
+  "glm-5.1-1m",
+  "glm-5-turbo",
+  // No-separator forms reached via dash-stripped probes (e.g. "glm5.2-fast").
+  "glm5.1",
+  "glm51",
+  "glm5.1[1m]",
+  "glm5.11m",
+  "glm5turbo",
 ])
+const GLM_HIDDEN_FINAL_PATTERN = /(?:^|[^a-z0-9])glm-?5[.-]1(?:$|[^0-9])/
+// Only Grok 4.5 and its official xAI aliases. Older Grok chat/coding SKUs are dropped.
+const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>(["grok-4.5", "grok-4-5", "grok-4.5-latest", "grok-build-latest"])
 const GLM_PROVIDER_IDS = new Set(["zhipuai", "zhipuai-coding-plan", "zai", "zai-coding-plan"])
 
 type ModelSupportProbeInput = {
@@ -91,7 +98,10 @@ export function supportsGlmModels(probes: readonly string[]) {
     })
   )
     return false
-  if (probes.some((probe) => probe.includes("glm-5v") || probe.includes("glm5v"))) return false
-  // Allow selected non-vision GLM 5 and any future GLM N≥5. Drops hidden SKUs, glm-5v, and glm-3.x / glm-4.x.
+  // GLM vision SKUs (glm-5v today, glm-Nv in future releases) cannot serve
+  // text-only agent traffic. Probes include a dash-stripped form, so /glm\d+v/
+  // matches glm-5v, glm5v, and any future glm-6v across separator styles.
+  if (probes.some((probe) => /glm\d+v/.test(probe))) return false
+  // Allow selected non-vision GLM 5 and any future GLM N≥5. Drops hidden SKUs, glm-Nv, and glm-3.x / glm-4.x.
   return hasGlmMajorVersionAtLeastFive(probes)
 }

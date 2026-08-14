@@ -106,6 +106,45 @@ describe("isModelSupportedForProvider", () => {
     expect(isModelSupportedForProvider("zhipuai", "glm-4.5")).toBe(false)
   })
 
+  test("GLM real-catalog text SKUs are offered", () => {
+    // Every GLM SKU currently in models-snapshot.json that should reach the picker.
+    for (const id of [
+      "glm-5",
+      "glm-5-2",
+      "glm-5.2",
+      "glm-5.2[1m]",
+      "glm5.2",
+      "glm-5.2-fast",
+      "glm-5.2-nitro",
+      "glm-5.2-flex",
+      "glm-5.2-fp4",
+      "glm-5.2-caveman",
+      "glm-5.2-honey",
+      "glm-5.2-ponytail",
+      "glm-5.2-short",
+      "glm-5-free",
+      "glm-5.2:free",
+      "glm-5.2@eu",
+      "glm5.2-fast",
+    ]) {
+      expect(isModelSupportedForProvider("zai", id)).toBe(true)
+    }
+  })
+
+  test("GLM vision SKUs are hidden across versions and separators", () => {
+    for (const id of ["glm-5v", "glm5v", "glm-6v", "glm6v"]) {
+      expect(isModelSupportedForProvider("zai", id)).toBe(false)
+    }
+    // A version like 5.10 must NOT be misread as vision by the /glm\d+v/ guard.
+    expect(isModelSupportedForProvider("zai", "glm-5.10")).toBe(true)
+  })
+
+  test("legacy / unversioned GLM SKUs are hidden", () => {
+    for (const id of ["glm-z1-air", "glm-z1-airx", "glm-zero-preview", "glm-for-coding"]) {
+      expect(isModelSupportedForProvider("zhipuai", id)).toBe(false)
+    }
+  })
+
   test("passes unknown providers through unless a global rejection matches", () => {
     expect(isModelSupportedForProvider("custom", "custom-model")).toBe(true)
   })
