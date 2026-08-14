@@ -316,6 +316,87 @@ describe("prompt loop error transitions", () => {
     ])
   })
 
+  test("stops once with the cap's own message when a cumulative autonomous cap trips", async () => {
+    // Cumulative caps (files/lines; steps until the next continuation) make
+    // every subsequent tool call throw, so retrying can never recover —
+    // previously this churned to a generic "too many consecutive errors".
+    const sessionID = SessionID.descending()
+    const warnings: { message: string; fields: Record<string, unknown> }[] = []
+    const published: { sessionID: SessionID; message: string }[] = []
+    const capMessage =
+      "Autonomous line-change cap reached: 52941/5000 lines modified. Set experimental.autonomous_caps.lines to raise."
+
+    const result = await handlePromptLoopError(
+      {
+        sessionID,
+        currentModel: primaryModel,
+        // Serialized shape, as assistant message errors arrive in the loop.
+        error: {
+          name: "AutonomousLimitExceededError",
+          data: { kind: "lines", current: 52941, limit: 5000, message: capMessage },
+        },
+        consecutiveErrors: 1,
+        step: 4,
+      },
+      {
+        warn(message, fields) {
+          warnings.push({ message, fields })
+        },
+        publishError(input) {
+          published.push(input)
+        },
+      },
+    )
+
+    expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 1 })
+    expect(warnings).toEqual([
+      {
+        message: "autonomous cap exceeded, stopping without retry",
+        fields: {
+          command: "session.prompt.loop",
+          status: "error",
+          errorCode: "AUTONOMOUS_CAP_EXCEEDED",
+          consecutiveErrors: 1,
+          step: 4,
+          sessionID,
+        },
+      },
+    ])
+    expect(published).toEqual([{ sessionID, message: capMessage }])
+  })
+
+  test("per-tool cap trips fall through to ordinary error handling (counters reset each turn)", async () => {
+    const sessionID = SessionID.descending()
+    const published: { sessionID: SessionID; message: string }[] = []
+
+    const result = await handlePromptLoopError(
+      {
+        sessionID,
+        currentModel: primaryModel,
+        error: {
+          name: "AutonomousLimitExceededError",
+          data: {
+            kind: "tool_calls",
+            current: 51,
+            limit: 50,
+            message: 'Autonomous per-tool call cap reached for "bash": 51/50 calls.',
+          },
+        },
+        consecutiveErrors: 1,
+        step: 4,
+      },
+      {
+        warn() {},
+        publishError(input) {
+          published.push(input)
+        },
+      },
+    )
+
+    expect(result).toEqual({ action: "continue", consecutiveErrors: 1 })
+    expect(published).toEqual([])
+  })
+
   test("publishes stop errors when the consecutive error limit is reached", async () => {
     const sessionID = SessionID.descending()
     const warnings: { message: string; fields: Record<string, unknown> }[] = []

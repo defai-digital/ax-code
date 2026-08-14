@@ -56,7 +56,7 @@ test("create rolls back the git worktree when sandbox recording fails", async ()
       const addSandbox = vi.spyOn(Project, "addSandbox").mockRejectedValue(new Error("db unavailable"))
 
       try {
-        await expect(Worktree.create({ name: "db-fail" })).rejects.toThrow("WorktreeCreateFailedError")
+        await expect(Worktree.create({ name: "db-fail" })).rejects.toMatchObject({ name: "WorktreeCreateFailedError" })
 
         const projectRoot = path.join(Global.Path.data, "worktree", Instance.project.id)
         await expect(fs.stat(path.join(projectRoot, "db-fail"))).rejects.toThrow()

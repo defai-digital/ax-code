@@ -805,6 +805,13 @@ export const Info = z
                 lines_total: PositiveInteger.optional().describe(
                   "Max instrumented line-change total (alias: experimental.autonomous_caps.lines)",
                 ),
+                lines_exempt_paths: z
+                  .array(z.string())
+                  .optional()
+                  .describe(
+                    "Glob patterns whose writes count toward the file cap but not the line cap — lockfiles and " +
+                      "generated snapshots by default (alias: experimental.autonomous_caps.linesExemptPaths)",
+                  ),
                 blocked_paths: z
                   .array(z.string())
                   .optional()
@@ -985,6 +992,10 @@ export const Info = z
             files: PositiveInteger.optional(),
             lines: PositiveInteger.optional(),
             blockedPaths: z.array(z.string()).optional(),
+            linesExemptPaths: z
+              .array(z.string())
+              .optional()
+              .describe("Glob patterns whose writes count toward the file cap but not the line cap."),
             perTool: z
               .record(z.string(), SafeInteger)
               .optional()

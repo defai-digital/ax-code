@@ -48,6 +48,46 @@ export const AUTONOMOUS_MAX_STEPS = 500
 export const AUTONOMOUS_MAX_FILES_CHANGED = 50
 export const AUTONOMOUS_MAX_LINES_CHANGED = 5_000
 
+// Paths whose writes do not count toward AUTONOMOUS_MAX_LINES_CHANGED
+// (they still count toward the file cap). Regenerating a lockfile or a
+// generated snapshot rewrites tens of thousands of lines in one tool
+// call — e.g. provider/models-snapshot.json (~160k lines) consumed 10x
+// the entire default line budget in a single write, after which every
+// tool call failed with AutonomousLimitExceededError. The lines cap is
+// meant to bound hand-authored change footprint, not generated output.
+// Matched via `Wildcard.match` (`*` crosses path segments, `^...$`
+// anchored), so a leading `*` also covers absolute paths; bare names are
+// listed too for worktree-root writes. Override per session via
+// `autonomy.budget.changes.lines_exempt_paths` (alias
+// `experimental.autonomous_caps.linesExemptPaths`).
+export const AUTONOMOUS_LINES_EXEMPT_PATHS: readonly string[] = [
+  // Package-manager lockfiles
+  "pnpm-lock.yaml",
+  "*/pnpm-lock.yaml",
+  "package-lock.json",
+  "*/package-lock.json",
+  "yarn.lock",
+  "*/yarn.lock",
+  "bun.lock",
+  "*/bun.lock",
+  "bun.lockb",
+  "*/bun.lockb",
+  "Cargo.lock",
+  "*/Cargo.lock",
+  "poetry.lock",
+  "*/poetry.lock",
+  "uv.lock",
+  "*/uv.lock",
+  "Gemfile.lock",
+  "*/Gemfile.lock",
+  "composer.lock",
+  "*/composer.lock",
+  // Generated snapshots (test snapshots, data snapshots like
+  // provider/models-snapshot.json)
+  "*.snap",
+  "*-snapshot.json",
+]
+
 // Glob patterns matched via `Wildcard.match`, which converts `*` to regex
 // `.*` and anchors `^...$`. Because the matcher does not distinguish `*`
 // from `**`, "anywhere"-style patterns like `**/secrets/**` only match

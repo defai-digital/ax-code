@@ -227,6 +227,16 @@ export type ApiError = {
   }
 }
 
+export type AutonomousLimitExceededError = {
+  name: "AutonomousLimitExceededError"
+  data: {
+    kind: "steps" | "files" | "lines" | "blocked_path" | "tool_calls"
+    current: number
+    limit: number
+    message: string
+  }
+}
+
 export type AssistantMessage = {
   id: string
   sessionID: string
@@ -243,6 +253,7 @@ export type AssistantMessage = {
     | StructuredOutputError
     | ContextOverflowError
     | ApiError
+    | AutonomousLimitExceededError
   parentID: string
   modelID: string
   providerID: string
@@ -1630,6 +1641,7 @@ export type EventSessionError = {
       | StructuredOutputError
       | ContextOverflowError
       | ApiError
+      | AutonomousLimitExceededError
   }
 }
 
@@ -2357,6 +2369,10 @@ export type Config = {
          */
         lines_total?: number
         /**
+         * Glob patterns whose writes count toward the file cap but not the line cap — lockfiles and generated snapshots by default (alias: experimental.autonomous_caps.linesExemptPaths)
+         */
+        lines_exempt_paths?: Array<string>
+        /**
          * Glob patterns that refuse writes (alias: experimental.autonomous_caps.blockedPaths)
          */
         blocked_paths?: Array<string>
@@ -2540,6 +2556,10 @@ export type Config = {
       files?: number
       lines?: number
       blockedPaths?: Array<string>
+      /**
+       * Glob patterns whose writes count toward the file cap but not the line cap.
+       */
+      linesExemptPaths?: Array<string>
       /**
        * Per-tool call-count caps. 0 or negative disables the cap for that tool. Tools not listed are unrestricted at the per-tool layer.
        */
@@ -12870,7 +12890,7 @@ export type ProviderAxEnginePrepareData = {
   body?: {
     modelPath?: string
     binaryPath?: string
-    modelID?: "qwen3.6-27b-axq-6bit" | "qwen3.5-9b-axq-6bit" | "qwen3-coder-next-axq-6bit"
+    modelID?: "qwen3.6-27b-axq-6bit" | "ornith-35b" | "qwen3.5-9b-axq-6bit" | "qwen3-coder-next-axq-6bit"
     quantization?: "mlx4bit" | "mlx6bit"
     download?: boolean
     start?: boolean
@@ -12902,7 +12922,7 @@ export type ProviderAxEngineStartData = {
   body?: {
     modelPath?: string
     binaryPath?: string
-    modelID?: "qwen3.6-27b-axq-6bit" | "qwen3.5-9b-axq-6bit" | "qwen3-coder-next-axq-6bit"
+    modelID?: "qwen3.6-27b-axq-6bit" | "ornith-35b" | "qwen3.5-9b-axq-6bit" | "qwen3-coder-next-axq-6bit"
     quantization?: "mlx4bit" | "mlx6bit"
     download?: boolean
   }

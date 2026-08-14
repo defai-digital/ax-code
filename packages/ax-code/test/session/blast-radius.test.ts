@@ -39,6 +39,27 @@ describe("BlastRadius", () => {
     expect(BlastRadius.get(SID).lines).toBe(0)
   })
 
+  test("recordWrite skips line counting for default lines-exempt paths but still counts the file", () => {
+    // Regression: a session regenerated the ~160k-line
+    // provider/models-snapshot.json in one bash redirect, which alone blew
+    // the 5000-line budget (52941/5000) and stranded the whole run.
+    BlastRadius.get(SID)
+    BlastRadius.recordWrite(SID, "/repo/packages/ax-code/src/provider/models-snapshot.json", 82_000)
+    BlastRadius.recordWrite(SID, "/repo/pnpm-lock.yaml", 12_000)
+    BlastRadius.recordWrite(SID, "test/__snapshots__/render.test.ts.snap", 400)
+    BlastRadius.recordWrite(SID, "/repo/src/index.ts", 25)
+    const state = BlastRadius.get(SID)
+    expect(state.files.size).toBe(4)
+    expect(state.lines).toBe(25)
+  })
+
+  test("linesExemptPaths override replaces the default exemption list", () => {
+    BlastRadius.get(SID, { linesExemptPaths: ["*.generated.ts"] })
+    BlastRadius.recordWrite(SID, "src/schema.generated.ts", 5_000)
+    BlastRadius.recordWrite(SID, "pnpm-lock.yaml", 100)
+    expect(BlastRadius.get(SID).lines).toBe(100)
+  })
+
   test("isPathBlocked matches glob patterns", () => {
     BlastRadius.get(SID, { blockedPaths: [".env", "**/secrets/**", "infra/**"] })
     expect(BlastRadius.isPathBlocked(SID, ".env").blocked).toBe(true)
@@ -161,6 +182,25 @@ describe("BlastRadius", () => {
     BlastRadius.get(SID, { steps: 100, files: 100, lines: 5 })
     BlastRadius.recordWriteAndAssert(SID, "/a", 3)
     expect(() => BlastRadius.recordWriteAndAssert(SID, "/b", 10)).toThrow()
+  })
+
+  test("cap trip carries the descriptive message on Error.message, not just the class name", () => {
+    // Regression: NamedError used to set Error.message to the class name,
+    // so tool errors and logs showed the opaque "AutonomousLimitExceededError".
+    BlastRadius.get(SID, { steps: 100, files: 100, lines: 10 })
+    BlastRadius.recordWrite(SID, "/a", 50)
+    try {
+      BlastRadius.assertWithinCaps(SID)
+      expect.fail("expected assertWithinCaps to throw")
+    } catch (error) {
+      expect(BlastRadius.LimitExceededError.isInstance(error)).toBe(true)
+      const named = error as InstanceType<typeof BlastRadius.LimitExceededError>
+      expect(named.name).toBe("AutonomousLimitExceededError")
+      expect(named.message).toContain("line-change cap reached: 50/10")
+      expect(named.data.kind).toBe("lines")
+      expect(named.data.current).toBe(50)
+      expect(named.data.limit).toBe(10)
+    }
   })
 
   test("per-tool caps trip when a single tool exceeds its limit (PRD v4.2.1 P2-3)", () => {

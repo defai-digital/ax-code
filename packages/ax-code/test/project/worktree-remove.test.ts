@@ -134,7 +134,7 @@ describe("Worktree.remove", () => {
           directory: root,
           fn: () => Worktree.remove({ directory: dir }),
         }),
-      ).rejects.toThrow("WorktreeRemoveFailedError")
+      ).rejects.toMatchObject({ name: "WorktreeRemoveFailedError" })
 
       expect(removeSandbox).not.toHaveBeenCalled()
     } finally {
@@ -169,7 +169,7 @@ describe("Worktree.remove", () => {
           directory: root,
           fn: () => Worktree.remove({ directory: dir }),
         }),
-      ).rejects.toThrow("WorktreeRemoveFailedError")
+      ).rejects.toMatchObject({ name: "WorktreeRemoveFailedError" })
 
       const ref = runOk(`git show-ref --verify --quiet refs/heads/${branch}`, root)
       expect(ref.status).not.toBe(0)

@@ -1,6 +1,7 @@
 import type { Config } from "@/config/config"
 import {
   AUTONOMOUS_BLOCKED_PATHS,
+  AUTONOMOUS_LINES_EXEMPT_PATHS,
   AUTONOMOUS_MAX_FILES_CHANGED,
   AUTONOMOUS_MAX_LINES_CHANGED,
   AUTONOMOUS_MAX_STEPS,
@@ -39,6 +40,8 @@ export interface ResolvedAutonomyBudget {
   toolCallsPerSegment: number
   filesTotal: number
   linesTotal: number
+  /** Paths that count toward the file cap but not the line cap. */
+  linesExemptPaths: readonly string[]
   blockedPaths: readonly string[]
   perTool: Readonly<Record<string, number>>
   /** Sliding-window tool-call burst limiter. */
@@ -204,6 +207,14 @@ export function resolveAutonomyBudget(config: Pick<Config.Info, "session" | "exp
     sources.push("experimental.autonomous_caps.blockedPaths")
   }
 
+  let linesExemptPaths: readonly string[] = caps?.linesExemptPaths ?? AUTONOMOUS_LINES_EXEMPT_PATHS
+  if (budget?.changes?.lines_exempt_paths !== undefined) {
+    linesExemptPaths = budget.changes.lines_exempt_paths
+    sources.push("autonomy.budget.changes.lines_exempt_paths")
+  } else if (caps?.linesExemptPaths !== undefined) {
+    sources.push("experimental.autonomous_caps.linesExemptPaths")
+  }
+
   const perTool: Record<string, number> = { ...AUTONOMOUS_PER_TOOL_MAX_CALLS }
   if (caps?.perTool) {
     for (const [k, v] of Object.entries(caps.perTool)) {
@@ -274,6 +285,7 @@ export function resolveAutonomyBudget(config: Pick<Config.Info, "session" | "exp
     toolCallsPerSegment: finitePositive(toolCallsPerSegment, AUTONOMOUS_MAX_STEPS),
     filesTotal: finitePositive(filesTotal, AUTONOMOUS_MAX_FILES_CHANGED),
     linesTotal: finitePositive(linesTotal, AUTONOMOUS_MAX_LINES_CHANGED),
+    linesExemptPaths,
     blockedPaths,
     perTool,
     toolCallRate: {
@@ -330,6 +342,7 @@ export function formatAutonomyBudgetReport(input: {
       .map(([k, v]) => `${k}=${v}`)
       .join(", ") || "(none)"}`,
     `  blocked path patterns: ${b.blockedPaths.length}`,
+    `  lines-exempt patterns: ${b.linesExemptPaths.length}`,
     "",
     "Stall breakers",
     `  tool-only nudge / final / max: ${b.toolOnly.nudge} / ${b.toolOnly.finalNudge} / ${b.toolOnly.maxTurns}`,

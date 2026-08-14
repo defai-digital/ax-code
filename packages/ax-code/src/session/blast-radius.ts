@@ -6,6 +6,7 @@ import {
   AUTONOMOUS_MAX_STEPS,
   AUTONOMOUS_MAX_FILES_CHANGED,
   AUTONOMOUS_MAX_LINES_CHANGED,
+  AUTONOMOUS_LINES_EXEMPT_PATHS,
   AUTONOMOUS_BLOCKED_PATHS,
   AUTONOMOUS_PER_TOOL_MAX_CALLS,
 } from "@/constants/session"
@@ -23,6 +24,13 @@ export namespace BlastRadius {
     files: number
     lines: number
     blockedPaths: readonly string[]
+    /**
+     * Paths whose writes count toward the file cap but not the line cap.
+     * Lockfiles and generated snapshots rewrite tens of thousands of
+     * lines in one call and would otherwise consume the entire line
+     * budget (and strand the session) on a single regeneration.
+     */
+    linesExemptPaths: readonly string[]
     /**
      * Per-tool call-count cap. A `0` or negative value disables the
      * cap for that tool. Tools not in the map are unrestricted.
@@ -50,6 +58,7 @@ export namespace BlastRadius {
       files: AUTONOMOUS_MAX_FILES_CHANGED,
       lines: AUTONOMOUS_MAX_LINES_CHANGED,
       blockedPaths: AUTONOMOUS_BLOCKED_PATHS,
+      linesExemptPaths: AUTONOMOUS_LINES_EXEMPT_PATHS,
       perTool: AUTONOMOUS_PER_TOOL_MAX_CALLS,
     }
   }
@@ -84,6 +93,7 @@ export namespace BlastRadius {
       lines: numericCap(overrides.lines, base.lines),
       perTool: mergePerToolCaps(base.perTool, overrides.perTool),
       blockedPaths: overrides.blockedPaths ?? base.blockedPaths,
+      linesExemptPaths: overrides.linesExemptPaths ?? base.linesExemptPaths,
     }
   }
 
@@ -175,11 +185,23 @@ export namespace BlastRadius {
     return next
   }
 
-  /** Record a file write (idempotent for the same path) and a line delta. */
+  /**
+   * Record a file write (idempotent for the same path) and a line delta.
+   * Paths matching `caps.linesExemptPaths` (lockfiles, generated
+   * snapshots) count toward the file cap but contribute no lines.
+   */
   export function recordWrite(sessionID: SessionID, filePath: string, lineDelta: number) {
     const state = get(sessionID)
     state.files.add(filePath)
-    state.lines += Number.isFinite(lineDelta) ? Math.max(0, lineDelta) : 0
+    const delta = Number.isFinite(lineDelta) ? Math.max(0, lineDelta) : 0
+    if (delta === 0) return
+    for (const pattern of state.caps.linesExemptPaths) {
+      if (Wildcard.match(filePath, pattern)) {
+        log.info("write to lines-exempt path not counted toward line cap", { filePath, pattern, lineDelta: delta })
+        return
+      }
+    }
+    state.lines += delta
   }
 
   /**
@@ -220,7 +242,12 @@ export namespace BlastRadius {
     return null
   }
 
-  const LimitExceededError = NamedError.create(
+  /**
+   * Exported so `MessageV2.fromError` can pass the typed error through to
+   * the assistant message (instead of collapsing it to UnknownError) and
+   * the prompt loop can stop cleanly when a cumulative cap trips.
+   */
+  export const LimitExceededError = NamedError.create(
     "AutonomousLimitExceededError",
     z.object({
       kind: z.enum(["steps", "files", "lines", "blocked_path", "tool_calls"]),
@@ -238,7 +265,7 @@ export namespace BlastRadius {
       case "files":
         return `Autonomous file-change cap reached: ${check.current}/${check.limit} files modified. Set experimental.autonomous_caps.files to raise.`
       case "lines":
-        return `Autonomous line-change cap reached: ${check.current}/${check.limit} lines modified. Set experimental.autonomous_caps.lines to raise.`
+        return `Autonomous line-change cap reached: ${check.current}/${check.limit} lines modified. Set experimental.autonomous_caps.lines (autonomy.budget.changes.lines_total) to raise, or add generated files to autonomy.budget.changes.lines_exempt_paths.`
       case "blocked_path":
         return `Path is on the autonomous blocked-path list (limit ${check.limit}).`
       case "tool_calls":

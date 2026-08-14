@@ -127,6 +127,7 @@ Prefer the first-class **`autonomy`** object. Legacy `session.*` and `experiment
 | Todo auto-retries | 10 | Continuations while todos remain pending | `autonomy.budget.todo_retries` | `session.max_todo_retries` |
 | Blast-radius tool calls | 500 / segment | Tool invocations in autonomous mode | `autonomy.budget.tool_calls.per_segment` | `experimental.autonomous_caps.steps` |
 | Blast-radius files / lines | 50 files · 5,000 lines | Change footprint (survives continuations) | `autonomy.budget.changes.files_total` / `.lines_total` | `experimental.autonomous_caps.files` / `.lines` |
+| Lines-exempt paths | Lockfiles + generated snapshots (`*.snap`, `*-snapshot.json`) | Globs that count toward the file cap but not the line cap | `autonomy.budget.changes.lines_exempt_paths` | `experimental.autonomous_caps.linesExemptPaths` |
 | Per-tool flood caps | e.g. bash 50, edit 100 | Calls per model turn | `autonomy.budget.tool_calls.per_tool` | `experimental.autonomous_caps.perTool` |
 | Tool-only streak breaker | Nudge 15 · final ~30 · stop 35 | Consecutive tool-only model finishes | `autonomy.stall.tool_only_*` | — |
 | Tool-call burst limiter | 30 calls / 10s | Rolling window per processor turn | `autonomy.budget.tool_calls.rate` | — |

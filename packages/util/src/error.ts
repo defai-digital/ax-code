@@ -22,7 +22,12 @@ export abstract class NamedError extends Error {
         public readonly data: z.input<Data>,
         options?: ErrorOptions,
       ) {
-        super(name, options)
+        // Prefer a human-readable `data.message` for Error.message so
+        // generic consumers (logs, tool-error text, toErrorMessage) see
+        // the description instead of the bare class name. The class name
+        // remains available as `.name`.
+        const detail = (data as { message?: unknown } | null | undefined)?.message
+        super(typeof detail === "string" && detail.length > 0 ? detail : name, options)
         this.name = name
       }
 

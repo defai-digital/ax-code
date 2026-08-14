@@ -264,6 +264,7 @@ export namespace SessionProcessor {
             files: budget.filesTotal,
             lines: budget.linesTotal,
             blockedPaths: budget.blockedPaths,
+            linesExemptPaths: budget.linesExemptPaths,
             perTool: budget.perTool,
           })
           rateLimitMaxCalls = budget.toolCallRate.count

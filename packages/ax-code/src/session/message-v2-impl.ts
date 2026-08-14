@@ -20,6 +20,7 @@ import { ModelID, ProviderID } from "@/provider/schema"
 import { providerModelKey } from "@/provider/model-key"
 import { toErrorMessage } from "../util/error-message"
 import { PromptIsolationPolicy } from "./prompt-runtime-policy"
+import { BlastRadius } from "./blast-radius"
 
 export namespace MessageV2 {
   const log = Log.create({ service: "session.message" })
@@ -417,6 +418,7 @@ export namespace MessageV2 {
         StructuredOutputError.Schema,
         ContextOverflowError.Schema,
         APIError.Schema,
+        BlastRadius.LimitExceededError.Schema,
       ])
       .optional(),
     parentID: MessageID.zod,
@@ -1178,6 +1180,13 @@ export namespace MessageV2 {
           },
           { cause: e },
         ).toObject()
+      // Autonomous blast-radius cap trips carry structured data (kind,
+      // current, limit, message) that the prompt loop and the desktop UI
+      // key on by name. Pass them through instead of collapsing to
+      // UnknownError, which previously reduced the whole error to the
+      // bare class-name string.
+      case BlastRadius.LimitExceededError.isInstance(e):
+        return normalizeToPlain(e) as ReturnType<typeof fromError>
       case e instanceof Error && (e as { isRetryable?: unknown }).isRetryable === false:
         // CLI adapters can report a terminal provider-side failure without an
         // HTTP response. Preserve the explicit classification so the prompt

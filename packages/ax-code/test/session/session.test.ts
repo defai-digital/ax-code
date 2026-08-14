@@ -151,7 +151,7 @@ describe("session.updatePartDelta", () => {
             field: "text",
             delta: "hello",
           }),
-        ).rejects.toThrow("NotFoundError")
+        ).rejects.toMatchObject({ name: "NotFoundError", message: expect.stringContaining("Part not found") })
         await Session.remove(session.id)
       },
     })

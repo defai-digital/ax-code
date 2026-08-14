@@ -11,6 +11,7 @@ import {
 import type { SessionID } from "./schema"
 import { Todo } from "./todo"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
+import { BlastRadius } from "./blast-radius"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -94,6 +95,29 @@ function isAxEngineStreamStall(input: { providerID: string; error: unknown }) {
   )
 }
 
+/**
+ * Detect an autonomous blast-radius cap trip that cannot recover within
+ * this run. The steps counter only re-bases at continuation boundaries and
+ * the files/lines tallies are cumulative for the whole session, so once
+ * one of those caps is exceeded EVERY subsequent tool call throws — even
+ * read-only ones. Retrying churns through consecutive errors and ends in a
+ * generic "too many consecutive errors" stop (observed killing a session
+ * at 52941/5000 lines after a generated-snapshot rewrite). Stop once, with
+ * the cap's own actionable message, instead.
+ *
+ * Per-tool caps ("tool_calls") are excluded: those counters reset at every
+ * processor turn, so the ordinary retry path can genuinely recover.
+ * Matches both the live NamedError and its serialized `{name, data}` shape
+ * (assistant message errors arrive serialized).
+ */
+function terminalAutonomousCapMessage(error: unknown): string | undefined {
+  if (!BlastRadius.LimitExceededError.isInstance(error)) return undefined
+  const data = (error as { data?: { kind?: unknown; message?: unknown } }).data
+  if (data?.kind === "tool_calls") return undefined
+  const message = typeof data?.message === "string" ? data.message.trim() : ""
+  return message || "Autonomous blast-radius cap exceeded; the session was stopped."
+}
+
 export async function handlePromptLoopError(
   input: {
     sessionID: SessionID
@@ -105,6 +129,20 @@ export async function handlePromptLoopError(
   },
   deps: PromptLoopErrorDeps = {},
 ): Promise<PromptLoopErrorResult> {
+  const capMessage = terminalAutonomousCapMessage(input.error)
+  if (capMessage) {
+    ;(deps.warn ?? log.warn)("autonomous cap exceeded, stopping without retry", {
+      command: "session.prompt.loop",
+      status: "error",
+      errorCode: "AUTONOMOUS_CAP_EXCEEDED",
+      consecutiveErrors: input.consecutiveErrors,
+      step: input.step,
+      sessionID: input.sessionID,
+    })
+    ;(deps.publishError ?? Session.publishError)({ sessionID: input.sessionID, message: capMessage })
+    return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
+  }
+
   // Replaying an idle-timed-out local request is actively harmful: MLX may
   // still be releasing its single job slot, so the duplicate immediately
   // receives concurrency-limit 429s and can repeat the same huge prefill.

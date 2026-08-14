@@ -31295,6 +31295,7 @@
                     "type": "string",
                     "enum": [
                       "qwen3.6-27b-axq-6bit",
+                      "ornith-35b",
                       "qwen3.5-9b-axq-6bit",
                       "qwen3-coder-next-axq-6bit"
                     ]
@@ -31375,6 +31376,7 @@
                     "type": "string",
                     "enum": [
                       "qwen3.6-27b-axq-6bit",
+                      "ornith-35b",
                       "qwen3.5-9b-axq-6bit",
                       "qwen3-coder-next-axq-6bit"
                     ]
@@ -35613,6 +35615,49 @@
           "data"
         ]
       },
+      "AutonomousLimitExceededError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "const": "AutonomousLimitExceededError"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "steps",
+                  "files",
+                  "lines",
+                  "blocked_path",
+                  "tool_calls"
+                ]
+              },
+              "current": {
+                "type": "number"
+              },
+              "limit": {
+                "type": "number"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "current",
+              "limit",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "data"
+        ]
+      },
       "AssistantMessage": {
         "type": "object",
         "properties": {
@@ -35664,6 +35709,9 @@
               },
               {
                 "$ref": "#/components/schemas/APIError"
+              },
+              {
+                "$ref": "#/components/schemas/AutonomousLimitExceededError"
               }
             ]
           },
@@ -41032,6 +41080,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/APIError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AutonomousLimitExceededError"
                   }
                 ]
               }
@@ -42829,6 +42880,13 @@
                         "exclusiveMinimum": 0,
                         "maximum": 9007199254740991
                       },
+                      "lines_exempt_paths": {
+                        "description": "Glob patterns whose writes count toward the file cap but not the line cap — lockfiles and generated snapshots by default (alias: experimental.autonomous_caps.linesExemptPaths)",
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
                       "blocked_paths": {
                         "description": "Glob patterns that refuse writes (alias: experimental.autonomous_caps.blockedPaths)",
                         "type": "array",
@@ -43096,6 +43154,13 @@
                     "maximum": 9007199254740991
                   },
                   "blockedPaths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "linesExemptPaths": {
+                    "description": "Glob patterns whose writes count toward the file cap but not the line cap.",
                     "type": "array",
                     "items": {
                       "type": "string"

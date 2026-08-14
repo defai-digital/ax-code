@@ -5,6 +5,7 @@ import type { Provider } from "../../src/provider/provider"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { SessionID, MessageID, PartID } from "../../src/session/schema"
 import { Question } from "../../src/question"
+import { BlastRadius } from "../../src/session/blast-radius"
 
 const sessionID = SessionID.make("session")
 const messageID = MessageID.make("msg_test")
@@ -1154,6 +1155,29 @@ describe("session.message-v2.fromError", () => {
       name: "UnknownError",
       data: {
         message: "123",
+      },
+    })
+  })
+
+  test("passes autonomous cap errors through with their structured data", () => {
+    // Regression: these were collapsed into UnknownError with only the bare
+    // class name as the message, hiding kind/current/limit from the loop
+    // and the descriptive text from the user.
+    const error = new BlastRadius.LimitExceededError({
+      kind: "lines",
+      current: 52941,
+      limit: 5000,
+      message: "Autonomous line-change cap reached: 52941/5000 lines modified.",
+    })
+    const result = MessageV2.fromError(error, { providerID })
+
+    expect(result).toStrictEqual({
+      name: "AutonomousLimitExceededError",
+      data: {
+        kind: "lines",
+        current: 52941,
+        limit: 5000,
+        message: "Autonomous line-change cap reached: 52941/5000 lines modified.",
       },
     })
   })

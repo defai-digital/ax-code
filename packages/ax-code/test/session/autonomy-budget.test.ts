@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import {
+  AUTONOMOUS_LINES_EXEMPT_PATHS,
   AUTONOMOUS_MAX_STEPS,
   GLOBAL_STEP_LIMIT,
   GOAL_TOTAL_STEP_HEADROOM,
@@ -77,6 +78,24 @@ describe("resolveAutonomyBudget", () => {
         "autonomy.stall.tool_only_turns",
       ]),
     )
+  })
+
+  test("lines_exempt_paths resolves defaults, legacy alias, and canonical override", () => {
+    const defaults = resolveAutonomyBudget({})
+    expect(defaults.linesExemptPaths).toEqual(AUTONOMOUS_LINES_EXEMPT_PATHS)
+
+    const viaCaps = resolveAutonomyBudget({
+      experimental: { autonomous_caps: { linesExemptPaths: ["*.gen.ts"] } },
+    } as any)
+    expect(viaCaps.linesExemptPaths).toEqual(["*.gen.ts"])
+    expect(viaCaps.sources).toContain("experimental.autonomous_caps.linesExemptPaths")
+
+    const viaBudget = resolveAutonomyBudget({
+      experimental: { autonomous_caps: { linesExemptPaths: ["*.gen.ts"] } },
+      autonomy: { budget: { changes: { lines_exempt_paths: ["vendor/**"] } } },
+    } as any)
+    expect(viaBudget.linesExemptPaths).toEqual(["vendor/**"])
+    expect(viaBudget.sources).toContain("autonomy.budget.changes.lines_exempt_paths")
   })
 
   test("quick profile seeds tighter budgets", () => {
