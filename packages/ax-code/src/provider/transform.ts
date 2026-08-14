@@ -242,10 +242,10 @@ export namespace ProviderTransform {
   export function message(msgs: ModelMessage[], model: Provider.Model, options: Record<string, unknown>) {
     msgs = unsupportedParts(msgs, model)
     msgs = normalizeMessages(msgs, model, options)
-    // Official Ornith jinja raises "System message must be at the beginning"
-    // when any system turn is not messages[0]. AX Code emits several system
-    // blocks (env, family prompt, craft, cache slices). Collapse them.
-    if (isOrnithFamily(model)) msgs = collapseToSingleLeadingSystem(msgs)
+    // Official Qwen 3.x / Ornith / Holo3 jinja raises "System message must
+    // be at the beginning" when any system turn is not messages[0]. AX Code
+    // emits several system blocks (env, family prompt, craft, cache slices).
+    if (requiresSingleLeadingSystem(model)) msgs = collapseToSingleLeadingSystem(msgs)
     if (shouldApplyCaching(model, options)) {
       msgs = applyCaching(msgs, model)
     }
@@ -374,6 +374,19 @@ export namespace ProviderTransform {
 
   export function isOrnithFamily(model: { id?: string; providerID: string; api: { id: string } }): boolean {
     return [model.providerID, model.api.id, model.id].some((id) => id?.toLowerCase().includes("ornith"))
+  }
+
+  // Official Qwen 3.x ChatML (and Ornith / Holo3 fine-tunes) reject any
+  // system turn that is not messages[0]. Same 400 Ornith-397B hit on PAI.
+  function requiresSingleLeadingSystem(model: {
+    id?: string
+    providerID: string
+    api: { id: string }
+    family?: string
+  }): boolean {
+    if (isOrnithFamily(model)) return true
+    const blob = `${model.id ?? ""} ${model.api.id} ${model.family ?? ""}`.toLowerCase()
+    return blob.includes("holo3") || blob.includes("holo-3") || blob.includes("qwen3")
   }
 
   function shouldSetPromptCacheKey(input: {
@@ -534,22 +547,29 @@ export namespace ProviderTransform {
     return msgs.map((msg) => {
       if (msg.role !== "assistant" || !Array.isArray(msg.content)) return msg
       let reasoningText = ""
+      let hadReasoning = false
       const rest: typeof msg.content = []
       for (const part of msg.content as Array<{ type: string; text?: string }>) {
         if (part.type === "reasoning") {
+          hadReasoning = true
           if (part.text) reasoningText += part.text
         } else {
           rest.push(part as (typeof msg.content)[number])
         }
       }
-      if (!reasoningText) return msg
-      const tagged = wrapThinkTagText(reasoningText)
-      const firstText = rest.findIndex((part) => part.type === "text")
-      if (firstText >= 0) {
-        const part = rest[firstText] as { type: "text"; text: string }
-        rest[firstText] = { ...part, text: `${tagged}\n${part.text}` }
-      } else {
-        rest.unshift({ type: "text", text: tagged } as (typeof msg.content)[number])
+      // Always drop reasoning parts. An empty leftover part still makes the
+      // OpenAI-compat SDK emit `reasoning_content`, which MiniMax-M3 on PAI
+      // rejects with 400.
+      if (!hadReasoning) return msg
+      if (reasoningText) {
+        const tagged = wrapThinkTagText(reasoningText)
+        const firstText = rest.findIndex((part) => part.type === "text")
+        if (firstText >= 0) {
+          const part = rest[firstText] as { type: "text"; text: string }
+          rest[firstText] = { ...part, text: `${tagged}\n${part.text}` }
+        } else {
+          rest.unshift({ type: "text", text: tagged } as (typeof msg.content)[number])
+        }
       }
       return { ...msg, content: rest }
     })

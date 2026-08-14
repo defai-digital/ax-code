@@ -239,6 +239,64 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
     expect(result.filter((msg) => msg.role === "system")).toHaveLength(1)
   })
 
+  test("collapses Qwen 3.x and Holo3 system messages the same way as Ornith", () => {
+    const prompt = [
+      { role: "system" as const, content: "env block" },
+      { role: "system" as const, content: "family prompt" },
+      { role: "user" as const, content: "hello" },
+    ]
+    for (const [id, apiID] of [
+      ["alibaba-pai/Qwen3.6-35B-A3B-4bit", "Qwen3.6-35B-A3B-4bit"],
+      ["alibaba-pai/qwen3.5-plus", "qwen3.5-plus"],
+      ["ax-engine/holo3-35b", "holo3-35b"],
+    ]) {
+      const result = ProviderTransform.message(
+        prompt,
+        {
+          id,
+          providerID: ProviderID.make(id.split("/")[0]!),
+          api: { id: apiID, url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
+          capabilities: {
+            reasoning: true,
+            input: { text: true, audio: false, image: false, video: false, pdf: false },
+          },
+        } as any,
+        {},
+      )
+      expect(result, id).toHaveLength(2)
+      expect(result[0], id).toMatchObject({ role: "system", content: "env block\n\nfamily prompt" })
+      expect(result[1], id).toMatchObject({ role: "user", content: "hello" })
+    }
+  })
+
+  test("does not collapse MiniMax, GLM, or DeepSeek system messages", () => {
+    const prompt = [
+      { role: "system" as const, content: "env block" },
+      { role: "system" as const, content: "family prompt" },
+      { role: "user" as const, content: "hello" },
+    ]
+    for (const [id, apiID] of [
+      ["alibaba-pai/MiniMax-M3-MXFP8", "MiniMax-M3-MXFP8"],
+      ["alibaba-pai/GLM-5.2-FP8", "GLM-5.2-FP8"],
+      ["alibaba-pai/DeepSeek-V3", "DeepSeek-V3"],
+    ]) {
+      const result = ProviderTransform.message(
+        prompt,
+        {
+          id,
+          providerID: ProviderID.make("alibaba-pai"),
+          api: { id: apiID, url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
+          capabilities: {
+            reasoning: true,
+            input: { text: true, audio: false, image: false, video: false, pdf: false },
+          },
+        } as any,
+        {},
+      )
+      expect(result.filter((msg) => msg.role === "system"), id).toHaveLength(2)
+    }
+  })
+
   test("Ornith uses official 0.6 / 0.95 sampling even when family is qwen", () => {
     const local = {
       id: "ax-engine/ornith-35b",
@@ -1021,6 +1079,43 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
         input: { command: "echo hello" },
       },
     ])
+    expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBeUndefined()
+  })
+
+  test("MiniMax on PAI strips empty reasoning parts so reasoning_content is not emitted", () => {
+    const result = ProviderTransform.message(
+      [
+        {
+          role: "assistant",
+          content: [
+            { type: "reasoning", text: "" },
+            { type: "text", text: "Done." },
+          ],
+        },
+      ] as any[],
+      {
+        id: ModelID.make("alibaba-pai/MiniMax-M3-MXFP8"),
+        providerID: ProviderID.make("alibaba-pai"),
+        api: {
+          id: "MiniMax-M3-MXFP8",
+          url: "http://127.0.0.1:18099/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+        capabilities: {
+          reasoning: true,
+          interleaved: { field: "reasoning_content" },
+          input: { text: true, audio: false, image: false, video: false, pdf: false },
+        },
+        limit: { context: 128000, output: 8192 },
+        status: "active",
+        options: {},
+        headers: {},
+      } as any,
+      {},
+    )
+
+    expect(result[0].content).toHaveLength(1)
+    expect(result[0].content[0]).toMatchObject({ type: "text", text: "Done." })
     expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBeUndefined()
   })
 
