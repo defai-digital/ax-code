@@ -293,6 +293,39 @@ export namespace BackgroundShell {
     }
   }
 
+  /** Wait until this shell has unread output, exits, the timeout elapses, or abort fires. Then consume like read(). */
+  export async function waitAndRead(
+    id: string,
+    sessionID: string,
+    opts: { timeoutMs: number; signal?: AbortSignal },
+  ): Promise<{ info: Info; output: string; dropped: boolean } | undefined> {
+    const entry = shells.get(id)
+    if (!entry || entry.sessionID !== sessionID) return undefined
+
+    const hasUnread = entry.readOffset < entry.buffer.length
+    if (entry.status === "running" && !hasUnread && opts.timeoutMs > 0 && !opts.signal?.aborted) {
+      await new Promise<void>((resolve) => {
+        let settled = false
+        const settle = () => {
+          if (settled) return
+          settled = true
+          clearTimeout(timer)
+          unsub?.()
+          opts.signal?.removeEventListener("abort", settle)
+          resolve()
+        }
+        const timer = setTimeout(settle, opts.timeoutMs)
+        const unsub = observe(id, sessionID, {
+          onOutput: () => settle(),
+          onExit: () => settle(),
+        })
+        opts.signal?.addEventListener("abort", settle, { once: true })
+      })
+    }
+
+    return read(id, sessionID)
+  }
+
   /** Return output produced since the previous read() for this shell. */
   export function read(id: string, sessionID?: string): { info: Info; output: string; dropped: boolean } | undefined {
     const entry = shells.get(id)

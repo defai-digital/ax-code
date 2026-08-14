@@ -103,6 +103,43 @@ describe("bash run_in_background", () => {
     })
   })
 
+  test("bash_output waits for new output instead of returning empty immediately", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const output = await BashOutputTool.init()
+        const result = await bash.execute(
+          { command: "sleep 0.4; echo waited-line", run_in_background: true },
+          ctx,
+        )
+        const shellID = (result.metadata as any).background.shellID as string
+        const started = Date.now()
+        const readResult = await output.execute({ shell_id: shellID, timeout_ms: 5_000 }, ctx)
+        expect(Date.now() - started).toBeGreaterThan(250)
+        expect(readResult.output).toContain("waited-line")
+        expect(readResult.output).not.toContain("no new output")
+      },
+    })
+  })
+
+  test("bash_output timeout_ms 0 stays a non-blocking poll", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const output = await BashOutputTool.init()
+        const result = await bash.execute({ command: "sleep 30", run_in_background: true }, ctx)
+        const shellID = (result.metadata as any).background.shellID as string
+        const started = Date.now()
+        const readResult = await output.execute({ shell_id: shellID, timeout_ms: 0 }, ctx)
+        expect(Date.now() - started).toBeLessThan(1_000)
+        expect(readResult.output).toContain("running")
+        expect(readResult.output).toContain("no new output")
+      },
+    })
+  })
+
   test("incremental reads only return new output", async () => {
     await Instance.provide({
       directory: projectRoot,

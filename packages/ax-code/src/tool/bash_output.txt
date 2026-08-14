@@ -4,4 +4,5 @@ Retrieves output from a shell started with bash run_in_background.
 - Call without shell_id to list all background shells for this session and their statuses.
 - Use the optional filter parameter (a JavaScript regular expression) to return only matching lines — helpful when tailing verbose logs for errors or specific markers.
 - A finished shell is forgotten once its remaining output has been read.
-- Poll this tool while waiting on long-running commands (builds, servers, test suites) instead of blocking a foreground bash call.
+- By default this call waits up to 30s for new output or exit. Do not poll it in a tight loop. Pass timeout_ms=0 only when you need a non-blocking status check.
+- Prefer a single waited bash_output over many empty polls. Empty running results mean "still working" — do other work or stop; do not burn the turn budget polling.

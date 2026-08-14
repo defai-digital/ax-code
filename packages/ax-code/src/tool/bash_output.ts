@@ -21,6 +21,15 @@ export const BashOutputTool = Tool.define("bash_output", {
         "Optional regular expression; only output lines matching it are returned. Non-matching lines are still consumed and will not be returned by later calls.",
       )
       .optional(),
+    timeout_ms: z
+      .number()
+      .int()
+      .min(0)
+      .max(120_000)
+      .describe(
+        "How long to wait for new output or exit before returning. Default 30000. Use 0 for a non-blocking poll.",
+      )
+      .optional(),
   }),
   async execute(params, ctx) {
     type Metadata = {
@@ -47,7 +56,11 @@ export const BashOutputTool = Tool.define("bash_output", {
       }
     }
 
-    const result = BackgroundShell.read(params.shell_id, ctx.sessionID)
+    const timeoutMs = params.timeout_ms ?? 30_000
+    const result = await BackgroundShell.waitAndRead(params.shell_id, ctx.sessionID, {
+      timeoutMs,
+      signal: ctx.abort,
+    })
     if (!result) {
       throw new Error(
         `No background shell with ID "${params.shell_id}" in this session. Call bash_output without shell_id to list available shells.`,
@@ -68,10 +81,16 @@ export const BashOutputTool = Tool.define("bash_output", {
       }
     }
 
+    const stillIdle = result.info.status === "running" && output.length === 0
     const header = [
       `<status>${formatStatus(result.info)}</status>`,
       result.dropped ? "<notice>oldest unread output was dropped (buffer limit)</notice>" : "",
-      filterInvalid !== undefined ? `<notice>invalid filter regex ${JSON.stringify(filterInvalid)}; returning unfiltered output</notice>` : "",
+      filterInvalid !== undefined
+        ? `<notice>invalid filter regex ${JSON.stringify(filterInvalid)}; returning unfiltered output</notice>`
+        : "",
+      stillIdle
+        ? `<notice>still running after waiting ${timeoutMs}ms with no new output. Do not poll again immediately — continue other work, wait longer with timeout_ms, or kill_shell if the job is stuck.</notice>`
+        : "",
     ]
       .filter(Boolean)
       .join("\n")
