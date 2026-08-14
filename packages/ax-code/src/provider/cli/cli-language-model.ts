@@ -145,7 +145,6 @@ async function writeCliPrompt(
 function autonomousCliArgs(providerID: string): string[] {
   if (!ScopedFlag.autonomous()) return []
   if (providerID === "claude-code") return ["--dangerously-skip-permissions"]
-  if (providerID === "gemini-cli") return ["--approval-mode", "yolo"]
   if (providerID === "qoder-cli") return ["--permission-mode", "auto"]
   // Kimi -p/--prompt mode already auto-approves tools; other providers need no override here.
   return []
@@ -491,7 +490,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           onFail(error)
         }
         // Tolerate parser throws on malformed JSON lines. External CLI
-        // tools (claude-code/gemini-cli/codex-cli) can emit anything, and
+        // tools (claude-code/codex-cli) can emit anything, and
         // a synchronous throw in this data callback used to escape the
         // stdout.on("data") handler and tear down the host process —
         // stdout.on("error") only catches transport errors, not synchronous

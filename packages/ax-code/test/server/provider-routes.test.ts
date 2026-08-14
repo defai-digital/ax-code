@@ -358,12 +358,13 @@ describe("provider routes", () => {
     const body = (await response.json()) as { models: Array<{ id: string }> }
     expect(body.models.map((model) => model.id)).toEqual([
       "qwen3.6-27b-axq-6bit",
+      "ornith-35b",
       "qwen3.5-9b-axq-6bit",
       "qwen3-coder-next-axq-6bit",
     ])
     expect((body as { catalog?: { source?: string; modelIDs?: string[] } }).catalog).toMatchObject({
       source: "packages/ax-code/src/provider/ax-engine/constants.ts",
-      modelIDs: ["qwen3.6-27b-axq-6bit", "qwen3.5-9b-axq-6bit", "qwen3-coder-next-axq-6bit"],
+      modelIDs: ["qwen3.6-27b-axq-6bit", "ornith-35b", "qwen3.5-9b-axq-6bit", "qwen3-coder-next-axq-6bit"],
     })
   })
 

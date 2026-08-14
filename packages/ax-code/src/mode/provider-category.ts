@@ -14,11 +14,9 @@ export const LOCAL_RUNTIME_PROVIDER_IDS = ["ax-engine", "ax-studio", "ollama"] a
 
 export const CLI_PLAN_PROVIDER_IDS = [
   "claude-code",
-  "gemini-cli",
   "codex-cli",
   "grok-build-cli",
   "qoder-cli",
-  "antigravity-cli",
   "kimi-cli",
 ] as const
 

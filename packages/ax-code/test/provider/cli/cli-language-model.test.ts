@@ -1,12 +1,7 @@
 import { test, expect, describe, vi } from "vitest"
 import { buildCliCommand, cliEnv, CliLanguageModel } from "../../../src/provider/cli/cli-language-model"
 import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
-import {
-  antigravityCliParser,
-  claudeCodeParser,
-  geminiCliParser,
-  grokBuildCliParser,
-} from "../../../src/provider/cli/parser"
+import { claudeCodeParser, grokBuildCliParser, qoderCliParser } from "../../../src/provider/cli/parser"
 import { usageSource } from "../../../src/provider/usage"
 import { Process } from "../../../src/util/process"
 import { Shell } from "../../../src/shell/shell"
@@ -765,7 +760,7 @@ describe("CliLanguageModel", () => {
         // it as an unknown flag ("bad option: --model") and exits before writing.
         "--",
       ],
-      parser: geminiCliParser,
+      parser: qoderCliParser,
       promptMode: "stdin",
     })
 
@@ -955,29 +950,6 @@ describe("CliLanguageModel", () => {
     }
   })
 
-  test("adds Gemini CLI yolo approval mode in autonomous mode", () => {
-    process.env.AX_CODE_AUTONOMOUS = "true"
-    try {
-      const cmd = buildCliCommand(
-        {
-          providerID: "gemini-cli",
-          modelID: "gemini-2.5-flash",
-          binary: "gemini",
-          args: ["--output-format", "stream-json"],
-          parser: geminiCliParser,
-          promptMode: "arg",
-          promptFlag: "-p",
-        },
-        "write file",
-      )
-      expect(cmd).toContain("--approval-mode")
-      expect(cmd).toContain("yolo")
-      expect(cmd.slice(-2)).toEqual(["-p", "write file"])
-    } finally {
-      restoreAutonomous()
-    }
-  })
-
   test("adds Qoder's automatic permission mode in autonomous mode", () => {
     process.env.AX_CODE_AUTONOMOUS = "true"
     try {
@@ -1004,10 +976,6 @@ describe("CliLanguageModel", () => {
     const env = cliEnv([], "qoder-cli")
     if (process.platform === "win32") expect(env.SHELL).not.toBe("/bin/sh")
     else expect(env.SHELL).toBe("/bin/sh")
-  })
-
-  test("runs Gemini CLI headless without interactive workspace trust prompts", () => {
-    expect(CLI_PROVIDER_DEFINITIONS["gemini-cli"]?.args).toContain("--skip-trust")
   })
 
   test("passes Claude Code prompt as a positional argument", () => {
@@ -1073,11 +1041,11 @@ describe("CliLanguageModel", () => {
   test("omits --model when using a CLI provider default model", () => {
     const cmd = buildCliCommand(
       {
-        providerID: "gemini-cli",
-        modelID: "gemini-cli",
-        binary: "gemini",
+        providerID: "qoder-cli",
+        modelID: "qoder-cli",
+        binary: "qodercli",
         args: ["--output-format", "stream-json"],
-        parser: geminiCliParser,
+        parser: claudeCodeParser,
         promptMode: "arg",
         promptFlag: "-p",
       },
@@ -1197,26 +1165,6 @@ describe("CliLanguageModel", () => {
     }
   })
 
-  test("passes Antigravity CLI prompt through plain print mode", () => {
-    const definition = CLI_PROVIDER_DEFINITIONS["antigravity-cli"]
-    expect(definition).toBeDefined()
-
-    const cmd = buildCliCommand(
-      {
-        providerID: "antigravity-cli",
-        modelID: "antigravity-cli",
-        binary: "agy",
-        args: definition?.args ?? [],
-        parser: antigravityCliParser,
-        promptMode: definition?.promptMode ?? "arg",
-        promptFlag: definition?.promptFlag,
-      },
-      "write file",
-    )
-
-    expect(cmd).toEqual(["agy", "-p", "write file"])
-  })
-
   test("passes Kimi Code CLI prompt through stream-json prompt mode", () => {
     process.env.AX_CODE_AUTONOMOUS = "false"
     try {
@@ -1292,25 +1240,22 @@ describe("CliLanguageModel", () => {
     }
   })
 
-  test("passes Antigravity CLI the active workspace for headless prompts", () => {
-    const definition = CLI_PROVIDER_DEFINITIONS["antigravity-cli"]
-    expect(definition?.workspaceArg).toBe("--add-dir")
-
+  test("passes the active workspace through workspaceArg for headless prompts", () => {
     const cmd = buildCliCommand(
       {
-        providerID: "antigravity-cli",
-        modelID: "antigravity-cli",
-        binary: "agy",
-        args: definition?.args ?? [],
-        parser: antigravityCliParser,
-        promptMode: definition?.promptMode ?? "arg",
-        promptFlag: definition?.promptFlag,
-        workspaceArg: definition?.workspaceArg,
+        providerID: "custom-cli",
+        modelID: "custom-cli",
+        binary: "customcli",
+        args: [],
+        parser: claudeCodeParser,
+        promptMode: "arg",
+        promptFlag: "-p",
+        workspaceArg: "--add-dir",
       },
       "what's this project",
       "/workspace/ax-code",
     )
 
-    expect(cmd).toEqual(["agy", "--add-dir", "/workspace/ax-code", "-p", "what's this project"])
+    expect(cmd).toEqual(["customcli", "--add-dir", "/workspace/ax-code", "-p", "what's this project"])
   })
 })

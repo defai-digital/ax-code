@@ -78,11 +78,9 @@ export function normalizeProviderListPayload(data: unknown): ProviderListRespons
 
 export const CLI_BINARIES: Record<string, string> = {
   "claude-code": "claude",
-  "gemini-cli": "gemini",
   "codex-cli": "codex",
   "grok-build-cli": "grok",
   "qoder-cli": "qodercli",
-  "antigravity-cli": "agy",
   "kimi-cli": "kimi",
 }
 
@@ -94,7 +92,7 @@ export const CLI_PROVIDERS = new Set<string>(CLI_PLAN_PROVIDER_IDS)
 
 export const PROVIDER_DIALOG_CHANGE_TYPE_VALUE = "__change_type__"
 
-const HIDDEN_PROVIDERS = new Set(["google", "github-copilot", "gemini-cli", "antigravity-cli"])
+const HIDDEN_PROVIDERS = new Set(["google", "github-copilot"])
 
 function providerDialogSortKey(providerID: string) {
   return providerConnectCategorySortKey(providerID)

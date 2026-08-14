@@ -1,8 +1,6 @@
 import {
-  antigravityCliParser,
   claudeCodeParser,
   codexCliParser,
-  geminiCliParser,
   grokBuildCliParser,
   kimiCliParser,
   qoderCliParser,
@@ -25,13 +23,6 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     parser: claudeCodeParser,
     promptMode: "positional",
   },
-  "gemini-cli": {
-    binary: "gemini",
-    args: ["--output-format", "stream-json", "--skip-trust"],
-    parser: geminiCliParser,
-    promptMode: "arg",
-    promptFlag: "-p",
-  },
   "codex-cli": {
     binary: "codex",
     args: ["exec", "--json", "--skip-git-repo-check"],
@@ -51,14 +42,6 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     parser: qoderCliParser,
     promptMode: "arg",
     promptFlag: "-p",
-  },
-  "antigravity-cli": {
-    binary: "agy",
-    args: [],
-    parser: antigravityCliParser,
-    promptMode: "arg",
-    promptFlag: "-p",
-    workspaceArg: "--add-dir",
   },
   // Kimi Code CLI (membership): non-interactive -p/--prompt mode with stream-json JSONL.
   // Note: Kimi does not accept Claude's --print flag; -p itself enables headless mode.

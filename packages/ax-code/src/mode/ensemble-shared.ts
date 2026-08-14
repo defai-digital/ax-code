@@ -27,11 +27,9 @@ const PROVIDER_ALIASES: Record<string, string[]> = {
   openai: ["openai", "codex-cli"],
   claude: ["anthropic", "claude-code"],
   anthropic: ["anthropic", "claude-code"],
-  gemini: ["gemini-cli", "google"],
-  google: ["google", "gemini-cli"],
+  gemini: ["google"],
   kimi: ["kimi-cli"],
   qoder: ["qoder-cli"],
-  antigravity: ["antigravity-cli"],
 }
 
 export function resolveConnectedProviderID(

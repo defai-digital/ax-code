@@ -319,11 +319,9 @@ function openAICompatibleLoader(providerID: string, envKey: string, defaultHost:
 
 const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
   "claude-code": "Claude Code default",
-  "gemini-cli": "Gemini CLI default",
   "codex-cli": "Codex CLI default",
   "grok-build-cli": "Grok Build CLI default",
   "qoder-cli": "Qoder CLI default",
-  "antigravity-cli": "Antigravity CLI default",
   "kimi-cli": "Kimi Code CLI default",
 }
 
@@ -447,11 +445,9 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
 }
 
 const claudeCode = getCliProviderDefinition("claude-code")!
-const geminiCli = getCliProviderDefinition("gemini-cli")!
 const codexCli = getCliProviderDefinition("codex-cli")!
 const grokBuildCli = getCliProviderDefinition("grok-build-cli")!
 const qoderCli = getCliProviderDefinition("qoder-cli")!
-const antigravityCli = getCliProviderDefinition("antigravity-cli")!
 const kimiCli = getCliProviderDefinition("kimi-cli")!
 
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
@@ -503,14 +499,6 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     promptMode: claudeCode.promptMode,
     promptFlag: claudeCode.promptFlag,
   }),
-  "gemini-cli": cliLoader({
-    providerID: "gemini-cli",
-    binary: geminiCli.binary,
-    args: geminiCli.args,
-    parser: geminiCli.parser,
-    promptMode: geminiCli.promptMode,
-    promptFlag: geminiCli.promptFlag,
-  }),
   "codex-cli": cliLoader({
     providerID: "codex-cli",
     binary: codexCli.binary,
@@ -534,15 +522,6 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     parser: qoderCli.parser,
     promptMode: qoderCli.promptMode,
     promptFlag: qoderCli.promptFlag,
-  }),
-  "antigravity-cli": cliLoader({
-    providerID: "antigravity-cli",
-    binary: antigravityCli.binary,
-    args: antigravityCli.args,
-    parser: antigravityCli.parser,
-    promptMode: antigravityCli.promptMode,
-    promptFlag: antigravityCli.promptFlag,
-    workspaceArg: antigravityCli.workspaceArg,
   }),
   "kimi-cli": cliLoader({
     providerID: "kimi-cli",

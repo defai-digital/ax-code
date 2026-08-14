@@ -138772,8 +138772,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 204800,
-          "output": 131072
+          "context": 198000,
+          "output": 128000
         }
       },
       "z-ai/glm-5.2": {
@@ -159381,39 +159381,6 @@
       }
     }
   },
-  "gemini-cli": {
-    "id": "gemini-cli",
-    "name": "Google (Gemini CLI)",
-    "env": [],
-    "npm": "cli",
-    "models": {
-      "gemini-cli": {
-        "id": "gemini-cli",
-        "name": "Gemini CLI",
-        "family": "gemini",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": false,
-        "release_date": "2025-06-01",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 1000000,
-          "output": 65536
-        },
-        "options": {},
-        "status": "active"
-      }
-    }
-  },
   "codex-cli": {
     "id": "codex-cli",
     "name": "OpenAI (Codex CLI)",
@@ -159490,39 +159457,6 @@
         "id": "qoder-cli",
         "name": "Qoder CLI",
         "family": "qoder",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": false,
-        "release_date": "2026-06-01",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 200000,
-          "output": 16384
-        },
-        "options": {},
-        "status": "active"
-      }
-    }
-  },
-  "antigravity-cli": {
-    "id": "antigravity-cli",
-    "name": "Google (Antigravity CLI)",
-    "env": [],
-    "npm": "cli",
-    "models": {
-      "antigravity-cli": {
-        "id": "antigravity-cli",
-        "name": "Google (Antigravity CLI)",
-        "family": "antigravity",
         "attachment": true,
         "reasoning": false,
         "tool_call": false,

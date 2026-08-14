@@ -1,10 +1,8 @@
 import { describe, expect, test } from "vitest"
 import {
-  antigravityCliParser,
   claudeCodeParser,
   CliOutputError,
   codexCliParser,
-  geminiCliParser,
   grokBuildCliParser,
   kimiCliParser,
   parseCliJsonEventLine,
@@ -51,15 +49,6 @@ describe("claudeCodeParser", () => {
 })
 
 describe("provider CLI parser nested content", () => {
-  test("gemini parser narrows text fields before returning them", () => {
-    expect(geminiCliParser.parseStreamLine('{"type":"message","role":"assistant","content":123,"text":"OK"}')).toBe(
-      "OK",
-    )
-    expect(
-      geminiCliParser.parseStreamLine('{"type":"message","role":"assistant","content":123,"text":false}'),
-    ).toBeNull()
-  })
-
   test("codex parser decodes item content blocks without accepting malformed text", () => {
     expect(
       codexCliParser.parseComplete(
@@ -82,20 +71,17 @@ describe("provider CLI parser nested content", () => {
 })
 
 describe("provider CLI raw stream text", () => {
-  test("qoder, grok, and antigravity parsers preserve whitespace in non-JSON stream lines", () => {
+  test("qoder, grok, and kimi parsers preserve whitespace in non-JSON stream lines", () => {
     expect(qoderCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
     expect(grokBuildCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
-    expect(antigravityCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
     expect(kimiCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
   })
 
   test("raw complete fallback preserves model whitespace", () => {
     expect(claudeCodeParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
-    expect(geminiCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(codexCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(qoderCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(grokBuildCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
-    expect(antigravityCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(kimiCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
   })
 })

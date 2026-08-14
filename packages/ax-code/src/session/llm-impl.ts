@@ -636,10 +636,8 @@ export namespace LLM {
       providerID.endsWith("-cli") ||
       providerID === "claude-code" ||
       providerID === "codex-cli" ||
-      providerID === "gemini-cli" ||
       providerID === "qoder-cli" ||
       providerID === "kimi-cli" ||
-      providerID === "antigravity-cli" ||
       providerID === "grok-build-cli"
     )
   }

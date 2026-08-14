@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
-// CLI providers (claude-code, gemini-cli, codex-cli, grok-build-cli) take images
+// CLI providers (claude-code, codex-cli, grok-build-cli) take images
 // and other files as paths their own file/image tools read — not as inline text.
 // We materialize each file part to a temp file (or keep a remote URL as-is) and
 // hand the references to promptToText, which lists them so the spawned agent can

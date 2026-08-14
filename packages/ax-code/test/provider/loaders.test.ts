@@ -80,15 +80,6 @@ describe("CLI provider loaders", () => {
     })
   })
 
-  test("gemini-cli configured provider does not discover runnable variants when binary missing", async () => {
-    await expectMissingCliProvider({
-      providerID: "gemini-cli",
-      binary: "gemini",
-      baseModelID: "gemini-cli",
-      discoveredModelIDs: ["gemini-3-pro-preview", "gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash"],
-    })
-  })
-
   test("codex-cli configured provider does not discover runnable variants when binary missing", async () => {
     await expectMissingCliProvider({
       providerID: "codex-cli",

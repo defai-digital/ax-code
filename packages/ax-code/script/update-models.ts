@@ -13,7 +13,7 @@
 import path from "path"
 import { fileURLToPath } from "url"
 import { readJson, writeText } from "./fs-compat"
-import { cloneJsonValue, formatModelsSnapshot, modelsSnapshotChanged } from "./models-snapshot"
+import { cloneJsonValue, formatModelsSnapshot, modelsSnapshotChanged, RETIRED_PROVIDER_IDS } from "./models-snapshot"
 
 const dir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const snapshotPath = process.env.AX_CODE_MODELS_SNAPSHOT_PATH || path.join(dir, "src/provider/models-snapshot.json")
@@ -42,14 +42,19 @@ const fetched = await loadFetchedModels()
 
 const existing = await readJson<Record<string, any>>(snapshotPath).catch((): Record<string, any> => ({}))
 
+// Retired providers must not survive a refresh, whether they come from the
+// upstream catalog or a stale local snapshot.
+for (const id of RETIRED_PROVIDER_IDS) {
+  delete fetched[id]
+  delete existing[id]
+}
+
 // Preserve local-only provider entries that models.dev doesn't include
 const cliImageProviderIDs = [
   "claude-code",
-  "gemini-cli",
   "codex-cli",
   "grok-build-cli",
   "qoder-cli",
-  "antigravity-cli",
   "kimi-cli",
 ] as const
 const localProviderIDs = ["ax-studio", ...cliImageProviderIDs, "ollama"]
@@ -167,61 +172,6 @@ if (!fetched["qoder-cli"].models?.["qoder-cli"]) {
       id: "qoder-cli",
       name: "Qoder CLI",
       family: "qoder",
-      attachment: true,
-      reasoning: false,
-      tool_call: false,
-      temperature: false,
-      release_date: "2026-06-01",
-      modalities: {
-        input: ["text", "image"],
-        output: ["text"],
-      },
-      limit: {
-        context: 200000,
-        output: 16384,
-      },
-      options: {},
-      status: "active",
-    },
-  }
-}
-if (!fetched["antigravity-cli"]) {
-  fetched["antigravity-cli"] = {
-    id: "antigravity-cli",
-    name: "Google (Antigravity CLI)",
-    env: [],
-    npm: "cli",
-    models: {
-      "antigravity-cli": {
-        id: "antigravity-cli",
-        name: "Google (Antigravity CLI)",
-        family: "antigravity",
-        attachment: true,
-        reasoning: false,
-        tool_call: false,
-        temperature: false,
-        release_date: "2026-06-01",
-        modalities: {
-          input: ["text", "image"],
-          output: ["text"],
-        },
-        limit: {
-          context: 200000,
-          output: 16384,
-        },
-        options: {},
-        status: "active",
-      },
-    },
-  }
-}
-if (!fetched["antigravity-cli"].models?.["antigravity-cli"]) {
-  fetched["antigravity-cli"].models = {
-    ...(fetched["antigravity-cli"].models ?? {}),
-    "antigravity-cli": {
-      id: "antigravity-cli",
-      name: "Google (Antigravity CLI)",
-      family: "antigravity",
       attachment: true,
       reasoning: false,
       tool_call: false,
@@ -706,31 +656,6 @@ if (!fetched["qoder-cli"].models?.["qoder-cli"]) {
       id: "qoder-cli",
       name: "Qoder CLI",
       family: "qoder",
-      attachment: true,
-      reasoning: false,
-      tool_call: false,
-      temperature: false,
-      release_date: "2026-06-01",
-      modalities: {
-        input: ["text", "image"],
-        output: ["text"],
-      },
-      limit: {
-        context: 200000,
-        output: 16384,
-      },
-      options: {},
-      status: "active",
-    },
-  }
-}
-if (!fetched["antigravity-cli"].models?.["antigravity-cli"]) {
-  fetched["antigravity-cli"].models = {
-    ...(fetched["antigravity-cli"].models ?? {}),
-    "antigravity-cli": {
-      id: "antigravity-cli",
-      name: "Google (Antigravity CLI)",
-      family: "antigravity",
       attachment: true,
       reasoning: false,
       tool_call: false,

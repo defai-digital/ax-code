@@ -2347,9 +2347,9 @@ describe("ProviderTransform.variants", () => {
 
     test("unsupported CLI providers do not advertise inert variants", () => {
       const model = createMockModel({
-        id: "gemini-cli/gemini-cli",
-        providerID: "gemini-cli",
-        api: { id: "gemini-cli", url: "cli://local", npm: "cli" },
+        id: "qoder-cli/qoder-cli",
+        providerID: "qoder-cli",
+        api: { id: "qoder-cli", url: "cli://local", npm: "cli" },
       })
       expect(ProviderTransform.variants(model)).toEqual({})
     })

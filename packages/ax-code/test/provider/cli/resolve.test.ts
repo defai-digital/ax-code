@@ -175,32 +175,6 @@ describe("resolveCliModel", () => {
     }
   })
 
-  test("gemini-cli respects GEMINI_MODEL env var", async () => {
-    const original = process.env.GEMINI_MODEL
-    process.env.GEMINI_MODEL = "gemini-3-flash-preview"
-    try {
-      const info = await resolveCliModel("gemini-cli")
-      expect(info.model).toBe("gemini-3-flash-preview")
-      expect(info.source).toBe("GEMINI_MODEL")
-    } finally {
-      if (original !== undefined) process.env.GEMINI_MODEL = original
-      else delete process.env.GEMINI_MODEL
-    }
-  })
-
-  test("returns default for gemini-cli when no config", async () => {
-    const original = process.env.GEMINI_MODEL
-    delete process.env.GEMINI_MODEL
-    try {
-      const info = await resolveCliModel("gemini-cli")
-      if (info.source === "default") {
-        expect(info.model).toBe("gemini-cli")
-      }
-    } finally {
-      if (original !== undefined) process.env.GEMINI_MODEL = original
-    }
-  })
-
   test("returns default for codex-cli when no config", async () => {
     const info = await resolveCliModel("codex-cli")
     if (info.source === "default") {

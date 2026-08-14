@@ -152,12 +152,12 @@ describe("provider dialog options", () => {
     expect(CLI_BINARIES["kimi-cli"]).toBe("kimi")
   })
 
-  test("hides Gemini CLI and Antigravity CLI from the connect dialog", () => {
+  test("hides suppressed providers from the connect dialog", () => {
     expect(
       providerDialogProviders({
         available: [
-          provider("gemini-cli", "Google (Gemini CLI)"),
-          provider("antigravity-cli", "Google (Antigravity CLI)"),
+          provider("google", "Google"),
+          provider("github-copilot", "GitHub Copilot"),
           provider("kimi-cli", "Kimi Code CLI"),
         ],
         configured: [],
@@ -169,7 +169,6 @@ describe("provider dialog options", () => {
     expect(providerDialogCategory("xai")).toBe("API plan")
     expect(providerDialogCategory("grok-build-cli")).toBe("CLI plan")
     expect(providerDialogCategory("qoder-cli")).toBe("CLI plan")
-    expect(providerDialogCategory("antigravity-cli")).toBe("CLI plan")
     expect(providerDialogCategory("kimi-cli")).toBe("CLI plan")
     expect(providerDialogCategory("ollama")).toBe("Local runtime")
     expect(providerDialogCategory("alibaba-pai")).toBe("Private GPU cloud")
@@ -233,8 +232,9 @@ describe("provider dialog options", () => {
     expect(providerModelSelectable({ providerID: "ax-engine", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "grok-build-cli", toolcall: false })).toBe(true)
     expect(providerModelSelectable({ providerID: "qoder-cli", toolcall: false })).toBe(true)
-    expect(providerModelSelectable({ providerID: "antigravity-cli", toolcall: false })).toBe(true)
     expect(providerModelSelectable({ providerID: "kimi-cli", toolcall: false })).toBe(true)
+    // Retired CLI providers no longer get the non-toolcall exemption.
+    expect(providerModelSelectable({ providerID: "antigravity-cli", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "xai", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "xai", toolcall: true })).toBe(true)
   })

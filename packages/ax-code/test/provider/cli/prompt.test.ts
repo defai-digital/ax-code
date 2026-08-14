@@ -21,7 +21,6 @@ describe("promptToText", () => {
     const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "text", text: "What changed today?" }] }]
 
     expect(promptToText(prompt, { providerID: "codex-cli" })).toContain("built-in web search")
-    expect(promptToText(prompt, { providerID: "gemini-cli" })).toContain("built-in web search")
     expect(promptToText(prompt, { providerID: "grok-build-cli" })).toContain("built-in web search")
     expect(promptToText(prompt, { providerID: "qoder-cli" })).toContain("built-in web search")
     expect(promptToText(prompt, { providerID: "kimi-cli" })).toContain("built-in web search")

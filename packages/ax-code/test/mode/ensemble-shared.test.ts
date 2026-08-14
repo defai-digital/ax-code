@@ -23,8 +23,8 @@ describe("resolveConnectedProviderID", () => {
   })
 
   test("maps colloquial names for cli providers", () => {
-    const cliConnected = ["gemini-cli", "kimi-cli", "claude-code", "codex-cli"]
-    expect(resolveConnectedProviderID("gemini", cliConnected)).toBe("gemini-cli")
+    const cliConnected = ["google", "kimi-cli", "claude-code", "codex-cli"]
+    expect(resolveConnectedProviderID("gemini", cliConnected)).toBe("google")
     expect(resolveConnectedProviderID("kimi", cliConnected)).toBe("kimi-cli")
     expect(resolveConnectedProviderID("claude", cliConnected)).toBe("claude-code")
     expect(resolveConnectedProviderID("openai", cliConnected)).toBe("codex-cli")

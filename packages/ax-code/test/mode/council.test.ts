@@ -210,7 +210,7 @@ describe("Council.selectDiverseMembers", () => {
     const selected = Council.selectDiverseMembers(
       [
         { providerID: "google", id: 1 },
-        { providerID: "gemini-cli", id: 2 },
+        { providerID: "zhipuai", id: 2 },
         { providerID: "openrouter", id: 3 },
         { providerID: "claude-code", id: 4 },
       ],
@@ -238,7 +238,7 @@ describe("Council.providerFamily", () => {
     expect(Council.providerFamily("claude-code")).toBe("anthropic")
     expect(Council.providerFamily("openai")).toBe("openai")
     expect(Council.providerFamily("google")).toBe("google")
-    expect(Council.providerFamily("gemini-cli")).toBe("google")
+    expect(Council.providerFamily("gemini-3-pro")).toBe("google")
     expect(Council.providerFamily("xai")).toBe("xai")
     expect(Council.providerFamily("grok-2")).toBe("xai")
     expect(Council.providerFamily("alibaba")).toBe("alibaba")
@@ -256,8 +256,6 @@ describe("Council.providerFamily", () => {
     expect(Council.providerFamily("codex-mini")).toBe("openai")
     // "github-copilot" exact match → openai
     expect(Council.providerFamily("github-copilot")).toBe("openai")
-    // "antigravity" → google, not some other family
-    expect(Council.providerFamily("antigravity-model")).toBe("google")
     // Case-insensitive: "Claude" with capital C still matches
     expect(Council.providerFamily("Claude-Sonnet")).toBe("anthropic")
     // "zai" prefix → zhipu

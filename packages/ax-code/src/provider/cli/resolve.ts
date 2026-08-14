@@ -11,11 +11,9 @@ export interface CliModelInfo {
 
 const DEFAULTS: Record<string, string> = {
   "claude-code": "claude-code",
-  "gemini-cli": "gemini-cli",
   "codex-cli": "codex-cli",
   "grok-build-cli": "grok-build-cli",
   "qoder-cli": "qoder-cli",
-  "antigravity-cli": "antigravity-cli",
   "kimi-cli": "kimi-cli",
 }
 
@@ -91,16 +89,6 @@ async function resolveClaudeModel(): Promise<CliModelInfo> {
   })
 }
 
-async function resolveGeminiModel(): Promise<CliModelInfo> {
-  return resolveModelFromJsonSettings({
-    envVar: "GEMINI_MODEL",
-    settingsPath: ".gemini/settings.json",
-    sourceLabel: "~/.gemini/settings.json",
-    defaultModel: DEFAULTS["gemini-cli"]!,
-    read: resolveModelFromObject,
-  })
-}
-
 async function resolveCodexModel(): Promise<CliModelInfo> {
   const toml = await readText(join(homeDir(), ".codex", "config.toml"))
   if (toml) {
@@ -117,16 +105,6 @@ async function resolveQoderModel(): Promise<CliModelInfo> {
     settingsPath: ".qoder/settings.json",
     sourceLabel: "~/.qoder/settings.json",
     defaultModel: DEFAULTS["qoder-cli"]!,
-    read: resolveModelFromObject,
-  })
-}
-
-async function resolveAntigravityModel(): Promise<CliModelInfo> {
-  return resolveModelFromJsonSettings({
-    envVar: "ANTIGRAVITY_MODEL",
-    settingsPath: ".antigravity/settings.json",
-    sourceLabel: "~/.antigravity/settings.json",
-    defaultModel: DEFAULTS["antigravity-cli"]!,
     read: resolveModelFromObject,
   })
 }
@@ -175,11 +153,9 @@ async function resolveKimiModel(): Promise<CliModelInfo> {
 
 const RESOLVERS: Record<string, () => Promise<CliModelInfo>> = {
   "claude-code": resolveClaudeModel,
-  "gemini-cli": resolveGeminiModel,
   "codex-cli": resolveCodexModel,
   "grok-build-cli": async () => ({ model: DEFAULTS["grok-build-cli"]!, source: "default" }),
   "qoder-cli": resolveQoderModel,
-  "antigravity-cli": resolveAntigravityModel,
   "kimi-cli": resolveKimiModel,
 }
 

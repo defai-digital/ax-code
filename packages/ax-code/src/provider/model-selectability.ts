@@ -6,11 +6,9 @@ import os from "os"
 // legitimately want anyway.
 const TOOLCALL_OPTIONAL_PROVIDER_IDS = new Set([
   "claude-code",
-  "gemini-cli",
   "codex-cli",
   "grok-build-cli",
   "qoder-cli",
-  "antigravity-cli",
   "kimi-cli",
 ])
 

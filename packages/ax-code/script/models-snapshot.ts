@@ -1,14 +1,17 @@
 export const LOCAL_PROVIDER_IDS = [
   "claude-code",
-  "gemini-cli",
   "codex-cli",
   "grok-build-cli",
   "qoder-cli",
-  "antigravity-cli",
   "kimi-cli",
   "ollama",
   "ax-studio",
 ] as const
+
+// Providers ax-code once shipped but no longer supports. Snapshot refreshes
+// must drop them even if a stale snapshot or upstream catalog still carries
+// an entry, otherwise a retired provider resurrects on the next regen.
+export const RETIRED_PROVIDER_IDS = ["gemini-cli", "antigravity-cli"] as const
 
 export type ModelsSnapshot = Record<string, unknown>
 
@@ -49,6 +52,9 @@ const LOCAL_PROVIDER_DEFAULTS: ModelsSnapshot = {
 
 export function preserveLocalProviders(fetched: ModelsSnapshot, existing: ModelsSnapshot) {
   const next = { ...fetched }
+  for (const id of RETIRED_PROVIDER_IDS) {
+    delete next[id]
+  }
   for (const id of LOCAL_PROVIDER_IDS) {
     if (existing[id] && !next[id]) next[id] = cloneJsonValue(existing[id])
     if (!next[id] && LOCAL_PROVIDER_DEFAULTS[id]) next[id] = LOCAL_PROVIDER_DEFAULTS[id]

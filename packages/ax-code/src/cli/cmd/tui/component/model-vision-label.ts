@@ -3,10 +3,8 @@ export const MODEL_WEB_SEARCH_MARKER = "🌐"
 const CLI_WEB_SEARCH_PROVIDER_IDS = new Set([
   "claude-code",
   "codex-cli",
-  "gemini-cli",
   "grok-build-cli",
   "qoder-cli",
-  "antigravity-cli",
   "kimi-cli",
 ])
 

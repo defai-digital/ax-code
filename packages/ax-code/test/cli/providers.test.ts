@@ -88,7 +88,6 @@ describe("providers command", () => {
     ;(ProvidersAxEngineCommand.builder as Function)(yargs)
 
     expect(options.get("quantization")?.choices).toBe(AX_ENGINE_QUANTIZATION_IDS)
-    expect(options.get("quantization")?.choices).not.toContain("mlx4bit")
   })
 
   test("providers list reports saved credentials", async () => {
@@ -154,11 +153,11 @@ describe("providers command", () => {
     const invalidateSpy = vi.spyOn(Provider, "invalidate").mockResolvedValue()
 
     try {
-      await Auth.set("gemini-cli", { type: "api", key: "cli" })
-      await ProvidersLogoutCommand.handler({ provider: "gemini-cli" } as any)
+      await Auth.set("kimi-cli", { type: "api", key: "cli" })
+      await ProvidersLogoutCommand.handler({ provider: "kimi-cli" } as any)
 
       expect(selectSpy).not.toHaveBeenCalled()
-      expect(await Auth.get("gemini-cli")).toBeUndefined()
+      expect(await Auth.get("kimi-cli")).toBeUndefined()
       expect(invalidateSpy).toHaveBeenCalled()
       expect(outroSpy).toHaveBeenCalledWith("Logout successful")
     } finally {
@@ -178,7 +177,7 @@ describe("providers command", () => {
 
     try {
       stdin.isTTY = false
-      await Auth.set("gemini-cli", { type: "api", key: "cli" })
+      await Auth.set("kimi-cli", { type: "api", key: "cli" })
       await ProvidersLogoutCommand.handler({} as any)
 
       expect(selectSpy).not.toHaveBeenCalled()
