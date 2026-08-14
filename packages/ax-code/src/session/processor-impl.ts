@@ -13,6 +13,7 @@ import { DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN } from "@/constants/sessi
 import { BlastRadius } from "./blast-radius"
 import { resolveAutonomyBudget } from "./autonomy-budget"
 import { detectCycle, type RingEntry } from "./cycle-detection"
+import { ensureSessionToolCycleRing } from "./tool-cycle-ring"
 import type { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
 import { Config } from "@/config/config"
@@ -116,7 +117,7 @@ export namespace SessionProcessor {
       const result = visit(obj, 0)
       return result.length > MAX_CANONICAL_LENGTH ? result.slice(0, MAX_CANONICAL_LENGTH) : result
     }
-    const recentToolRing: RingEntry[] = []
+    const recentToolRing: RingEntry[] = ensureSessionToolCycleRing(input.sessionID)
     const doomLoopWarnings: Record<string, string> = {}
     // Per-turn count of autonomous doom-loop detections per tool. The first
     // detection warns; a repeat within the same turn means the model saw the
@@ -145,7 +146,8 @@ export namespace SessionProcessor {
       delete doomLoopWarnings[input.toolCallId]
     }
     const resetShortLivedToolLoopState = () => {
-      recentToolRing.length = 0
+      // The cycle ring is run-scoped so identical bash across turns is
+      // visible. Compaction / stream-error still drop per-turn caches.
       toolCallTimestamps.length = 0
       for (const key of Object.keys(toolInputCache)) delete toolInputCache[key]
       for (const key of Object.keys(doomLoopWarnings)) delete doomLoopWarnings[key]

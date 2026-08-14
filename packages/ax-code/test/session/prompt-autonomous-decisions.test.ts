@@ -13,8 +13,12 @@ import {
   hasUsableReadOnlyEvidence,
   isEmptyModelTurn,
   isTruncatedModelTurn,
+  isMutatingProgressTurn,
+  isNoProgressToolTurn,
   isReadOnlyExplorationTurn,
   modelTurnFinished,
+  toolCallingBackstopDecision,
+  toolOnlyStopMessage,
   readOnlyExplorationDecision,
   resolveTurnToolChoice,
   shouldRestoreForcedTextOnlyTurn,
@@ -891,17 +895,22 @@ describe("tool-only turn decision", () => {
     finalCheckpointHits: 0,
   }
 
-  test("walks a full streak: nudge at 15, final nudge at 30, stop past 35", () => {
+  test("walks a full streak: nudge at 15, forced final at 30, land at 36, stop after second wrap-up", () => {
     let toolOnlyNudges = 0
+    let finalCheckpointHits = 0
     const events: string[] = []
-    for (let streak = 1; streak <= 36; streak += 1) {
+    for (let streak = 1; streak <= 40; streak += 1) {
       const decision = toolOnlyTurnDecision({
         consecutiveToolOnlyTurns: streak,
         toolOnlyNudges,
         ...config,
+        finalCheckpointHits,
+        forcedWrapUps: finalCheckpointHits,
+        recentProgress: false,
       })
       if (decision.action === "nudge") {
         events.push(`nudge:${streak}:${decision.final ? "final" : "first"}${decision.forced ? ":forced" : ""}`)
+        if (decision.final) finalCheckpointHits += 1
         toolOnlyNudges += 1
       }
       if (decision.action === "stop") {
@@ -909,7 +918,7 @@ describe("tool-only turn decision", () => {
         break
       }
     }
-    expect(events).toEqual(["nudge:15:first", "nudge:30:final", "stop:36"])
+    expect(events).toEqual(["nudge:15:first", "nudge:30:final:forced", "nudge:36:final:forced", "stop:37"])
   })
 
   test("ignores below thresholds and exactly at the hard limit", () => {
@@ -924,9 +933,9 @@ describe("tool-only turn decision", () => {
     })
   })
 
-  test("stops without a pending nudge when thresholds are misconfigured above the limit", () => {
-    // If the final checkpoint is tuned above the hard limit, the stop must
-    // still fire rather than waiting forever for the unreachable nudge.
+  test("lands with a forced wrap-up when thresholds are misconfigured above the limit", () => {
+    // If the final checkpoint is tuned above the hard limit, do not wait
+    // forever for the unreachable nudge — force a summary first.
     const decision = toolOnlyTurnDecision({
       consecutiveToolOnlyTurns: 36,
       toolOnlyNudges: 1,
@@ -935,7 +944,7 @@ describe("tool-only turn decision", () => {
       maxToolOnlyTurns: 35,
       finalCheckpointHits: 0,
     })
-    expect(decision).toEqual({ action: "stop" })
+    expect(decision).toEqual({ action: "nudge", final: true, forced: true })
   })
 
   test("late first nudge fires even when the streak jumped past the threshold", () => {
@@ -947,13 +956,35 @@ describe("tool-only turn decision", () => {
     expect(decision).toEqual({ action: "nudge", final: false, forced: false })
   })
 
-  test("first final checkpoint is advisory, not forced", () => {
+  test("first final checkpoint is forced so a single streak can land", () => {
     const decision = toolOnlyTurnDecision({
       consecutiveToolOnlyTurns: 30,
       toolOnlyNudges: 1,
       ...config,
     })
-    expect(decision).toEqual({ action: "nudge", final: true, forced: false })
+    expect(decision).toEqual({ action: "nudge", final: true, forced: true })
+  })
+
+  test("at the hard cap, recent progress forces a wrap-up instead of stopping", () => {
+    const decision = toolOnlyTurnDecision({
+      consecutiveToolOnlyTurns: 36,
+      toolOnlyNudges: 2,
+      ...config,
+      recentProgress: true,
+      forcedWrapUps: 2,
+    })
+    expect(decision).toEqual({ action: "nudge", final: true, forced: true })
+  })
+
+  test("at the hard cap with no progress and two wrap-ups, stop", () => {
+    const decision = toolOnlyTurnDecision({
+      consecutiveToolOnlyTurns: 36,
+      toolOnlyNudges: 2,
+      ...config,
+      recentProgress: false,
+      forcedWrapUps: 2,
+    })
+    expect(decision).toEqual({ action: "stop" })
   })
 
   // Regression for #340: a model can reset consecutiveToolOnlyTurns to 0 by
@@ -979,6 +1010,64 @@ describe("tool-only turn decision", () => {
       finalCheckpointHits: 2,
     })
     expect(decision).toEqual({ action: "nudge", final: false, forced: false })
+  })
+})
+
+describe("progress-aware stall helpers", () => {
+  test("treats completed edits and patches as progress", () => {
+    expect(isMutatingProgressTurn([{ type: "patch" }])).toBe(true)
+    expect(isMutatingProgressTurn([{ type: "tool", tool: "edit", state: { status: "completed" } }])).toBe(true)
+    expect(isMutatingProgressTurn([{ type: "tool", tool: "bash", state: { status: "completed" } }])).toBe(false)
+  })
+
+  test("no-progress requires read-only repeats of prior signatures", () => {
+    const prior = new Set(['bash:{"command":"ls"}'])
+    expect(
+      isNoProgressToolTurn(
+        [{ type: "tool", tool: "bash", state: { status: "completed", input: { command: "ls" } } }],
+        prior,
+      ),
+    ).toBe(true)
+    expect(
+      isNoProgressToolTurn(
+        [{ type: "tool", tool: "bash", state: { status: "completed", input: { command: "pwd" } } }],
+        prior,
+      ),
+    ).toBe(false)
+    expect(
+      isNoProgressToolTurn([{ type: "tool", tool: "edit", state: { status: "completed", input: { path: "a" } } }], prior),
+    ).toBe(false)
+    const after = new Set(['bash:{"command":"ls"}'])
+    expect(
+      isNoProgressToolTurn(
+        [{ type: "tool", tool: "bash", state: { status: "completed", input: { command: "ls" } } }],
+        prior,
+        after,
+      ),
+    ).toBe(true)
+    expect(
+      isNoProgressToolTurn(
+        [{ type: "tool", tool: "bash", state: { status: "completed", input: { command: "ls" } } }],
+        prior,
+        new Set(['bash:{"command":"ls"}', 'bash:{"command":"pwd"}']),
+      ),
+    ).toBe(false)
+  })
+
+  test("absolute tool-calling backstop forces a wrap-up past the cap", () => {
+    expect(toolCallingBackstopDecision({ consecutiveToolCallingTurns: 35, maxToolOnlyTurns: 35 })).toEqual({
+      action: "ignore",
+    })
+    expect(toolCallingBackstopDecision({ consecutiveToolCallingTurns: 36, maxToolOnlyTurns: 35 })).toEqual({
+      action: "force_wrap",
+    })
+  })
+
+  test("stop message does not claim the model produced no text", () => {
+    const message = toolOnlyStopMessage({ consecutiveToolOnlyTurns: 36, toolOnlyNudges: 2 })
+    expect(message).toContain("36 consecutive no-progress tool-calling turns")
+    expect(message).toContain("2 checkpoint reminders")
+    expect(message).not.toContain("without a completed text response")
   })
 })
 

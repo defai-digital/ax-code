@@ -154,36 +154,39 @@ export namespace AutonomousContinuationPrompt {
     )
   }
 
-  // Wording notes: the streak counts turns whose finish reason was
-  // "tool-calls" — the model may well have emitted narration text inside
-  // those turns, so do NOT claim it produced "no text response". The streak
-  // also fires on productive implementation work, not just exploration, so
-  // the guidance must allow continuing legitimate work after a synthesis
-  // rather than commanding the model to stop. The checkpoint runs in both
-  // supervised and autonomous sessions, so it must not claim "autonomous".
+  // Wording notes: the streak now counts no-progress tool-calling turns
+  // (repeated read-only signatures), not "the model produced no text".
+  // Do NOT claim it produced "no text response". A turn that also calls
+  // tools does not reset the counter — only a turn that ends without
+  // further tool calls, or a turn with new progress, does. The checkpoint
+  // runs in both supervised and autonomous sessions.
   export function toolOnlyTurnNudge(input: {
     consecutiveToolOnlyTurns: number
     maxToolOnlyTurns: number
     final?: boolean
-    // Set once the FINAL checkpoint has already fired earlier this run and
-    // the model resumed a fresh tool-only streak anyway — the grace period
-    // is spent, so tools are being stripped from the very next request
-    // rather than trusting another advisory nudge (see #340).
+    // Tools are stripped from the next request. `repeat` is set when a
+    // previous forced wrap-up already fired this run (#340).
     forced?: boolean
+    repeat?: boolean
   }) {
     return (
-      `Agent-loop checkpoint: your last ${input.consecutiveToolOnlyTurns} turns each ended in further tool calls ` +
-      `without a completed text response. The loop stops automatically after ${input.maxToolOnlyTurns} consecutive such turns. ` +
+      `Agent-loop checkpoint: your last ${input.consecutiveToolOnlyTurns} turns ended with further tool calls ` +
+      `(finish=tool-calls) and no new progress. This counts the finish reason and repeated inspection, ` +
+      `not whether you already wrote narration. ` +
+      `A turn that also calls tools does not reset this counter — only a turn that ends without further tool calls, ` +
+      `or a turn that mutates the workspace / uses a new tool signature, does. ` +
+      `After ${input.maxToolOnlyTurns} consecutive no-progress turns the loop forces a text-only wrap-up, then stops if there is still no progress. ` +
       (input.forced
-        ? `You already received one final checkpoint warning this run and resumed tool-only calling anyway. ` +
+        ? (input.repeat
+            ? `You already received a forced wrap-up this run and resumed no-progress tool calling. `
+            : "") +
           `Tools are disabled for your next turn — respond now with a text summary covering what was ` +
           `accomplished, what remains, and any blockers. `
         : input.final
-          ? `This is the FINAL checkpoint before that stop. Finish now: complete at most a few essential tool calls, ` +
-            `then end your turn with a text response covering what was accomplished, what remains, and any blockers. `
+          ? `This is the FINAL checkpoint. Tools will be disabled on the next turn. Finish remaining essential work only if already in flight, ` +
+            `then summarize what was accomplished, what remains, and any blockers. `
           : `Pause and write a brief synthesis: what you have established so far, what remains, and your next concrete step. ` +
-            `If you are mid-implementation, continue the remaining work after the synthesis — completing a turn with a text ` +
-            `response resets this counter. `) +
+            `If you are mid-implementation, you may continue the remaining work after the synthesis. `) +
       `If you are re-covering the same ground without new findings, stop exploring and produce your final answer ` +
       `or explain what blocks completion.`
     )

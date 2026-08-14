@@ -78,8 +78,9 @@ export namespace EnsemblePreflight {
       "",
       "Pass `providers: [{ providerID, modelID? }, ...]` to pick specific contestants once connected.",
       "",
-      "**Do not continue as a single-provider implementation.** Arena did not run multi-contestant selection.",
-      "Stop and tell the user which providers were eligible vs excluded, and how to connect another.",
+      "Multi-model verification did not run. You may continue as a single-provider implementation.",
+      "Tell the user which providers were requested vs connected, and that verification was skipped.",
+      "Do not retry arena/council with the same unavailable providers.",
     ]
       .filter((line) => line !== undefined)
       .join("\n")

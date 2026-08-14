@@ -15,6 +15,34 @@ import { modelSelectableForProvider } from "../provider/model-selectability"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
 
+/** Colloquial names users type ("grok", "codex") → connected provider IDs. */
+const PROVIDER_ALIASES: Record<string, string[]> = {
+  grok: ["grok-build-cli", "xai"],
+  "grok-4": ["grok-build-cli"],
+  "grok-4.5": ["grok-build-cli"],
+  xai: ["xai", "grok-build-cli"],
+  codex: ["codex-cli", "openai"],
+  "codex-cli": ["codex-cli", "openai"],
+  claude: ["anthropic"],
+  anthropic: ["anthropic"],
+}
+
+export function resolveConnectedProviderID(
+  requested: string,
+  connectedIDs: readonly string[],
+): string | undefined {
+  if (connectedIDs.includes(requested)) return requested
+  const lower = requested.toLowerCase()
+  const exact = connectedIDs.find((id) => id.toLowerCase() === lower)
+  if (exact) return exact
+  for (const alias of PROVIDER_ALIASES[lower] ?? []) {
+    if (connectedIDs.includes(alias)) return alias
+    const match = connectedIDs.find((id) => id.toLowerCase() === alias.toLowerCase())
+    if (match) return match
+  }
+  return undefined
+}
+
 export namespace EnsembleShared {
   export interface MemberSpec {
     providerID: ProviderID
@@ -95,11 +123,21 @@ export namespace EnsembleShared {
     if (explicit?.length) {
       const out: MemberSpec[] = []
       const rejected: string[] = []
+      const connectedIDs = Object.keys(providers)
       for (const item of explicit) {
-        const providerID = ProviderID.make(item.providerID)
+        const resolved = resolveConnectedProviderID(item.providerID, connectedIDs)
+        if (!resolved) {
+          rejected.push(
+            `Unknown provider ${JSON.stringify(item.providerID)}. Connected: ${connectedIDs.sort().join(", ") || "(none)"}.`,
+          )
+          continue
+        }
+        const providerID = ProviderID.make(resolved)
         const provider = providers[providerID]
         if (!provider) {
-          rejected.push(`Unknown provider ${JSON.stringify(item.providerID)}`)
+          rejected.push(
+            `Unknown provider ${JSON.stringify(item.providerID)}. Connected: ${connectedIDs.sort().join(", ") || "(none)"}.`,
+          )
           continue
         }
         let modelID: ModelID | undefined

@@ -82,7 +82,7 @@ describe("session.processor", () => {
   test("resets short-lived tool loop state across compaction", async () => {
     const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
     expect(src).toContain("const resetShortLivedToolLoopState = () => {")
-    expect(src).toContain("recentToolRing.length = 0")
+    expect(src).not.toContain("recentToolRing.length = 0")
     expect(src).toContain("toolCallTimestamps.length = 0")
     expect(src).toContain("for (const key of Object.keys(toolInputCache)) delete toolInputCache[key]")
     const start = src.indexOf("if (needsCompaction) {")

@@ -45,7 +45,9 @@ describe("EnsemblePreflight", () => {
     expect(msg).toContain("**1**")
     expect(msg).toContain("qoder-cli")
     expect(msg).toContain("ax-engine")
-    expect(msg).toContain("Do not continue as a single-provider implementation")
+    expect(msg).toContain("You may continue as a single-provider implementation")
+    expect(msg).toContain("Do not retry arena/council")
+    expect(msg).not.toContain("Do not continue as a single-provider implementation")
     expect(msg).toContain("not eligible")
   })
 

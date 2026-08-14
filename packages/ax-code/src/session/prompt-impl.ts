@@ -70,6 +70,10 @@ import {
   readOnlyExplorationDecision,
   resolveTurnToolChoice,
   shouldRestoreForcedTextOnlyTurn,
+  isMutatingProgressTurn,
+  isNoProgressToolTurn,
+  toolCallingBackstopDecision,
+  toolOnlyStopMessage,
   toolOnlyTurnDecision,
   unexecutableToolTextRecoveryDecision,
   type ForceTextReason,
@@ -109,6 +113,7 @@ import {
   promptLoopLimits,
 } from "./prompt-loop-config"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
+import { clearSessionToolCycleRing, sessionToolCycleSignatures } from "./tool-cycle-ring"
 import { GOAL_CEILING_CONVERGENCE_STEPS } from "@/constants/session"
 import {
   CommandInput as CommandInputSchema,
@@ -161,6 +166,10 @@ export namespace SessionPrompt {
   export const prompt = fn(PromptInput, async (input) => {
     const session = await Session.get(input.sessionID)
     assertWorkSessionSendable({ metadata: session.metadata, agent: input.agent })
+    // New user prompt = new run. Cross-turn cycle memory must not leak
+    // from a previous prompt in this session.
+    clearSessionToolCycleRing(input.sessionID)
+    using _toolCycleRing = defer(() => clearSessionToolCycleRing(input.sessionID))
 
     // User lifecycle hooks (UserPromptSubmit): a blockOnFailure hook can veto
     // the prompt before the user message is persisted. This must run BEFORE
@@ -344,28 +353,26 @@ export namespace SessionPrompt {
     let emptyModelTurnRetries = 0
     let truncatedModelTurnRetries = 0
     let previousTruncatedModelOutputPrefix: string | undefined
-    // Consecutive outer-loop turns where the model only produced tool calls
-    // (finish="tool-calls") without ever finishing with a text response.
-    // Reset to 0 whenever the model finishes cleanly. If this exceeds
-    // MAX_TOOL_ONLY_TURNS, the model is stuck in a read-only exploration
-    // loop (e.g. endlessly listing directories) and we break out.
+    // Consecutive no-progress tool-calling turns (repeated read-only
+    // signatures). Incremented only when the turn is inspection-only and
+    // every tool signature already appeared earlier this run. Reset on
+    // mutations, novel signatures, or a non-tool-calls finish.
     let consecutiveToolOnlyTurns = 0
-    // Number of nudge continuations injected during the current streak of
-    // tool-only turns (first checkpoint at TOOL_ONLY_TURN_NUDGE, final
-    // warning at TOOL_ONLY_TURN_FINAL_NUDGE). Reset alongside
-    // consecutiveToolOnlyTurns.
+    // Absolute tool-calling streak (any finish=tool-calls). Reset only on a
+    // completed text finish. Lands a forced wrap-up at the cap so a long
+    // productive run cannot wander until the step ceiling.
+    let consecutiveToolCallingTurns = 0
+    // Number of nudge continuations injected during the current no-progress
+    // streak. Reset alongside consecutiveToolOnlyTurns.
     let toolOnlyNudges = 0
-    // How many times the FINAL tool-only-turn checkpoint has fired this run.
-    // Deliberately NOT reset alongside consecutiveToolOnlyTurns/toolOnlyNudges:
-    // a model can trivially "reset the clock" by producing one completed-text
-    // turn (even a token acknowledgment) right after the final checkpoint,
-    // then resume a fresh tool-only streak with a full new budget — see #340.
-    // The first final checkpoint is advisory (gives the model its existing
-    // 5-turn buffer to wrap up on its own). If the streak reaches the final
-    // checkpoint again afterward, the model already burned that grace period,
-    // so forceTextOnlyTurn below strips tools from the very next request
-    // instead of trusting another advisory nudge.
+    // How many times a FINAL / forced wrap-up has fired this run. Not reset
+    // with the streak (#340): after two forced wrap-ups with no recent
+    // mutations, the hard stop may fire. The first FINAL checkpoint is
+    // forced so a single long streak can land a summary.
     let toolOnlyFinalCheckpointHits = 0
+    // Remaining turns that still count as "recent mutations" for landing
+    // (force wrap-up instead of publishPromptFailure after productive work).
+    let recentMutatingTurnsRemaining = 0
     let forceTextOnlyTurn = false
     // Why the current/pending force-text turn was requested. Recovery that
     // re-enables tools is only valid for ax_engine_read_only.
@@ -436,7 +443,9 @@ export namespace SessionPrompt {
       // Files/lines caps intentionally stay cumulative.
       BlastRadius.resetSteps(sessionID)
       consecutiveToolOnlyTurns = 0
+      consecutiveToolCallingTurns = 0
       toolOnlyNudges = 0
+      recentMutatingTurnsRemaining = 0
       consecutiveAxEngineReadOnlyTurns = 0
       axEngineReadOnlyNudged = false
       axEngineReadOnlyHasEvidence = false
@@ -951,6 +960,7 @@ export namespace SessionPrompt {
         break
       }
 
+      const priorToolSignatures = sessionToolCycleSignatures(sessionID)
       const processor = await createPromptProcessor({
         sessionID,
         lastUser,
@@ -1071,7 +1081,9 @@ export namespace SessionPrompt {
       // hard-stopping a healthy session.
       if (modelFinished) {
         consecutiveToolOnlyTurns = 0
+        consecutiveToolCallingTurns = 0
         toolOnlyNudges = 0
+        recentMutatingTurnsRemaining = 0
         consecutiveAxEngineReadOnlyTurns = 0
         axEngineReadOnlyNudged = false
         axEngineReadOnlyHasEvidence = false
@@ -1434,19 +1446,11 @@ export namespace SessionPrompt {
         break
       }
 
-      // Tool-only turn convergence: when the model's last step was tool
-      // calls (finish="tool-calls"), modelFinished is false and none of
-      // the above completion paths fire. The loop would otherwise keep
-      // calling the model indefinitely if the model never produces a
-      // final text response (common when stuck in a read-only exploration
-      // loop — e.g. repeatedly listing directories or running shell
-      // commands). Track consecutive tool-only outer-loop turns and break
-      // when the count exceeds MAX_TOOL_ONLY_TURNS.
-      // Streak reset for finished turns happens earlier (right after
-      // modelFinished is computed) so autonomous continuations cannot skip
-      // it. Errored turns neither reset nor count: the error transition
-      // below owns that path, and injecting a nudge on an errored turn
-      // would defer error recovery by a turn.
+      // No-progress stall: finish=tool-calls is the normal agent state, so
+      // we increment only when the turn is read-only inspection whose
+      // signatures already appeared this run. Mutations and novel reads
+      // reset the streak. A hard stop fires only after forced wrap-ups
+      // with no recent mutations. Errored turns neither reset nor count.
       if (!modelFinished && !processor.message.error) {
         // #381: a successful update_goal(status=complete) that ends the turn
         // with tool-calls must force a final text summary, not climb toward
@@ -1465,6 +1469,7 @@ export namespace SessionPrompt {
         if (goalForce.action === "force_text") {
           armForceTextOnlyTurn("goal_complete")
           consecutiveToolOnlyTurns = 0
+          consecutiveToolCallingTurns = 0
           toolOnlyNudges = 0
           consecutiveAxEngineReadOnlyTurns = 0
           axEngineReadOnlyNudged = false
@@ -1483,7 +1488,18 @@ export namespace SessionPrompt {
           continue
         }
 
-        consecutiveToolOnlyTurns += 1
+        if (isMutatingProgressTurn(currentParts)) {
+          recentMutatingTurnsRemaining = 5
+        } else if (recentMutatingTurnsRemaining > 0) {
+          recentMutatingTurnsRemaining -= 1
+        }
+        consecutiveToolCallingTurns += 1
+        if (isNoProgressToolTurn(currentParts, priorToolSignatures, sessionToolCycleSignatures(sessionID))) {
+          consecutiveToolOnlyTurns += 1
+        } else {
+          consecutiveToolOnlyTurns = 0
+          toolOnlyNudges = 0
+        }
         const axEngineReadOnlyTurn =
           model.providerID === AX_ENGINE_PROVIDER_ID && isReadOnlyExplorationTurn(currentParts)
         if (axEngineReadOnlyTurn) {
@@ -1548,12 +1564,11 @@ export namespace SessionPrompt {
           finalNudgeThreshold: toolOnlyFinalNudgeThreshold,
           maxToolOnlyTurns,
           finalCheckpointHits: toolOnlyFinalCheckpointHits,
+          recentProgress: recentMutatingTurnsRemaining > 0,
+          forcedWrapUps: toolOnlyFinalCheckpointHits,
         })
         if (toolOnlyTransition.action === "nudge") {
-          // See the toolOnlyFinalCheckpointHits declaration above: a repeat
-          // final checkpoint means the model already spent its one advisory
-          // grace period and resumed tool-only calling anyway, so this time
-          // force the next turn to be text-only instead of nudging again.
+          const repeatForced = toolOnlyTransition.forced && toolOnlyFinalCheckpointHits > 0
           if (toolOnlyTransition.final) toolOnlyFinalCheckpointHits += 1
           if (toolOnlyTransition.forced) armForceTextOnlyTurn("tool_only_breaker")
           log.info("tool-only turn nudge", {
@@ -1563,9 +1578,8 @@ export namespace SessionPrompt {
             consecutiveToolOnlyTurns,
             finalNudge: toolOnlyTransition.final,
             forced: toolOnlyTransition.forced,
+            recentProgress: recentMutatingTurnsRemaining > 0,
           })
-          // msgs already holds the loop history (and any this-step appends);
-          // continuation only needs last-user agent/model metadata.
           await createAutonomousTextContinuation({
             sessionID,
             messages: msgs,
@@ -1574,6 +1588,7 @@ export namespace SessionPrompt {
               maxToolOnlyTurns,
               final: toolOnlyTransition.final,
               forced: toolOnlyTransition.forced,
+              repeat: repeatForced,
             }),
           })
           toolOnlyNudges += 1
@@ -1588,25 +1603,41 @@ export namespace SessionPrompt {
             consecutiveToolOnlyTurns,
             maxToolOnlyTurns,
           })
-          // This circuit breaker runs in both supervised and autonomous
-          // sessions, so the message must not claim "autonomous mode", and
-          // the reminder count is derived rather than hard-coded so it stays
-          // truthful if the thresholds are ever retuned.
-          const reminderClause =
-            toolOnlyNudges > 0
-              ? `, despite ${toolOnlyNudges} checkpoint reminder${toolOnlyNudges === 1 ? "" : "s"}`
-              : ""
           await publishPromptFailure({
             sessionID,
             assistant: processor.message,
-            message:
-              `Agent loop stopped: ${consecutiveToolOnlyTurns} consecutive turns each ended in further ` +
-              `tool calls without a completed text response${reminderClause}. ` +
-              `The loop was halted as a circuit breaker; work done so far is preserved in the transcript. ` +
-              `Resume with a more specific request, or break the task into smaller steps.`,
+            message: toolOnlyStopMessage({ consecutiveToolOnlyTurns, toolOnlyNudges }),
           })
           reason = "stalled"
           break
+        }
+        const callingBackstop = toolCallingBackstopDecision({
+          consecutiveToolCallingTurns,
+          maxToolOnlyTurns,
+        })
+        if (callingBackstop.action === "force_wrap") {
+          const repeatForced = toolOnlyFinalCheckpointHits > 0
+          toolOnlyFinalCheckpointHits += 1
+          armForceTextOnlyTurn("tool_only_breaker")
+          log.info("tool-calling backstop wrap-up", {
+            command: "session.prompt.loop",
+            status: "force_text",
+            sessionID,
+            consecutiveToolCallingTurns,
+            maxToolOnlyTurns,
+          })
+          await createAutonomousTextContinuation({
+            sessionID,
+            messages: msgs,
+            text: AutonomousContinuationPrompt.toolOnlyTurnNudge({
+              consecutiveToolOnlyTurns: consecutiveToolCallingTurns,
+              maxToolOnlyTurns,
+              final: true,
+              forced: true,
+              repeat: repeatForced,
+            }),
+          })
+          continue
         }
       }
 

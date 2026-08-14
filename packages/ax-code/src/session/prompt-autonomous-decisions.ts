@@ -265,6 +265,7 @@ type ToolActivityPart = {
   state?: {
     status?: string
     output?: string
+    input?: unknown
   }
 }
 
@@ -273,6 +274,64 @@ type ToolActivityPart = {
 // turn has no persisted patch part, so shell-based edits do not trip the
 // local-model convergence guard.
 const READ_ONLY_EXPLORATION_TOOLS = new Set(["bash", "bash_output", "kill_shell", "list", "read", "glob", "grep"])
+const MUTATING_PROGRESS_TOOLS = new Set(["edit", "write", "multiedit", "apply_patch", "todowrite"])
+
+/** True when this turn persisted a source change or completed a mutating tool. */
+export function isMutatingProgressTurn(parts: readonly ToolActivityPart[] | undefined): boolean {
+  if (!parts?.length) return false
+  if (parts.some((part) => part.type === "patch")) return true
+  return parts.some(
+    (part) =>
+      part.type === "tool" &&
+      MUTATING_PROGRESS_TOOLS.has(part.tool ?? "") &&
+      part.state?.status === "completed",
+  )
+}
+
+export function toolSignaturesFromParts(parts: readonly ToolActivityPart[] | undefined): string[] {
+  if (!parts?.length) return []
+  const signatures: string[] = []
+  for (const part of parts) {
+    if (part.type !== "tool" || !part.tool) continue
+    signatures.push(`${part.tool}:${canonicalizePartInput(part.state?.input)}`)
+  }
+  return signatures
+}
+
+/**
+ * No-progress = every tool this turn is read-only inspection AND the
+ * run-scoped ring gained no new unique signatures (the same calls already
+ * appeared). Prefer `afterSignatures` from the ring so canonicalization
+ * matches the processor. Novel reads and any mutation are progress.
+ */
+export function isNoProgressToolTurn(
+  parts: readonly ToolActivityPart[] | undefined,
+  priorSignatures: ReadonlySet<string>,
+  afterSignatures?: ReadonlySet<string>,
+): boolean {
+  if (!isReadOnlyExplorationTurn(parts)) return false
+  if (afterSignatures) {
+    if (afterSignatures.size === 0) return false
+    for (const signature of afterSignatures) {
+      if (!priorSignatures.has(signature)) return false
+    }
+    return true
+  }
+  const signatures = toolSignaturesFromParts(parts)
+  if (signatures.length === 0) return false
+  return signatures.every((signature) => priorSignatures.has(signature))
+}
+
+function canonicalizePartInput(input: unknown): string {
+  if (typeof input === "string") return input.length > 4096 ? input.slice(0, 4096) : input
+  try {
+    const serialized = JSON.stringify(input)
+    if (serialized === undefined) return String(input)
+    return serialized.length > 4096 ? serialized.slice(0, 4096) : serialized
+  } catch {
+    return "[unprintable]"
+  }
+}
 
 export function isReadOnlyExplorationTurn(parts: readonly ToolActivityPart[] | undefined): boolean {
   if (!parts?.length || parts.some((part) => part.type === "patch")) return false
@@ -378,24 +437,15 @@ export function unexecutableToolTextRecoveryDecision(input: {
   return { action: "recover" }
 }
 
-// Circuit breaker for streaks of turns that end in further tool calls without
-// a completed text response. Two checkpoints (a synthesis nudge, then a final
-// warning) fire before the hard stop. `consecutiveToolOnlyTurns` is the streak
-// length INCLUDING the current turn; `toolOnlyNudges` is how many checkpoints
-// have already fired this streak. The caller resets both whenever a turn
-// finishes with a text response.
+// Stall breaker for consecutive *no-progress* tool-calling turns (read-only
+// repeats). Two checkpoints fire before a hard stop. The caller increments
+// `consecutiveToolOnlyTurns` only on no-progress turns and resets it on
+// mutations, novel tool signatures, or a finish that is not tool-calls.
 //
-// That per-streak reset is exactly what makes the final checkpoint gameable:
-// a model can produce one completed-text turn (even a token acknowledgment)
-// right after the final checkpoint, then resume a fresh tool-only streak with
-// a full new budget, indefinitely. `finalCheckpointHits` — a count that is
-// NOT reset alongside the streak — tracks how many times the final checkpoint
-// has fired this run. The first time is advisory (`forced: false`, matching
-// prior behavior: the model gets its existing buffer up to maxToolOnlyTurns
-// to wrap up on its own). Every time after that means the model already spent
-// its grace period and resumed tool-only calling anyway, so the decision
-// becomes `forced: true` — the caller strips tools from the very next
-// request instead of trusting another advisory nudge (see #340).
+// The first FINAL checkpoint is forced (`toolChoice: none`) so a single long
+// streak can land a summary. `finalCheckpointHits` / `forcedWrapUps` still
+// bound repeated leniency after a wrap-up (#340): after two forced wrap-ups
+// with no recent mutations, the hard stop may fire.
 export function toolOnlyTurnDecision(input: {
   consecutiveToolOnlyTurns: number
   toolOnlyNudges: number
@@ -403,17 +453,50 @@ export function toolOnlyTurnDecision(input: {
   finalNudgeThreshold: number
   maxToolOnlyTurns: number
   finalCheckpointHits: number
+  /** Mutation in the last few turns — do not hard-fail after productive work. */
+  recentProgress?: boolean
+  /** Forced wrap-ups already issued this run (usually `finalCheckpointHits`). */
+  forcedWrapUps?: number
 }): ToolOnlyTurnDecision {
   const thresholds = [input.nudgeThreshold, input.finalNudgeThreshold]
   const nextThreshold = thresholds[input.toolOnlyNudges]
   if (nextThreshold !== undefined && input.consecutiveToolOnlyTurns >= nextThreshold) {
     const final = input.toolOnlyNudges === thresholds.length - 1
-    return { action: "nudge", final, forced: final && input.finalCheckpointHits > 0 }
+    return { action: "nudge", final, forced: final }
   }
   if (input.consecutiveToolOnlyTurns > input.maxToolOnlyTurns) {
+    const wrapUps = input.forcedWrapUps ?? input.finalCheckpointHits
+    if (input.recentProgress || wrapUps < 2) {
+      return { action: "nudge", final: true, forced: true }
+    }
     return { action: "stop" }
   }
   return { action: "ignore" }
+}
+
+/** Absolute tool-calling cap: force a wrap-up, never a hard fail. */
+export function toolCallingBackstopDecision(input: {
+  consecutiveToolCallingTurns: number
+  maxToolOnlyTurns: number
+}): { action: "ignore" } | { action: "force_wrap" } {
+  if (input.consecutiveToolCallingTurns > input.maxToolOnlyTurns) return { action: "force_wrap" }
+  return { action: "ignore" }
+}
+
+export function toolOnlyStopMessage(input: {
+  consecutiveToolOnlyTurns: number
+  toolOnlyNudges: number
+}): string {
+  const reminderClause =
+    input.toolOnlyNudges > 0
+      ? `, despite ${input.toolOnlyNudges} checkpoint reminder${input.toolOnlyNudges === 1 ? "" : "s"}`
+      : ""
+  return (
+    `Agent loop stopped: ${input.consecutiveToolOnlyTurns} consecutive no-progress tool-calling turns` +
+    `${reminderClause}. ` +
+    `The loop was halted as a circuit breaker after forced wrap-up attempts; work done so far is preserved in the transcript. ` +
+    `Resume with a more specific request, or break the task into smaller steps.`
+  )
 }
 
 type GoalCompleteToolPart = {

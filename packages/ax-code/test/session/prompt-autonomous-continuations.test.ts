@@ -180,14 +180,12 @@ describe("autonomous continuation prompt builders", () => {
       maxToolOnlyTurns: 35,
     })
 
-    expect(text).toContain("last 15 turns each ended in further tool calls")
-    expect(text).toContain("stops automatically after 35 consecutive")
-    expect(text).toContain("continue the remaining work after the synthesis")
-    expect(text).toContain("resets this counter")
-    // The streak only proves the finish reason was tool-calls; the model may
-    // have produced narration text, and it may be doing legitimate
-    // implementation work rather than exploring.
+    expect(text).toContain("last 15 turns ended with further tool calls")
+    expect(text).toContain("does not reset this counter")
+    expect(text).toContain("may continue the remaining work after the synthesis")
+    expect(text).not.toContain("without a completed text response")
     expect(text).not.toContain("without producing any text response")
+    expect(text).not.toContain("completing a turn with a text")
     expect(text).not.toContain("Stop broad exploration now")
   })
 
@@ -199,8 +197,8 @@ describe("autonomous continuation prompt builders", () => {
     })
 
     expect(text).toContain("FINAL checkpoint")
-    expect(text).toContain("end your turn with a text response")
-    expect(text).not.toContain("resets this counter")
+    expect(text).toContain("Tools will be disabled on the next turn")
+    expect(text).not.toContain("completing a turn with a text")
   })
 
   test("forced tool-only nudge tells the model tools are disabled this turn", () => {
@@ -211,9 +209,22 @@ describe("autonomous continuation prompt builders", () => {
       forced: true,
     })
 
-    expect(text).toContain("already received one final checkpoint warning")
     expect(text).toContain("Tools are disabled for your next turn")
+    expect(text).not.toContain("already received a forced wrap-up")
     expect(text).not.toContain("FINAL checkpoint before that stop")
+  })
+
+  test("repeat forced wrap-up mentions the earlier attempt", () => {
+    const text = AutonomousContinuationPrompt.toolOnlyTurnNudge({
+      consecutiveToolOnlyTurns: 36,
+      maxToolOnlyTurns: 35,
+      final: true,
+      forced: true,
+      repeat: true,
+    })
+
+    expect(text).toContain("already received a forced wrap-up")
+    expect(text).toContain("Tools are disabled for your next turn")
   })
 
   test("builds pending-todo continuation guidance with stagnation detail", () => {
