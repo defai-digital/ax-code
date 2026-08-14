@@ -3,11 +3,11 @@ import { footerToggleLabel } from "../../../src/cli/cmd/tui/component/prompt/foo
 
 describe("footerToggleLabel", () => {
   test("keeps active and inactive labels the same width", () => {
-    const active = footerToggleLabel("Autonomous", true)
-    const inactive = footerToggleLabel("Autonomous", false)
+    const active = footerToggleLabel("Auto", true)
+    const inactive = footerToggleLabel("Auto", false)
 
-    expect(active).toBe(" ● Autonomous ")
-    expect(inactive).toBe(" ○ Autonomous ")
+    expect(active).toBe(" ● Auto ")
+    expect(inactive).toBe(" ○ Auto ")
     expect(active.length).toBe(inactive.length)
   })
 

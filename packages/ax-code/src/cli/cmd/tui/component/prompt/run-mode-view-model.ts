@@ -69,10 +69,10 @@ export function runModeLabel(mode: RunMode): string {
     case "none":
       return "Manual"
     case "auto":
-      return "Autonomous"
+      return "Auto"
     case "super-long":
-      // During deprecation, show as "Autonomous (Long-Run)" to clarify semantics
-      return "Autonomous (Long-Run)"
+      // During deprecation, show as "Auto (Long-Run)" to clarify semantics
+      return "Auto (Long-Run)"
   }
 }
 

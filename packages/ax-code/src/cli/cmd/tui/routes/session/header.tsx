@@ -222,7 +222,7 @@ export function Header() {
                 <box flexDirection="row" gap={1} paddingLeft={1} paddingRight={1} flexShrink={0}>
                   <Spinner color={chipColor()}>
                     <span style={{ fg: chipColor(), bold: true }}>
-                      {sync.data.autonomous ? "◆ AUTONOMOUS" : "◆ WORKING"}
+                      {sync.data.autonomous ? "◆ AUTO" : "◆ WORKING"}
                     </span>
                     <span style={{ fg: theme.textMuted }}>
                       {" "}

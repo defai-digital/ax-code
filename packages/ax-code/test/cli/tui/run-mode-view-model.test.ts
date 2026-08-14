@@ -38,9 +38,9 @@ describe("nextRunMode", () => {
 describe("runModeLabel", () => {
   test("labels every mode", () => {
     expect(runModeLabel("none")).toBe("Manual")
-    expect(runModeLabel("auto")).toBe("Autonomous")
-    // During deprecation, super-long shows as "Autonomous (Long-Run)"
-    expect(runModeLabel("super-long")).toBe("Autonomous (Long-Run)")
+    expect(runModeLabel("auto")).toBe("Auto")
+    // During deprecation, super-long shows as "Auto (Long-Run)"
+    expect(runModeLabel("super-long")).toBe("Auto (Long-Run)")
   })
 })
 
