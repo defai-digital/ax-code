@@ -316,6 +316,36 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
       expect(ProviderTransform.topP(model)).toBe(0.95)
     }
   })
+
+  test("detects Ornith from an aliased endpoint URL without matching ornithology hostnames", () => {
+    const aliased = {
+      id: "custom/coding-model",
+      providerID: ProviderID.make("custom"),
+      api: {
+        id: "coding-model",
+        url: "https://gateway.example/v1/models/Ornith-1.0-35B",
+        npm: "@ai-sdk/openai-compatible",
+      },
+    } as any
+    const unrelated = {
+      ...aliased,
+      api: { ...aliased.api, url: "https://ornithology.example/v1" },
+    }
+
+    expect(ProviderTransform.isOrnithFamily(aliased)).toBe(true)
+    expect(ProviderTransform.isOrnithFamily(unrelated)).toBe(false)
+  })
+
+  test("does not advertise unsupported reasoning-effort variants for Ornith", () => {
+    const model = {
+      id: "ax-engine/ornith-35b",
+      providerID: ProviderID.make("ax-engine"),
+      api: { id: "ornith-35b", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
+      capabilities: { reasoning: true },
+    } as any
+
+    expect(ProviderTransform.variants(model)).toEqual({})
+  })
 })
 
 describe("ProviderTransform.message - applyCaching", () => {

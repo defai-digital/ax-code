@@ -148,6 +148,19 @@ describe("Model Capability Registry", () => {
       expect(caps.contextWindow).toBe(32_000)
       expect(caps.thinking).toBe("blocked")
     })
+
+    it("returns explicit Ornith 35B capabilities for AX Engine ids", () => {
+      for (const id of ["ornith-35b", "AX-Ornith-1.0-35B-MLX-AXQ-4bit"]) {
+        const caps = getModelCapabilities(id, "ax-engine")
+        expect(caps.contextWindow).toBe(262_144)
+        expect(caps.thinking).toBe("supported")
+        expect(caps.preserveThinking).toBe("supported")
+        expect(caps.promptCache).toBe("experimental")
+        expect(caps.toolCalling).toBe("supported")
+        expect(caps.structuredOutput).toBe("supported")
+        expect(caps.rateLimitTier).toBe("unlimited")
+      }
+    })
   })
 
   describe("supportsLongAgent", () => {
@@ -222,6 +235,10 @@ describe("Model Capability Registry", () => {
     it("should return true for GLM 5.x on an unknown provider (fallback entry)", () => {
       expect(supportsLongAgent("glm-5.2", "some-gateway")).toBe(true)
     })
+
+    it("supports the long-agent profile for local Ornith 35B", () => {
+      expect(supportsLongAgent("ornith-35b", "ax-engine")).toBe(true)
+    })
   })
 
   describe("getContextPackBudget", () => {
@@ -254,6 +271,10 @@ describe("Model Capability Registry", () => {
 
     it("should return 128k for GLM 5.x", () => {
       expect(getContextPackBudget("glm-5.2", "zai-coding-plan")).toBe(128_000)
+    })
+
+    it("should return 128k for local Ornith 35B", () => {
+      expect(getContextPackBudget("ornith-35b", "ax-engine")).toBe(128_000)
     })
   })
 

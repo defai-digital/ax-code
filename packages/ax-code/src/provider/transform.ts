@@ -372,8 +372,19 @@ export namespace ProviderTransform {
     return ["api.kimi.com", "api.moonshot.ai", "api.moonshot.cn", "api.moonshotai.cn"].some((host) => url.includes(host))
   }
 
-  export function isOrnithFamily(model: { id?: string; providerID: string; api: { id: string } }): boolean {
-    return [model.providerID, model.api.id, model.id].some((id) => id?.toLowerCase().includes("ornith"))
+  export function isOrnithFamily(model: {
+    id?: string
+    providerID: string
+    api: { id: string; url?: string }
+  }): boolean {
+    if ([model.providerID, model.api.id, model.id].some((id) => id?.toLowerCase().includes("ornith"))) return true
+
+    // Some OpenAI-compatible gateways expose an alias as the model id while
+    // retaining the upstream family in the route URL. Keep this secondary
+    // signal boundary-aware so a hostname such as `ornithology.example` does
+    // not accidentally select Ornith-specific request shaping.
+    const url = (model.api.url ?? "").toLowerCase()
+    return /(?:^|[/?#&=._:-])ornith(?:$|[/?#&=._:-])/.test(url)
   }
 
   // Official Qwen 3.x ChatML (and Ornith / Holo3 fine-tunes) reject any
@@ -698,6 +709,11 @@ export namespace ProviderTransform {
 
     if (!model.capabilities.reasoning) return {}
 
+    // Ornith exposes a binary thinking switch through its chat template, not
+    // OpenAI reasoning-effort levels. Avoid advertising low/medium/high
+    // variants that an OpenAI-compatible vLLM/AX Engine endpoint may reject.
+    if (isOrnithFamily(model)) return {}
+
     const id = model.id.toLowerCase()
 
     // GLM 5.2 / MiniMax M3 / Kimi-on-Anthropic have documented effort knobs.
@@ -896,7 +912,9 @@ export namespace ProviderTransform {
 
     // Ornith hub jinja (35B local and 397B-FP8 on PAI/vLLM) defaults thinking
     // on via chat_template_kwargs. Send the switch explicitly so a generic
-    // Qwen server default cannot close the think channel.
+    // Qwen server default cannot close the think channel. This request-body
+    // extension is specific to @ai-sdk/openai-compatible; a future Ornith
+    // transport must add its native equivalent instead of relying on this path.
     if (isOrnithFamily(input.model) && input.model.api.npm === "@ai-sdk/openai-compatible") {
       result["chat_template_kwargs"] = {
         enable_thinking: true,

@@ -408,6 +408,25 @@ const MODEL_REGISTRY: ModelRegistration[] = [
     },
   },
 
+  // Ornith 1.0 35B — managed AX Engine build. The local catalog uses the
+  // short `ornith-35b` id while external AX Engine servers may advertise the
+  // full upstream/AXQuant name, so the pattern accepts both forms. Prefix
+  // caching is runtime-managed by AX Engine and remains experimental here.
+  {
+    pattern: /ornith(?:[\.\-_]?1[\.\-_]?0)?[\.\-_]?35b/i,
+    providerIds: ["ax-engine"],
+    capabilities: {
+      contextWindow: 262_144,
+      thinking: "supported",
+      preserveThinking: "supported",
+      promptCache: "experimental",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "unlimited",
+    },
+  },
+
   // Dedicated private GPU endpoints (vLLM / SGLang / TGI). Discovered
   // max_model_len can be 1M+; treat the whole family as large-context and
   // unpaced so unknown model IDs do not collapse to DEFAULT_CAPABILITIES.

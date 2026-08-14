@@ -1,12 +1,15 @@
 export const AX_ENGINE_PROVIDER_ID = "ax-engine"
 export const AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID = "qwen3.6-27b-axq-6bit"
+export const AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID = "ornith-35b"
 export const AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID = "qwen3.5-9b-axq-6bit"
 export const AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID = "qwen3-coder-next-axq-6bit"
 export const AX_ENGINE_DISPLAY_NAME = "AX Engine (Local)"
 export const AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID = "qwen3.6-27b-axq"
+export const AX_ENGINE_ORNITH_35B_AXQ_API_MODEL_ID = "ornith-35b"
 export const AX_ENGINE_QWEN35_9B_AXQ_API_MODEL_ID = "qwen3.5-9b-axq"
 export const AX_ENGINE_QWEN3_CODER_NEXT_AXQ_API_MODEL_ID = "qwen3-coder-next-axq"
 export const AX_ENGINE_QWEN36_27B_AXQ_MODEL_DISPLAY_NAME = "Qwen3.6-27B AXQ 6-bit (Local MLX Auto)"
+export const AX_ENGINE_ORNITH_35B_AXQ_MODEL_DISPLAY_NAME = "Ornith-1.0-35B AXQ 4-bit (Local MLX)"
 export const AX_ENGINE_QWEN35_9B_AXQ_MODEL_DISPLAY_NAME = "Qwen3.5-9B AXQ 6-bit (Local MLX Auto)"
 export const AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_DISPLAY_NAME = "Qwen3-Coder-Next AXQ 6-bit (Local MLX)"
 // Keep the client default aligned with ax-engine-server. Managed lifecycle may
@@ -80,12 +83,13 @@ export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease | undefined = undef
 // prefers the monorepo source launcher over Homebrew/PATH installs).
 export const AX_ENGINE_MODEL_IDS = [
   AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
+  AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID,
   AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID,
   AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID,
 ] as const
 export type AxEngineModelID = (typeof AX_ENGINE_MODEL_IDS)[number]
 
-export const AX_ENGINE_QUANTIZATION_IDS = ["mlx6bit"] as const
+export const AX_ENGINE_QUANTIZATION_IDS = ["mlx6bit", "mlx4bit"] as const
 export type AxEngineQuantization = (typeof AX_ENGINE_QUANTIZATION_IDS)[number]
 
 /** Absolute source path (repo-relative) for the managed model catalog contract. */
@@ -100,6 +104,8 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
     apiModelID: AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID,
     name: AX_ENGINE_QWEN36_27B_AXQ_MODEL_DISPLAY_NAME,
     defaultQuantization: "mlx6bit",
+    releaseDate: "2026-06-14",
+    reasoning: false,
     toolcall: true,
     minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
     contextTokens: 65_536,
@@ -116,6 +122,33 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
       },
     },
   },
+  // Development AXQuant 4-bit Ornith pack. The source model advertises a
+  // 262,144-token window and native Qwen-style reasoning/tool calls. It has no
+  // MTP sidecar, so AX Engine uses the direct decode path.
+  [AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID]: {
+    id: AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID,
+    apiModelID: AX_ENGINE_ORNITH_35B_AXQ_API_MODEL_ID,
+    name: AX_ENGINE_ORNITH_35B_AXQ_MODEL_DISPLAY_NAME,
+    defaultQuantization: "mlx4bit",
+    releaseDate: "2026-08-13",
+    reasoning: true,
+    toolcall: true,
+    minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
+    contextTokens: 262_144,
+    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
+    quantizations: {
+      mlx4bit: {
+        hfRepo: "AutomatosX/AX-Ornith-1.0-35B-MLX-AXQ-4bit",
+        downloadMode: "direct",
+        packageMarker: undefined,
+        directFallback: true,
+        mtpSource: "Direct decode AXQuant Ornith coding model (no MTP package)",
+        // ~21.5 GB complete download; keep headroom for the HF snapshot and
+        // temporary files created while AX Engine prepares the model.
+        minDiskBytes: 32 * 1024 ** 3,
+      },
+    },
+  },
   // Lighter AutomatosX AXQ 9B pack with MTP sidecar. Direct HF download; hub
   // ships axquant_mtp_sidecar_manifest.json but not model-manifest.json (ax-engine
   // emits the native manifest after download).
@@ -124,6 +157,8 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
     apiModelID: AX_ENGINE_QWEN35_9B_AXQ_API_MODEL_ID,
     name: AX_ENGINE_QWEN35_9B_AXQ_MODEL_DISPLAY_NAME,
     defaultQuantization: "mlx6bit",
+    releaseDate: "2026-06-14",
+    reasoning: false,
     toolcall: true,
     minMemoryBytes: 0,
     contextTokens: 32_768,
@@ -148,6 +183,8 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
     apiModelID: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_API_MODEL_ID,
     name: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_DISPLAY_NAME,
     defaultQuantization: "mlx6bit",
+    releaseDate: "2026-06-14",
+    reasoning: false,
     toolcall: true,
     minMemoryBytes: AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES,
     contextTokens: 16_384,

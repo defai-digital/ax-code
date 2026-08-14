@@ -18,6 +18,7 @@ import { getAxEngineDoctorCheck } from "../../src/cli/cmd/doctor"
 import { shouldShowProviderInList } from "../../src/server/routes/provider"
 import {
   AX_ENGINE_ERROR,
+  AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID,
   AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID,
   AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
   AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID,
@@ -283,6 +284,7 @@ describe("ax-engine model cache", () => {
   test("normalizes unknown quantization to the conservative default", () => {
     expect(normalizeQuantization("mlx6bit")).toBe("mlx6bit")
     expect(normalizeQuantization("mlx4bit")).toBe("mlx6bit")
+    expect(normalizeQuantization("mlx4bit", AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID)).toBe("mlx4bit")
     expect(normalizeQuantization("surprise")).toBe("mlx6bit")
     expect(normalizeQuantization("toString")).toBe("mlx6bit")
     expect(normalizeQuantization("constructor")).toBe("mlx6bit")
@@ -1091,10 +1093,16 @@ describe("ax-engine provider integration", () => {
     expect(provider).toBeDefined()
     expect(Object.keys(provider.models)).toEqual([
       AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
+      AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID,
       AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID,
       AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID,
     ])
-    expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([65_536, 32_768, 16_384])
+    expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([
+      65_536,
+      262_144,
+      32_768,
+      16_384,
+    ])
     expect(provider.models[AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID]).toMatchObject({
       name: "Qwen3.6-27B AXQ 6-bit (Local MLX Auto)",
       tool_call: true,
@@ -1102,6 +1110,20 @@ describe("ax-engine provider integration", () => {
       options: {
         modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
         quantization: "mlx6bit",
+        minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
+      },
+      status: "beta",
+      experimental: { localRuntime: "ax-engine" },
+    })
+    expect(provider.models[AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID]).toMatchObject({
+      name: "Ornith-1.0-35B AXQ 4-bit (Local MLX)",
+      family: AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID,
+      reasoning: true,
+      tool_call: true,
+      limit: { context: 262_144, input: 260_096, output: 2_048 },
+      options: {
+        modelID: AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID,
+        quantization: "mlx4bit",
         minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
       },
       status: "beta",

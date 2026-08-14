@@ -193,7 +193,7 @@ export function axEngineLoader(): CustomLoader {
         api: { id: def.apiModelID, url: modelBaseURL, npm: "@ai-sdk/openai-compatible" },
         capabilities: {
           temperature: true,
-          reasoning: false,
+          reasoning: def.reasoning,
           attachment: false,
           toolcall: def.toolcall,
           input: { text: true, audio: false, image: false, video: false, pdf: false },
@@ -212,7 +212,7 @@ export function axEngineLoader(): CustomLoader {
           quantization: def.defaultQuantization,
         },
         headers: {},
-        release_date: "",
+        release_date: def.releaseDate,
         variants: {},
       }
       if (live) applyLiveContract(model, live)

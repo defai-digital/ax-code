@@ -81,6 +81,13 @@ describe("session.system", () => {
     } as any)
     expect(packed).toEqual([PROMPT_ORNITH, PROMPT_CRAFT])
 
+    const aliasedEndpoint = SystemPrompt.provider({
+      id: "custom/coding-model",
+      providerID: "custom",
+      api: { id: "coding-model", url: "https://gateway.example/models/Ornith-1.0-35B/v1" },
+    } as any)
+    expect(aliasedEndpoint).toEqual([PROMPT_ORNITH, PROMPT_CRAFT])
+
     const localQwen = SystemPrompt.provider({
       id: "ax-engine/qwen3.6-27b",
       providerID: "ax-engine",
