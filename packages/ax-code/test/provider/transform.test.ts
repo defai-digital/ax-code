@@ -248,7 +248,10 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
     for (const [id, apiID] of [
       ["alibaba-pai/Qwen3.6-35B-A3B-4bit", "Qwen3.6-35B-A3B-4bit"],
       ["alibaba-pai/qwen3.5-plus", "qwen3.5-plus"],
+      ["togetherai/qwen-3-7-max", "qwen-3-7-max"],
+      ["venice/qwen_3_5_max", "qwen_3_5_max"],
       ["ax-engine/holo3-35b", "holo3-35b"],
+      ["ax-engine/holo-3-35b", "holo-3-35b"],
     ]) {
       const result = ProviderTransform.message(
         prompt,
@@ -1688,6 +1691,45 @@ describe("ProviderTransform.variants", () => {
     })
   })
 
+  test("GLM 5.2 effort variants apply across every catalog spelling", () => {
+    // Dotted, dashed, dashless, underscore, p-form, and suffixed SKUs all
+    // denote GLM 5.2; none of them may silently lose the documented
+    // high/max effort knobs.
+    for (const id of [
+      "glm-5.2",
+      "glm-5-2",
+      "glm5.2",
+      "glm52",
+      "glm_5_2",
+      "glm-5p2",
+      "glm5p2",
+      "glm-5.2[1m]",
+      "glm-5.2-fast",
+      "glm-5.2:free",
+    ]) {
+      const model = createMockModel({
+        id: `togetherai/${id}`,
+        providerID: "togetherai",
+        api: { id, url: "https://api.together.xyz", npm: "@ai-sdk/openai-compatible" },
+      })
+      expect(ProviderTransform.variants(model), id).toEqual({
+        high: { reasoningEffort: "high" },
+        max: { reasoningEffort: "max" },
+      })
+    }
+  })
+
+  test("GLM versions other than 5.2 keep the family-wide empty variants", () => {
+    for (const id of ["glm-5.25", "glm-5.3", "glm-5"]) {
+      const model = createMockModel({
+        id: `togetherai/${id}`,
+        providerID: "togetherai",
+        api: { id, url: "https://api.together.xyz", npm: "@ai-sdk/openai-compatible" },
+      })
+      expect(ProviderTransform.variants(model), id).toEqual({})
+    }
+  })
+
   test("GLM 5.2 on z.ai and alibaba-pai stay variant-empty", () => {
     for (const [providerID, npm] of [
       ["zai-coding-plan", "@ai-sdk/openai-compatible"],
@@ -2400,6 +2442,32 @@ describe("ProviderTransform family matching", () => {
     expect(ProviderTransform.topP(qwen)).toBe(1)
     expect(ProviderTransform.topK(gemini)).toBe(64)
   })
+
+  test("digit-adjacent version spellings still match their family without a declared family", () => {
+    // Dashless catalogs spell the version where a separator would be:
+    // qwen3.7-max, glm5.2, gemini2.5pro. The family boundary must treat a
+    // digit after the family name as a version, not a different token.
+    for (const [id, expectedTemperature, expectedTopP, expectedTopK] of [
+      ["qwen3.7-max", 0.55, 1, undefined],
+      ["qwen-3-7-max", 0.55, 1, undefined],
+      ["glm5.2", 1.0, undefined, undefined],
+      ["glm-5-2", 1.0, undefined, undefined],
+      ["gemini2.5pro", 1.0, 0.95, 64],
+    ] as const) {
+      const model = createModel({ id, family: undefined, capabilities: { reasoning: false } })
+      expect(ProviderTransform.temperature(model), id).toBe(expectedTemperature)
+      expect(ProviderTransform.topP(model), id).toBe(expectedTopP)
+      expect(ProviderTransform.topK(model), id).toBe(expectedTopK)
+    }
+  })
+
+  test("letter-adjacent tokens are still not family matches", () => {
+    for (const id of ["qwencode", "glmzero", "geminiflash"]) {
+      const model = createModel({ id, family: undefined, capabilities: { reasoning: false } })
+      expect(ProviderTransform.temperature(model), id).toBeUndefined()
+      expect(ProviderTransform.topP(model), id).toBeUndefined()
+    }
+  })
 })
 
 describe("ProviderTransform.maxOutputTokens", () => {
@@ -2581,6 +2649,20 @@ describe("ProviderTransform.maxOutputTokens", () => {
       limit: { output: 0 },
     } as any
     expect(ProviderTransform.maxOutputTokens(model)).toBe(131_072)
+  })
+
+  test("dashless and dashed GLM 5 spellings inherit the 131 072 ceiling without a declared family", () => {
+    for (const id of ["glm5.2", "glm-5-2", "glm52", "glm_5_2"]) {
+      const model = {
+        id,
+        providerID: ProviderID.make("some-gateway"),
+        api: { id, npm: "@ai-sdk/openai-compatible" },
+        limit: { output: 131_072 },
+      } as any
+      expect(ProviderTransform.maxOutputTokens(model), id).toBe(131_072)
+      const missingMeta = { ...model, limit: { output: 0 } } as any
+      expect(ProviderTransform.maxOutputTokens(missingMeta), id).toBe(131_072)
+    }
   })
 
   test("versionless glm aliases fall back to the generic cap without output metadata", () => {

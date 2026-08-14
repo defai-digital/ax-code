@@ -73,9 +73,21 @@ describe("probesHaveGlmMajorVersion", () => {
     expect(probesHaveGlmMajorVersion(buildModelProbes("glm-4.7-flash"), 4)).toBe(true)
   })
 
+  test("resolves squashed and p-form spellings to the single-digit major", () => {
+    expect(probesHaveGlmMajorVersion(buildModelProbes("glm52"), 5)).toBe(true)
+    expect(probesHaveGlmMajorVersion(buildModelProbes("glm5p2"), 5)).toBe(true)
+    expect(probesHaveGlmMajorVersion(buildModelProbes("glm4"), 4)).toBe(true)
+  })
+
   test("returns false for versionless glm aliases", () => {
     expect(probesHaveGlmMajorVersion(buildModelProbes("glm-zero-preview"), 5)).toBe(false)
     expect(probesHaveGlmMajorVersion(buildModelProbes("my-glm", { family: "glm" }), 5)).toBe(false)
+  })
+
+  test("does not match glm embedded inside another token", () => {
+    expect(probesHaveGlmMajorVersion(buildModelProbes("chatglm-6"), 5)).toBe(false)
+    expect(probesHaveGlmMajorVersion(buildModelProbes("chatglm-6"), 6)).toBe(false)
+    expect(probesHaveGlmMajorVersion(buildModelProbes("someglm5"), 5)).toBe(false)
   })
 })
 
@@ -162,6 +174,16 @@ describe("isModelSupportedForProvider", () => {
 
   test("legacy / unversioned GLM SKUs are hidden", () => {
     for (const id of ["glm-z1-air", "glm-z1-airx", "glm-zero-preview", "glm-for-coding"]) {
+      expect(isModelSupportedForProvider("zhipuai", id)).toBe(false)
+    }
+  })
+
+  test("legacy chatglm SKUs are hidden — glm must be its own token", () => {
+    // Old ChatGLM open-API ids predate the glm-N.x naming scheme and cannot
+    // serve agent traffic; the word-boundary probe keeps them out while
+    // real glm-5.x SKUs stay offered.
+    for (const id of ["chatglm-6", "chatglm3-turbo", "chatglm2"]) {
+      expect(isModelSupportedForProvider("zai", id)).toBe(false)
       expect(isModelSupportedForProvider("zhipuai", id)).toBe(false)
     }
   })

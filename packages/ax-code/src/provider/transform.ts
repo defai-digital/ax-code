@@ -8,7 +8,7 @@ import { Flag } from "@/flag/flag"
 import { isRecord } from "@/util/record"
 import { buildSearchParameters, type LiveSearchConfig } from "./xai/server-tools"
 import { isQwen37MaxOrPlusModel } from "./model-capabilities"
-import { modelIdFinalSegment } from "./model-id"
+import { modelIdFinalSegment, normalizeProviderModelId } from "./model-id"
 import { buildModelProbes, probesHaveGlmMajorVersion } from "./model-support"
 import { isDedicatedPrivateGpuProviderID } from "./private-gpu/presets"
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
@@ -394,10 +394,11 @@ export namespace ProviderTransform {
     // signal boundary-aware so a hostname such as `ornithology.example` or
     // `ornith-api.example` does not accidentally select Ornith-specific
     // request shaping. Only match `ornith` in the URL path or query string,
-    // not in the hostname.
+    // not in the hostname. Case-insensitive: aliased routes commonly keep
+    // the upstream capitalization (`/models/Ornith-1.0-35B`).
     try {
       const parsed = new URL(model.api.url ?? "")
-      return /\/ornith(?:[\.\-_]|$)/.test(parsed.pathname) || /[?&]ornith=/i.test(parsed.search)
+      return /\/ornith(?:[\.\-_]|$)/i.test(parsed.pathname) || /[?&]ornith=/i.test(parsed.search)
     } catch {
       return false
     }
@@ -405,6 +406,8 @@ export namespace ProviderTransform {
 
   // Official Qwen 3.x ChatML (and Ornith / Holo3 fine-tunes) reject any
   // system turn that is not messages[0]. Same 400 Ornith-397B hit on PAI.
+  // Check the raw blob AND the separator-normalized form so dashed spellings
+  // (`qwen-3-7-max`, `holo-3`) trigger the collapse exactly like `qwen3.7-max`.
   function requiresSingleLeadingSystem(model: {
     id?: string
     providerID: string
@@ -413,7 +416,14 @@ export namespace ProviderTransform {
   }): boolean {
     if (isOrnithFamily(model)) return true
     const blob = `${model.id ?? ""} ${model.api.id} ${model.family ?? ""}`.toLowerCase()
-    return blob.includes("holo3") || blob.includes("holo-3") || blob.includes("qwen3")
+    const normalized = normalizeProviderModelId(blob)
+    return (
+      blob.includes("qwen3") ||
+      blob.includes("holo3") ||
+      blob.includes("holo-3") ||
+      normalized.includes("qwen3") ||
+      normalized.includes("holo3")
+    )
   }
 
   function shouldSetPromptCacheKey(input: {
@@ -483,13 +493,16 @@ export namespace ProviderTransform {
   // final model-id segment. This avoids substring matches from provider or
   // account prefixes such as `accounts/qwen-tools/...` while still matching
   // ids like `google/gemini-3-flash` and family aliases such as
-  // `gemini-flash`.
+  // `gemini-flash`. A digit directly after the family name counts as a
+  // boundary too: dashless catalog spellings like `qwen3.7-max` / `glm5.2`
+  // carry the version where a separator would be and must not lose their
+  // family-specific shaping (sampling, output caps, variant suppression).
   function hasFamily(model: Provider.Model, family: string): boolean {
     const matches = (value?: string) => {
       if (!value) return false
       if (!value.startsWith(family)) return false
       const next = value[family.length]
-      return next === undefined || /[^a-z0-9]/.test(next)
+      return next === undefined || /[^a-z]/.test(next)
     }
     const segment = model.id ? modelIdFinalSegment(model.id).toLowerCase() : undefined
     const declared = model.family?.toLowerCase()
@@ -497,9 +510,9 @@ export namespace ProviderTransform {
   }
 
   // "minimax-m2" family, including the dashless id spellings (minimax-m25 ==
-  // minimax-m2.5) some providers use. hasFamily rejects those because a digit
-  // immediately follows "minimax-m2", which would otherwise deny them the
-  // temperature/topP/topK tuning the dotted variants receive.
+  // minimax-m2.5) some providers use. hasFamily accepts those since digit
+  // adjacency became a version boundary; the regex fallback keeps matching
+  // explicit multi-digit forms regardless of how the family is declared.
   function isMinimaxM2(model: Provider.Model): boolean {
     if (hasFamily(model, "minimax-m2")) return true
     const segment = modelIdFinalSegment(model.id).toLowerCase()
@@ -518,9 +531,17 @@ export namespace ProviderTransform {
     return id.includes("minimax-m3")
   }
 
+  // GLM 5.2 across every catalog spelling: `glm-5.2`, `glm-5-2`, `glm5.2`,
+  // `glm52`, `glm_5_2`, and the p-form `glm-5p2`. A single boundary-aware
+  // pattern replaces the old substring token list, which missed the
+  // dashless/underscore spellings (silently dropping the documented
+  // high/xhigh effort knobs) and false-matched longer versions such as
+  // `glm-5.25`. Boundary before `glm` rejects unrelated tokens; the
+  // (?!\d) lookahead rejects `glm-5.25`-style major.minor extensions while
+  // still matching suffixed SKUs like `glm-5.2-fast` / `glm-5.2[1m]`.
   function isGlm52(model: Provider.Model): boolean {
-    const id = `${model.id} ${model.api.id}`.toLowerCase()
-    return ["glm-5.2", "glm-5-2", "glm-5p2"].some((token) => id.includes(token))
+    const blob = `${model.id} ${model.api.id}`.toLowerCase()
+    return /(?:^|[^a-z0-9])glm[._\-]?5(?:[._\-]?2|p2)(?!\d)/.test(blob)
   }
 
   function isZaiProvider(providerID: string): boolean {

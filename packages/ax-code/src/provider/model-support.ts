@@ -1,6 +1,9 @@
 import { modelIdFinalSegment } from "./model-id"
 
-const GLM_MAJOR_VERSION = /glm-?(\d+)/
+// Word boundary before `glm` so embedded tokens (chatglm-*, someglm*) don't
+// match, and a single captured digit so fully-squashed spellings ("glm52")
+// resolve to major 5 instead of 52.
+const GLM_MAJOR_VERSION = /(?:^|[^a-z0-9])glm-?(\d)/
 const GLM_HIDDEN_FINAL_SEGMENTS = new Set<string>([
   "glm-5.1",
   "glm-5-1",
@@ -77,7 +80,8 @@ function hasGlmMajorVersionAtLeastFive(probes: readonly string[]) {
 // Semantic GLM major-version probe (shared with transform.ts's output-token
 // gate). True when any probe spells a GLM with the exact given major version
 // — e.g. probesHaveGlmMajorVersion(probes, 5) matches "glm-5.2" / "glm5.2"
-// / "glm-5.1[1m]" but not "glm-4.7-flash" or versionless aliases.
+// / "glm52" / "glm-5.1[1m]" but not "glm-4.7-flash", versionless aliases,
+// or embedded tokens such as "chatglm-6".
 export function probesHaveGlmMajorVersion(probes: readonly string[], major: number): boolean {
   for (const probe of probes) {
     const m = probe.match(GLM_MAJOR_VERSION)
