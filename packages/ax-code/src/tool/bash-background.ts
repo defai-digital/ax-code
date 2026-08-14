@@ -301,29 +301,44 @@ export namespace BackgroundShell {
   ): Promise<{ info: Info; output: string; dropped: boolean } | undefined> {
     const entry = shells.get(id)
     if (!entry || entry.sessionID !== sessionID) return undefined
+    if (opts.signal?.aborted) throw abortError()
 
     const hasUnread = entry.readOffset < entry.buffer.length
-    if (entry.status === "running" && !hasUnread && opts.timeoutMs > 0 && !opts.signal?.aborted) {
-      await new Promise<void>((resolve) => {
+    if (entry.status === "running" && !hasUnread && opts.timeoutMs > 0) {
+      await new Promise<void>((resolve, reject) => {
         let settled = false
-        const settle = () => {
+        let timer: ReturnType<typeof setTimeout> | undefined
+        let unsub: (() => void) | undefined
+        const settle = (error?: Error) => {
           if (settled) return
           settled = true
-          clearTimeout(timer)
+          if (timer !== undefined) clearTimeout(timer)
           unsub?.()
-          opts.signal?.removeEventListener("abort", settle)
-          resolve()
+          opts.signal?.removeEventListener("abort", onAbort)
+          if (error) reject(error)
+          else resolve()
         }
-        const timer = setTimeout(settle, opts.timeoutMs)
-        const unsub = observe(id, sessionID, {
-          onOutput: () => settle(),
+        const onAbort = () => settle(abortError())
+        timer = setTimeout(() => settle(), opts.timeoutMs)
+        opts.signal?.addEventListener("abort", onAbort, { once: true })
+        // Ignore already-consumed observer backlog so a second wait is not
+        // woken by output read() already returned. Only future output/exit.
+        const unreadAtSubscribe = entry.buffer.length
+        unsub = observe(id, sessionID, {
+          onOutput: () => {
+            if (entry.buffer.length > unreadAtSubscribe || entry.readOffset < entry.buffer.length) settle()
+          },
           onExit: () => settle(),
         })
-        opts.signal?.addEventListener("abort", settle, { once: true })
       })
+      if (opts.signal?.aborted) throw abortError()
     }
 
     return read(id, sessionID)
+  }
+
+  function abortError() {
+    return new DOMException("Aborted", "AbortError")
   }
 
   /** Return output produced since the previous read() for this shell. */

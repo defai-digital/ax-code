@@ -2,6 +2,7 @@ import z from "zod"
 import { Tool } from "./tool"
 import DESCRIPTION from "./bash_output.txt"
 import { BackgroundShell } from "./bash-background"
+import { ToolNumber } from "./schema"
 
 function formatStatus(info: BackgroundShell.Info) {
   const exit = info.exitCode === null ? "" : ` (exit ${info.exitCode})`
@@ -21,14 +22,8 @@ export const BashOutputTool = Tool.define("bash_output", {
         "Optional regular expression; only output lines matching it are returned. Non-matching lines are still consumed and will not be returned by later calls.",
       )
       .optional(),
-    timeout_ms: z
-      .number()
-      .int()
-      .min(0)
-      .max(120_000)
-      .describe(
-        "How long to wait for new output or exit before returning. Default 30000. Use 0 for a non-blocking poll.",
-      )
+    timeout_ms: ToolNumber(z.number().int().min(0).max(120_000))
+      .describe("How long to wait for new output or exit before returning. Default 30000.")
       .optional(),
   }),
   async execute(params, ctx) {
@@ -81,7 +76,7 @@ export const BashOutputTool = Tool.define("bash_output", {
       }
     }
 
-    const stillIdle = result.info.status === "running" && output.length === 0
+    const stillIdle = result.info.status === "running" && result.output.length === 0
     const header = [
       `<status>${formatStatus(result.info)}</status>`,
       result.dropped ? "<notice>oldest unread output was dropped (buffer limit)</notice>" : "",

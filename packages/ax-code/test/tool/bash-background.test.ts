@@ -228,6 +228,47 @@ describe("bash run_in_background", () => {
     expect(() => BackgroundShell.assertCapacity("ses_bg_cap_other")).not.toThrow()
   })
 
+  test("waitAndRead does not hang after consuming initial output", async () => {
+    const proc = fakeProc()
+    const info = BackgroundShell.register({
+      sessionID: "ses_bg_wait_race",
+      command: "noop",
+      description: "fake",
+      proc,
+    })
+    ;(proc.stdout as unknown as EventEmitter).emit("data", Buffer.from("first\n"))
+    const first = await BackgroundShell.waitAndRead(info.id, "ses_bg_wait_race", { timeoutMs: 50 })
+    expect(first?.output).toContain("first")
+
+    const pending = BackgroundShell.waitAndRead(info.id, "ses_bg_wait_race", { timeoutMs: 2_000 })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    ;(proc.stdout as unknown as EventEmitter).emit("data", Buffer.from("second\n"))
+    const second = await pending
+    expect(second?.output).toContain("second")
+    expect(second?.output).not.toContain("first")
+  })
+
+  test("waitAndRead abort rejects without consuming later output", async () => {
+    const proc = fakeProc()
+    const info = BackgroundShell.register({
+      sessionID: "ses_bg_wait_abort",
+      command: "noop",
+      description: "fake",
+      proc,
+    })
+    const controller = new AbortController()
+    const pending = BackgroundShell.waitAndRead(info.id, "ses_bg_wait_abort", {
+      timeoutMs: 5_000,
+      signal: controller.signal,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" })
+    ;(proc.stdout as unknown as EventEmitter).emit("data", Buffer.from("after-abort\n"))
+    const later = BackgroundShell.read(info.id, "ses_bg_wait_abort")
+    expect(later?.output).toContain("after-abort")
+  })
+
   test("multi-byte UTF-8 characters split across chunks are not corrupted", () => {
     const proc = fakeProc()
     const info = BackgroundShell.register({ sessionID: "ses_bg_utf8", command: "noop", description: "fake", proc })
