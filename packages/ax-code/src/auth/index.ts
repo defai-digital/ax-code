@@ -257,6 +257,12 @@ export namespace Auth {
   // on the auth lock during a fresh install.
   let allPending: Promise<Record<string, Info>> | undefined
 
+  // Provider IDs whose stored credentials failed to decrypt on the most recent
+  // read. Kept so callers (ensemble tools, provider status surfaces) can tell
+  // "no credential" apart from "credential present but unrecoverable" instead
+  // of reporting an authed provider as simply unknown.
+  let lastDecryptionFailures: readonly string[] = []
+
   export const AuthError = NamedError.create(
     "AuthError",
     z.object({
@@ -310,6 +316,7 @@ export namespace Auth {
     // attempts and tell the user which providers need re-entry.
     if (data.__canary && !verifyCanary(data.__canary)) {
       const stale = Object.keys(data).filter((k) => k !== "__canary")
+      lastDecryptionFailures = stale
       if (stale.length) {
         log.warn(
           `encryption runtime changed — ${stale.length} provider key(s) need re-entry: ${stale.join(", ")}. ` +
@@ -351,6 +358,7 @@ export namespace Auth {
         }
       }
     }
+    lastDecryptionFailures = failed
     if (failed.length) {
       log.warn(
         `${failed.length} provider key(s) could not be decrypted: ${failed.join(", ")}. ` +
@@ -390,6 +398,17 @@ export namespace Auth {
     }
 
     return entries
+  }
+
+  /**
+   * Provider IDs whose stored credentials could not be decrypted (machine key
+   * or crypto runtime changed). Reads auth storage to refresh the list. These
+   * providers have an auth record on disk but are dropped from the connected
+   * set; the fix is `ax-code providers login --provider <id>`.
+   */
+  export async function decryptionFailures(): Promise<readonly string[]> {
+    await all().catch(() => undefined)
+    return lastDecryptionFailures
   }
 
   export function all(): Promise<Record<string, Info>> {

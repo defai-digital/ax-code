@@ -21,6 +21,14 @@ describe("resolveConnectedProviderID", () => {
   test("is case-insensitive for exact ids", () => {
     expect(resolveConnectedProviderID("DeepSeek", connected)).toBe("deepseek")
   })
+
+  test("maps colloquial names for cli providers", () => {
+    const cliConnected = ["gemini-cli", "kimi-cli", "claude-code", "codex-cli"]
+    expect(resolveConnectedProviderID("gemini", cliConnected)).toBe("gemini-cli")
+    expect(resolveConnectedProviderID("kimi", cliConnected)).toBe("kimi-cli")
+    expect(resolveConnectedProviderID("claude", cliConnected)).toBe("claude-code")
+    expect(resolveConnectedProviderID("openai", cliConnected)).toBe("codex-cli")
+  })
 })
 
 describe("resolveExplicitMemberSelection", () => {
@@ -66,5 +74,42 @@ describe("resolveExplicitMemberSelection", () => {
       selectableModels,
     })
     expect(result).toEqual({ member: { providerID: "deepseek", modelID: "deepseek-chat" } })
+  })
+
+  test("explains an undecryptable credential instead of calling the provider unknown", () => {
+    const result = resolveExplicitMemberSelection({
+      requestedProvider: "codex-cli",
+      connectedIDs,
+      selectableModels,
+      undecryptableIDs: ["codex-cli", "xai"],
+    })
+    expect(result).toMatchObject({ rejected: expect.stringContaining("cannot be decrypted") })
+    if ("rejected" in result) {
+      expect(result.rejected).toContain("ax-code providers login --provider codex-cli")
+      expect(result.rejected).not.toContain("Unknown provider")
+    }
+  })
+
+  test("resolves aliases against the undecryptable set too", () => {
+    const result = resolveExplicitMemberSelection({
+      requestedProvider: "codex",
+      connectedIDs,
+      selectableModels,
+      undecryptableIDs: ["codex-cli"],
+    })
+    expect(result).toMatchObject({ rejected: expect.stringContaining("codex-cli") })
+    if ("rejected" in result) {
+      expect(result.rejected).toContain("cannot be decrypted")
+    }
+  })
+
+  test("still reports unknown when the provider is neither connected nor undecryptable", () => {
+    const result = resolveExplicitMemberSelection({
+      requestedProvider: "codex",
+      connectedIDs,
+      selectableModels,
+      undecryptableIDs: ["groq"],
+    })
+    expect(result).toMatchObject({ rejected: expect.stringContaining("Unknown provider") })
   })
 })

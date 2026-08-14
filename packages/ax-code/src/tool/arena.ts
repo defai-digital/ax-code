@@ -32,13 +32,37 @@ const DEFAULT_MAX = 3
 const HARD_MAX = 5
 const DEFAULT_TIMEOUT_MS = 60_000
 
+// Length/count caps are enforced by clamping after parse (see clampProposal),
+// not hard zod .max() constraints — verbose members otherwise fail the whole
+// fan-out with "response did not match schema". Numeric scores are clamped in
+// a preprocess so a model emitting riskScore 25 or confidence 1.2 degrades
+// gracefully instead of rejecting the proposal.
+const clampNumber = (min: number, max: number) => (value: unknown) =>
+  typeof value === "number" && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : value
+
 const ProposalSchema = z.object({
-  approach: z.string().min(1).max(1200),
-  steps: z.array(z.string().min(1).max(300)).min(1).max(12),
-  risks: z.array(z.string().min(1).max(300)).max(8),
-  riskScore: z.number().int().min(0).max(20),
-  confidence: z.number().min(0).max(1).optional(),
+  approach: z.string().min(1).describe("Approach summary, at most 1200 chars"),
+  steps: z.array(z.string().min(1)).min(1).describe("Ordered steps, at most 12, each at most 300 chars"),
+  risks: z.array(z.string().min(1)).describe("Risks, at most 8, each at most 300 chars"),
+  riskScore: z.preprocess((value) => {
+    const clamped = clampNumber(0, 20)(value)
+    return typeof clamped === "number" ? Math.round(clamped) : clamped
+  }, z.number().int().min(0).max(20)),
+  confidence: z.preprocess(clampNumber(0, 1), z.number().min(0).max(1)).optional(),
 })
+
+function clampProposalText(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value
+}
+
+function clampProposal(proposal: z.infer<typeof ProposalSchema>): z.infer<typeof ProposalSchema> {
+  return {
+    ...proposal,
+    approach: clampProposalText(proposal.approach, 1200),
+    steps: proposal.steps.slice(0, 12).map((step) => clampProposalText(step, 300)),
+    risks: proposal.risks.slice(0, 8).map((risk) => clampProposalText(risk, 300)),
+  }
+}
 
 // Kept local to avoid circular-dependency at module-load time (identical to council.ts).
 const MemberSelectionSchema = z.object({
@@ -155,19 +179,21 @@ Give an overall riskScore from 0 (low implementation risk) to 20 (high). Do not 
       durationMs: Date.now() - started,
       status: "ok",
     })
-    return { member: input.member, proposal: first.result }
+    return { member: input.member, proposal: clampProposal(first.result) }
   }
 
-  const wasAborted = (first.error ?? "").startsWith("aborted:") || input.abort.aborted
+  const firstError = first.error ?? ""
+  const wasTimeout = firstError.startsWith("timeout:")
+  const wasAborted = firstError.startsWith("aborted:") || input.abort.aborted
   log.warn("arena proposal failed", {
     toolName: "arena",
     memberId: input.member.memberId,
     durationMs: Date.now() - started,
-    status: wasAborted ? "timeout" : "error",
+    status: wasTimeout ? "timeout" : wasAborted ? "aborted" : "error",
   })
 
   // Retry once on non-abort, non-timeout failure
-  if (retryOnce && !wasAborted) {
+  if (retryOnce && !wasTimeout && !wasAborted) {
     log.info("arena proposal retrying", {
       toolName: "arena",
       memberId: input.member.memberId,
@@ -181,13 +207,18 @@ Give an overall riskScore from 0 (low implementation risk) to 20 (high). Do not 
         durationMs: Date.now() - retryStarted,
         status: "ok",
       })
-      return { member: input.member, proposal: retry.result }
+      return { member: input.member, proposal: clampProposal(retry.result) }
     }
+    const retryError = retry.error ?? ""
     log.warn("arena proposal retry failed", {
       toolName: "arena",
       memberId: input.member.memberId,
       durationMs: Date.now() - retryStarted,
-      status: (retry.error ?? "").startsWith("aborted:") || input.abort.aborted ? "timeout" : "error",
+      status: retryError.startsWith("timeout:")
+        ? "timeout"
+        : retryError.startsWith("aborted:") || input.abort.aborted
+          ? "aborted"
+          : "error",
     })
     return { member: input.member, error: retry.error ?? "unknown" }
   }

@@ -1,3 +1,4 @@
+import { toErrorMessage } from "../../util/error-message"
 import { which } from "../../util/which"
 import { CliLanguageModel, cliEnv } from "./cli-language-model"
 import { getCliProviderDefinition, type CliProviderDefinition } from "./config"
@@ -121,10 +122,22 @@ export async function probeCliLanguageModel(config: CliLanguageModelProbeConfig)
   })
 
   const abortSignal = AbortSignal.timeout(CLI_CONNECT_TIMEOUT_MS)
-  await model.doGenerate({
-    prompt: [{ role: "user", content: [{ type: "text", text: CLI_CONNECT_PROMPT }] }],
-    abortSignal,
-  })
+  try {
+    await model.doGenerate({
+      prompt: [{ role: "user", content: [{ type: "text", text: CLI_CONNECT_PROMPT }] }],
+      abortSignal,
+    })
+  } catch (error) {
+    // A raw stream error ("Premature close") or timeout gives the user nothing
+    // to act on. Those shapes almost always mean the CLI sat waiting for an
+    // interactive login/consent prompt it could not show in headless mode.
+    const message = toErrorMessage(error)
+    const opaque = abortSignal.aborted || /premature close|timed? ?out|abort/i.test(message)
+    const hint = opaque
+      ? ` — the CLI produced no usable output within ${Math.round(CLI_CONNECT_TIMEOUT_MS / 1000)}s; it may need a one-time interactive run or login (run \`${config.binary}\` in a terminal first, then retry)`
+      : ""
+    throw new Error(`${config.providerID} CLI probe failed: ${message}${hint}`)
+  }
 }
 
 export async function probeCliProvider(providerID: string): Promise<CliProviderProbeResult> {

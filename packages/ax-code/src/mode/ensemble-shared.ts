@@ -8,6 +8,7 @@
  * which can prevent this namespace from being available at evaluation time).
  */
 
+import { Auth } from "../auth"
 import { Council } from "./council"
 import { ModeMemory } from "./memory"
 import { EnsemblePreflight } from "./preflight"
@@ -23,8 +24,14 @@ const PROVIDER_ALIASES: Record<string, string[]> = {
   xai: ["xai", "grok-build-cli"],
   codex: ["codex-cli", "openai"],
   "codex-cli": ["codex-cli", "openai"],
-  claude: ["anthropic"],
-  anthropic: ["anthropic"],
+  openai: ["openai", "codex-cli"],
+  claude: ["anthropic", "claude-code"],
+  anthropic: ["anthropic", "claude-code"],
+  gemini: ["gemini-cli", "google"],
+  google: ["google", "gemini-cli"],
+  kimi: ["kimi-cli"],
+  qoder: ["qoder-cli"],
+  antigravity: ["antigravity-cli"],
 }
 
 export function resolveConnectedProviderID(
@@ -59,11 +66,28 @@ export function resolveExplicitMemberSelection(input: {
   connectedIDs: readonly string[]
   /** Provider ID → selectable model IDs, already preference-sorted. */
   selectableModels: Readonly<Record<string, readonly string[]>>
+  /** Provider IDs with a stored credential that failed decryption. */
+  undecryptableIDs?: readonly string[]
 }): ExplicitMemberResolution {
   const connected = [...input.connectedIDs].sort()
   const connectedLabel = connected.join(", ") || "(none)"
   const resolvedProvider = resolveConnectedProviderID(input.requestedProvider, input.connectedIDs)
   if (!resolvedProvider) {
+    // "Unknown provider" is actively misleading when the provider has a
+    // credential on disk that merely failed decryption (machine key or crypto
+    // runtime changed) — the user believes they are logged in. Resolve the
+    // requested name (including aliases) against the failed set so the
+    // rejection names the real problem and its fix.
+    const undecryptable = input.undecryptableIDs?.length
+      ? resolveConnectedProviderID(input.requestedProvider, input.undecryptableIDs)
+      : undefined
+    if (undecryptable) {
+      return {
+        rejected:
+          `Provider ${JSON.stringify(undecryptable)} has a stored credential that cannot be decrypted, so it is not connected. ` +
+          `Ask the user to run \`ax-code providers login --provider ${undecryptable}\` to re-enter it. Connected: ${connectedLabel}.`,
+      }
+    }
     return {
       rejected:
         `Unknown provider ${JSON.stringify(input.requestedProvider)}. Connected: ${connectedLabel}. ` +
@@ -152,6 +176,17 @@ export namespace EnsembleShared {
       }
       ids.push(providerID)
     }
+    // Providers with an undecryptable stored credential never make it into
+    // Provider.list() at all, so without this they would be invisible here —
+    // neither connected nor excluded — and read as "unknown".
+    const undecryptable = await Auth.decryptionFailures().catch(() => [] as readonly string[])
+    for (const providerID of undecryptable) {
+      if (ids.includes(providerID) || excluded.some((entry) => entry.providerID === providerID)) continue
+      excluded.push({
+        providerID,
+        reason: `stored credential cannot be decrypted — run \`ax-code providers login --provider ${providerID}\` to re-enter it`,
+      })
+    }
     return { count: ids.length, ids: ids.sort(), excluded: excluded.sort((a, b) => a.providerID.localeCompare(b.providerID)) }
   }
 
@@ -173,6 +208,7 @@ export namespace EnsembleShared {
       const rejected: string[] = []
       const notes: string[] = []
       const connectedIDs = Object.keys(providers)
+      const undecryptableIDs = await Auth.decryptionFailures().catch(() => [] as readonly string[])
       const selectableModels: Record<string, string[]> = {}
       for (const id of connectedIDs) {
         const provider = providers[ProviderID.make(id)]
@@ -190,6 +226,7 @@ export namespace EnsembleShared {
           requestedModel: item.modelID,
           connectedIDs,
           selectableModels,
+          undecryptableIDs,
         })
         if ("rejected" in resolved) {
           rejected.push(resolved.rejected)

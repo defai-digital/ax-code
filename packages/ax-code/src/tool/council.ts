@@ -26,18 +26,44 @@ const DEFAULT_MAX_MEMBERS = 3
 const DEFAULT_TIMEOUT_MS = 60_000
 const HARD_MAX_MEMBERS = 6
 
+// Length/count caps are enforced by clamping after parse (see clampMemberOutput),
+// not by hard zod .max() constraints: verbose members (observed with DeepSeek)
+// otherwise fail the whole fan-out with "response did not match schema" just for
+// writing a long sentence. Severity is normalized so common off-enum spellings
+// ("critical", "info") don't reject an otherwise valid review.
+const IssueSeveritySchema = z.preprocess((value) => {
+  if (typeof value !== "string") return value
+  const lower = value.toLowerCase().trim()
+  if (["critical", "blocker", "severe", "major"].includes(lower)) return "high"
+  if (["info", "informational", "minor", "nit", "trivial"].includes(lower)) return "low"
+  return ["high", "medium", "low"].includes(lower) ? lower : "medium"
+}, z.enum(["high", "medium", "low"]))
+
 const IssueSchema = z.object({
-  severity: z.enum(["high", "medium", "low"]),
-  category: z.string().min(1).max(64),
-  location: z.string().max(200).optional(),
-  summary: z.string().min(1).max(400),
-  suggestedFix: z.string().max(600).optional(),
+  severity: IssueSeveritySchema,
+  category: z.string().min(1).describe("Short category label, at most 64 chars"),
+  location: z.string().optional().describe("Optional file:line, at most 200 chars"),
+  summary: z.string().min(1).describe("One-sentence summary, at most 400 chars"),
+  suggestedFix: z.string().optional().describe("Optional fix sketch, at most 600 chars"),
 })
 
 const MemberOutputSchema = z.object({
-  overall: z.string().min(1).max(800),
-  issues: z.array(IssueSchema).max(20),
+  overall: z.string().min(1).describe("Overall assessment, at most 800 chars"),
+  issues: z.array(IssueSchema).describe("At most 20 issues; prefer fewer, high-signal"),
 })
+
+const MAX_ISSUES = 20
+
+function clampText(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value
+}
+
+function clampOptionalText(value: string | undefined, max: number): string | undefined {
+  if (value === undefined) return undefined
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  return clampText(trimmed, max)
+}
 
 // Kept local to avoid circular-dependency at module-load time (identical to arena.ts).
 const MemberSelectionSchema = z.object({
@@ -169,22 +195,23 @@ async function runMember(input: {
         memberId: member.memberId,
         providerID: String(member.providerID),
         modelID: String(member.modelID),
-        overall: raw.overall,
-        issues: raw.issues.map((issue) => ({
+        overall: clampText(raw.overall, 800),
+        issues: raw.issues.slice(0, MAX_ISSUES).map((issue) => ({
           memberId: member.memberId,
           severity: issue.severity,
-          category: issue.category,
-          location: issue.location,
-          summary: issue.summary,
-          suggestedFix: issue.suggestedFix,
+          category: clampText(issue.category, 64),
+          location: clampOptionalText(issue.location, 200),
+          summary: clampText(issue.summary, 400),
+          suggestedFix: clampOptionalText(issue.suggestedFix, 600),
         })),
       }
     }
 
     const errMessage = fanOutResult?.error ?? "aborted"
+    const wasTimeout = errMessage.startsWith("timeout:")
     const wasAborted = errMessage.startsWith("aborted:") || abort.aborted
 
-    if (!wasAborted && attempt < maxAttempts) {
+    if (!wasTimeout && !wasAborted && attempt < maxAttempts) {
       log.info("council member retrying", {
         toolName: "council",
         memberId: member.memberId,
@@ -198,14 +225,16 @@ async function runMember(input: {
       toolName: "council",
       memberId: member.memberId,
       durationMs: Date.now() - started,
-      status: wasAborted ? "timeout" : "error",
+      status: wasTimeout ? "timeout" : wasAborted ? "aborted" : "error",
     })
     return {
       memberId: member.memberId,
       providerID: String(member.providerID),
       modelID: String(member.modelID),
       issues: [],
-      error: wasAborted ? `timeout or aborted: ${errMessage}` : errMessage,
+      error: wasTimeout
+        ? `${errMessage} — raise modes.council.timeoutMs in ax-code.json for slow reasoning/CLI members`
+        : errMessage,
     }
   }
 

@@ -61,13 +61,23 @@ export namespace FanOut {
     } else {
       config.abort.addEventListener("abort", onParentAbort, { once: true })
     }
-    const timer = setTimeout(() => localAbort.abort(), config.timeoutMs)
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      localAbort.abort()
+    }, config.timeoutMs)
     timer.unref?.()
     try {
       const result = await config.execute(member, localAbort.signal, timer)
       return { result }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
+      // A timer-fired abort and a parent-signal abort surface identically
+      // (AbortError), but they mean different things to the caller: one is a
+      // per-member timeout the user can raise via config, the other is a
+      // deliberate cancellation. Label them distinctly so reports don't blame
+      // "timeout" for a user-initiated abort (or vice versa).
+      if (timedOut) return { error: `timeout: member exceeded ${config.timeoutMs}ms` }
       return { error: localAbort.signal.aborted ? `aborted: ${message}` : message }
     } finally {
       clearTimeout(timer)

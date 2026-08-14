@@ -147,12 +147,17 @@ describe("Council.aggregateCouncil", () => {
 
   test("classifyMemberFailure distinguishes timeout and JSON schema errors", () => {
     expect(Council.classifyMemberFailure("timeout or aborted: AbortError")).toBe("timeout")
+    expect(Council.classifyMemberFailure("timeout: member exceeded 60000ms")).toBe("timeout")
     expect(
       Council.classifyMemberFailure(
         "'messages' must contain the word 'json' in some form, to use 'response_format' of type 'json_object'.",
       ),
     ).toBe("JSON schema requirement")
     expect(Council.classifyMemberFailure("rate limit exceeded 429")).toBe("rate limit")
+  })
+
+  test("classifyMemberFailure separates user aborts from timeouts", () => {
+    expect(Council.classifyMemberFailure("aborted: This operation was aborted")).toBe("aborted")
   })
 
   test("requires strictly more than half of an even-sized council for majority", () => {

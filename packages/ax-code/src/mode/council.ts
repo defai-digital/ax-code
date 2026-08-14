@@ -238,7 +238,8 @@ export namespace Council {
   /** Classify a member failure for concise incomplete-result summaries. */
   export function classifyMemberFailure(error: string): string {
     const text = error.toLowerCase()
-    if (text.includes("timeout") || text.includes("aborted") || text.includes("abort")) return "timeout"
+    if (text.includes("timeout") || text.includes("timed out")) return "timeout"
+    if (text.includes("abort")) return "aborted"
     if (
       text.includes("json") ||
       text.includes("response_format") ||
