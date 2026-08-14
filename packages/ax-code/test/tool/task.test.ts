@@ -806,6 +806,7 @@ describe("tool.task", () => {
             parts: [{ type: "text", text: "background child done" }],
           } as any
         }) as any)
+        const loopSpy = vi.spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
 
         try {
           const result = await (
@@ -852,8 +853,119 @@ describe("tool.task", () => {
             expect(childFinished).toBe(true)
             expect(promptSpy).toHaveBeenCalled()
           })
+          await vi.waitFor(async () => {
+            const latest = await TaskQueue.get(TaskQueueID.make(queueID))
+            expect(latest.payload["deliveryStatus"]).toBe("delivered")
+          })
+          const parentMessages = await Session.messages({ sessionID: parent.id })
+          const handoffText = parentMessages
+            .flatMap((message) => message.parts)
+            .filter((part) => part.type === "text")
+            .map((part) => part.text)
+            .find((text) => text.includes("<task id="))
+          expect(handoffText).toContain("background child done")
+          expect(handoffText).toContain(`id="${taskID}"`)
+          expect(loopSpy).toHaveBeenCalled()
         } finally {
           promptSpy.mockRestore()
+          loopSpy.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("background empty child result is delivered and blocks the completion gate", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          return {
+            info: {
+              id: input.messageID ?? MessageID.ascending(),
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: Date.now(), completed: Date.now() },
+            },
+            parts: [],
+          } as any
+        }) as any)
+        const loopSpy = vi.spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
+
+        try {
+          const result = await (
+            await TaskTool.init()
+          ).execute(
+            {
+              description: "Review code",
+              prompt: "review the code",
+              subagent_type: "general",
+              background: true,
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+
+          const queueID = String(result.metadata.queueID)
+          await vi.waitFor(async () => {
+            const latest = await TaskQueue.get(TaskQueueID.make(queueID))
+            expect(latest.payload["deliveryStatus"]).toBe("delivered")
+            expect(latest.payload["deliveryEmpty"]).toBe(true)
+          })
+
+          const { AutonomousCompletionGate } = await import("../../src/control-plane/autonomous-completion-gate")
+          const decision = AutonomousCompletionGate.evaluate({
+            pendingTodos: [],
+            messages: await Session.messages({ sessionID: parent.id }),
+          })
+          expect(decision).toMatchObject({
+            status: "blocked",
+            reason: "empty_subagent_result",
+            emptyResult: { taskID: result.metadata.sessionId },
+          })
+        } finally {
+          promptSpy.mockRestore()
+          loopSpy.mockRestore()
         }
       },
     })

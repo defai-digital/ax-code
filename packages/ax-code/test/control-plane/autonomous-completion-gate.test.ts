@@ -267,6 +267,97 @@ describe("AutonomousCompletionGate", () => {
     })
   })
 
+  test("blocks an empty background handoff even after a successful spawn tool result", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_bg",
+              state: {
+                status: "completed",
+                input: { description: "Explore the repo", background: true },
+                output: "state: running",
+                metadata: { emptyResult: false, sessionId: "ses_bg", background: true },
+              },
+            },
+          ],
+        },
+        {
+          info: { role: "user" },
+          parts: [
+            {
+              type: "text",
+              synthetic: true,
+              text: [
+                '<task id="ses_bg" state="completed" empty="true">',
+                "<summary>Background task completed without a usable final response: Explore the repo</summary>",
+                "<task_result>",
+                "Subagent completed without a final response.",
+                "</task_result>",
+                "</task>",
+              ].join("\n"),
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "empty_subagent_result",
+      emptyResult: {
+        taskID: "ses_bg",
+      },
+    })
+  })
+
+  test("allows completion after a later non-empty background handoff", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_bg",
+              state: {
+                status: "completed",
+                output: "state: running",
+                metadata: { emptyResult: false, sessionId: "ses_bg", background: true },
+              },
+            },
+          ],
+        },
+        {
+          info: { role: "user" },
+          parts: [
+            {
+              type: "text",
+              synthetic: true,
+              text: [
+                '<task id="ses_bg" state="completed" empty="false">',
+                "<summary>Background task completed: Explore the repo</summary>",
+                "<task_result>",
+                "Auth lives in src/auth/index.ts",
+                "</task_result>",
+                "</task>",
+              ].join("\n"),
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toEqual({ status: "allow" })
+  })
+
   test("blocks recovered subagent results that still need review", () => {
     const decision = AutonomousCompletionGate.evaluate({
       pendingTodos: [],

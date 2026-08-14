@@ -159,8 +159,9 @@ async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecutio
     // blocks. If they shared one block a DB error from finishIfRunning would
     // fall into the catch and mark a successfully-run task as "failed".
     let succeeded = false
+    let result: unknown
     try {
-      const result = await runWithExecutionWatchdog(item, execution)
+      result = await runWithExecutionWatchdog(item, execution)
       const failure = replayFailureForQueueExecution(item, result)
       if (failure) throw new Error(failure)
       succeeded = true
@@ -176,11 +177,13 @@ async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecutio
         error: NamedError.message(error),
       })
       await syncScheduledTaskOutcome(finished, error)
+      await deliverLiveTaskSubagent(finished, { status: "failed", error: NamedError.message(error) })
       log.error("task queue item execution failed", { taskID: item.id, sessionID: item.sessionID, error })
     }
     if (succeeded) {
       const finished = await finishIfRunning(item, { status: "completed" })
       await syncScheduledTaskOutcome(finished)
+      await deliverLiveTaskSubagent(finished, { status: "completed", result })
     }
   } finally {
     const current = await TaskQueue.get(item.id).catch(() => item)
@@ -207,6 +210,18 @@ async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecutio
       })
     })
   }
+}
+
+async function deliverLiveTaskSubagent(
+  item: TaskQueue.Info,
+  outcome: { status: "completed"; result: unknown } | { status: "failed"; error: string },
+) {
+  if (item.kind !== "subagent" || item.payload["source"] !== "task") return
+  await import("./background-subagent-delivery")
+    .then(({ deliverBackgroundSubagentHandoff }) => deliverBackgroundSubagentHandoff({ item, outcome }))
+    .catch((error) => {
+      log.warn("background subagent delivery failed", { taskID: item.id, sessionID: item.sessionID, error })
+    })
 }
 
 async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueExecution): Promise<unknown> {

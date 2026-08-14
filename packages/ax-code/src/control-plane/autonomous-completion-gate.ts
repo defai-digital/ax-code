@@ -1,6 +1,7 @@
 import { Locale } from "@/util/locale"
 import { asRecordOrUndefined } from "../util/record"
 import { isActiveTodo } from "../session/todo-status"
+import { parseBackgroundTaskHandoffs } from "../session/background-subagent-handoff"
 export namespace AutonomousCompletionGate {
   export type Todo = {
     content: string
@@ -170,12 +171,14 @@ export namespace AutonomousCompletionGate {
         const record = asRecord(part)
         if (!record) continue
 
-        if (isAssistantMessage(message) && record["type"] === "text" && typeof record["text"] === "string") {
+        if (record["type"] === "text" && typeof record["text"] === "string") {
+          applyBackgroundHandoffs(unresolved, substantiveCallsAfter, record["text"])
           // Skip system-injected ("synthetic") or filtered-out ("ignored")
           // text parts — TextPart marks these via boolean flags
           // (session/message-v2.ts). They are not the model's authentic
           // resolution intent and must not clear unresolved subagent state.
           if (record["synthetic"] === true || record["ignored"] === true) continue
+          if (!isAssistantMessage(message)) continue
           resolveWithAssistantText(unresolved, record["text"])
           for (const key of [...substantiveCallsAfter.keys()]) {
             if (!unresolved.has(key)) substantiveCallsAfter.delete(key)
@@ -268,6 +271,30 @@ export namespace AutonomousCompletionGate {
     let latest: EmptySubagentResult | undefined
     for (const result of unresolved.values()) latest = result
     return latest
+  }
+
+  function applyBackgroundHandoffs(
+    unresolved: Map<string, EmptySubagentResult>,
+    substantiveCallsAfter: Map<string, number>,
+    text: string,
+  ) {
+    for (const handoff of parseBackgroundTaskHandoffs(text)) {
+      const key = `task:${handoff.taskID}`
+      if (handoff.empty || handoff.failed) {
+        unresolved.delete(key)
+        unresolved.set(key, {
+          taskID: handoff.taskID,
+          description: handoff.title,
+          failed: handoff.failed,
+          errorMessage: handoff.failed ? handoff.resultText : undefined,
+          recoveredResultNeedsReview: handoff.recoveredResultNeedsReview,
+        })
+        substantiveCallsAfter.set(key, 0)
+        continue
+      }
+      unresolved.delete(key)
+      substantiveCallsAfter.delete(key)
+    }
   }
 
   // K substantive direct-work tool calls by the parent after a subagent

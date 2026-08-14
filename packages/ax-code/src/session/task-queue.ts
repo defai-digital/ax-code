@@ -403,6 +403,39 @@ export namespace TaskQueue {
     return item
   }
 
+  export const DeliveryStatus = z.enum(["pending", "delivered", "blocked"])
+  export type DeliveryStatus = z.infer<typeof DeliveryStatus>
+
+  export async function setDelivery(input: {
+    id: TaskQueueID
+    status: DeliveryStatus
+    error?: string
+    resultEmpty?: boolean
+  }): Promise<Info> {
+    const current = await get(input.id)
+    const now = Date.now()
+    const payload: Payload = {
+      ...current.payload,
+      deliveryStatus: input.status,
+    }
+    if (input.error !== undefined) payload["deliveryError"] = input.error
+    else delete payload["deliveryError"]
+    if (input.resultEmpty !== undefined) payload["deliveryEmpty"] = input.resultEmpty
+    const item = Database.use((db) => {
+      const row = db
+        .update(TaskQueueTable)
+        .set({ payload, time_updated: now })
+        .where(eq(TaskQueueTable.id, input.id))
+        .returning()
+        .get()
+      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      return fromRow(row)
+    })
+    assertProjectItem(item)
+    publishUpdated(item)
+    return item
+  }
+
   export async function claimForExecution(id: TaskQueueID): Promise<Info | undefined> {
     const current = await get(id)
     if (current.status !== "queued" && current.status !== "waiting_for_idle") return undefined

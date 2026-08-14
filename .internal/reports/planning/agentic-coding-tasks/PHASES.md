@@ -73,16 +73,16 @@ Depends on Phase 1 (rail must exist before detach is useful).
 
 ## Phase 3 — Push completion (P0)
 
-**Status:** TODO
+**Status:** DONE (2026-08-14)
 
 Depends on Phase 2.
 
 ### Work
 
-1. [ ] On child terminal state, inject parent handoff (`<task id state>`)
-2. [ ] Delivery field on the queue row (`pending` / `delivered` / `blocked`)
-3. [ ] Completion gate treats delivered empty/failed background results as today
-4. [ ] Do not promote tool logs into child result text
+1. [x] On child terminal state, inject parent handoff (`<task id state>`)
+2. [x] Delivery field on the queue row (`pending` / `delivered` / `blocked`)
+3. [x] Completion gate treats delivered empty/failed background results as today
+4. [x] Do not promote tool logs into child result text
 
 ### Exit criteria
 

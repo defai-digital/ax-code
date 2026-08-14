@@ -128,6 +128,7 @@ async function startBackgroundSubagent(input: {
     payload: {
       source: "task",
       resumeOnRestart: true,
+      deliveryStatus: "pending",
       parentSessionID: ctx.sessionID,
       subagentType: params.subagent_type,
       command: params.command,
