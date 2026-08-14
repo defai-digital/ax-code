@@ -634,16 +634,35 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
 
 function subagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
   if (!item.sessionID) return undefined
-  const body = promptBodyFromQueueItem(item)
-  if (!body) return undefined
   return {
     sessionID: item.sessionID,
     run: () =>
       runInQueueItemInstance(item, async () => {
-        const result = await SessionPrompt.prompt({ ...body, sessionID: item.sessionID! })
+        const body = promptBodyFromQueueItem(item)
+        if (!body) throw new Error(`Subagent queue item ${item.id} has no executable prompt`)
+        const next = await applyRestartContinuation(item, body)
+        const result = await SessionPrompt.prompt({ ...next, sessionID: item.sessionID! })
         if (isWorkflowQueueItem(item)) await recordWorkflowSubagentUsage(item, result)
         return result
       }),
+  }
+}
+
+async function applyRestartContinuation(item: TaskQueue.Info, body: Record<string, unknown>) {
+  if (item.payload["source"] !== "task" || !item.sessionID) return body
+  const { Session } = await import(".")
+  const messages = await Session.messages({ sessionID: item.sessionID })
+  if (!messages.some((message) => message.info.role === "user" || message.info.role === "assistant")) return body
+  return {
+    ...body,
+    agentRouting: "preserve",
+    parts: [
+      {
+        type: "text",
+        text:
+          "Your previous turn was interrupted by a backend restart. Continue the assigned task and produce the final result. Do not repeat completed work unless you must verify it.",
+      },
+    ],
   }
 }
 

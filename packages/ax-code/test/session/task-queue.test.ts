@@ -204,6 +204,68 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("requeues interrupted live task-tool subagents so they can resume", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const child = await Session.create({ title: "Live subagent" })
+        const running = await TaskQueue.enqueue({
+          sessionID: child.id,
+          kind: "subagent",
+          title: "Explore the repo",
+          payload: { source: "task", resumeOnRestart: true, prompt: "find auth" },
+        })
+        const blocked = await TaskQueue.enqueue({
+          sessionID: child.id,
+          kind: "subagent",
+          title: "Review code",
+          payload: { source: "task", resumeOnRestart: true, prompt: "review" },
+        })
+        await TaskQueue.setStatus({ id: running.id, status: "running" })
+        await TaskQueue.setStatus({ id: blocked.id, status: "blocked_permission", error: "approval required" })
+
+        const recovered = await TaskQueue.recoverInterrupted()
+
+        expect(recovered.requeued.map((item) => item.id).sort()).toEqual([blocked.id, running.id].sort())
+        expect((await TaskQueue.get(running.id)).status).toBe("queued")
+        expect((await TaskQueue.get(blocked.id)).status).toBe("queued")
+        expect((await TaskQueue.get(running.id)).error).toBeUndefined()
+      },
+    })
+  })
+
+  test("cancelForSession marks non-terminal items cancelled and keeps completed ones", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Queue cancel" })
+        const running = await TaskQueue.enqueue({
+          sessionID: session.id,
+          kind: "subagent",
+          title: "Running child",
+          payload: { source: "task" },
+        })
+        const done = await TaskQueue.enqueue({
+          sessionID: session.id,
+          kind: "subagent",
+          title: "Done child",
+          payload: { source: "task" },
+        })
+        await TaskQueue.setStatus({ id: running.id, status: "running" })
+        await TaskQueue.setStatus({ id: done.id, status: "completed" })
+
+        const cancelled = await TaskQueue.cancelForSession(session.id)
+        expect(cancelled.map((item) => item.id)).toEqual([running.id])
+        expect((await TaskQueue.get(running.id)).status).toBe("cancelled")
+        expect((await TaskQueue.get(done.id)).status).toBe("completed")
+      },
+    })
+  })
+
   test("requeues scheduled automation interrupted before session creation", async () => {
     await using tmp = await tmpdir({ git: true })
 

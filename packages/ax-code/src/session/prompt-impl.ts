@@ -236,7 +236,25 @@ export namespace SessionPrompt {
 
   export async function cancel(sessionID: SessionID) {
     log.info("cancel", { command: "session.prompt.cancel", status: "started", sessionID })
-    return runState.cancel(sessionID)
+    await runState.cancel(sessionID)
+    await cancelDescendantSessions(sessionID)
+  }
+
+  async function cancelDescendantSessions(sessionID: SessionID) {
+    const { Session } = await import(".")
+    const { TaskQueue } = await import("./task-queue")
+    const children = await Session.children(sessionID).catch((error) => {
+      log.warn("failed to list child sessions during cancel cascade", { sessionID, error })
+      return []
+    })
+    for (const child of children) {
+      await cancel(child.id).catch((error) => {
+        log.warn("failed to cancel child session", { sessionID, childID: child.id, error })
+      })
+    }
+    await TaskQueue.cancelForSession(sessionID, "Cancelled because the parent session stopped.").catch((error) => {
+      log.warn("failed to cancel task queue items during session abort", { sessionID, error })
+    })
   }
 
   export const LoopInput = LoopInputSchema

@@ -93,16 +93,16 @@ Depends on Phase 2.
 
 ## Phase 4 — Cancel, concurrency, restart (P0/P1)
 
-**Status:** TODO
+**Status:** DONE (2026-08-14)
 
 Depends on Phase 2 (needs queue-backed children).
 
 ### Work
 
-1. [ ] Parent abort cascades to busy descendants
-2. [ ] `maxChildrenPerSession` (default 8) for background spawns
-3. [ ] `recoverInterrupted` covers live `kind: "subagent"`
-4. [ ] Timeout/failure keeps session for `task_id` resume
+1. [x] Parent abort cascades to busy descendants
+2. [x] `maxChildrenPerSession` (default 8) for background spawns
+3. [x] `recoverInterrupted` covers live `kind: "subagent"`
+4. [x] Timeout/failure keeps session for `task_id` resume
 
 ### Exit criteria
 

@@ -9035,6 +9035,45 @@
     "name": "OpenCode Go",
     "doc": "https://opencode.ai/docs/zen",
     "models": {
+      "glm-5.3": {
+        "id": "glm-5.3",
+        "name": "GLM-5.3",
+        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
       "qwen3.7-plus": {
         "id": "qwen3.7-plus",
         "name": "Qwen3.7 Plus",
@@ -26806,14 +26845,15 @@
       "qwen/qwen3-30b-a3b": {
         "id": "qwen/qwen3-30b-a3b",
         "name": "Qwen3 30B A3B",
-        "description": "Qwen instruction model for multilingual chat, reasoning, and tool use",
+        "description": "Sparse MoE Qwen model with 3B active parameters for efficient chat and reasoning",
         "family": "qwen",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
         "structured_output": false,
-        "release_date": "2025-02-27",
-        "last_updated": "2025-02-27",
+        "temperature": true,
+        "release_date": "2025-04-28",
+        "last_updated": "2025-04-28",
         "modalities": {
           "input": [
             "text"
@@ -27358,14 +27398,15 @@
       "qwen/Qwen2.5-Coder-32B-Instruct": {
         "id": "qwen/Qwen2.5-Coder-32B-Instruct",
         "name": "Qwen 2.5 Coder 32b",
-        "description": "Qwen coding model for software agents, repository edits, and code reasoning",
+        "description": "Open coding-focused Qwen model for code generation, repair, and repository reasoning",
         "family": "qwen",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
         "structured_output": false,
-        "release_date": "2025-07-03",
-        "last_updated": "2025-07-03",
+        "temperature": true,
+        "release_date": "2024-11-12",
+        "last_updated": "2024-11-12",
         "modalities": {
           "input": [
             "text"
@@ -34664,13 +34705,15 @@
       "meta-llama/llama-3.1-8b-instruct": {
         "id": "meta-llama/llama-3.1-8b-instruct",
         "name": "Llama 3.1 8b Instruct",
-        "description": "Open Llama instruction model for multilingual chat, reasoning, and coding",
+        "description": "Compact open Llama model for lightweight chat, drafting, and self-hosting",
         "family": "llama",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
         "structured_output": false,
-        "release_date": "2024-01-01",
+        "temperature": true,
+        "knowledge": "2023-12",
+        "release_date": "2024-07-23",
         "last_updated": "2024-07-23",
         "modalities": {
           "input": [
@@ -49381,8 +49424,8 @@
         "tool_call": true,
         "structured_output": false,
         "temperature": true,
-        "release_date": "2025-04-30",
-        "last_updated": "2025-04-30",
+        "release_date": "2025-04-28",
+        "last_updated": "2025-04-28",
         "modalities": {
           "input": [
             "text"
@@ -49408,6 +49451,7 @@
         "tool_call": false,
         "structured_output": false,
         "temperature": true,
+        "knowledge": "2024-04",
         "release_date": "2025-03-05",
         "last_updated": "2025-03-05",
         "modalities": {
@@ -49434,8 +49478,8 @@
         "tool_call": false,
         "structured_output": false,
         "temperature": true,
-        "release_date": "2025-02-27",
-        "last_updated": "2025-02-27",
+        "release_date": "2024-11-12",
+        "last_updated": "2024-11-12",
         "modalities": {
           "input": [
             "text"
@@ -49567,8 +49611,9 @@
         "tool_call": false,
         "structured_output": false,
         "temperature": true,
-        "release_date": "2025-01-22",
-        "last_updated": "2025-01-22",
+        "knowledge": "2023-12",
+        "release_date": "2024-07-23",
+        "last_updated": "2024-07-23",
         "modalities": {
           "input": [
             "text"
@@ -49593,6 +49638,7 @@
         "tool_call": false,
         "structured_output": false,
         "temperature": true,
+        "knowledge": "2023-12",
         "release_date": "2024-09-25",
         "last_updated": "2024-09-25",
         "modalities": {
@@ -49620,8 +49666,9 @@
         "tool_call": false,
         "structured_output": false,
         "temperature": true,
-        "release_date": "2024-07-25",
-        "last_updated": "2024-07-25",
+        "knowledge": "2023-12",
+        "release_date": "2024-07-23",
+        "last_updated": "2024-07-23",
         "modalities": {
           "input": [
             "text"
@@ -109968,7 +110015,7 @@
       },
       "qwen/qwen3-30b-a3b": {
         "id": "qwen/qwen3-30b-a3b",
-        "name": "Qwen: Qwen3 30B A3B",
+        "name": "Qwen3 30B A3B",
         "description": "Qwen instruction model for multilingual chat, reasoning, and tool use",
         "family": "qwen",
         "attachment": false,
@@ -109995,7 +110042,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 40960,
           "output": 16384
@@ -118223,7 +118270,7 @@
       },
       "meta-llama/llama-3.1-8b-instruct": {
         "id": "meta-llama/llama-3.1-8b-instruct",
-        "name": "Meta: Llama 3.1 8B Instruct",
+        "name": "Llama-3.1-8B-Instruct",
         "description": "Open Llama instruction model for multilingual chat, reasoning, and coding",
         "family": "llama",
         "attachment": false,
@@ -118231,6 +118278,7 @@
         "tool_call": true,
         "structured_output": true,
         "temperature": true,
+        "knowledge": "2023-12",
         "release_date": "2024-07-23",
         "last_updated": "2024-07-23",
         "modalities": {
@@ -118241,7 +118289,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 131072,
           "output": 131072
@@ -136959,6 +137007,59 @@
           "output": 66536
         }
       },
+      "Qwen/Qwen2.5-Coder-32B-Instruct": {
+        "id": "Qwen/Qwen2.5-Coder-32B-Instruct",
+        "name": "Qwen2.5-Coder-32B-Instruct",
+        "description": "Qwen coding model for software agents, repository edits, and code reasoning",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2024-11-12",
+        "last_updated": "2024-11-12",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 8192
+        }
+      },
+      "Qwen/Qwen3-30B-A3B": {
+        "id": "Qwen/Qwen3-30B-A3B",
+        "name": "Qwen3 30B A3B",
+        "description": "Qwen instruction model for multilingual chat, reasoning, and tool use",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2025-04-28",
+        "last_updated": "2025-04-28",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 40960,
+          "output": 16384
+        }
+      },
       "Qwen/Qwen3-235B-A22B-Thinking-2507": {
         "id": "Qwen/Qwen3-235B-A22B-Thinking-2507",
         "name": "Qwen3-235B-A22B-Thinking-2507",
@@ -137572,6 +137673,33 @@
         "knowledge": "2023-12",
         "release_date": "2024-12-06",
         "last_updated": "2024-12-06",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 4096
+        }
+      },
+      "meta-llama/Llama-3.1-8B-Instruct": {
+        "id": "meta-llama/Llama-3.1-8B-Instruct",
+        "name": "Llama-3.1-8B-Instruct",
+        "description": "Open Llama instruction model for multilingual chat, reasoning, and coding",
+        "family": "llama",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2023-12",
+        "release_date": "2024-07-23",
+        "last_updated": "2024-07-23",
         "modalities": {
           "input": [
             "text"
@@ -140636,6 +140764,33 @@
         "limit": {
           "context": 262144,
           "output": 66536
+        }
+      },
+      "Qwen/Qwen3-30B-A3B": {
+        "id": "Qwen/Qwen3-30B-A3B",
+        "name": "Qwen3 30B A3B",
+        "description": "Sparse MoE Qwen model with 3B active parameters for efficient chat and reasoning",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2025-04-28",
+        "last_updated": "2025-04-28",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 40960,
+          "output": 16384
         }
       },
       "Qwen/Qwen3-Max": {
@@ -155204,16 +155359,18 @@
       },
       "llama-3.1-8b-instruct": {
         "id": "llama-3.1-8b-instruct",
-        "name": "llama-3.1-8b-instruct",
+        "name": "Llama-3.1-8B-Instruct",
         "description": "Optimized for dialogue, this LLM by Meta outperforms other open-source chat models in benchmarks while prioritizing helpfulness and safety.",
+        "family": "llama",
         "attachment": false,
         "reasoning": true,
         "reasoning_options": [],
         "tool_call": true,
         "structured_output": true,
         "temperature": false,
-        "release_date": "2024-04-09",
-        "last_updated": "2024-04-09",
+        "knowledge": "2023-12",
+        "release_date": "2024-07-23",
+        "last_updated": "2024-07-23",
         "modalities": {
           "input": [
             "text"
@@ -155222,7 +155379,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 128000,
           "output": 128000

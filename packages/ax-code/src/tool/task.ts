@@ -17,6 +17,16 @@ import { withTimeout } from "@/util/timeout"
 import { ToolBoolean } from "./schema"
 
 const MAX_DEPTH = 5
+export const MAX_BACKGROUND_SUBAGENTS = 8
+
+export class BackgroundCapacityError extends Error {
+  constructor() {
+    super(
+      `Maximum concurrent background subagents (${MAX_BACKGROUND_SUBAGENTS}) reached. Wait for one to finish, stop one, or run this task in the foreground.`,
+    )
+    this.name = "BackgroundCapacityError"
+  }
+}
 // 10 minutes: subagent tasks that exceed this are likely stuck on a
 // non-responsive provider or in an infinite tool loop. The step limit
 // (200) catches runaway tool loops, but a provider that accepts the
@@ -116,6 +126,7 @@ async function startBackgroundSubagent(input: {
   ensureNotAborted()
   const { TaskQueue } = await import("../session/task-queue")
   const { TaskQueueExecutor } = await import("../session/task-queue-executor")
+  await assertBackgroundCapacity(ctx.sessionID, TaskQueue)
 
   const queued = await TaskQueue.enqueue({
     sessionID: session.id,
@@ -185,6 +196,28 @@ async function startBackgroundSubagent(input: {
       BACKGROUND_STARTED,
       "</task_result>",
     ].join("\n"),
+  }
+}
+
+async function assertBackgroundCapacity(parentSessionID: SessionID, TaskQueue: typeof import("../session/task-queue").TaskQueue) {
+  const children = await Session.children(parentSessionID)
+  let active = 0
+  for (const child of children) {
+    const items = await TaskQueue.list({ sessionID: child.id, limit: 100 })
+    if (
+      items.some(
+        (item) =>
+          item.kind === "subagent" &&
+          item.status !== "completed" &&
+          item.status !== "failed" &&
+          item.status !== "cancelled",
+      )
+    ) {
+      active++
+    }
+  }
+  if (active >= MAX_BACKGROUND_SUBAGENTS) {
+    throw new BackgroundCapacityError()
   }
 }
 
@@ -273,6 +306,11 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       const agent = await Agent.get(params.subagent_type)
       ensureNotAborted()
       if (!agent) throw new Error(`Unknown agent type: ${params.subagent_type} is not a valid agent type`)
+
+      if (params.background) {
+        const { TaskQueue } = await import("../session/task-queue")
+        await assertBackgroundCapacity(ctx.sessionID, TaskQueue)
+      }
 
       const hasTaskPermission = agent.permission.some((rule) => rule.permission === "task")
 
@@ -447,6 +485,12 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         if (ctx.abort.aborted || aborted || isAbortError(e)) {
           await Session.remove(session.id).catch((error) => {
             log.warn("failed to remove session after task abort", { sessionID: session.id, error })
+          })
+          throw e
+        }
+        if (e instanceof BackgroundCapacityError) {
+          await Session.remove(session.id).catch((error) => {
+            log.warn("failed to remove session after background capacity error", { sessionID: session.id, error })
           })
           throw e
         }

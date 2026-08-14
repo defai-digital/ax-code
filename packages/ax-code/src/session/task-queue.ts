@@ -526,6 +526,22 @@ export namespace TaskQueue {
     return setStatus({ id, status: "cancelled" })
   }
 
+  export async function cancelForSession(sessionID: SessionID, error?: string): Promise<Info[]> {
+    const items = await list({ sessionID, limit: 500 })
+    const cancelled: Info[] = []
+    for (const item of items) {
+      if (item.status === "completed" || item.status === "failed" || item.status === "cancelled") continue
+      cancelled.push(
+        await setStatus({
+          id: item.id,
+          status: "cancelled",
+          error: error ?? "Cancelled because the parent session stopped.",
+        }),
+      )
+    }
+    return cancelled
+  }
+
   export async function retry(id: TaskQueueID): Promise<Info> {
     const current = await get(id)
     assertActionStatus(current, "retry", ["failed", "cancelled"])
@@ -570,13 +586,20 @@ export namespace TaskQueue {
       const preserved: Info[] = []
       for (const row of rows) {
         const workflowItem = hasWorkflowPayload(row.payload)
+        const liveTaskSubagent = isLiveTaskSubagentPayload(row.payload) && row.kind === "subagent"
         const scheduledBeforePrompt =
           row.status === "running" &&
           row.kind === "automation" &&
           row.session_id === null &&
           typeof row.payload["scheduledTaskID"] === "string" &&
           !row.payload["workflowTemplateID"]
-        if (row.status === "waiting_for_idle" || (workflowItem && row.status === "running") || scheduledBeforePrompt) {
+        if (
+          row.status === "waiting_for_idle" ||
+          (workflowItem && row.status === "running") ||
+          scheduledBeforePrompt ||
+          (liveTaskSubagent &&
+            (row.status === "running" || row.status === "blocked_permission" || row.status === "blocked_question"))
+        ) {
           const updated = db
             .update(TaskQueueTable)
             .set({
@@ -627,6 +650,10 @@ export namespace TaskQueue {
   function hasWorkflowPayload(payload: Payload) {
     const workflow = payload["workflow"]
     return !!workflow && typeof workflow === "object"
+  }
+
+  function isLiveTaskSubagentPayload(payload: Payload) {
+    return payload["source"] === "task" && payload["resumeOnRestart"] === true
   }
 
   function resumesOnRestart(item: Info) {
