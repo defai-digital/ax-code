@@ -526,6 +526,28 @@ export namespace TaskQueue {
     return setStatus({ id, status: "cancelled" })
   }
 
+  export async function stop(id: TaskQueueID): Promise<Info> {
+    const current = await get(id)
+    if (current.status === "completed" || current.status === "failed" || current.status === "cancelled") {
+      throw new HTTPException(409, {
+        message: `Cannot stop task queue item ${id} while it is ${current.status}.`,
+      })
+    }
+    if (
+      current.sessionID &&
+      (current.status === "running" || current.status === "blocked_permission" || current.status === "blocked_question")
+    ) {
+      const { SessionPrompt } = await import("./prompt")
+      await SessionPrompt.cancel(current.sessionID)
+      const after = await get(id)
+      if (after.status === "cancelled") return after
+    }
+    if (current.status === "running") {
+      return setStatus({ id, status: "cancelled", error: "Stopped by operator." })
+    }
+    return cancel(id)
+  }
+
   export async function cancelForSession(sessionID: SessionID, error?: string): Promise<Info[]> {
     const items = await list({ sessionID, limit: 500 })
     const cancelled: Info[] = []

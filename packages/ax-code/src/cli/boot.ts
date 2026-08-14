@@ -46,6 +46,7 @@ import { UninstallCommand } from "./cmd/uninstall"
 import { UpgradeCommand } from "./cmd/upgrade"
 import { WebUiCommand } from "./cmd/webui"
 import { WorkflowCommand } from "./cmd/workflow"
+import { TaskCommand } from "./cmd/task"
 import { fatal } from "./bootstrap/fatal"
 import { init } from "./bootstrap/env"
 import { ensureWindowsUtf8Console } from "./bootstrap/windows-console"
@@ -101,6 +102,7 @@ const cmds = [
   WikiCommand,
   SkillCommand,
   WorkflowCommand,
+  TaskCommand,
   DesignCheckCommand,
   ContextCommand,
 ]

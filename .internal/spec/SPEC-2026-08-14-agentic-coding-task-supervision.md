@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Phase 4 implemented |
+| Status | Phase 5 CLI implemented; Desktop deferred |
 | Date | 2026-08-14 |
 | Related | PRD-2026-08-14; ADR-055 |
 | Location | `.internal/spec/SPEC-2026-08-14-agentic-coding-task-supervision.md` |

@@ -113,15 +113,16 @@ Depends on Phase 2 (needs queue-backed children).
 
 ## Phase 5 — Operator CLI, then Desktop (P1/P2)
 
-**Status:** TODO
+**Status:** DONE (2026-08-14) — CLI shipped; Desktop deferred
 
 Depends on Phase 2.
 
 ### Work
 
-1. [ ] `ax-code task list|show|cancel|retry` over `taskQueue.*`
+1. [x] `ax-code task list|show|cancel|retry` over the durable TaskQueue
 2. [ ] Desktop Tasks page (later) on the same ledger
 
 ### Exit criteria
 
-- CLI can list/cancel a background child without opening the TUI.
+- [x] CLI can list/cancel a background child without opening the TUI.
+- Desktop remains a later consumer of the same ledger.
