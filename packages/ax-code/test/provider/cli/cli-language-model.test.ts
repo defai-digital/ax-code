@@ -131,6 +131,67 @@ describe("CliLanguageModel", () => {
     expect(usageSource(finish.usage)).toBe("estimated")
   })
 
+  test("doStream preserves newlines for plain-text CLI output", async () => {
+    await using tmp = await tmpdir()
+    // `grok -p` prints plain multi-line text (no JSONL events). The stdout
+    // line split must not eat the newlines that carry markdown structure.
+    const spawn = vi
+      .spyOn(Process, "spawn")
+      .mockImplementation(() => successfulChild("LINE1\nLINE2\n\nLINE3\n"))
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const model = makeModel({ parser: grokBuildCliParser })
+          const { stream } = await model.doStream({
+            prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+          })
+          let text = ""
+          const reader = stream.getReader()
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            if (value.type === "text-delta") text += value.delta
+          }
+          expect(text).toBe("LINE1\nLINE2\n\nLINE3\n")
+        },
+      })
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doStream does not inject separators into structured JSONL output", async () => {
+    await using tmp = await tmpdir()
+    const jsonl =
+      '{"type":"content_block_delta","delta":{"text":"Hello"}}\n' +
+      '{"type":"content_block_delta","delta":{"text":" world"}}\n'
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => successfulChild(jsonl))
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const model = makeModel({ parser: claudeCodeParser })
+          const { stream } = await model.doStream({
+            prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+          })
+          let text = ""
+          const reader = stream.getReader()
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            if (value.type === "text-delta") text += value.delta
+          }
+          expect(text).toBe("Hello world")
+        },
+      })
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
   test("doGenerate forwards responseFormat json as a prompt instruction and unwraps fenced output", async () => {
     const fenced = '```json\n{"overall":"fine","issues":[]}\n```'
     const spawn = vi

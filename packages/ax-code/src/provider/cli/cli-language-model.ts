@@ -8,7 +8,7 @@ import { Process } from "../../util/process"
 import { Env } from "../../util/env"
 import { promptToText } from "./prompt"
 import { materializeCliAttachments } from "./attachments"
-import { stdoutHasCliJsonEvents, type CliOutputParser } from "./parser"
+import { parseCliJsonEventLine, stdoutHasCliJsonEvents, type CliOutputParser } from "./parser"
 import { buffer } from "node:stream/consumers"
 import { StringDecoder } from "node:string_decoder"
 import { toErrorMessage } from "@/util/error-message"
@@ -526,6 +526,13 @@ export class CliLanguageModel implements LanguageModelV3 {
 
         let remainder = ""
         let emitted = false
+        // Tracks whether any structured JSONL event has been seen on this
+        // stream. Plain-text CLIs (e.g. `grok -p`) never emit one; for them
+        // the line split below consumes the newlines that carry markdown
+        // structure (tables, lists, paragraph breaks), so raw lines must get
+        // their newline back. Structured events carry newlines inside their
+        // payloads and must not get separators.
+        let sawStructuredEvent = false
         let textOpen = true
         let stdoutEnded = false
         let stderrEnded = false
@@ -560,6 +567,11 @@ export class CliLanguageModel implements LanguageModelV3 {
             return null
           }
         }
+        const emitDelta = (delta: string) => {
+          emitted = true
+          output.push(delta)
+          controller.enqueue({ type: "text-delta", id: textId, delta })
+        }
         const processStdoutText = (textChunk: string) => {
           if (!textChunk || closed()) return
           raw.push(textChunk)
@@ -567,13 +579,17 @@ export class CliLanguageModel implements LanguageModelV3 {
           const lines = text.split("\n")
           remainder = lines.pop() ?? ""
           for (const line of lines) {
-            if (!line.trim()) continue
-            const delta = safeParse(line)
-            if (delta) {
-              emitted = true
-              output.push(delta)
-              controller.enqueue({ type: "text-delta", id: textId, delta })
+            if (!line.trim()) {
+              // Blank line: a paragraph break for plain-text CLIs, noise for
+              // JSONL ones. Skip until real output has started so the text
+              // does not gain a leading newline.
+              if (!sawStructuredEvent && emitted) emitDelta("\n")
+              continue
             }
+            const structured = parseCliJsonEventLine(line) !== undefined
+            if (structured) sawStructuredEvent = true
+            const delta = safeParse(line)
+            if (delta) emitDelta(structured ? delta : delta + "\n")
           }
         }
         armCliActivityTimer()
