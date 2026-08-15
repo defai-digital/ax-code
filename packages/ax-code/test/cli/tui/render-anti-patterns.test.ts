@@ -186,7 +186,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(exitContext).toContain("await destroyTuiRenderer(renderer)")
     expect(app).toContain("await destroyTuiRenderer(renderer)")
     expect(thread).toContain("await flushTuiStdout()")
-    expect(thread).toContain("process.exit(0)")
+    expect(thread).toContain("process.exit(process.exitCode ?? 0)")
   })
 
   test("keeps passthrough external output enabled in the app runtime", async () => {

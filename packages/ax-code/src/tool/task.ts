@@ -109,7 +109,7 @@ const parameters = z.object({
 type TaskMetadata = {
   sessionId: SessionID
   model: { modelID: string; providerID: string }
-  background: boolean
+  background?: boolean
   queueID?: TaskQueueID
   emptyResult: boolean
   finalizeAttempted: boolean
@@ -546,7 +546,6 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
           {
             sessionId: session.id,
             model,
-            background: false,
             emptyResult: true,
             finalizeAttempted,
             recoveredFromEmpty: false,
@@ -617,7 +616,6 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
         {
           sessionId: session.id,
           model,
-          background: false,
           emptyResult,
           finalizeAttempted,
           recoveredFromEmpty,

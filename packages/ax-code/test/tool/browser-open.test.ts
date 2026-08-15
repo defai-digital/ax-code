@@ -8,7 +8,7 @@ describe("browser_open tool", () => {
   })
 
   test("asks for origin-scoped durable permission", async () => {
-    vi.spyOn(BrowserRuntime, "get").mockReturnValue({
+    vi.spyOn(BrowserRuntime, "forSession").mockReturnValue({
       open: vi.fn(async (url: string, viewport: { width: number; height: number }) => ({
         pageID: "page-1",
         url,

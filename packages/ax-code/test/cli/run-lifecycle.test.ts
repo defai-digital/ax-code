@@ -244,7 +244,8 @@ test("TUI worker waits for an old event stream before replacing it", async () =>
   expect(src).toContain("const startEventStream = async")
   expect(src).toContain("await eventStream.done?.catch")
   expect(src).toContain("if (signal.aborted) return")
-  expect(src).toContain("await startEventStream({ directory: input.workspaceID ?? process.cwd() })")
+  expect(src).toContain("const directory = input.workspaceID ?? process.cwd()")
+  expect(src).toContain("await startEventStream({ directory })")
 })
 
 test("autonomous pulse timer does not keep the process alive", async () => {

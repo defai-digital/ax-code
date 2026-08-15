@@ -8,7 +8,7 @@ describe("browser_capture tool", () => {
   })
 
   test("returns screenshots as file attachments with data URLs", async () => {
-    vi.spyOn(BrowserRuntime, "get").mockReturnValue({
+    vi.spyOn(BrowserRuntime, "forSession").mockReturnValue({
       screenshot: vi.fn(async () => ({
         pageID: "page-1",
         data: Buffer.from("png-data"),

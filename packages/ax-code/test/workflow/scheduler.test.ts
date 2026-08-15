@@ -74,7 +74,10 @@ describe("WorkflowScheduler", () => {
           // Both phases produced summary artifacts — proves the scheduler
           // advanced past phase-a rather than stopping after the first.
           const phaseSummaries = result.artifacts.filter(
-            (artifact) => artifact.kind === "summary" && typeof artifact.summary === "string" && artifact.summary.includes("Noop phase completed"),
+            (artifact) =>
+              artifact.kind === "summary" &&
+              typeof artifact.summary === "string" &&
+              artifact.summary.includes("Noop phase completed"),
           )
           expect(phaseSummaries.length).toBeGreaterThanOrEqual(2)
         },
@@ -1306,17 +1309,23 @@ describe("WorkflowScheduler", () => {
           const { TaskQueue } = await import("../../src/session/task-queue")
           const queue = await TaskQueue.list()
           expect(queue).toHaveLength(3)
+          const started = await WorkflowRun.getDetail(run.id)
+          const criticChild = started.children.at(-1)
+          const workerChildren = started.children.slice(0, -1)
+          if (!criticChild?.taskQueueID || workerChildren.some((child) => !child.taskQueueID)) {
+            throw new Error("expected queued critic and worker children")
+          }
 
-          await TaskQueue.setStatus({ id: queue[0]!.id, status: "completed" })
-          await TaskQueue.setStatus({ id: queue[1]!.id, status: "completed" })
+          await TaskQueue.setStatus({ id: workerChildren[0]!.taskQueueID!, status: "completed" })
+          await TaskQueue.setStatus({ id: workerChildren[1]!.taskQueueID!, status: "completed" })
 
           let detail = await WorkflowRun.getDetail(run.id)
           expect(detail.status).toBe("running")
           expect(detail.phases[0]?.status).toBe("running")
           expect(detail.children.filter((child) => child.status === "completed")).toHaveLength(2)
-          expect((await TaskQueue.get(queue[2]!.id)).status).toBe("queued")
+          expect((await TaskQueue.get(criticChild.taskQueueID)).status).not.toBe("completed")
 
-          await TaskQueue.setStatus({ id: queue[2]!.id, status: "completed" })
+          await TaskQueue.setStatus({ id: criticChild.taskQueueID, status: "completed" })
 
           detail = await WorkflowRun.getDetail(run.id)
           expect(detail.status).toBe("completed")

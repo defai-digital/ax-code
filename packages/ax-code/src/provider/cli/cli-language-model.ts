@@ -16,6 +16,7 @@ import { Log } from "@/util/log"
 import { ScopedFlag } from "@/flag/scoped"
 import { Token } from "@/util/token"
 import { markEstimatedUsage } from "../usage"
+import { parseJsonResult } from "../../util/json-value"
 import { Shell } from "@/shell/shell"
 import { Instance } from "@/project/instance"
 import { cliEffortArgs, cliEffortFromProviderOptions } from "./effort"
@@ -173,24 +174,14 @@ export function extractJsonPayload(text: string): string {
   const fence = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)```/i)
   const candidate = (fence?.[1] ?? trimmed).trim()
   if (!candidate) return text
-  try {
-    JSON.parse(candidate)
-    return candidate
-  } catch {
-    // fall through to brace scan
-  }
+  if (parseJsonResult(candidate).ok) return candidate
   const start = candidate.search(/[{[]/)
   if (start === -1) return text
   const close = candidate[start] === "{" ? "}" : "]"
   const end = candidate.lastIndexOf(close)
   if (end <= start) return text
   const slice = candidate.slice(start, end + 1)
-  try {
-    JSON.parse(slice)
-    return slice
-  } catch {
-    return text
-  }
+  return parseJsonResult(slice).ok ? slice : text
 }
 
 function autonomousCliArgs(providerID: string): string[] {
