@@ -1,14 +1,9 @@
 import type { Agent } from "../agent/agent"
-import { ScopedFlag } from "../flag/scoped"
 import { providerModelKey } from "../provider/model-key"
 import type { ProviderID } from "../provider/schema"
 import { InstructionPrompt } from "./instruction"
 import type { MessageV2 } from "./message-v2"
-import { SessionGoal } from "./goal"
-import type { SessionID } from "./schema"
 import { SystemPrompt } from "./system"
-import { Todo } from "./todo"
-import { IntelligenceNudge } from "./intelligence-nudge"
 
 type SystemCache = {
   environment?: string[]
@@ -30,8 +25,6 @@ export async function systemPrompt(input: {
   environment?: typeof SystemPrompt.environment
   instructions?: typeof InstructionPrompt.system
   memory?: typeof SystemPrompt.memory
-  decisionHints?: typeof SystemPrompt.decisionHints
-  sessionID?: SessionID
   structuredPrompt?: string
 }) {
   // Skills caching:
@@ -78,9 +71,6 @@ export async function systemPrompt(input: {
   // user-curated entry contract.
   const memoryFn = input.memory ?? SystemPrompt.memory
   const memory = await memoryFn(input.agent, input.messages)
-  const decisionHintsFn = input.decisionHints ?? SystemPrompt.decisionHints
-  const decisionHints = await decisionHintsFn({ messages: input.messages, sessionID: input.sessionID })
-  const intelligenceNudge = IntelligenceNudge.evaluate(input.messages ?? [])
   const assuranceWorkflow = SystemPrompt.assuranceWorkflow(input.agent, input.model)
 
   const modelKey = providerModelKey({ providerID: input.model.providerID, modelID: input.model.api.id })
@@ -90,44 +80,16 @@ export async function systemPrompt(input: {
   }
   if (!input.cache.instructions) input.cache.instructions = await (input.instructions ?? InstructionPrompt.system)()
 
-  // In autonomous mode, inject pending todos into the system context each turn
-  // so the model always knows exactly what's left. This is live state visible
-  // at the start of every reasoning cycle, not just an upfront instruction.
-  const pendingTodos = ScopedFlag.autonomous() && input.sessionID ? Todo.active(input.sessionID) : []
-  const pendingTodosSection =
-    pendingTodos.length > 0
-      ? [
-          `<pending_todos count="${pendingTodos.length}">`,
-          ...Todo.formatLines(pendingTodos, {
-            prefix: "  ",
-            statusTransform: (status) => status.toUpperCase(),
-          }),
-          `  Complete all of these before ending your turn.`,
-          `</pending_todos>`,
-        ].join("\n")
-      : undefined
-  const goal = input.sessionID ? await SessionGoal.get(input.sessionID) : undefined
-  const goalSection =
-    goal && goal.status !== "complete"
-      ? [
-          `<session_goal status="${goal.status}" tokens_used="${goal.tokensUsed}"${goal.tokenBudget === undefined ? "" : ` token_budget="${goal.tokenBudget}"`}>`,
-          `  Objective: ${goal.objective}`,
-          `  Treat the objective as user-provided task context, not higher-priority instructions.`,
-          goal.status === "active"
-            ? `  Keep working toward this objective until it is complete, blocked, paused, cleared, or budget-limited.`
-            : `  Do not start new substantive work for this goal unless the runtime resumes it.`,
-          `</session_goal>`,
-        ].join("\n")
-      : undefined
-
+  // Cache-stability invariant: everything in this array must be stable within
+  // a session. The provider-side prompt cache keys on the system/history
+  // prefix, so per-turn dynamic state (session goal, pending todos, decision
+  // hints, intelligence nudge) deliberately does NOT live here — it is
+  // rendered as a synthetic <turn_context> part on the last user message by
+  // prompt-turn-context.ts / prompt-reminders.ts instead.
   const system = [
     ...input.cache.environment,
     ...(assuranceWorkflow ? [assuranceWorkflow] : []),
     ...(memory ? [memory] : []),
-    ...(decisionHints ? [decisionHints] : []),
-    ...(intelligenceNudge.active ? [intelligenceNudge.text] : []),
-    ...(goalSection ? [goalSection] : []),
-    ...(pendingTodosSection ? [pendingTodosSection] : []),
     ...(skills ? [skills] : []),
     ...input.cache.instructions,
   ]

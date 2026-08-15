@@ -27,4 +27,27 @@ describe("ModeProtocol.renderExecutionModes", () => {
     expect(text).toContain("task_parallel")
     expect(text.toLowerCase()).toContain("not a multi-provider ensemble")
   })
+
+  test("renders the slim variant when council/arena are disabled and local is unavailable", () => {
+    const text = ModeProtocol.renderExecutionModes({
+      defaultMode: "cloud",
+      councilEnabled: false,
+      arenaEnabled: false,
+      localAvailable: false,
+    })
+    expect(text).toContain("<execution_modes>")
+    expect(text).toContain("Effective default mode: cloud.")
+    expect(text).toContain("single-path implement + verify")
+    expect(text).not.toContain("task_parallel")
+    expect(text.split("\n")).toHaveLength(4)
+  })
+
+  test("keeps the full block when council is enabled even without arena or local", () => {
+    const text = ModeProtocol.renderExecutionModes({
+      councilEnabled: true,
+      arenaEnabled: false,
+      localAvailable: false,
+    })
+    expect(text).toContain("task_parallel")
+  })
 })

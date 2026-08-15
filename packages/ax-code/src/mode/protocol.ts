@@ -16,6 +16,18 @@ export namespace ModeProtocol {
     const arena = input?.arenaEnabled === true
     const local = input?.localAvailable === true
 
+    // Slim variant: with council/arena disabled and no local inference, none
+    // of the ensemble doctrine below is actionable — emit just the effective
+    // default and the single-path guidance.
+    if (!council && !arena && !local) {
+      return [
+        `<execution_modes>`,
+        `  Effective default mode: ${defaultMode}.`,
+        `  Council and arena are disabled and local inference is unavailable — use single-path implement + verify.`,
+        `</execution_modes>`,
+      ].join("\n")
+    }
+
     const lines = [
       `<execution_modes>`,
       `  Modes: local | cloud | hybrid | council | arena.`,

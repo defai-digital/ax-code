@@ -217,12 +217,7 @@ export namespace SystemPrompt {
           `  Prefer debug_analyze, impact_analyze, verify_project, and debug_apply_verification when they match the task and are available in the tool list.`,
           `</debug_engine_workflow>`,
         ]
-      : [
-          `<debug_engine_workflow>`,
-          `  Debugging & Refactoring Engine tools are not enabled in this session.`,
-          `  Do not call DRE-only tools unless they are present in the active tool list; use read, grep, bash, edit/write/apply_patch, and verify_project instead.`,
-          `</debug_engine_workflow>`,
-        ]
+      : []
 
     let executionModesProtocol: string[] = []
     let wikiProtocol: string[] = []

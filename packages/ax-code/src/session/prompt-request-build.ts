@@ -62,7 +62,6 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
           format,
           cache: input.cache,
           messages: requestMessagesSource,
-          sessionID: input.sessionID,
           structuredPrompt: input.structuredPrompt,
         }),
     MessageV2.toModelMessages(requestMessagesSource, input.model, { cache: !hasTransformPlugin }),

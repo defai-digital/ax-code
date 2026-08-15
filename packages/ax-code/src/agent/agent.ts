@@ -20,6 +20,7 @@ import PROMPT_TEST from "./prompt/test.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
 import PROMPT_RECAP from "./prompt/recap.txt"
+import PROMPT_PLAN_AGENT from "../session/prompt/plan-agent.txt"
 import { Permission } from "@/permission"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"
@@ -170,6 +171,7 @@ export namespace Agent {
         displayName: "Planner",
         description: "Plan mode. Disallows all edit tools.",
         tier: "core",
+        prompt: PROMPT_PLAN_AGENT,
         options: {},
         permission: Permission.merge(
           defaults,

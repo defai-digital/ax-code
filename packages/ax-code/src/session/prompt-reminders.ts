@@ -10,6 +10,7 @@ import PROMPT_PLAN from "../session/prompt/plan.txt"
 import BUILD_SWITCH from "../session/prompt/build-switch.txt"
 import { autonomousDecisionLedgerReminder } from "./prompt-autonomous-ledger"
 import { syntheticTextPart } from "./prompt-message-builders"
+import { buildTurnContext } from "./prompt-turn-context"
 
 type InsertRemindersInput = {
   messages: MessageV2.WithParts[]
@@ -108,6 +109,18 @@ export async function insertReminders(input: InsertRemindersInput) {
     : undefined
   if (autonomousDecisionLedger) {
     appendSyntheticReminder(autonomousDecisionLedger)
+  }
+
+  // Per-turn dynamic state (session goal, pending todos, decision hints,
+  // intelligence nudge) rides the reminder channel — request-only via the
+  // in-memory append, never persisted — so the system prompt prefix stays
+  // byte-stable for the provider prompt cache. insertReminders runs on every
+  // loop step before MessageV2.toModelMessages, and loopMessages reloads
+  // durable messages each step, so the part is rebuilt fresh per step and
+  // never accumulates.
+  const turnContext = await buildTurnContext({ messages: input.messages, sessionID: input.session.id })
+  if (turnContext) {
+    appendSyntheticReminder(turnContext)
   }
 
   if (!Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE) {
