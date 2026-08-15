@@ -138,7 +138,7 @@
       "body-parser@>=2.0.0 <2.3.0": "2.3.0",
       "dompurify@<3.4.13": "3.4.13",
       "builder-util-runtime@<9.7.0": "9.7.0",
-      "nanoid@>=3.0.0 <3.3.17": "3.3.17"
+      "nanoid@>=3.0.0 <3.3.18": "3.3.18"
     },
     "peerDependencyRules": {},
     "patchedDependencies": {

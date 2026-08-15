@@ -70,6 +70,7 @@ configure a workflow, understand a runtime boundary, or integrate AX Code with a
 - [Semantic Layer](architecture/semantic-layer.md) — graph and LSP provenance, audit, and replay boundaries.
 - [Local Engine Architecture](architecture/local-engine.md) — why AX Code uses an AX Engine sidecar.
 - [Runtime Stability](architecture/stability.md) — cancellation, crash, stream, timeout, and TUI reliability contracts.
+- [AX Work](architecture/ax-work.md) — Work is a separate product; AX Code stays code-only.
 
 ## Reference
 

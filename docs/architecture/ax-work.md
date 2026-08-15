@@ -1,5 +1,10 @@
 # AX Work
 
+Status: Active
+Scope: current-state
+Last reviewed: 2026-08-15
+Owner: ax-code runtime
+
 AX Work is a **separate product** (`~/code/ax-work`), not a tab inside AX
 Code Desktop. Combining office Work with coding tools in one app is
 rejected (ADR-053).

@@ -78,7 +78,7 @@ overrides:
   "body-parser@>=2.0.0 <2.3.0": "2.3.0"
   "dompurify@<3.4.13": "3.4.13"
   "builder-util-runtime@<9.7.0": "9.7.0"
-  "nanoid@>=3.0.0 <3.3.17": "3.3.17"
+  "nanoid@>=3.0.0 <3.3.18": "3.3.18"
 
 patchedDependencies:
   "@standard-community/standard-openapi@0.2.9": "patches/@standard-community%2Fstandard-openapi@0.2.9.patch"
