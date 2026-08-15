@@ -58,6 +58,12 @@ export async function resolvePromptLoopResult(
     sessionID: SessionID
     abort: AbortSignal
     expectedMessageID?: string
+    // True when this run was itself re-entered with resume_existing to drain
+    // queued prompts: only such a run pairs one queued-prompt callback with
+    // the response it just produced. A first-pass run must leave the queue
+    // untouched so the drain spawns a dedicated run per queued message.
+    resumeExisting: boolean
+    drainJoinerCallbacks: (sessionID: SessionID) => { resolve: (message: MessageV2.WithParts) => void }[]
     shiftQueuedCallback: (sessionID: SessionID) => { resolve: (message: MessageV2.WithParts) => void } | undefined
   },
   deps: PromptLoopResultDeps = defaultDeps,
@@ -76,7 +82,15 @@ export async function resolvePromptLoopResult(
     if (input.expectedMessageID && item.info.id !== input.expectedMessageID) continue
     // Turn completed: run user-visible Stop hooks (e.g. require-tests-on-stop).
     if (deps.runStopHooks) await fireStopHooks(input.sessionID, deps.runStopHooks)
-    input.shiftQueuedCallback(input.sessionID)?.resolve(item)
+    // Joiners (loop({ resume_existing: true }) on an active run) asked for
+    // exactly this turn's result — resolve them all and drop them from the
+    // queue so the drain does not spawn a redundant loop for them.
+    for (const joiner of input.drainJoinerCallbacks(input.sessionID)) {
+      joiner.resolve(item)
+    }
+    if (input.resumeExisting) {
+      input.shiftQueuedCallback(input.sessionID)?.resolve(item)
+    }
     return item
   }
   if (input.abort.aborted) throw new DOMException("Aborted", "AbortError")

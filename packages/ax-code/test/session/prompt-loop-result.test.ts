@@ -29,6 +29,8 @@ describe("resolvePromptLoopResult", () => {
       {
         sessionID,
         abort: new AbortController().signal,
+        resumeExisting: true,
+        drainJoinerCallbacks: () => [],
         shiftQueuedCallback: () => ({
           resolve(message) {
             resolved = message
@@ -48,6 +50,37 @@ describe("resolvePromptLoopResult", () => {
     expect(resolved).toBe(assistant)
   })
 
+  test("resolves joiner callbacks without shifting the queued prompts", async () => {
+    const sessionID = SessionID.descending()
+    const assistant = message("assistant", "msg_assistant")
+    const joined: MessageV2.WithParts[] = []
+    let shifted = false
+
+    const result = await resolvePromptLoopResult(
+      {
+        sessionID,
+        abort: new AbortController().signal,
+        resumeExisting: false,
+        drainJoinerCallbacks: () => [
+          { resolve: (message) => joined.push(message) },
+          { resolve: (message) => joined.push(message) },
+        ],
+        shiftQueuedCallback: () => {
+          shifted = true
+          return undefined
+        },
+      },
+      {
+        prune: async () => {},
+        stream: (() => stream([assistant])) as any,
+      },
+    )
+
+    expect(result).toBe(assistant)
+    expect(joined).toEqual([assistant, assistant])
+    expect(shifted).toBe(false)
+  })
+
   test("throws AbortError when no assistant message exists and the run was aborted", async () => {
     const controller = new AbortController()
     controller.abort()
@@ -57,6 +90,8 @@ describe("resolvePromptLoopResult", () => {
         {
           sessionID: SessionID.descending(),
           abort: controller.signal,
+          resumeExisting: false,
+          drainJoinerCallbacks: () => [],
           shiftQueuedCallback: () => undefined,
         },
         {
@@ -75,6 +110,8 @@ describe("resolvePromptLoopResult", () => {
         sessionID: SessionID.descending(),
         abort: new AbortController().signal,
         expectedMessageID: current.info.id,
+        resumeExisting: false,
+        drainJoinerCallbacks: () => [],
         shiftQueuedCallback: () => undefined,
       },
       {

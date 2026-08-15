@@ -271,7 +271,7 @@ export namespace SessionPrompt {
         // state entry between the `start()` check above and this access,
         // which previously threw TypeError: Cannot read properties of
         // undefined (reading 'callbacks').
-        if (!runState.enqueue(sessionID, { resolve, reject })) {
+        if (!runState.enqueue(sessionID, { resolve, reject, joiner: isResumingActiveLoop })) {
           reject(new Error("Session was cancelled"))
         }
       })
@@ -1737,12 +1737,21 @@ export namespace SessionPrompt {
       }
       continue
     }
-    return resolvePromptLoopResult({
+    // Await the result BEFORE returning: the `await using` disposals above
+    // (queue drain, session.end, idle) run when this function body completes.
+    // Resolving joiner/queued callbacks first lets the drain observe the
+    // final queue state — otherwise it re-enters a redundant loop for a
+    // joiner callback the active run was about to resolve, leaving the
+    // session busy after the resumed caller already got its result.
+    const result = await resolvePromptLoopResult({
       sessionID,
       abort,
       expectedMessageID: lastProducedAssistantID,
+      resumeExisting: resume_existing === true,
+      drainJoinerCallbacks: runState.drainJoinerCallbacks,
       shiftQueuedCallback: runState.shiftQueuedCallback,
     })
+    return result
   })
 
   export const ShellInput = ShellInputSchema

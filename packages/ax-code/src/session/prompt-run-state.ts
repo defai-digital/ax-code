@@ -7,6 +7,11 @@ import { SessionStatus } from "./status"
 type PromptRunCallback = {
   resolve(input: MessageV2.WithParts): void
   reject(reason?: unknown): void
+  // True when the callback comes from loop({ resume_existing: true }) joining
+  // an already-active run: it has no durable user message of its own and is
+  // resolved with the active run's result, so it must not trigger a fresh
+  // loop when the queue drains.
+  joiner?: boolean
 }
 
 type PromptRunEntry = {
@@ -63,6 +68,15 @@ export function createPromptRunState() {
 
     queuedCallbacks(sessionID: SessionID) {
       return state()[sessionID]?.callbacks ?? []
+    },
+
+    drainJoinerCallbacks(sessionID: SessionID) {
+      const entry = state()[sessionID]
+      if (!entry) return []
+      const joiners = entry.callbacks.filter((cb) => cb.joiner)
+      if (joiners.length === 0) return []
+      entry.callbacks = entry.callbacks.filter((cb) => !cb.joiner)
+      return joiners
     },
 
     markIdle(sessionID: SessionID) {

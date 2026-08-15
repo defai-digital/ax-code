@@ -23,6 +23,8 @@ describe("resolvePromptLoopResult Stop hooks", () => {
       {
         sessionID,
         abort: new AbortController().signal,
+        resumeExisting: false,
+        drainJoinerCallbacks: () => [],
         shiftQueuedCallback: () => undefined,
       },
       {
@@ -54,6 +56,8 @@ describe("resolvePromptLoopResult Stop hooks", () => {
       {
         sessionID,
         abort: new AbortController().signal,
+        resumeExisting: false,
+        drainJoinerCallbacks: () => [],
         shiftQueuedCallback: () => undefined,
       },
       {
