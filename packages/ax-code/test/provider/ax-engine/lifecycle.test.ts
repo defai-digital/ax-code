@@ -26,7 +26,7 @@ function baseStatus(over: Partial<AxEngineStatusCore> = {}): AxEngineStatusCore 
     },
     disk: {
       path: "/tmp",
-      modelID: "qwen3.6-27b-axq-6bit",
+      modelID: "qwen3.8-27b-axq-6bit",
       quantization: "mlx6bit",
       requiredBytes: 1,
       ok: true,
@@ -34,7 +34,7 @@ function baseStatus(over: Partial<AxEngineStatusCore> = {}): AxEngineStatusCore 
     },
     model: {
       present: true,
-      modelID: "qwen3.6-27b-axq-6bit",
+      modelID: "qwen3.8-27b-axq-6bit",
       quantization: "mlx6bit",
       complete: true,
       blockers: [],
@@ -96,7 +96,7 @@ describe("mapAxEngineStatusToLifecycle", () => {
       baseStatus({
         model: {
           present: false,
-          modelID: "qwen3.6-27b-axq-6bit",
+          modelID: "qwen3.8-27b-axq-6bit",
           quantization: "mlx6bit",
           complete: false,
           blockers: [AX_ENGINE_ERROR.ModelNotPrepared],
@@ -139,7 +139,7 @@ describe("mapAxEngineStatusToLifecycle", () => {
       baseStatus({
         model: {
           present: false,
-          modelID: "qwen3.6-27b-axq-6bit",
+          modelID: "qwen3.8-27b-axq-6bit",
           quantization: "mlx6bit",
           complete: false,
           blockers: [AX_ENGINE_ERROR.ModelNotPrepared],

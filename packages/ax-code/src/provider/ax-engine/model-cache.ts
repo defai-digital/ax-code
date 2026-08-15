@@ -242,15 +242,11 @@ async function hasManifest(dir: string) {
 }
 
 function packageMarkerFor(modelID: AxEngineModelID, quantization: AxEngineQuantization) {
-  return AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[
-    quantization as keyof (typeof AX_ENGINE_MODEL_DEFINITIONS)[typeof modelID]["quantizations"]
-  ].packageMarker
+  return AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[quantization]?.packageMarker
 }
 
 function allowsDirectFallback(modelID: AxEngineModelID, quantization: AxEngineQuantization) {
-  return AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[
-    quantization as keyof (typeof AX_ENGINE_MODEL_DEFINITIONS)[typeof modelID]["quantizations"]
-  ].directFallback
+  return AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[quantization]?.directFallback ?? false
 }
 
 async function hasPackageMarker(dir: string, modelID: AxEngineModelID, quantization: AxEngineQuantization) {
@@ -674,15 +670,9 @@ export async function downloadModel(input: {
 }): Promise<AxEnginePrepareState> {
   const modelID = input.modelID ?? AX_ENGINE_DEFAULT_MODEL_ID
   const quantization = input.quantization ?? AX_ENGINE_MODEL_DEFINITIONS[modelID].defaultQuantization
-  const repo =
-    AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[
-      quantization as keyof (typeof AX_ENGINE_MODEL_DEFINITIONS)[typeof modelID]["quantizations"]
-    ]?.hfRepo
-  const quantizationDefinition =
-    AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[
-      quantization as keyof (typeof AX_ENGINE_MODEL_DEFINITIONS)[typeof modelID]["quantizations"]
-    ]
-  if (!repo) {
+  const quantizationDefinition = AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[quantization]
+  const repo = quantizationDefinition?.hfRepo
+  if (!quantizationDefinition || !repo) {
     throw new Error(
       `${AX_ENGINE_ERROR.DownloadFailed}: ${AX_ENGINE_MODEL_DEFINITIONS[modelID].name} does not support ${quantization}`,
     )
@@ -692,9 +682,7 @@ export async function downloadModel(input: {
   // default) and returns that snapshot path, so the weights live in one
   // standard location instead of being copied into ax-code's own cache.
   const dest = input.dest ? resolveDownloadDestination(modelID, quantization, input.dest) : undefined
-  // Catalog currently ships only direct packs; keep the MTP branch so adding a
-  // downloadMode: "mtp" entry later works without a type-narrowing false error.
-  const downloadMode = quantizationDefinition.downloadMode as "direct" | "mtp"
+  const downloadMode = quantizationDefinition.downloadMode
   const useMtpPackage = downloadMode === "mtp"
   const cmd = useMtpPackage
     ? [input.binaryPath, "download-mtp", modelID, "--json"]

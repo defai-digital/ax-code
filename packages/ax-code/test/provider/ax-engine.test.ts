@@ -18,12 +18,10 @@ import { getAxEngineDoctorCheck } from "../../src/cli/cmd/doctor"
 import { shouldShowProviderInList } from "../../src/server/routes/provider"
 import {
   AX_ENGINE_ERROR,
-  AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID,
-  AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID,
-  AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
-  AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID,
-  AX_ENGINE_QWEN3_CODER_NEXT_AXQ_API_MODEL_ID,
-  AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID,
+  AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID,
+  AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+  AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID,
+  AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
   AX_ENGINE_PROVIDER_ID,
   AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
   AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES,
@@ -180,7 +178,7 @@ describe("ax-engine platform gate", () => {
     const dependency = { available: true, mode: "path", binaryPath: "/bin/ax-engine", blockers: [] } as any
     const disk = {
       path: "/tmp",
-      modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
+      modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
       quantization: "mlx6bit",
       freeBytes: 100 * 1024 ** 3,
       requiredBytes: 48 * 1024 ** 3,
@@ -189,7 +187,7 @@ describe("ax-engine platform gate", () => {
     } as any
     const missingModel = {
       present: false,
-      modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
+      modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
       quantization: "mlx6bit",
       complete: false,
       blockers: [],
@@ -238,7 +236,7 @@ describe("ax-engine platform gate", () => {
   })
 
   test("prefers active download jobs over recent terminal history for Desktop catalog state", () => {
-    const modelID = AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID as AxEngineModelJobSummary["modelID"]
+    const modelID = AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID as AxEngineModelJobSummary["modelID"]
     const failedJob = {
       id: "failed-job",
       type: "download" as const,
@@ -284,20 +282,20 @@ describe("ax-engine model cache", () => {
   test("normalizes unknown quantization to the conservative default", () => {
     expect(normalizeQuantization("mlx6bit")).toBe("mlx6bit")
     expect(normalizeQuantization("mlx4bit")).toBe("mlx6bit")
-    expect(normalizeQuantization("mlx4bit", AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID)).toBe("mlx4bit")
+    expect(normalizeQuantization("mlx4bit", AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID)).toBe("mlx4bit")
     expect(normalizeQuantization("surprise")).toBe("mlx6bit")
     expect(normalizeQuantization("toString")).toBe("mlx6bit")
     expect(normalizeQuantization("constructor")).toBe("mlx6bit")
   })
 
   test("defaults downloads into the deterministic AX Code managed model cache", () => {
-    expect(resolveDownloadDestination(AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID, "mlx6bit")).toContain(
-      "ax-engine/models/qwen3.6-27b-axq-6bit/mlx6bit",
+    expect(resolveDownloadDestination(AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, "mlx6bit")).toContain(
+      "ax-engine/models/qwen3.8-27b-axq-6bit/mlx6bit",
     )
-    expect(resolveDownloadDestination(AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID, "mlx6bit")).toContain(
+    expect(resolveDownloadDestination(AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID, "mlx6bit")).toContain(
       "ax-engine/models/qwen3-coder-next-axq-6bit/mlx6bit",
     )
-    expect(resolveDownloadDestination(AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID, "mlx6bit", "/Volumes/Models/qwen")).toBe(
+    expect(resolveDownloadDestination(AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, "mlx6bit", "/Volumes/Models/qwen")).toBe(
       "/Volumes/Models/qwen",
     )
   })
@@ -347,7 +345,7 @@ describe("ax-engine model cache", () => {
     process.env.HF_HUB_CACHE = hfRoot
 
     try {
-      const status = await getDiskStatus({ modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID, quantization: "mlx6bit" })
+      const status = await getDiskStatus({ modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, quantization: "mlx6bit" })
       expect(status.path).toBe(hfRoot)
     } finally {
       if (previous === undefined) delete process.env.HF_HUB_CACHE
@@ -384,7 +382,7 @@ describe("ax-engine model cache", () => {
       await expect(markPrepared({ modelPath })).rejects.toMatchObject({ code: "EACCES" })
 
       const status = await getModelStatus({
-        modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
+        modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
         modelPath,
         quantization: "mlx6bit",
       })
@@ -410,7 +408,7 @@ describe("ax-engine model cache", () => {
     try {
       ;(AxEnginePaths as { prepareState: string }).prepareState = prepareState
       const status = await getModelStatus({
-        modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
+        modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
         quantization: "mlx6bit",
       })
 
@@ -460,8 +458,8 @@ describe("ax-engine server lifecycle", () => {
       await expect(
         ensureServer({
           binaryPath: "/bin/ax-engine",
-          modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
-          apiModelID: AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID,
+          modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+          apiModelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
           modelPath: "/models/qwen",
         }),
       ).rejects.toThrow("failed to read server state")
@@ -515,8 +513,8 @@ describe("ax-engine server lifecycle", () => {
       await expect(
         ensureServer({
           binaryPath: binary,
-          modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
-          apiModelID: AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID,
+          modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+          apiModelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
           modelPath: "/models/qwen",
         }),
       ).rejects.toThrow(
@@ -567,8 +565,8 @@ describe("ax-engine server lifecycle", () => {
       pid: 0,
       port: 38181,
       baseURL: "http://127.0.0.1:38181/v1",
-      modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
-      apiModelID: AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID,
+      modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+      apiModelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
       modelPath: "/models/qwen",
       binaryPath: "/opt/homebrew/bin/ax-engine",
       startedAt: Date.now(),
@@ -697,8 +695,8 @@ describe("ax-engine server lifecycle", () => {
     await withServerPaths(tmp.path, async () => {
       const pending = ensureServer({
         binaryPath: binary,
-        modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
-        apiModelID: AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID,
+        modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+        apiModelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
         modelPath: "/models/qwen",
         preferredPort: 38191,
         readyTimeoutMs: 1500,
@@ -738,8 +736,8 @@ describe("ax-engine server lifecycle", () => {
       await expect(
         ensureServer({
           binaryPath: binary,
-          modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
-          apiModelID: AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID,
+          modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+          apiModelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
           modelPath: "/models/qwen",
           preferredPort: 38192,
           apiKey: "configured-secret",
@@ -779,8 +777,8 @@ describe("ax-engine server lifecycle", () => {
         await expect(
           ensureServer({
             binaryPath: newBinary,
-            modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
-            apiModelID: AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID,
+            modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+            apiModelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
             modelPath: "/models/qwen",
             preferredPort: 38195,
             readyTimeoutMs: 1500,
@@ -813,9 +811,9 @@ describe("ax-engine server lifecycle", () => {
 
 describe("ax-engine server launch args", () => {
   test("omits block-pool flags when no context window is requested", () => {
-    expect(axEngineServerLaunchArgs({ apiModelID: AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID })).toEqual([
+    expect(axEngineServerLaunchArgs({ apiModelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID })).toEqual([
       "--model-id",
-      AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID,
+      AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
       "--speculation-profile",
       "agentic",
       "--max-batch-tokens",
@@ -948,14 +946,14 @@ describe("ax-engine prepare lifecycle", () => {
   test("checks prepared model status without starting server unless requested", async () => {
     const calls: string[] = []
     const result = await prepareAxEngine(
-      { modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID, quantization: "mlx6bit" },
+      { modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, quantization: "mlx6bit" },
       {
         requireEligibility: async () => eligibility,
         getModelStatus: async () => {
           calls.push("model")
           return {
             present: false,
-            modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
+            modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
             quantization: "mlx6bit",
             complete: false,
             blockers: ["AX_ENGINE_MODEL_MISSING: missing"],
@@ -975,14 +973,14 @@ describe("ax-engine prepare lifecycle", () => {
   test("can start an already prepared model through the shared lifecycle helper", async () => {
     const calls: string[] = []
     const result = await prepareAxEngine(
-      { modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID, quantization: "mlx6bit", start: true },
+      { modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, quantization: "mlx6bit", start: true },
       {
         requireEligibility: async () => eligibility,
         getModelStatus: async () => {
           calls.push("model")
           return {
             present: true,
-            modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
+            modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
             quantization: "mlx6bit",
             path: "/models/qwen",
             revision: "abc123",
@@ -1008,8 +1006,8 @@ describe("ax-engine prepare lifecycle", () => {
             pid: 123,
             port: 31418,
             baseURL: "http://127.0.0.1:31418/v1",
-            modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
-            apiModelID: AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID,
+            modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+            apiModelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
             modelPath: input.modelPath,
             modelRevision: input.modelRevision,
             binaryPath: input.binaryPath,
@@ -1027,7 +1025,7 @@ describe("ax-engine prepare lifecycle", () => {
   test("download prepare reuses the resolved dependency when starting", async () => {
     const calls: string[] = []
     const result = await prepareAxEngine(
-      { modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID, quantization: "mlx6bit", download: true, start: true },
+      { modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, quantization: "mlx6bit", download: true, start: true },
       {
         requireEligibility: async () => eligibility,
         getDependencyStatus: async () => {
@@ -1044,7 +1042,7 @@ describe("ax-engine prepare lifecycle", () => {
           calls.push("download")
           expect(input.binaryPath).toBe("/bin/ax-engine")
           return {
-            modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
+            modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
             quantization: "mlx6bit",
             path: "/models/qwen",
             revision: "def456",
@@ -1057,8 +1055,8 @@ describe("ax-engine prepare lifecycle", () => {
             pid: 123,
             port: 31418,
             baseURL: "http://127.0.0.1:31418/v1",
-            modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
-            apiModelID: AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID,
+            modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+            apiModelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
             modelPath: "/models/qwen",
             modelRevision: "def456",
             binaryPath: "/bin/ax-engine",
@@ -1092,61 +1090,65 @@ describe("ax-engine provider integration", () => {
     const provider = (await ModelsDev.get())[AX_ENGINE_PROVIDER_ID]
     expect(provider).toBeDefined()
     expect(Object.keys(provider.models)).toEqual([
-      AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
-      AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID,
-      AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID,
-      AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID,
+      "qwen3.8-27b-axq-6bit",
+      "qwen3.8-27b-axq-4bit",
+      "ornith-35b-axq-6bit",
+      "ornith-35b-axq-4bit",
+      "qwen3-coder-next-axq-6bit",
+      "qwen3-coder-next-axq-4bit",
     ])
     expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([
       65_536,
+      65_536,
       262_144,
-      32_768,
+      262_144,
+      16_384,
       16_384,
     ])
-    expect(provider.models[AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID]).toMatchObject({
-      name: "Qwen3.6-27B AXQ 6-bit (Local MLX Auto)",
+    expect(provider.models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]).toMatchObject({
+      name: "Qwen3.8-27B AXQ 6-bit (Local MLX Auto)",
       tool_call: true,
       limit: { context: 65_536, input: 63_488, output: 2_048 },
       options: {
-        modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
+        modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
         quantization: "mlx6bit",
         minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
       },
       status: "beta",
       experimental: { localRuntime: "ax-engine" },
     })
-    expect(provider.models[AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID]).toMatchObject({
+    expect(provider.models[AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID]).toMatchObject({
       name: "Ornith-1.0-35B AXQ 4-bit (Local MLX)",
-      family: AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID,
+      family: AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID,
       reasoning: true,
       tool_call: true,
       limit: { context: 262_144, input: 260_096, output: 2_048 },
       options: {
-        modelID: AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID,
+        modelID: AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID,
         quantization: "mlx4bit",
         minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
       },
       status: "beta",
       experimental: { localRuntime: "ax-engine" },
     })
-    expect(provider.models[AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID]).toMatchObject({
-      name: "Qwen3.5-9B AXQ 6-bit (Local MLX Auto)",
+    expect(provider.models[AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID]).toMatchObject({
+      name: "Qwen3.8-27B AXQ 4-bit (Local MLX Auto)",
       tool_call: true,
-      limit: { context: 32_768, input: 30_720, output: 2_048 },
+      limit: { context: 65_536, input: 63_488, output: 2_048 },
       options: {
-        modelID: AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID,
-        quantization: "mlx6bit",
-        minMemoryBytes: 0,
+        modelID: AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID,
+        quantization: "mlx4bit",
+        minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
       },
       status: "beta",
       experimental: { localRuntime: "ax-engine" },
     })
-    expect(provider.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID]).toMatchObject({
+    expect(provider.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]).toMatchObject({
       name: "Qwen3-Coder-Next AXQ 6-bit (Local MLX)",
       tool_call: true,
       limit: { context: 16_384, input: 14_336, output: 2_048 },
       options: {
-        modelID: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID,
+        modelID: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
         quantization: "mlx6bit",
         minMemoryBytes: AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES,
       },
@@ -1158,22 +1160,22 @@ describe("ax-engine provider integration", () => {
   test("sub-64GB hosts keep smaller ax-engine models selectable and block larger ones", async () => {
     const provider = (await Provider.fromModelsDevProvider((await ModelsDev.get())[AX_ENGINE_PROVIDER_ID]))!
     expect(
-      modelMemoryBlockReason(AX_ENGINE_PROVIDER_ID, provider.models[AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID], 32 * 1024 ** 3),
+      modelMemoryBlockReason(AX_ENGINE_PROVIDER_ID, provider.models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID], 32 * 1024 ** 3),
     ).toBe("requires 64GB unified memory")
     expect(
-      modelMemoryBlockReason(AX_ENGINE_PROVIDER_ID, provider.models[AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID], 32 * 1024 ** 3),
+      modelMemoryBlockReason(AX_ENGINE_PROVIDER_ID, provider.models[AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID], 64 * 1024 ** 3),
     ).toBeUndefined()
     expect(
       modelMemoryBlockReason(
         AX_ENGINE_PROVIDER_ID,
-        provider.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID],
+        provider.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID],
         64 * 1024 ** 3,
       ),
     ).toBe("requires 96GB unified memory")
     expect(
       modelMemoryBlockReason(
         AX_ENGINE_PROVIDER_ID,
-        provider.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID],
+        provider.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID],
         96 * 1024 ** 3,
       ),
     ).toBeUndefined()
@@ -1230,7 +1232,7 @@ describe("ax-engine provider integration", () => {
     })
 
     expect(seen).toEqual([])
-    expect(models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID].api.url).toBe("http://127.0.0.1:31418/v1")
+    expect(models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID].api.url).toBe("http://127.0.0.1:31418/v1")
   })
 
   test("explicit managed mode overrides a legacy AX_ENGINE_HOST attach environment", async () => {
@@ -1274,10 +1276,10 @@ describe("ax-engine provider integration", () => {
         const providers = await Provider.list()
         const axEngine = providers[ProviderID.make(AX_ENGINE_PROVIDER_ID)]
         expect(axEngine).toBeDefined()
-        expect(axEngine.models[AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID]).toBeDefined()
-        expect(axEngine.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID]).toBeDefined()
+        expect(axEngine.models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]).toBeDefined()
+        expect(axEngine.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]).toBeDefined()
         expect(axEngine.options.baseURL).toBeUndefined()
-        expect(axEngine.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID].api.url).toBe("http://127.0.0.1:31418/v1")
+        expect(axEngine.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID].api.url).toBe("http://127.0.0.1:31418/v1")
       },
     })
   })
@@ -1299,8 +1301,8 @@ describe("ax-engine provider integration", () => {
         const providers = await Provider.list()
         const axEngine = providers[ProviderID.make(AX_ENGINE_PROVIDER_ID)]
         expect(axEngine).toBeDefined()
-        expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID)
-        expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID)
+        expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID)
+        expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID)
       },
     })
   })
@@ -1324,10 +1326,10 @@ describe("ax-engine provider integration", () => {
         const providers = await Provider.list()
         const axEngine = providers[ProviderID.make(AX_ENGINE_PROVIDER_ID)]
         expect(axEngine).toBeDefined()
-        expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID)
-        expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID)
+        expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID)
+        expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID)
         expect(axEngine.options.baseURL).toBeUndefined()
-        expect(axEngine.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID].api.url).toBe("http://127.0.0.1:31418/v1")
+        expect(axEngine.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID].api.url).toBe("http://127.0.0.1:31418/v1")
       },
     })
   })
@@ -1338,7 +1340,7 @@ describe("ax-engine provider integration", () => {
       const url = String(input)
       seen.push(url)
       if (url === "http://127.0.0.1:31418/v1/models") {
-        return new Response(JSON.stringify({ data: [{ id: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID }] }), {
+        return new Response(JSON.stringify({ data: [{ id: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID }] }), {
           status: 200,
           headers: { "content-type": "application/json" },
         })
@@ -1365,7 +1367,7 @@ describe("ax-engine provider integration", () => {
 
   test("maps the public Qwen3.6-27B model id to the ax-engine runtime id", async () => {
     globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ data: [liveCard(AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID)] }), {
+      new Response(JSON.stringify({ data: [liveCard(AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID)] }), {
         status: 200,
         headers: { "content-type": "application/json" },
       })) as unknown as typeof fetch
@@ -1387,16 +1389,16 @@ describe("ax-engine provider integration", () => {
           return { id }
         },
       },
-      AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
+      AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
     )
 
-    expect(model).toEqual({ id: AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID })
-    expect(requested).toEqual([AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID])
+    expect(model).toEqual({ id: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID })
+    expect(requested).toEqual([AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID])
   })
 
   test("maps Qwen3-Coder-Next AXQ to its runtime id", async () => {
     globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ data: [liveCard(AX_ENGINE_QWEN3_CODER_NEXT_AXQ_API_MODEL_ID)] }), {
+      new Response(JSON.stringify({ data: [liveCard(AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID)] }), {
         status: 200,
         headers: { "content-type": "application/json" },
       })) as unknown as typeof fetch
@@ -1418,19 +1420,19 @@ describe("ax-engine provider integration", () => {
           return { id }
         },
       },
-      AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID,
-      { modelID: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID },
+      AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
+      { modelID: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID },
     )
 
-    expect(model).toEqual({ id: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_API_MODEL_ID })
-    expect(requested).toEqual([AX_ENGINE_QWEN3_CODER_NEXT_AXQ_API_MODEL_ID])
+    expect(model).toEqual({ id: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID })
+    expect(requested).toEqual([AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID])
   })
 
   test("discovered Coder-Next AXQ preserves the public model id for loader resolution", async () => {
     globalThis.fetch = (async () =>
       new Response(
         JSON.stringify({
-          data: [liveCard(AX_ENGINE_QWEN3_CODER_NEXT_AXQ_API_MODEL_ID, { limit: { context: 16_384, output: 2_048 } })],
+          data: [liveCard(AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID, { limit: { context: 16_384, output: 2_048 } })],
         }),
         {
           status: 200,
@@ -1448,11 +1450,11 @@ describe("ax-engine provider integration", () => {
     } as any)
 
     const discovered = await loader.discoverModels!({} as any)
-    const coder = discovered[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID]
+    const coder = discovered[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]
     expect(coder.capabilities.toolcall).toBe(true)
     expect(coder.limit).toEqual({ context: 16_384, input: 14_336, output: 2_048 })
     expect(coder.options).toMatchObject({
-      modelID: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID,
+      modelID: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
       quantization: "mlx6bit",
     })
 
@@ -1468,8 +1470,8 @@ describe("ax-engine provider integration", () => {
       coder.options,
     )
 
-    expect(model).toEqual({ id: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_API_MODEL_ID })
-    expect(requested).toEqual([AX_ENGINE_QWEN3_CODER_NEXT_AXQ_API_MODEL_ID])
+    expect(model).toEqual({ id: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID })
+    expect(requested).toEqual([AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID])
   })
 
   test("discovers and uses an external ax-engine model with a non-catalog model id", async () => {
@@ -1572,7 +1574,7 @@ describe("ax-engine provider integration", () => {
       new Response(
         JSON.stringify({
           data: [
-            liveCard(AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID, {
+            liveCard(AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, {
               ax_engine: { openai_tool_calling_supported: true, coding_supported: false },
             }),
           ],
@@ -1583,12 +1585,12 @@ describe("ax-engine provider integration", () => {
     const loader = await axEngineLoader()(provider)
     const model = await loader.getModel!(
       { languageModel: (id: string) => ({ id }) },
-      AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
+      AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
       {
-        modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
+        modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
       },
     )
-    expect(model).toEqual({ id: AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID })
+    expect(model).toEqual({ id: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID })
   })
 
   test("real AX Engine build-agent payload fits every managed model input limit", async () => {
@@ -1608,7 +1610,7 @@ describe("ax-engine provider integration", () => {
       directory: tmp.path,
       fn: async () => {
         const agent = await Agent.get("build")
-        const first = models[AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID]
+        const first = models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]
         const providerPrompt = SystemPrompt.provider(first).join("\n")
         expect(providerPrompt).toContain("local software-engineering agent")
         expect(providerPrompt.match(/local software-engineering agent/g)).toHaveLength(1)
@@ -1685,8 +1687,8 @@ describe("ax-engine provider integration", () => {
               return { id }
             },
           },
-          AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
-          { modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID },
+          AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+          { modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID },
         ),
       ).rejects.toThrow(AX_ENGINE_ERROR.ModelNotPrepared)
     } finally {

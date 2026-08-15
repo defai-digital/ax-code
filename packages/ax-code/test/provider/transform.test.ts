@@ -119,7 +119,7 @@ describe("ProviderTransform.options - Kimi / alibaba-pai promptCacheKey", () => 
   test("enables Ornith chat-template thinking on local 35B and PAI 397B", () => {
     const sessionID = "ses_ornith"
     const local = ProviderTransform.options({
-      model: mkModel({ providerID: "ax-engine", id: "ax-engine/ornith-35b", apiID: "ornith-35b" }),
+      model: mkModel({ providerID: "ax-engine", id: "ax-engine/ornith-35b-axq-4bit", apiID: "ornith-35b-axq-4bit" }),
       sessionID,
       providerOptions: {},
     })
@@ -305,10 +305,10 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
 
   test("Ornith uses official 0.6 / 0.95 sampling even when family is qwen", () => {
     const local = {
-      id: "ax-engine/ornith-35b",
+      id: "ax-engine/ornith-35b-axq-4bit",
       providerID: ProviderID.make("ax-engine"),
       family: "qwen",
-      api: { id: "ornith-35b", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
+      api: { id: "ornith-35b-axq-4bit", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
     } as any
     const cloud = {
       id: "alibaba-pai/Ornith-1.0-397B-FP8",
@@ -344,9 +344,9 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
 
   test("does not advertise unsupported reasoning-effort variants for Ornith", () => {
     const model = {
-      id: "ax-engine/ornith-35b",
+      id: "ax-engine/ornith-35b-axq-4bit",
       providerID: ProviderID.make("ax-engine"),
-      api: { id: "ornith-35b", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
+      api: { id: "ornith-35b-axq-4bit", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
       capabilities: { reasoning: true },
     } as any
 
@@ -398,7 +398,7 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
       providerID: ProviderID.make("custom"),
       api: {
         id: "coding-model",
-        url: "https://gateway.example/v1/models/ornith-35b",
+        url: "https://gateway.example/v1/models/ornith-35b-axq-4bit",
         npm: "@ai-sdk/openai-compatible",
       },
     } as any
@@ -2986,12 +2986,12 @@ describe("ProviderTransform.smallOptions - Alibaba thinking models", () => {
   })
 
   test("disables AX Engine chat-template thinking for small response-only turns", () => {
-    const result = ProviderTransform.smallOptions(createModel("ax-engine", "qwen3.6-27b-axq", true))
+    const result = ProviderTransform.smallOptions(createModel("ax-engine", "qwen3.8-27b-axq-6bit", true))
     expect(result).toEqual({ chat_template_kwargs: { enable_thinking: false } })
   })
 
   test("disables Ornith chat-template thinking on local and PAI title calls", () => {
-    expect(ProviderTransform.smallOptions(createModel("ax-engine", "ornith-35b", true))).toEqual({
+    expect(ProviderTransform.smallOptions(createModel("ax-engine", "ornith-35b-axq-4bit", true))).toEqual({
       chat_template_kwargs: { enable_thinking: false },
     })
     expect(ProviderTransform.smallOptions(createModel("alibaba-pai", "Ornith-1.0-397B-FP8", true))).toEqual({

@@ -54,9 +54,9 @@ describe("session.system", () => {
 
   test("routes local 35B and cloud 397B Ornith to the same lean prompt", () => {
     const local = SystemPrompt.provider({
-      id: "ax-engine/ornith-35b",
+      id: "ax-engine/ornith-35b-axq-4bit",
       providerID: "ax-engine",
-      api: { id: "ornith-35b", url: "http://127.0.0.1/v1" },
+      api: { id: "ornith-35b-axq-4bit", url: "http://127.0.0.1/v1" },
     } as any)
     const cloud = SystemPrompt.provider({
       id: "alibaba-pai/Ornith-1.0-397B-FP8",

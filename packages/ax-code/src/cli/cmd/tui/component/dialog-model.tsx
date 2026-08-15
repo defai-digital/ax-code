@@ -12,6 +12,10 @@ import { modelDisplayInfo } from "./model-vision-label"
 import { modelMemoryBlockReason, modelSelectableForProvider } from "@/provider/model-selectability"
 import { useTheme } from "../context/theme"
 import { dialogModelOptionDisabled } from "./dialog-model-options"
+import { useSDK } from "../context/sdk"
+import { useToast } from "../ui/toast"
+import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
+import { DialogAxEngineDownload, fetchAxEngineDownloadOffer } from "./dialog-ax-engine-download"
 
 export function DialogModel(props: { providerID?: string }) {
   const local = useLocal()
@@ -19,7 +23,37 @@ export function DialogModel(props: { providerID?: string }) {
   const dialog = useDialog()
   const keybind = useKeybind()
   const { theme } = useTheme()
+  const sdk = useSDK()
+  const toast = useToast()
   const [query, setQuery] = createSignal("")
+
+  function selectModel(value: { providerID: string; modelID: string }) {
+    const apply = () => local.model.set(value, { recent: true })
+    if (value.providerID !== AX_ENGINE_PROVIDER_ID) {
+      dialog.clear()
+      apply()
+      return
+    }
+    // Managed AX Engine models are listed before their weights exist locally.
+    // Offer a managed Hugging Face download instead of letting the first
+    // message fail with MODEL_NOT_PREPARED. Any probe failure falls back to
+    // plain selection — the offer is a convenience, never a gate.
+    void fetchAxEngineDownloadOffer(sdk, value.modelID)
+      .then((offer) => {
+        if (!offer) {
+          dialog.clear()
+          apply()
+          return
+        }
+        dialog.replace(() => (
+          <DialogAxEngineDownload offer={offer} sdk={sdk} toast={toast} onApplySelection={apply} />
+        ))
+      })
+      .catch(() => {
+        dialog.clear()
+        apply()
+      })
+  }
 
   const connected = useConnected()
   const providers = createDialogProviderOptions()
@@ -52,8 +86,7 @@ export function DialogModel(props: { providerID?: string }) {
             category,
             disabled: dialogModelOptionDisabled(provider.id, model.id, model),
             onSelect: () => {
-              dialog.clear()
-              local.model.set({ providerID: provider.id, modelID: model.id }, { recent: true })
+              selectModel({ providerID: provider.id, modelID: model.id })
             },
           },
         ]
@@ -94,8 +127,7 @@ export function DialogModel(props: { providerID?: string }) {
               category: connected() ? provider.name : undefined,
               disabled: dialogModelOptionDisabled(provider.id, model, info),
               onSelect() {
-                dialog.clear()
-                local.model.set({ providerID: provider.id, modelID: model }, { recent: true })
+                selectModel({ providerID: provider.id, modelID: model })
               },
             }
           }),

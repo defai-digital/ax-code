@@ -5,10 +5,10 @@ import {
   startDownloadJob,
   type AxEngineDownloadJobRuntime,
 } from "../../../src/provider/ax-engine/download-job"
-import { AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID } from "../../../src/provider/ax-engine/constants"
+import { AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID } from "../../../src/provider/ax-engine/constants"
 import type { downloadModel } from "../../../src/provider/ax-engine/model-cache"
 
-const MODEL_ID = AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID
+const MODEL_ID = AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID
 
 const eligibility = {
   supported: true,

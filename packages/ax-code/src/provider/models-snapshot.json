@@ -145442,8 +145442,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1048576,
-          "output": 393216
+          "context": 1024000,
+          "output": 384000
         }
       },
       "deepseek/deepseek-v4-pro-0813": {

@@ -206,6 +206,7 @@ export async function getAxEngineModelsCatalog(): Promise<AxEngineModelsResponse
     const quantization = definition.defaultQuantization
     if (!AX_ENGINE_QUANTIZATION_IDS.includes(quantization)) continue
     const quant = definition.quantizations[quantization]
+    if (!quant) continue
     const [local, disk] = await Promise.all([
       getModelStatus({ modelID, quantization }),
       getDiskStatus({ modelID, quantization }),

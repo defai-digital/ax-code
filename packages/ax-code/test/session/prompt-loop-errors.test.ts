@@ -279,7 +279,7 @@ describe("prompt loop error transitions", () => {
         sessionID,
         currentModel: {
           providerID: ProviderID.make("ax-engine"),
-          modelID: ModelID.make("qwen3.6-27b-axq-6bit"),
+          modelID: ModelID.make("qwen3.8-27b-axq-6bit"),
         },
         error: {
           name: "UnknownError",

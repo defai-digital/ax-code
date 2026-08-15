@@ -5,7 +5,7 @@ import { tmpdir } from "../../fixture/fixture"
 import { deleteAxEngineModel } from "../../../src/provider/ax-engine/delete"
 import { AxEnginePaths } from "../../../src/provider/ax-engine/paths"
 
-const AXQ27 = { modelID: "qwen3.6-27b-axq-6bit", quant: "mlx6bit", repo: "AutomatosX/AX-Qwen3.6-27B-MLX-AXQ-6bit-MTP" } as const
+const AXQ27 = { modelID: "qwen3.8-27b-axq-6bit", quant: "mlx6bit", repo: "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP" } as const
 const C1 = "1111111111111111111111111111111111111111"
 const C2 = "2222222222222222222222222222222222222222"
 

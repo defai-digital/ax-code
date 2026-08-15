@@ -14,7 +14,7 @@ import {
   AxEngineStartBody,
   shouldShowProviderInList,
 } from "../../src/server/routes/provider"
-import { AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID } from "../../src/provider/ax-engine"
+import { AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID } from "../../src/provider/ax-engine"
 import { AxEnginePaths } from "../../src/provider/ax-engine/paths"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
@@ -357,14 +357,23 @@ describe("provider routes", () => {
     expect(response.status).toBe(200)
     const body = (await response.json()) as { models: Array<{ id: string }> }
     expect(body.models.map((model) => model.id)).toEqual([
-      "qwen3.6-27b-axq-6bit",
-      "ornith-35b",
-      "qwen3.5-9b-axq-6bit",
+      "qwen3.8-27b-axq-6bit",
+      "qwen3.8-27b-axq-4bit",
+      "ornith-35b-axq-6bit",
+      "ornith-35b-axq-4bit",
       "qwen3-coder-next-axq-6bit",
+      "qwen3-coder-next-axq-4bit",
     ])
     expect((body as { catalog?: { source?: string; modelIDs?: string[] } }).catalog).toMatchObject({
       source: "packages/ax-code/src/provider/ax-engine/constants.ts",
-      modelIDs: ["qwen3.6-27b-axq-6bit", "ornith-35b", "qwen3.5-9b-axq-6bit", "qwen3-coder-next-axq-6bit"],
+      modelIDs: [
+        "qwen3.8-27b-axq-6bit",
+        "qwen3.8-27b-axq-4bit",
+        "ornith-35b-axq-6bit",
+        "ornith-35b-axq-4bit",
+        "qwen3-coder-next-axq-6bit",
+        "qwen3-coder-next-axq-4bit",
+      ],
     })
   })
 
@@ -389,7 +398,7 @@ describe("provider routes", () => {
 
     const modelPath = path.join(tmp.path, "external-model")
     const marker = {
-      modelID: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
+      modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
       quantization: "mlx6bit",
       path: modelPath,
       preparedAt: Date.now(),
@@ -401,7 +410,7 @@ describe("provider routes", () => {
     await fs.writeFile(AxEnginePaths.completionMarker(modelPath), JSON.stringify(marker))
 
     const response = await Server.Default().request(
-      `/provider/ax-engine/models/${AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID}?directory=${directory}`,
+      `/provider/ax-engine/models/${AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID}?directory=${directory}`,
       {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },

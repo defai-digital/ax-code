@@ -1,17 +1,13 @@
 export const AX_ENGINE_PROVIDER_ID = "ax-engine"
-export const AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID = "qwen3.6-27b-axq-6bit"
-export const AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID = "ornith-35b"
-export const AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID = "qwen3.5-9b-axq-6bit"
-export const AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID = "qwen3-coder-next-axq-6bit"
+// The supported local lineup is exactly three AXQuant families, each in 6-bit
+// and 4-bit: Qwen3.8-27B (MTP), Ornith-1.0-35B, and Qwen3-Coder-Next.
+export const AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID = "qwen3.8-27b-axq-6bit"
+export const AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID = "qwen3.8-27b-axq-4bit"
+export const AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID = "ornith-35b-axq-6bit"
+export const AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID = "ornith-35b-axq-4bit"
+export const AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID = "qwen3-coder-next-axq-6bit"
+export const AX_ENGINE_QWEN3_CODER_NEXT_AXQ_4BIT_MODEL_ID = "qwen3-coder-next-axq-4bit"
 export const AX_ENGINE_DISPLAY_NAME = "AX Engine (Local)"
-export const AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID = "qwen3.6-27b-axq"
-export const AX_ENGINE_ORNITH_35B_AXQ_API_MODEL_ID = "ornith-35b"
-export const AX_ENGINE_QWEN35_9B_AXQ_API_MODEL_ID = "qwen3.5-9b-axq"
-export const AX_ENGINE_QWEN3_CODER_NEXT_AXQ_API_MODEL_ID = "qwen3-coder-next-axq"
-export const AX_ENGINE_QWEN36_27B_AXQ_MODEL_DISPLAY_NAME = "Qwen3.6-27B AXQ 6-bit (Local MLX Auto)"
-export const AX_ENGINE_ORNITH_35B_AXQ_MODEL_DISPLAY_NAME = "Ornith-1.0-35B AXQ 4-bit (Local MLX)"
-export const AX_ENGINE_QWEN35_9B_AXQ_MODEL_DISPLAY_NAME = "Qwen3.5-9B AXQ 6-bit (Local MLX Auto)"
-export const AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_DISPLAY_NAME = "Qwen3-Coder-Next AXQ 6-bit (Local MLX)"
 // Keep the client default aligned with ax-engine-server. Managed lifecycle may
 // still select 31419+ when another process owns the preferred port.
 export const AX_ENGINE_DEFAULT_PORT = 31418
@@ -82,10 +78,12 @@ export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease | undefined = undef
 // Desktop session when that session spawns this monorepo's ax-code (desktop:dev
 // prefers the monorepo source launcher over Homebrew/PATH installs).
 export const AX_ENGINE_MODEL_IDS = [
-  AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
-  AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID,
-  AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID,
-  AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID,
+  AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+  AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID,
+  AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
+  AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID,
+  AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
+  AX_ENGINE_QWEN3_CODER_NEXT_AXQ_4BIT_MODEL_ID,
 ] as const
 export type AxEngineModelID = (typeof AX_ENGINE_MODEL_IDS)[number]
 
@@ -95,16 +93,39 @@ export type AxEngineQuantization = (typeof AX_ENGINE_QUANTIZATION_IDS)[number]
 /** Absolute source path (repo-relative) for the managed model catalog contract. */
 export const AX_ENGINE_CATALOG_SOURCE = "packages/ax-code/src/provider/ax-engine/constants.ts" as const
 
-export const AX_ENGINE_MODEL_DEFINITIONS = {
-  // Pre-packaged AutomatosX AXQuant (AXQ) 6-bit + MTP snapshot. Direct HF download
-  // (not download-mtp) because the hub package already ships model-manifest.json and
-  // the AXQuant MTP sidecar contract.
-  [AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID]: {
-    id: AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID,
-    apiModelID: AX_ENGINE_QWEN36_27B_AXQ_API_MODEL_ID,
-    name: AX_ENGINE_QWEN36_27B_AXQ_MODEL_DISPLAY_NAME,
+export type AxEngineQuantizationDefinition = {
+  hfRepo: string
+  downloadMode: "direct" | "mtp"
+  packageMarker: string | undefined
+  directFallback: boolean
+  mtpSource: string
+  minDiskBytes: number
+}
+
+export type AxEngineModelDefinition = {
+  id: AxEngineModelID
+  apiModelID: string
+  name: string
+  defaultQuantization: AxEngineQuantization
+  releaseDate: string
+  reasoning: boolean
+  toolcall: boolean
+  minMemoryBytes: number
+  contextTokens: number
+  outputTokens: number
+  /** Each catalog model ships exactly one quantization today; the map shape keeps room for more. */
+  quantizations: Partial<Record<AxEngineQuantization, AxEngineQuantizationDefinition>>
+}
+
+export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineModelID, AxEngineModelDefinition> = {
+  // Qwen3.8-27B AXQuant + MTP snapshots. Direct HF download: the hub packages
+  // ship model-manifest.json and the AXQuant MTP sidecar contract.
+  [AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]: {
+    id: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+    apiModelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+    name: "Qwen3.8-27B AXQ 6-bit (Local MLX Auto)",
     defaultQuantization: "mlx6bit",
-    releaseDate: "2026-06-14",
+    releaseDate: "2026-08-14",
     reasoning: false,
     toolcall: true,
     minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
@@ -112,23 +133,69 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
     outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
     quantizations: {
       mlx6bit: {
-        hfRepo: "AutomatosX/AX-Qwen3.6-27B-MLX-AXQ-6bit-MTP",
+        hfRepo: "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP",
         downloadMode: "direct",
         packageMarker: "axquant_mtp_sidecar_manifest.json",
         directFallback: true,
-        mtpSource: "AXQuant MTP sidecar packaged with AutomatosX/AX-Qwen3.6-27B-MLX-AXQ-6bit-MTP",
-        // ~21 GB complete download; keep headroom for HF snapshot + temp files.
+        mtpSource: "AXQuant MTP sidecar packaged with AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP",
+        // ~19.4 GiB complete download; keep headroom for HF snapshot + temp files.
         minDiskBytes: 32 * 1024 ** 3,
       },
     },
   },
-  // Development AXQuant 4-bit Ornith pack. The source model advertises a
-  // 262,144-token window and native Qwen-style reasoning/tool calls. It has no
-  // MTP sidecar, so AX Engine uses the direct decode path.
-  [AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID]: {
-    id: AX_ENGINE_ORNITH_35B_AXQ_MODEL_ID,
-    apiModelID: AX_ENGINE_ORNITH_35B_AXQ_API_MODEL_ID,
-    name: AX_ENGINE_ORNITH_35B_AXQ_MODEL_DISPLAY_NAME,
+  [AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID]: {
+    id: AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID,
+    apiModelID: AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID,
+    name: "Qwen3.8-27B AXQ 4-bit (Local MLX Auto)",
+    defaultQuantization: "mlx4bit",
+    releaseDate: "2026-08-14",
+    reasoning: false,
+    toolcall: true,
+    minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
+    contextTokens: 65_536,
+    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
+    quantizations: {
+      mlx4bit: {
+        hfRepo: "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP",
+        downloadMode: "direct",
+        packageMarker: "axquant_mtp_sidecar_manifest.json",
+        directFallback: true,
+        mtpSource: "AXQuant MTP sidecar packaged with AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP",
+        // ~16.9 GiB complete download; keep headroom for HF snapshot + temp files.
+        minDiskBytes: 28 * 1024 ** 3,
+      },
+    },
+  },
+  // Ornith 1.0 35B AXQuant packs. 262,144-token window with native Qwen-style
+  // reasoning/tool calls. No MTP sidecar, so AX Engine uses the direct decode
+  // path (ax-engine emits the native manifest after download).
+  [AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID]: {
+    id: AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
+    apiModelID: AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
+    name: "Ornith-1.0-35B AXQ 6-bit (Local MLX)",
+    defaultQuantization: "mlx6bit",
+    releaseDate: "2026-08-13",
+    reasoning: true,
+    toolcall: true,
+    minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
+    contextTokens: 262_144,
+    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
+    quantizations: {
+      mlx6bit: {
+        hfRepo: "AutomatosX/AX-Ornith-1.0-35B-MLX-AXQ-6bit",
+        downloadMode: "direct",
+        packageMarker: undefined,
+        directFallback: true,
+        mtpSource: "Direct decode AXQuant Ornith coding model (no MTP package)",
+        // ~24.5 GiB complete download; keep headroom for HF snapshot + temp files.
+        minDiskBytes: 36 * 1024 ** 3,
+      },
+    },
+  },
+  [AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID]: {
+    id: AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID,
+    apiModelID: AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID,
+    name: "Ornith-1.0-35B AXQ 4-bit (Local MLX)",
     defaultQuantization: "mlx4bit",
     releaseDate: "2026-08-13",
     reasoning: true,
@@ -143,45 +210,18 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
         packageMarker: undefined,
         directFallback: true,
         mtpSource: "Direct decode AXQuant Ornith coding model (no MTP package)",
-        // ~21.5 GB complete download; keep headroom for the HF snapshot and
-        // temporary files created while AX Engine prepares the model.
+        // ~20.0 GiB complete download; keep headroom for HF snapshot + temp files.
         minDiskBytes: 32 * 1024 ** 3,
       },
     },
   },
-  // Lighter AutomatosX AXQ 9B pack with MTP sidecar. Direct HF download; hub
-  // ships axquant_mtp_sidecar_manifest.json but not model-manifest.json (ax-engine
-  // emits the native manifest after download).
-  [AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID]: {
-    id: AX_ENGINE_QWEN35_9B_AXQ_MODEL_ID,
-    apiModelID: AX_ENGINE_QWEN35_9B_AXQ_API_MODEL_ID,
-    name: AX_ENGINE_QWEN35_9B_AXQ_MODEL_DISPLAY_NAME,
-    defaultQuantization: "mlx6bit",
-    releaseDate: "2026-06-14",
-    reasoning: false,
-    toolcall: true,
-    minMemoryBytes: 0,
-    contextTokens: 32_768,
-    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
-    quantizations: {
-      mlx6bit: {
-        hfRepo: "AutomatosX/AX-Qwen3.5-9B-MLX-AXQ-6bit-MTP",
-        downloadMode: "direct",
-        packageMarker: "axquant_mtp_sidecar_manifest.json",
-        directFallback: true,
-        mtpSource: "AXQuant MTP sidecar packaged with AutomatosX/AX-Qwen3.5-9B-MLX-AXQ-6bit-MTP",
-        // ~8.4 GB complete download; keep headroom for HF snapshot + temp files.
-        minDiskBytes: 16 * 1024 ** 3,
-      },
-    },
-  },
-  // AutomatosX AXQuant 6-bit coding specialist. Direct HF download; hub package
-  // has no MTP sidecar and no pre-shipped model-manifest.json (ax-engine emits
-  // the native manifest after download).
-  [AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID]: {
-    id: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_ID,
-    apiModelID: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_API_MODEL_ID,
-    name: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_MODEL_DISPLAY_NAME,
+  // Qwen3-Coder-Next AXQuant coding specialist packs. No MTP sidecar and no
+  // pre-shipped model-manifest.json (ax-engine emits the native manifest after
+  // download).
+  [AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]: {
+    id: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
+    apiModelID: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
+    name: "Qwen3-Coder-Next AXQ 6-bit (Local MLX)",
     defaultQuantization: "mlx6bit",
     releaseDate: "2026-06-14",
     reasoning: false,
@@ -196,14 +236,37 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
         packageMarker: undefined,
         directFallback: true,
         mtpSource: "Direct decode AXQuant coding specialist (no MTP package)",
-        // ~60 GB complete download; keep headroom for HF snapshot + temp files.
+        // ~55.7 GiB complete download; keep headroom for HF snapshot + temp files.
         minDiskBytes: 80 * 1024 ** 3,
       },
     },
   },
-} as const
+  [AX_ENGINE_QWEN3_CODER_NEXT_AXQ_4BIT_MODEL_ID]: {
+    id: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_4BIT_MODEL_ID,
+    apiModelID: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_4BIT_MODEL_ID,
+    name: "Qwen3-Coder-Next AXQ 4-bit (Local MLX)",
+    defaultQuantization: "mlx4bit",
+    releaseDate: "2026-06-14",
+    reasoning: false,
+    toolcall: true,
+    minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
+    contextTokens: 16_384,
+    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
+    quantizations: {
+      mlx4bit: {
+        hfRepo: "AutomatosX/AX-Qwen3-Coder-Next-MLX-AXQ-4bit",
+        downloadMode: "direct",
+        packageMarker: undefined,
+        directFallback: true,
+        mtpSource: "Direct decode AXQuant coding specialist (no MTP package)",
+        // ~44.6 GiB complete download; keep headroom for HF snapshot + temp files.
+        minDiskBytes: 64 * 1024 ** 3,
+      },
+    },
+  },
+}
 
-export const AX_ENGINE_DEFAULT_MODEL_ID: AxEngineModelID = AX_ENGINE_QWEN36_27B_AXQ_MODEL_ID
+export const AX_ENGINE_DEFAULT_MODEL_ID: AxEngineModelID = AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID
 
 export const AX_ENGINE_DEFAULT_QUANTIZATION: AxEngineQuantization = "mlx6bit"
 

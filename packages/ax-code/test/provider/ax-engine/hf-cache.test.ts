@@ -16,9 +16,9 @@ import { Filesystem } from "../../../src/util/filesystem"
 import { Process } from "../../../src/util/process"
 
 const AXQ27 = {
-  modelID: "qwen3.6-27b-axq-6bit",
+  modelID: "qwen3.8-27b-axq-6bit",
   quant: "mlx6bit",
-  repo: "AutomatosX/AX-Qwen3.6-27B-MLX-AXQ-6bit-MTP",
+  repo: "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP",
 } as const
 const CODER = {
   modelID: "qwen3-coder-next-axq-6bit",
@@ -183,7 +183,7 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     const status = await getModelStatus({ modelID: AXQ27.modelID, quantization: AXQ27.quant })
     expect(status.present).toBe(false)
     expect(status.blockers).toEqual([
-      "AX_ENGINE_MODEL_MISSING: prepare Qwen3.6-27B AXQ 6-bit (Local MLX Auto) before using ax-engine",
+      "AX_ENGINE_MODEL_MISSING: prepare Qwen3.8-27B AXQ 6-bit (Local MLX Auto) before using ax-engine",
     ])
   })
 
@@ -270,7 +270,7 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     process.env.HF_HUB_CACHE = hfRoot
     const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
     const originalText = Process.text
-    // 40 GiB free: enough for the default qwen3.6-27b-axq-6bit (32 GiB) but not
+    // 40 GiB free: enough for the default qwen3.8-27b-axq-6bit (32 GiB) but not
     // for qwen3-coder-next-axq-6bit (80 GiB). A call site that drops modelID would wrongly
     // pass the disk gate for this download.
     const availableBlocks = (40 * 1024 ** 3) / 1024
