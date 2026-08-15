@@ -76,16 +76,18 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       last = Date.now()
       // Batch all event emissions so all store updates result in a single render.
       // If an emission throws, log and continue — a single bad event must not
-      // poison the queue or leave the TUI permanently out of sync.
-      try {
-        batch(() => {
-          for (const event of events) {
+      // poison the queue or leave the TUI permanently out of sync. The
+      // try/catch is per event so one throwing listener doesn't silently skip
+      // the rest of the batch.
+      batch(() => {
+        for (const event of events) {
+          try {
             emitter.emit(event.type, event)
+          } catch (error) {
+            log.warn("event emission failed", { error: toErrorMessage(error), type: event.type })
           }
-        })
-      } catch (error) {
-        log.warn("event batch emission failed", { error: toErrorMessage(error), dropped: events.length })
-      }
+        }
+      })
     }
 
     const handleEvent = (event: TuiRuntimeEvent) => {

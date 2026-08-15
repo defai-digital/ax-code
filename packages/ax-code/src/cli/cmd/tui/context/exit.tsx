@@ -41,6 +41,10 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
           await destroyTuiRenderer(renderer)
           win32FlushInputBuffer()
           if (reason) {
+            // A reason means the exit is abnormal (e.g. sync bootstrap
+            // failure) — make sure the process exit code reflects that
+            // instead of the default 0.
+            process.exitCode = 1
             const formatted = FormatError(reason) ?? FormatUnknownError(reason)
             if (formatted) {
               process.stderr.write(formatted + "\n")

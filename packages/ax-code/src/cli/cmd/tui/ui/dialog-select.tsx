@@ -7,6 +7,7 @@ import { isDeepEqual } from "remeda"
 import { useDialog, type DialogContext } from "@tui/ui/dialog"
 import { useKeybind } from "@tui/context/keybind"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
+import { CONFIRM_KEYS } from "@tui/util/keys"
 import { findRenderableChild, focusRenderable } from "@tui/util/renderable-safety"
 import { useToast } from "@tui/ui/toast"
 import { Keybind } from "@/util/keybind"
@@ -291,7 +292,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       moveTo(flat().length - 1)
     }
 
-    if (evt.name === "return") {
+    if (CONFIRM_KEYS.has(evt.name)) {
       evt.preventDefault()
       evt.stopPropagation()
       confirmSelected()

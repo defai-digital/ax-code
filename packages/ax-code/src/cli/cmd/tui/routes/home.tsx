@@ -15,7 +15,7 @@ import { Logo } from "../component/logo"
 import { recentSessions, recentSessionTitle } from "../component/session-picker-view-model"
 import { Locale } from "@/util/locale"
 import { useSync } from "../context/sync"
-import { Toast } from "../ui/toast"
+import { Toast, useToast } from "../ui/toast"
 import { useArgs } from "../context/args"
 import { useDirectory } from "../context/directory"
 import { useRoute, useRouteData } from "@tui/context/route"
@@ -61,6 +61,7 @@ export function Home() {
   const promptRef = usePromptRef()
   const args = useArgs()
   const local = useLocal()
+  const toast = useToast()
   const mcp = createMemo(() => isNonEmptyRecord(sync.data.mcp))
   const mcpError = createMemo(() => {
     return Object.values(sync.data.mcp).some((x) => x.status === "failed")
@@ -133,6 +134,26 @@ export function Home() {
         if (prompt.current?.input !== args.prompt) return
         startupPromptConsumed = true
         prompt.submit()
+      },
+    ),
+  )
+  // The effect above waits forever when providers fail to load — the prompt
+  // would vanish silently. Surface the failure instead; the text stays in the
+  // input so the user can retry manually after fixing provider config.
+  createEffect(
+    on(
+      () => sync.data.provider_failed,
+      (failed) => {
+        if (!failed) return
+        if (!args.prompt || startupPromptConsumed) return
+        startupPromptConsumed = true
+        process.exitCode = 1
+        recordTuiStartupOnce("tui.startup.homePromptProviderFailed")
+        toast.show({
+          variant: "error",
+          message: "Providers failed to load — could not auto-submit the --prompt argument",
+          duration: 8000,
+        })
       },
     ),
   )

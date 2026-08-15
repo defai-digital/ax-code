@@ -7,7 +7,9 @@
 import { createSignal } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { MessageID } from "@/session/schema"
+import { withTimeout } from "@/util/timeout"
 import type { useSDK } from "@tui/context/sdk"
+import { SUBMIT_ACCEPT_TIMEOUT_MS } from "./prompt-config"
 import {
   appendFollowUp,
   headFollowUp,
@@ -123,14 +125,22 @@ export async function dispatchFollowUp(sdk: SdkContext, sessionID: string, item:
   if (inflight.has(sessionID)) return false
   inflight.add(sessionID)
   try {
-    const result = await sdk.client.session.promptAsync({
-      sessionID,
-      messageID: MessageID.ascending(),
-      agent: item.agent,
-      model: item.model,
-      variant: item.variant,
-      parts: item.parts as PromptAsyncBody["parts"],
-    })
+    // Bound the wait: promptAsync can hang on a stalled connection, and the
+    // inflight latch is held for the whole await — an unbounded hang would
+    // latch this session's queue forever. On timeout the rejection propagates
+    // (the item stays queued) and the finally below releases the latch.
+    const result = await withTimeout(
+      sdk.client.session.promptAsync({
+        sessionID,
+        messageID: MessageID.ascending(),
+        agent: item.agent,
+        model: item.model,
+        variant: item.variant,
+        parts: item.parts as PromptAsyncBody["parts"],
+      }),
+      SUBMIT_ACCEPT_TIMEOUT_MS,
+      `Follow-up dispatch timed out after ${SUBMIT_ACCEPT_TIMEOUT_MS}ms`,
+    )
     const error = result && typeof result === "object" ? (result as { error?: unknown }).error : undefined
     if (error) {
       const detail = (error as { data?: { message?: string }; message?: string })?.data?.message

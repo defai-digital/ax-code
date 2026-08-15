@@ -113,6 +113,7 @@ const eventStream = {
   abort: undefined as AbortController | undefined,
   status: undefined as StreamConnectionStatus | undefined,
   done: undefined as Promise<void> | undefined,
+  directory: undefined as string | undefined,
 }
 // Guards concurrent startEventStream calls (e.g. two setWorkspace RPCs
 // in quick succession): both would pass the teardown await below and
@@ -136,6 +137,7 @@ const startEventStream = async (input: { directory?: string }) => {
   }
   const abort = new AbortController()
   eventStream.abort = abort
+  eventStream.directory = input.directory ?? process.cwd()
   const signal = abort.signal
 
   const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -210,6 +212,7 @@ const startEventStream = async (input: { directory?: string }) => {
       if (eventStream.abort === abort) {
         eventStream.abort = undefined
         eventStream.done = undefined
+        eventStream.directory = undefined
       }
     })
   eventStream.done = done
@@ -291,7 +294,12 @@ export const rpc = {
     Config.global.reset()
   },
   async setWorkspace(input: { workspaceID?: string }) {
-    await startEventStream({ directory: input.workspaceID ?? process.cwd() })
+    const directory = input.workspaceID ?? process.cwd()
+    // Home <-> session navigation re-pins the same directory; rebuilding the
+    // SSE subscription for an unchanged directory only drops events in the
+    // teardown/reconnect gap, so no-op instead.
+    if (directory === eventStream.directory) return
+    await startEventStream({ directory })
   },
   async shutdown() {
     // shutdown is invoked from multiple paths: the thread's explicit
@@ -311,6 +319,7 @@ export const rpc = {
       await eventStream.done?.catch(() => {})
       eventStream.abort = undefined
       eventStream.done = undefined
+      eventStream.directory = undefined
       GlobalBus.off("event", handleGlobalEvent)
       await Instance.disposeAll()
       // Stop the local ax-engine server on quit so the loaded model is

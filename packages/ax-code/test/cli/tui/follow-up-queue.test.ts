@@ -1,4 +1,5 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
+import { SUBMIT_ACCEPT_TIMEOUT_MS } from "../../../src/cli/cmd/tui/component/prompt/prompt-config"
 import {
   appendFollowUp,
   followUpPreview,
@@ -174,6 +175,32 @@ describe("follow-up-queue-store", () => {
     expect(second).toBe(false)
     release?.()
     expect(await first).toBe(true)
+  })
+
+  test("dispatchFollowUp times out a hung dispatch, keeps the item queued, and releases the latch", async () => {
+    vi.useFakeTimers()
+    try {
+      const sid = "ses_timeout"
+      clearFollowUpQueue(sid)
+      const queued = enqueueFollowUp(sid, { parts: [{ type: "text", text: "stuck" }] })
+      // Never resolves — simulates a stalled connection holding the request open.
+      const hungSdk = { client: { session: { promptAsync: () => new Promise(() => {}) } } } as any
+
+      const hung = dispatchFollowUp(hungSdk, sid, queued)
+      const rejection = expect(hung).rejects.toThrow(/timed out/)
+      await vi.advanceTimersByTimeAsync(SUBMIT_ACCEPT_TIMEOUT_MS + 1)
+      await rejection
+
+      // The item was not removed (only success dequeues) and the in-flight
+      // latch was released, so a retry dispatches instead of skipping.
+      expect(peekQueuedFollowUp(sid)?.id).toBe(queued.id)
+      const okSdk = { client: { session: { promptAsync: async () => ({}) } } } as any
+      await expect(dispatchFollowUp(okSdk, sid, queued)).resolves.toBe(true)
+      expect(followUpQueue(sid)).toEqual([])
+      clearFollowUpQueue(sid)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

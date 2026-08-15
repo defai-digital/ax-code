@@ -1327,6 +1327,10 @@ export function Prompt(props: PromptProps) {
         sessionID = res.data.id
         if (nextSubmitAbort.signal.aborted) return
         upsertSessionInStore(createdSession)
+        // Pin the new session as the draft: until routeToSession navigates and
+        // props.sessionID catches up, a second Enter would otherwise take the
+        // startingNewSession branch again and allocate a duplicate session.
+        setDraftSessionID(res.data.id)
       }
       if (!sessionID) throw new Error("Session id allocation failed")
 
@@ -1845,13 +1849,15 @@ export function Prompt(props: PromptProps) {
                 }
                 if (keybind.match("app_exit", e)) {
                   if (store.prompt.input === "") {
+                    // preventDefault must happen synchronously — after the
+                    // await the event has already been dispatched to the
+                    // textarea's own handlers.
+                    e.preventDefault()
                     try {
                       await exit()
                     } catch (error) {
                       log.warn("tui.prompt.onKeyDown: exit failed", { error })
                     }
-                    // Don't preventDefault - let textarea potentially handle the event
-                    e.preventDefault()
                     return
                   }
                 }

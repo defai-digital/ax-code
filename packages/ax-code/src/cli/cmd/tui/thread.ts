@@ -233,6 +233,9 @@ function isBackendProtocolMessage(line: string) {
   return type === "rpc.result" || type === "rpc.error" || type === "rpc.event"
 }
 
+// Cap on the backend stdout line buffer in createProcessWire — see below.
+const MAX_BACKEND_STDOUT_BUFFER = 1024 * 1024
+
 export function createProcessWire(child: any, target: string): RpcWireTarget {
   const wire: RpcWireTarget = {
     onmessage: null,
@@ -308,6 +311,21 @@ export function createProcessWire(child: any, target: string): RpcWireTarget {
   child.stdout?.setEncoding("utf8")
   child.stdout?.on("data", (chunk: unknown) => {
     buffer += String(chunk)
+    // Cap the line buffer: a backend writing a newline-free stretch (binary
+    // garbage, a stuck process) would otherwise grow it without bound. 1MB is
+    // far past any legitimate protocol line.
+    if (buffer.length > MAX_BACKEND_STDOUT_BUFFER) {
+      DiagnosticLog.recordProcess("tui.backendStdoutBufferTruncated", {
+        target,
+        length: buffer.length,
+      })
+      Log.Default.warn("TUI backend stdout line buffer exceeded cap, truncating", {
+        target,
+        length: buffer.length,
+      })
+      buffer = ""
+      return
+    }
     while (true) {
       const index = buffer.indexOf("\n")
       if (index < 0) break
@@ -1008,6 +1026,9 @@ export const TuiThreadCommand = cmd({
       unguard?.()
     }
     await flushTuiStdout()
-    process.exit(0)
+    // Honor an exit code set by exit(reason) (e.g. a bootstrap failure) —
+    // exiting unconditionally with 0 here reported fatal startup failures as
+    // success to the shell.
+    process.exit(process.exitCode ?? 0)
   },
 })

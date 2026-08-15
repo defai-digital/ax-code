@@ -98,6 +98,25 @@ describe("worker event stream lifecycle", () => {
     expect(streamState.active).toBe(0)
   })
 
+  test("setWorkspace with an unchanged directory no-ops instead of rebuilding the stream", async () => {
+    const { rpc } = await import("@tui/worker")
+
+    await rpc.setWorkspace({ workspaceID: "/workspace/unchanged" })
+    expect(streamState.active).toBe(1)
+
+    const startedBefore = streamState.started
+    // Home <-> session navigation re-pins the same directory; the worker must
+    // not tear down and rebuild the SSE subscription for it.
+    await rpc.setWorkspace({ workspaceID: "/workspace/unchanged" })
+    expect(streamState.started).toBe(startedBefore)
+    expect(streamState.active).toBe(1)
+
+    // A genuinely different directory still swaps the stream.
+    await rpc.setWorkspace({ workspaceID: "/workspace/changed" })
+    expect(streamState.started).toBe(startedBefore + 1)
+    expect(streamState.active).toBe(1)
+  })
+
   test("text deltas coalesce before crossing the RPC boundary; teardown drops the buffer", async () => {
     const { rpc } = await import("@tui/worker")
     await rpc.setWorkspace({ workspaceID: "/workspace/coalesce" })

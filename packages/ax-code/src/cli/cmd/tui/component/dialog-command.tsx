@@ -190,7 +190,11 @@ function init() {
       return false
     },
     keybinds(enabled: boolean) {
-      setSuspendCount((count) => count + (enabled ? -1 : 1))
+      // Floor at 0: an unmatched resume (a hide() without a matching show())
+      // must not drive the count negative — a negative count reads as
+      // "not suspended", so global keybinds would fire while a dropdown that
+      // legitimately suspended them is still open.
+      setSuspendCount((count) => Math.max(0, count + (enabled ? -1 : 1)))
     },
     suspended,
     show() {

@@ -21,6 +21,7 @@ import { normalize as normalizePathValue, diffSummary } from "./format"
 import { Global } from "@/global"
 import { withTimeout } from "@/util/timeout"
 import { errorPayloadMessage } from "../../util/error-message"
+import { CONFIRM_KEYS } from "../../util/keys"
 import {
   createPermissionSubmitLatch,
   endPermissionSubmit,
@@ -42,7 +43,6 @@ function replyError(error: unknown, fallback: string): Error {
 }
 
 type PermissionStage = "permission" | "always" | "reject"
-const CONFIRM_KEYS = new Set(["return", "linefeed", "kpenter"])
 
 // The reply request goes through a no-timeout fetch (SDK connections stay
 // open indefinitely for streaming), so a dropped/stalled response never

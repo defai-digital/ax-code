@@ -2,7 +2,7 @@ import type { BoxRenderable, TextareaRenderable, KeyEvent, ScrollBoxRenderable }
 import { pathToFileURL } from "url"
 import fuzzysort from "fuzzysort"
 import { firstBy } from "remeda"
-import { createMemo, createResource, createEffect, onMount, For, Show, createSignal } from "solid-js"
+import { createMemo, createResource, createEffect, onMount, onCleanup, For, Show, createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useSDK } from "@tui/context/sdk"
 import { useSync } from "@tui/context/sync"
@@ -667,6 +667,10 @@ export function Autocomplete(props: {
   }
 
   function show(mode: "@" | "/") {
+    // Transition-guard: keybinds() suspends global keybinds on every show and
+    // resumes on every hide, so both must be no-ops unless visibility actually
+    // changes — otherwise the suspend count in dialog-command drifts.
+    if (store.visible) return
     command.keybinds(false)
     scrollOffset = 0
     scroll?.scrollTo(0)
@@ -692,9 +696,20 @@ export function Autocomplete(props: {
     // become temporarily non-autocompleteable while the user is typing
     // arguments, and clearing here made "/" look broken when event ordering
     // caused an early hide.
+    // Transition-guard mirrors show(): hide() also runs when the dropdown was
+    // never visible (paste/image insert sync calls it unconditionally), and an
+    // unmatched resume would push the keybind suspend count negative.
+    if (!store.visible) return
     command.keybinds(true)
     setStore("visible", false)
   }
+
+  // If the Prompt unmounts while the dropdown is still open (route change
+  // mid-autocomplete), release the keybind suspension show() took out —
+  // otherwise every global keybind stays dead for the rest of the session.
+  onCleanup(() => {
+    if (store.visible) command.keybinds(true)
+  })
 
   onMount(() => {
     props.ref({
