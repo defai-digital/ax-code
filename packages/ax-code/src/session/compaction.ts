@@ -370,24 +370,27 @@ When constructing the summary, try to stick to this template:
 ---
 ## Goal
 
-[What goal(s) is the user trying to accomplish?]
+[What goal(s) is the user trying to accomplish? Include explicit constraints and preferences, quoted verbatim where the wording matters.]
 
-## Instructions
+## Decisions
 
-- [What important instructions did the user give you that are relevant]
-- [If there is a plan or spec, include information about it so next agent can continue using it]
+[What technical decisions were made, and why? Include rejected alternatives when the rejection matters.]
 
-## Discoveries
+## Progress
 
-[What notable things were learned during this conversation that would be useful for the next agent to know when continuing the work]
+[What work has been completed, what is still in progress? State verification status explicitly: which tests, typecheck, or builds ran, and whether they passed, failed, or have not been run yet.]
 
-## Accomplished
+## Errors
 
-[What work has been completed, what work is still in progress, and what work is left?]
+[What errors were hit, and how was each resolved — or is it still unresolved?]
 
-## Relevant files / directories
+## Next steps
 
-[Construct a structured list of relevant files that have been read, edited, or created that pertain to the task at hand. If all the files in a directory are relevant, include the path to the directory.]
+[What remains to be done, in order? Name the immediate next action first.]
+
+## Files
+
+[Construct a structured list of relevant files that have been read, edited, or created that pertain to the task at hand, each with a one-line note. If all the files in a directory are relevant, include the path to the directory.]
 ---`
 
     const promptText = compacting.prompt ?? [defaultPrompt, ...compacting.context].join("\n\n")

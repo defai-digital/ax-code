@@ -27,6 +27,7 @@ import { Recorder } from "../replay/recorder"
 import type { SessionID } from "./schema"
 import { Log } from "@/util/log"
 import { Flag } from "../flag/flag"
+import { git } from "../util/git"
 import { ScopedFlag } from "../flag/scoped"
 import { VerificationPolicy } from "./verification-policy"
 import { ModeProtocol } from "../mode/protocol"
@@ -37,6 +38,45 @@ import { maybeRenderAxWikiProtocol } from "@ax-code/ax-wiki"
 
 export namespace SystemPrompt {
   const log = Log.create({ service: "session.system-prompt" })
+
+  const GIT_SNAPSHOT_TIMEOUT_MS = 2_000
+
+  /**
+   * Point-in-time git context for the <env> block: branch, dirty state, and
+   * the last 3 commits. Remote URLs are deliberately excluded to avoid
+   * leaking private host names into the prompt. Any git error or timeout
+   * omits the fields silently — prompt assembly must never fail on git.
+   *
+   * This runs inside environment(), which prompt-system.ts caches per model
+   * for the session, so the snapshot is computed once per session, not per
+   * turn.
+   */
+  async function gitSnapshot(cwd: string): Promise<string[]> {
+    const run = async (args: string[]) => {
+      const result = await git(args, { cwd, timeout: GIT_SNAPSHOT_TIMEOUT_MS })
+      return result.exitCode === 0 ? result.text().trim() : undefined
+    }
+    try {
+      const [branch, status, commits] = await Promise.all([
+        run(["rev-parse", "--abbrev-ref", "HEAD"]),
+        run(["status", "--porcelain"]),
+        run(["log", "-3", "--oneline", "--no-decorate"]),
+      ])
+      if (!branch) return []
+      const lines = [
+        `  Git branch: ${branch}`,
+        `  Git working tree: ${status ? "dirty (uncommitted changes)" : "clean"}`,
+      ]
+      if (commits) {
+        lines.push(`  Recent commits (point-in-time snapshot, may be stale):`)
+        for (const commit of commits.split("\n")) lines.push(`    ${commit}`)
+      }
+      return lines
+    } catch (error) {
+      log.warn("git snapshot failed", { error })
+      return []
+    }
+  }
 
   function withCraft(prompt: string) {
     return [prompt, PROMPT_CRAFT]
@@ -220,6 +260,8 @@ export namespace SystemPrompt {
       }
     }
 
+    const gitContext = project.vcs === "git" ? await gitSnapshot(Instance.directory) : []
+
     return [
       [
         `You are powered by the model named ${model.api.id}. The exact model ID is ${model.providerID}/${model.api.id}`,
@@ -228,6 +270,7 @@ export namespace SystemPrompt {
         `  Working directory: ${Instance.directory}`,
         `  Workspace root folder: ${Instance.worktree}`,
         `  Is directory a git repo: ${project.vcs === "git" ? "yes" : "no"}`,
+        ...gitContext,
         `  Platform: ${process.platform}`,
         `  Today's date: ${new Date().toDateString()}`,
         `</env>`,

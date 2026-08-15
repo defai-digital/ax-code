@@ -1,8 +1,11 @@
 Writes a file to the local filesystem.
 
 Usage:
+- Use Write only for new files or complete rewrites. For any change to part of an existing file, use Edit — never rewrite a whole file to change a few lines.
 - This tool will overwrite the existing file if there is one at the provided path.
 - If this is an existing file, you MUST use the Read tool first to read the file's contents. This tool will fail if you did not read the file first.
+- Parent directories are created automatically.
+- Content is limited to 5MB.
 - ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
 - NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 - When writing bug report files under `.internal/bugs/*.md`, include `Classification: confirmed|suspected|false_positive`, a `## Evidence` section, and one of `## Suggested Fix`, `## Recommended Action`, or `## Closure`. Use `confirmed` only for repo-validated defects, `suspected` for unproven findings, and `false_positive` with `## Closure` for scanner noise or accepted behavior.

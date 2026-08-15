@@ -24,13 +24,17 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
  * are retried with a short backoff so concurrent git operations don't surface
  * as spurious errors.
  */
-export async function git(args: string[], opts: { cwd: string; env?: Record<string, string> }): Promise<GitResult> {
+export async function git(
+  args: string[],
+  opts: { cwd: string; env?: Record<string, string>; timeout?: number },
+): Promise<GitResult> {
   const run = () =>
     Process.run(["git", ...args], {
       cwd: opts.cwd,
       env: opts.env,
       stdin: "ignore",
       nothrow: true,
+      timeout: opts.timeout,
     })
       .then((result) => ({
         exitCode: result.code,

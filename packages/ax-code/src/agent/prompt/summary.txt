@@ -3,7 +3,7 @@ Summarize what was done in this conversation. Write like a pull request descript
 Rules:
 - 2-3 sentences max
 - Describe the changes made, not the process
-- Do not mention running tests, builds, or other validation steps
+- Mention validation (tests, builds, typecheck) only when it failed, is still pending, or the user explicitly requested it; otherwise omit it
 - Do not explain what the user asked for
 - Write in first person (I added..., I fixed...)
 - Never ask questions or add new questions

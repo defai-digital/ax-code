@@ -1,1 +1,15 @@
-Lists files and directories in a given path. The path parameter must be absolute; omit it to use the current workspace directory. You can optionally provide an array of glob patterns to ignore with the ignore parameter. You should generally prefer the Glob and Grep tools, if you know which directories to search.
+Lists the contents of a directory as an indented tree, recursing into subdirectories.
+
+Usage:
+- The path parameter must be absolute; omit it to list the current workspace directory.
+- Directories render with a trailing `/`; subdirectories are shown first, then files, sorted alphabetically.
+- The listing is recursive but capped at 100 entries; when the cap is hit, narrow the path or pass ignore glob patterns to focus.
+- Common noise directories are always skipped: node_modules, .git, dist, build, target, vendor, caches, virtualenvs, and similar.
+
+When to use:
+- Exploring an unfamiliar project layout, or checking what a directory contains before creating files in it.
+
+When NOT to use:
+- Finding files by name or extension — use Glob; it searches any depth without the 100-entry cap.
+- Searching file contents — use Grep.
+- Confirming one known path exists — Read it directly.

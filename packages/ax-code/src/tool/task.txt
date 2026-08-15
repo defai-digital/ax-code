@@ -28,8 +28,8 @@ Example usage (NOTE: The agents below are fictional examples for illustration on
 
 <example_agent_descriptions>
 "code-reviewer": use this agent after you are done writing a significant piece of code
-"greeting-responder": use this agent when to respond to user greetings with a friendly joke
-</example_agent_description>
+"explore": use this agent to answer questions about how an unfamiliar part of the codebase works
+</example_agent_descriptions>
 
 <example>
 user: "Please write a function that checks if a number is prime"
@@ -53,9 +53,9 @@ assistant: Uses the Task tool to launch the code-reviewer agent
 </example>
 
 <example>
-user: "Hello"
+user: "Where is session state persisted?"
 <commentary>
-Since the user is greeting, use the greeting-responder agent to respond with a friendly joke
+The user is asking about an unfamiliar area of the codebase; delegate the search to the explore agent instead of running many searches inline
 </commentary>
-assistant: "I'm going to use the Task tool to launch the with the greeting-responder agent"
+assistant: "I'm going to use the Task tool to launch the explore agent to trace how session state is persisted"
 </example>

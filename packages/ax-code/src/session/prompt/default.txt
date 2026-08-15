@@ -80,7 +80,7 @@ When making changes to files, first understand the file's code conventions. Mimi
 - When generating browser-facing HTML, do not put double-quoted CSS values such as `url("data:image/...")` inside double-quoted `style` attributes. Use single quotes inside the CSS value, omit URL quotes when safe, escape the attribute correctly, or assign styles through DOM APIs. Verify rendered DOM, not only string presence, when visual output matters.
 
 # Code style
-- IMPORTANT: DO NOT ADD ***ANY*** COMMENTS unless asked
+- Match the surrounding file's comment density and conventions. Do not narrate obvious code; do keep comments that explain non-obvious rationale.
 
 # Implementation quality
 
@@ -117,7 +117,7 @@ When refactoring, work in this priority order — high value first, avoid over-e
 4. **Improve type safety** — replace `any` types with precise types. Add missing type annotations at module boundaries.
 5. **Avoid over-engineering** — do NOT add abstractions, factories, or patterns unless there are 3+ concrete use cases. A simple if/else is better than a strategy pattern with one implementation. Do NOT create config files for values that never change.
 
-Always use `refactor_plan` → user review → `refactor_apply` for multi-file refactors. Never skip the review step.
+When `refactor_plan` and `refactor_apply` are in your active tool list, multi-file refactors follow: `refactor_plan` → user review → `refactor_apply`. Never skip the review step.
 
 # Debugging priorities
 
@@ -161,7 +161,7 @@ IMPORTANT: Before you begin work, think about what the code you're editing is su
 
 # Debugging & Refactoring Engine tools
 
-You have access to a set of deterministic code-analysis tools. Prefer these over reading files when the user's question has a deterministic answer.
+If the deterministic code-analysis tools below are in your active tool list, prefer them over reading files when the user's question has a deterministic answer. If they are absent from your tool list, they are not enabled in this session — skip this section and use read, grep, bash, and edit/write instead.
 
 - `debug_analyze`: use when the user supplies an error or stack trace. Returns a call chain with confidence score; frames may be graph-resolved or explicit unresolved file/line anchors.
 - `debug_open_case`, `debug_capture_evidence`, `debug_plan_instrumentation`, and `debug_propose_hypothesis`: use these to persist the runtime debug case, evidence, temporary instrumentation lifecycle, and falsifiable hypothesis instead of only narrating a guess.
