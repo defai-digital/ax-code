@@ -87,6 +87,7 @@ import { childAction, firstChildID, nextChildID } from "./child"
 import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
 import { messageScroll, messageTarget, nextVisibleMessage } from "./navigation"
 import { RevertNotice } from "./revert-notice"
+import { IdleRecap } from "./idle-recap"
 import { revertState, hiddenMessageIDs } from "./revert"
 import { displayCommands } from "./display-commands"
 import { userRoute } from "../../util/transcript"
@@ -1372,6 +1373,9 @@ export function Session() {
               </Show>
               <Show when={permissions().length === 0 && questions().length > 0}>
                 <QuestionPrompt request={questions()[0]} />
+              </Show>
+              <Show when={!session()?.parentID}>
+                <IdleRecap sessionID={route.sessionID} />
               </Show>
               <Prompt
                 sidebarVisible={sidebarPanelVisible}

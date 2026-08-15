@@ -218,6 +218,8 @@ import type {
   SessionPromptAsyncResponses,
   SessionPromptErrors,
   SessionPromptResponses,
+  SessionRecapErrors,
+  SessionRecapResponses,
   SessionRevertErrors,
   SessionRevertResponses,
   SessionRiskErrors,
@@ -4376,6 +4378,36 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
+   * Recap last turn
+   *
+   * Generate a short plain-text recap of the most recent turn using the provider's small model. Read-only and best-effort: returns null when no recap is available.
+   */
+  public recap<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionRecapResponses, SessionRecapErrors, ThrowOnError>({
+      url: "/session/{sessionID}/recap",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * Get session messages
    *
    * Retrieve all messages in a session, including user prompts and AI responses.
@@ -5723,7 +5755,13 @@ export class AxEngine extends HeyApiClient {
       directory?: string
       modelPath?: string
       binaryPath?: string
-      modelID?: "qwen3.6-27b-axq-6bit" | "ornith-35b" | "qwen3.5-9b-axq-6bit" | "qwen3-coder-next-axq-6bit"
+      modelID?:
+        | "qwen3.8-27b-axq-6bit"
+        | "qwen3.8-27b-axq-4bit"
+        | "ornith-35b-axq-6bit"
+        | "ornith-35b-axq-4bit"
+        | "qwen3-coder-next-axq-6bit"
+        | "qwen3-coder-next-axq-4bit"
       quantization?: "mlx4bit" | "mlx6bit"
       download?: boolean
       start?: boolean
@@ -5772,7 +5810,13 @@ export class AxEngine extends HeyApiClient {
       directory?: string
       modelPath?: string
       binaryPath?: string
-      modelID?: "qwen3.6-27b-axq-6bit" | "ornith-35b" | "qwen3.5-9b-axq-6bit" | "qwen3-coder-next-axq-6bit"
+      modelID?:
+        | "qwen3.8-27b-axq-6bit"
+        | "qwen3.8-27b-axq-4bit"
+        | "ornith-35b-axq-6bit"
+        | "ornith-35b-axq-4bit"
+        | "qwen3-coder-next-axq-6bit"
+        | "qwen3-coder-next-axq-4bit"
       quantization?: "mlx4bit" | "mlx6bit"
       download?: boolean
     },

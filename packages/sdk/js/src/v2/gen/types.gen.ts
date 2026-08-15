@@ -11457,6 +11457,41 @@ export type SessionSummarizeResponses = {
 
 export type SessionSummarizeResponse = SessionSummarizeResponses[keyof SessionSummarizeResponses]
 
+export type SessionRecapData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/recap"
+}
+
+export type SessionRecapErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+}
+
+export type SessionRecapError = SessionRecapErrors[keyof SessionRecapErrors]
+
+export type SessionRecapResponses = {
+  /**
+   * Recap of the last turn, or null when unavailable
+   */
+  200: {
+    text: string | null
+  }
+}
+
+export type SessionRecapResponse = SessionRecapResponses[keyof SessionRecapResponses]
+
 export type SessionMessagesData = {
   body?: never
   path: {
@@ -12890,7 +12925,13 @@ export type ProviderAxEnginePrepareData = {
   body?: {
     modelPath?: string
     binaryPath?: string
-    modelID?: "qwen3.6-27b-axq-6bit" | "ornith-35b" | "qwen3.5-9b-axq-6bit" | "qwen3-coder-next-axq-6bit"
+    modelID?:
+      | "qwen3.8-27b-axq-6bit"
+      | "qwen3.8-27b-axq-4bit"
+      | "ornith-35b-axq-6bit"
+      | "ornith-35b-axq-4bit"
+      | "qwen3-coder-next-axq-6bit"
+      | "qwen3-coder-next-axq-4bit"
     quantization?: "mlx4bit" | "mlx6bit"
     download?: boolean
     start?: boolean
@@ -12922,7 +12963,13 @@ export type ProviderAxEngineStartData = {
   body?: {
     modelPath?: string
     binaryPath?: string
-    modelID?: "qwen3.6-27b-axq-6bit" | "ornith-35b" | "qwen3.5-9b-axq-6bit" | "qwen3-coder-next-axq-6bit"
+    modelID?:
+      | "qwen3.8-27b-axq-6bit"
+      | "qwen3.8-27b-axq-4bit"
+      | "ornith-35b-axq-6bit"
+      | "ornith-35b-axq-4bit"
+      | "qwen3-coder-next-axq-6bit"
+      | "qwen3-coder-next-axq-4bit"
     quantization?: "mlx4bit" | "mlx6bit"
     download?: boolean
   }

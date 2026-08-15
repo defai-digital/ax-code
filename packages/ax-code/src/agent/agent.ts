@@ -19,6 +19,7 @@ import PROMPT_PERF from "./prompt/perf.txt"
 import PROMPT_TEST from "./prompt/test.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
+import PROMPT_RECAP from "./prompt/recap.txt"
 import { Permission } from "@/permission"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"
@@ -142,6 +143,7 @@ export namespace Agent {
       "compaction",
       "title",
       "summary",
+      "recap",
       ...Object.keys(cfg.agent ?? {}),
     ]
     await Promise.all(
@@ -350,6 +352,17 @@ export namespace Agent {
         tier: "internal",
         permission: Permission.merge(defaults, policy("summary"), denyAll, user),
         prompt: PROMPT_SUMMARY,
+      },
+      recap: {
+        name: "recap",
+        mode: "primary",
+        options: {},
+        native: true,
+        hidden: true,
+        tier: "internal",
+        temperature: 0.5,
+        permission: Permission.merge(defaults, policy("recap"), denyAll, user),
+        prompt: PROMPT_RECAP,
       },
     }
 

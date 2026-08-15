@@ -24731,32 +24731,6 @@
           "output": 262144
         }
       },
-      "qwen/Qwen3-235B-A22B-Instruct-2507-TEE": {
-        "id": "qwen/Qwen3-235B-A22B-Instruct-2507-TEE",
-        "name": "Qwen 3 235b A22B 2507 (TEE)",
-        "description": "Qwen instruction model for multilingual chat, reasoning, and tool use",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": true,
-        "release_date": "2025-07-25",
-        "last_updated": "2025-07-25",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 256000,
-          "input": 256000,
-          "output": 262144
-        }
-      },
       "qwen/qwen3-32b": {
         "id": "qwen/qwen3-32b",
         "name": "Qwen 3 32b",
@@ -26063,6 +26037,42 @@
           "output": 8192
         }
       },
+      "zai-org/glm-5.3:thinking": {
+        "id": "zai-org/glm-5.3:thinking",
+        "name": "GLM 5.3 Preview Thinking",
+        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 131072
+        }
+      },
       "zai-org/glm-5-original:thinking": {
         "id": "zai-org/glm-5-original:thinking",
         "name": "GLM 5 Original Thinking",
@@ -26179,6 +26189,43 @@
           ]
         },
         "open_weights": true,
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 131072
+        }
+      },
+      "zai-org/glm-5.3": {
+        "id": "zai-org/glm-5.3",
+        "name": "GLM 5.3 Preview",
+        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
         "limit": {
           "context": 1048576,
           "input": 1048576,
@@ -27931,6 +27978,36 @@
           "output": 8192
         }
       },
+      "TEE/kimi-k2.7-code": {
+        "id": "TEE/kimi-k2.7-code",
+        "name": "Kimi K2.7 Code TEE",
+        "description": "Coding-focused Kimi model, stronger on long-horizon repo work with less overthinking",
+        "family": "kimi-k2",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": false,
+        "knowledge": "2025-01",
+        "release_date": "2026-06-12",
+        "last_updated": "2026-06-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 65536
+        }
+      },
       "TEE/deepseek-v4-flash": {
         "id": "TEE/deepseek-v4-flash",
         "name": "DeepSeek V4 Flash TEE",
@@ -28522,6 +28599,45 @@
           "context": 131072,
           "input": 131072,
           "output": 8192
+        }
+      },
+      "dots-studio/dots-3-note-preview:free": {
+        "id": "dots-studio/dots-3-note-preview:free",
+        "name": "Dots3-Note Preview",
+        "description": "Dots Studio's open-weight multimodal Mixture-of-Experts model activates 16B of 280B parameters for long-context reasoning, coding, visual and document understanding, tool use, and long-horizon agent workflows.",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-15",
+        "last_updated": "2026-08-15",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 512000,
+          "input": 512000,
+          "output": 512000
         }
       },
       "minimax/minimax-01": {
@@ -145336,12 +145452,12 @@
         "open_weights": true,
         "limit": {
           "context": 1048576,
-          "output": 262144
+          "output": 131072
         }
       },
       "deepseek/deepseek-v3.1-terminus": {
         "id": "deepseek/deepseek-v3.1-terminus",
-        "name": "DeepSeek: DeepSeek V3.1 Terminus",
+        "name": "DeepSeek: DeepSeek V3.1 Terminus (retires Aug 17)",
         "description": "DeepSeek chat model for instruction following, coding, and analysis",
         "family": "deepseek",
         "attachment": false,
@@ -152000,6 +152116,45 @@
           "output": 262144
         }
       },
+      "qwen/qwen3.8-27b": {
+        "id": "qwen/qwen3.8-27b",
+        "name": "Qwen: Qwen3.8 27B",
+        "description": "Qwen3.8 27B is an open-weight dense vision-language model from Qwen. It is suited for coding, professional workflows, research, multimodal interaction, and long-running agent tasks, with flexible thinking that can be...",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 262144,
+          "output": 131072
+        }
+      },
       "qwen/qwen3.6-plus": {
         "id": "qwen/qwen3.6-plus",
         "name": "Qwen3.6 Plus",
@@ -153354,8 +153509,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 1048576,
-          "output": 131072
+          "context": 262144,
+          "output": 262144
         }
       },
       "inclusionai/ring-2.6-1t": {
@@ -154835,6 +154990,41 @@
         "limit": {
           "context": 131072,
           "output": 131072
+        }
+      },
+      "dots-studio/dots-3-note-preview:free": {
+        "id": "dots-studio/dots-3-note-preview:free",
+        "name": "Dots Studio: Dots3-Note Preview (free)",
+        "description": "Dots3-Note Preview is an open-weight mixture-of-experts model from Dots Studio, with 16B active parameters out of 280B total. It is the lightest model in the Dots 3 family and is...",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 512000,
+          "output": 512000
         }
       },
       "minimax/minimax-01": {

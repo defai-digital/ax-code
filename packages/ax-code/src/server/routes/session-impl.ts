@@ -7,6 +7,7 @@ import z from "zod"
 import { Session } from "../../session"
 import { MessageV2 } from "../../session/message-v2"
 import { SessionPrompt } from "../../session/prompt"
+import { SessionRecap } from "../../session/recap"
 import { SessionCompaction } from "../../session/compaction"
 import { SessionRevert } from "../../session/revert"
 import { SessionStatus } from "@/session/status"
@@ -1032,6 +1033,33 @@ export const SessionRoutes = lazy(() =>
         })
         await SessionPrompt.loop({ sessionID })
         return c.json(true)
+      },
+    )
+    .post(
+      "/:sessionID/recap",
+      describeRoute({
+        summary: "Recap last turn",
+        description:
+          "Generate a short plain-text recap of the most recent turn using the provider's small model. Read-only and best-effort: returns null when no recap is available.",
+        operationId: "session.recap",
+        responses: {
+          200: {
+            description: "Recap of the last turn, or null when unavailable",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ text: z.string().nullable() })),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", SESSION_ID_PARAM),
+      async (c) => {
+        const sessionID = await parseCurrentProjectSessionID(c)
+        SessionPrompt.assertNotBusy(sessionID)
+        const recap = await SessionRecap.generate({ sessionID })
+        return c.json({ text: recap?.text ?? null })
       },
     )
     .get(

@@ -22,6 +22,17 @@ export const TuiOptions = z.object({
     .enum(["auto", "stacked"])
     .optional()
     .describe("Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column"),
+  idle_recap: z
+    .object({
+      enabled: z.boolean().optional().describe("Show a short recap banner after an idle turn (default true)"),
+      delay_ms: z
+        .number()
+        .min(1000)
+        .optional()
+        .describe("Idle delay before the recap is generated, in milliseconds (default 5000, min 1000)"),
+    })
+    .optional()
+    .describe("Idle recap settings"),
 })
 
 export const TuiInfo = z
