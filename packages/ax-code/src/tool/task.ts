@@ -2,7 +2,7 @@ import { Tool } from "./tool"
 import DESCRIPTION from "./task.txt"
 import z from "zod"
 import { Session } from "../session"
-import { SessionID, MessageID } from "../session/schema"
+import { SessionID, MessageID, type TaskQueueID } from "../session/schema"
 import { NotFoundError } from "../storage/db"
 import { MessageV2 } from "../session/message-v2"
 import { Agent } from "../agent/agent"
@@ -106,6 +106,27 @@ const parameters = z.object({
   ),
 })
 
+type TaskMetadata = {
+  sessionId: SessionID
+  model: { modelID: string; providerID: string }
+  background: boolean
+  queueID?: TaskQueueID
+  emptyResult: boolean
+  finalizeAttempted: boolean
+  recoveredFromEmpty: boolean
+  recoveredResultNeedsReview: boolean
+  subagentError: boolean
+  errorName?: string
+  errorMessage?: string
+  finalizeError?: boolean
+  finalizeErrorName?: string
+  finalizeErrorMessage?: string
+}
+
+function taskResult(title: string, metadata: TaskMetadata, output: string) {
+  return { title, metadata, output }
+}
+
 const BACKGROUND_STARTED = [
   "The task is working in the background. You will be notified when it finishes.",
   "DO NOT sleep, poll for progress, ask the task for status, or duplicate this task's work — avoid working with the same files or topics it is using.",
@@ -177,9 +198,9 @@ async function startBackgroundSubagent(input: {
     metadata,
   })
 
-  return {
-    title: params.description,
-    metadata: {
+  return taskResult(
+    params.description,
+    {
       ...metadata,
       emptyResult: false,
       finalizeAttempted: false,
@@ -187,7 +208,7 @@ async function startBackgroundSubagent(input: {
       recoveredResultNeedsReview: false,
       subagentError: false,
     },
-    output: [
+    [
       `task_id: ${session.id} (for resuming to continue this task if needed)`,
       "state: running",
       `queue_id: ${queued.id}`,
@@ -196,10 +217,13 @@ async function startBackgroundSubagent(input: {
       BACKGROUND_STARTED,
       "</task_result>",
     ].join("\n"),
-  }
+  )
 }
 
-async function assertBackgroundCapacity(parentSessionID: SessionID, TaskQueue: typeof import("../session/task-queue").TaskQueue) {
+async function assertBackgroundCapacity(
+  parentSessionID: SessionID,
+  TaskQueue: typeof import("../session/task-queue").TaskQueue,
+) {
   const children = await Session.children(parentSessionID)
   let active = 0
   for (const child of children) {
@@ -221,7 +245,7 @@ async function assertBackgroundCapacity(parentSessionID: SessionID, TaskQueue: t
   }
 }
 
-export const TaskTool = Tool.define("task", async (ctx) => {
+export const TaskTool = Tool.define("task", async (ctx?) => {
   const agents = await Agent.list().then((x) =>
     x.filter((a) => {
       const tier = Agent.resolveTier(a)
@@ -517,11 +541,12 @@ export const TaskTool = Tool.define("task", async (ctx) => {
             "retry the task, or explain that no usable subagent result was returned.",
         ].join("\n")
         await fireSubagentStop({ sessionID: session.id, agent: agent.name, status: "failed" })
-        return {
-          title: params.description,
-          metadata: {
+        return taskResult(
+          params.description,
+          {
             sessionId: session.id,
             model,
+            background: false,
             emptyResult: true,
             finalizeAttempted,
             recoveredFromEmpty: false,
@@ -533,14 +558,14 @@ export const TaskTool = Tool.define("task", async (ctx) => {
             finalizeErrorName: finalizeError?.name,
             finalizeErrorMessage: finalizeError?.message,
           },
-          output: [
+          [
             `task_id: ${session.id} (for resuming to continue this task if needed)`,
             "",
             "<task_result>",
             recoverableText,
             "</task_result>",
           ].join("\n"),
-        }
+        )
       }
 
       const text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
@@ -587,11 +612,12 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         status: error || finalizeError ? "failed" : "completed",
       })
 
-      return {
-        title: params.description,
-        metadata: {
+      return taskResult(
+        params.description,
+        {
           sessionId: session.id,
           model,
+          background: false,
           emptyResult,
           finalizeAttempted,
           recoveredFromEmpty,
@@ -604,7 +630,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           finalizeErrorMessage: finalizeError?.message,
         },
         output,
-      }
+      )
     },
   }
 })

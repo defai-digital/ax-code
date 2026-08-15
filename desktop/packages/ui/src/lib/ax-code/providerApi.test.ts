@@ -92,12 +92,12 @@ describe("isRestartingError", () => {
 describe("isCliProvider", () => {
   test("recognizes CLI-backed providers", () => {
     expect(isCliProvider("claude-code")).toBe(true)
-    expect(isCliProvider("gemini-cli")).toBe(true)
     expect(isCliProvider("codex-cli")).toBe(true)
     expect(isCliProvider("grok-build-cli")).toBe(true)
     expect(isCliProvider("qoder-cli")).toBe(true)
-    expect(isCliProvider("antigravity-cli")).toBe(true)
     expect(isCliProvider("kimi-cli")).toBe(true)
+    expect(isCliProvider("gemini-cli")).toBe(false)
+    expect(isCliProvider("antigravity-cli")).toBe(false)
     expect(isCliProvider("openai")).toBe(false)
   })
 })

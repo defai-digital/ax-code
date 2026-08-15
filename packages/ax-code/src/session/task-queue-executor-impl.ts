@@ -648,7 +648,10 @@ function subagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
   }
 }
 
-async function applyRestartContinuation(item: TaskQueue.Info, body: Record<string, unknown>) {
+async function applyRestartContinuation(
+  item: TaskQueue.Info,
+  body: Omit<SessionPrompt.PromptInput, "sessionID">,
+): Promise<Omit<SessionPrompt.PromptInput, "sessionID">> {
   if (item.payload["source"] !== "task" || !item.sessionID) return body
   const { Session } = await import(".")
   const messages = await Session.messages({ sessionID: item.sessionID })
@@ -659,8 +662,7 @@ async function applyRestartContinuation(item: TaskQueue.Info, body: Record<strin
     parts: [
       {
         type: "text",
-        text:
-          "Your previous turn was interrupted by a backend restart. Continue the assigned task and produce the final result. Do not repeat completed work unless you must verify it.",
+        text: "Your previous turn was interrupted by a backend restart. Continue the assigned task and produce the final result. Do not repeat completed work unless you must verify it.",
       },
     ],
   }

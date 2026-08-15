@@ -1274,7 +1274,7 @@ export function Session() {
               terminalHeight={dimensions().height}
               width={contentWidth()}
               stopping={stoppingSubagents()}
-              onToggle={() => setSubagentPanelCollapsed(!subagentPanelCollapsed())}
+              onToggle={() => setSubagentPanelCollapsed((prev) => !prev)}
               onOpen={openSubagent}
               onStop={stopSubagent}
             />
