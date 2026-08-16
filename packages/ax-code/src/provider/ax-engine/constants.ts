@@ -12,7 +12,13 @@ export const AX_ENGINE_DISPLAY_NAME = "AX Engine (Local)"
 // still select 31419+ when another process owns the preferred port.
 export const AX_ENGINE_DEFAULT_PORT = 31418
 export const AX_ENGINE_API_KEY = "local"
-export const AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS = 2_048
+// 2 048 proved too small for agentic turns: a single long tool call (e.g. a
+// find/wc pipeline with exclusions) plus its reasoning preamble saturates the
+// budget and the JSON arguments are cut mid-string, forcing the truncated-turn
+// recovery loop to burn extra turns. 8 192 keeps headroom while staying well
+// under the global OUTPUT_TOKEN_MAX cap and the server's --max-batch-tokens
+// launch arg (kept aligned in server.ts).
+export const AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS = 8_192
 export const AX_ENGINE_MIN_VERSION = "6.11.0"
 export const AX_ENGINE_SPECULATION_PROFILE = "agentic"
 export const AX_ENGINE_MTP_MODE = "pure"
@@ -228,7 +234,10 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineModelID, AxEngineModelD
     toolcall: true,
     minMemoryBytes: AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES,
     contextTokens: 16_384,
-    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
+    // Half the big-model default: reserving 8 192 of a 16 384-token window for
+    // output would leave only 8 192 for input. 4 096 keeps tool-call JSON safe
+    // from mid-string truncation while preserving a usable prompt budget.
+    outputTokens: 4_096,
     quantizations: {
       mlx6bit: {
         hfRepo: "AutomatosX/AX-Qwen3-Coder-Next-MLX-AXQ-6bit",
@@ -251,7 +260,8 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineModelID, AxEngineModelD
     toolcall: true,
     minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
     contextTokens: 16_384,
-    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
+    // See the 6-bit entry: 4 096 output keeps the 16 384-token window usable.
+    outputTokens: 4_096,
     quantizations: {
       mlx4bit: {
         hfRepo: "AutomatosX/AX-Qwen3-Coder-Next-MLX-AXQ-4bit",

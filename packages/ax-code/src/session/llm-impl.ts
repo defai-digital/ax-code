@@ -501,7 +501,10 @@ export namespace LLM {
       providerID: input.model.providerID,
       modelID: input.model.id,
     })
-    return attachSuperLongPacingReservation(attachThinkTagStream(guarded), pacingReservation, input.abort)
+    const thinkTagStream = attachThinkTagStream(guarded, {
+      assumePrefilledThinkBlock: ProviderTransform.assumesPrefilledThinkBlock(input.model, paramsOptions),
+    })
+    return attachSuperLongPacingReservation(thinkTagStream, pacingReservation, input.abort)
   }
 
   export type SuperLongPacingReservation = {

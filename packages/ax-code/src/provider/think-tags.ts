@@ -45,10 +45,28 @@ function longestTagPrefix(buffer: string, candidates: readonly string[]): number
   return keep
 }
 
+export type ThinkTagStreamOptions = {
+  /**
+   * Start the stream already inside a reasoning block closed by `</think>`.
+   * Chat templates that prefill `<think>` into the generation prompt (Ornith
+   * with `enable_thinking`) emit bare reasoning text first — the opening tag
+   * never appears in the stream, so without this the reasoning and the
+   * literal close tag leak into visible text.
+   */
+  assumePrefilledThinkBlock?: boolean
+}
+
 export class ThinkTagParser {
   private buffer = ""
   private mode: "text" | "reasoning" = "text"
   private active: ThinkTagPair | undefined
+
+  constructor(options: ThinkTagStreamOptions = {}) {
+    if (options.assumePrefilledThinkBlock) {
+      this.mode = "reasoning"
+      this.active = THINK_TAG_PAIRS.find((pair) => pair.name === "think")
+    }
+  }
 
   get inReasoning() {
     return this.mode === "reasoning"
@@ -129,8 +147,11 @@ export function wrapThinkTagText(text: string, tag: ThinkTagName = "mm:think") {
   return `<${tag}>${text}</${tag}>`
 }
 
-export function attachThinkTagStream<T extends { fullStream: AsyncIterable<unknown> }>(output: T): T {
-  const parser = new ThinkTagParser()
+export function attachThinkTagStream<T extends { fullStream: AsyncIterable<unknown> }>(
+  output: T,
+  options: ThinkTagStreamOptions = {},
+): T {
+  const parser = new ThinkTagParser(options)
   let textStarted: { id: string; providerMetadata?: unknown } | undefined
   let pendingTextStart: { id: string; providerMetadata?: unknown } | undefined
   let reasoning: { id: string; seq: number } | undefined

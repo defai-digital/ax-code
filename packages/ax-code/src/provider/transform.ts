@@ -181,6 +181,12 @@ export namespace ProviderTransform {
   // by default would silently degrade their multi-turn reasoning quality.
   function rejectsReasoningContentOnInput(model: Provider.Model): boolean {
     if (model.api.npm !== "@ai-sdk/openai-compatible") return false
+    // Ornith's Qwen-style chat template drops historical thinking on its own,
+    // so carried-over reasoning_content is discarded server-side at best and
+    // rejected by stricter local servers (ax-engine) at worst. Strip it
+    // client-side: reasoning parsed out of prefilled think blocks (see
+    // assumesPrefilledThinkBlock) must never reach the wire.
+    if (isOrnithFamily(model)) return true
     return model.providerID === "groq"
   }
 
@@ -402,6 +408,20 @@ export namespace ProviderTransform {
     } catch {
       return false
     }
+  }
+
+  // Ornith's chat template prefills `<think>` into the generation prompt when
+  // thinking is enabled, so the response stream opens with bare reasoning
+  // text and only the closing `</think>` is generated. Servers that do not
+  // parse think blocks into reasoning_content (ax-engine today) deliver that
+  // reasoning as ordinary text; the think-tag stream parser must start inside
+  // a reasoning block for exactly these requests. Auxiliary calls
+  // (smallOptions: enable_thinking=false) have no prefill and must not match.
+  export function assumesPrefilledThinkBlock(model: Provider.Model, options: Record<string, any>): boolean {
+    if (model.api.npm !== "@ai-sdk/openai-compatible") return false
+    if (!isOrnithFamily(model)) return false
+    const kwargs = options["chat_template_kwargs"]
+    return isRecord(kwargs) && kwargs["enable_thinking"] === true
   }
 
   // Official Qwen 3.x ChatML (and Ornith / Holo3 fine-tunes) reject any

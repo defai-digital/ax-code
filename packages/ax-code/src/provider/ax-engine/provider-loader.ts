@@ -2,6 +2,7 @@ import type { Provider } from "../provider"
 import type { CustomLoader } from "../loaders"
 import { ProviderID, ModelID } from "../schema"
 import {
+  AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
   AX_ENGINE_DEFAULT_PORT,
   AX_ENGINE_ERROR,
   AX_ENGINE_MODEL_DEFINITIONS,
@@ -225,7 +226,7 @@ export function axEngineLoader(): CustomLoader {
       )
       if (definitionID) return modelFromDefinition(definitionID, contract, modelBaseURL)
       const context = contract.context ?? 16_384
-      const output = contract.output ?? 2_048
+      const output = contract.output ?? AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS
       return remember({
         id: ModelID.make(contract.id),
         providerID: ProviderID.make(AX_ENGINE_PROVIDER_ID),

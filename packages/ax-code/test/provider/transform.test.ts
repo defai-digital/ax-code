@@ -3301,3 +3301,68 @@ describe("ProviderTransform.options - z.ai / Zhipu GLM snapshot guard", () => {
     expect(result).toEqual({})
   })
 })
+
+describe("ProviderTransform.assumesPrefilledThinkBlock", () => {
+  function ornithModel(npm = "@ai-sdk/openai-compatible") {
+    return {
+      id: "ax-engine/ornith-35b-axq-4bit",
+      providerID: "ax-engine",
+      api: { id: "ornith-35b-axq-4bit", url: "http://127.0.0.1/v1", npm },
+    } as any
+  }
+
+  test("true for Ornith on openai-compatible with template thinking enabled", () => {
+    expect(
+      ProviderTransform.assumesPrefilledThinkBlock(ornithModel(), {
+        chat_template_kwargs: { enable_thinking: true },
+      }),
+    ).toBe(true)
+  })
+
+  test("false when thinking is disabled (smallOptions) or unspecified", () => {
+    expect(
+      ProviderTransform.assumesPrefilledThinkBlock(ornithModel(), {
+        chat_template_kwargs: { enable_thinking: false },
+      }),
+    ).toBe(false)
+    expect(ProviderTransform.assumesPrefilledThinkBlock(ornithModel(), {})).toBe(false)
+  })
+
+  test("false for non-Ornith models and non-openai-compatible SDKs", () => {
+    const qwen = {
+      id: "ax-engine/qwen3.8-27b-axq-4bit",
+      providerID: "ax-engine",
+      api: { id: "qwen3.8-27b-axq-4bit", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
+    } as any
+    const options = { chat_template_kwargs: { enable_thinking: true } }
+    expect(ProviderTransform.assumesPrefilledThinkBlock(qwen, options)).toBe(false)
+    expect(ProviderTransform.assumesPrefilledThinkBlock(ornithModel("@ai-sdk/anthropic"), options)).toBe(false)
+  })
+})
+
+describe("ProviderTransform.message - Ornith reasoning history", () => {
+  test("strips reasoning parts from Ornith assistant messages on input", () => {
+    const model = {
+      id: "ax-engine/ornith-35b-axq-4bit",
+      providerID: "ax-engine",
+      api: { id: "ornith-35b-axq-4bit", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
+      capabilities: { interleaved: false },
+    } as any
+    const result = ProviderTransform.message(
+      [
+        {
+          role: "assistant",
+          content: [
+            { type: "reasoning", text: "plan the count" },
+            { type: "text", text: "Here is the count" },
+          ],
+        } as any,
+      ],
+      model,
+      {},
+    )
+    // The Qwen-style template drops historical thinking server-side anyway;
+    // reasoning parsed from prefilled think blocks must not reach the wire.
+    expect(result[0].content).toEqual([{ type: "text", text: "Here is the count" }])
+  })
+})

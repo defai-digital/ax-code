@@ -817,7 +817,7 @@ describe("ax-engine server launch args", () => {
       "--speculation-profile",
       "agentic",
       "--max-batch-tokens",
-      "2048",
+      "8192",
       "--disable-ngram-acceleration",
       "--max-concurrent-requests",
       "1",
@@ -834,7 +834,7 @@ describe("ax-engine server launch args", () => {
       "--speculation-profile",
       "agentic",
       "--max-batch-tokens",
-      "2048",
+      "8192",
       "--disable-ngram-acceleration",
       "--max-concurrent-requests",
       "1",
@@ -853,7 +853,7 @@ describe("ax-engine server launch args", () => {
       "--speculation-profile",
       "agentic",
       "--max-batch-tokens",
-      "2048",
+      "8192",
       "--disable-ngram-acceleration",
       "--max-concurrent-requests",
       "1",
@@ -1108,7 +1108,7 @@ describe("ax-engine provider integration", () => {
     expect(provider.models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]).toMatchObject({
       name: "Qwen3.8-27B AXQ 6-bit (Local MLX Auto)",
       tool_call: true,
-      limit: { context: 65_536, input: 63_488, output: 2_048 },
+      limit: { context: 65_536, input: 57_344, output: 8_192 },
       options: {
         modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
         quantization: "mlx6bit",
@@ -1122,7 +1122,7 @@ describe("ax-engine provider integration", () => {
       family: AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID,
       reasoning: true,
       tool_call: true,
-      limit: { context: 262_144, input: 260_096, output: 2_048 },
+      limit: { context: 262_144, input: 253_952, output: 8_192 },
       options: {
         modelID: AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID,
         quantization: "mlx4bit",
@@ -1134,7 +1134,7 @@ describe("ax-engine provider integration", () => {
     expect(provider.models[AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID]).toMatchObject({
       name: "Qwen3.8-27B AXQ 4-bit (Local MLX Auto)",
       tool_call: true,
-      limit: { context: 65_536, input: 63_488, output: 2_048 },
+      limit: { context: 65_536, input: 57_344, output: 8_192 },
       options: {
         modelID: AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID,
         quantization: "mlx4bit",
@@ -1146,7 +1146,7 @@ describe("ax-engine provider integration", () => {
     expect(provider.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]).toMatchObject({
       name: "Qwen3-Coder-Next AXQ 6-bit (Local MLX)",
       tool_call: true,
-      limit: { context: 16_384, input: 14_336, output: 2_048 },
+      limit: { context: 16_384, input: 12_288, output: 4_096 },
       options: {
         modelID: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
         quantization: "mlx6bit",
