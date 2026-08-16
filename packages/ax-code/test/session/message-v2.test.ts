@@ -1278,3 +1278,60 @@ describe("session.message-v2.toModelMessages cache", () => {
     expect(result).toStrictEqual([{ role: "user", content: [{ type: "text", text: "mutated in place" }] }])
   })
 })
+
+describe("session.message-v2.toModelMessage providerMetadata shape", () => {
+  test("drops legacy flat think-tag metadata that fails the ModelMessage schema", async () => {
+    // The think-tag stream parser used to tag reasoning parts with flat
+    // { thinkTag: "think" } providerMetadata, which persisted into session
+    // history. Passed through verbatim it becomes providerOptions with a
+    // string value, failing AI SDK prompt validation on every later turn.
+    const input: MessageV2.WithParts[] = [
+      {
+        info: assistantInfo("m-assistant", "m-user"),
+        parts: [
+          {
+            ...basePart("m-assistant", "a1"),
+            type: "reasoning",
+            text: "plan",
+            metadata: { thinkTag: "think" },
+          },
+          {
+            ...basePart("m-assistant", "a2"),
+            type: "text",
+            text: "answer",
+            metadata: { thinkTag: "think" },
+          },
+        ] as MessageV2.Part[],
+      },
+    ]
+
+    const [message] = await MessageV2.toModelMessages(input, model)
+    expect(message.role).toBe("assistant")
+    const content = message.content as Array<{ type: string; text?: string; providerOptions?: unknown }>
+    expect(content.map((part) => [part.type, part.text])).toEqual([
+      ["reasoning", "plan"],
+      ["text", "answer"],
+    ])
+    for (const part of content) expect(part.providerOptions).toBeUndefined()
+  })
+
+  test("keeps provider-namespaced metadata that matches the record-of-records shape", async () => {
+    const input: MessageV2.WithParts[] = [
+      {
+        info: assistantInfo("m-assistant", "m-user"),
+        parts: [
+          {
+            ...basePart("m-assistant", "a1"),
+            type: "text",
+            text: "answer",
+            metadata: { openaiCompatible: { thinkTag: "think" } },
+          },
+        ] as MessageV2.Part[],
+      },
+    ]
+
+    const [message] = await MessageV2.toModelMessages(input, model)
+    const content = message.content as Array<{ providerOptions?: unknown }>
+    expect(content[0]?.providerOptions).toEqual({ openaiCompatible: { thinkTag: "think" } })
+  })
+})

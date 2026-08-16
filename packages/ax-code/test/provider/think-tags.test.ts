@@ -79,13 +79,8 @@ describe("attachThinkTagStream", () => {
 
     expect(events).toEqual([
       { type: "start" },
-      { type: "reasoning-start", id: "think-tag-1", providerMetadata: { thinkTag: "mm:think" } },
-      {
-        type: "reasoning-delta",
-        id: "think-tag-1",
-        text: "plan the edit",
-        providerMetadata: { thinkTag: "mm:think" },
-      },
+      { type: "reasoning-start", id: "think-tag-1" },
+      { type: "reasoning-delta", id: "think-tag-1", text: "plan the edit" },
       { type: "reasoning-end", id: "think-tag-1" },
       { type: "text-start", id: "t0" },
       { type: "text-delta", id: "t0", text: "Now call bash" },
@@ -104,13 +99,8 @@ describe("attachThinkTagStream", () => {
     )
 
     expect(events).toEqual([
-      { type: "reasoning-start", id: "think-tag-1", providerMetadata: { thinkTag: "mm:think" } },
-      {
-        type: "reasoning-delta",
-        id: "think-tag-1",
-        text: "only thinking",
-        providerMetadata: { thinkTag: "mm:think" },
-      },
+      { type: "reasoning-start", id: "think-tag-1" },
+      { type: "reasoning-delta", id: "think-tag-1", text: "only thinking" },
       { type: "reasoning-end", id: "think-tag-1" },
     ])
   })
@@ -129,19 +119,9 @@ describe("attachThinkTagStream", () => {
     )
 
     expect(events).toEqual([
-      { type: "reasoning-start", id: "think-tag-1", providerMetadata: { thinkTag: "think" } },
-      {
-        type: "reasoning-delta",
-        id: "think-tag-1",
-        text: "reasoning about the task",
-        providerMetadata: { thinkTag: "think" },
-      },
-      {
-        type: "reasoning-delta",
-        id: "think-tag-1",
-        text: ".",
-        providerMetadata: { thinkTag: "think" },
-      },
+      { type: "reasoning-start", id: "think-tag-1" },
+      { type: "reasoning-delta", id: "think-tag-1", text: "reasoning about the task" },
+      { type: "reasoning-delta", id: "think-tag-1", text: "." },
       { type: "reasoning-end", id: "think-tag-1" },
       { type: "text-start", id: "t0" },
       { type: "text-delta", id: "t0", text: "Visible answer" },
@@ -164,13 +144,8 @@ describe("attachThinkTagStream", () => {
     )
 
     expect(events).toEqual([
-      { type: "reasoning-start", id: "think-tag-1", providerMetadata: { thinkTag: "think" } },
-      {
-        type: "reasoning-delta",
-        id: "think-tag-1",
-        text: "still reasoning when tokens ran out",
-        providerMetadata: { thinkTag: "think" },
-      },
+      { type: "reasoning-start", id: "think-tag-1" },
+      { type: "reasoning-delta", id: "think-tag-1", text: "still reasoning when tokens ran out" },
       { type: "reasoning-end", id: "think-tag-1" },
     ])
   })

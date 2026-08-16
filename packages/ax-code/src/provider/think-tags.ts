@@ -157,11 +157,15 @@ export function attachThinkTagStream<T extends { fullStream: AsyncIterable<unkno
   let reasoning: { id: string; seq: number } | undefined
   let seq = 0
 
-  const openReasoning = (tag?: ThinkTagName) => {
+  const openReasoning = () => {
     if (reasoning) return []
     seq += 1
     reasoning = { id: `think-tag-${seq}`, seq }
-    return [{ type: "reasoning-start" as const, id: reasoning.id, providerMetadata: tag ? { thinkTag: tag } : undefined }]
+    // No providerMetadata: the think-tag name is internal bookkeeping, and
+    // providerMetadata must be a provider-namespaced record-of-records. A
+    // flat { thinkTag } leaks through storage into providerOptions on the
+    // next turn and fails the AI SDK's ModelMessage schema validation.
+    return [{ type: "reasoning-start" as const, id: reasoning.id }]
   }
 
   const closeReasoning = () => {
@@ -182,13 +186,12 @@ export function attachThinkTagStream<T extends { fullStream: AsyncIterable<unkno
     const events: unknown[] = []
     for (const chunk of chunks) {
       if (chunk.type === "reasoning") {
-        events.push(...openReasoning(chunk.tag))
+        events.push(...openReasoning())
         if (chunk.text) {
           events.push({
             type: "reasoning-delta",
             id: reasoning!.id,
             text: chunk.text,
-            providerMetadata: chunk.tag ? { thinkTag: chunk.tag } : undefined,
           })
         }
         continue

@@ -710,6 +710,18 @@ export namespace MessageV2 {
 
     const isDataUrl = (url: string) => /^data:/i.test(url)
 
+    // providerMetadata must be a provider-namespaced record-of-records for
+    // the AI SDK's ModelMessage schema; flatter legacy metadata (e.g.
+    // { thinkTag: "think" } written into reasoning parts by the think-tag
+    // stream parser before it stopped tagging) fails validation and bricks
+    // every subsequent turn of the session. Drop non-conforming keys so
+    // corrupted history stays sendable.
+    const validProviderMetadata = (metadata: unknown) => {
+      if (!isRecord(metadata)) return undefined
+      const valid = Object.fromEntries(Object.entries(metadata).filter(([, value]) => isRecord(value)))
+      return Object.keys(valid).length > 0 ? (valid as MessageV2.TextPart["metadata"]) : undefined
+    }
+
     const toModelOutput = (opts: { toolCallId: string; input: unknown; output: unknown } | unknown) => {
       // AI SDK v6 passes { toolCallId, input, output }, v5 passed output directly
       const output = isRecord(opts) && "output" in opts ? opts.output : opts
@@ -819,7 +831,7 @@ export namespace MessageV2 {
             assistantMessage.parts.push({
               type: "text",
               text: part.text,
-              ...(differentModel ? {} : { providerMetadata: part.metadata }),
+              ...(differentModel ? {} : { providerMetadata: validProviderMetadata(part.metadata) }),
             })
           if (part.type === "step-start")
             assistantMessage.parts.push({
@@ -854,7 +866,7 @@ export namespace MessageV2 {
                 toolCallId: part.callID,
                 input: part.state.input,
                 output,
-                ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
+                ...(differentModel ? {} : { callProviderMetadata: validProviderMetadata(part.metadata) }),
               })
             }
             if (part.state.status === "error")
@@ -864,7 +876,7 @@ export namespace MessageV2 {
                 toolCallId: part.callID,
                 input: part.state.input,
                 errorText: part.state.error,
-                ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
+                ...(differentModel ? {} : { callProviderMetadata: validProviderMetadata(part.metadata) }),
               })
             // Handle pending/running tool calls to prevent dangling tool_use blocks
             // Anthropic/Claude APIs require every tool_use to have a corresponding tool_result
@@ -875,14 +887,14 @@ export namespace MessageV2 {
                 toolCallId: part.callID,
                 input: part.state.input,
                 errorText: "[Tool execution was interrupted]",
-                ...(differentModel ? {} : { callProviderMetadata: part.metadata }),
+                ...(differentModel ? {} : { callProviderMetadata: validProviderMetadata(part.metadata) }),
               })
           }
           if (part.type === "reasoning") {
             assistantMessage.parts.push({
               type: "reasoning",
               text: part.text,
-              ...(differentModel ? {} : { providerMetadata: part.metadata }),
+              ...(differentModel ? {} : { providerMetadata: validProviderMetadata(part.metadata) }),
             })
           }
         }
