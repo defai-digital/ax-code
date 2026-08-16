@@ -63,6 +63,7 @@ export function displayCommands(input: {
   session: Accessor<Session | undefined>
   setConceal: (next: Setter<boolean>) => void
   setShowDetails: (next: Setter<boolean>) => void
+  setShowAssistantStats: (next: Setter<boolean>) => void
   setShowGenericToolOutput: (next: Setter<boolean>) => void
   setShowHeader: (next: Setter<boolean>) => void
   setShowScrollbar: (next: Setter<boolean>) => void
@@ -73,6 +74,7 @@ export function displayCommands(input: {
   setTimestamps: (next: Setter<"hide" | "show">) => void
   metadataDensity: Accessor<"auto" | "full" | "compact">
   showAssistantMetadata: Accessor<boolean>
+  showAssistantStats: Accessor<boolean>
   showDetails: Accessor<boolean>
   showGenericToolOutput: Accessor<boolean>
   showHeader: Accessor<boolean>
@@ -351,6 +353,15 @@ export function displayCommands(input: {
       category: "Session",
       onSelect: (dialog: DialogContext) => {
         input.setShowDetails((prev) => !prev)
+        dialog.clear()
+      },
+    },
+    {
+      title: input.showAssistantStats() ? "Hide assistant stats" : "Show assistant stats",
+      value: "session.toggle.assistant_stats",
+      category: "Session",
+      onSelect: (dialog: DialogContext) => {
+        input.setShowAssistantStats((prev) => !prev)
         dialog.clear()
       },
     },

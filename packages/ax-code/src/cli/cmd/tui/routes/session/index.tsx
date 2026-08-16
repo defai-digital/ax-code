@@ -95,6 +95,7 @@ import { EventQuery } from "@/replay/query"
 import { buildRouteInfoByMessage, routeEvent } from "./route"
 import {
   assistantMessageDuration,
+  assistantMessageStats,
   assistantToolSummary,
   codeDisplayView,
   compactDelegatedLabel,
@@ -302,6 +303,7 @@ export function Session() {
   )
   const [showDetails, setShowDetails] = kv.signal("tool_details_visibility", true)
   const [showAssistantMetadata] = kv.signal("assistant_metadata_visibility", true)
+  const [showAssistantStats, setShowAssistantStats] = kv.signal("assistant_stats_visibility", true)
   const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", true)
   const [showHeader, setShowHeader] = kv.signal("header_visible", true)
   const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
@@ -870,6 +872,8 @@ export function Session() {
       setTimestamps,
       metadataDensity,
       showAssistantMetadata,
+      showAssistantStats,
+      setShowAssistantStats,
       showDetails,
       showGenericToolOutput,
       showHeader,
@@ -1686,6 +1690,8 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
   const local = useLocal()
   const { theme } = useTheme()
   const sync = useSync()
+  const kv = useKV()
+  const [showAssistantStats] = kv.signal("assistant_stats_visibility", true)
   const messages = createMemo(() => sync.data.message[props.message.sessionID] ?? [])
 
   const final = createMemo(() => {
@@ -1697,6 +1703,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
     return assistantMessageDuration(props.message, messages())
   })
   const toolSummary = createMemo(() => assistantToolSummary(props.parts))
+  const stats = createMemo(() => (showAssistantStats() ? assistantMessageStats(props.message) : undefined))
 
   const keybind = useKeybind()
 
@@ -1830,6 +1837,15 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
               <span style={{ fg: theme.textMuted }}> · {props.message.modelID}</span>
               <Show when={duration()}>
                 <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
+              </Show>
+              <Show when={stats()?.output}>
+                <span style={{ fg: theme.textMuted }}> · {stats()!.output} tok</span>
+              </Show>
+              <Show when={stats()?.rate}>
+                <span style={{ fg: theme.textMuted }}> · {stats()!.rate}</span>
+              </Show>
+              <Show when={stats()?.cacheHit}>
+                <span style={{ fg: theme.textMuted }}> · cache {stats()!.cacheHit}</span>
               </Show>
               <For each={toolSummary()}>
                 {(item) => (

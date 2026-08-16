@@ -52,7 +52,7 @@ type FooterGoalChip = {
 // Render token counts as "1.2k" / "480" depending on size. Tight format
 // because the chip lives in the right-rail next to MCP / LSP and we
 // don't want it eating multiple columns at every assistant tick.
-function formatTokenCount(n: number): string {
+export function formatTokenCount(n: number): string {
   if (n < 1000) return String(n)
   if (n < 10_000) return `${(n / 1000).toFixed(1)}k`
   if (n >= 999_500) return `${(n / 1_000_000).toFixed(1)}m`
@@ -62,7 +62,13 @@ function formatTokenCount(n: number): string {
 // Sub-second rates are noisy and meaningless ("inf t/s" right after the
 // first token lands) — gate rate calc on a real elapsed window. Anything
 // shorter than this returns no rate; the caller hides the suffix.
-const RATE_MIN_ELAPSED_SECONDS = 0.5
+export const RATE_MIN_ELAPSED_SECONDS = 0.5
+
+// Single rate format for every tok/s readout (live footer chip, per-message
+// footer stats) so the numbers never diverge in style.
+export function formatTokenRate(rate: number): string {
+  return rate >= 100 ? `${Math.round(rate)} t/s` : `${rate.toFixed(1)} t/s`
+}
 
 // Build the per-turn token chip view from the most-recent assistant
 // message plus the current turn's start timestamp. Rate is OUTPUT
@@ -86,8 +92,7 @@ export function footerTokenChip(input: {
     const now = input.now ?? Date.now()
     const elapsed = Math.max(0, (now - input.startedAt) / 1000)
     if (elapsed >= RATE_MIN_ELAPSED_SECONDS) {
-      const rate = outTok / elapsed
-      view.rate = rate >= 100 ? `${Math.round(rate)} t/s` : `${rate.toFixed(1)} t/s`
+      view.rate = formatTokenRate(outTok / elapsed)
     }
   }
   return view

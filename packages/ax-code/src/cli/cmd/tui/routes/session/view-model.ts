@@ -1,6 +1,7 @@
 import type { AssistantMessage, Part, UserMessage } from "@ax-code/sdk/v2"
 import { userRoute, type AgentInfo } from "./route"
 import { filetype } from "./format"
+import { formatTokenCount, formatTokenRate, RATE_MIN_ELAPSED_SECONDS } from "./footer-view-model"
 import { parseTuiJsonPayload } from "../../util/json"
 
 type TodoViewItem = {
@@ -120,6 +121,35 @@ export function assistantMessageDuration(
   const user = messages.find((item) => item.role === "user" && item.id === message.parentID)
   if (!user?.time?.created) return 0
   return message.time.completed - user.time.created
+}
+
+export type AssistantMessageStats = { output?: string; rate?: string; cacheHit?: string }
+
+// Per-message throughput/cache readout for the assistant footer line. The rate
+// is EFFECTIVE output tokens per second over the whole assistant turn
+// (time.created → time.completed), so it includes tool execution between
+// steps — intentionally matching the latency the user experienced rather than
+// raw decode speed. cacheHit uses cache.read, which local servers (ax-engine)
+// fill with prefix-cache hits.
+export function assistantMessageStats(message: AssistantMessage): AssistantMessageStats | undefined {
+  const stats: AssistantMessageStats = {}
+  const output = message.tokens.output
+  if (output > 0) {
+    stats.output = formatTokenCount(output)
+    if (message.time.completed) {
+      const elapsed = (message.time.completed - message.time.created) / 1000
+      if (elapsed >= RATE_MIN_ELAPSED_SECONDS) {
+        stats.rate = formatTokenRate(output / elapsed)
+      }
+    }
+  }
+  const read = message.tokens.cache.read
+  const fresh = message.tokens.input
+  if (read > 0 && read + fresh > 0) {
+    stats.cacheHit = `${Math.round((read / (read + fresh)) * 100)}%`
+  }
+  if (!stats.output && !stats.rate && !stats.cacheHit) return undefined
+  return stats
 }
 
 const TOOL_SUMMARY_LABELS: Record<string, [string, string]> = {
