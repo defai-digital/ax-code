@@ -1574,6 +1574,8 @@ export const dict = {
   "chat.changedFiles.title": "Changed files",
   "chat.changedFiles.actions.openFileTitle": "Open {path}",
   "chat.emptyState.axCodeUnreachable": "AX Code is not reachable",
+  "chat.emptyState.retry": "Retry",
+  "chat.emptyState.retrying": "Retrying…",
   "chat.emptyState.startNewChat": "Start a new chat",
   "chat.emptyState.draftTitle": "What are we working on?",
   "chat.emptyState.draftTitleWithProject": "What are we working on in {project}?",
@@ -1852,6 +1854,8 @@ export const dict = {
   "snippets.source.global": "global",
   "snippets.source.project": "project",
   "chat.chatInput.toast.compactFailed": "Failed to compact session",
+  "chat.chatInput.toast.noModelSelected": "Select a model before sending",
+  "chat.chatInput.toast.noModelSelectedAction": "Select model",
   "chat.chatInput.toast.summaryFailed": "Failed to generate summary",
   "chat.chatInput.toast.reviewFailed": "Failed to review changes",
   "chat.chatInput.toast.planFeatureFailed": "Failed to start feature planning",
@@ -2625,6 +2629,9 @@ export const dict = {
   "syncStatus.reconnecting": "Reconnecting...",
   "syncStatus.connecting": "Connecting...",
   "syncStatus.disconnected": "Disconnected — check network",
+  "syncStatus.reconnectBanner.title": "Connection lost. Reconnecting…",
+  "syncStatus.reconnectBanner.retry": "Retry now",
+  "syncStatus.reconnectBanner.dismiss": "Dismiss",
 
   // Rich empty states
   "emptyState.git.title": "No git repository detected",

@@ -73,6 +73,7 @@ import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
 
 import { SyncStatusIndicator } from "@/components/ui/SyncStatusIndicator"
+import { ReconnectBanner } from "@/components/ui/ReconnectBanner"
 import { NotificationCenter } from "@/components/notifications/NotificationCenter"
 import { useNotificationStore } from "@/stores/useNotificationStore"
 import type { Session } from "@ax-code/sdk/v2/client"
@@ -1963,6 +1964,7 @@ export const Header: React.FC = () => {
       style={{ ["--padding-scale" as string]: "1" } as React.CSSProperties}
     >
       {renderDesktop()}
+      <ReconnectBanner />
     </header>
   )
 }

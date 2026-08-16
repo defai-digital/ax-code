@@ -761,6 +761,9 @@ function App({ apis }: AppProps) {
     }
 
     if (error) {
+      // The store only records the failure — surface it so a failed
+      // "new session"/"fork"/send is not invisible to the user.
+      toast.error(error)
       const timer = setTimeout(() => clearError(), 5000)
       return () => clearTimeout(timer)
     }

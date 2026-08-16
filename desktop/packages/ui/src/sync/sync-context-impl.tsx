@@ -1300,6 +1300,13 @@ export function SyncProvider(props: { sdk: AxCodeClient; directory: string; chil
           hasEverConnected: true,
           connectionPhase: "connected",
         })
+        // If the global bootstrap failed (e.g. backend down at mount), the
+        // store still carries an init error — a successful reconnect is the
+        // earliest chance to refill it.
+        const globalState = useGlobalSyncStore.getState()
+        if (globalState.error) {
+          void bootstrapGlobal(props.sdk, globalState.actions.set)
+        }
         if (isRecentBoot()) {
           return
         }

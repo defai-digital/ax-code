@@ -47,6 +47,20 @@ const RETRY_BACKOFF_CAP_HIDDEN_OR_OFFLINE_MS = 60_000
 const RETRY_BACKOFF_MAX_EXPONENT = 8
 const ABSOLUTE_URL_PATTERN = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//
 
+/**
+ * Window event the UI dispatches to interrupt the reconnect backoff and force
+ * an immediate reconnect attempt (e.g. a "retry now" action on the reconnect
+ * banner). Handled exactly like `openchamber:system-resume`.
+ */
+export const SYNC_RETRY_NOW_EVENT = "openchamber:sync-retry-now"
+
+/** Ask the active event pipeline to reconnect immediately. */
+export function requestSyncRetryNow(): void {
+  if (typeof globalThis.window !== "undefined") {
+    globalThis.window.dispatchEvent(new Event(SYNC_RETRY_NOW_EVENT))
+  }
+}
+
 export type EventPipelineInput = {
   sdk: AxCodeClient
   onEvent: (directory: string, payload: Event) => void
@@ -547,6 +561,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
    * Wait between reconnect attempts. Resolves early when:
    *   - the browser fires `online` (network came back — probe immediately),
    *   - the desktop shell fires `openchamber:system-resume` (wake from sleep),
+   *   - the UI fires `openchamber:sync-retry-now` (user asked to retry now),
    *   - the tab becomes visible (user came back — probe immediately),
    *   - the pipeline is being torn down (cleanup aborts).
    * Otherwise resolves after `ms` like a plain timer.
@@ -566,6 +581,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
         if (typeof globalThis.window !== "undefined") {
           globalThis.window.removeEventListener("online", onInterrupt)
           globalThis.window.removeEventListener("openchamber:system-resume", onInterrupt)
+          globalThis.window.removeEventListener(SYNC_RETRY_NOW_EVENT, onInterrupt)
         }
         if (typeof document !== "undefined") {
           document.removeEventListener("visibilitychange", onVisibilityInterrupt)
@@ -586,6 +602,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
       if (typeof globalThis.window !== "undefined") {
         globalThis.window.addEventListener("online", onInterrupt, { once: true })
         globalThis.window.addEventListener("openchamber:system-resume", onInterrupt, { once: true })
+        globalThis.window.addEventListener(SYNC_RETRY_NOW_EVENT, onInterrupt, { once: true })
       }
       if (typeof document !== "undefined") {
         document.addEventListener("visibilitychange", onVisibilityInterrupt)
@@ -1028,6 +1045,15 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
     attempt?.abort()
   }
 
+  // UI-triggered "retry now" (e.g. the reconnect banner). Same effect as
+  // system-resume: abort any in-flight attempt so the loop reconnects
+  // immediately; waitForRetry also listens for the event, so an
+  // inter-attempt backoff sleep ends now too.
+  const onRetryNow = () => {
+    attemptAbortReason = `${activeTransport}_manual_retry`
+    attempt?.abort()
+  }
+
   // Browser told us the network is back. If we're already in a disconnected
   // cycle, abort the (stale) attempt and let the loop probe immediately;
   // waitForRetry also resolves early on `online`, so any inter-attempt sleep
@@ -1061,6 +1087,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
   // test environments can replace globalThis.window with a stub.
   if (typeof globalThis.window !== "undefined") {
     globalThis.window.addEventListener("openchamber:system-resume", onSystemResume)
+    globalThis.window.addEventListener(SYNC_RETRY_NOW_EVENT, onRetryNow)
     globalThis.window.addEventListener("online", onOnline)
     globalThis.window.addEventListener("offline", onOffline)
   }
@@ -1072,6 +1099,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
     }
     if (typeof globalThis.window !== "undefined") {
       globalThis.window.removeEventListener("openchamber:system-resume", onSystemResume)
+      globalThis.window.removeEventListener(SYNC_RETRY_NOW_EVENT, onRetryNow)
       globalThis.window.removeEventListener("online", onOnline)
       globalThis.window.removeEventListener("offline", onOffline)
     }

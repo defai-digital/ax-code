@@ -1,12 +1,15 @@
 import React from "react"
 import { AxCodeIcon } from "@/components/ui/AxCodeIcon"
+import { bootstrapGlobal } from "@/sync/bootstrap"
 import { useGlobalSyncStore } from "@/sync/global-sync-store"
+import { axCodeClient } from "@/lib/ax-code/client"
 import { useI18n } from "@/lib/i18n"
 import { useUIStore } from "@/stores/useUIStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useSessionUIStore } from "@/sync/session-ui-store"
 import { Icon } from "@/components/icon/Icon"
 import { ProjectsHome } from "@/components/projects/ProjectsHome"
+import { cn } from "@/lib/utils"
 
 /**
  * Empty chat surface — project-first when workspaces exist (Codex-style home),
@@ -37,6 +40,17 @@ const ChatEmptyState: React.FC = () => {
     [openNewSessionDraft, setActiveMainTab],
   )
 
+  const [isRetrying, setIsRetrying] = React.useState(false)
+
+  // Re-run the global bootstrap that failed at mount (e.g. backend was down).
+  const handleRetryConnection = React.useCallback(() => {
+    if (isRetrying) return
+    setIsRetrying(true)
+    void bootstrapGlobal(axCodeClient.getSdkClient(), useGlobalSyncStore.getState().actions.set).finally(() => {
+      setIsRetrying(false)
+    })
+  }, [isRetrying])
+
   if (initError) {
     return (
       <div className="flex flex-col items-center justify-center min-h-full w-full px-6 py-16 sm:py-20">
@@ -46,6 +60,15 @@ const ChatEmptyState: React.FC = () => {
             {t("chat.emptyState.axCodeUnreachable")}
           </span>
           <span className="typography-meta text-muted-foreground leading-relaxed">{initError.message}</span>
+          <button
+            type="button"
+            onClick={handleRetryConnection}
+            disabled={isRetrying}
+            className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-border bg-transparent px-3.5 py-2 typography-meta font-medium text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
+          >
+            <Icon name="refresh" className={cn("h-3.5 w-3.5", isRetrying && "animate-spin")} />
+            {isRetrying ? t("chat.emptyState.retrying") : t("chat.emptyState.retry")}
+          </button>
         </div>
       </div>
     )
