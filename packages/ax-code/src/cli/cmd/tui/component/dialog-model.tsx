@@ -1,4 +1,4 @@
-import { createMemo, createSignal } from "solid-js"
+import { createEffect, createMemo, createSignal } from "solid-js"
 import { useLocal } from "@tui/context/local"
 import { useSync } from "@tui/context/sync"
 import { map, pipe, flatMap, entries, filter, sortBy, take } from "remeda"
@@ -15,7 +15,7 @@ import { dialogModelOptionDisabled } from "./dialog-model-options"
 import { useSDK } from "../context/sdk"
 import { useToast } from "../ui/toast"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
-import { DialogAxEngineDownload, fetchAxEngineDownloadOffer } from "./dialog-ax-engine-download"
+import { DialogAxEngineDownload, fetchAxEngineDownloadOffer, fetchAxEngineModelAnnotations } from "./dialog-ax-engine-download"
 
 export function DialogModel(props: { providerID?: string }) {
   const local = useLocal()
@@ -26,6 +26,26 @@ export function DialogModel(props: { providerID?: string }) {
   const sdk = useSDK()
   const toast = useToast()
   const [query, setQuery] = createSignal("")
+
+  // Managed AX Engine models are listed before their weights exist locally.
+  // Annotate picker entries with the catalog fit state ("Not downloaded",
+  // "Downloading…", …) so an unusable model is never a silent selection.
+  // Fetched once per dialog open; probe failure degrades to no annotations.
+  const [axEngineAnnotations, setAxEngineAnnotations] = createSignal<ReadonlyMap<string, string>>(new Map())
+  let axEngineAnnotationsRequested = false
+  createEffect(() => {
+    if (axEngineAnnotationsRequested) return
+    if (!sync.data.provider.some((provider) => provider.id === AX_ENGINE_PROVIDER_ID)) return
+    axEngineAnnotationsRequested = true
+    void fetchAxEngineModelAnnotations(sdk)
+      .then(setAxEngineAnnotations)
+      .catch(() => undefined)
+  })
+
+  function axEngineAnnotation(providerID: string, modelID: string) {
+    if (providerID !== AX_ENGINE_PROVIDER_ID) return undefined
+    return axEngineAnnotations().get(modelID)
+  }
 
   function selectModel(value: { providerID: string; modelID: string }) {
     const apply = () => local.model.set(value, { recent: true })
@@ -74,7 +94,7 @@ export function DialogModel(props: { providerID?: string }) {
         const model = provider.models[item.modelID]
         if (!model) return []
         const display = modelDisplayInfo(item.modelID, model)
-        const blockReason = modelMemoryBlockReason(provider.id, model)
+        const blockReason = modelMemoryBlockReason(provider.id, model) ?? axEngineAnnotation(provider.id, model.id)
         return [
           {
             key: item,
@@ -113,7 +133,7 @@ export function DialogModel(props: { providerID?: string }) {
           filter(([_, info]) => (props.providerID ? info.providerID === props.providerID : true)),
           map(([model, info]) => {
             const display = modelDisplayInfo(model, info)
-            const blockReason = modelMemoryBlockReason(provider.id, info)
+            const blockReason = modelMemoryBlockReason(provider.id, info) ?? axEngineAnnotation(provider.id, model)
             return {
               value: { providerID: provider.id, modelID: model },
               title: display.label,
