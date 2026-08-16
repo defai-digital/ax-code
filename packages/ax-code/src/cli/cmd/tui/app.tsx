@@ -46,6 +46,7 @@ import { KVProvider, useKV } from "./context/kv"
 import { Provider } from "@/provider/provider"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
+import { AxEngineDownloadsProvider } from "./context/ax-engine-downloads"
 import { VisualCapabilityProvider } from "./ui/primitives/capability-context"
 import {
   runMode,
@@ -143,19 +144,21 @@ export function tui(input: TuiInput) {
                                 <LocalProvider>
                                   <KeybindProvider>
                                     <PromptStashProvider>
-                                      <DialogProvider>
-                                        <CommandProvider>
-                                          <FrecencyProvider>
-                                            <PromptHistoryProvider>
-                                              <PromptRefProvider>
-                                                <VisualCapabilityProvider>
-                                                  <App onSnapshot={input.onSnapshot} />
-                                                </VisualCapabilityProvider>
-                                              </PromptRefProvider>
-                                            </PromptHistoryProvider>
-                                          </FrecencyProvider>
-                                        </CommandProvider>
-                                      </DialogProvider>
+                                      <AxEngineDownloadsProvider>
+                                        <DialogProvider>
+                                          <CommandProvider>
+                                            <FrecencyProvider>
+                                              <PromptHistoryProvider>
+                                                <PromptRefProvider>
+                                                  <VisualCapabilityProvider>
+                                                    <App onSnapshot={input.onSnapshot} />
+                                                  </VisualCapabilityProvider>
+                                                </PromptRefProvider>
+                                              </PromptHistoryProvider>
+                                            </FrecencyProvider>
+                                          </CommandProvider>
+                                        </DialogProvider>
+                                      </AxEngineDownloadsProvider>
                                     </PromptStashProvider>
                                   </KeybindProvider>
                                 </LocalProvider>

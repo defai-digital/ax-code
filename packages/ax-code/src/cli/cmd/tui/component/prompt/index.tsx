@@ -66,6 +66,9 @@ import { createColors, createFrames } from "../../ui/spinner.ts"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogAlert } from "../../ui/dialog-alert"
 import { useToast } from "../../ui/toast"
+import { useAxEngineDownloads } from "../../context/ax-engine-downloads"
+import { axEngineDownloadChip } from "../ax-engine-downloads-view-model"
+import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { Usage } from "../../routes/session/usage"
@@ -172,6 +175,21 @@ export function Prompt(props: PromptProps) {
       streamHealth: sync.data.stream_health,
     }),
   )
+
+  // AX Engine download progress for the footer chip and the submit guard:
+  // while the selected model's weights are queued/downloading, show the
+  // progress next to the model name and block submits with an explanation
+  // instead of letting the turn fail server-side with MODEL_NOT_PREPARED.
+  const axEngineDownloads = useAxEngineDownloads()
+  const axEngineDownloadJob = createMemo(() => {
+    const current = local.model.current()
+    if (!current || current.providerID !== AX_ENGINE_PROVIDER_ID) return undefined
+    return axEngineDownloads.jobForModel(current.modelID)
+  })
+  const downloadChip = createMemo(() => {
+    const job = axEngineDownloadJob()
+    return job ? axEngineDownloadChip(job) : undefined
+  })
 
   // ADR-028: interactive follow-up queueing. While the session is busy, plain
   // prompts are buffered client-side and replayed when the session goes idle,
@@ -1178,6 +1196,20 @@ export function Prompt(props: PromptProps) {
       sessionID: props.sessionID ?? draftSessionID() ?? "new",
     })
 
+    // Managed AX Engine weights still downloading: the request would fail
+    // server-side with MODEL_NOT_PREPARED. Keep the draft intact and explain.
+    const pendingDownload = selectedModel.providerID === AX_ENGINE_PROVIDER_ID ? axEngineDownloadJob() : undefined
+    if (pendingDownload) {
+      toast.show({
+        variant: "warning",
+        message: `${selectedModel.modelID} is not ready yet (${axEngineDownloadChip(pendingDownload)}) — send again when the download completes`,
+      })
+      log.info("tui.prompt.submit: blocked, ax-engine model downloading", {
+        model: providerModelKey(selectedModel),
+      })
+      return
+    }
+
     const runID = ++submitRunID
     let sessionID = props.sessionID ?? draftSessionID()
     const startingNewSession = sessionID == null
@@ -1962,6 +1994,16 @@ export function Prompt(props: PromptProps) {
                   </text>
                   <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
                   <Show when={connectionChip()}>
+                    {(chip) => (
+                      <>
+                        <text fg={theme.textMuted}>·</text>
+                        <text flexShrink={0} fg={theme.warning}>
+                          {chip()}
+                        </text>
+                      </>
+                    )}
+                  </Show>
+                  <Show when={downloadChip()}>
                     {(chip) => (
                       <>
                         <text fg={theme.textMuted}>·</text>

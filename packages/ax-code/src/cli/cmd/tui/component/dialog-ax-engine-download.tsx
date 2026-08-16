@@ -2,6 +2,7 @@ import { DialogSelect } from "@tui/ui/dialog-select"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
 import type { useSDK } from "../context/sdk"
 import type { useToast } from "../ui/toast"
+import { useAxEngineDownloads } from "../context/ax-engine-downloads"
 import { axEngineModelStateAnnotations, type AxEngineCatalogEntryState } from "./dialog-ax-engine-state"
 
 // Minimal projections of /provider/ax-engine/models and /connection responses —
@@ -105,6 +106,7 @@ export function DialogAxEngineDownload(props: {
   toast: ReturnType<typeof useToast>
   onApplySelection: () => void
 }) {
+  const downloads = useAxEngineDownloads()
   return (
     <DialogSelect<string>
       title={`${props.offer.name} is not downloaded`}
@@ -121,6 +123,9 @@ export function DialogAxEngineDownload(props: {
             return startAxEngineDownload(props.sdk, props.offer).then(
               () => {
                 props.onApplySelection()
+                // Start the watcher now so progress/completion toasts and the
+                // prompt chip pick the job up on the next poll tick.
+                downloads.refresh()
                 props.toast.show({
                   variant: "success",
                   message: `Downloading ${props.offer.name} in the background — it becomes usable when the download completes`,
