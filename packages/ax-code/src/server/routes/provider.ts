@@ -16,6 +16,7 @@ import { Log } from "../../util/log"
 import {
   AX_ENGINE_MODEL_IDS,
   AX_ENGINE_PROVIDER_ID,
+  AX_ENGINE_QUANTIZATION_IDS,
   axEngineAttachProviderConfig,
   axEngineConnectionApiKey,
   axEngineEndpointsMayAlias,
@@ -89,7 +90,12 @@ export const AxEngineStartBody = z
 
 export const AxEngineModelActionBody = z
   .object({
-    quantization: z.enum(["mlx6bit"]).optional(),
+    // Both catalog quantizations are valid here — the TUI sends the model's
+    // own quantization (mlx4bit for the 4-bit packs), and restricting this to
+    // mlx6bit made every 4-bit download/delete request fail validation with a
+    // bare 400. normalizeQuantization downstream still pins the value to the
+    // quantization the selected model actually ships.
+    quantization: z.enum(AX_ENGINE_QUANTIZATION_IDS).optional(),
   })
   .optional()
   .default({})

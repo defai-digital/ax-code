@@ -252,6 +252,13 @@ describe("provider routes", () => {
     expect(AxEngineModelActionBody.parse({ quantization: "mlx6bit" })).toEqual({ quantization: "mlx6bit" })
   })
 
+  test("ax-engine model action schema accepts the 4-bit quantization the TUI sends", () => {
+    // The TUI posts the selected model's own quantization; 4-bit packs send
+    // "mlx4bit", which the old mlx6bit-only enum rejected with a bare 400.
+    expect(AxEngineModelActionBody.parse({ quantization: "mlx4bit" })).toEqual({ quantization: "mlx4bit" })
+    expect(AxEngineModelActionBody.safeParse({ quantization: "mlx8bit" }).success).toBe(false)
+  })
+
   test("ax-engine connection schema distinguishes managed and attach requests", () => {
     expect(AxEngineConnectionBody.parse({ mode: "managed" })).toEqual({ mode: "managed" })
     expect(

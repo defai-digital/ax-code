@@ -5492,7 +5492,7 @@ export class Model extends HeyApiClient {
     parameters: {
       modelID: string
       directory?: string
-      quantization?: "mlx6bit"
+      quantization?: "mlx6bit" | "mlx4bit"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5533,7 +5533,7 @@ export class Model extends HeyApiClient {
     parameters: {
       modelID: string
       directory?: string
-      quantization?: "mlx6bit"
+      quantization?: "mlx6bit" | "mlx4bit"
     },
     options?: Options<never, ThrowOnError>,
   ) {

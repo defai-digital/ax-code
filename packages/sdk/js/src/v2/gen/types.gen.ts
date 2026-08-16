@@ -12778,7 +12778,7 @@ export type ProviderAxEngineModelsResponses = {
 
 export type ProviderAxEngineModelDownloadData = {
   body?: {
-    quantization?: "mlx6bit"
+    quantization?: "mlx6bit" | "mlx4bit"
   }
   path: {
     modelID: string
@@ -12852,7 +12852,7 @@ export type ProviderAxEngineDownloadCancelResponses = {
 
 export type ProviderAxEngineModelDeleteData = {
   body?: {
-    quantization?: "mlx6bit"
+    quantization?: "mlx6bit" | "mlx4bit"
   }
   path: {
     modelID: string

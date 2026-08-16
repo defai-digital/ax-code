@@ -31085,7 +31085,8 @@
                   "quantization": {
                     "type": "string",
                     "enum": [
-                      "mlx6bit"
+                      "mlx6bit",
+                      "mlx4bit"
                     ]
                   }
                 }
@@ -31233,7 +31234,8 @@
                   "quantization": {
                     "type": "string",
                     "enum": [
-                      "mlx6bit"
+                      "mlx6bit",
+                      "mlx4bit"
                     ]
                   }
                 }
