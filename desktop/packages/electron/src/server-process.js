@@ -14,6 +14,7 @@
 // external require so esbuild does not inline the 5 MB server into this entry.
 const { startWebUiServer } = require("./server.js")
 const { createServerProcessLifecycle } = require("./server-process-lifecycle.js")
+const { startParentDeathWatchdog } = require("./parent-death-watchdog.js")
 
 let serverHandle = null
 
@@ -54,7 +55,20 @@ async function boot() {
   process.parentPort.postMessage({ type: "ready", port: serverHandle.getPort() })
 }
 
+// If the Electron main process dies hard (kill -9, crash) it never sends the
+// "stop" message; run the same graceful stop ourselves so the ax-code child
+// this server spawned is not orphaned and the port is released.
+const watchdog = startParentDeathWatchdog({
+  parentPort: process.parentPort,
+  parentPid: process.ppid,
+  onParentDeath: () => {
+    void stop()
+  },
+})
+
 async function stop(exitCode = 0) {
+  // Clean shutdown must not re-trigger the parent-death watchdog.
+  watchdog.stop()
   await lifecycle.stop(exitCode)
 }
 

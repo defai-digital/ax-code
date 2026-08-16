@@ -31,6 +31,7 @@ const { shouldIncludeNativeSearchEntry, toNativeSearchRelativePath } = require("
 const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support-urls")
 const { createServerRestartPolicy, shouldRecoverAfterServerExit } = require("./server-restart-policy")
 const { createRendererCrashPolicy } = require("./renderer-crash-policy")
+const { loadUrlWithTimeout } = require("./load-url-timeout")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
 const { sendUpdateProgressToWindows } = require("./update-progress")
 const { normalizeInstalledAppsCache } = require("./installed-apps-cache")
@@ -181,6 +182,7 @@ app.on("open-file", (event, filePath) => {
 // loopback exactly as before — only where the server runs changes.
 const SERVER_START_TIMEOUT_MS = 30_000
 const SERVER_STOP_TIMEOUT_MS = 5_000
+const SERVER_KILL_TIMEOUT_MS = 3_000
 const MAX_SERVER_CRASH_RESTARTS = 5
 const SERVER_CRASH_RETRY_BASE_MS = 500
 const SERVER_STABILITY_RESET_MS = 60_000
@@ -188,6 +190,7 @@ const serverRestartPolicy = createServerRestartPolicy({ maxRestarts: MAX_SERVER_
 
 const MAX_RENDERER_CRASH_RELOADS = 3
 const RENDERER_STABILITY_RESET_MS = 60_000
+const WINDOW_LOAD_TIMEOUT_MS = 30_000
 const rendererCrashPolicy = createRendererCrashPolicy({ maxReloads: MAX_RENDERER_CRASH_RELOADS })
 
 function scheduleRendererStabilityReset() {
@@ -386,26 +389,37 @@ function stopServer() {
   serverChild = null
   return new Promise((resolve) => {
     let done = false
+    let killTimer = null
     const finish = () => {
       if (done) return
       done = true
-      clearTimeout(timer)
+      clearTimeout(termTimer)
+      if (killTimer) clearTimeout(killTimer)
       resolve()
     }
-    const timer = setTimeout(() => {
+    // A wedged server may ignore the graceful stop and even SIGTERM, so
+    // escalate to SIGKILL rather than hang the quit path forever.
+    const termTimer = setTimeout(() => {
       try {
-        child.kill()
+        child.kill("SIGTERM")
       } catch {
         /* ignore */
       }
-      finish()
+      killTimer = setTimeout(() => {
+        try {
+          child.kill("SIGKILL")
+        } catch {
+          /* ignore */
+        }
+        finish()
+      }, SERVER_KILL_TIMEOUT_MS)
     }, SERVER_STOP_TIMEOUT_MS)
     child.once("exit", finish)
     try {
       child.postMessage({ type: "stop" })
     } catch {
       try {
-        child.kill()
+        child.kill("SIGTERM")
       } catch {
         /* ignore */
       }
@@ -530,7 +544,9 @@ async function createWindow() {
           rendererCrashPolicy.markStable()
           if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.reload()
         } else {
-          app.exit(1)
+          // app.exit() skips 'before-quit', so shut the server (and its
+          // ax-code child) down first to avoid orphaning them.
+          shutdownForExit().finally(() => app.exit(1))
         }
       })
       .catch((dialogError) => console.error("[electron] failed to show renderer crash dialog:", dialogError))
@@ -564,7 +580,9 @@ async function createWindow() {
   recordStartupEvent("renderer.load-url.start", {
     devRenderer: Boolean(getDevRendererUrl()),
   })
-  await mainWindow.loadURL(rendererUrl)
+  // Rejects on timeout into the whenReady startup-failure path, so a wedged
+  // server cannot leave the app looking dead with a hidden window.
+  await loadUrlWithTimeout(mainWindow, rendererUrl, { timeoutMs: WINDOW_LOAD_TIMEOUT_MS })
 }
 
 // ── Auto-update ───────────────────────────────────────────────────────────
@@ -1683,7 +1701,13 @@ const createAdditionalWindow = async (url) => {
     event.preventDefault()
     safeOpenExternal(targetUrl)
   })
-  await win.loadURL(url)
+  try {
+    await loadUrlWithTimeout(win, url, { timeoutMs: WINDOW_LOAD_TIMEOUT_MS })
+  } catch (error) {
+    // Never leave a hidden show:false window behind a wedged load.
+    win.destroy()
+    throw error
+  }
   return win
 }
 
@@ -2525,7 +2549,13 @@ const createMiniChatWindow = async ({ mode, sessionId, directory, projectId }) =
   if (directory) params.set("directory", directory)
   if (projectId) params.set("projectId", projectId)
   const base = getDevRendererUrl() || `http://localhost:${serverPort}`
-  await win.loadURL(`${base}/mini-chat.html?${params.toString()}`)
+  try {
+    await loadUrlWithTimeout(win, `${base}/mini-chat.html?${params.toString()}`, { timeoutMs: WINDOW_LOAD_TIMEOUT_MS })
+  } catch (error) {
+    // Never leave a hidden show:false window behind a wedged load.
+    win.destroy()
+    throw error
+  }
   return win
 }
 

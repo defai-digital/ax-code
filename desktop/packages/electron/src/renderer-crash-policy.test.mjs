@@ -58,8 +58,8 @@ describe("createRendererCrashPolicy", () => {
     expect(didFinishLoadHandler).toBeDefined()
     expect(didFinishLoadHandler).toContain("scheduleRendererStabilityReset()")
 
-    const initialLoadTail = mainSource.match(/await mainWindow\.loadURL\(rendererUrl\)(?<tail>[\s\S]{0,100})/)?.groups
-      ?.tail
+    const initialLoadTail = mainSource.match(/await loadUrlWithTimeout\(mainWindow, rendererUrl(?<tail>[\s\S]{0,100})/)
+      ?.groups?.tail
     expect(initialLoadTail).not.toContain("scheduleRendererStabilityReset()")
   })
 })
