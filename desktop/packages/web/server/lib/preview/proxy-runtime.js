@@ -1263,15 +1263,18 @@ export const createPreviewProxyRuntime = ({ crypto, URL, createProxyMiddleware, 
 
     app.post("/api/preview/targets", express.json(), async (req, res) => {
       try {
+        // Origin validation is independent of UI auth (see the WebSocket
+        // upgrade paths); it blocks cross-site browser POSTs even when no UI
+        // password is set.
+        const originAllowed = await isRequestOriginAllowed(req)
+        if (!originAllowed) {
+          return res.status(403).json({ error: "Invalid origin" })
+        }
+
         if (uiAuthController?.enabled) {
           const sessionToken = await uiAuthController?.ensureSessionToken?.(req, res)
           if (!sessionToken) {
             return res.status(401).json({ error: "UI authentication required" })
-          }
-
-          const originAllowed = await isRequestOriginAllowed(req)
-          if (!originAllowed) {
-            return res.status(403).json({ error: "Invalid origin" })
           }
         }
 
@@ -1485,16 +1488,19 @@ export const createPreviewProxyRuntime = ({ crypto, URL, createProxyMiddleware, 
 
       const handleUpgrade = async () => {
         try {
+          // Origin validation is independent of UI auth (see the other
+          // WebSocket upgrade paths); it must run even when no UI password
+          // is set.
+          const originAllowed = await isRequestOriginAllowed(req)
+          if (!originAllowed) {
+            rejectWebSocketUpgrade(socket, 403, "Invalid origin")
+            return
+          }
+
           if (uiAuthController?.enabled) {
             const sessionToken = await uiAuthController?.ensureSessionToken?.(req, null)
             if (!sessionToken) {
               rejectWebSocketUpgrade(socket, 401, "UI authentication required")
-              return
-            }
-
-            const originAllowed = await isRequestOriginAllowed(req)
-            if (!originAllowed) {
-              rejectWebSocketUpgrade(socket, 403, "Invalid origin")
               return
             }
           }

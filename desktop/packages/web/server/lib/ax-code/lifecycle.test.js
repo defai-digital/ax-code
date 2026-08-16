@@ -22,6 +22,11 @@ vi.mock("@ax-code/sdk/headless", () => ({
   },
 }))
 
+// Keep the bootstrap retry loop fast in tests; the retry constants are read
+// once when lifecycle.js is imported below.
+process.env.AX_CODE_DESKTOP_BOOTSTRAP_RETRY_BASE_DELAY_MS = "50"
+process.env.AX_CODE_DESKTOP_BOOTSTRAP_RETRY_MAX_DELAY_MS = "100"
+
 const { createAxCodeLifecycleRuntime } = await import("./lifecycle.js")
 
 const originalAxCodeBinary = process.env.AX_CODE_BINARY
@@ -74,6 +79,8 @@ const createLifecycleState = () => ({
   isExternalAxCode: false,
   isShuttingDown: false,
   healthCheckInterval: null,
+  axCodeNextRetryAt: 0,
+  axCodeRetryExhausted: false,
   expressApp: null,
   useWslForAxCode: false,
   resolvedWslBinary: null,
@@ -441,5 +448,41 @@ describe("ax-code lifecycle", () => {
     expect(spawnMock).not.toHaveBeenCalled()
     expect(startHeadlessBackendMock).toHaveBeenCalledTimes(2)
     await server.close()
+  })
+
+  it("retries a failed bootstrap with backoff instead of wedging permanently", async () => {
+    delete process.env.AX_CODE_BINARY
+    startHeadlessBackendMock.mockRejectedValueOnce(new Error("spawn failed (attempt 1)"))
+    startHeadlessBackendMock.mockRejectedValueOnce(new Error("spawn failed (attempt 2)"))
+    startHeadlessBackendMock.mockResolvedValue({
+      url: "http://127.0.0.1:45678",
+      headers: { Authorization: "Basic test" },
+      close: vi.fn(async () => undefined),
+      closed: new Promise(() => {}),
+    })
+
+    const state = createLifecycleState()
+    const runtime = createRuntime({ state })
+
+    await runtime.bootstrapAxCodeAtStartup()
+
+    expect(state.lastAxCodeError).toBe("spawn failed (attempt 2)")
+    expect(state.axCodeProcess).toBe(null)
+    expect(state.axCodeRetryExhausted).toBe(false)
+    expect(state.axCodeNextRetryAt).toBeGreaterThan(0)
+
+    // The first scheduled retry (50ms base delay in tests) recovers the backend.
+    await vi.waitFor(() => {
+      expect(state.axCodeProcess).toBeTruthy()
+      expect(state.isAxCodeReady).toBe(true)
+    })
+
+    expect(state.axCodeNextRetryAt).toBe(0)
+    expect(state.axCodeRetryExhausted).toBe(false)
+    // Health monitoring was started by the successful retry.
+    expect(state.healthCheckInterval).toBeTruthy()
+
+    runtime.shutdown()
+    expect(state.healthCheckInterval).toBe(null)
   })
 })

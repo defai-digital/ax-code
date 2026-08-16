@@ -152086,7 +152086,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 65536
         }
       },
       "qwen/qwen3-next-80b-a3b-instruct": {

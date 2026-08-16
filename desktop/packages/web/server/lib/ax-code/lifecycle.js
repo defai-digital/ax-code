@@ -21,6 +21,9 @@ const HEALTH_CHECK_MAX_CONSECUTIVE_FAILURES = parsePositiveInt(
 )
 const HEALTH_CHECK_INTERVAL_OVERRIDE_MS = parsePositiveInt(process.env.AX_CODE_DESKTOP_AX_CODE_HEALTH_INTERVAL_MS, 0)
 const HEALTH_CHECK_RESULT_CACHE_MS = parsePositiveInt(process.env.AX_CODE_DESKTOP_AX_CODE_HEALTH_CACHE_MS, 750)
+const BOOTSTRAP_RETRY_BASE_DELAY_MS = parsePositiveInt(process.env.AX_CODE_DESKTOP_BOOTSTRAP_RETRY_BASE_DELAY_MS, 5000)
+const BOOTSTRAP_RETRY_MAX_DELAY_MS = parsePositiveInt(process.env.AX_CODE_DESKTOP_BOOTSTRAP_RETRY_MAX_DELAY_MS, 60000)
+const BOOTSTRAP_RETRY_MAX_ATTEMPTS = parsePositiveInt(process.env.AX_CODE_DESKTOP_BOOTSTRAP_RETRY_MAX_ATTEMPTS, 10)
 
 export const createAxCodeLifecycleRuntime = (deps) => {
   const {
@@ -48,6 +51,7 @@ export const createAxCodeLifecycleRuntime = (deps) => {
     getManagedAxCodeShellEnvSnapshot,
     getActiveSessionCount = () => 0,
     recordStartupEvent = null,
+    healthCheckIntervalMs = 15000,
   } = deps
 
   const markStartup = (name, details = {}, options = {}) => {
@@ -797,6 +801,8 @@ export const createAxCodeLifecycleRuntime = (deps) => {
 
   const restartAxCode = async () => {
     if (state.isShuttingDown) return
+    // A manual restart supersedes any pending bootstrap retry.
+    clearBootstrapRetryTimer()
     if (state.currentRestartPromise) {
       await state.currentRestartPromise
       return
@@ -919,6 +925,7 @@ export const createAxCodeLifecycleRuntime = (deps) => {
 
     try {
       await state.currentRestartPromise
+      resetBootstrapRetryState()
     } catch (error) {
       console.error(`Failed to restart ax-code: ${error.message}`)
       state.lastAxCodeError = error.message
@@ -1057,6 +1064,79 @@ export const createAxCodeLifecycleRuntime = (deps) => {
     }
   }
 
+  // ── Bounded auto-retry after a failed bootstrap ─────────────────────────
+  // Without this, a backend that fails to start at boot wedges the UI on a
+  // permanent 503 {restarting:true}: the health monitor only runs once a
+  // managed process exists, and nothing re-probes a dead external backend.
+  let bootstrapRetryTimer = null
+  let bootstrapRetryAttempt = 0
+
+  const clearBootstrapRetryTimer = () => {
+    if (bootstrapRetryTimer) {
+      clearTimeout(bootstrapRetryTimer)
+      bootstrapRetryTimer = null
+    }
+  }
+
+  const resetBootstrapRetryState = () => {
+    bootstrapRetryAttempt = 0
+    state.axCodeNextRetryAt = 0
+    state.axCodeRetryExhausted = false
+  }
+
+  const runBootstrapRetry = async () => {
+    state.axCodeNextRetryAt = 0
+    if (state.isShuttingDown) return
+
+    try {
+      // restartAxCode re-probes in external mode and re-spawns in managed mode.
+      await restartAxCode()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      state.lastAxCodeError = message
+      console.warn(`[lifecycle] ax-code start retry failed: ${message}`)
+      scheduleBootstrapRetry()
+      return
+    }
+
+    resetBootstrapRetryState()
+    // The health monitor never started when the initial bootstrap failed.
+    if (!state.isExternalAxCode) {
+      startHealthMonitoring(healthCheckIntervalMs)
+    }
+    console.log("[lifecycle] ax-code recovered after retry")
+  }
+
+  const scheduleBootstrapRetry = () => {
+    clearBootstrapRetryTimer()
+    if (state.isShuttingDown) return
+
+    if (bootstrapRetryAttempt >= BOOTSTRAP_RETRY_MAX_ATTEMPTS) {
+      state.axCodeNextRetryAt = 0
+      state.axCodeRetryExhausted = true
+      console.error(
+        `[lifecycle] ax-code did not start after ${BOOTSTRAP_RETRY_MAX_ATTEMPTS} retries; giving up (a manual restart can still recover it)`,
+      )
+      return
+    }
+
+    bootstrapRetryAttempt += 1
+    const delayMs = Math.min(
+      BOOTSTRAP_RETRY_BASE_DELAY_MS * 2 ** (bootstrapRetryAttempt - 1),
+      BOOTSTRAP_RETRY_MAX_DELAY_MS,
+    )
+    state.axCodeRetryExhausted = false
+    state.axCodeNextRetryAt = Date.now() + delayMs
+    console.log(
+      `[lifecycle] retrying ax-code start in ${Math.round(delayMs / 1000)}s (attempt ${bootstrapRetryAttempt}/${BOOTSTRAP_RETRY_MAX_ATTEMPTS})`,
+    )
+    bootstrapRetryTimer = setTimeout(() => {
+      bootstrapRetryTimer = null
+      void runBootstrapRetry()
+    }, delayMs)
+    if (typeof bootstrapRetryTimer.unref === "function") bootstrapRetryTimer.unref()
+  }
+
   const bootstrapAxCodeAtStartup = async () => {
     try {
       syncFromHmrState()
@@ -1155,6 +1235,9 @@ export const createAxCodeLifecycleRuntime = (deps) => {
       console.error(`Failed to start AX Code: ${error.message}`)
       console.log("Continuing without AX Code integration...")
       state.lastAxCodeError = error.message
+      // Keep the UI recoverable: retry with backoff instead of wedging on a
+      // permanent "restarting" 503.
+      scheduleBootstrapRetry()
     }
   }
 
@@ -1288,6 +1371,8 @@ export const createAxCodeLifecycleRuntime = (deps) => {
   const shutdown = () => {
     state.isShuttingDown = true
     startupAbortController?.abort()
+    clearBootstrapRetryTimer()
+    state.axCodeNextRetryAt = 0
     if (state.healthCheckInterval) {
       clearInterval(state.healthCheckInterval)
       state.healthCheckInterval = null

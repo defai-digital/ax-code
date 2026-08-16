@@ -567,13 +567,18 @@ export const createSettingsRuntime = (deps) => {
         return project
       } catch (error) {
         const err = error
+        if (err && typeof err === "object" && err.code === "ENOENT") {
+          // Keep projects whose path is temporarily missing (unmounted drive,
+          // renamed folder, …). Pruning them here would silently delete the
+          // project from settings on every save. Removal only happens when the
+          // user explicitly removes a project — the UI then persists a
+          // projects list without that entry.
+          console.warn(`[validateProjectEntries] Keeping project with missing path: ${project.path}`)
+          return project
+        }
         console.error(
           `[validateProjectEntries] Failed to validate project "${project.path}": ${err.code || err.message || err}`,
         )
-        if (err && typeof err === "object" && err.code === "ENOENT") {
-          console.log(`[validateProjectEntries] Removing project with ENOENT: ${project.path}`)
-          return null
-        }
         console.log(`[validateProjectEntries] Keeping project despite non-ENOENT error: ${project.path}`)
         return project
       }

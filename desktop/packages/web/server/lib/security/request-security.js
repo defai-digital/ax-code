@@ -1,4 +1,3 @@
-import { addLocalhostOriginAliases, getRequestOrigin } from "./request-origin.js"
 import { normalizeLoopbackHttpOrigin } from "./local-only.js"
 
 export const createRequestSecurityRuntime = () => {
@@ -56,28 +55,22 @@ export const createRequestSecurityRuntime = () => {
     } catch {}
   }
 
-  const getRequestOriginCandidates = async (req) => {
-    const origins = new Set()
-    const origin = normalizeLoopbackHttpOrigin(getRequestOrigin(req))
-    if (origin) {
-      origins.add(origin)
-      addLocalhostOriginAliases(origins, origin)
-    }
-
-    return origins
-  }
-
   const isRequestOriginAllowed = async (req) => {
     const originHeader = asTrimmedString(req.headers.origin)
+    // Non-browser clients (curl, Electron main, the node SDK) send no Origin
+    // header. Browsers always send one on cross-site requests and WebSocket
+    // upgrades, so an absent Origin cannot be a cross-site browser attack.
     if (!originHeader) {
-      return false
+      return true
     }
 
-    const normalizedOrigin = normalizeLoopbackHttpOrigin(originHeader)
-    if (!normalizedOrigin) return false
-
-    const allowedOrigins = await getRequestOriginCandidates(req)
-    return allowedOrigins.has(normalizedOrigin)
+    // The UI is served same-origin from this loopback server, and the Vite
+    // dev proxy forwards the browser's original (loopback) Origin while
+    // rewriting Host — so accept any loopback origin rather than requiring an
+    // exact host match. What must be rejected is a cross-site (non-loopback)
+    // browser origin: any website open in the user's browser can otherwise
+    // reach this loopback server.
+    return normalizeLoopbackHttpOrigin(originHeader) !== null
   }
 
   return {

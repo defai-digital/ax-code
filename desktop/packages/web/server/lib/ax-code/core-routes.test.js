@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest"
 import express from "express"
 import request from "supertest"
 import {
+  createApiRequestSecurityMiddleware,
   registerAuthAndAccessRoutes,
   registerCommonRequestMiddleware,
   registerServerStatusRoutes,
@@ -261,5 +262,53 @@ describe("core-routes", () => {
     } finally {
       globalThis.fetch = originalFetch
     }
+  })
+})
+
+describe("createApiRequestSecurityMiddleware", () => {
+  const createApp = () => {
+    const app = express()
+    app.use("/api", createApiRequestSecurityMiddleware())
+    app.get("/api/ok", (_req, res) => res.json({ ok: true }))
+    app.post("/api/ok", (_req, res) => res.json({ ok: true }))
+    return app
+  }
+
+  it("allows GET requests without an Origin header", async () => {
+    await request(createApp()).get("/api/ok").expect(200)
+  })
+
+  it("allows POST requests without an Origin header (curl, Electron main, node SDK)", async () => {
+    await request(createApp()).post("/api/ok").expect(200)
+  })
+
+  it("allows POST requests from a loopback Origin", async () => {
+    await request(createApp()).post("/api/ok").set("Origin", "http://localhost:5173").expect(200)
+  })
+
+  it("rejects POST requests with a cross-site Origin", async () => {
+    const response = await request(createApp()).post("/api/ok").set("Origin", "https://evil.example.com").expect(403)
+
+    expect(response.body).toEqual({ error: "Forbidden" })
+  })
+
+  it("rejects POST requests with Sec-Fetch-Site: cross-site", async () => {
+    await request(createApp()).post("/api/ok").set("Sec-Fetch-Site", "cross-site").expect(403)
+  })
+
+  it("allows POST requests with Sec-Fetch-Site: same-origin", async () => {
+    await request(createApp()).post("/api/ok").set("Sec-Fetch-Site", "same-origin").expect(200)
+  })
+
+  it("rejects requests with a non-loopback Host header (DNS rebinding)", async () => {
+    await request(createApp()).get("/api/ok").set("Host", "desktop.example.com").expect(403)
+  })
+
+  it("does not guard non-/api paths", async () => {
+    const app = express()
+    app.use("/api", createApiRequestSecurityMiddleware())
+    app.get("/assets/app.js", (_req, res) => res.send("ok"))
+
+    await request(app).get("/assets/app.js").set("Host", "desktop.example.com").expect(200)
   })
 })

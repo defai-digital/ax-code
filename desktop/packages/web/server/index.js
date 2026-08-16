@@ -36,6 +36,7 @@ import { createThemeRuntime } from "./lib/ax-code/theme-runtime.js"
 import { createFeatureRoutesRuntime } from "./lib/ax-code/feature-routes-runtime.js"
 import { parseServeCliOptions } from "./lib/ax-code/cli-options.js"
 import {
+  createApiRequestSecurityMiddleware,
   registerAuthAndAccessRoutes,
   registerCommonRequestMiddleware,
   registerServerStatusRoutes,
@@ -754,6 +755,9 @@ const serverUtilsRuntime = createServerUtilsRuntime({
     isAxCodeReady,
     isRestartingAxCode,
     axCodeRuntimeHealth: axCodeLifecycleState.axCodeRuntimeHealth || null,
+    lastAxCodeError,
+    axCodeNextRetryAt: axCodeLifecycleState.axCodeNextRetryAt || 0,
+    axCodeRetryExhausted: Boolean(axCodeLifecycleState.axCodeRetryExhausted),
   }),
   getAxCodeAuthHeaders,
   buildAxCodeUrl,
@@ -975,6 +979,7 @@ const axCodeLifecycleRuntime = createAxCodeLifecycleRuntime({
   getManagedAxCodeShellEnvSnapshot: getLoginShellEnvSnapshot,
   getActiveSessionCount,
   recordStartupEvent,
+  healthCheckIntervalMs: HEALTH_CHECK_INTERVAL,
 })
 
 const restartAxCode = (...args) => axCodeLifecycleRuntime.restartAxCode(...args)
@@ -1207,6 +1212,10 @@ async function main(options = {}) {
       threshold: 1024,
     }),
   )
+  // CSRF / DNS-rebinding guard for every /api route. Registered before any
+  // route handlers so state-changing endpoints (shutdown, config reload, …)
+  // are covered even though they are registered first inside the bootstrap.
+  app.use("/api", createApiRequestSecurityMiddleware())
   expressApp = app
   server = http.createServer(app)
 

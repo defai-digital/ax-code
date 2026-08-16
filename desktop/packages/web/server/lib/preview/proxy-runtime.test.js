@@ -292,7 +292,7 @@ describe("preview proxy upstream request hygiene", () => {
         server: { on: vi.fn() },
         express: { json: vi.fn(() => vi.fn()) },
         uiAuthController: null,
-        isRequestOriginAllowed: vi.fn(),
+        isRequestOriginAllowed: vi.fn(async () => true),
         rejectWebSocketUpgrade: vi.fn(),
       },
     )
@@ -305,6 +305,52 @@ describe("preview proxy upstream request hygiene", () => {
     })
 
     expect(removed).toEqual(["cookie", "authorization", "x-openchamber-ui-session"])
+  })
+
+  it("rejects preview target creation from disallowed origins even when UI auth is disabled", async () => {
+    let targetRoute = null
+    const app = {
+      post: (_path, ...handlers) => {
+        targetRoute = handlers.at(-1)
+      },
+      use() {},
+    }
+    const runtime = createPreviewProxyRuntime({
+      crypto: {
+        randomBytes: () => Buffer.from("0123456789abcdef"),
+      },
+      URL,
+      createProxyMiddleware: () => {
+        const middleware = vi.fn()
+        middleware.upgrade = vi.fn()
+        return middleware
+      },
+      responseInterceptor: (handler) => handler,
+    })
+    runtime.attach(app, {
+      server: { on: vi.fn() },
+      express: { json: vi.fn(() => vi.fn()) },
+      uiAuthController: null,
+      isRequestOriginAllowed: async () => false,
+      rejectWebSocketUpgrade: vi.fn(),
+    })
+
+    const res = {
+      statusCode: 200,
+      body: undefined,
+      status(code) {
+        this.statusCode = code
+        return this
+      },
+      json(payload) {
+        this.body = payload
+        return this
+      },
+    }
+    await targetRoute({ body: { url: "http://127.0.0.1:3000" }, headers: {}, secure: false }, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(res.body).toEqual({ error: "Invalid origin" })
   })
 
   it("keeps the original target stable when a proxied resource redirects cross-origin", async () => {
@@ -334,7 +380,7 @@ describe("preview proxy upstream request hygiene", () => {
       server: { on: vi.fn() },
       express: { json: vi.fn(() => vi.fn()) },
       uiAuthController: null,
-      isRequestOriginAllowed: vi.fn(),
+      isRequestOriginAllowed: vi.fn(async () => true),
       rejectWebSocketUpgrade: vi.fn(),
     })
 

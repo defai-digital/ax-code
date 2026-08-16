@@ -559,4 +559,63 @@ describe("message stream websocket runtime", () => {
     socket.close()
     await runtime.close()
   })
+
+  it("rejects websocket upgrades from disallowed origins even when UI auth is disabled", async () => {
+    const server = new EventEmitter()
+    const rejections = []
+
+    const runtime = createMessageStreamWsRuntime({
+      server,
+      uiAuthController: null,
+      isRequestOriginAllowed: async () => false,
+      rejectWebSocketUpgrade(_socket, statusCode, reason) {
+        rejections.push({ statusCode, reason })
+      },
+      buildAxCodeUrl: (path) => `http://127.0.0.1:4096${path}`,
+      getAxCodeAuthHeaders: () => ({}),
+      processForwardedEventPayload() {},
+      wsClients: new Set(),
+      fetchImpl: async () => {
+        throw new Error("fetch should not be called")
+      },
+    })
+
+    server.emit("upgrade", { url: "/api/global/event/ws", headers: {} }, { destroyed: false }, Buffer.alloc(0))
+    await new Promise((resolve) => setTimeout(resolve, 5))
+
+    expect(rejections).toEqual([{ statusCode: 403, reason: "Invalid origin" }])
+    await runtime.close()
+  })
+
+  it("runs the origin check before the auth check when UI auth is enabled", async () => {
+    const server = new EventEmitter()
+    const rejections = []
+
+    const runtime = createMessageStreamWsRuntime({
+      server,
+      uiAuthController: {
+        enabled: true,
+        ensureSessionToken: async () => {
+          throw new Error("auth should not run before the origin check")
+        },
+      },
+      isRequestOriginAllowed: async () => false,
+      rejectWebSocketUpgrade(_socket, statusCode, reason) {
+        rejections.push({ statusCode, reason })
+      },
+      buildAxCodeUrl: (path) => `http://127.0.0.1:4096${path}`,
+      getAxCodeAuthHeaders: () => ({}),
+      processForwardedEventPayload() {},
+      wsClients: new Set(),
+      fetchImpl: async () => {
+        throw new Error("fetch should not be called")
+      },
+    })
+
+    server.emit("upgrade", { url: "/api/global/event/ws", headers: {} }, { destroyed: false }, Buffer.alloc(0))
+    await new Promise((resolve) => setTimeout(resolve, 5))
+
+    expect(rejections).toEqual([{ statusCode: 403, reason: "Invalid origin" }])
+    await runtime.close()
+  })
 })

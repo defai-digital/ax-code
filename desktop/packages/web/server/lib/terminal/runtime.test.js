@@ -187,6 +187,27 @@ describe("terminal runtime", () => {
 
     expect(server.listenerCount("upgrade")).toBe(0)
   })
+
+  it("rejects websocket upgrades from disallowed origins even when UI auth is disabled", async () => {
+    const server = new EventEmitter()
+    const rejections = []
+    const runtime = createRuntime(server, {
+      uiAuthController: null,
+      isRequestOriginAllowed: async () => false,
+      rejectWebSocketUpgrade(_socket, statusCode, reason) {
+        rejections.push({ statusCode, reason })
+      },
+    })
+
+    try {
+      server.emit("upgrade", { url: "/api/terminal/ws", headers: {} }, { destroyed: false }, Buffer.alloc(0))
+      await new Promise((resolve) => setTimeout(resolve, 5))
+
+      expect(rejections).toEqual([{ statusCode: 403, reason: "Invalid origin" }])
+    } finally {
+      await runtime.shutdown()
+    }
+  })
 })
 
 describe("terminal runtime error visibility", () => {

@@ -122,16 +122,19 @@ export function createMessageStreamWsRuntime({
 
     const handleUpgrade = async () => {
       try {
+        // Origin validation is independent of UI auth: it must run even when
+        // no UI password is set, otherwise any website open in the user's
+        // browser could open a WebSocket to this loopback server.
+        const originAllowed = await isRequestOriginAllowed(req)
+        if (!originAllowed) {
+          rejectWebSocketUpgrade(socket, 403, "Invalid origin")
+          return
+        }
+
         if (uiAuthController?.enabled) {
           const sessionToken = await uiAuthController?.ensureSessionToken?.(req, null)
           if (!sessionToken) {
             rejectWebSocketUpgrade(socket, 401, "UI authentication required")
-            return
-          }
-
-          const originAllowed = await isRequestOriginAllowed(req)
-          if (!originAllowed) {
-            rejectWebSocketUpgrade(socket, 403, "Invalid origin")
             return
           }
         }

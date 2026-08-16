@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest"
+import express from "express"
+import request from "supertest"
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
 
 import {
   createCompatibilityRewriteCounter,
   createDirectoryQueryCanonicalizer,
   isDashboardProxyPathname,
   isAxCodeReadinessValueReady,
+  registerAxCodeProxy,
 } from "./proxy.js"
 
 describe("isAxCodeReadinessValueReady", () => {
@@ -124,5 +130,70 @@ describe("isDashboardProxyPathname", () => {
     expect(isDashboardProxyPathname("/graph/session-1")).toBe(true)
     expect(isDashboardProxyPathname("/api/dre-graph")).toBe(false)
     expect(isDashboardProxyPathname("/dre-graphical")).toBe(false)
+  })
+})
+
+describe("ax-code readiness gate", () => {
+  const createGatedApp = (runtimeState) => {
+    const app = express()
+    registerAxCodeProxy(app, {
+      fs,
+      os,
+      path,
+      OPEN_CODE_READY_GRACE_MS: 60_000,
+      getRuntime: () => runtimeState,
+      getAxCodeAuthHeaders: () => ({}),
+      buildAxCodeUrl: (route) => `http://127.0.0.1:4096${route}`,
+      ensureAxCodeApiPrefix: () => {},
+    })
+    return app
+  }
+
+  const createNotReadyState = (overrides = {}) => ({
+    axCodePort: null,
+    axCodeBaseUrl: null,
+    isAxCodeReady: false,
+    isRestartingAxCode: false,
+    axCodeNotReadySince: Date.now(),
+    lastAxCodeError: null,
+    axCodeNextRetryAt: 0,
+    axCodeRetryExhausted: false,
+    ...overrides,
+  })
+
+  it("keeps the legacy restarting payload while the backend is starting", async () => {
+    const response = await request(createGatedApp(createNotReadyState())).get("/api/session").expect(503)
+
+    expect(response.body).toEqual({ error: "ax-code is restarting", restarting: true })
+  })
+
+  it("surfaces the last error and next retry time while a retry is scheduled", async () => {
+    const nextRetryAt = Date.now() + 5000
+    const response = await request(
+      createGatedApp(createNotReadyState({ lastAxCodeError: "spawn failed", axCodeNextRetryAt: nextRetryAt })),
+    )
+      .get("/api/session")
+      .expect(503)
+
+    expect(response.body).toEqual({
+      error: "ax-code is restarting",
+      restarting: true,
+      lastError: "spawn failed",
+      nextRetryAt,
+    })
+  })
+
+  it("flips restarting to false once the retry budget is exhausted", async () => {
+    const response = await request(
+      createGatedApp(createNotReadyState({ lastAxCodeError: "spawn failed", axCodeRetryExhausted: true })),
+    )
+      .get("/api/session")
+      .expect(503)
+
+    expect(response.body).toEqual({
+      error: "ax-code failed to start",
+      restarting: false,
+      lastError: "spawn failed",
+    })
   })
 })

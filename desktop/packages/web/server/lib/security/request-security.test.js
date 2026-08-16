@@ -102,4 +102,29 @@ describe("request security origin checks", () => {
       ),
     ).resolves.toBe(false)
   })
+
+  it("allows requests without an Origin header (non-browser clients)", async () => {
+    const runtime = createRuntime()
+
+    await expect(
+      runtime.isRequestOriginAllowed(
+        createMockRequest({
+          host: "localhost:3000",
+        }),
+      ),
+    ).resolves.toBe(true)
+  })
+
+  it("allows loopback origins on a different port than the Host (dev proxy)", async () => {
+    const runtime = createRuntime()
+
+    await expect(
+      runtime.isRequestOriginAllowed(
+        createMockRequest({
+          host: "127.0.0.1:3001",
+          origin: "http://localhost:5173",
+        }),
+      ),
+    ).resolves.toBe(true)
+  })
 })

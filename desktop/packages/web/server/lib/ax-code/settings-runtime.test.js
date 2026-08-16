@@ -212,4 +212,23 @@ describe("settings runtime", () => {
       await cleanup()
     }
   })
+
+  it("keeps projects with temporarily-missing paths when persisting settings", async () => {
+    const { runtime, tempRoot, cleanup } = await createRuntime()
+    try {
+      const existingPath = path.join(tempRoot, "existing-project")
+      await fsPromises.mkdir(existingPath, { recursive: true })
+      const missingPath = path.join(tempRoot, "missing-project")
+      const projects = [
+        { id: createProjectIdFromPath(existingPath), path: existingPath, addedAt: 1, lastOpenedAt: 1 },
+        { id: createProjectIdFromPath(missingPath), path: missingPath, addedAt: 2, lastOpenedAt: 2 },
+      ]
+
+      const persisted = await runtime.persistSettings({ projects })
+
+      expect(persisted.projects).toEqual(projects)
+    } finally {
+      await cleanup()
+    }
+  })
 })

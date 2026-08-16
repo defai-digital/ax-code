@@ -561,10 +561,24 @@ export const registerAxCodeProxy = (app, deps) => {
       runtimeState.isRestartingAxCode ||
       !runtimeState.axCodePort
     if (stillWaiting) {
-      return res.status(503).json({
+      const payload = {
         error: "ax-code is restarting",
         restarting: true,
-      })
+      }
+      if (runtimeState.axCodeRetryExhausted) {
+        // The start-retry budget is exhausted: the backend is down, not
+        // restarting. The UI keeps polling while `restarting` is true, so
+        // flip it to surface the failure instead of spinning forever.
+        payload.restarting = false
+        payload.error = "ax-code failed to start"
+      }
+      if (typeof runtimeState.lastAxCodeError === "string" && runtimeState.lastAxCodeError.length > 0) {
+        payload.lastError = runtimeState.lastAxCodeError
+      }
+      if (typeof runtimeState.axCodeNextRetryAt === "number" && runtimeState.axCodeNextRetryAt > 0) {
+        payload.nextRetryAt = runtimeState.axCodeNextRetryAt
+      }
+      return res.status(503).json(payload)
     }
 
     next()

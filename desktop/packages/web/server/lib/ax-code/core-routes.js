@@ -1,6 +1,44 @@
 import { createBackgroundAxCodeReloader } from "./background-reload.js"
 import { rateLimit } from "express-rate-limit"
 
+import { getRequestRpId } from "../security/request-origin.js"
+import { isLoopbackHostname, normalizeLoopbackHttpOrigin } from "../security/local-only.js"
+
+const API_SECURITY_SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"])
+
+const asTrimmedHeader = (value) => (typeof value === "string" ? value.trim() : "")
+
+// CSRF / DNS-rebinding guard for the local API. The server binds loopback and
+// (unless a UI password is set) treats loopback clients as trusted, so the
+// threats to block centrally are (a) cross-site requests from arbitrary
+// websites open in the user's browser and (b) DNS-rebinding, where a hostile
+// page re-resolves its domain to 127.0.0.1 and arrives with a non-loopback
+// Host header. Non-browser clients (curl, Electron main, the node SDK) send
+// no Origin header and must keep working; browsers always send Origin on
+// cross-site POSTs.
+export const createApiRequestSecurityMiddleware = () => (req, res, next) => {
+  const host = getRequestRpId(req)
+  if (!host || !isLoopbackHostname(host)) {
+    return res.status(403).json({ error: "Forbidden" })
+  }
+
+  if (API_SECURITY_SAFE_METHODS.has(req.method)) {
+    return next()
+  }
+
+  const secFetchSite = asTrimmedHeader(req.headers?.["sec-fetch-site"]).toLowerCase()
+  if (secFetchSite === "cross-site") {
+    return res.status(403).json({ error: "Forbidden" })
+  }
+
+  const originHeader = asTrimmedHeader(req.headers?.origin)
+  if (originHeader && !normalizeLoopbackHttpOrigin(originHeader)) {
+    return res.status(403).json({ error: "Forbidden" })
+  }
+
+  return next()
+}
+
 const createAuthRouteRateLimiter = () =>
   rateLimit({
     windowMs: 60_000,

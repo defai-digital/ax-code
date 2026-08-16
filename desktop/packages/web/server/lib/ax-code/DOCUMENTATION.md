@@ -115,7 +115,7 @@ This module provides ax-code server integration utilities for the web server run
   - `waitForAxCodeReady(timeoutMs?, intervalMs?)`
   - `waitForAgentPresence(agentName, timeoutMs?, intervalMs?)`
   - `refreshAxCodeAfterConfigChange(reason, options?)`
-  - `bootstrapAxCodeAtStartup()`
+  - `bootstrapAxCodeAtStartup()`: on failure, schedules a bounded auto-retry loop (exponential backoff, env-tunable via `AX_CODE_DESKTOP_BOOTSTRAP_RETRY_*`) so a backend that fails to start at boot no longer wedges the API on a permanent 503.
   - `startHealthMonitoring(healthCheckIntervalMs)`
   - `waitForPortRelease(port, timeoutMs, hostname?)`
   - `killProcessOnPort(port)`
