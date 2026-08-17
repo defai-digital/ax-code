@@ -113,11 +113,13 @@ jobs:
       - name: Require an absent or draft release
         if: ${{ github.event.inputs.dry_run != 'true' }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
-          if IS_DRAFT="$(gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null)"; then
+          if RELEASE_JSON="$(node script/github-release-assets.mjs inspect --repo "$REPOSITORY" --tag "$TAG" 2>/dev/null)"; then
+            IS_DRAFT="$(node -e 'console.log(JSON.parse(process.argv[1]).draft)' "$RELEASE_JSON")"
             if [ "$IS_DRAFT" != "true" ]; then
               echo "::error::release $TAG is already published; refusing to replace verified assets"
               exit 1
@@ -169,13 +171,16 @@ jobs:
 
       - name: Upload web tarball
         if: ${{ github.event.inputs.dry_run != 'true' }}
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
-        with:
-          tag_name: ${{ needs.create-release.outputs.tag }}
-          draft: true
-          files: desktop/packages/web/*.tgz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(desktop/packages/web/*.tgz)
+          test "${#files[@]}" -gt 0
+          node script/github-release-assets.mjs upload --repo "$REPOSITORY" --tag "$TAG" "${files[@]}"
 
   build-macos:
     needs: create-release
@@ -327,17 +332,21 @@ jobs:
 
       - name: Upload macOS assets
         if: ${{ github.event.inputs.dry_run != 'true' }}
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
-        with:
-          tag_name: ${{ needs.create-release.outputs.tag }}
-          draft: true
-          files: |
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(
             desktop/packages/electron/dist/*.dmg
             desktop/packages/electron/dist/*.zip
             desktop/packages/electron/dist/*.blockmap
             desktop/packages/electron/dist/latest-mac.yml
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          )
+          test "${#files[@]}" -gt 0
+          node script/github-release-assets.mjs upload --repo "$REPOSITORY" --tag "$TAG" "${files[@]}"
 
   # Windows x64 (Intel/AMD). The arm64 sibling is build-windows-arm64 below;
   # each arch builds on its own runner so native modules compile for the target.
@@ -392,16 +401,21 @@ jobs:
 
       - name: Upload Windows x64 installers
         if: ${{ github.event.inputs.dry_run != 'true' }}
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
-        with:
-          tag_name: ${{ needs.create-release.outputs.tag }}
-          draft: true
-          files: |
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(
             desktop/packages/electron/dist/*.exe
             desktop/packages/electron/dist/*.zip
             desktop/packages/electron/dist/*.blockmap
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          )
+          test "${#files[@]}" -gt 0
+          node script/github-release-assets.mjs upload --repo "$REPOSITORY" --tag "$TAG" "${files[@]}"
 
       # Both Windows jobs emit a file literally named "latest.yml"; uploading
       # both to the release would clobber. Keep it as an arch-tagged CI artifact
@@ -465,16 +479,21 @@ jobs:
 
       - name: Upload Windows arm64 installers
         if: ${{ github.event.inputs.dry_run != 'true' }}
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
-        with:
-          tag_name: ${{ needs.create-release.outputs.tag }}
-          draft: true
-          files: |
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(
             desktop/packages/electron/dist/*.exe
             desktop/packages/electron/dist/*.zip
             desktop/packages/electron/dist/*.blockmap
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          )
+          test "${#files[@]}" -gt 0
+          node script/github-release-assets.mjs upload --repo "$REPOSITORY" --tag "$TAG" "${files[@]}"
 
       - name: Upload Windows arm64 update manifest
         if: ${{ github.event.inputs.dry_run != 'true' }}
@@ -513,7 +532,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.create-release.outputs.tag }}
           REPOSITORY: ${{ github.repository }}
-        run: gh release upload "$TAG" --repo "$REPOSITORY" --clobber "$RUNNER_TEMP/latest.yml"
+        run: node script/github-release-assets.mjs upload --repo "$REPOSITORY" --tag "$TAG" "$RUNNER_TEMP/latest.yml"
 
   # Ubuntu Desktop 24.04 LTS glibc baseline (amd64). Sibling arm64 job below.
   build-linux:
@@ -554,17 +573,21 @@ jobs:
 
       - name: Upload Linux x64 installers
         if: ${{ github.event.inputs.dry_run != 'true' }}
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
-        with:
-          tag_name: ${{ needs.create-release.outputs.tag }}
-          draft: true
-          files: |
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(
             desktop/packages/electron/dist/*.AppImage
             desktop/packages/electron/dist/*.deb
             desktop/packages/electron/dist/*.blockmap
             desktop/packages/electron/dist/latest-linux.yml
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          )
+          test "${#files[@]}" -gt 0
+          node script/github-release-assets.mjs upload --repo "$REPOSITORY" --tag "$TAG" "${files[@]}"
 
   build-linux-arm64:
     needs: create-release
@@ -604,20 +627,34 @@ jobs:
 
       - name: Upload Linux arm64 installers
         if: ${{ github.event.inputs.dry_run != 'true' }}
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
-        with:
-          tag_name: ${{ needs.create-release.outputs.tag }}
-          draft: true
-          files: |
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(
             desktop/packages/electron/dist/*.AppImage
             desktop/packages/electron/dist/*.deb
             desktop/packages/electron/dist/*.blockmap
             desktop/packages/electron/dist/latest-linux-arm64.yml
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          )
+          test "${#files[@]}" -gt 0
+          node script/github-release-assets.mjs upload --repo "$REPOSITORY" --tag "$TAG" "${files[@]}"
 
   sign-release-assets:
-    needs: [create-release, package-web, build-macos, build-windows, build-windows-arm64, build-linux, build-linux-arm64, merge-windows-latest-yml]
+    needs:
+      [
+        create-release,
+        package-web,
+        build-macos,
+        build-windows,
+        build-windows-arm64,
+        build-linux,
+        build-linux-arm64,
+        merge-windows-latest-yml,
+      ]
     if: >-
       always() &&
       github.event.inputs.dry_run != 'true' &&
@@ -645,7 +682,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           mkdir -p release-assets
-          gh release download "$TAG" --repo "$REPOSITORY" --dir release-assets --clobber
+          node script/github-release-assets.mjs download --repo "$REPOSITORY" --tag "$TAG" --dir release-assets
           cp install.ps1 release-assets/install.ps1
 
       - name: Sign release assets
@@ -684,7 +721,7 @@ jobs:
           test -f release-assets/install.ps1
           while IFS= read -r -d '' file; do signatures+=("$file"); done < <(find release-assets -type f -name '*.minisig' -print0)
           test "${#signatures[@]}" -gt 0
-          gh release upload "$TAG" --repo "$REPOSITORY" --clobber "${uploads[@]}" "${signatures[@]}"
+          node script/github-release-assets.mjs upload --repo "$REPOSITORY" --tag "$TAG" "${uploads[@]}" "${signatures[@]}"
 
   verify-release-assets:
     needs: [create-release, sign-release-assets]
@@ -705,7 +742,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          gh release download "$TAG" --repo "$REPOSITORY" --dir release-assets --clobber
+          node script/github-release-assets.mjs download --repo "$REPOSITORY" --tag "$TAG" --dir release-assets
           cmp docs/release/ax-minisign.pub release-assets/ax-minisign.pub
 
           verified=0
@@ -751,17 +788,12 @@ jobs:
     steps:
       - name: Publish release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.create-release.outputs.tag }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          IS_DRAFT="$(gh release view "$TAG" --repo "$REPOSITORY" --json isDraft --jq '.isDraft')"
-          if [ "$IS_DRAFT" != "true" ]; then
-            echo "::error::release $TAG is no longer a draft; refusing to publish or mutate it"
-            exit 1
-          fi
-          gh release edit "$TAG" --repo "$REPOSITORY" --draft=false
+          node script/github-release-assets.mjs publish --repo "$REPOSITORY" --tag "$TAG"
 
   # Generate winget Desktop manifests from published NSIS installers and attach
   # them to the desktop-v* release for microsoft/winget-pkgs submission.

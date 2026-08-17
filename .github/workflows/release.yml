@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to resume, for example v7.6.1
+        required: true
+        type: string
 
 concurrency:
   group: release-${{ github.ref }}
@@ -18,7 +24,8 @@ permissions:
 # GitHub release assets and updates the Homebrew tap for stable releases.
 # npm distribution is no longer supported.
 env:
-  AX_CODE_RELEASE_CHANNEL: ${{ contains(github.ref_name, '-') && 'beta' || 'latest' }}
+  AX_CODE_RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+  AX_CODE_RELEASE_CHANNEL: ${{ contains(inputs.tag || github.ref_name, '-') && 'beta' || 'latest' }}
 
 jobs:
   validate:
@@ -229,7 +236,7 @@ jobs:
         working-directory: packages/ax-code
         run: pnpm exec tsx ${{ matrix.build-script }} ${{ matrix.build-args }}
         env:
-          AX_CODE_VERSION: ${{ github.ref_name }}
+          AX_CODE_VERSION: ${{ env.AX_CODE_RELEASE_TAG }}
           AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
           AX_CODE_RELEASE: "true"
 
@@ -366,8 +373,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          TAG="${{ github.ref_name }}"
+          TAG="$AX_CODE_RELEASE_TAG"
           PRERELEASE_ARGS=()
           if [ "$CHANNEL" != "latest" ]; then
             PRERELEASE_ARGS=(--prerelease)
@@ -377,22 +385,21 @@ jobs:
           # distribution is no longer supported.
           # Idempotent while the release is still a draft. Never mutate a
           # published release before re-verifying all detached signatures.
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
+          if ! RELEASE_JSON="$(node script/github-release-assets.mjs inspect --repo "$REPOSITORY" --tag "$TAG" 2>/dev/null)"; then
             VERSION="${TAG#v}"
             NOTES_FILE=".internal/release/release-notes-v${VERSION}.md"
+            NOTES_ARGS=()
             if [ -f "$NOTES_FILE" ]; then
               NOTES_ARGS=(--notes-file "$NOTES_FILE")
-            else
-              NOTES_ARGS=(--generate-notes)
             fi
-            gh release create "$TAG" \
-              --title "$TAG" \
+            node script/github-release-assets.mjs create \
+              --repo "$REPOSITORY" \
+              --tag "$TAG" \
+              --name "$TAG" \
               "${NOTES_ARGS[@]}" \
-              --verify-tag \
-              --draft \
               "${PRERELEASE_ARGS[@]}"
           else
-            IS_DRAFT="$(gh release view "$TAG" --json isDraft --jq '.isDraft')"
+            IS_DRAFT="$(node -e 'console.log(JSON.parse(process.argv[1]).draft)' "$RELEASE_JSON")"
             if [ "$IS_DRAFT" != "true" ]; then
               echo "::error::release $TAG is already published; refusing to replace its assets"
               exit 1
@@ -403,27 +410,27 @@ jobs:
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          TAG="${{ github.ref_name }}"
+          TAG="$AX_CODE_RELEASE_TAG"
           shopt -s nullglob
           files=(docs/release/ax-minisign.pub packages/ax-code/dist/install.ps1 packages/ax-code/dist/install.ps1.minisig packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.tar.gz.minisig packages/ax-code/dist/*.zip packages/ax-code/dist/*.zip.minisig)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "::error::no release assets found to upload"
             exit 1
           fi
-          for f in "${files[@]}"; do
-            gh release upload "$TAG" "$f" --clobber
-          done
+          node script/github-release-assets.mjs upload --repo "$REPOSITORY" --tag "$TAG" "${files[@]}"
 
       - name: Verify uploaded release signatures
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          TAG="${{ github.ref_name }}"
+          TAG="$AX_CODE_RELEASE_TAG"
           VERIFY_DIR="$RUNNER_TEMP/release-verify"
           mkdir -p "$VERIFY_DIR"
-          gh release download "$TAG" --dir "$VERIFY_DIR" --clobber
+          node script/github-release-assets.mjs download --repo "$REPOSITORY" --tag "$TAG" --dir "$VERIFY_DIR"
           cmp docs/release/ax-minisign.pub "$VERIFY_DIR/ax-minisign.pub"
 
           verified=0
@@ -440,15 +447,11 @@ jobs:
       - name: Publish verified release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          TAG="${{ github.ref_name }}"
-          IS_DRAFT="$(gh release view "$TAG" --json isDraft --jq '.isDraft')"
-          if [ "$IS_DRAFT" != "true" ]; then
-            echo "::error::release $TAG is no longer a draft; refusing to publish or mutate it"
-            exit 1
-          fi
-          gh release edit "$TAG" --draft=false
+          TAG="$AX_CODE_RELEASE_TAG"
+          node script/github-release-assets.mjs publish --repo "$REPOSITORY" --tag "$TAG"
 
   homebrew:
     # Update the Homebrew tap automatically after a STABLE release. Beta /
@@ -457,7 +460,7 @@ jobs:
     # to the shared defai-digital/homebrew-tap repository and the legacy
     # product tap retained for upgrade compatibility.
     needs: publish
-    if: ${{ !contains(github.ref_name, '-') }}
+    if: ${{ !contains(inputs.tag || github.ref_name, '-') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -467,7 +470,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y minisign
       - name: Update Homebrew tap
         env:
-          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REF_NAME: ${{ inputs.tag || github.ref_name }}
           # Read this repo's release assets with the default token. Pass both
           # tap-write secret names so the script can fall back if one is present
           # but lacks access to one of the Homebrew tap repositories.
@@ -480,7 +483,7 @@ jobs:
   # them to the GitHub release for maintainers submitting to winget-pkgs.
   winget-manifests:
     needs: publish
-    if: ${{ !contains(github.ref_name, '-') }}
+    if: ${{ !contains(inputs.tag || github.ref_name, '-') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -495,6 +498,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Generate CLI winget manifests
+        env:
+          GITHUB_REF_NAME: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
@@ -530,10 +535,10 @@ jobs:
     needs: [publish, homebrew]
     if: >-
       always() &&
-      !contains(github.ref_name, '-') &&
+      !contains(inputs.tag || github.ref_name, '-') &&
       needs.publish.result == 'success'
     uses: ./.github/workflows/install-matrix-smoke.yml
     with:
-      version: ${{ github.ref_name }}
+      version: ${{ inputs.tag || github.ref_name }}
       channel: all
     secrets: inherit
