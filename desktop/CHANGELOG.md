@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.6.1] - 2026-08-17
+
+### Fixed
+
+- Make unexecutable tool text recovery budget consecutive.
+- Report the actual coverage runtime.
+- Preserve harmless merge interrupts.
+- Merge sharded coverage reports.
+- Build performance workflow dependencies.
+- Repair performance workflow execution.
+- Resolve repository self-scan regressions.
+
 ## [7.6.0] - 2026-08-17
 
 ### Added
