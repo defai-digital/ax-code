@@ -67,6 +67,9 @@ export type CoverageSummary = {
   meta: {
     createdAt: string
     runtime: {
+      name?: "bun" | "node"
+      version?: string
+      /** Legacy v1 summaries stored the Bun version under this key. */
       bun?: string
       platform: string
       arch: string
@@ -364,7 +367,7 @@ export function renderCoverageReport(summary: CoverageSummary) {
   out.push(
     summary.metrics.branches.available
       ? `- branches: ${coverageLine(summary.metrics.branches.pct)} (${summary.metrics.branches.covered}/${summary.metrics.branches.total})`
-      : "- branches: unavailable in Bun LCOV output",
+      : "- branches: unavailable in the current LCOV output",
   )
   out.push("")
   out.push("Artifacts:")
@@ -374,8 +377,10 @@ export function renderCoverageReport(summary: CoverageSummary) {
   out.push("")
   out.push("Provenance:")
   out.push(`- created at: ${summary.meta.createdAt}`)
+  const runtimeName = summary.meta.runtime.name ?? (summary.meta.runtime.bun ? "bun" : "unknown")
+  const runtimeVersion = summary.meta.runtime.version ?? summary.meta.runtime.bun ?? "unknown"
   out.push(
-    `- runtime: bun ${summary.meta.runtime.bun ?? "unknown"} on ${summary.meta.runtime.platform}/${summary.meta.runtime.arch}`,
+    `- runtime: ${runtimeName} ${runtimeVersion} on ${summary.meta.runtime.platform}/${summary.meta.runtime.arch}`,
   )
   if (summary.meta.git.branch) out.push(`- git branch: ${summary.meta.git.branch}`)
   if (summary.meta.git.commit) out.push(`- git commit: ${summary.meta.git.commit}`)
@@ -478,8 +483,10 @@ export async function createCoverageSummary(input: {
     notes.push(`excluded ${parsedFiles.length - files.length} coverage entries outside the repository root`)
   }
   if (!files.some((file) => file.branches.available)) {
-    notes.push("branch coverage is unavailable because the current Bun LCOV reporter did not emit branch counters")
+    notes.push("branch coverage is unavailable because the current LCOV reporter did not emit branch counters")
   }
+
+  const bunVersion = process.versions.bun
 
   const summary: CoverageSummary = {
     schemaVersion: 1,
@@ -497,7 +504,8 @@ export async function createCoverageSummary(input: {
     meta: {
       createdAt: new Date().toISOString(),
       runtime: {
-        bun: process.versions.bun ?? process.version,
+        name: bunVersion ? "bun" : "node",
+        version: bunVersion ?? process.versions.node,
         platform: process.platform,
         arch: process.arch,
       },

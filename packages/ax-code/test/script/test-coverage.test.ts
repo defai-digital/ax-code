@@ -245,7 +245,7 @@ describe("script.test-coverage", () => {
       notes: [],
       meta: {
         createdAt: "2026-04-18T00:00:00.000Z",
-        runtime: { bun: "1.3.12", platform: "linux", arch: "x64" },
+        runtime: { name: "node", version: "26.7.0", platform: "linux", arch: "x64" },
         git: {},
         ci: {},
       },
@@ -405,7 +405,7 @@ describe("script.test-coverage", () => {
       notes: [],
       meta: {
         createdAt: "2026-04-18T00:00:00.000Z",
-        runtime: { bun: "1.3.12", platform: "linux", arch: "x64" },
+        runtime: { name: "node", version: "26.7.0", platform: "linux", arch: "x64" },
         git: {},
         ci: {},
       },
@@ -415,5 +415,12 @@ describe("script.test-coverage", () => {
 
     expect(report).toContain("Lowest branch coverage:")
     expect(report).toContain("src/two.ts: 0.00%")
+    expect(report).toContain("runtime: node 26.7.0 on linux/x64")
+
+    const legacyReport = renderCoverageReport({
+      ...summary,
+      meta: { ...summary.meta, runtime: { bun: "1.3.12", platform: "linux", arch: "x64" } },
+    })
+    expect(legacyReport).toContain("runtime: bun 1.3.12 on linux/x64")
   })
 })
