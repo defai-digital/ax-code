@@ -8,6 +8,7 @@ import { useKeyboard, useRenderer } from "@ax-code/opentui-solid"
 import { createSimpleContext } from "./helper"
 import { useTuiConfig } from "./tui-config"
 import { scheduleTuiTimeout } from "@tui/util/timer"
+import { normalizeKeyEventForKeybind } from "@tui/util/keys"
 import { blurRenderable, focusRenderable } from "@tui/util/renderable-safety"
 
 export type KeybindKey = keyof NonNullable<TuiConfig.Info["keybinds"]> & string
@@ -59,14 +60,10 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
     }
 
     function parse(evt: ParsedKey): Keybind.Info {
-      // Ctrl+- on non-kitty terminals: raw mode emits 0x1F, which the parser
-      // reports as name "_" with ctrl. Normalize it back to "-" so `ctrl+-`
-      // bindings (e.g. the default input_undo) match. (Mirrored in
-      // textarea-keybindings.ts for the opentui textarea path.)
-      if (evt.ctrl && evt.name === "_") {
-        return Keybind.fromParsedKey({ ...evt, name: "-" }, store.leader)
-      }
-      return Keybind.fromParsedKey(evt, store.leader)
+      // Terminal-encoding normalization (ctrl+- as "_", Ctrl+J as
+      // "linefeed"/"\n") lives in normalizeKeyEventForKeybind so config
+      // bindings match the byte-level names the parser emits.
+      return Keybind.fromParsedKey(normalizeKeyEventForKeybind(evt), store.leader)
     }
 
     function match(key: KeybindKey, evt: ParsedKey) {

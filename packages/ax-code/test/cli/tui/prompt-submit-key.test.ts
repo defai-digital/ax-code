@@ -78,6 +78,15 @@ test("enter alias submits instead of inserting a blank line", async () => {
   expect(result).toEqual({ draft: "hello", submits: 1 })
 })
 
+test("ctrl+j (legacy linefeed byte) inserts a newline instead of submitting", async () => {
+  // Raw-mode terminals report Ctrl+J as an unmodified "linefeed" key. The
+  // default input_newline config binds ctrl+j, which emits a linefeed alias,
+  // so the textarea resolves it to newline — not the Enter->submit fallback.
+  expect(actionFor("linefeed")).toBe("newline")
+  const result = applyPromptKey("hello", "linefeed")
+  expect(result).toEqual({ draft: "hello\n", submits: 0 })
+})
+
 test("raw CRLF Enter submits after terminal paste chunks", async () => {
   expect(isUnmodifiedPromptSubmitKey({ name: "", raw: "\r\n", sequence: "\r\n" })).toBe(true)
 })

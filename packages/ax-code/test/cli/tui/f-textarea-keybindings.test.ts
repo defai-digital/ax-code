@@ -69,3 +69,18 @@ test("default (modified) input_newline still injects the Enter->submit family", 
   expect(bindings.some((b) => b.name === "return" && !b.shift && b.action === "submit")).toBe(true)
   expect(bindings.some((b) => b.name === "kpenter" && b.action === "submit")).toBe(true)
 })
+
+// Ctrl+J legacy encoding: raw mode emits the LF byte -> name "linefeed" with
+// NO modifiers (CSI-u reports "\n"). A ctrl+j binding must emit unmodified
+// aliases so it fires on those events, and linefeed must no longer be
+// hijacked into the Enter->submit family (which made Ctrl+J submit).
+test("ctrl+j binding emits unmodified linefeed/LF aliases and linefeed is not submit", () => {
+  const bindings = textareaKeybindingsForConfig(
+    { input_newline: [key("j", { ctrl: true })] },
+    { submit: false, interceptEnter: true },
+  )
+  expect(bindings.some((b) => b.name === "j" && b.ctrl && b.action === "newline")).toBe(true)
+  expect(bindings.some((b) => b.name === "linefeed" && !b.ctrl && b.action === "newline")).toBe(true)
+  expect(bindings.some((b) => b.name === "\n" && !b.ctrl && b.action === "newline")).toBe(true)
+  expect(bindings.some((b) => b.name === "linefeed" && b.action === "submit")).toBe(false)
+})

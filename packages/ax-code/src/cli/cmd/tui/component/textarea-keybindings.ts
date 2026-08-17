@@ -92,6 +92,14 @@ function mapTextareaKeybindings(
         if (binding.ctrl && binding.name === "-") {
           return [mapped, { ...mapped, name: "_" }]
         }
+        // Ctrl+J has no distinct legacy encoding either: raw mode emits the LF
+        // byte, reported as name "linefeed" with NO modifiers (CSI-u reports
+        // "\n"). Emit unmodified aliases so a ctrl+j binding — the default
+        // input_newline — inserts a newline instead of falling through to the
+        // Enter handling. (Mirrored in util/keys.ts normalizeKeyEventForKeybind.)
+        if (binding.ctrl && binding.name === "j") {
+          return [mapped, { name: "linefeed", action }, { name: "\n", action }]
+        }
         return [mapped]
       })
   )
@@ -118,7 +126,9 @@ export function textareaKeybindingsForConfig(
       ? ([
           { name: "return", action: "submit" },
           { name: "enter", action: "submit" },
-          { name: "linefeed", action: "submit" },
+          // "linefeed" is deliberately NOT an Enter alias: it is the legacy
+          // encoding of Ctrl+J, which the default input_newline config binds
+          // to newline. Mapping it to submit made Ctrl+J submit the prompt.
           // Keypad Enter: intercept it as "submit" too, otherwise OpenTUI's
           // default `kpenter` -> "newline" binding inserts a blank line.
           { name: "kpenter", action: "submit" },
