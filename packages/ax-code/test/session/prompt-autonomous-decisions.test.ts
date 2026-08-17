@@ -1239,6 +1239,47 @@ describe("local read-only exploration convergence", () => {
       }),
     ).toEqual({ action: "stop" })
   })
+
+  test("unexecutable tool text budget is consecutive: recovers again after a clean turn resets it", () => {
+    // Mirrors the prompt-impl.ts wiring: the loop increments recoveriesUsed on
+    // each recovery and resets it to 0 when the completion gate next evaluates
+    // "allow" (a completed tool call or clean prose intervened). A second
+    // forced-text trap after real work must recover again, not kill the
+    // session; two offenses with no clean turn in between must stop.
+    let recoveriesUsed = 0
+
+    const firstOffense = unexecutableToolTextRecoveryDecision({
+      lastTurnWasForceTextOnly: true,
+      recoveriesUsed,
+      maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
+      forceReason: "ax_engine_read_only",
+    })
+    expect(firstOffense).toEqual({ action: "recover" })
+    recoveriesUsed += 1
+
+    // Intervening clean/productive turn: gate evaluates "allow" -> reset.
+    recoveriesUsed = 0
+
+    expect(
+      unexecutableToolTextRecoveryDecision({
+        lastTurnWasForceTextOnly: true,
+        recoveriesUsed,
+        maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
+        forceReason: "ax_engine_read_only",
+      }),
+    ).toEqual({ action: "recover" })
+    recoveriesUsed += 1
+
+    // Back-to-back offense with no clean turn in between still hard-stops.
+    expect(
+      unexecutableToolTextRecoveryDecision({
+        lastTurnWasForceTextOnly: true,
+        recoveriesUsed,
+        maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
+        forceReason: "ax_engine_read_only",
+      }),
+    ).toEqual({ action: "stop" })
+  })
 })
 
 describe("goal complete force text (#381)", () => {

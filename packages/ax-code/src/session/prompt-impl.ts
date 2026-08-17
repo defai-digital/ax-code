@@ -1368,6 +1368,14 @@ export namespace SessionPrompt {
         if (completionGate.status === "allow") {
           completionGateRetries = 0
           lastCompletionGateSignature = undefined
+          // The unexecutable-tool-text budget is consecutive, not lifetime:
+          // the gate only reaches "allow" after an intervening turn produced
+          // a completed tool call or clean prose (its own tracking clears
+          // exactly then), so the model has demonstrated protocol competence
+          // since the last offense. Resetting here keeps the self-inflicted
+          // forced-text trap recoverable on every recurrence while still
+          // hard-stopping back-to-back offenses.
+          unexecutableToolTextRecoveries = 0
         }
 
         const remainingAgentSteps = Number.isFinite(maxSteps) ? Math.max(0, maxSteps - step) : Infinity

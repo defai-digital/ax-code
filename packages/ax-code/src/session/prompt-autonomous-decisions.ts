@@ -425,6 +425,12 @@ export function readOnlyExplorationDecision(input: {
  * with tools re-enabled once. Applies to ax-engine read-only convergence
  * and the generic tool-only / backstop breaker (models often paste
  * <function=edit> as chat). Intentional text-only paths stay tool-free.
+ *
+ * `recoveriesUsed` is a CONSECUTIVE-offense counter: the prompt loop resets
+ * it to 0 whenever the completion gate next evaluates "allow" (a completed
+ * tool call or clean prose intervened since the last offense). Callers must
+ * preserve that contract — a lifetime counter would hard-stop the session on
+ * the second forced-text trap no matter how much real work happened between.
  */
 const RECOVERABLE_UNEXECUTABLE_FORCE_REASONS = new Set<ForceTextReason>([
   "ax_engine_read_only",

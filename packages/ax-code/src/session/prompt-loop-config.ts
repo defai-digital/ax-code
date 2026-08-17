@@ -37,7 +37,11 @@ export const AX_ENGINE_READ_ONLY_TURN_FORCE = 4
 // 26k+ diffs that otherwise get force-texted mid-review.
 export const AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS = 8_000
 // After a forced text-only turn, if the model pastes unexecutable tool XML,
-// re-enable tools once instead of hard-stopping (self-inflicted trap).
+// re-enable tools instead of hard-stopping (self-inflicted trap). The budget
+// counts CONSECUTIVE offenses: the caller resets it whenever the completion
+// gate next evaluates "allow" (a completed tool call or clean prose
+// intervened), so intermittent forced-text traps stay recoverable while a
+// model that fails twice in a row still hard-stops.
 export const MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES = 1
 // Truncated turns (finish=length) are a normal consequence of output-token
 // limits — the model was actively generating useful content that exceeded its
