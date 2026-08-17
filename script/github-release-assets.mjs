@@ -92,16 +92,33 @@ async function responseJson(response) {
   return text ? JSON.parse(text) : undefined
 }
 
-export async function findRelease({ repo, tag, token, request = githubRequest }) {
-  const releases = []
-  for (let page = 1; page <= 10; page += 1) {
-    const response = await request(apiUrl(repo, `/releases?per_page=100&page=${page}`), {}, { token })
-    const batch = await responseJson(response)
-    if (!Array.isArray(batch)) throw new Error("GitHub releases response was not an array")
-    releases.push(...batch)
-    if (batch.length < 100) break
+export async function findRelease({
+  repo,
+  tag,
+  token,
+  request = githubRequest,
+  notFoundRetryDelaysMs = [],
+  sleepImpl = sleep,
+  log = console.warn,
+}) {
+  for (let attempt = 0; ; attempt += 1) {
+    const releases = []
+    for (let page = 1; page <= 10; page += 1) {
+      const response = await request(apiUrl(repo, `/releases?per_page=100&page=${page}`), {}, { token })
+      const batch = await responseJson(response)
+      if (!Array.isArray(batch)) throw new Error("GitHub releases response was not an array")
+      releases.push(...batch)
+      if (batch.length < 100) break
+    }
+
+    const matches = releases.filter((release) => release?.tag_name === tag)
+    if (matches.length > 0) return selectReleaseByTag(matches, tag)
+    if (attempt >= notFoundRetryDelaysMs.length) return selectReleaseByTag(matches, tag)
+
+    const delay = notFoundRetryDelaysMs[attempt]
+    log(`Release ${tag} is not visible yet; retrying in ${delay}ms (${attempt + 1}/${notFoundRetryDelaysMs.length})`)
+    await sleepImpl(delay)
   }
-  return selectReleaseByTag(releases, tag)
 }
 
 export async function createRelease({ repo, tag, token, name = tag, notes, prerelease = false }) {
@@ -131,7 +148,7 @@ export async function createRelease({ repo, tag, token, name = tag, notes, prere
     // tag and continue only when it is still an unpublished draft.
     let release
     try {
-      release = await findRelease({ repo, tag, token })
+      release = await findRelease({ repo, tag, token, notFoundRetryDelaysMs: DEFAULT_RETRY_DELAYS_MS })
     } catch {
       throw error
     }
@@ -168,7 +185,7 @@ async function retryPipeline(factory, destination, retryDelaysMs = DEFAULT_RETRY
 }
 
 export async function downloadReleaseAssets({ repo, tag, token, directory }) {
-  const release = await findRelease({ repo, tag, token })
+  const release = await findRelease({ repo, tag, token, notFoundRetryDelaysMs: DEFAULT_RETRY_DELAYS_MS })
   await mkdir(directory, { recursive: true })
   const seen = new Set()
 
@@ -191,7 +208,7 @@ export async function downloadReleaseAssets({ repo, tag, token, directory }) {
 }
 
 export async function uploadReleaseAssets({ repo, tag, token, files }) {
-  const release = await findRelease({ repo, tag, token })
+  const release = await findRelease({ repo, tag, token, notFoundRetryDelaysMs: DEFAULT_RETRY_DELAYS_MS })
   requireDraft(release)
   const assets = new Map((release.assets ?? []).map((asset) => [asset.name, asset]))
 
@@ -241,7 +258,7 @@ export async function uploadReleaseAssets({ repo, tag, token, files }) {
 }
 
 export async function publishRelease({ repo, tag, token }) {
-  const release = await findRelease({ repo, tag, token })
+  const release = await findRelease({ repo, tag, token, notFoundRetryDelaysMs: DEFAULT_RETRY_DELAYS_MS })
   requireDraft(release)
   const response = await githubRequest(
     apiUrl(repo, `/releases/${release.id}`),

@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest"
 import {
+  findRelease,
   githubRequest,
   isRetryableStatus,
   matchingUploadedAsset,
@@ -75,5 +76,31 @@ describe("GitHub draft release assets", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2)
     expect(sleepImpl).toHaveBeenCalledWith(25)
     expect(log).toHaveBeenCalledWith(expect.stringContaining("returned 503"))
+  })
+
+  test("retries while a newly created draft is not visible in the release list", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("[]", { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ id: 42, tag_name: "v7.6.1", draft: true }]), { status: 200 }),
+      )
+    const sleepImpl = vi.fn().mockResolvedValue(undefined)
+    const log = vi.fn()
+
+    const release = await findRelease({
+      repo: "acme/app",
+      tag: "v7.6.1",
+      token: "test-token",
+      request,
+      notFoundRetryDelaysMs: [25],
+      sleepImpl,
+      log,
+    })
+
+    expect(release).toMatchObject({ id: 42, draft: true })
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(sleepImpl).toHaveBeenCalledWith(25)
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("not visible yet"))
   })
 })
