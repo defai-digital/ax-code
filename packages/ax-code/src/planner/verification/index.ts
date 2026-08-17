@@ -123,7 +123,7 @@ export async function typecheck(cwd: string, timeout = 60_000): Promise<Verifica
  */
 export async function custom(cmd: string, cwd: string, timeout = 60_000): Promise<VerificationResult> {
   const start = Date.now()
-  const shell = process.platform === "win32" ? ["cmd", "/c", cmd] : ["sh", "-c", cmd]
+  const shell = Process.shellCommand(cmd)
 
   try {
     const { code, stdout, stderr } = await Process.run(shell, {

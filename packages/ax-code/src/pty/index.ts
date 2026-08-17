@@ -141,6 +141,19 @@ export namespace Pty {
     return out
   }
 
+  export function withUtf8LocaleDefaults(env: Record<string, string>): Record<string, string> {
+    // Respect any locale selected by the user or parent process. LC_ALL has
+    // the highest precedence and forcing it to C.UTF-8 would silently change
+    // language, collation, and command output inside every terminal session.
+    if (env.LC_ALL || env.LC_CTYPE || env.LANG) return env
+    return {
+      ...env,
+      LC_ALL: "C.UTF-8",
+      LC_CTYPE: "C.UTF-8",
+      LANG: "C.UTF-8",
+    }
+  }
+
   type NodePtyModule = typeof import("node-pty-prebuilt-multiarch")
 
   function isNodePtyDebugFallbackNoise(args: readonly unknown[]) {
@@ -417,18 +430,12 @@ export namespace Pty {
       ...process.env,
       ...shellEnv.env,
     })
-    const env = {
+    const env = withUtf8LocaleDefaults({
       ...baseEnv,
       ...sanitizeUserEnv(input.env),
       TERM: TERM_VALUE,
       AX_CODE_TERMINAL: AX_CODE_TERMINAL_VALUE,
-    } as Record<string, string>
-
-    if (process.platform === "win32") {
-      env.LC_ALL = "C.UTF-8"
-      env.LC_CTYPE = "C.UTF-8"
-      env.LANG = "C.UTF-8"
-    }
+    } as Record<string, string>)
     log.info("creating session", { id, cmd: command, args, cwd })
 
     const spawn = await pty()

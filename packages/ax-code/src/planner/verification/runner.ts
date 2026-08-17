@@ -188,7 +188,7 @@ export async function runCommand(
   cwd: string,
   timeoutMs: number = RUN_COMMAND_TIMEOUT_MS,
 ): Promise<{ ok: boolean; stdout: string; stderr: string; code: number; timedOut: boolean }> {
-  const { code, stdout, stderr } = await Process.run(["sh", "-c", cmd], {
+  const { code, stdout, stderr } = await Process.run(Process.shellCommand(cmd), {
     cwd,
     env: Env.sanitize(),
     timeout: timeoutMs,

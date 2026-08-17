@@ -36,16 +36,32 @@ type SetupCliOptions = {
   spawnSync?: typeof childProcess.spawnSync
   log?: (msg: string) => void
   which?: WhichFn
+  realpathSync?: (p: string) => string
+}
+
+// A package-manager-managed install must not be overwritten: Homebrew links
+// bin/ax-code into the read-only Cellar, so writing through it fails with
+// EACCES (and would be clobbered by the next brew upgrade anyway).
+export function isHomebrewManagedBinary(
+  binaryPath: string,
+  realpathSync: (p: string) => string = (p) => fs.realpathSync(p),
+): boolean {
+  try {
+    return realpathSync(binaryPath).includes(`${path.sep}Cellar${path.sep}`)
+  } catch {
+    return false
+  }
 }
 
 export function getInstallBinDir(
   env: NodeJS.ProcessEnv = process.env,
   which: WhichFn = whichSync,
   platform: NodeJS.Platform = process.platform,
+  realpathSync: (p: string) => string = (p) => fs.realpathSync(p),
 ): string {
   if (env.AX_CODE_BIN_DIR) return env.AX_CODE_BIN_DIR
   const existing = which("ax-code")
-  if (existing) return path.dirname(existing)
+  if (existing && !isHomebrewManagedBinary(existing, realpathSync)) return path.dirname(existing)
   if (env.PNPM_HOME) return env.PNPM_HOME
   if (platform === "win32") {
     return path.join(env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "ax-code", "bin")
@@ -223,8 +239,9 @@ export function setupCli(input: SetupCliOptions = {}) {
   const spawnSync = input.spawnSync ?? childProcess.spawnSync
   const log = input.log ?? console.log
   const which = input.which ?? whichSync
+  const realpathSync = input.realpathSync ?? ((p: string) => fs.realpathSync(p))
   const windows = platform === "win32"
-  const binDir = getInstallBinDir(env, which, platform)
+  const binDir = getInstallBinDir(env, which, platform, realpathSync)
 
   if (!exists(binDir)) {
     mkdirSync(binDir, { recursive: true })
@@ -278,8 +295,29 @@ export function setupCli(input: SetupCliOptions = {}) {
     log(`Created: ${bashPath}`)
   } else {
     const shPath = path.join(binDir, "ax-code")
-    writeFileSync(shPath, launcher.unix, { mode: 0o755 })
+    try {
+      writeFileSync(shPath, launcher.unix, { mode: 0o755 })
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "EACCES") {
+        throw new Error(
+          `Permission denied writing ${shPath}. Set AX_CODE_BIN_DIR to a writable directory ` +
+            `(e.g. AX_CODE_BIN_DIR="$HOME/.local/bin") or fix the directory's permissions.`,
+        )
+      }
+      throw err
+    }
     log(`Created: ${shPath}`)
+  }
+
+  // Another ax-code earlier in PATH (e.g. a Homebrew install) keeps shadowing
+  // this launcher — say so instead of letting the user run the stale one.
+  const onPath = which("ax-code")
+  if (onPath && path.dirname(onPath) !== binDir) {
+    log("")
+    log(`Note: "ax-code" currently resolves to ${onPath}, which shadows this install.`)
+    if (isHomebrewManagedBinary(onPath, realpathSync)) {
+      log(`It is managed by Homebrew — run "brew unlink ax-code" to use this launcher instead.`)
+    }
   }
 
   log("")

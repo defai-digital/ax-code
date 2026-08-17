@@ -22,6 +22,22 @@ const DANGEROUS_ROOTS = new Set([
   "/Users/Shared",
 ])
 
+const WINDOWS_DANGEROUS_ROOTS = ["C:/", "C:/Windows", "C:/Program Files", "C:/Program Files (x86)"]
+
+// Windows paths reach `realDirectory` with either separator and arbitrary
+// drive-letter casing (`C:\Windows` vs `c:\windows`), so compare the
+// Windows roots case-insensitively on forward-slash form.
+function normalizeWindowsPath(p: string): string {
+  return p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase()
+}
+
+const WINDOWS_DANGEROUS_ROOTS_NORMALIZED = new Set(WINDOWS_DANGEROUS_ROOTS.map(normalizeWindowsPath))
+
+export function isDangerousRoot(directory: string): boolean {
+  if (DANGEROUS_ROOTS.has(directory)) return true
+  return WINDOWS_DANGEROUS_ROOTS_NORMALIZED.has(normalizeWindowsPath(directory))
+}
+
 const SENSITIVE_HOME_DIRECTORIES = [".ssh", ".gnupg", ".aws", ".azure", ".config/gcloud", ".docker", ".kube", ".npm"]
 
 export function requestDirectory(c: Context): string | Response {
@@ -63,7 +79,7 @@ export function requestDirectory(c: Context): string | Response {
   const isSensitiveHomeDirectory = sensitiveHomeDirectories.some(
     (blocked) => realDirectory === blocked || Filesystem.contains(blocked, realDirectory),
   )
-  if (DANGEROUS_ROOTS.has(realDirectory) || isSensitiveHomeDirectory) {
+  if (isDangerousRoot(realDirectory) || isSensitiveHomeDirectory) {
     return invalidRequest(c, { message: "Directory is not allowed", details: { resource: "directory" } })
   }
   return realDirectory

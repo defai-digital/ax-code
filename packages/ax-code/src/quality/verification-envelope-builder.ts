@@ -1,5 +1,6 @@
 import type { DebugEngine } from "../debug-engine"
 import { Installation } from "../installation"
+import { Process } from "../util/process"
 import { type StructuredFailure, type VerificationEnvelope, VerificationEnvelopeSchema } from "./verification-envelope"
 import type { Workflow } from "./finding-registry"
 
@@ -201,7 +202,7 @@ function source(sessionID: string, tool: string) {
 }
 
 function command(runner: "typecheck" | "lint" | "test", commandText: string | null, cwd: string) {
-  return { runner, argv: commandText ? ["sh", "-c", commandText] : [], cwd }
+  return { runner, argv: commandText ? Process.shellCommand(commandText) : [], cwd }
 }
 
 function commonScope(applyResult: DebugEngine.ApplyResult) {

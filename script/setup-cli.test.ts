@@ -7,6 +7,7 @@ import {
   bundledBuildMarkerPath,
   bundledLauncherScript,
   getInstallBinDir,
+  isHomebrewManagedBinary,
   preferredBundledTarget,
   setupCli,
   sourceLauncherScript,
@@ -287,5 +288,75 @@ describe("setup-cli helpers", () => {
     expect(launcherWrite?.[1]).toContain(`exec "${binary}" "$@"`)
     const markerWrite = writes.find(([target]) => target === bundledBuildMarkerPath(binary))
     expect(markerWrite?.[1]).toContain("/repo")
+  })
+
+  test("detects Homebrew-managed binaries via their Cellar realpath", () => {
+    const realpath = (p: string) =>
+      p === "/opt/homebrew/bin/ax-code" ? "/opt/homebrew/Cellar/ax-code/7.6.1/bin/ax-code" : p
+    expect(isHomebrewManagedBinary("/opt/homebrew/bin/ax-code", realpath)).toBe(true)
+    expect(isHomebrewManagedBinary("/usr/local/bin/ax-code", realpath)).toBe(false)
+    expect(
+      isHomebrewManagedBinary("/gone/ax-code", () => {
+        throw new Error("ENOENT")
+      }),
+    ).toBe(false)
+  })
+
+  test("does not reuse a Homebrew-managed install directory", () => {
+    const which = (command: string) => (command === "ax-code" ? "/opt/homebrew/bin/ax-code" : undefined)
+    const realpath = () => "/opt/homebrew/Cellar/ax-code/7.6.1/bin/ax-code"
+    expect(getInstallBinDir({ PNPM_HOME: "/pnpm/home" }, which, "darwin", realpath)).toBe("/pnpm/home")
+    // A non-managed existing install is still reused in place.
+    expect(getInstallBinDir({ PNPM_HOME: "/pnpm/home" }, which, "darwin", () => "/opt/homebrew/bin/ax-code")).toBe(
+      "/opt/homebrew/bin",
+    )
+  })
+
+  test("setupCli skips the Homebrew directory and warns about the shadowing install", () => {
+    const writes: Array<[string, string]> = []
+    const logs: string[] = []
+    const binary = bundledBinaryPath({ root: "/repo", platform: "darwin", arch: "arm64" })
+    const marker = bundledBuildMarkerPath(binary)
+    setupCli({
+      root: "/repo",
+      env: { PNPM_HOME: "/pnpm/home" },
+      platform: "darwin",
+      arch: "arm64",
+      exists: (target) => target === "/pnpm/home" || target === binary || target === marker,
+      mkdirSync: () => undefined,
+      readFileSync: (p) => (p === marker ? "/repo\n" : ""),
+      writeFileSync: (target, content) => {
+        writes.push([target, String(content)])
+      },
+      spawnSync: () => ({ status: 0, stdout: null, stderr: null, pid: 1, output: null, signal: null }) as any,
+      which: (command) => (command === "ax-code" ? "/opt/homebrew/bin/ax-code" : undefined),
+      realpathSync: () => "/opt/homebrew/Cellar/ax-code/7.6.1/bin/ax-code",
+      log: (msg) => logs.push(msg),
+    })
+
+    expect(writes.map(([target]) => target)).toEqual(["/pnpm/home/ax-code"])
+    expect(logs.some((line) => line.includes("brew unlink ax-code"))).toBe(true)
+  })
+
+  test("setupCli turns an EACCES launcher write into an actionable error", () => {
+    const binary = bundledBinaryPath({ root: "/repo", platform: "darwin", arch: "arm64" })
+    const marker = bundledBuildMarkerPath(binary)
+    expect(() =>
+      setupCli({
+        root: "/repo",
+        env: { AX_CODE_BIN_DIR: "/root-only/bin" },
+        platform: "darwin",
+        arch: "arm64",
+        exists: (target) => target === "/root-only/bin" || target === binary || target === marker,
+        mkdirSync: () => undefined,
+        readFileSync: (p) => (p === marker ? "/repo\n" : ""),
+        writeFileSync: () => {
+          throw Object.assign(new Error("permission denied"), { code: "EACCES" })
+        },
+        spawnSync: () => ({ status: 0, stdout: null, stderr: null, pid: 1, output: null, signal: null }) as any,
+        which: () => undefined,
+        log: () => undefined,
+      }),
+    ).toThrowError(/AX_CODE_BIN_DIR/)
   })
 })

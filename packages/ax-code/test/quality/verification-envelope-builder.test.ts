@@ -3,6 +3,7 @@ import type { DebugEngine } from "../../src/debug-engine"
 import { fromRefactorApplyResult, fromVerificationCommandResult } from "../../src/quality/verification-envelope-builder"
 import { VerificationEnvelopeSchema } from "../../src/quality/verification-envelope"
 import { Installation } from "../../src/installation"
+import { Process } from "../../src/util/process"
 
 function applyResult(overrides: Partial<DebugEngine.ApplyResult> = {}): DebugEngine.ApplyResult {
   return {
@@ -380,6 +381,33 @@ describe("fromRefactorApplyResult", () => {
 })
 
 describe("fromVerificationCommandResult", () => {
+  test("records the platform shell argv via Process.shellCommand (cmd /c on win32, sh -c elsewhere)", () => {
+    const envs = fromVerificationCommandResult({
+      workflow: "qa",
+      sessionID: "ses_shell",
+      cwd: "/tmp/work",
+      sourceTool: "verify_project",
+      scope: { kind: "workspace" },
+      commands: { typecheck: "bun run typecheck", lint: null, test: null },
+      checks: {
+        typecheck: { ok: true, skipped: false, errors: [], duration: 1 },
+        lint: { ok: true, skipped: true, errors: [], duration: 0 },
+        tests: {
+          ok: true,
+          skipped: true,
+          errors: [],
+          ran: 0,
+          failed: 0,
+          failures: [],
+          selection: "skipped",
+          duration: 0,
+        },
+      },
+    })
+    const typecheck = envs.find((env) => env.result.name === "typecheck")!
+    expect(typecheck.command.argv).toEqual(Process.shellCommand("bun run typecheck"))
+  })
+
   test("returns citable envelopes for a general verification run", () => {
     const envs = fromVerificationCommandResult({
       workflow: "review",

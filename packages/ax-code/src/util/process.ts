@@ -105,6 +105,14 @@ export namespace Process {
     )
   }
 
+  /**
+   * argv for running a shell command string. Stock Windows has no `sh`, so
+   * use `cmd /c` there and `sh -c` everywhere else.
+   */
+  export function shellCommand(command: string, platform: NodeJS.Platform = process.platform): string[] {
+    return platform === "win32" ? ["cmd", "/c", command] : ["sh", "-c", command]
+  }
+
   export function spawn(cmd: string[], opts: Options = {}): Child {
     if (cmd.length === 0) throw new Error("Command is required")
     opts.abort?.throwIfAborted()

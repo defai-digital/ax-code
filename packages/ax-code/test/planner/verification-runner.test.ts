@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import * as fs from "fs/promises"
 import path from "path"
 import {
@@ -7,6 +7,7 @@ import {
   resolveCommands,
   runCommand,
 } from "../../src/planner/verification/runner"
+import { Process } from "../../src/util/process"
 import { tmpdir } from "../fixture/fixture"
 
 async function writePackageJson(dir: string, scripts: Record<string, string>) {
@@ -197,6 +198,20 @@ describe("resolveCommands", () => {
     expect(cmds.typecheck).toBe("cargo check")
     expect(cmds.lint).toBeNull()
     expect(cmds.test).toBe("cargo test")
+  })
+
+  test("runCommand runs through the platform shell (cmd /c on win32, sh -c elsewhere)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const spy = vi
+      .spyOn(Process, "run")
+      .mockResolvedValue({ code: 0, stdout: Buffer.from(""), stderr: Buffer.from("") })
+    try {
+      const result = await runCommand("echo hi", tmp.path)
+      expect(result.ok).toBe(true)
+      expect(spy).toHaveBeenCalledWith(Process.shellCommand("echo hi"), expect.objectContaining({ cwd: tmp.path }))
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   test("runCommand sanitizes secret-like parent environment variables", async () => {

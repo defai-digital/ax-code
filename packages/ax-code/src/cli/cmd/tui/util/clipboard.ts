@@ -15,6 +15,24 @@ import { toErrorMessage } from "../../../../util/error-message"
 const log = Log.create({ service: "tui.clipboard" })
 
 /**
+ * WSL kernels identify as "microsoft" in both WSL1 ("4.4.0-...-Microsoft")
+ * and WSL2 ("5.15....-microsoft-standard-WSL2") release strings.
+ */
+export function isWslRelease(kernelRelease: string): boolean {
+  return /microsoft/i.test(kernelRelease)
+}
+
+/**
+ * Detects Windows Subsystem for Linux. `release().includes("WSL")` misses
+ * WSL1 (no "WSL" in its kernel release), so match "microsoft" instead and
+ * fall back to the WSL-only environment variables.
+ */
+export function isWsl(): boolean {
+  if (platform() !== "linux") return false
+  return isWslRelease(release()) || Boolean(process.env["WSL_DISTRO_NAME"] || process.env["WSLENV"])
+}
+
+/**
  * Writes text to clipboard via OSC 52 escape sequence.
  * This allows clipboard operations to work over SSH by having
  * the terminal emulator handle the clipboard locally.
@@ -196,7 +214,7 @@ export namespace Clipboard {
       }
     }
 
-    if (os === "win32" || release().includes("WSL")) {
+    if (os === "win32" || isWsl()) {
       const script =
         "Add-Type -AssemblyName System.Windows.Forms; $img = [System.Windows.Forms.Clipboard]::GetImage(); if ($img) { $ms = New-Object System.IO.MemoryStream; $img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); [System.Convert]::ToBase64String($ms.ToArray()) }"
       const base64 = await Process.text(["powershell.exe", "-NonInteractive", "-NoProfile", "-command", script], {
@@ -243,6 +261,14 @@ export namespace Clipboard {
     }
 
     if (os === "linux") {
+      // WSL has no stock Linux clipboard helper, but the Windows-side
+      // clip.exe is on PATH and reads the clipboard text from stdin.
+      if (isWsl() && which("clip.exe")) {
+        return async (text: string) => {
+          const proc = Process.spawn(["clip.exe"], { stdin: "pipe", stdout: "ignore", stderr: "ignore" })
+          await writeViaProcessStdin(proc, text)
+        }
+      }
       if (process.env["WAYLAND_DISPLAY"] && which("wl-copy")) {
         return async (text: string) => {
           const proc = Process.spawn(["wl-copy"], { stdin: "pipe", stdout: "ignore", stderr: "ignore" })

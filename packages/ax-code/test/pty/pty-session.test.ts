@@ -74,6 +74,22 @@ describe("pty", () => {
     expect(env.SAFE).toBe("ok")
   })
 
+  test("defaults locale-less PTY children to UTF-8", () => {
+    expect(Pty.withUtf8LocaleDefaults({ SAFE: "ok" })).toEqual({
+      SAFE: "ok",
+      LC_ALL: "C.UTF-8",
+      LC_CTYPE: "C.UTF-8",
+      LANG: "C.UTF-8",
+    })
+  })
+
+  test.each([{ LANG: "en_CA.UTF-8" }, { LC_CTYPE: "de_DE.UTF-8" }, { LC_ALL: "C" }] as Array<Record<string, string>>)(
+    "preserves an explicitly configured PTY locale: %o",
+    (env) => {
+      expect(Pty.withUtf8LocaleDefaults(env)).toEqual(env)
+    },
+  )
+
   test("reports a replay gap when reconnect cursor is older than the retained buffer", () => {
     const replay = Pty.replayBufferedOutput(
       {

@@ -7,6 +7,7 @@ import { EOL } from "os"
 import { toErrorMessage } from "../../../util/error-message"
 import { mkdirSync, closeSync, openSync } from "node:fs"
 import { dirname } from "node:path"
+import { once } from "node:events"
 
 async function openDatabase(dbPath: string, options: { readonly: boolean }) {
   const { DatabaseSync } = await import("node:sqlite")
@@ -65,10 +66,22 @@ const QueryCommand = cmd({
       if (!ok) process.exit(1)
       return
     }
+    // events.once(child, "close") below owns both close/error listener cleanup.
+    // @scan-suppress lifecycle_scan
     const child = spawn("sqlite3", [Database.Path], {
       stdio: "inherit",
     })
-    await new Promise((resolve) => child.on("close", resolve))
+    try {
+      // events.once rejects on the child's error event and removes the paired
+      // listeners on either outcome, so an ENOENT cannot crash the process or
+      // leave listeners attached after the shell exits.
+      await once(child, "close")
+    } catch (err) {
+      UI.error(
+        `Unable to start sqlite3 CLI; install sqlite3 or use the non-interactive subcommands (${toErrorMessage(err)})`,
+      )
+      process.exitCode = 1
+    }
   },
 })
 

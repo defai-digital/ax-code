@@ -10,6 +10,12 @@ function node(script: string) {
 }
 
 describe("util.process", () => {
+  test("shellCommand maps win32 to cmd /c and other platforms to sh -c", () => {
+    expect(Process.shellCommand("echo hi", "win32")).toEqual(["cmd", "/c", "echo hi"])
+    expect(Process.shellCommand("echo hi", "darwin")).toEqual(["sh", "-c", "echo hi"])
+    expect(Process.shellCommand("echo hi", "linux")).toEqual(["sh", "-c", "echo hi"])
+  })
+
   test("captures stdout and stderr", async () => {
     const out = await Process.run(node('process.stdout.write("out");process.stderr.write("err")'))
     expect(out.code).toBe(0)

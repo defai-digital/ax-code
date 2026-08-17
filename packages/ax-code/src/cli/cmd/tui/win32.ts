@@ -1,4 +1,7 @@
 import { createRequire } from "module"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "tui.win32" })
 
 const STD_INPUT_HANDLE = -10
 const ENABLE_PROCESSED_INPUT = 0x0001
@@ -38,15 +41,25 @@ const kernel = () => {
 }
 
 let k32: Kernel | undefined
+let warnedNoFfi = false
 
 function load() {
   if (process.platform !== "win32") return false
   try {
     k32 ??= kernel()
-    return !!k32
   } catch {
-    return false
+    // Reported via the warning below.
   }
+  if (!k32 && !warnedNoFfi) {
+    // Once per process: under plain Node (dev/source mode) bun:ffi is
+    // unavailable, so the Ctrl+C console guard silently no-ops and Ctrl+C
+    // kills the whole console group. Surface that instead of staying silent.
+    warnedNoFfi = true
+    log.warn("Ctrl+C guard unavailable: bun:ffi is required but this runtime is not Bun", {
+      runtime: process.versions.bun ? "bun" : "node",
+    })
+  }
+  return !!k32
 }
 
 /**
