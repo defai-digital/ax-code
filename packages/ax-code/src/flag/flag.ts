@@ -61,9 +61,16 @@ export namespace Flag {
   export const AX_CODE_DISABLE_PRUNE = truthy("AX_CODE_DISABLE_PRUNE")
   export const AX_CODE_DISABLE_TERMINAL_TITLE = truthy("AX_CODE_DISABLE_TERMINAL_TITLE")
   // OpenTUI's full terminal setup enables alternate-screen, capability
-  // probes, Kitty keyboard negotiation, and a native render thread. Keep
-  // that profile opt-in until it is stable across direct-TTY environments.
+  // probes, and a native render thread. Keep that profile opt-in until it
+  // is stable across direct-TTY environments.
   export const AX_CODE_TUI_ADVANCED_TERMINAL = truthy("AX_CODE_TUI_ADVANCED_TERMINAL")
+  // The Kitty keyboard protocol (CSI-u) is pushed with a single
+  // fire-and-forget escape the terminal either honors or ignores — unlike
+  // the advanced profile's capability probes it cannot hang startup.
+  // Enabled by default so Shift+Enter/Ctrl+Enter and other modified keys
+  // work on supporting terminals; set to 0/false to opt out on terminals
+  // that mishandle the flags push.
+  export const AX_CODE_TUI_KITTY_KEYBOARD = !falsy("AX_CODE_TUI_KITTY_KEYBOARD")
   export const AX_CODE_PERMISSION = process.env["AX_CODE_PERMISSION"]
   export const AX_CODE_DISABLE_DEFAULT_PLUGINS = truthy("AX_CODE_DISABLE_DEFAULT_PLUGINS")
   export const AX_CODE_DISABLE_LSP_DOWNLOAD = truthy("AX_CODE_DISABLE_LSP_DOWNLOAD")

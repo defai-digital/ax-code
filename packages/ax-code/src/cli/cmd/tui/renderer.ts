@@ -30,6 +30,7 @@ export type TuiRenderProfile = {
 export function resolveTuiRenderProfile(input: {
   advancedTerminal: boolean
   terminalTitleDisabled: boolean
+  kittyKeyboard?: boolean
 }): TuiRenderProfile {
   const { advancedTerminal, terminalTitleDisabled } = input
   return {
@@ -40,12 +41,15 @@ export function resolveTuiRenderProfile(input: {
     // Letting OpenTUI destroy the renderer directly bypasses that routing.
     exitOnCtrlC: false,
     useThread: advancedTerminal,
-    // Mouse support is safe in compatible mode — unlike kitty keyboard
-    // or the native render thread, it does not trigger terminal capability
+    // Mouse support is safe in compatible mode — unlike the advanced
+    // profile's capability probes, it does not trigger terminal capability
     // probes that can hang. Enable it so footer toggle buttons (Fast-model,
     // Autonomous, Sandbox) are clickable in all terminal profiles.
     useMouse: true,
-    useKittyKeyboard: advancedTerminal,
+    // Kitty keyboard is likewise probe-free (a single fire-and-forget flags
+    // push), so it is decoupled from the advanced profile and enabled by
+    // default — Shift+Enter/Ctrl+Enter newline bindings depend on it.
+    useKittyKeyboard: input.kittyKeyboard ?? true,
     screenMode: advancedTerminal ? "alternate-screen" : "main-screen",
     allowTerminalTitle: advancedTerminal && !terminalTitleDisabled,
   }
@@ -55,6 +59,7 @@ export function getTuiRenderProfile(): TuiRenderProfile {
   return resolveTuiRenderProfile({
     advancedTerminal: Flag.AX_CODE_TUI_ADVANCED_TERMINAL,
     terminalTitleDisabled: Flag.AX_CODE_DISABLE_TERMINAL_TITLE,
+    kittyKeyboard: Flag.AX_CODE_TUI_KITTY_KEYBOARD,
   })
 }
 
@@ -72,6 +77,8 @@ export function createTuiRenderOptionsFromProfile(
     // protocol negotiation on the real TTY, which has been a source of
     // install-time hangs on some terminals. Users who need the old
     // behavior can opt back in with AX_CODE_TUI_ADVANCED_TERMINAL=1.
+    // (Kitty keyboard is the exception: a probe-free flags push, enabled
+    // in all profiles unless AX_CODE_TUI_KITTY_KEYBOARD=0.)
     exitOnCtrlC: profile.exitOnCtrlC,
     useThread: profile.useThread,
     useMouse: profile.useMouse,

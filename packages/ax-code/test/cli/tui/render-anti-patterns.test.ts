@@ -171,7 +171,9 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(renderer).toContain("autoFocus: false")
     expect(renderer).toContain("openConsoleOnError: false")
     expect(renderer).toContain("useMouse: true")
-    expect(renderer).toContain("useKittyKeyboard: advancedTerminal")
+    // Kitty keyboard is decoupled from the advanced profile (probe-free
+    // flags push) and on by default; the opt-out flag disables it.
+    expect(renderer).toContain("useKittyKeyboard: input.kittyKeyboard ?? true")
     expect(renderer).toContain("useKittyKeyboard: profile.useKittyKeyboard ? {} : null")
   })
 

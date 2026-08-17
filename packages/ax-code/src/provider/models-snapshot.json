@@ -104318,9 +104318,13 @@
           {
             "type": "effort",
             "values": [
+              "none",
+              "minimal",
               "low",
+              "medium",
               "high",
-              "xhigh"
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -104340,7 +104344,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1000000,
+          "context": 1048576,
           "output": 384000
         }
       },
@@ -148772,7 +148776,7 @@
         "open_weights": true,
         "limit": {
           "context": 1048576,
-          "output": 262144
+          "output": 131072
         }
       },
       "deepseek/deepseek-v3.1-terminus": {
@@ -154611,7 +154615,7 @@
       },
       "qwen/qwen3-vl-235b-a22b-thinking": {
         "id": "qwen/qwen3-vl-235b-a22b-thinking",
-        "name": "Qwen: Qwen3 VL 235B A22B Thinking",
+        "name": "Qwen3 VL 235B A22B Thinking",
         "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
         "family": "qwen",
         "attachment": true,
@@ -154627,6 +154631,7 @@
         "tool_call": true,
         "structured_output": true,
         "temperature": true,
+        "knowledge": "2025-03-31",
         "release_date": "2025-09-23",
         "last_updated": "2025-09-23",
         "modalities": {
@@ -154638,7 +154643,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 131072,
           "output": 32768
@@ -155749,7 +155754,7 @@
       },
       "qwen/qwen3-vl-235b-a22b-instruct": {
         "id": "qwen/qwen3-vl-235b-a22b-instruct",
-        "name": "Qwen: Qwen3 VL 235B A22B Instruct",
+        "name": "Qwen3 VL 235B A22B Instruct",
         "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
         "family": "qwen",
         "attachment": true,
@@ -155757,6 +155762,7 @@
         "tool_call": true,
         "structured_output": true,
         "temperature": true,
+        "knowledge": "2025-03-31",
         "release_date": "2025-09-23",
         "last_updated": "2025-09-23",
         "modalities": {
@@ -155768,7 +155774,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 131072,
           "output": 32768
@@ -156829,8 +156835,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 1024000,
-          "output": 384000
+          "context": 262144,
+          "output": 262144
         }
       },
       "inclusionai/ring-2.6-1t": {

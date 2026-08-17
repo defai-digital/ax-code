@@ -31,7 +31,22 @@ describe("tui renderer profile", () => {
     expect(options.useThread).toBe(false)
     expect(options.useMouse).toBe(true)
     expect(options.screenMode).toBe("main-screen")
-    expect(options.useKittyKeyboard).toBeNull()
+    // Kitty keyboard is probe-free (fire-and-forget flags push) and enabled
+    // in all profiles by default — Shift+Enter newline depends on it.
+    expect(options.useKittyKeyboard).toEqual({})
+  })
+
+  test("kitty keyboard opt-out disables the flags push in both profiles", () => {
+    for (const advancedTerminal of [false, true]) {
+      const profile = resolveTuiRenderProfile({
+        advancedTerminal,
+        terminalTitleDisabled: false,
+        kittyKeyboard: false,
+      })
+      const options = createTuiRenderOptionsFromProfile(profile)
+      expect(profile.useKittyKeyboard).toBe(false)
+      expect(options.useKittyKeyboard).toBeNull()
+    }
   })
 
   test("maps the advanced profile to the opt-in OpenTUI feature set", () => {
