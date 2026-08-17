@@ -20,7 +20,10 @@ const originalTermFile = process.env.AX_CODE_FAKE_TERM_FILE
 const originalAuthFile = process.env.AX_CODE_FAKE_AUTH_FILE
 const originalArgsFile = process.env.AX_CODE_FAKE_ARGS_FILE
 const fixtureStartupTimeoutMs = 30_000
-const fixtureObservationTimeoutMs = 5_000
+// macOS may hold a newly-created executable in XProtect/Gatekeeper for several
+// seconds before the fixture writes its PID. This timeout observes startup; it
+// does not make passing tests slower once the file appears.
+const fixtureObservationTimeoutMs = 30_000
 
 afterEach(() => {
   process.env.PATH = originalPath

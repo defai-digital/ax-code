@@ -11,7 +11,9 @@ import { createIpcTransport } from "./ipc-transport.js"
 
 const SIGKILL_GRACE_MS = 300
 const EXIT_WAIT_MS = 2_000
-const STARTUP_TIMEOUT_MS = 10_000
+// Match the SDK server helper: first launch can be delayed by platform
+// executable scanning before the backend has a chance to emit readiness.
+const STARTUP_TIMEOUT_MS = 30_000
 const READY_LINE_PREFIX = "ax-code server listening on "
 const IPC_READY_LINE_PREFIX = "ax-code server ipc listening on "
 

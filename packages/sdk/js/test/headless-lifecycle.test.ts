@@ -166,10 +166,15 @@ describe("headless backend lifecycle", () => {
 
   test("kills the backend when health readiness fails", async () => {
     await using fake = await createReadyFakeAxCode()
+    // Execute the generated fixture through the stable system shell so this
+    // test measures health handling, not macOS first-execution scanning.
+    const args = [fake.bin]
 
     let caught: unknown
     try {
       await startHeadlessBackend({
+        binary: "/bin/sh",
+        args,
         timeout: 1_000,
         reservePort: async () => 18456,
         fetch: (async () => new Response("not ready", { status: 503 })) as typeof fetch,
@@ -183,8 +188,8 @@ describe("headless backend lifecycle", () => {
       "ax-code backend health check failed (503): not ready",
     )
     expect((caught as HeadlessBackendStartupError).diagnostics).toMatchObject({
-      binary: "ax-code",
-      args: ["serve", "--hostname=127.0.0.1", "--port=18456"],
+      binary: "/bin/sh",
+      args,
       readyUrl: "http://127.0.0.1:18456",
       health: {
         ok: false,
@@ -198,10 +203,13 @@ describe("headless backend lifecycle", () => {
 
   test("startup failures expose diagnostics and partial stdout output", async () => {
     await using fake = await createPartialOutputFakeAxCode()
+    const args = [fake.bin]
 
     let caught: unknown
     try {
       await startHeadlessBackend({
+        binary: "/bin/sh",
+        args,
         timeout: 250,
         reservePort: async () => 18456,
         fetch: (async () => jsonResponse({ healthy: true })) as typeof fetch,
@@ -213,8 +221,8 @@ describe("headless backend lifecycle", () => {
     expect(caught).toBeInstanceOf(HeadlessBackendStartupError)
     expect((caught as HeadlessBackendStartupError).message).toContain("ax-code backend did not become ready")
     expect((caught as HeadlessBackendStartupError).diagnostics).toMatchObject({
-      binary: "ax-code",
-      args: ["serve", "--hostname=127.0.0.1", "--port=18456"],
+      binary: "/bin/sh",
+      args,
       capturedOutput: "partial ready line without newline",
     })
 
@@ -601,6 +609,7 @@ async function createPartialOutputFakeAxCode() {
   process.env.AX_CODE_FAKE_TERM_FILE = termFile
 
   return {
+    bin,
     pidFile,
     termFile,
     async [Symbol.asyncDispose]() {

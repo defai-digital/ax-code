@@ -27,7 +27,12 @@ export type Proc = ChildProcess & {
 
 const DEFAULT_HOSTNAME = "127.0.0.1"
 const DEFAULT_PORT = 4096
-const DEFAULT_TIMEOUT = 5000
+// First execution of a newly installed binary can spend several seconds in
+// macOS Gatekeeper/XProtect before user code starts. Five seconds was close
+// enough to that floor that a healthy server could time out before printing
+// its first line. Keep startup bounded, but leave room for platform scanning
+// and normal process initialization.
+const DEFAULT_TIMEOUT = 30_000
 const READY_LINE_PATTERN = /ax-code server listening\s+on\s+(https?:\/\/[^\s]+)/
 const SIGTERM_KILL_GRACE_MS = 300
 const SIGKILL_GIVE_UP_MS = 2_000
