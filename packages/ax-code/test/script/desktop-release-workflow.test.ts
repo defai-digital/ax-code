@@ -87,7 +87,7 @@ describe("desktop release workflow", () => {
     expect(job![0]).toContain("Install minisign")
     expect(job![0]).toContain("cp install.ps1 release-assets/install.ps1")
     expect(job![0]).toContain("Sign release assets")
-    expect(job![0]).toContain("gh release upload")
+    expect(job![0]).toContain("node script/github-release-assets.mjs upload")
     expect(job![0]).toContain("release-assets/install.ps1")
     expect(job![0]).toContain("docs/release/ax-minisign.pub")
   })
@@ -103,9 +103,12 @@ describe("desktop release workflow", () => {
     expect(text).toContain("spctl --assess --type open --context context:primary-signature")
     expect(text).not.toContain("spctl --assess --type install")
     expect(text).toContain("spctl --assess --type execute")
-    // One softprops draft upload per publishable desktop artifact job (mac/win + Linux formats).
-    expect(releaseActionUses).toHaveLength(7)
+    // softprops creates exactly one draft. Artifact producers use the
+    // resumable helper so an interrupted release can safely replace draft
+    // assets without creating competing releases.
+    expect(releaseActionUses).toHaveLength(1)
     expect(draftReleaseFlags).toHaveLength(releaseActionUses.length)
+    expect(text.match(/node script\/github-release-assets\.mjs upload/g) ?? []).toHaveLength(8)
 
     const verifyJob = text.match(/  verify-release-assets:[\s\S]*?(?=\n  finalize-release:|$)/)
     expect(verifyJob, "verify-release-assets job should exist").not.toBeNull()
@@ -116,10 +119,10 @@ describe("desktop release workflow", () => {
     const finalizeJob = text.match(/  finalize-release:[\s\S]*?(?=\n  update-homebrew-tap:|$)/)
     expect(finalizeJob, "finalize-release job should exist").not.toBeNull()
     expect(finalizeJob![0]).toContain("verify-release-assets")
+    expect(finalizeJob![0]).toContain("actions/checkout@v7")
     expect(text).toContain("release $TAG is already published; refusing to replace verified assets")
-    expect(finalizeJob![0]).toContain("release $TAG is no longer a draft; refusing to publish or mutate it")
-    expect(finalizeJob![0]).toContain('gh release view "$TAG" --repo "$REPOSITORY"')
-    expect(finalizeJob![0]).toContain('gh release edit "$TAG" --repo "$REPOSITORY" --draft=false')
+    expect(finalizeJob![0]).toContain("node script/github-release-assets.mjs publish")
+    expect(finalizeJob![0]).not.toContain('gh release edit "$TAG"')
   })
 
   test("signs the Desktop disk image before notarizing and stapling it", async () => {
