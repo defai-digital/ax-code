@@ -1,5 +1,4 @@
 import type { Hooks, PluginInput, Plugin as PluginInstance } from "@ax-code/plugin"
-import { xaiAuthPlugin } from "../provider/xai/auth-plugin"
 import { PRIVATE_GPU_AUTH_PLUGINS } from "../provider/private-gpu/auth-plugin"
 import { Config } from "../config/config"
 import { Bus } from "../bus"
@@ -31,7 +30,7 @@ export namespace Plugin {
   }[keyof Hooks]
 
   // Built-in plugins that are directly imported (not installed from npm)
-  const INTERNAL_PLUGINS: PluginInstance[] = [xaiAuthPlugin, ...PRIVATE_GPU_AUTH_PLUGINS]
+  const INTERNAL_PLUGINS: PluginInstance[] = [...PRIVATE_GPU_AUTH_PLUGINS]
 
   // Old npm package names for plugins that are now built-in — skip if users still have them in config
   const DEPRECATED_PLUGIN_PACKAGES = ["ax-code-openai-codex-auth", "ax-code-copilot-auth"]

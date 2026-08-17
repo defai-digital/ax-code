@@ -11,8 +11,8 @@ function model(toolcall: boolean, options: Record<string, unknown> = {}, text = 
 
 describe("dialog model options", () => {
   test("disables non-toolcall models for regular providers", () => {
-    expect(dialogModelOptionDisabled("xai", "text-only", model(false))).toBe(true)
-    expect(dialogModelOptionDisabled("xai", "tool-model", model(true))).toBe(false)
+    expect(dialogModelOptionDisabled("groq", "text-only", model(false))).toBe(true)
+    expect(dialogModelOptionDisabled("groq", "tool-model", model(true))).toBe(false)
   })
 
   test("keeps CLI provider non-toolcall models selectable", () => {
@@ -21,7 +21,7 @@ describe("dialog model options", () => {
   })
 
   test("disables unavailable and explicitly hidden models", () => {
-    expect(dialogModelOptionDisabled("xai", "missing", undefined)).toBe(true)
+    expect(dialogModelOptionDisabled("groq", "missing", undefined)).toBe(true)
     expect(dialogModelOptionDisabled("opencode", "gpt-nano", model(true))).toBe(true)
   })
 

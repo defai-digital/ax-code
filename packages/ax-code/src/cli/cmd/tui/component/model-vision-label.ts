@@ -1,12 +1,6 @@
 export const MODEL_VISION_MARKER = "👀"
 export const MODEL_WEB_SEARCH_MARKER = "🌐"
-const CLI_WEB_SEARCH_PROVIDER_IDS = new Set([
-  "claude-code",
-  "codex-cli",
-  "grok-build-cli",
-  "qoder-cli",
-  "kimi-cli",
-])
+const CLI_WEB_SEARCH_PROVIDER_IDS = new Set(["claude-code", "codex-cli", "grok-build-cli", "qoder-cli", "kimi-cli"])
 
 export type DisplayCapableModel = {
   id?: string
@@ -27,7 +21,6 @@ export function supportsWebSearch(model: DisplayCapableModel | undefined) {
   const apiNpm = model.api?.npm
 
   if (providerID && CLI_WEB_SEARCH_PROVIDER_IDS.has(providerID)) return true
-  if (apiNpm === "@ai-sdk/xai" && !apiID.includes("multi-agent") && apiID.includes("grok-4")) return true
   if (
     apiNpm === "@ai-sdk/openai-compatible" &&
     (providerID?.startsWith("alibaba-coding-plan") || providerID?.startsWith("alibaba-token-plan")) &&

@@ -20,6 +20,7 @@ import {
 import { DEDICATED_PRIVATE_GPU_VENDORS } from "./private-gpu/presets"
 import type { AxEngineModelID } from "./ax-engine/constants"
 import fs from "fs/promises"
+import { isRetiredProviderID } from "./retired-providers"
 
 export namespace ModelsDev {
   const log = Log.create({ service: "models" })
@@ -28,15 +29,17 @@ export namespace ModelsDev {
 
   function sanitize(input: Record<string, Provider>) {
     return Object.fromEntries(
-      Object.entries(input).map(([id, provider]) => [
-        id,
-        {
-          ...provider,
-          models: Object.fromEntries(
-            Object.entries(provider.models).filter(([modelID, model]) => supported(id, modelID, model)),
-          ),
-        },
-      ]),
+      Object.entries(input)
+        .filter(([id]) => !isRetiredProviderID(id))
+        .map(([id, provider]) => [
+          id,
+          {
+            ...provider,
+            models: Object.fromEntries(
+              Object.entries(provider.models).filter(([modelID, model]) => supported(id, modelID, model)),
+            ),
+          },
+        ]),
     ) as Record<string, Provider>
   }
 

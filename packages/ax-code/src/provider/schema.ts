@@ -10,7 +10,6 @@ export const ProviderID = {
   // Well-known providers
   axCode: providerID.make("ax-code"),
   google: providerID.make("google"),
-  xai: providerID.make("xai"),
 } as const
 
 export const ModelID = defineBrandedString("ModelID")

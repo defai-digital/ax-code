@@ -30,7 +30,9 @@ describe("update-models script", () => {
     expect(stdout).toContain("Fetching models from")
     // Either "Updated" or "already up to date" — both are valid
     expect(stdout).toMatch(/Updated|already up to date/)
-    expect(JSON.parse(await readFile(snapshotPath, "utf-8"))).toHaveProperty("anthropic")
+    const snapshot = JSON.parse(await readFile(snapshotPath, "utf-8"))
+    expect(snapshot).toHaveProperty("anthropic")
+    expect(snapshot.xai).toBeUndefined()
   })
 
   test("snapshot file is valid JSON with provider entries", async () => {
@@ -100,13 +102,11 @@ describe("update-models script", () => {
     expect(data["antigravity-cli"]).toBeUndefined()
   })
 
-  test("preserves Grok API and CLI plan entries", async () => {
+  test("drops the direct xai provider and preserves the Grok CLI bridge", async () => {
     const snapshotPath = path.join(import.meta.dirname, "../../src/provider/models-snapshot.json")
     const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
 
-    expect(data.xai?.name).toBe("Grok Cloud API")
-    expect(Object.keys(data.xai?.models ?? {})).toEqual(["grok-4.5"])
-    expect(data.xai?.models?.["grok-4.5"]?.id).toBe("grok-4.5")
+    expect(data.xai).toBeUndefined()
     expect(data.groq?.name).toBe("GroqCloud")
     expect(data.groq?.env).toEqual(["GROQ_API_KEY"])
     expect(data.groq?.api).toBe("https://api.groq.com/openai/v1")
@@ -289,6 +289,20 @@ async function createModelsFixture(dir: string) {
             name: "Claude Sonnet 5",
             family: "claude",
             limit: { context: 200_000, output: 64_000 },
+          },
+        },
+      },
+      xai: {
+        id: "xai",
+        name: "xAI",
+        env: ["XAI_API_KEY"],
+        npm: "@ai-sdk/xai",
+        models: {
+          "grok-4.5": {
+            id: "grok-4.5",
+            name: "Grok 4.5",
+            family: "grok",
+            limit: { context: 500_000, output: 500_000 },
           },
         },
       },

@@ -44,12 +44,12 @@ describe("providerModelKey", () => {
       providerModelList([
         { providerID: "openai", modelID: "gpt-5", extra: true },
         { providerID: "anthropic", modelID: "" },
-        { providerID: "xai", modelID: "grok-code-fast-1" },
+        { providerID: "groq", modelID: "qwen/qwen3.6-27b" },
         "not-a-model",
       ]),
     ).toEqual([
       { providerID: "openai", modelID: "gpt-5" },
-      { providerID: "xai", modelID: "grok-code-fast-1" },
+      { providerID: "groq", modelID: "qwen/qwen3.6-27b" },
     ])
     expect(providerModelList({ providerID: "openai", modelID: "gpt-5" })).toEqual([])
   })

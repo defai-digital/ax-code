@@ -6,7 +6,6 @@ import type { Provider } from "./provider"
 import type { ModelsDev } from "./models"
 import { Flag } from "@/flag/flag"
 import { isRecord } from "@/util/record"
-import { buildSearchParameters, type LiveSearchConfig } from "./xai/server-tools"
 import { isQwen37MaxOrPlusModel } from "./model-capabilities"
 import { modelIdFinalSegment, normalizeProviderModelId } from "./model-id"
 import { buildModelProbes, probesHaveGlmMajorVersion } from "./model-support"
@@ -684,11 +683,6 @@ export namespace ProviderTransform {
     return /claude-(?:opus-?4-[6-8]|sonnet-?4-6)(?:$|[^0-9])/.test(id)
   }
 
-  function supportsXaiEffort(model: Provider.Model) {
-    const id = model.api.id.toLowerCase()
-    return /^grok-4\.5(?:$|-)/.test(id) || /^grok-4\.20-multi-agent(?:$|-)/.test(id)
-  }
-
   function alibabaThinkingBudget(model: Provider.Model, requested?: unknown) {
     const max = maxOutputTokens(model)
     const value = typeof requested === "number" && Number.isFinite(requested) && requested > 0 ? requested : max
@@ -805,12 +799,6 @@ export namespace ProviderTransform {
     }
 
     switch (model.api.npm) {
-      case "@ai-sdk/xai":
-        // The xAI loader uses the Responses API, where Grok reasoning models
-        // accept low/medium/high reasoningEffort through the AI SDK.
-        if (model.providerID !== "xai" || !supportsXaiEffort(model)) return {}
-        return Object.fromEntries(WIDELY_SUPPORTED_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]))
-
       case "venice-ai-sdk-provider":
       // https://docs.venice.ai/overview/guides/reasoning-models#reasoning-effort
       case "@ai-sdk/openai-compatible":
@@ -982,18 +970,6 @@ export namespace ProviderTransform {
         enable_thinking: true,
         ...(input.longAgent && input.providerOptions?.preserveThinking !== false ? { preserve_thinking: true } : {}),
       }
-    }
-
-    // xAI Live Search: opt grok-4+ chat models into automatic real-world
-    // search so current-events queries (weather, news, X chatter) work out of
-    // the box. The model decides per-turn whether to actually search (mode:
-    // "auto"). User overrides at `provider.xai.options.searchParameters` or
-    // per-model `models.<id>.options.searchParameters` win via mergeDeep
-    // later; passing { mode: "off" } disables this entirely.
-    if (input.model.api.npm === "@ai-sdk/xai") {
-      const userOverride = input.providerOptions?.searchParameters as Partial<LiveSearchConfig> | undefined
-      const params = buildSearchParameters(input.model.api.id, userOverride)
-      if (params) result["searchParameters"] = params
     }
 
     // Alibaba DashScope internet search: Qwen models served through the

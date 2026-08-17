@@ -56,13 +56,13 @@ describe("tui local model preferences", () => {
     expect(
       normalizeModelVariantStore({
         "openai/gpt-5": "high",
-        "xai/grok-code-fast-1": undefined,
+        "groq/qwen3.6-27b": undefined,
         "anthropic/claude": 42,
         nested: { value: "bad" },
       }),
     ).toEqual({
       "openai/gpt-5": "high",
-      "xai/grok-code-fast-1": undefined,
+      "groq/qwen3.6-27b": undefined,
     })
   })
 

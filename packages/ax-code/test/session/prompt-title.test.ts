@@ -11,7 +11,7 @@ import {
 describe("session prompt title", () => {
   test("skips automatic title generation for the managed ax-engine provider", () => {
     expect(shouldSkipAutomaticTitle({ providerID: ProviderID.make(AX_ENGINE_PROVIDER_ID) })).toBe(true)
-    expect(shouldSkipAutomaticTitle({ providerID: ProviderID.xai })).toBe(false)
+    expect(shouldSkipAutomaticTitle({ providerID: ProviderID.make("groq") })).toBe(false)
   })
 
   test("cleanGeneratedTitle strips thinking blocks and wrappers", () => {
@@ -27,11 +27,7 @@ describe("session prompt title", () => {
   test("fallbackTitleFromUserText uses the first non-empty line", () => {
     expect(fallbackTitleFromUserText("count the line of code")).toBe("count the line of code")
     expect(fallbackTitleFromUserText("\n\n  hello world  \nmore")).toBe("hello world")
-    expect(
-      fallbackTitleFromUserText(
-        "a".repeat(100),
-      ),
-    ).toBe("a".repeat(77) + "...")
+    expect(fallbackTitleFromUserText("a".repeat(100))).toBe("a".repeat(77) + "...")
     expect(fallbackTitleFromUserText("   \n  ")).toBeUndefined()
   })
 })

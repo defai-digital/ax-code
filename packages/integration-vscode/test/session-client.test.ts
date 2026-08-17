@@ -76,13 +76,13 @@ function createSdkClient(label: string) {
         data: {
           all: [
             {
-              id: "xai",
-              name: "x.ai",
-              env: ["XAI_API_KEY"],
+              id: "groq",
+              name: "GroqCloud",
+              env: ["GROQ_API_KEY"],
               models: {
-                "grok-code": {
-                  id: "grok-code",
-                  name: "Grok Code",
+                "qwen/qwen3.6-27b": {
+                  id: "qwen/qwen3.6-27b",
+                  name: "Qwen 3.6 27B",
                   release_date: "",
                   attachment: false,
                   reasoning: false,
@@ -92,8 +92,8 @@ function createSdkClient(label: string) {
               },
             },
           ],
-          default: { xai: "grok-code" },
-          connected: ["xai"],
+          default: { groq: "qwen/qwen3.6-27b" },
+          connected: ["groq"],
         },
         error: undefined,
       }),
@@ -218,8 +218,8 @@ describe("SessionClient server restart handling", () => {
 
     const providers = await client.listProviders()
 
-    expect(providers.all[0].id).toBe("xai")
-    expect(providers.default.xai).toBe("grok-code")
-    expect(providers.connected).toEqual(["xai"])
+    expect(providers.all[0].id).toBe("groq")
+    expect(providers.default.groq).toBe("qwen/qwen3.6-27b")
+    expect(providers.connected).toEqual(["groq"])
   })
 })

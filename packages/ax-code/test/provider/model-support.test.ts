@@ -3,66 +3,7 @@ import {
   buildModelProbes,
   isModelSupportedForProvider,
   probesHaveGlmMajorVersion,
-  supportsAllowedGrokModel,
-  supportsGlmModels,
-  supportsGrok41OrAllowedCodingModel,
-  supportsOpenAIGptModels,
 } from "../../src/provider/model-support"
-import { supportsLiveSearch } from "../../src/provider/xai/server-tools"
-
-function probes(modelID: string) {
-  return buildModelProbes(modelID, { id: modelID, name: modelID, family: "grok" })
-}
-
-function neutralProbes(modelID: string, family: string) {
-  return buildModelProbes(modelID, { id: modelID, name: modelID, family })
-}
-
-describe("supportsAllowedGrokModel", () => {
-  // Grok is restricted to an explicit allow-list.
-  // Anything else with "grok" in its probes is dropped, regardless of version.
-  test.each([
-    ["grok-4.5", true],
-    ["grok-4-5", true],
-    ["grok-4.5-latest", true],
-    ["grok-build-latest", true],
-  ])("accepts %s", (id, expected) => {
-    expect(supportsAllowedGrokModel(probes(id))).toBe(expected)
-  })
-
-  test.each([
-    ["grok-4.3", false],
-    ["grok-4-3", false],
-    ["grok-code-fast-1", false],
-    ["grok-code-fast", false],
-    ["grok-code-fast-1-0825", false],
-    ["grok-build-0.1", false],
-    ["grok-4.2", false],
-    ["grok-4.1", false],
-    ["grok-4-1", false],
-    ["grok-4-1-fast", false],
-    ["grok-4", false],
-    ["grok-4-fast", false],
-    ["grok-4-0709", false],
-    ["grok-5", false],
-    ["grok-5.1", false],
-    ["grok-3", false],
-    ["grok-beta", false],
-    ["grok-vision-beta", false],
-  ])("rejects %s", (id, expected) => {
-    expect(supportsAllowedGrokModel(probes(id))).toBe(expected)
-  })
-
-  test("passes non-grok probes through", () => {
-    expect(supportsAllowedGrokModel(neutralProbes("claude-opus-4-7", "claude-opus"))).toBe(true)
-    expect(supportsOpenAIGptModels(neutralProbes("gpt-5", "gpt"))).toBe(true)
-    expect(supportsGlmModels(neutralProbes("glm-5", "glm"))).toBe(true)
-  })
-
-  test("supportsGrok41OrAllowedCodingModel is a deprecated alias", () => {
-    expect(supportsGrok41OrAllowedCodingModel).toBe(supportsAllowedGrokModel)
-  })
-})
 
 describe("probesHaveGlmMajorVersion", () => {
   test("matches the exact major version across separator spellings", () => {
@@ -119,13 +60,9 @@ describe("isModelSupportedForProvider", () => {
     expect(isModelSupportedForProvider("google", "models/preview-latest", { name: "Gemini 2.5 Pro" })).toBe(false)
   })
 
-  test("applies OpenAI, xAI, and GLM provider filters from model probes", () => {
+  test("applies OpenAI and GLM provider filters from model probes", () => {
     expect(isModelSupportedForProvider("openai", "gpt-4.1")).toBe(true)
     expect(isModelSupportedForProvider("openai", "gpt-3.5")).toBe(false)
-    expect(isModelSupportedForProvider("xai", "grok-4.5")).toBe(true)
-    expect(isModelSupportedForProvider("xai", "grok-4.3")).toBe(false)
-    expect(isModelSupportedForProvider("xai", "grok-build-0.1")).toBe(false)
-    expect(isModelSupportedForProvider("xai", "grok-4.2")).toBe(false)
     expect(isModelSupportedForProvider("zai", "glm-5.2")).toBe(true)
     expect(isModelSupportedForProvider("zai", "glm-5")).toBe(true)
     expect(isModelSupportedForProvider("zai", "glm-5.1")).toBe(false)
@@ -190,20 +127,5 @@ describe("isModelSupportedForProvider", () => {
 
   test("passes unknown providers through unless a global rejection matches", () => {
     expect(isModelSupportedForProvider("custom", "custom-model")).toBe(true)
-  })
-})
-
-describe("xai Live Search gates for Grok 4.5", () => {
-  test("grok-4.5 supports server-side Live Search", () => {
-    expect(supportsLiveSearch("grok-4.5")).toBe(true)
-    expect(supportsLiveSearch("grok-4.5-latest")).toBe(true)
-  })
-
-  test("multi-agent grok-4 variants still opt out of Live Search", () => {
-    expect(supportsLiveSearch("grok-4.20-multi-agent-0309")).toBe(false)
-  })
-
-  test("retired coding SKUs do not auto-enable Live Search", () => {
-    expect(supportsLiveSearch("grok-build-0.1")).toBe(false)
   })
 })

@@ -44,6 +44,7 @@ import { DEFAULT_SETUP_PROVIDER_IDS } from "@/provider/default-setup-providers"
 import { connectAlibabaPai } from "@/provider/alibaba-pai"
 import { connectPrivateGpu } from "@/provider/private-gpu/connect"
 import { isDedicatedPrivateGpuProviderID } from "@/provider/private-gpu/presets"
+import { isRetiredProviderID } from "@/provider/retired-providers"
 
 const log = Log.create({ service: "server" })
 
@@ -60,6 +61,7 @@ export function shouldShowProviderInList(input: {
   enabled?: Set<string>
   axEngineSupported?: boolean
 }) {
+  if (isRetiredProviderID(input.key)) return false
   if (input.disabled.has(input.key)) return false
   if (input.key === "ax-engine" && !input.axEngineSupported) return false
   return input.enabled ? input.enabled.has(input.key) : NATIVE_PROVIDERS.has(input.key)

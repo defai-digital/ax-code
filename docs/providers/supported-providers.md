@@ -42,7 +42,7 @@ These providers call hosted APIs or hosted account-plan endpoints.
 For a no-cost first run, see [Free-Tier API Quickstart](free-tier-apis.md). It distinguishes a provider's free
 offering from AX Code's compatibility and explains why an external free-API catalog is not itself a support matrix.
 
-The hosted `xai` provider remains available for explicit configuration or existing credentials, but it is hidden from the default setup list. For Grok, the default setup path is the `grok-build-cli` provider listed below.
+Grok is supported only through the `grok-build-cli` provider listed below. AX Code no longer includes a direct `xai` cloud API provider; existing Grok API credentials do not create a connection.
 
 `github-copilot` is the GitHub Copilot account bridge. It is not the separate `github-models` API listed by some
 free-API directories.
@@ -57,14 +57,14 @@ These providers appear in `/connect` under **Private GPU cloud**, after Local ru
 
 OpenCode-style hosted GPU catalogs. Models come from the bundled models.dev snapshot. Connect with an API key.
 
-| Provider id    | Display name          | Credential environment variables |
-| -------------- | --------------------- | -------------------------------- |
-| `nebius`       | Nebius Token Factory  | `NEBIUS_API_KEY`                 |
-| `fireworks-ai` | Fireworks AI          | `FIREWORKS_API_KEY`              |
-| `togetherai`   | Together AI           | `TOGETHER_API_KEY`               |
-| `baseten`      | Baseten               | `BASETEN_API_KEY`                |
-| `nvidia`       | NVIDIA NIM            | `NVIDIA_API_KEY`                 |
-| `deepinfra`    | Deep Infra            | `DEEPINFRA_API_KEY`              |
+| Provider id    | Display name         | Credential environment variables |
+| -------------- | -------------------- | -------------------------------- |
+| `nebius`       | Nebius Token Factory | `NEBIUS_API_KEY`                 |
+| `fireworks-ai` | Fireworks AI         | `FIREWORKS_API_KEY`              |
+| `togetherai`   | Together AI          | `TOGETHER_API_KEY`               |
+| `baseten`      | Baseten              | `BASETEN_API_KEY`                |
+| `nvidia`       | NVIDIA NIM           | `NVIDIA_API_KEY`                 |
+| `deepinfra`    | Deep Infra           | `DEEPINFRA_API_KEY`              |
 
 The hosted Hugging Face router (`huggingface` / `HF_TOKEN`) stays in Cloud API Providers. Dedicated Hugging Face Inference Endpoints are listed below.
 
@@ -72,15 +72,15 @@ The hosted Hugging Face router (`huggingface` / `HF_TOKEN`) stays in Cloud API P
 
 PAI-style dedicated GPU endpoints. Paste the OpenAI-compatible URL and token; AX Code calls `GET …/models` and uses the deployed model IDs. These are not Alibaba Coding Plan / Token Plan (DashScope) providers.
 
-| Provider id              | Display name              | Credential environment variables                         |
-| ------------------------ | ------------------------- | -------------------------------------------------------- |
-| `alibaba-pai`            | Alibaba PAI-EAS           | `ALIBABA_PAI_API_KEY`, `ALIBABA_PAI_BASE_URL`            |
-| `runpod`                 | RunPod                    | `RUNPOD_API_KEY`, `RUNPOD_BASE_URL`                      |
-| `huggingface-endpoints`  | Hugging Face Endpoints    | `HF_ENDPOINTS_TOKEN`, `HF_ENDPOINTS_BASE_URL`            |
-| `sagemaker`              | Amazon SageMaker          | `SAGEMAKER_API_KEY`, `SAGEMAKER_BASE_URL`                |
-| `volcengine-ark`         | Volcengine Ark            | `ARK_API_KEY`, `ARK_BASE_URL`                            |
-| `modelarts`              | Huawei ModelArts          | `MODELARTS_API_KEY`, `MODELARTS_BASE_URL`                |
-| `tencent-ti`             | Tencent TI                | `TENCENT_TI_API_KEY`, `TENCENT_TI_BASE_URL`              |
+| Provider id             | Display name           | Credential environment variables              |
+| ----------------------- | ---------------------- | --------------------------------------------- |
+| `alibaba-pai`           | Alibaba PAI-EAS        | `ALIBABA_PAI_API_KEY`, `ALIBABA_PAI_BASE_URL` |
+| `runpod`                | RunPod                 | `RUNPOD_API_KEY`, `RUNPOD_BASE_URL`           |
+| `huggingface-endpoints` | Hugging Face Endpoints | `HF_ENDPOINTS_TOKEN`, `HF_ENDPOINTS_BASE_URL` |
+| `sagemaker`             | Amazon SageMaker       | `SAGEMAKER_API_KEY`, `SAGEMAKER_BASE_URL`     |
+| `volcengine-ark`        | Volcengine Ark         | `ARK_API_KEY`, `ARK_BASE_URL`                 |
+| `modelarts`             | Huawei ModelArts       | `MODELARTS_API_KEY`, `MODELARTS_BASE_URL`     |
+| `tencent-ti`            | Tencent TI             | `TENCENT_TI_API_KEY`, `TENCENT_TI_BASE_URL`   |
 
 `sagemaker` is for an OpenAI-compatible URL in front of SageMaker (vLLM / TGI / API Gateway). It does not sign AWS SigV4.
 
@@ -88,13 +88,13 @@ PAI-style dedicated GPU endpoints. Paste the OpenAI-compatible URL and token; AX
 
 CLI providers reuse a local vendor CLI and its login/session instead of storing a hosted API key in AX Code.
 
-| Provider id       | Display name             | Required local command | Supported model id |
-| ----------------- | ------------------------ | ---------------------- | ------------------ |
-| `claude-code`     | Anthropic (Claude Code)  | `claude`               | `claude-code`      |
-| `codex-cli`       | OpenAI (Codex CLI)       | `codex`                | `codex-cli`        |
-| `grok-build-cli`  | Grok Build CLI           | `grok`                 | `grok-build-cli`   |
-| `qoder-cli`       | Qoder CLI                | `qodercli`             | `qoder-cli`        |
-| `kimi-cli`        | Kimi Code CLI            | `kimi`                 | `kimi-cli`         |
+| Provider id      | Display name            | Required local command | Supported model id |
+| ---------------- | ----------------------- | ---------------------- | ------------------ |
+| `claude-code`    | Anthropic (Claude Code) | `claude`               | `claude-code`      |
+| `codex-cli`      | OpenAI (Codex CLI)      | `codex`                | `codex-cli`        |
+| `grok-build-cli` | Grok Build CLI          | `grok`                 | `grok-build-cli`   |
+| `qoder-cli`      | Qoder CLI               | `qodercli`             | `qoder-cli`        |
+| `kimi-cli`       | Kimi Code CLI           | `kimi`                 | `kimi-cli`         |
 
 Run the vendor CLI login first when required, then run `ax-code providers login <provider-id>`. AX Code probes the CLI command and stores a local marker credential after the probe succeeds.
 

@@ -36810,6 +36810,34 @@
           "output": 16384
         }
       },
+      "Qwen/Qwen3-VL-235B-A22B-Instruct": {
+        "id": "Qwen/Qwen3-VL-235B-A22B-Instruct",
+        "name": "Qwen3 VL 235B A22B Instruct",
+        "description": "Qwen vision-language instruct model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-03-31",
+        "release_date": "2025-09-23",
+        "last_updated": "2025-09-23",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 32768
+        }
+      },
       "Qwen/Qwen3.6-27B": {
         "id": "Qwen/Qwen3.6-27B",
         "name": "Qwen3.6 27B",
@@ -38442,6 +38470,72 @@
         "limit": {
           "context": 262144,
           "output": 16384
+        }
+      },
+      "Qwen/Qwen3-VL-235B-A22B-Thinking": {
+        "id": "Qwen/Qwen3-VL-235B-A22B-Thinking",
+        "name": "Qwen3 VL 235B A22B Thinking",
+        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-03-31",
+        "release_date": "2025-09-23",
+        "last_updated": "2025-09-23",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 32768
+        }
+      },
+      "Qwen/Qwen3-VL-235B-A22B-Instruct": {
+        "id": "Qwen/Qwen3-VL-235B-A22B-Instruct",
+        "name": "Qwen3 VL 235B A22B Instruct",
+        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-03-31",
+        "release_date": "2025-09-23",
+        "last_updated": "2025-09-23",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 32768
         }
       },
       "Qwen/Qwen3.6-27B": {
@@ -58768,55 +58862,6 @@
         "limit": {
           "context": 256000,
           "output": 64000
-        }
-      }
-    }
-  },
-  "xai": {
-    "id": "xai",
-    "env": [
-      "XAI_API_KEY"
-    ],
-    "npm": "@ai-sdk/xai",
-    "name": "Grok Cloud API",
-    "doc": "https://docs.x.ai/docs/models",
-    "models": {
-      "grok-4.5": {
-        "id": "grok-4.5",
-        "name": "Grok 4.5 🌐",
-        "description": "xAI's Grok model for chat, coding, agentic tools, and lower hallucination risk",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-07-08",
-        "last_updated": "2026-07-08",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 500000,
-          "output": 500000
         }
       }
     }
@@ -85451,6 +85496,236 @@
       }
     }
   },
+  "arcee": {
+    "id": "arcee",
+    "env": [
+      "ARCEE_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "https://api.arcee.ai/api/v1",
+    "name": "Arcee",
+    "doc": "https://docs.arcee.ai",
+    "models": {
+      "trinity-large-thinking": {
+        "id": "trinity-large-thinking",
+        "name": "Trinity Large Thinking",
+        "description": "Reasoning-optimized 398B MoE agent model with extended thinking for long-horizon and multi-turn tool use",
+        "family": "trinity",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "release_date": "2026-04-01",
+        "last_updated": "2026-05-28",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        },
+        "status": "beta"
+      },
+      "deepseek/deepseek-v4-pro-0813": {
+        "id": "deepseek/deepseek-v4-pro-0813",
+        "name": "DeepSeek V4 Pro 0813",
+        "description": "DeepSeek V4 Pro snapshot with million-token context and support for thinking and non-thinking modes",
+        "family": "deepseek-thinking",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "output": 384000
+        },
+        "status": "beta"
+      },
+      "deepseek/deepseek-v4-pro": {
+        "id": "deepseek/deepseek-v4-pro",
+        "name": "DeepSeek V4 Pro",
+        "description": "Open MoE flagship with million-token context for coding and long agent runs",
+        "family": "deepseek-thinking",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-04-24",
+        "last_updated": "2026-04-24",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 512000,
+          "output": 384000
+        },
+        "status": "beta"
+      },
+      "deepseek/deepseek-v4-flash-latest": {
+        "id": "deepseek/deepseek-v4-flash-latest",
+        "name": "DeepSeek V4 Flash Latest",
+        "description": "Official DeepSeek V4 Flash release with enhanced agentic capabilities and integrated DSpark speculative decoding",
+        "family": "deepseek-flash",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-07-31",
+        "last_updated": "2026-07-31",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048576,
+          "output": 384000
+        },
+        "status": "beta"
+      },
+      "zai-org/glm-5.2": {
+        "id": "zai-org/glm-5.2",
+        "name": "GLM-5.2",
+        "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 131072
+        },
+        "status": "beta"
+      },
+      "thinkingmachines/inkling-small": {
+        "id": "thinkingmachines/inkling-small",
+        "name": "Inkling Small",
+        "description": "Multimodal MoE reasoning model (276B total, 12B active) for text, image, and audio",
+        "family": "ling",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "release_date": "2026-07-30",
+        "last_updated": "2026-07-30",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        },
+        "status": "beta"
+      }
+    }
+  },
   "qihang-ai": {
     "id": "qihang-ai",
     "env": [
@@ -103870,9 +104145,9 @@
           {
             "type": "effort",
             "values": [
-              "none",
-              "high",
-              "xhigh"
+              "low",
+              "medium",
+              "high"
             ]
           }
         ],
@@ -106072,7 +106347,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 262144,
+          "context": 1048576,
           "output": 262144
         }
       },
@@ -106179,7 +106454,7 @@
         "name": "GLM 5.2 Fast",
         "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
         "family": "glm",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "reasoning_options": [
           {
@@ -106201,7 +106476,8 @@
         "last_updated": "2026-06-13",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -106253,7 +106529,7 @@
         "name": "GLM 5.2",
         "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
         "family": "glm",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "reasoning_options": [
           {
@@ -106275,7 +106551,8 @@
         "last_updated": "2026-06-13",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -132261,6 +132538,73 @@
           "output": 8192
         }
       },
+      "qwen/qwen3-vl-235b-a22b-thinking": {
+        "id": "qwen/qwen3-vl-235b-a22b-thinking",
+        "name": "Qwen3 VL 235B A22B Thinking",
+        "description": "Qwen vision-language thinking model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-03-31",
+        "release_date": "2025-09-23",
+        "last_updated": "2025-09-23",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 32768
+        }
+      },
+      "qwen/deepseek-v4-pro-0813": {
+        "id": "qwen/deepseek-v4-pro-0813",
+        "name": "DeepSeek V4 Pro 0813",
+        "description": "DeepSeek V4 Pro snapshot with million-token context and support for thinking and non-thinking modes",
+        "family": "deepseek-thinking",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        }
+      },
       "qwen/qwen3-coder-next": {
         "id": "qwen/qwen3-coder-next",
         "name": "Qwen3 Coder Next",
@@ -132580,6 +132924,35 @@
         "limit": {
           "context": 1000000,
           "output": 384000
+        }
+      },
+      "qwen/qwen3-vl-235b-a22b-instruct": {
+        "id": "qwen/qwen3-vl-235b-a22b-instruct",
+        "name": "Qwen3 VL 235B A22B Instruct",
+        "description": "Qwen vision-language instruct model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-03-31",
+        "release_date": "2025-09-23",
+        "last_updated": "2025-09-23",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 32768
         }
       },
       "qwen/qwen-vl-plus": {
@@ -133628,7 +134001,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1048576,
+          "context": 1310720,
           "output": 384000
         }
       },
@@ -134118,6 +134491,82 @@
         "open_weights": true,
         "limit": {
           "context": 131072,
+          "output": 32768
+        }
+      },
+      "tensorx/deepseek/deepseek-v4-flash-0731": {
+        "id": "tensorx/deepseek/deepseek-v4-flash-0731",
+        "name": "DeepSeek V4 Flash 0731",
+        "description": "Official DeepSeek V4 Flash release with enhanced agentic capabilities and integrated DSpark speculative decoding",
+        "family": "deepseek-flash",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-07-31",
+        "last_updated": "2026-07-31",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048576,
+          "output": 384000
+        }
+      },
+      "tensorx/qwen/qwen3.8-27b": {
+        "id": "tensorx/qwen/qwen3.8-27b",
+        "name": "Qwen3.8 27B",
+        "description": "Dense 27B vision-language model for coding, agent tasks, and image and video understanding",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
           "output": 32768
         }
       },

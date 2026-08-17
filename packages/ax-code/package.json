@@ -83,7 +83,6 @@
     "@ai-sdk/openai-compatible": "2.0.38",
     "@ai-sdk/provider": "3.0.8",
     "@ai-sdk/provider-utils": "4.0.22",
-    "@ai-sdk/xai": "3.0.77",
     "@ax-code/ax-wiki": "workspace:*",
     "@ax-code/diff": "workspace:*",
     "@ax-code/fs": "workspace:*",

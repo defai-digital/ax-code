@@ -85,15 +85,15 @@ describe("Debate", () => {
   test("redacts short provider and model names without corrupting larger words", () => {
     const report = Council.aggregateCouncil([
       {
-        memberId: "xai/o3",
-        providerID: "xai",
+        memberId: "groq/o3",
+        providerID: "groq",
         modelID: "o3",
         issues: [
           {
-            memberId: "xai/o3",
+            memberId: "groq/o3",
             severity: "medium",
             category: "design",
-            summary: "xAI and o3 recommend maintaining the queue",
+            summary: "Groq and o3 recommend maintaining the queue",
           },
         ],
       },
@@ -101,7 +101,7 @@ describe("Debate", () => {
     ])
 
     const prompt = Debate.renderSynthesisPrompt(Debate.buildAnonymousSynthesis(report, 1))
-    expect(prompt.toLowerCase()).not.toContain("xai")
+    expect(prompt.toLowerCase()).not.toContain("groq")
     expect(prompt).not.toContain("o3")
     expect(prompt).toContain("maintaining")
   })

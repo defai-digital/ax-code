@@ -451,15 +451,6 @@ const qoderCli = getCliProviderDefinition("qoder-cli")!
 const kimiCli = getCliProviderDefinition("kimi-cli")!
 
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
-  xai: async () => {
-    return {
-      autoload: false,
-      async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
-        return sdk.responses(modelID)
-      },
-      options: {},
-    }
-  },
   // Official DeepSeek cloud API — OpenAI-compatible (OpenCode: npm
   // @ai-sdk/openai-compatible + baseURL https://api.deepseek.com[/v1]).
   // Catalog already defines models + DEEPSEEK_API_KEY; pin baseURL so login

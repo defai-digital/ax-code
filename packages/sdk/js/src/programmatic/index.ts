@@ -30,7 +30,7 @@
  * // Direct API key (no local config needed)
  * const agent2 = await createAgent({
  *   directory: ".",
- *   auth: { provider: "xai", apiKey: "xai-abc123" },
+ *   auth: { provider: "google", apiKey: "google-api-key" },
  * })
  *
  * // Cleanup

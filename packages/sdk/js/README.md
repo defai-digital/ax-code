@@ -124,12 +124,12 @@ try {
 
 ```ts
 // Option 1: Environment variable (auto-detected)
-// Set ANTHROPIC_API_KEY, XAI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, etc.
+// Set GOOGLE_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, or GEMINI_API_KEY.
 
 // Option 2: Direct injection (no local config needed)
 const agent = await createAgent({
   directory: ".",
-  auth: { provider: "xai", apiKey: "xai-abc123" },
+  auth: { provider: "google", apiKey: "google-api-key" },
 })
 
 // Option 3: Pre-configured via `ax-code providers login`

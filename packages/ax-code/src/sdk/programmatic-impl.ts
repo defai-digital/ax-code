@@ -194,7 +194,6 @@ async function ensureLog() {
 // ============================================================
 
 const ENV_VAR_MAP: Record<string, string> = {
-  XAI_API_KEY: "xai",
   GEMINI_API_KEY: "google",
   GOOGLE_GENERATIVE_AI_API_KEY: "google",
   GOOGLE_API_KEY: "google",
@@ -908,7 +907,7 @@ function createSessionHandle(
  * // With direct API key (no local config needed)
  * const agent = await createAgent({
  *   directory: process.cwd(),
- *   auth: { provider: "xai", apiKey: "xai-abc123" },
+ *   auth: { provider: "google", apiKey: "google-api-key" },
  * })
  *
  * // With retry and timeout

@@ -18,8 +18,6 @@ const GLM_HIDDEN_FINAL_SEGMENTS = new Set<string>([
   "glm5turbo",
 ])
 const GLM_HIDDEN_FINAL_PATTERN = /(?:^|[^a-z0-9])glm-?5[.-]1(?:$|[^0-9])/
-// Only Grok 4.5 and its official xAI aliases. Older Grok chat/coding SKUs are dropped.
-const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>(["grok-4.5", "grok-4-5", "grok-4.5-latest", "grok-build-latest"])
 const GLM_PROVIDER_IDS = new Set(["zhipuai", "zhipuai-coding-plan", "zai", "zai-coding-plan"])
 
 type ModelSupportProbeInput = {
@@ -58,9 +56,6 @@ export function isModelSupportedForProvider(providerID: string, modelID: string,
   if (providerID === "openai") {
     return supportsOpenAIGptModels(probes)
   }
-  if (providerID === "xai") {
-    return supportsAllowedGrokModel(probes)
-  }
   if (GLM_PROVIDER_IDS.has(providerID)) {
     return supportsGlmModels(probes)
   }
@@ -98,16 +93,6 @@ export function supportsOpenAIGptModels(probes: readonly string[]) {
     return false
   return probes.some((probe) => probe.includes("gpt-4") || probe.includes("gpt-5"))
 }
-
-// Grok allow-list: only Grok 4.5 (and official aliases). Final-segment match so
-// reseller-prefixed ids like "x-ai/grok-4.5" still resolve.
-export function supportsAllowedGrokModel(probes: readonly string[]) {
-  if (!probes.some((probe) => probe.includes("grok"))) return true
-  return probes.some((probe) => GROK_ALLOWED_FINAL_SEGMENTS.has(modelIdFinalSegment(probe)))
-}
-
-/** @deprecated Use {@link supportsAllowedGrokModel} — the allow-list is Grok 4.5, not 4.1. */
-export const supportsGrok41OrAllowedCodingModel = supportsAllowedGrokModel
 
 export function supportsGlmModels(probes: readonly string[]) {
   if (!probes.some((probe) => probe.includes("glm"))) return true

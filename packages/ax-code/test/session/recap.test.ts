@@ -50,7 +50,7 @@ function text(text: string, extra?: Record<string, unknown>) {
 describe("session recap", () => {
   test("skips automatic recap for the managed ax-engine provider", () => {
     expect(shouldSkipAutomaticRecap({ providerID: ProviderID.make(AX_ENGINE_PROVIDER_ID) })).toBe(true)
-    expect(shouldSkipAutomaticRecap({ providerID: ProviderID.xai })).toBe(false)
+    expect(shouldSkipAutomaticRecap({ providerID: ProviderID.make("groq") })).toBe(false)
   })
 
   test("lastTurnMessages returns the slice from the last real user message onward", () => {

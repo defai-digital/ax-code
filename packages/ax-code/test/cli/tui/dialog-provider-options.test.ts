@@ -35,7 +35,7 @@ describe("provider dialog options", () => {
     expect(
       providerDialogProviders({
         available: [provider("openai", "OpenAI")],
-        configured: [provider("xai", "xAI")],
+        configured: [provider("groq", "GroqCloud")],
       }).map((item) => item.id),
     ).toEqual(["openai"])
   })
@@ -44,9 +44,9 @@ describe("provider dialog options", () => {
     expect(
       providerDialogProviders({
         available: [],
-        configured: [provider("xai", "xAI"), provider("zai-coding-plan", "Z.AI Coding Plan")],
+        configured: [provider("groq", "GroqCloud"), provider("zai-coding-plan", "Z.AI Coding Plan")],
       }).map((item) => item.id),
-    ).toEqual(["zai-coding-plan", "xai"])
+    ).toEqual(["groq", "zai-coding-plan"])
   })
 
   test("keeps hidden providers out of the connect dialog fallback", () => {
@@ -56,18 +56,18 @@ describe("provider dialog options", () => {
         configured: [
           provider("google", "Google"),
           provider("github-copilot", "GitHub Copilot"),
-          provider("xai", "xAI"),
+          provider("groq", "GroqCloud"),
         ],
       }).map((item) => item.id),
-    ).toEqual(["xai"])
+    ).toEqual(["groq"])
   })
 
   test("treats configured fallback providers as connected", () => {
     expect(
       providerDialogConnected({
-        providerID: "xai",
+        providerID: "groq",
         connected: [],
-        configured: [provider("xai", "xAI")],
+        configured: [provider("groq", "GroqCloud")],
       }),
     ).toBe(true)
     expect(
@@ -166,7 +166,7 @@ describe("provider dialog options", () => {
   })
 
   test("separates API, CLI, local, and private GPU provider categories", () => {
-    expect(providerDialogCategory("xai")).toBe("API plan")
+    expect(providerDialogCategory("groq")).toBe("API plan")
     expect(providerDialogCategory("grok-build-cli")).toBe("CLI plan")
     expect(providerDialogCategory("qoder-cli")).toBe("CLI plan")
     expect(providerDialogCategory("kimi-cli")).toBe("CLI plan")
@@ -218,14 +218,14 @@ describe("provider dialog options", () => {
     expect(
       providerDialogProviders({
         available: [
-          provider("xai", "xAI"),
+          provider("groq", "GroqCloud"),
           provider("alibaba-pai", "Alibaba PAI-EAS"),
           provider("grok-build-cli", "Grok Build CLI"),
           provider("ax-engine", "AX Engine (Local)"),
         ],
         configured: [],
       }).map((item) => item.id),
-    ).toEqual(["ax-engine", "alibaba-pai", "grok-build-cli", "xai"])
+    ).toEqual(["ax-engine", "alibaba-pai", "grok-build-cli", "groq"])
   })
 
   test("requires normal tool-call capability for local runtime models", () => {
@@ -235,14 +235,14 @@ describe("provider dialog options", () => {
     expect(providerModelSelectable({ providerID: "kimi-cli", toolcall: false })).toBe(true)
     // Retired CLI providers no longer get the non-toolcall exemption.
     expect(providerModelSelectable({ providerID: "antigravity-cli", toolcall: false })).toBe(false)
-    expect(providerModelSelectable({ providerID: "xai", toolcall: false })).toBe(false)
-    expect(providerModelSelectable({ providerID: "xai", toolcall: true })).toBe(true)
+    expect(providerModelSelectable({ providerID: "groq", toolcall: false })).toBe(false)
+    expect(providerModelSelectable({ providerID: "groq", toolcall: true })).toBe(true)
   })
 
   test("selects the configured default model when it is fully selectable", () => {
     expect(
       selectableProviderDefaultModelID({
-        providerID: "xai",
+        providerID: "groq",
         defaultModel: "default",
         models: {
           default: { id: "default", capabilities: { toolcall: true } },
@@ -272,7 +272,7 @@ describe("provider dialog options", () => {
   test("returns undefined when no provider model is selectable", () => {
     expect(
       selectableProviderDefaultModelID({
-        providerID: "xai",
+        providerID: "groq",
         defaultModel: "text",
         models: {
           text: { id: "text", capabilities: { toolcall: false } },

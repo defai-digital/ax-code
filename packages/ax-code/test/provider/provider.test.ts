@@ -50,14 +50,14 @@ test("provider loaded from env variable", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.xai]).toBeDefined()
+      expect(providers[ProviderID.make("groq")]).toBeDefined()
       // Provider should retain its connection source even if custom loaders
       // merge additional options.
-      expect(providers[ProviderID.xai].source).toBe("env")
+      expect(providers[ProviderID.make("groq")].source).toBe("env")
     },
   })
 })
@@ -125,13 +125,13 @@ test("Auth.set invalidates provider cache after key replacement", async () => {
     directory: tmp.path,
     fn: async () => {
       try {
-        await Auth.set("xai", { type: "api", key: "wrong-key" })
-        expect((await Provider.list())[ProviderID.xai]?.key).toBe("wrong-key")
+        await Auth.set("groq", { type: "api", key: "wrong-key" })
+        expect((await Provider.list())[ProviderID.make("groq")]?.key).toBe("wrong-key")
 
-        await Auth.set("xai", { type: "api", key: "correct-key" })
-        expect((await Provider.list())[ProviderID.xai]?.key).toBe("correct-key")
+        await Auth.set("groq", { type: "api", key: "correct-key" })
+        expect((await Provider.list())[ProviderID.make("groq")]?.key).toBe("correct-key")
       } finally {
-        await Auth.remove("xai")
+        await Auth.remove("groq")
       }
     },
   })
@@ -155,7 +155,7 @@ test("Auth.set in one project makes the key visible in another without reconnect
     await Instance.provide({
       directory: projectB.path,
       fn: async () => {
-        expect((await Provider.list())[ProviderID.xai]).toBeUndefined()
+        expect((await Provider.list())[ProviderID.make("groq")]).toBeUndefined()
       },
     })
 
@@ -163,8 +163,8 @@ test("Auth.set in one project makes the key visible in another without reconnect
     await Instance.provide({
       directory: projectA.path,
       fn: async () => {
-        await Auth.set("xai", { type: "api", key: "shared-key" })
-        expect((await Provider.list())[ProviderID.xai]?.key).toBe("shared-key")
+        await Auth.set("groq", { type: "api", key: "shared-key" })
+        expect((await Provider.list())[ProviderID.make("groq")]?.key).toBe("shared-key")
       },
     })
 
@@ -172,11 +172,11 @@ test("Auth.set in one project makes the key visible in another without reconnect
     await Instance.provide({
       directory: projectB.path,
       fn: async () => {
-        expect((await Provider.list())[ProviderID.xai]?.key).toBe("shared-key")
+        expect((await Provider.list())[ProviderID.make("groq")]?.key).toBe("shared-key")
       },
     })
   } finally {
-    await Auth.remove("xai")
+    await Auth.remove("groq")
   }
 })
 
@@ -188,14 +188,14 @@ test("Auth.set during Instance boot init does not deadlock invalidateAll", async
     await Instance.provide({
       directory: tmp.path,
       init: async () => {
-        await Auth.set("xai", { type: "api", key: "boot-init-key" })
+        await Auth.set("groq", { type: "api", key: "boot-init-key" })
       },
       fn: async () => {
-        expect((await Provider.list())[ProviderID.xai]?.key).toBe("boot-init-key")
+        expect((await Provider.list())[ProviderID.make("groq")]?.key).toBe("boot-init-key")
       },
     })
   } finally {
-    await Auth.remove("xai")
+    await Auth.remove("groq")
   }
 })
 
@@ -486,7 +486,7 @@ test("provider loaded from config with apiKey option", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            groq: {
               options: {
                 apiKey: "config-api-key",
               },
@@ -500,7 +500,7 @@ test("provider loaded from config with apiKey option", async () => {
     directory: tmp.path,
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.xai]).toBeDefined()
+      expect(providers[ProviderID.make("groq")]).toBeDefined()
     },
   })
 })
@@ -514,7 +514,7 @@ test("provider api keys are stripped of pasted newlines before SDK use", async (
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            groq: {
               options: {
                 apiKey: " config-key\n ",
               },
@@ -532,7 +532,7 @@ test("provider api keys are stripped of pasted newlines before SDK use", async (
     fn: async () => {
       try {
         const providers = await Provider.list()
-        expect(providers[ProviderID.xai].options.apiKey).toBe("config-key")
+        expect(providers[ProviderID.make("groq")].options.apiKey).toBe("config-key")
         expect(providers[ProviderID.make("zai-coding-plan")].key).toBe("zai-test-key")
       } finally {
         await Auth.remove("zai-coding-plan")
@@ -548,7 +548,7 @@ test("disabled_providers excludes provider", async () => {
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-          disabled_providers: ["xai"],
+          disabled_providers: ["groq"],
         }),
       )
     },
@@ -556,11 +556,11 @@ test("disabled_providers excludes provider", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.xai]).toBeUndefined()
+      expect(providers[ProviderID.make("groq")]).toBeUndefined()
     },
   })
 })
@@ -572,7 +572,7 @@ test("enabled_providers restricts to only listed providers", async () => {
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-          enabled_providers: ["xai"],
+          enabled_providers: ["groq"],
         }),
       )
     },
@@ -580,12 +580,12 @@ test("enabled_providers restricts to only listed providers", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-openai-key")
+      Env.set("GROQ_API_KEY", "test-openai-key")
       Env.set("GOOGLE_GENERATIVE_AI_API_KEY", "test-google-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.xai]).toBeDefined()
+      expect(providers[ProviderID.make("groq")]).toBeDefined()
       expect(providers[ProviderID.google]).toBeUndefined()
     },
   })
@@ -599,8 +599,8 @@ test("model whitelist filters models for provider", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
-              whitelist: ["grok-4.5"],
+            groq: {
+              whitelist: ["qwen/qwen3.6-27b"],
             },
           },
         }),
@@ -610,13 +610,13 @@ test("model whitelist filters models for provider", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.xai]).toBeDefined()
-      const models = Object.keys(providers[ProviderID.xai].models)
-      expect(models).toContain("grok-4.5")
+      expect(providers[ProviderID.make("groq")]).toBeDefined()
+      const models = Object.keys(providers[ProviderID.make("groq")].models)
+      expect(models).toContain("qwen/qwen3.6-27b")
       expect(models.length).toBe(1)
     },
   })
@@ -630,10 +630,9 @@ test("model blacklist excludes specific models", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
-              // Only Grok 4.5 is curated for xAI; blacklisting it drops the
-              // whole provider (no remaining models).
-              blacklist: ["grok-4.5"],
+            groq: {
+              // Blacklisting both curated Groq models drops the provider.
+              blacklist: ["qwen/qwen3.6-27b", "openai/gpt-oss-120b"],
             },
           },
         }),
@@ -643,11 +642,11 @@ test("model blacklist excludes specific models", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.xai]).toBeUndefined()
+      expect(providers[ProviderID.make("groq")]).toBeUndefined()
     },
   })
 })
@@ -660,10 +659,10 @@ test("custom model alias via config", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            groq: {
               models: {
                 "my-alias": {
-                  id: "grok-4.5",
+                  id: "qwen/qwen3.6-27b",
                   name: "My Custom Alias",
                 },
               },
@@ -676,13 +675,13 @@ test("custom model alias via config", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.xai]).toBeDefined()
-      expect(providers[ProviderID.xai].models["my-alias"]).toBeDefined()
-      expect(providers[ProviderID.xai].models["my-alias"].name).toBe("My Custom Alias")
+      expect(providers[ProviderID.make("groq")]).toBeDefined()
+      expect(providers[ProviderID.make("groq")].models["my-alias"]).toBeDefined()
+      expect(providers[ProviderID.make("groq")].models["my-alias"].name).toBe("My Custom Alias")
     },
   })
 })
@@ -738,7 +737,7 @@ test("env variable takes precedence, config merges options", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            groq: {
               options: {
                 timeout: 60000,
                 chunkTimeout: 15000,
@@ -752,14 +751,14 @@ test("env variable takes precedence, config merges options", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "env-api-key")
+      Env.set("GROQ_API_KEY", "env-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.xai]).toBeDefined()
+      expect(providers[ProviderID.make("groq")]).toBeDefined()
       // Config options should be merged
-      expect(providers[ProviderID.xai].options.timeout).toBe(60000)
-      expect(providers[ProviderID.xai].options.chunkTimeout).toBe(15000)
+      expect(providers[ProviderID.make("groq")].options.timeout).toBe(60000)
+      expect(providers[ProviderID.make("groq")].options.chunkTimeout).toBe(15000)
     },
   })
 })
@@ -778,13 +777,13 @@ test("getModel returns model for valid provider/model", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model = await Provider.getModel(ProviderID.xai, ModelID.make("grok-4.5"))
+      const model = await Provider.getModel(ProviderID.make("groq"), ModelID.make("qwen/qwen3.6-27b"))
       expect(model).toBeDefined()
-      expect(String(model.providerID)).toBe("xai")
-      expect(String(model.id)).toBe("grok-4.5")
+      expect(String(model.providerID)).toBe("groq")
+      expect(String(model.id)).toBe("qwen/qwen3.6-27b")
       const language = await Provider.getLanguage(model)
       expect(language).toBeDefined()
     },
@@ -805,10 +804,10 @@ test("getModel throws ModelNotFoundError for invalid model", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
-      await expect(Provider.getModel(ProviderID.xai, ModelID.make("nonexistent-model"))).rejects.toThrow()
+      await expect(Provider.getModel(ProviderID.make("groq"), ModelID.make("nonexistent-model"))).rejects.toThrow()
     },
   })
 })
@@ -860,9 +859,9 @@ test("getLanguage throws ModelNotFoundError when the model provider is missing",
 })
 
 test("parseModel correctly parses provider/model string", () => {
-  const result = Provider.parseModel("xai/grok-4.5")
-  expect(String(result.providerID)).toBe("xai")
-  expect(String(result.modelID)).toBe("grok-4.5")
+  const result = Provider.parseModel("groq/qwen/qwen3.6-27b")
+  expect(String(result.providerID)).toBe("groq")
+  expect(String(result.modelID)).toBe("qwen/qwen3.6-27b")
 })
 
 test("parseModel handles model IDs with slashes", () => {
@@ -909,7 +908,7 @@ test("defaultModel returns first available model when no config set", async () =
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       const model = await Provider.defaultModel()
@@ -926,7 +925,7 @@ test("defaultModel respects config model setting", async () => {
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-          model: "xai/grok-4.5",
+          model: "groq/qwen/qwen3.6-27b",
         }),
       )
     },
@@ -934,12 +933,12 @@ test("defaultModel respects config model setting", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       const model = await Provider.defaultModel()
-      expect(String(model.providerID)).toBe("xai")
-      expect(String(model.modelID)).toBe("grok-4.5")
+      expect(String(model.providerID)).toBe("groq")
+      expect(String(model.modelID)).toBe("qwen/qwen3.6-27b")
     },
   })
 })
@@ -1305,9 +1304,9 @@ test("model options are merged from existing model", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            groq: {
               models: {
-                "grok-4.5": {
+                "qwen/qwen3.6-27b": {
                   options: {
                     customOption: "custom-value",
                   },
@@ -1322,11 +1321,11 @@ test("model options are merged from existing model", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4.5"]
+      const model = providers[ProviderID.make("groq")].models["qwen/qwen3.6-27b"]
       expect(model.options.customOption).toBe("custom-value")
     },
   })
@@ -1340,7 +1339,7 @@ test("provider removed when all models filtered out", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            groq: {
               whitelist: ["nonexistent-model"],
             },
           },
@@ -1351,11 +1350,11 @@ test("provider removed when all models filtered out", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.xai]).toBeUndefined()
+      expect(providers[ProviderID.make("groq")]).toBeUndefined()
     },
   })
 })
@@ -1374,13 +1373,13 @@ test("closest finds model by partial match", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const result = await Provider.closest(ProviderID.xai, ["grok-4.5"])
+      const result = await Provider.closest(ProviderID.make("groq"), ["qwen/qwen3.6-27b"])
       expect(result).toBeDefined()
-      expect(String(result?.providerID)).toBe("xai")
-      expect(String(result?.modelID)).toContain("grok-4.5")
+      expect(String(result?.providerID)).toBe("groq")
+      expect(String(result?.modelID)).toContain("qwen/qwen3.6-27b")
     },
   })
 })
@@ -1413,10 +1412,10 @@ test("getModel uses realIdByKey for aliased models", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            groq: {
               models: {
                 "my-gpt4o": {
-                  id: "grok-4.5",
+                  id: "qwen/qwen3.6-27b",
                   name: "My GPT-4o Alias",
                 },
               },
@@ -1429,13 +1428,13 @@ test("getModel uses realIdByKey for aliased models", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.xai].models["my-gpt4o"]).toBeDefined()
+      expect(providers[ProviderID.make("groq")].models["my-gpt4o"]).toBeDefined()
 
-      const model = await Provider.getModel(ProviderID.xai, ModelID.make("my-gpt4o"))
+      const model = await Provider.getModel(ProviderID.make("groq"), ModelID.make("my-gpt4o"))
       expect(model).toBeDefined()
       expect(String(model.id)).toBe("my-gpt4o")
       expect(model.name).toBe("My GPT-4o Alias")
@@ -1531,9 +1530,9 @@ test("model inherits properties from existing database model", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            groq: {
               models: {
-                "grok-4.5": {
+                "qwen/qwen3.6-27b": {
                   name: "Custom Name for GPT-4o",
                 },
               },
@@ -1546,11 +1545,11 @@ test("model inherits properties from existing database model", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4.5"]
+      const model = providers[ProviderID.make("groq")].models["qwen/qwen3.6-27b"]
       expect(model.name).toBe("Custom Name for GPT-4o")
       expect(model.capabilities.toolcall).toBe(true)
       expect(model.limit.context).toBeGreaterThan(0)
@@ -1565,7 +1564,7 @@ test("disabled_providers prevents loading even with env var", async () => {
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-          disabled_providers: ["xai"],
+          disabled_providers: ["groq"],
         }),
       )
     },
@@ -1573,11 +1572,11 @@ test("disabled_providers prevents loading even with env var", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-openai-key")
+      Env.set("GROQ_API_KEY", "test-openai-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.xai]).toBeUndefined()
+      expect(providers[ProviderID.make("groq")]).toBeUndefined()
     },
   })
 })
@@ -1597,7 +1596,7 @@ test("enabled_providers with empty array allows no providers", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-openai-key")
+      Env.set("GROQ_API_KEY", "test-openai-key")
       Env.set("GOOGLE_GENERATIVE_AI_API_KEY", "test-google-key")
     },
     fn: async () => {
@@ -1615,9 +1614,9 @@ test("whitelist and blacklist can be combined", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
-              whitelist: ["grok-4.5", "grok-4-fast"],
-              blacklist: ["grok-4-fast"],
+            groq: {
+              whitelist: ["qwen/qwen3.6-27b", "openai/gpt-oss-120b"],
+              blacklist: ["openai/gpt-oss-120b"],
             },
           },
         }),
@@ -1627,14 +1626,14 @@ test("whitelist and blacklist can be combined", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.xai]).toBeDefined()
-      const models = Object.keys(providers[ProviderID.xai].models)
-      expect(models).toContain("grok-4.5")
-      expect(models).not.toContain("grok-4-fast")
+      expect(providers[ProviderID.make("groq")]).toBeDefined()
+      const models = Object.keys(providers[ProviderID.make("groq")].models)
+      expect(models).toContain("qwen/qwen3.6-27b")
+      expect(models).not.toContain("openai/gpt-oss-120b")
       expect(models.length).toBe(1)
     },
   })
@@ -1691,10 +1690,10 @@ test("getSmallModel returns appropriate small model", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GOOGLE_GENERATIVE_AI_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model = await Provider.getSmallModel(ProviderID.xai)
+      const model = await Provider.getSmallModel(ProviderID.google)
       expect(model).toBeDefined()
       expect(model?.id).toBeDefined()
     },
@@ -1757,7 +1756,7 @@ test("getSmallModel respects config small_model override", async () => {
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-          small_model: "xai/grok-4.5",
+          small_model: "groq/qwen/qwen3.6-27b",
         }),
       )
     },
@@ -1765,13 +1764,13 @@ test("getSmallModel respects config small_model override", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model = await Provider.getSmallModel(ProviderID.xai)
+      const model = await Provider.getSmallModel(ProviderID.make("groq"))
       expect(model).toBeDefined()
-      expect(String(model?.providerID)).toBe("xai")
-      expect(String(model?.id)).toBe("grok-4.5")
+      expect(String(model?.providerID)).toBe("groq")
+      expect(String(model?.id)).toBe("qwen/qwen3.6-27b")
     },
   })
 })
@@ -1994,51 +1993,6 @@ test("provider list filters GPT-5.5 from configured provider models", async () =
                 },
               },
             },
-            xai: {
-              options: {
-                apiKey: "test-xai-key",
-              },
-              models: {
-                "grok-4": {
-                  id: "grok-4",
-                  name: "Grok 4",
-                },
-                "my-old-grok-alias": {
-                  id: "my-old-grok-alias",
-                  name: "Grok 4 Fast",
-                  family: "grok",
-                },
-                "my-grok-alias": {
-                  id: "my-grok-alias",
-                  name: "Grok 4.1 Fast",
-                  family: "grok",
-                },
-                "grok-code-fast-1": {
-                  id: "grok-code-fast-1",
-                  name: "Grok Code Fast 1",
-                },
-                "grok-code-fast-1:optimized:free": {
-                  id: "grok-code-fast-1:optimized:free",
-                  name: "Grok Code Fast 1 Optimized Free",
-                },
-                "grok-build-0.1": {
-                  id: "grok-build-0.1",
-                  name: "Grok Build 0.1",
-                },
-                "grok-code-fast": {
-                  id: "grok-code-fast",
-                  name: "Grok Code Fast",
-                },
-                "grok-code-fast-1-0825": {
-                  id: "grok-code-fast-1-0825",
-                  name: "Grok Code Fast 1 0825",
-                },
-                "grok-4.5": {
-                  id: "grok-4.5",
-                  name: "Grok 4.5",
-                },
-              },
-            },
             "zai-coding-plan": {
               options: {
                 apiKey: "test-zai-key",
@@ -2076,18 +2030,6 @@ test("provider list filters GPT-5.5 from configured provider models", async () =
       expect(providers[ProviderID.make("openai")]?.models["my-spaced-gpt-alias"]).toBeUndefined()
       expect(providers[ProviderID.make("openai")]?.models["my-separated-gpt-alias"]).toBeUndefined()
       expect(providers[ProviderID.make("openai")]?.models["gpt-5"]).toBeDefined()
-      expect(providers[ProviderID.xai]?.models["grok-4"]).toBeUndefined()
-      expect(providers[ProviderID.xai]?.models["my-old-grok-alias"]).toBeUndefined()
-      // "my-grok-alias" carries name "Grok 4.1 Fast" → normalizes to grok-4-1-fast,
-      // which is no longer in the Grok allow-list. Aliasing isn't an escape hatch.
-      expect(providers[ProviderID.xai]?.models["my-grok-alias"]).toBeUndefined()
-      expect(providers[ProviderID.xai]?.models["grok-code-fast-1"]).toBeUndefined()
-      expect(providers[ProviderID.xai]?.models["grok-code-fast-1:optimized:free"]).toBeUndefined()
-      expect(providers[ProviderID.xai]?.models["grok-build-0.1"]).toBeUndefined()
-      expect(providers[ProviderID.xai]?.models["grok-code-fast"]).toBeUndefined()
-      expect(providers[ProviderID.xai]?.models["grok-code-fast-1-0825"]).toBeUndefined()
-      expect(providers[ProviderID.xai]?.models["grok-4.3"]).toBeUndefined()
-      expect(providers[ProviderID.xai]?.models["grok-4.5"]).toBeDefined()
       expect(providers[ProviderID.make("zai-coding-plan")]?.models["glm-5v-turbo"]).toBeUndefined()
       expect(providers[ProviderID.make("zai-coding-plan")]?.models["my-glm-vision-alias"]).toBeUndefined()
       expect(providers[ProviderID.make("zai-coding-plan")]?.models["my-spaced-glm-vision-alias"]).toBeUndefined()
@@ -2096,8 +2038,27 @@ test("provider list filters GPT-5.5 from configured provider models", async () =
   })
 })
 
-test("xai provider only exposes Grok 4.5", async () => {
-  await using tmp = await tmpdir()
+test("retired xai provider cannot be re-enabled by config or credentials", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      enabled_providers: ["xai"],
+      provider: {
+        xai: {
+          name: "Retired xAI",
+          npm: "@ai-sdk/openai-compatible",
+          api: "https://api.x.ai/v1",
+          env: ["XAI_API_KEY"],
+          models: {
+            "grok-4.5": {
+              name: "Grok 4.5",
+              tool_call: true,
+              limit: { context: 500_000, output: 32_000 },
+            },
+          },
+        },
+      },
+    },
+  })
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
@@ -2105,16 +2066,7 @@ test("xai provider only exposes Grok 4.5", async () => {
     },
     fn: async () => {
       const providers = await Provider.list()
-      const xai = providers[ProviderID.xai]
-      expect(xai).toBeDefined()
-      const ids = Object.keys(xai.models)
-      expect(ids.sort()).toEqual(["grok-4.5"])
-
-      const grok = xai.models["grok-4.5"]
-      expect(grok.api.id).toBe("grok-4.5")
-      expect(grok.capabilities.toolcall).toBe(true)
-      expect(grok.capabilities.reasoning).toBe(true)
-      expect(grok.capabilities.input.image).toBe(true)
+      expect(providers[ProviderID.make("xai")]).toBeUndefined()
     },
   })
 })
@@ -2131,7 +2083,6 @@ test("provider.sort prioritizes preferred models", () => {
   expect(sorted[0].id).toContain("gpt-5")
   expect(sorted[1].id).toContain("sonnet-4")
   expect(sorted[1].id).toContain("latest")
-  expect(sorted[sorted.length - 1].id).not.toContain("grok-4.5")
   expect(sorted[sorted.length - 1].id).not.toContain("sonnet-4")
 })
 
@@ -2143,7 +2094,7 @@ test("multiple providers can be configured simultaneously", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            groq: {
               options: { timeout: 30000 },
             },
             "alibaba-coding-plan": {
@@ -2157,14 +2108,14 @@ test("multiple providers can be configured simultaneously", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-openai-key")
+      Env.set("GROQ_API_KEY", "test-openai-key")
       Env.set("ALIBABA_CODING_PLAN_API_KEY", "test-coding-plan-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.xai]).toBeDefined()
+      expect(providers[ProviderID.make("groq")]).toBeDefined()
       expect(providers[ProviderID.make("alibaba-coding-plan")]).toBeDefined()
-      expect(providers[ProviderID.xai].options.timeout).toBe(30000)
+      expect(providers[ProviderID.make("groq")].options.timeout).toBe(30000)
       expect(providers[ProviderID.make("alibaba-coding-plan")].options.timeout).toBe(60000)
     },
   })
@@ -2210,11 +2161,7 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
         "wan2.7-image",
         "wan2.7-image-pro",
       ]
-      const expectedTokenPlanModels = [
-        ...expectedAlibabaPlanModels,
-        "qwen3.8-max",
-        "qwen3.8-max-preview",
-      ].sort()
+      const expectedTokenPlanModels = [...expectedAlibabaPlanModels, "qwen3.8-max", "qwen3.8-max-preview"].sort()
       expect(Object.keys(codingPlan.models).sort()).toEqual(expectedAlibabaPlanModels)
       expect(Object.keys(codingPlanCn.models).sort()).toEqual(expectedAlibabaPlanModels)
       expect(Object.keys(tokenPlan.models).sort()).toEqual(expectedTokenPlanModels)
@@ -2313,10 +2260,10 @@ test("model alias name defaults to alias key when id differs", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            groq: {
               models: {
                 gpt4: {
-                  id: "grok-4.5",
+                  id: "qwen/qwen3.6-27b",
                   // no name specified - should default to "gpt4" (the key)
                 },
               },
@@ -2329,11 +2276,11 @@ test("model alias name defaults to alias key when id differs", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.xai].models["gpt4"].name).toBe("gpt4")
+      expect(providers[ProviderID.make("groq")].models["gpt4"].name).toBe("gpt4")
     },
   })
 })
@@ -2482,7 +2429,7 @@ test("disabled_providers and enabled_providers interaction", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           // enabled_providers takes precedence - only these are considered
-          enabled_providers: ["xai", "groq"],
+          enabled_providers: ["google", "groq"],
           // Then disabled_providers filters from the enabled set
           disabled_providers: ["groq"],
         }),
@@ -2492,18 +2439,15 @@ test("disabled_providers and enabled_providers interaction", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-openai")
       Env.set("GROQ_API_KEY", "test-groq")
       Env.set("GOOGLE_GENERATIVE_AI_API_KEY", "test-google")
     },
     fn: async () => {
       const providers = await Provider.list()
-      // xai: in enabled, not in disabled = allowed
-      expect(providers[ProviderID.xai]).toBeDefined()
+      // google: in enabled, not in disabled = allowed
+      expect(providers[ProviderID.google]).toBeDefined()
       // groq: in enabled, but also in disabled = NOT allowed
       expect(providers[ProviderID.make("groq")]).toBeUndefined()
-      // google: not in enabled = NOT allowed (even though not disabled)
-      expect(providers[ProviderID.google]).toBeUndefined()
     },
   })
 })
@@ -2675,11 +2619,11 @@ test("getModel returns consistent results", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model1 = await Provider.getModel(ProviderID.xai, ModelID.make("grok-4.5"))
-      const model2 = await Provider.getModel(ProviderID.xai, ModelID.make("grok-4.5"))
+      const model1 = await Provider.getModel(ProviderID.make("groq"), ModelID.make("qwen/qwen3.6-27b"))
+      const model2 = await Provider.getModel(ProviderID.make("groq"), ModelID.make("qwen/qwen3.6-27b"))
       expect(model1.providerID).toEqual(model2.providerID)
       expect(model1.id).toEqual(model2.id)
       expect(model1).toEqual(model2)
@@ -2736,11 +2680,11 @@ test("ModelNotFoundError includes suggestions for typos", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       try {
-        await Provider.getModel(ProviderID.xai, ModelID.make("gro")) // partial/typo model
+        await Provider.getModel(ProviderID.make("groq"), ModelID.make("qwen/qwen3.6-27")) // incomplete model id
         expect(true).toBe(false) // Should not reach here
       } catch (e: any) {
         expect(e.data.suggestions).toBeDefined()
@@ -2764,15 +2708,15 @@ test("ModelNotFoundError for provider includes suggestions", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       try {
-        await Provider.getModel(ProviderID.make("xia"), ModelID.make("grok-4.5")) // typo: xia → xai
+        await Provider.getModel(ProviderID.make("grq"), ModelID.make("qwen/qwen3.6-27b")) // typo: grq → groq
         expect(true).toBe(false) // Should not reach here
       } catch (e: any) {
         expect(e.data.suggestions).toBeDefined()
-        expect(e.data.suggestions).toContain("xai")
+        expect(e.data.suggestions).toContain("groq")
       }
     },
   })
@@ -2812,12 +2756,12 @@ test("getProvider returns provider info", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const provider = await Provider.getProvider(ProviderID.xai)
+      const provider = await Provider.getProvider(ProviderID.make("groq"))
       expect(provider).toBeDefined()
-      expect(String(provider?.id)).toBe("xai")
+      expect(String(provider?.id)).toBe("groq")
     },
   })
 })
@@ -2836,10 +2780,10 @@ test("closest returns undefined when no partial match found", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const result = await Provider.closest(ProviderID.xai, ["nonexistent-xyz-model"])
+      const result = await Provider.closest(ProviderID.make("groq"), ["nonexistent-xyz-model"])
       expect(result).toBeUndefined()
     },
   })
@@ -2859,13 +2803,13 @@ test("closest checks multiple query terms in order", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       // First term won't match, second will
-      const result = await Provider.closest(ProviderID.xai, ["nonexistent", "grok-4.5"])
+      const result = await Provider.closest(ProviderID.make("groq"), ["nonexistent", "qwen/qwen3.6-27b"])
       expect(result).toBeDefined()
-      expect(result?.modelID).toContain("grok-4.5")
+      expect(result?.modelID).toContain("qwen/qwen3.6-27b")
     },
   })
 })
@@ -2916,7 +2860,7 @@ test("provider options are deeply merged", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            groq: {
               options: {
                 headers: {
                   "X-Custom": "custom-value",
@@ -2932,13 +2876,13 @@ test("provider options are deeply merged", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
       // Custom options should be merged
-      expect(providers[ProviderID.xai].options.timeout).toBe(30000)
-      expect(providers[ProviderID.xai].options.headers["X-Custom"]).toBe("custom-value")
+      expect(providers[ProviderID.make("groq")].options.timeout).toBe(30000)
+      expect(providers[ProviderID.make("groq")].options.headers["X-Custom"]).toBe("custom-value")
     },
   })
 })
@@ -2951,7 +2895,7 @@ test("custom model inherits npm package from models.dev provider config", async 
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            groq: {
               models: {
                 "my-custom-model": {
                   name: "My Custom Model",
@@ -2968,13 +2912,13 @@ test("custom model inherits npm package from models.dev provider config", async 
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["my-custom-model"]
+      const model = providers[ProviderID.make("groq")].models["my-custom-model"]
       expect(model).toBeDefined()
-      expect(model.api.npm).toBe("@ai-sdk/xai")
+      expect(model.api.npm).toBe("@ai-sdk/openai-compatible")
     },
   })
 })
@@ -3023,7 +2967,7 @@ test("custom model inherits api.url from models.dev provider", async () => {
   })
 })
 
-test("xai reasoning models expose supported reasoningEffort variants", async () => {
+test("OpenAI reasoning models expose supported reasoningEffort variants", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -3037,12 +2981,12 @@ test("xai reasoning models expose supported reasoningEffort variants", async () 
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("OPENAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      // grok-4.5 has reasoning capability
-      const model = providers[ProviderID.xai].models["grok-4.5"]
+      // GPT-5.4 has reasoning capability
+      const model = providers[ProviderID.make("openai")].models["gpt-5.4"]
       expect(model.capabilities.reasoning).toBe(true)
       expect(model.variants).toBeDefined()
       expect(model.variants).toEqual({
@@ -3062,9 +3006,9 @@ test("model variants can be disabled via config", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            openai: {
               models: {
-                "grok-4.5": {
+                "gpt-5.4": {
                   variants: {
                     high: { disabled: true },
                   },
@@ -3079,11 +3023,11 @@ test("model variants can be disabled via config", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("OPENAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4.5"]
+      const model = providers[ProviderID.make("openai")].models["gpt-5.4"]
       expect(model.variants).toBeDefined()
       expect(model.variants!["high"]).toBeUndefined()
       expect(model.variants!["medium"]).toEqual({ reasoningEffort: "medium" })
@@ -3099,9 +3043,9 @@ test("model variants can be customized via config", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            openai: {
               models: {
-                "grok-4.5": {
+                "gpt-5.4": {
                   variants: {
                     high: {
                       reasoningEffort: "high",
@@ -3119,11 +3063,11 @@ test("model variants can be customized via config", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("OPENAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4.5"]
+      const model = providers[ProviderID.make("openai")].models["gpt-5.4"]
       expect(model.variants!["high"]).toBeDefined()
       expect(model.variants!["high"].budgetTokens).toBe(20000)
     },
@@ -3138,9 +3082,9 @@ test("disabled key is stripped from variant config", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            openai: {
               models: {
-                "grok-4.5": {
+                "gpt-5.4": {
                   variants: {
                     max: {
                       disabled: false,
@@ -3158,11 +3102,11 @@ test("disabled key is stripped from variant config", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("OPENAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4.5"]
+      const model = providers[ProviderID.make("openai")].models["gpt-5.4"]
       expect(model.variants!["max"]).toBeDefined()
       expect(model.variants!["max"].disabled).toBeUndefined()
       expect(model.variants!["max"].customField).toBe("test")
@@ -3178,9 +3122,9 @@ test("all variants can be disabled via config", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            openai: {
               models: {
-                "grok-4.5": {
+                "gpt-5.4": {
                   variants: {
                     low: { disabled: true },
                     high: { disabled: true },
@@ -3198,18 +3142,18 @@ test("all variants can be disabled via config", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("OPENAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4.5"]
+      const model = providers[ProviderID.make("openai")].models["gpt-5.4"]
       expect(model.variants).toBeDefined()
       expect(Object.keys(model.variants!).length).toBe(0)
     },
   })
 })
 
-test("xai variant config merges with generated reasoningEffort", async () => {
+test("OpenAI variant config merges with generated reasoningEffort", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -3217,9 +3161,9 @@ test("xai variant config merges with generated reasoningEffort", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            openai: {
               models: {
-                "grok-4.5": {
+                "gpt-5.4": {
                   variants: {
                     high: {
                       extraOption: "custom-value",
@@ -3236,11 +3180,11 @@ test("xai variant config merges with generated reasoningEffort", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("OPENAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4.5"]
+      const model = providers[ProviderID.make("openai")].models["gpt-5.4"]
       expect(model.variants!["high"]).toBeDefined()
       expect(model.variants!["high"].reasoningEffort).toBe("high")
       expect(model.variants!["high"].extraOption).toBe("custom-value")
@@ -3256,9 +3200,9 @@ test("variants filtered in second pass for database models", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            xai: {
+            openai: {
               models: {
-                "grok-4.5": {
+                "gpt-5.4": {
                   variants: {
                     high: { disabled: true },
                   },
@@ -3273,11 +3217,11 @@ test("variants filtered in second pass for database models", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("XAI_API_KEY", "test-api-key")
+      Env.set("OPENAI_API_KEY", "test-api-key")
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4.5"]
+      const model = providers[ProviderID.make("openai")].models["gpt-5.4"]
       expect(model.variants).toBeDefined()
       expect(model.variants!["high"]).toBeUndefined()
       expect(model.variants!["medium"]).toEqual({ reasoningEffort: "medium" })

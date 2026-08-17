@@ -279,8 +279,8 @@ export const DoctorCommand: CommandModule = {
 
     // 6. Credentials — combine `ax-code providers login` entries (auth.json)
     // with environment variable fallbacks. Previously we only checked
-    // three hardcoded env vars (GOOGLE_GENERATIVE_AI_API_KEY, XAI_API_KEY,
-    // GROQ_API_KEY) and ignored auth.json entirely, so users who set up
+    // a few hardcoded env vars (GOOGLE_GENERATIVE_AI_API_KEY, GROQ_API_KEY,
+    // OPENAI_API_KEY) and ignored auth.json entirely, so users who set up
     // credentials via `ax-code providers login` saw a spurious
     // "No credentials found" warning on every doctor run.
     // The env list is now derived from models.dev (one line per provider

@@ -50,13 +50,7 @@ for (const id of RETIRED_PROVIDER_IDS) {
 }
 
 // Preserve local-only provider entries that models.dev doesn't include
-const cliImageProviderIDs = [
-  "claude-code",
-  "codex-cli",
-  "grok-build-cli",
-  "qoder-cli",
-  "kimi-cli",
-] as const
+const cliImageProviderIDs = ["claude-code", "codex-cli", "grok-build-cli", "qoder-cli", "kimi-cli"] as const
 const localProviderIDs = ["ax-studio", ...cliImageProviderIDs, "ollama"]
 for (const id of localProviderIDs) {
   if (existing[id] && !fetched[id]) fetched[id] = cloneJsonValue(existing[id])
@@ -963,19 +957,6 @@ if (Object.keys(kimiCloudPlanKept).length > 0) {
   }
 }
 
-// xAI: only Grok 4.5 is curated. models.dev usually publishes it; if not,
-// re-inject from the previous snapshot so regeneration never blanks the block.
-const XAI_FLAGSHIP_MODEL_ID = "grok-4.5"
-if (fetched["xai"]?.models) {
-  const xaiModels = fetched["xai"].models as Record<string, RawModel>
-  if (!xaiModels[XAI_FLAGSHIP_MODEL_ID]) {
-    const fromExisting = existing["xai"]?.models?.[XAI_FLAGSHIP_MODEL_ID]
-    if (fromExisting) {
-      xaiModels[XAI_FLAGSHIP_MODEL_ID] = cloneJsonValue(fromExisting)
-    }
-  }
-}
-
 // GLM flagship + 1M-context variants on the Z.AI coding-plan endpoints.
 // Z.AI exposes a 1M-token window by appending a "[1m]" suffix to the model
 // name (e.g. "glm-5.2[1m]"); the suffix is forwarded verbatim as the
@@ -1068,14 +1049,6 @@ for (const provider of Object.values(fetched) as Array<{ models?: Record<string,
   }
 }
 
-// Apply display name overrides
-const nameOverrides: Record<string, string> = {
-  xai: "Grok Cloud API",
-}
-for (const [id, name] of Object.entries(nameOverrides)) {
-  if (fetched[id]) fetched[id].name = name
-}
-
 const apiOverrides: Record<string, string> = {
   "alibaba-coding-plan": "https://coding-intl.dashscope.aliyuncs.com/v1",
   "alibaba-coding-plan-cn": "https://coding.dashscope.aliyuncs.com/v1",
@@ -1141,13 +1114,6 @@ function unmarkSearch(model: { name?: string } | undefined) {
 function supportsTextOutput(model: { modalities?: { output?: unknown } } | undefined) {
   const output = model?.modalities?.output
   return !Array.isArray(output) || output.includes("text")
-}
-// xAI: Grok 4.5 has Live Search wired via providerOptions.searchParameters.
-const xaiSearchModelIds = ["grok-4.5", "grok-4-5", "grok-4.5-latest", "grok-build-latest"]
-const xaiModels = fetched["xai"]?.models as Record<string, { name?: string }> | undefined
-if (xaiModels) {
-  for (const model of Object.values(xaiModels)) unmarkSearch(model)
-  for (const mid of xaiSearchModelIds) markSearch(xaiModels[mid])
 }
 // Alibaba: every Qwen model on the four plan endpoints accepts `enable_search`.
 // Non-Qwen models (DeepSeek/GLM/Kimi/MiniMax) served on the same plans don't

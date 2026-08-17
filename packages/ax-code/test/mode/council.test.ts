@@ -222,7 +222,8 @@ describe("Council.aggregateCouncil", () => {
             memberId: "m2",
             severity: "low",
             category: "performance",
-            summary: "The nested loop over all repository files re-reads every entry on each iteration of the outer scan.",
+            summary:
+              "The nested loop over all repository files re-reads every entry on each iteration of the outer scan.",
           },
         ],
       },
@@ -242,13 +243,31 @@ describe("Council.aggregateCouncil", () => {
         memberId: "m1",
         providerID: "p1",
         modelID: "a",
-        issues: [{ memberId: "m1", severity: "medium", category: "performance", location: "src/a.ts:10", summary, suggestedFix }],
+        issues: [
+          {
+            memberId: "m1",
+            severity: "medium",
+            category: "performance",
+            location: "src/a.ts:10",
+            summary,
+            suggestedFix,
+          },
+        ],
       },
       {
         memberId: "m2",
         providerID: "p2",
         modelID: "b",
-        issues: [{ memberId: "m2", severity: "medium", category: "performance", location: "src/b.ts:99", summary, suggestedFix }],
+        issues: [
+          {
+            memberId: "m2",
+            severity: "medium",
+            category: "performance",
+            location: "src/b.ts:99",
+            summary,
+            suggestedFix,
+          },
+        ],
       },
     ])
 
@@ -362,8 +381,8 @@ describe("Council.providerFamily", () => {
     expect(Council.providerFamily("openai")).toBe("openai")
     expect(Council.providerFamily("google")).toBe("google")
     expect(Council.providerFamily("gemini-3-pro")).toBe("google")
-    expect(Council.providerFamily("xai")).toBe("xai")
-    expect(Council.providerFamily("grok-2")).toBe("xai")
+    expect(Council.providerFamily("xai")).toBe("grok")
+    expect(Council.providerFamily("grok-build-cli")).toBe("grok")
     expect(Council.providerFamily("alibaba")).toBe("alibaba")
     expect(Council.providerFamily("qwen-max")).toBe("alibaba")
     expect(Council.providerFamily("zhipu")).toBe("zhipu")

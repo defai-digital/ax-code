@@ -40,7 +40,6 @@ Effort levels are generated automatically for supported models on these provider
 | --------------------------- | ------------------------------------------------------------- | ------------------------------------------- |
 | Anthropic (Claude)          | `effort` on current models; thinking budgets on legacy models | Fast, Balanced, Deep, Max (model-dependent) |
 | OpenAI (GPT-5.x)            | `reasoningEffort`                                             | Fast, Balanced, Deep                        |
-| xAI (Grok)                  | Responses API `reasoningEffort`                               | Fast, Balanced, Deep                        |
 | Google (Gemini 3.x)         | `thinkingConfig.thinkingLevel`                                | Fast, Deep (3.1 adds Balanced)              |
 | OpenAI-compatible endpoints | `reasoningEffort`                                             | Fast, Balanced, Deep                        |
 | Venice                      | `reasoningEffort`                                             | Fast, Balanced, Deep                        |

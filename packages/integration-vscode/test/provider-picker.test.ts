@@ -6,13 +6,13 @@ describe("providerModelPickItems", () => {
     const items = providerModelPickItems({
       all: [
         {
-          id: "xai",
-          name: "x.ai",
-          env: ["XAI_API_KEY"],
+          id: "groq",
+          name: "GroqCloud",
+          env: ["GROQ_API_KEY"],
           models: {
-            "grok-code": {
-              id: "grok-code",
-              name: "Grok Code",
+            "qwen/qwen3.6-27b": {
+              id: "qwen/qwen3.6-27b",
+              name: "Qwen 3.6 27B",
               release_date: "",
               attachment: false,
               reasoning: false,
@@ -22,11 +22,11 @@ describe("providerModelPickItems", () => {
           },
         },
       ],
-      default: { xai: "grok-code" },
-      connected: ["xai"],
+      default: { groq: "qwen/qwen3.6-27b" },
+      connected: ["groq"],
     })
 
-    expect(items).toEqual([{ label: "xai/grok-code", description: "x.ai" }])
+    expect(items).toEqual([{ label: "groq/qwen/qwen3.6-27b", description: "GroqCloud" }])
   })
 
   test("excludes models from providers that are not connected", () => {
@@ -49,13 +49,13 @@ describe("providerModelPickItems", () => {
           },
         },
         {
-          id: "xai",
-          name: "x.ai",
-          env: ["XAI_API_KEY"],
+          id: "groq",
+          name: "GroqCloud",
+          env: ["GROQ_API_KEY"],
           models: {
-            "grok-code": {
-              id: "grok-code",
-              name: "Grok Code",
+            "qwen/qwen3.6-27b": {
+              id: "qwen/qwen3.6-27b",
+              name: "Qwen 3.6 27B",
               release_date: "",
               attachment: false,
               reasoning: false,
@@ -66,11 +66,11 @@ describe("providerModelPickItems", () => {
         },
       ],
       default: {},
-      connected: ["xai"],
+      connected: ["groq"],
     })
 
     // Only the connected provider's model is offered.
-    expect(items).toEqual([{ label: "xai/grok-code", description: "x.ai" }])
+    expect(items).toEqual([{ label: "groq/qwen/qwen3.6-27b", description: "GroqCloud" }])
   })
 
   test("returns nothing when no provider is connected", () => {

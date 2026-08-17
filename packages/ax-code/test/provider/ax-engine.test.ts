@@ -1880,7 +1880,7 @@ describe("ax-engine provider integration", () => {
         enabled: new Set(["xai"]),
         axEngineSupported: false,
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 })
 

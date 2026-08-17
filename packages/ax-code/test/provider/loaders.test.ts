@@ -118,7 +118,7 @@ describe("CLI provider loaders", () => {
 })
 
 describe("online provider loaders", () => {
-  test("xai provider loaded with api key", async () => {
+  test("retired xai provider is not loaded from an API key", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await writeFile(
@@ -136,8 +136,7 @@ describe("online provider loaders", () => {
       },
       fn: async () => {
         const providers = await Provider.list()
-        expect(providers[ProviderID.xai]).toBeDefined()
-        expect(providers[ProviderID.xai].source).toBe("env")
+        expect(providers[ProviderID.make("xai")]).toBeUndefined()
       },
     })
   })

@@ -26,7 +26,7 @@ describe("provider connect category", () => {
     expect(providerConnectCategory("alibaba-pai")).toBe("private-gpu")
     expect(providerConnectCategory("nebius")).toBe("private-gpu")
     expect(providerConnectCategory("grok-build-cli")).toBe("cli")
-    expect(providerConnectCategory("xai")).toBe("api")
+    expect(providerConnectCategory("openai")).toBe("api")
     expect(providerConnectCategory("huggingface")).toBe("api")
     expect(providerConnectCategory("huggingface-endpoints")).toBe("private-gpu")
   })

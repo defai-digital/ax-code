@@ -781,9 +781,6 @@ importers:
       '@ai-sdk/provider-utils':
         specifier: 4.0.22
         version: 4.0.22(zod@4.3.6)
-      '@ai-sdk/xai':
-        specifier: 3.0.77
-        version: 3.0.77(zod@4.3.6)
       '@ax-code/ax-wiki':
         specifier: workspace:*
         version: link:../ax-wiki

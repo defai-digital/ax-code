@@ -15,13 +15,14 @@ import { EnsemblePreflight } from "./preflight"
 import { modelSelectableForProvider } from "../provider/model-selectability"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
+import { isRetiredProviderID } from "../provider/retired-providers"
 
 /** Colloquial names users type ("grok", "codex") → connected provider IDs. */
 const PROVIDER_ALIASES: Record<string, string[]> = {
-  grok: ["grok-build-cli", "xai"],
+  grok: ["grok-build-cli"],
   "grok-4": ["grok-build-cli"],
   "grok-4.5": ["grok-build-cli"],
-  xai: ["xai", "grok-build-cli"],
+  xai: ["grok-build-cli"],
   codex: ["codex-cli", "openai"],
   "codex-cli": ["codex-cli", "openai"],
   openai: ["openai", "codex-cli"],
@@ -32,10 +33,7 @@ const PROVIDER_ALIASES: Record<string, string[]> = {
   qoder: ["qoder-cli"],
 }
 
-export function resolveConnectedProviderID(
-  requested: string,
-  connectedIDs: readonly string[],
-): string | undefined {
+export function resolveConnectedProviderID(requested: string, connectedIDs: readonly string[]): string | undefined {
   if (connectedIDs.includes(requested)) return requested
   const lower = requested.toLowerCase()
   const exact = connectedIDs.find((id) => id.toLowerCase() === lower)
@@ -177,7 +175,9 @@ export namespace EnsembleShared {
     // Providers with an undecryptable stored credential never make it into
     // Provider.list() at all, so without this they would be invisible here —
     // neither connected nor excluded — and read as "unknown".
-    const undecryptable = await Auth.decryptionFailures().catch(() => [] as readonly string[])
+    const undecryptable = (await Auth.decryptionFailures().catch(() => [] as readonly string[])).filter(
+      (providerID) => !isRetiredProviderID(providerID),
+    )
     for (const providerID of undecryptable) {
       if (ids.includes(providerID) || excluded.some((entry) => entry.providerID === providerID)) continue
       excluded.push({
@@ -185,7 +185,11 @@ export namespace EnsembleShared {
         reason: `stored credential cannot be decrypted — run \`ax-code providers login --provider ${providerID}\` to re-enter it`,
       })
     }
-    return { count: ids.length, ids: ids.sort(), excluded: excluded.sort((a, b) => a.providerID.localeCompare(b.providerID)) }
+    return {
+      count: ids.length,
+      ids: ids.sort(),
+      excluded: excluded.sort((a, b) => a.providerID.localeCompare(b.providerID)),
+    }
   }
 
   /**
@@ -206,7 +210,9 @@ export namespace EnsembleShared {
       const rejected: string[] = []
       const notes: string[] = []
       const connectedIDs = Object.keys(providers)
-      const undecryptableIDs = await Auth.decryptionFailures().catch(() => [] as readonly string[])
+      const undecryptableIDs = (await Auth.decryptionFailures().catch(() => [] as readonly string[])).filter(
+        (providerID) => !isRetiredProviderID(providerID),
+      )
       const selectableModels: Record<string, string[]> = {}
       for (const id of connectedIDs) {
         const provider = providers[ProviderID.make(id)]

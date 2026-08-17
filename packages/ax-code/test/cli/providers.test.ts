@@ -96,16 +96,14 @@ describe("providers command", () => {
     const infoSpy = vi.spyOn(prompts.log, "info").mockImplementation(() => {})
 
     try {
-      await Auth.set("xai", { type: "api", key: "sk-test" })
+      await Auth.set("google", { type: "api", key: "sk-test" })
       await ProvidersListCommand.handler({} as any)
 
       expect(infoSpy).toHaveBeenCalled()
       expect(
         infoSpy.mock.calls.some(([message]) => {
           const text = String(message)
-          return (
-            (text.includes("Grok Cloud API") || text.includes("xAI") || text.includes("xai")) && text.includes("api")
-          )
+          return text.includes("Google") && text.includes("api")
         }),
       ).toBe(true)
       expect(outroSpy).toHaveBeenCalledWith("1 credentials")

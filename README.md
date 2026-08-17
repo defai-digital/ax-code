@@ -215,7 +215,7 @@ See [Sandbox Mode](docs/guides/sandbox.md), [Autonomous Mode](docs/guides/autono
 5. Run `ax-code index` on larger repos when structural code-intelligence (symbols, callers, refs) matters; use the wiki for architecture narrative.
 6. Use `ax-code run`, `ax-code serve`, or `@ax-code/sdk` when the same agent workflow needs to move into scripts, CI, bots, or applications.
 
-Grok defaults to `Grok Build CLI` in `/connect`, using the local `grok` command and its CLI login/session. The hosted `Grok Cloud API` provider still works for explicit `xai` configuration or existing credentials, but is hidden from the default provider list.
+Grok runs exclusively through `Grok Build CLI`. Select `grok-build-cli` in `/connect`; AX Code invokes the local `grok` command and reuses its CLI login/session. The former direct `xai` cloud API provider is no longer supported.
 
 ## Supported Providers and Models
 

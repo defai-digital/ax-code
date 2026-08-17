@@ -26,7 +26,6 @@ import { isNonEmptyRecord, recordCount } from "@/util/record"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
-import { createXai } from "@ai-sdk/xai"
 import { ProviderTransform } from "./transform"
 import { providerModelKey, providerModelList } from "./model-key"
 import {
@@ -45,6 +44,7 @@ import { Bus } from "../bus"
 import { BusEvent } from "../bus/bus-event"
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
 import { isSupportedHost as isAxEngineSupportedHost } from "./ax-engine/platform"
+import { isRetiredProviderID } from "./retired-providers"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -74,28 +74,11 @@ export namespace Provider {
     enabled?: Set<string> | null
     axEngineSupported?: boolean
   }) {
+    if (isRetiredProviderID(input.providerID)) return false
     if (input.enabled && !input.enabled.has(input.providerID)) return false
     if (input.disabled.has(input.providerID)) return false
     if (input.providerID === AX_ENGINE_PROVIDER_ID && !input.axEngineSupported) return false
     return true
-  }
-
-  function canonicalXaiApiModelID(modelID: string) {
-    // Official aliases and retired coding SKUs all route to Grok 4.5 on the wire.
-    if (
-      modelID === "grok-4-5" ||
-      modelID === "grok-4.5-latest" ||
-      modelID === "grok-build-latest" ||
-      modelID === "grok-4.3" ||
-      modelID === "grok-4-3" ||
-      modelID === "grok-code-fast" ||
-      modelID === "grok-code-fast-1" ||
-      modelID === "grok-code-fast-1-0825" ||
-      modelID === "grok-build-0.1"
-    ) {
-      return "grok-4.5"
-    }
-    return modelID
   }
 
   // The "[Nm]" suffix (e.g. "glm-5.2[1m]") is a client-side context-window
@@ -109,9 +92,8 @@ export namespace Provider {
     return modelID.replace(/\[\d+m\]$/, "")
   }
 
-  function canonicalApiModelID(providerID: ProviderID, modelID: string) {
-    const base = stripContextWindowSuffix(modelID)
-    return providerID === ProviderID.xai ? canonicalXaiApiModelID(base) : base
+  function canonicalApiModelID(modelID: string) {
+    return stripContextWindowSuffix(modelID)
   }
 
   function sanitizeAuthString(value: unknown): unknown {
@@ -168,38 +150,6 @@ export namespace Provider {
     return Buffer.from(JSON.stringify(redactCacheKeyValue(value))).toString("base64url")
   }
 
-  function addLegacyXaiModelAliases(providerID: ProviderID, models: Record<string, Model>) {
-    if (providerID !== ProviderID.xai) return
-
-    const isLegacyGrok = (modelID: string) => {
-      return /^grok-4[.-]20(?:-|\.|-|$)/i.test(modelID)
-    }
-
-    const addLegacyAlias = (aliasID: string) => {
-      if (models[aliasID]) return
-      const legacyTargets = Object.entries(models).filter(
-        ([modelID]) =>
-          isLegacyGrok(modelID) &&
-          (modelID.includes("-reasoning") || modelID.includes("-non-reasoning") || modelID.includes("-0309-")),
-      )
-      if (legacyTargets.length === 0) return
-      const reasoningModel = legacyTargets.find(
-        ([modelID]) => modelID.includes("-reasoning") && !modelID.includes("-non-reasoning"),
-      )
-      const baseModel = reasoningModel ?? legacyTargets[0]
-      if (!baseModel) return
-      const [modelID, sourceModel] = baseModel
-      models[aliasID] = {
-        ...sourceModel,
-        id: ModelID.make(aliasID),
-        api: { ...sourceModel.api, id: modelID },
-      }
-    }
-
-    addLegacyAlias("grok-4-1-fast")
-    // Only Grok 4.5 is curated for xAI. Do not surface retired coding SKUs
-    // (grok-code-fast-*, grok-build-0.1, grok-4.3) as selectable aliases.
-  }
   type Lang = Exclude<LanguageModel, string>
   type SDK = {
     languageModel(modelID: string): unknown
@@ -286,7 +236,6 @@ export namespace Provider {
     // same adapter OpenCode documents for Meta Model API.
     "@ai-sdk/openai": createOpenAI,
     "@ai-sdk/openai-compatible": createOpenAICompatible,
-    "@ai-sdk/xai": createXai,
   }
 
   export const Model = ProviderModelSchema
@@ -357,13 +306,11 @@ export namespace Provider {
 
     function applyModelFilters(providerID: ProviderID, provider: Info) {
       const configProvider = config.provider?.[providerID]
-      addLegacyXaiModelAliases(providerID, provider.models)
-
       for (const [modelID, model] of Object.entries(provider.models)) {
         const supportModelID = model.api.id ?? model.id ?? modelID
         model.api = {
           ...model.api,
-          id: canonicalApiModelID(providerID, supportModelID),
+          id: canonicalApiModelID(supportModelID),
         }
         if (!supported(providerID, supportModelID, model)) {
           delete provider.models[modelID]
@@ -414,8 +361,6 @@ export namespace Provider {
         source: "config",
         models: existing?.models ?? {},
       }
-      addLegacyXaiModelAliases(providerID, parsed.models)
-
       for (const [modelID, model] of Object.entries(provider.models ?? {})) {
         const nextID = model.id ?? modelID
         if (!supported(providerID, nextID, model)) continue
@@ -1111,7 +1056,7 @@ export namespace Provider {
       const availableProviders = Object.keys(s.providers)
       const fuzzyMatches = fuzzysort.go(providerID, availableProviders, { limit: 3, threshold: -10000 })
       let suggestions = fuzzyMatches.map((m) => m.target)
-      // Fallback to Levenshtein distance for typos fuzzysort can't handle (e.g. "xia" → "xai")
+      // Fallback to Levenshtein distance for typos fuzzysort can't handle (e.g. "googel" → "google")
       if (suggestions.length === 0) {
         suggestions = availableProviders
           .map((p) => ({ p, d: levenshtein(providerID, p) }))
@@ -1238,9 +1183,6 @@ export namespace Provider {
       let priority = ["gemini-3-flash", "gemini-flash", "llama-3.1-8b", "llama3-8b"]
       if (providerID.startsWith("zai")) {
         priority = ["glm-5.2", "glm-5"]
-      }
-      if (providerID === ProviderID.xai) {
-        priority = ["grok-4.5"]
       }
       if (providerID.startsWith("alibaba")) {
         priority = ["qwen3.6-flash", "deepseek-v4-flash", "deepseek-v4-pro", "qwen3.6-plus"]

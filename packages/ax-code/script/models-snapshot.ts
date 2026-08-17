@@ -1,3 +1,5 @@
+import { RETIRED_PROVIDER_IDS } from "../src/provider/retired-providers"
+
 export const LOCAL_PROVIDER_IDS = [
   "claude-code",
   "codex-cli",
@@ -8,10 +10,7 @@ export const LOCAL_PROVIDER_IDS = [
   "ax-studio",
 ] as const
 
-// Providers ax-code once shipped but no longer supports. Snapshot refreshes
-// must drop them even if a stale snapshot or upstream catalog still carries
-// an entry, otherwise a retired provider resurrects on the next regen.
-export const RETIRED_PROVIDER_IDS = ["gemini-cli", "antigravity-cli"] as const
+export { RETIRED_PROVIDER_IDS }
 
 export type ModelsSnapshot = Record<string, unknown>
 

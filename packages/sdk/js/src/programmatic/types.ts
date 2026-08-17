@@ -113,9 +113,9 @@ export interface SdkTool<I = unknown> {
 export interface AgentOptions {
   /** Project directory to operate in */
   directory: string
-  /** Provider ID (e.g., "xai", "google") */
+  /** Provider ID (e.g., "google", "groq") */
   provider?: string
-  /** Model ID (e.g., "grok-4", "gemini-2.5-pro") */
+  /** Model ID (e.g., "gemini-3.1-pro-preview", "qwen/qwen3.6-27b") */
   model?: string
   /** Agent mode (e.g., "build", "security", "architect", "debug", "perf") */
   agent?: string
@@ -281,7 +281,7 @@ export interface Agent {
   session(): Promise<SessionHandle>
   /** Execute a tool directly */
   tool(name: string, input: Record<string, unknown>): Promise<unknown>
-  /** List available models (e.g., ["google/gemini-2.5-pro", "xai/grok-4"]) */
+  /** List available models (e.g., ["google/gemini-3.1-pro-preview", "groq/qwen/qwen3.6-27b"]) */
   models(): Promise<string[]>
   /** List available tool names (e.g., ["bash", "read", "write", "grep"]) */
   tools(): Promise<string[]>

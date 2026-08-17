@@ -46,12 +46,12 @@ describe("provider routes", () => {
     const directory = encodeURIComponent(tmp.path)
     const app = Server.Default()
 
-    const put = await app.request(`/auth/xai?directory=${directory}`, {
+    const put = await app.request(`/auth/provider-context-test?directory=${directory}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "api", key: "test-key" }),
     })
-    const del = await app.request(`/auth/xai?directory=${directory}`, {
+    const del = await app.request(`/auth/provider-context-test?directory=${directory}`, {
       method: "DELETE",
     })
 
@@ -61,7 +61,7 @@ describe("provider routes", () => {
     expect(await del.json()).toBe(true)
   })
 
-  test("shows default API and CLI providers on fresh config while hiding Grok Cloud API", async () => {
+  test("shows default API and CLI providers while excluding the retired xai provider", async () => {
     await using tmp = await tmpdir({ git: true })
     const directory = encodeURIComponent(tmp.path)
 
@@ -146,7 +146,7 @@ describe("provider routes", () => {
     expect(nebius.status).toBe(400)
   })
 
-  test("allows explicitly enabled Grok Cloud API in provider list", () => {
+  test("keeps the retired xai provider out of provider lists", () => {
     expect(
       shouldShowProviderInList({
         key: "xai",
@@ -159,18 +159,30 @@ describe("provider routes", () => {
         disabled: new Set(),
         enabled: new Set(["xai"]),
       }),
-    ).toBe(true)
+    ).toBe(false)
+  })
+
+  test("does not expose xai OAuth methods", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const directory = encodeURIComponent(tmp.path)
+    const response = await Server.Default().request(`/provider/auth?directory=${directory}`)
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).not.toHaveProperty("xai")
   })
 
   test("oauth authorize with invalid method index returns 400 not 500", async () => {
     await using tmp = await tmpdir({ git: true })
     const directory = encodeURIComponent(tmp.path)
 
-    const response = await Server.Default().request(`/provider/xai/oauth/authorize?directory=${directory}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ method: 999999 }),
-    })
+    const response = await Server.Default().request(
+      `/provider/unknown-oauth-test/oauth/authorize?directory=${directory}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: 999999 }),
+      },
+    )
     expect(response.status).toBe(400)
     const body = (await response.json()) as { name: string; details?: { resource?: string } }
     expect(body.name).toBe("InvalidRequestError")
@@ -181,11 +193,14 @@ describe("provider routes", () => {
     await using tmp = await tmpdir({ git: true })
     const directory = encodeURIComponent(tmp.path)
 
-    const response = await Server.Default().request(`/provider/xai/oauth/callback?directory=${directory}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ method: 0 }),
-    })
+    const response = await Server.Default().request(
+      `/provider/unknown-oauth-test/oauth/callback?directory=${directory}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: 0 }),
+      },
+    )
     expect(response.status).toBe(400)
     const body = (await response.json()) as { name: string; details?: { resource?: string } }
     expect(body.name).toBe("InvalidRequestError")
@@ -196,11 +211,14 @@ describe("provider routes", () => {
     await using tmp = await tmpdir({ git: true })
     const directory = encodeURIComponent(tmp.path)
 
-    const response = await Server.Default().request(`/provider/xai/oauth/callback?directory=${directory}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ method: "0" }),
-    })
+    const response = await Server.Default().request(
+      `/provider/unknown-oauth-test/oauth/callback?directory=${directory}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "0" }),
+      },
+    )
     expect(response.status).toBe(400)
     const body = (await response.json()) as { name: string; details?: { resource?: string } }
     expect(body.name).toBe("InvalidRequestError")
@@ -211,11 +229,14 @@ describe("provider routes", () => {
     await using tmp = await tmpdir({ git: true })
     const directory = encodeURIComponent(tmp.path)
 
-    const response = await Server.Default().request(`/provider/xai/oauth/authorize?directory=${directory}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ method: -1 }),
-    })
+    const response = await Server.Default().request(
+      `/provider/unknown-oauth-test/oauth/authorize?directory=${directory}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: -1 }),
+      },
+    )
     expect(response.status).toBe(400)
   })
 
@@ -223,11 +244,14 @@ describe("provider routes", () => {
     await using tmp = await tmpdir({ git: true })
     const directory = encodeURIComponent(tmp.path)
 
-    const response = await Server.Default().request(`/provider/xai/oauth/authorize?directory=${directory}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ method: "" }),
-    })
+    const response = await Server.Default().request(
+      `/provider/unknown-oauth-test/oauth/authorize?directory=${directory}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "" }),
+      },
+    )
     expect(response.status).toBe(400)
     const body = (await response.json()) as { name: string }
     expect(body.name).toBe("InvalidRequestError")

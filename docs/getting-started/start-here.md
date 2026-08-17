@@ -96,7 +96,7 @@ ax-code mcp add
 ax-code doctor
 ```
 
-For Grok, `/connect` defaults to `Grok Build CLI`, which uses the local `grok` command and its CLI login/session. The hosted `Grok Cloud API` provider still works for explicit `xai` configuration or existing credentials, but is hidden from the default provider list.
+Grok runs exclusively through `Grok Build CLI`. Select `grok-build-cli` in `/connect`; AX Code invokes the local `grok` command and reuses its CLI login/session. The former direct `xai` cloud API provider is no longer supported.
 
 ## Doc Map
 
