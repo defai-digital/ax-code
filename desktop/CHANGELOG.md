@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 
 - Let Ctrl+J insert a newline instead of submitting in legacy terminals.
 - Make signed release publication safely resumable after transient GitHub API failures.
+- Restore valid Node.js fallback modules for Bun-only OpenTUI entrypoints.
 - Make unexecutable tool text recovery budget consecutive.
 - Report the actual coverage runtime.
 - Preserve harmless merge interrupts.

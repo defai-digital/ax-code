@@ -1,5 +1,7 @@
 import { access, readFile } from "node:fs/promises"
+import { readdirSync } from "node:fs"
 import path from "node:path"
+import { spawnSync } from "node:child_process"
 import { describe, expect, test } from "vitest"
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../../")
@@ -68,5 +70,20 @@ describe("vendored OpenTUI package integrity", () => {
       expectFileExists("packages/opentui-spinner/dist/solid.mjs"),
       expectFileExists("packages/opentui-spinner/dist/solid.d.mts"),
     ])
+  })
+
+  test("OpenTUI Node fallback modules are syntactically valid", () => {
+    const directories = ["packages/opentui-core", "packages/opentui-solid/scripts"]
+    const fallbackFiles = directories.flatMap((directory) =>
+      readdirSync(path.join(repoRoot, directory))
+        .filter((file) => file.endsWith(".node.js"))
+        .map((file) => path.join(directory, file)),
+    )
+
+    expect(fallbackFiles.length).toBeGreaterThan(0)
+    for (const file of fallbackFiles) {
+      const result = spawnSync(process.execPath, ["--check", path.join(repoRoot, file)], { encoding: "utf8" })
+      expect(result.status, `${file} must parse in Node.js:\n${result.stderr}`).toBe(0)
+    }
   })
 })
