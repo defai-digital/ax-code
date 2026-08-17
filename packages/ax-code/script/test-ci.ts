@@ -7,9 +7,10 @@ import type { Readable } from "node:stream"
 import { check, list, pick, root } from "./test-group"
 import { writeCoverageArtifacts } from "./test-coverage"
 
-type Result = {
+export type Result = {
   code: number
   file: string
+  artifacts?: string[]
   ignored: number
   coverageDir?: string
   stats: {
@@ -18,6 +19,11 @@ type Result = {
     skipped: number
     time: number
   }
+}
+
+type ShardCoverage = {
+  blobFile: string
+  reportsDirectory: string
 }
 
 const harmlessEffectInterrupt = "All fibers interrupted without error"
@@ -107,7 +113,14 @@ function tee(stream: Readable | null, writer: NodeJS.WriteStream): Promise<strin
   })
 }
 
-async function run(group: string, files: string[], dir: string, run: number, shard?: number) {
+async function run(
+  group: string,
+  files: string[],
+  dir: string,
+  run: number,
+  shard?: number,
+  shardCoverage?: ShardCoverage,
+) {
   const file = path.join(dir, `${group}-${run}${shard ? `-shard-${shard}` : ""}.xml`)
   const coverageDir = flag("--coverage")
     ? path.resolve(root, arg("--coverage-dir") ?? path.join(testingReports, "coverage"))
@@ -115,7 +128,12 @@ async function run(group: string, files: string[], dir: string, run: number, sha
   // The 30s per-test timeout and setup/preload files come from vitest.config.ts.
   // The exact file set is passed through the config's `include` via AX_TEST_FILES
   // (vitest positional filters can't reliably target an exact set).
-  const command = [vitestCli(), "run", "--reporter=junit", `--outputFile=${file}`]
+  const command = [vitestCli(), "run", "--reporter=junit"]
+  if (shardCoverage) {
+    command.push("--reporter=blob", `--outputFile.junit=${file}`, `--outputFile.blob=${shardCoverage.blobFile}`)
+  } else {
+    command.push(`--outputFile=${file}`)
+  }
   const maxWorkers = process.env.AX_TEST_MAX_WORKERS
   if (maxWorkers) {
     command.push(`--maxWorkers=${maxWorkers}`)
@@ -124,9 +142,8 @@ async function run(group: string, files: string[], dir: string, run: number, sha
     command.push(
       "--coverage.enabled",
       "--coverage.provider=v8",
-      "--coverage.reporter=text",
-      "--coverage.reporter=lcov",
-      `--coverage.reportsDirectory=${coverageDir}`,
+      ...(shardCoverage ? ["--coverage.reporter=json"] : ["--coverage.reporter=text", "--coverage.reporter=lcov"]),
+      `--coverage.reportsDirectory=${shardCoverage?.reportsDirectory ?? coverageDir}`,
     )
   }
   const proc = spawn(process.execPath, command, {
@@ -150,6 +167,59 @@ async function run(group: string, files: string[], dir: string, run: number, sha
     coverageDir,
     stats,
   } satisfies Result
+}
+
+async function mergeCoverageReports(blobDir: string, coverageDir: string) {
+  const command = [
+    vitestCli(),
+    `--merge-reports=${blobDir}`,
+    "--reporter=dot",
+    "--coverage.enabled",
+    "--coverage.provider=v8",
+    "--coverage.reporter=text",
+    "--coverage.reporter=lcov",
+    `--coverage.reportsDirectory=${coverageDir}`,
+  ]
+  const proc = spawn(process.execPath, command, {
+    cwd: root,
+    stdio: ["inherit", "pipe", "pipe"],
+    env: process.env,
+  })
+  const [, , code] = await Promise.all([
+    tee(proc.stdout, process.stdout),
+    tee(proc.stderr, process.stderr),
+    new Promise<number>((resolve) => {
+      proc.on("exit", (value) => resolve(value ?? 1))
+      proc.on("error", () => resolve(1))
+    }),
+  ])
+  if (code !== 0) throw new Error(`Vitest coverage merge failed with exit code ${code}`)
+
+  const lcovFile = path.join(coverageDir, "lcov.info")
+  if (!existsSync(lcovFile)) throw new Error(`Vitest coverage merge did not create ${lcovFile}`)
+}
+
+export function aggregateRunResults(group: string, run: number, dir: string, results: Result[]): Result {
+  if (results.length === 0) throw new Error("Cannot aggregate an empty test run")
+  const coverageDirs = new Set(results.flatMap((result) => (result.coverageDir ? [result.coverageDir] : [])))
+  if (coverageDirs.size > 1) throw new Error("Test shards wrote to different coverage directories")
+
+  return {
+    code: results.some((result) => result.code !== 0) ? 1 : 0,
+    file: path.join(dir, `${group}-${run}${results.length > 1 ? "-shards" : ""}.xml`),
+    artifacts: results.flatMap((result) => result.artifacts ?? [result.file]),
+    ignored: results.reduce((sum, result) => sum + result.ignored, 0),
+    coverageDir: coverageDirs.values().next().value,
+    stats: results.reduce(
+      (sum, result) => ({
+        tests: sum.tests + result.stats.tests,
+        failures: sum.failures + result.stats.failures,
+        skipped: sum.skipped + result.stats.skipped,
+        time: sum.time + result.stats.time,
+      }),
+      { tests: 0, failures: 0, skipped: 0, time: 0 },
+    ),
+  }
 }
 
 function fmt(ms: number) {
@@ -182,7 +252,9 @@ export function renderSummaryText(group: string, runs: Result[]) {
   out.push("")
   out.push("Artifacts:")
   for (const run of runs) {
-    out.push(`- ${path.basename(run.file)} (${run.code === 0 ? "passed" : "failed"})`)
+    for (const artifact of run.artifacts ?? [run.file]) {
+      out.push(`- ${path.basename(artifact)} (${run.code === 0 ? "passed" : "failed"})`)
+    }
   }
   out.push("")
   return out.join("\n")
@@ -216,21 +288,30 @@ async function main() {
   const shards = shardFiles(files, shardSize)
   const runPass = async (runNumber: number): Promise<Result> => {
     const results: Result[] = []
-    for (const [index, shard] of shards.entries())
-      results.push(await run(group, shard, dir, runNumber, shards.length > 1 ? index + 1 : undefined))
-    return {
-      code: results.some((result) => result.code !== 0) ? 1 : 0,
-      file: path.join(dir, `${group}-${runNumber}${shards.length > 1 ? "-shards" : ""}.xml`),
-      ignored: results.reduce((sum, result) => sum + result.ignored, 0),
-      stats: results.reduce(
-        (sum, result) => ({
-          tests: sum.tests + result.stats.tests,
-          failures: sum.failures + result.stats.failures,
-          skipped: sum.skipped + result.stats.skipped,
-          time: sum.time + result.stats.time,
-        }),
-        { tests: 0, failures: 0, skipped: 0, time: 0 },
-      ),
+    const coverageWorkDir =
+      flag("--coverage") && shards.length > 1
+        ? await fs.mkdtemp(path.join(dir, `.coverage-${group}-${runNumber}-`))
+        : undefined
+    const blobDir = coverageWorkDir ? path.join(coverageWorkDir, "blobs") : undefined
+    if (blobDir) await fs.mkdir(blobDir, { recursive: true })
+
+    try {
+      for (const [index, shard] of shards.entries()) {
+        const shardNumber = shards.length > 1 ? index + 1 : undefined
+        const shardCoverage = coverageWorkDir
+          ? {
+              blobFile: path.join(blobDir!, `shard-${shardNumber}.json`),
+              reportsDirectory: path.join(coverageWorkDir, `shard-${shardNumber}`),
+            }
+          : undefined
+        results.push(await run(group, shard, dir, runNumber, shardNumber, shardCoverage))
+      }
+
+      const result = aggregateRunResults(group, runNumber, dir, results)
+      if (blobDir && result.code === 0) await mergeCoverageReports(blobDir, result.coverageDir!)
+      return result
+    } finally {
+      if (coverageWorkDir) await fs.rm(coverageWorkDir, { recursive: true, force: true })
     }
   }
 
@@ -243,23 +324,24 @@ async function main() {
   }
 
   await summary(group, runs)
-  if (flag("--coverage")) {
+  const failed = runs.some((run) => run.code !== 0)
+  if (flag("--coverage") && !failed) {
     const coverageDir = runs[runs.length - 1]?.coverageDir
-    const lcovFile = coverageDir ? path.join(coverageDir, "lcov.info") : undefined
-    if (lcovFile && existsSync(lcovFile)) {
-      await writeCoverageArtifacts({
-        group,
-        lcovFile,
-        summaryFile: path.resolve(
-          root,
-          arg("--coverage-summary-out") ?? path.join(testingReports, "coverage-summary.json"),
-        ),
-        reportFile: path.resolve(root, arg("--coverage-report-out") ?? path.join(testingReports, "coverage-report.md")),
-        baselineFile: arg("--coverage-baseline") ? path.resolve(root, arg("--coverage-baseline")!) : undefined,
-      })
-    }
+    if (!coverageDir) throw new Error("Coverage was requested but the test run did not retain its output directory")
+    const lcovFile = path.join(coverageDir, "lcov.info")
+    if (!existsSync(lcovFile)) throw new Error(`Coverage was requested but ${lcovFile} was not created`)
+    await writeCoverageArtifacts({
+      group,
+      lcovFile,
+      summaryFile: path.resolve(
+        root,
+        arg("--coverage-summary-out") ?? path.join(testingReports, "coverage-summary.json"),
+      ),
+      reportFile: path.resolve(root, arg("--coverage-report-out") ?? path.join(testingReports, "coverage-report.md")),
+      baselineFile: arg("--coverage-baseline") ? path.resolve(root, arg("--coverage-baseline")!) : undefined,
+    })
   }
-  if (runs.some((run) => run.code !== 0)) process.exit(1)
+  if (failed) process.exit(1)
 }
 
 if (import.meta.url === `file://${process.argv[1]}` || import.meta.main) {

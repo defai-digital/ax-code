@@ -2,7 +2,14 @@ import { describe, expect, test } from "vitest"
 import path from "path"
 import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
-import { num, parseJUnit, resolveTestCIGroup, renderSummaryText, shardFiles } from "../../script/test-ci"
+import {
+  aggregateRunResults,
+  num,
+  parseJUnit,
+  resolveTestCIGroup,
+  renderSummaryText,
+  shardFiles,
+} from "../../script/test-ci"
 
 describe("script.test-ci", () => {
   test("parses valid non-negative integers and keeps default when option missing", () => {
@@ -30,6 +37,37 @@ describe("script.test-ci", () => {
   test("splits deterministic files into bounded sequential shards", () => {
     expect(shardFiles(["a", "b", "c", "d", "e"], 2)).toEqual([["a", "b"], ["c", "d"], ["e"]])
     expect(() => shardFiles(["a"], 0)).toThrow("Shard size must be a positive integer")
+  })
+
+  test("aggregates shard reports without dropping coverage metadata", () => {
+    const results = ["shard-1.xml", "shard-2.xml"].map((file, index) => ({
+      code: 0,
+      file: `/tmp/${file}`,
+      ignored: index,
+      coverageDir: "/tmp/coverage",
+      stats: { tests: 10, failures: 0, skipped: index, time: 1.25 },
+    }))
+
+    const result = aggregateRunResults("deterministic", 1, "/tmp/junit", results)
+
+    expect(result.coverageDir).toBe("/tmp/coverage")
+    expect(result.artifacts).toEqual(["/tmp/shard-1.xml", "/tmp/shard-2.xml"])
+    expect(result.stats).toEqual({ tests: 20, failures: 0, skipped: 1, time: 2.5 })
+    expect(result.ignored).toBe(1)
+  })
+
+  test("rejects inconsistent shard coverage directories", () => {
+    const result = (coverageDir: string) => ({
+      code: 0,
+      file: `/tmp/${path.basename(coverageDir)}.xml`,
+      ignored: 0,
+      coverageDir,
+      stats: { tests: 1, failures: 0, skipped: 0, time: 0.1 },
+    })
+
+    expect(() => aggregateRunResults("deterministic", 1, "/tmp/junit", [result("/tmp/a"), result("/tmp/b")])).toThrow(
+      "Test shards wrote to different coverage directories",
+    )
   })
 
   test("returns zeroed junit metrics when junit xml file is missing", async () => {
