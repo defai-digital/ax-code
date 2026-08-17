@@ -234,6 +234,13 @@ jobs:
           resolve_repo_json baseline_summary_out "$PERF_BASELINE_SUMMARY_OUT"
           resolve_repo_json summary_out "$PERF_SUMMARY_OUT"
 
+      - name: Build SDK
+        run: pnpm --dir packages/sdk/js run build
+
+      - name: Build benchmark native addons
+        if: inputs.native_profile
+        run: pnpm build:native index-core fs
+
       - name: Run perf benchmark
         shell: bash
         env:
