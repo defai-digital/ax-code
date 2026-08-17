@@ -1,5 +1,6 @@
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
+import { urlAllowlistServerRoute } from "@tui/util/server-url"
 import type { useSDK } from "../context/sdk"
 import type { useToast } from "../ui/toast"
 import { useAxEngineDownloads } from "../context/ax-engine-downloads"
@@ -24,12 +25,14 @@ type AxEngineCatalog = { models?: AxEngineCatalogModel[] }
  */
 async function fetchAxEngineCatalog(sdk: ReturnType<typeof useSDK>): Promise<AxEngineCatalog | undefined> {
   const headers = directoryRequestHeaders({ directory: sdk.directory })
-  const connectionResponse = await sdk.fetch(new URL("/provider/ax-engine/connection", sdk.url), { headers })
+  const connectionResponse = await sdk.fetch(urlAllowlistServerRoute(sdk.url, "/provider/ax-engine/connection"), {
+    headers,
+  })
   if (connectionResponse.ok) {
     const connection = (await connectionResponse.json()) as { mode?: string }
     if (connection.mode === "attach") return undefined
   }
-  const response = await sdk.fetch(new URL("/provider/ax-engine/models", sdk.url), { headers })
+  const response = await sdk.fetch(urlAllowlistServerRoute(sdk.url, "/provider/ax-engine/models"), { headers })
   if (!response.ok) return undefined
   return (await response.json()) as AxEngineCatalog
 }
@@ -79,7 +82,7 @@ export async function fetchAxEngineDownloadOffer(
 
 async function startAxEngineDownload(sdk: ReturnType<typeof useSDK>, offer: AxEngineDownloadOffer): Promise<void> {
   const response = await sdk.fetch(
-    new URL(`/provider/ax-engine/models/${encodeURIComponent(offer.modelID)}/download`, sdk.url),
+    urlAllowlistServerRoute(sdk.url, `/provider/ax-engine/models/${encodeURIComponent(offer.modelID)}/download`),
     {
       method: "POST",
       headers: directoryRequestHeaders({ directory: sdk.directory, contentType: "application/json" }),

@@ -2,7 +2,6 @@ import fs from "node:fs/promises"
 import path from "path"
 import type { Agent } from "../agent/agent"
 import { evaluate } from "@/permission/evaluate"
-import { Identifier } from "../id/id"
 import { Log } from "../util/log"
 import { ToolID } from "./schema"
 import { TRUNCATION_DIR } from "./truncation-dir"
@@ -66,43 +65,50 @@ export namespace Truncate {
     return evaluate("task", "*", agent.permission).action !== "deny"
   }
 
-  async function readEntries() {
-    return fs
+  type Entry = { name: string; path: string; size: number; mtimeMs: number }
+
+  async function readEntries(): Promise<Entry[]> {
+    const names = await fs
       .readdir(TRUNCATION_DIR)
       .then((all) => all.filter((name) => name.startsWith("tool_")).sort())
       .catch(() => [] as string[])
+    const entries = await Promise.all(
+      names.map(async (name): Promise<Entry | undefined> => {
+        const entryPath = path.join(TRUNCATION_DIR, name)
+        const stat = await fs.stat(entryPath).catch(() => undefined)
+        if (!stat) return undefined
+        return { name, path: entryPath, size: Number(stat.size), mtimeMs: stat.mtimeMs }
+      }),
+    )
+    return entries
+      .filter((entry): entry is Entry => entry !== undefined)
+      .sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name))
   }
 
   async function removeQuietly(filepath: string) {
     await fs.rm(filepath, { force: true }).catch(() => undefined)
   }
 
-  export async function cleanup() {
-    const cutoff = Identifier.timestamp(Identifier.create("tool", false, Date.now() - RETENTION_MS))
+  export async function cleanup(now = Date.now()) {
+    const cutoff = now - RETENTION_MS
     const entries = await readEntries()
 
     // Time-based cleanup
     for (const entry of entries) {
-      if (Identifier.timestamp(entry) >= cutoff) continue
-      await removeQuietly(path.join(TRUNCATION_DIR, entry))
+      if (entry.mtimeMs >= cutoff) continue
+      await removeQuietly(entry.path)
     }
 
-    // Size-based cleanup: remove oldest files until under disk cap.
+    // Size-based cleanup: filesystem mtimes preserve chronological order even
+    // when the 36-bit timestamp embedded in tool IDs crosses its ~795-day wrap.
     const remaining = await readEntries()
-    let totalSize = 0
-    const sizes: { name: string; size: number }[] = []
-    for (const entry of remaining) {
-      const stat = await fs.stat(path.join(TRUNCATION_DIR, entry)).catch(() => ({ size: 0 }))
-      const size = Number(stat.size)
-      sizes.push({ name: entry, size })
-      totalSize += size
-    }
+    let totalSize = remaining.reduce((sum, entry) => sum + entry.size, 0)
     if (totalSize <= MAX_DIR_BYTES) return
 
-    for (const item of sizes) {
+    for (const entry of remaining) {
       if (totalSize <= MAX_DIR_BYTES) break
-      await removeQuietly(path.join(TRUNCATION_DIR, item.name))
-      totalSize -= item.size
+      await removeQuietly(entry.path)
+      totalSize -= entry.size
     }
   }
 

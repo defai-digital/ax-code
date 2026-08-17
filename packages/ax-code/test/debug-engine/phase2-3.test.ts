@@ -799,6 +799,51 @@ describe("detectRaces", () => {
     })
   })
 
+  test("ignores counter-like text in comments and string literals", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "counter-noise.ts"),
+      [
+        "async function process() {",
+        "  await handle()",
+        "  // Keep the correct --max-batch-tokens setting.",
+        '  const help = "Use the correct --max-output-tokens setting"',
+        "  return help",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectRaces(projectID, { patterns: ["non_atomic_counter"] })
+        expect(report.findings).toEqual([])
+      },
+    })
+  })
+
+  test("ignores function-local accumulation after await", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "local-accumulator.ts"),
+      [
+        "async function read(stream: AsyncIterable<string>) {",
+        '  let buffer = ""',
+        "  for await (const chunk of stream) buffer += chunk",
+        "  return buffer",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectRaces(projectID, { patterns: ["non_atomic_counter"] })
+        expect(report.findings).toEqual([])
+      },
+    })
+  })
+
   test("detects conflicting mutations inside Promise.all", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(
@@ -1054,6 +1099,22 @@ describe("detectLifecycle", () => {
         const report = await DebugEngine.detectLifecycle(projectID, { resourceTypes: ["child_process"] })
         expect(report.findings.length).toBeGreaterThan(0)
         expect(report.findings[0].resourceType).toBe("child_process")
+      },
+    })
+  })
+
+  test("does not treat RegExp.exec as a child process", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "regex.ts"),
+      ["const matcher = /value/", "function match(value: string) {", "  return matcher.exec(value)", "}"].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectLifecycle(projectID, { resourceTypes: ["child_process"] })
+        expect(report.findings).toEqual([])
       },
     })
   })

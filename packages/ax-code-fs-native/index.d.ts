@@ -72,7 +72,8 @@ export declare function normalizeForEmbedding(content: string): string
 /**
  * Batch file reader: reads multiple files in parallel using rayon.
  * Returns a JSON object mapping file paths to their UTF-8 contents.
- * Files that fail to read (binary, permissions, etc.) are silently skipped.
+ * If any file cannot be read as UTF-8, return an error so the JavaScript
+ * caller can fall back to its per-file reader without silently losing input.
  */
 export declare function readFilesBatch(filesJson: string): string
 

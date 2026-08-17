@@ -195,13 +195,18 @@ describe("Truncate", () => {
     const DAY_MS = 24 * 60 * 60 * 1000
 
     test("deletes files older than 7 days and preserves recent files", async () => {
+      const now = Date.now()
       await fs.mkdir(Truncate.DIR, { recursive: true })
-      const old = path.join(Truncate.DIR, Identifier.create("tool", false, Date.now() - 10 * DAY_MS))
-      const recent = path.join(Truncate.DIR, Identifier.create("tool", false, Date.now() - 3 * DAY_MS))
+      // Keep rollover-prone embedded timestamps in the names: cleanup must use
+      // filesystem age, not lexicographic/decoded ID time.
+      const old = path.join(Truncate.DIR, Identifier.create("tool", false, now - 10 * DAY_MS))
+      const recent = path.join(Truncate.DIR, Identifier.create("tool", false, now - 3 * DAY_MS))
       try {
         await fs.writeFile(old, "old content")
         await fs.writeFile(recent, "recent content")
-        await Truncate.cleanup()
+        await fs.utimes(old, new Date(now - 10 * DAY_MS), new Date(now - 10 * DAY_MS))
+        await fs.utimes(recent, new Date(now - 3 * DAY_MS), new Date(now - 3 * DAY_MS))
+        await Truncate.cleanup(now)
 
         expect(await exists(old)).toBe(false)
         expect(await exists(recent)).toBe(true)

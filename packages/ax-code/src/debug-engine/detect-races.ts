@@ -35,6 +35,7 @@ const COUNTER_RE = /(\w+)\s*(?:\+\+|--|\+=|\-=)/g
 
 type LineInfo = {
   text: string
+  code: string
   trimmed: string
   num: number
   isAwait: boolean
@@ -42,14 +43,81 @@ type LineInfo = {
   suppressed: boolean
 }
 
+function maskCommentsAndLiterals(content: string): string {
+  let output = ""
+  let mode: "code" | "line-comment" | "block-comment" | "single" | "double" | "template" = "code"
+
+  for (let index = 0; index < content.length; index += 1) {
+    const char = content[index]!
+    const next = content[index + 1]
+    const masked = char === "\n" ? "\n" : " "
+
+    if (mode === "line-comment") {
+      output += masked
+      if (char === "\n") mode = "code"
+      continue
+    }
+    if (mode === "block-comment") {
+      output += masked
+      if (char === "*" && next === "/") {
+        output += " "
+        index += 1
+        mode = "code"
+      }
+      continue
+    }
+    if (mode !== "code") {
+      output += masked
+      if (char === "\\" && next !== undefined) {
+        output += next === "\n" ? "\n" : " "
+        index += 1
+        continue
+      }
+      if (
+        (mode === "single" && char === "'") ||
+        (mode === "double" && char === '"') ||
+        (mode === "template" && char === "`")
+      ) {
+        mode = "code"
+      } else if (char === "\n" && mode !== "template") {
+        mode = "code"
+      }
+      continue
+    }
+
+    if (char === "/" && next === "/") {
+      output += "  "
+      index += 1
+      mode = "line-comment"
+      continue
+    }
+    if (char === "/" && next === "*") {
+      output += "  "
+      index += 1
+      mode = "block-comment"
+      continue
+    }
+    if (char === "'" || char === '"' || char === "`") {
+      output += " "
+      mode = char === "'" ? "single" : char === '"' ? "double" : "template"
+      continue
+    }
+    output += char
+  }
+
+  return output
+}
+
 function parseLines(content: string): LineInfo[] {
   const rawLines = content.split("\n")
+  const codeLines = maskCommentsAndLiterals(content).split("\n")
   return rawLines.map((text, i) => ({
     text,
+    code: codeLines[i] ?? "",
     trimmed: text.trim(),
     num: i + 1,
-    isAwait: /\bawait\b/.test(text),
-    isAsync: /\basync\b/.test(text),
+    isAwait: /\bawait\b/.test(codeLines[i] ?? ""),
+    isAsync: /\basync\b/.test(codeLines[i] ?? ""),
     // Suppression applies to the comment line itself AND the next
     // non-empty line (the common pattern is a comment on its own line
     // followed by the suppressed code).
@@ -66,12 +134,12 @@ function findAsyncScopes(lines: LineInfo[]): Array<{ start: number; end: number 
   let inAsync = false
 
   for (const line of lines) {
-    if (/\basync\b/.test(line.text) && /(?:function|=>|\()/.test(line.text) && depth === 0) {
+    if (/\basync\b/.test(line.code) && /(?:function|=>|\()/.test(line.code) && depth === 0) {
       inAsync = true
       scopeStart = line.num
     }
 
-    for (const ch of line.text) {
+    for (const ch of line.code) {
       if (ch === "{") {
         depth++
       } else if (ch === "}") {
@@ -107,19 +175,19 @@ function detectToctou(lines: LineInfo[], file: string, max: number): DebugEngine
 
       // Map.get / Map.has reads
       if (!line.suppressed) {
-        const getMatches = line.text.matchAll(MAP_GET_RE)
+        const getMatches = line.code.matchAll(MAP_GET_RE)
         for (const m of getMatches) reads.push({ name: m[1], line: line.num })
         const hasRe = /(\w+)\.has\s*\(/g
-        const hasMatches = line.text.matchAll(hasRe)
+        const hasMatches = line.code.matchAll(hasRe)
         for (const m of hasMatches) reads.push({ name: m[1], line: line.num })
       }
 
       // Map.set / Map.delete writes
       if (!line.suppressed) {
-        const setMatches = line.text.matchAll(MAP_SET_RE)
+        const setMatches = line.code.matchAll(MAP_SET_RE)
         for (const m of setMatches) writes.push({ name: m[1], line: line.num })
         const deleteRe = /(\w+)\.delete\s*\(/g
-        const deleteMatches = line.text.matchAll(deleteRe)
+        const deleteMatches = line.code.matchAll(deleteRe)
         for (const m of deleteMatches) writes.push({ name: m[1], line: line.num })
       }
     }
@@ -163,7 +231,7 @@ function detectNonAtomicCounter(lines: LineInfo[], file: string, max: number): D
     for (const line of scopeLines) {
       if (line.suppressed) continue
       if (line.isAwait) awaitLines.push(line.num)
-      const matches = line.text.matchAll(COUNTER_RE)
+      const matches = line.code.matchAll(COUNTER_RE)
       for (const m of matches) counters.push({ name: m[1], line: line.num })
     }
 
@@ -174,12 +242,13 @@ function detectNonAtomicCounter(lines: LineInfo[], file: string, max: number): D
       if (!hasAwaitBefore) continue
       if (findings.length >= max) break
       const escapedName = counter.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-      // Skip counters on local variables declared in the same line
+      // Function-local state is isolated per invocation, so concurrent calls
+      // cannot race on it. Only counters captured from an outer scope need a
+      // finding after an await boundary.
       const declLine = scopeLines.find(
-        (l) => l.num <= counter.line && new RegExp(`\\b(?:let|var|const)\\s+${escapedName}\\b`).test(l.text),
+        (l) => l.num <= counter.line && new RegExp(`\\b(?:let|var|const)\\s+${escapedName}\\b`).test(l.code),
       )
-      // If declared and first used on the same line, skip
-      if (declLine && declLine.num === counter.line) continue
+      if (declLine) continue
       findings.push({
         file,
         line: counter.line,
@@ -288,7 +357,7 @@ function detectStaleListener(lines: LineInfo[], file: string, max: number): Debu
       if (line.suppressed) continue
       if (line.isAwait) lastAwaitLine = line.num
 
-      const lMatch = listenerRe.exec(line.text)
+      const lMatch = listenerRe.exec(line.code)
       if (lMatch && lastAwaitLine > 0 && lastAwaitLine < line.num) {
         if (findings.length >= max) break
         findings.push({

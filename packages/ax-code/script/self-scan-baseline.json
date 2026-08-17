@@ -3,7 +3,7 @@
   "scope": "packages/ax-code/src",
   "scanners": {
     "race_scan": {
-      "count": 114,
+      "count": 55,
       "findings": [
         {
           "fingerprint": "3d3065523434f5546e63b368db904bd163079d8cf1a87fe366a8ccd7229dfc45",
@@ -26,8 +26,8 @@
         {
           "fingerprint": "49cf239d908d2e0b51d0366e5950eba42705206cb278f7c16cb0e1a0e34d141c",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 474,
-          "endLine": 481,
+          "line": 521,
+          "endLine": 528,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -80,83 +80,11 @@
         {
           "fingerprint": "a27e555075eb8610002f1ec13df092835b9067110dd1059f873638597dff6c61",
           "file": "src/server/routes/provider.ts",
-          "line": 373,
-          "endLine": 418,
+          "line": 379,
+          "endLine": 424,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
-        },
-        {
-          "fingerprint": "8641019dfe607445546ccf02b7419f0124493526a300724c4582d26386d44d71",
-          "file": "src/cli/boot.ts",
-          "line": 274,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "20e897e013620da366afeab19c609c3173939ad7d84c6815b7c3c6fdd33a26c6",
-          "file": "src/cli/cmd/account.ts",
-          "line": 57,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "5546c3324d0af8c227a946e184cf81eb7043d040738c680909fe9441bfe01a30",
-          "file": "src/cli/cmd/release/check.ts",
-          "line": 366,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "f059c3caa1907d3ecde7d8d88e39f956299b9563c750cf708cc7f12584d14fdc",
-          "file": "src/cli/cmd/release/check.ts",
-          "line": 390,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "4dbdbe83c5d305e030cc800081c295b81013e64ea52587ff123689884defebe4",
-          "file": "src/cli/cmd/release/check.ts",
-          "line": 406,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "56663462b1325512399188015597015b16f0a6f565c3111b6c944d05f9ecaa42",
-          "file": "src/cli/cmd/release/check.ts",
-          "line": 534,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "5331583bb7b8a3423155e5138515b2c9594e4db0cd588f1f2ef33ea3c1340d4c",
-          "file": "src/cli/cmd/release/check.ts",
-          "line": 567,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "5331583bb7b8a3423155e5138515b2c9594e4db0cd588f1f2ef33ea3c1340d4c",
-          "file": "src/cli/cmd/release/check.ts",
-          "line": 567,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "139a374b2a8591be3acdfa6574acf665c8556feaa2bde2f9a73687ea43b3b027",
-          "file": "src/cli/cmd/stats.ts",
-          "line": 223,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
         },
         {
           "fingerprint": "02f82e48307b4136ae98bc2204331b0054079a0d4177d62efa83c5e2cf2a92dc",
@@ -279,14 +207,6 @@
           "summary": "non_atomic_counter"
         },
         {
-          "fingerprint": "7d73ef4dbccd011ae8c7239324405f028c5c65dd6886113004daa6a7da8fad2a",
-          "file": "src/cli/cmd/stats.ts",
-          "line": 293,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
           "fingerprint": "998ed66b469962159fae24c670f5d3c205887371d391dd49f36089809b85d43b",
           "file": "src/cli/cmd/stats.ts",
           "line": 294,
@@ -319,108 +239,12 @@
           "summary": "non_atomic_counter"
         },
         {
-          "fingerprint": "3b859ad7fd382f8e9eaff0154b916cde39044b6cca65bf64cbc711e2e4f27314",
-          "file": "src/cli/cmd/tui/context/sync-bootstrap-phase.ts",
-          "line": 47,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "0982c13b7d62c1425536321205f4e779cbbb8bb31c4553b34cfc8e55eca7769c",
-          "file": "src/cli/cmd/uninstall.ts",
-          "line": 315,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "d316227d26f17d6ceadcefd38c04fd814170983365f54a8267f48d0a560b37f8",
-          "file": "src/context/analyzer.ts",
-          "line": 419,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "ca5eab6513113dc88da215db033faef179708854a848881d79b7af12ea4cfc80",
-          "file": "src/context/analyzer.ts",
-          "line": 420,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "d316227d26f17d6ceadcefd38c04fd814170983365f54a8267f48d0a560b37f8",
-          "file": "src/context/analyzer.ts",
-          "line": 430,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "ca5eab6513113dc88da215db033faef179708854a848881d79b7af12ea4cfc80",
-          "file": "src/context/analyzer.ts",
-          "line": 431,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
           "fingerprint": "b3192d6b381edb8edb80e282d3f114bf4b5993e00ae3081500ed53d03b7d8c96",
           "file": "src/control-plane/abort.ts",
           "line": 26,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
-        },
-        {
-          "fingerprint": "483b808ae3d36e2314700854278d2218435c63e97416c1870761e7d695419dc7",
-          "file": "src/control-plane/sse.ts",
-          "line": 109,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "63201ba806b99dfd40645b1d7684fdc2dafe4165ebe43d161f7281eef1a2b395",
-          "file": "src/control-plane/sse.ts",
-          "line": 127,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "0c8fb83a73e5f0c8e2c7957476a41bde6606ec38334fd86494ac9a54d315b9d4",
-          "file": "src/debug-engine/prewarm-lsp.ts",
-          "line": 66,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "180a65640e683a0cac7c8f0c745acffd3e1e33b2f0137ad6ac4316e070300d78",
-          "file": "src/debug-engine/prewarm-lsp.ts",
-          "line": 68,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "58731604215c0552a93bbc8c238a2658040d822224f5fce575038cf034b1d1b9",
-          "file": "src/design-check/index.ts",
-          "line": 97,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "c9e0915d270d035b82b3df6c8e34f0466a517aeb26df2938cf90a67cd63c5428",
-          "file": "src/design-check/index.ts",
-          "line": 98,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
         },
         {
           "fingerprint": "08f504bed4812683de42c6bf96b42656c5480c7f7161a7876dca952f4378f19c",
@@ -431,28 +255,12 @@
           "summary": "stale_listener"
         },
         {
-          "fingerprint": "38ac6603b0d9b1256ae4f9152e467b6e670e6f401924e3c84d3257cba682a3aa",
-          "file": "src/desktop/webui.ts",
-          "line": 168,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
           "fingerprint": "91bde4c2b7b20279b9a43b2a300a191324200a4548d7eff4e2caa27e6aa90831",
           "file": "src/desktop/webui.ts",
           "line": 170,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
-        },
-        {
-          "fingerprint": "d767fb692ddd3c38f3438627a768c22722686f2af6d8d94a978336e03f3b1a67",
-          "file": "src/desktop/webui.ts",
-          "line": 171,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
         },
         {
           "fingerprint": "05eeadc494b238d86e782cb54c833fc020338ce892405031488d278d691eee4f",
@@ -487,100 +295,12 @@
           "summary": "stale_listener"
         },
         {
-          "fingerprint": "4821b528e1ce5d4c98530e5579f5fe00e375949f7686a27c80af726090b42a72",
-          "file": "src/lsp/oxlint.ts",
-          "line": 31,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "dcf7853552ab3cb60c7f1914d150a9d1244e7ee76130b5c601908efad87f5195",
-          "file": "src/lsp/oxlint.ts",
-          "line": 37,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "74f0a2ebd3b988571a463364f4a40d834c7ff4c943b9216da16761b5959731bf",
-          "file": "src/planner/verification/runner.ts",
-          "line": 68,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "74f0a2ebd3b988571a463364f4a40d834c7ff4c943b9216da16761b5959731bf",
-          "file": "src/planner/verification/runner.ts",
-          "line": 68,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "74f0a2ebd3b988571a463364f4a40d834c7ff4c943b9216da16761b5959731bf",
-          "file": "src/planner/verification/runner.ts",
-          "line": 68,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "8e839ddea356c58e937fb10f66eb892b7dce26800795afee5f292ae8f974b92a",
-          "file": "src/provider/ax-engine/delete.ts",
-          "line": 30,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "feb3c388956e901678fb121a688ac6224685ea9f5d2f40991b40041aab948025",
-          "file": "src/provider/ax-engine/delete.ts",
-          "line": 64,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "8a109b64fea1149cc361f9d01642107679b222d1ba8e5ce4b9c6c03b11b240f6",
-          "file": "src/provider/ax-engine/dependency.ts",
-          "line": 44,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "7e35300a964f2dfe026057383515bd2f4e87588ebd91a3052e77a4c601a56a08",
-          "file": "src/provider/ax-engine/model-cache.ts",
-          "line": 137,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "29d3cd9a361e16d75eba534955cc309a0e2c9e980c3c8942674e469676612739",
-          "file": "src/provider/ax-engine/server.ts",
-          "line": 581,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
           "fingerprint": "5aafcf3daf9c0f5aa15c32094a8a960871a0dbab834f741fdc19c163960f3cd6",
           "file": "src/provider/cli/cli-language-model.ts",
-          "line": 128,
+          "line": 129,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
-        },
-        {
-          "fingerprint": "d40653244fe56619015e50d71cbd2d26501581d124f415d1d8907a9fa2f9fb11",
-          "file": "src/quality/pr-diff.ts",
-          "line": 64,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
         },
         {
           "fingerprint": "3ddfb144004f8561d841fad870fd33a35f3191cf24799e9f2da394c5ec518148",
@@ -615,14 +335,6 @@
           "summary": "stale_listener"
         },
         {
-          "fingerprint": "201978cf6522b40aa14d142052a1dc46708c7081236c3a2b20fe97baa6b09f74",
-          "file": "src/server/ipc-protocol.ts",
-          "line": 69,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
           "fingerprint": "dc8f689d4bfe63384c8619afb313b2f48931482449276672be173b63428acf2c",
           "file": "src/server/ipc-transport.ts",
           "line": 54,
@@ -631,36 +343,12 @@
           "summary": "stale_listener"
         },
         {
-          "fingerprint": "d44623bac8ca36d03387ee3dab4cd1f7d174ea25e9a2fa1b22e68bdc8b712e9e",
-          "file": "src/server/ipc-transport.ts",
-          "line": 298,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "d402e05e733d5a7e907d657b8387a67cf170d784b5b8735c89384f0d4204db2d",
-          "file": "src/server/ipc-transport.ts",
-          "line": 309,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
           "fingerprint": "bfb7d19789bd1671a43dfa388db6c20893fb99fdb315ba13f31cbf4e082e477a",
           "file": "src/server/runtime-adapter.ts",
           "line": 145,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
-        },
-        {
-          "fingerprint": "4d267cdc98d48bfb47e6177e84099b329d73542923471de8a03cf2f9732c2fcd",
-          "file": "src/session/prompt-goal-command.ts",
-          "line": 99,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
         },
         {
           "fingerprint": "fb1d933bdfcd8d5db130889a83678bd50acfe692e687907ebff8d5eaf0e10591",
@@ -703,70 +391,6 @@
           "summary": "stale_listener"
         },
         {
-          "fingerprint": "e552ef7821993944343788aba29a6335ebfcc88613983d9a3b13081abb557bea",
-          "file": "src/tool/arena.ts",
-          "line": 472,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "7cf5cae2fabb1fd72cabc3f395d6bbb37aeeb17f9f0f31986415aa070960385e",
-          "file": "src/tool/bash-impl.ts",
-          "line": 381,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "4ef5f0c251dc147636531b7931f2297d9b40bccf5cc65d7635cbf70b34ac2736",
-          "file": "src/tool/bash-impl.ts",
-          "line": 413,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "7cf5cae2fabb1fd72cabc3f395d6bbb37aeeb17f9f0f31986415aa070960385e",
-          "file": "src/tool/bash-impl.ts",
-          "line": 423,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "ca93f1cef8a51124444bc28773908c2a7a07d262420085ef9fe9dc6a56735214",
-          "file": "src/tool/bash-impl.ts",
-          "line": 465,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "a4623bfd2301bac8c740b18295a9b6618677d77d922fd8a7e1466d6372899ada",
-          "file": "src/tool/bash-impl.ts",
-          "line": 537,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "a40e0bc5fead8009f03a4b787b6998c709b84e06ec53970dcef5f9fc4f66dbc7",
-          "file": "src/tool/bash-impl.ts",
-          "line": 585,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "ca93f1cef8a51124444bc28773908c2a7a07d262420085ef9fe9dc6a56735214",
-          "file": "src/tool/bash-impl.ts",
-          "line": 622,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
           "fingerprint": "616e9a85a1ac74bf4aa42b2a1c21026a7b60731d4a70f92544fded017a54af78",
           "file": "src/tool/bash-impl.ts",
           "line": 794,
@@ -781,30 +405,6 @@
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
-        },
-        {
-          "fingerprint": "47dd40928aebfd8688f22e7371ad500b3ed4a3e9730e6367514a42ec182a98af",
-          "file": "src/tool/bash-impl.ts",
-          "line": 909,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "58c9ca32d3401a451d6c61084e3692056db0bffb1741d4f42bef087255069a27",
-          "file": "src/tool/bash-impl.ts",
-          "line": 915,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "0b8fbd647b476533829aedd18dd9a40e2fc7ba4180a7502defa0b8cc36658ccc",
-          "file": "src/tool/bash-impl.ts",
-          "line": 918,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
         },
         {
           "fingerprint": "b6ccd991efa86426087f6ba13ff4e83712d6ca771983e62f3a71feaca628587b",
@@ -839,49 +439,9 @@
           "summary": "stale_listener"
         },
         {
-          "fingerprint": "93d7561899b25fb58ea8a1ea18bcd926f31fe14d7ead3624726473d529cd31c7",
-          "file": "src/tool/bash-impl.ts",
-          "line": 1017,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "118d036977a62692c4e13a90360e46ef895da8de041af3d279c34166072809de",
-          "file": "src/tool/council.ts",
-          "line": 371,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "841d86ebaf05845c8ae923856a9937029b9bf6fc54e944b8e86b17fc54fda511",
-          "file": "src/tool/read.ts",
-          "line": 389,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "2ee3d64b2690803e99c4db5908875b6b173bbc2affb555ccc73b288514941dc8",
-          "file": "src/tool/task_parallel.ts",
-          "line": 94,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "354011741c5874e63c31146b003150ecf05e2bd94d27a2301bad5cc91a64e527",
-          "file": "src/tool/task.ts",
-          "line": 216,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
           "fingerprint": "b9d9a04724b36a10ee233d083096f7cdff3da08fd2d7be1114991c6f1f3628d0",
           "file": "src/tool/task.ts",
-          "line": 271,
+          "line": 295,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -889,47 +449,15 @@
         {
           "fingerprint": "a95f1ba3de560b3ffe2d2d7f53c2aa142aa03cf5ab1a6f97d922360e4adfb23e",
           "file": "src/tool/task.ts",
-          "line": 273,
+          "line": 297,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
-        },
-        {
-          "fingerprint": "9268060b698b62af7ceb5ecc6a168a2833ac61336048bc082d91432bc08a76ae",
-          "file": "src/tool/task.ts",
-          "line": 286,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "5158a5c105310f45a28fa52e1520eed86fd08ce9e83be30c642fc1817ba235e9",
-          "file": "src/util/queue.ts",
-          "line": 31,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "66d0141e75e94bde417cfe1cfc8a25f9b8c48569ed05df2893b54f710ef69808",
-          "file": "src/util/queue.ts",
-          "line": 47,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
-        },
-        {
-          "fingerprint": "5eec45b8445c426ada6cba5f8cdbf6b516d1edbfcb5ff6e8e6a54cd358ca792b",
-          "file": "src/util/queue.ts",
-          "line": 65,
-          "severity": "medium",
-          "kind": "non_atomic_counter",
-          "summary": "non_atomic_counter"
         }
       ]
     },
     "lifecycle_scan": {
-      "count": 202,
+      "count": 181,
       "findings": [
         {
           "fingerprint": "988fc40c0ae29463c01aa66d00474a79033c16bb47b846775fe9a251acb59cbf",
@@ -970,14 +498,6 @@
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
-        },
-        {
-          "fingerprint": "3aaf4293b754bb0ed0bdb1082df9627320c3b8d8bc775f8f80091639ab66d0f2",
-          "file": "src/cli/cmd/branch.ts",
-          "line": 30,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
         },
         {
           "fingerprint": "d9abcdd41bf1582f1ced261814673baa89aab6161301179a2f9d3ddec1f6c1c0",
@@ -1028,22 +548,6 @@
           "summary": "child_process:no_cleanup"
         },
         {
-          "fingerprint": "44b4446d901a159a3c80832efab1baf34962825e5aa728729218a0641f9bc858",
-          "file": "src/cli/cmd/release/check.ts",
-          "line": 465,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "a3f418ecd687e764958602cd21d51259689d9a66bec12bdf3431e77bb50bfff8",
-          "file": "src/cli/cmd/run.ts",
-          "line": 483,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
           "fingerprint": "0d32bc72f5c452849db4e17e0f3c37f7227795f8d35d5c21703c56b1245b6339",
           "file": "src/cli/cmd/storage/session.ts",
           "line": 439,
@@ -1068,89 +572,9 @@
           "summary": "timer:no_cleanup"
         },
         {
-          "fingerprint": "c230626cc75225950cf2694c041c9de3dc36a0fbdedf15cb5fde2b69c0fff390",
-          "file": "src/control-plane/sse.ts",
-          "line": 112,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "6647c3866e353ab14151d1604db83f92f64e629a1ba6c84cc7455639f9e08142",
-          "file": "src/debug-engine/detect-hardcodes.ts",
-          "line": 113,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "a7e2e9e583e89e226e9f030c81193279e5c8ff8989388285680cfbdab363ae40",
-          "file": "src/debug-engine/detect-hardcodes.ts",
-          "line": 140,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "4de12d5af148bc11c73de2758bea89100cf83cf018f86bc0f34ad33a7bb92f4d",
-          "file": "src/debug-engine/detect-hardcodes.ts",
-          "line": 154,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "7450084ebe371ded8bf3a9030e9cd96dce7c1485eddb59c1d19256871c6cf384",
-          "file": "src/debug-engine/detect-hardcodes.ts",
-          "line": 210,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "d4c5a38f78bcfecb6c4f3358fd0b12eb5ca49f23efa2423d8c5b15d10062f055",
-          "file": "src/debug-engine/detect-races.ts",
-          "line": 217,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "67ad1e5925c8509e075f257d3b0ea82d923a7e9f91e6e2245693178600074be7",
-          "file": "src/debug-engine/detect-races.ts",
-          "line": 247,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "d22a06df05dfcf16ee9ad0a13461e164f260b1a87e2c92ec896d15626613f259",
-          "file": "src/debug-engine/detect-races.ts",
-          "line": 291,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "29fbbb57f5b8e312aff35d1c0da1ef57663c7c26ad3c3d0028b82ef0dda6937a",
-          "file": "src/debug-engine/detect-security.ts",
-          "line": 55,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
           "fingerprint": "a000d89ad5e16831c674d6f33b7bcc2192fc763d6aa691e56922eee8211e1d64",
           "file": "src/debug-engine/language-scan.ts",
           "line": 421,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "84cd7511015c46967d2a7f74f9f29c17e86e03a243fdac2a6e8eb6c715cdc859",
-          "file": "src/design-check/rules/spacing.ts",
-          "line": 26,
           "severity": "high",
           "kind": "child_process:no_cleanup",
           "summary": "child_process:no_cleanup"
@@ -1236,17 +660,9 @@
           "summary": "timer:no_cleanup"
         },
         {
-          "fingerprint": "984bb314e3fc1f9cd9764f85a9e60ae0488731b7b783e5f136b24232f4bb2216",
-          "file": "src/planner/verification/index.ts",
-          "line": 213,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
           "fingerprint": "eb9262e63234254c65022b56f40eb4bd20816c31faaa928f64564ec930cc65a0",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 205,
+          "line": 244,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -1254,7 +670,7 @@
         {
           "fingerprint": "d59deefdfb2a0775af8aa7e7fbc8e74e490a80b77680ad2a113b24afbffbf8a7",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 370,
+          "line": 409,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -1262,7 +678,7 @@
         {
           "fingerprint": "205ae80d3cc4e55b0beadb36e9dcbe9cf42c44a6063964169019dfc79874e990",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 574,
+          "line": 637,
           "severity": "high",
           "kind": "child_process:no_cleanup",
           "summary": "child_process:no_cleanup"
@@ -1279,14 +695,6 @@
           "fingerprint": "8a4d9b83635380d36e2f7143be0bd2b589577e10e1c22d3f5ac3cc6fc855dc6d",
           "file": "src/sdk/programmatic-impl.ts",
           "line": 877,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "20a058455668657087758f1cfa61361a819d64fa46151c6755afd1ec252ed3be",
-          "file": "src/sdk/programmatic-impl.ts",
-          "line": 879,
           "severity": "high",
           "kind": "child_process:no_cleanup",
           "summary": "child_process:no_cleanup"
@@ -1316,57 +724,9 @@
           "summary": "child_process:no_cleanup"
         },
         {
-          "fingerprint": "4a08109fa25222d5cebf4ae916c230108fbdf9f36da4aa2c586890d57f154477",
-          "file": "src/server/routes/session-impl.ts",
-          "line": 919,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "940f4a27bd13c027c6494a7a9f33186d3e8ac060101ecfed7cfe32d34f8578fe",
-          "file": "src/session/background-subagent-handoff.ts",
-          "line": 131,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "c4bf20d00bde73f20e1b97bed2495be109749f4e2729d63ffd6f1ee492c853aa",
-          "file": "src/session/prompt-goal-arguments.ts",
-          "line": 27,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
           "fingerprint": "6eadeab55f818015517e7489f9a4ac8bce393fb7a5f107b35d46f631d5411a19",
           "file": "src/session/prompt-shell-command.ts",
           "line": 82,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "018c1ffbafa611aed7204e99c38526bd8aaddf6c80ed2251808f63e65357374a",
-          "file": "src/session/scheduled-task.ts",
-          "line": 797,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "8ac39a134080b8adf35936c4121eca7bf8f13b01b97b22a4bab528dda8f4aa56",
-          "file": "src/session/scheduled-task.ts",
-          "line": 806,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "cbdb584bc0df78a2b4941e2cc21f0b91e03df74dec3ae981bbb586ed8c8a5e6e",
-          "file": "src/session/scheduled-task.ts",
-          "line": 828,
           "severity": "high",
           "kind": "child_process:no_cleanup",
           "summary": "child_process:no_cleanup"
@@ -1662,7 +1022,7 @@
         {
           "fingerprint": "b97b9f29e6d33df6fd0e3d7a43cd436a57cf23f8943829889c47971ebe233e53",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 287,
+          "line": 288,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1670,7 +1030,7 @@
         {
           "fingerprint": "667fad48cc4105ec032b7cda3fb201a7fbcec719103d829340198565b18106c1",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 464,
+          "line": 465,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1678,7 +1038,7 @@
         {
           "fingerprint": "b8a37765a5b970d69b4ed20bcb8f2dd37aa52e0d70b5dcab07390c9c9bb310cc",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 861,
+          "line": 862,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1694,7 +1054,7 @@
         {
           "fingerprint": "97eeeb757f34ce4d55118a56b69bd51d17ad55095c5db4eae7cfaff503359414",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 224,
+          "line": 242,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1702,7 +1062,7 @@
         {
           "fingerprint": "93865fa82182c5a60f029005c05bf66a6e319edf80870fc41d95f437b073858d",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 663,
+          "line": 681,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1710,7 +1070,7 @@
         {
           "fingerprint": "a7a5f8f67ea5f92e06d4a03b240dffd6f11a8a1d9a43c93e8bc3363a62c0fb52",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 664,
+          "line": 682,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1718,7 +1078,7 @@
         {
           "fingerprint": "1ca2bcc2a2fdffc4c21b41943edc93f7e4e0c59ce06f588cc884532ed0d28dfa",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 665,
+          "line": 683,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1726,7 +1086,7 @@
         {
           "fingerprint": "94835321fd4764acd5d2c20ae85163b425d19914a8b36ddbabfa6a2871e22f98",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 908,
+          "line": 926,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1734,7 +1094,7 @@
         {
           "fingerprint": "2f4fc5cf64d2ce458bf6389bbafeb79f101cc1e5f045b945f5d745710aa36c83",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 1468,
+          "line": 1500,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1774,7 +1134,7 @@
         {
           "fingerprint": "5da0e23870753ff220f1e8f5e41eec1d4ecb1bdb021e74b05a0ebd18b62cd93e",
           "file": "src/cli/cmd/tui/routes/session/index.tsx",
-          "line": 466,
+          "line": 468,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1782,7 +1142,7 @@
         {
           "fingerprint": "118d3e2f99454063417372729f558461cd075ae01cfaef93ad3e7c87dc2da547",
           "file": "src/cli/cmd/tui/routes/session/index.tsx",
-          "line": 509,
+          "line": 511,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1790,7 +1150,7 @@
         {
           "fingerprint": "d80f45de3e6121e38b7cc04ac30d95553aa2926161888746c21ec3b7f0b22278",
           "file": "src/cli/cmd/tui/routes/session/index.tsx",
-          "line": 550,
+          "line": 552,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1798,7 +1158,7 @@
         {
           "fingerprint": "2a614de4f16010568bd8b4e72bc13388b28af3943fa04304a122ed158fc034c1",
           "file": "src/cli/cmd/tui/routes/session/index.tsx",
-          "line": 746,
+          "line": 748,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1806,7 +1166,7 @@
         {
           "fingerprint": "cd29900713c26f4e4dc0cf58d79a5bc7960d826846fb180d5b174bbefe44f672",
           "file": "src/cli/cmd/tui/routes/session/index.tsx",
-          "line": 1193,
+          "line": 1197,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1814,7 +1174,7 @@
         {
           "fingerprint": "6d9373a614e7a6d114635bd982b53adb764396fb7e8261cdcfc6c62e8bab56e1",
           "file": "src/cli/cmd/tui/routes/session/index.tsx",
-          "line": 1386,
+          "line": 1390,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1822,7 +1182,7 @@
         {
           "fingerprint": "254bc2912354d0003e6d89bfdc990bd6e734acd9a0f3ca23d6e962e8b3b956bb",
           "file": "src/cli/cmd/tui/routes/session/index.tsx",
-          "line": 1389,
+          "line": 1393,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1838,7 +1198,7 @@
         {
           "fingerprint": "e31a8a9b68ce8488851ca25622d4b0f25fb5b2507b0bb15103a04eb352e9a57f",
           "file": "src/cli/cmd/tui/routes/session/view-model.ts",
-          "line": 150,
+          "line": 180,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1934,7 +1294,7 @@
         {
           "fingerprint": "3a1ff74e6fb1b1f8c42bd7c44a8a427b7012a7156f67688345afdebdaaab91c6",
           "file": "src/debug-engine/detect-races.ts",
-          "line": 254,
+          "line": 323,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -2134,7 +1494,7 @@
         {
           "fingerprint": "18bd52525aeee67ce476a8823018f783c5f85cbaebc7cb383290c834024810e7",
           "file": "src/provider/ax-engine/provider-loader.ts",
-          "line": 177,
+          "line": 180,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -2142,7 +1502,7 @@
         {
           "fingerprint": "db39b64c07a2e452b6401b50891ab5f75a5cad589180e0efa1b9e2e2b90c1f7c",
           "file": "src/provider/ax-engine/provider-loader.ts",
-          "line": 291,
+          "line": 294,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -2150,7 +1510,7 @@
         {
           "fingerprint": "4c29ce91f7286aafd67c68bb387b6bbc2bd074bdc25fe9550f9c396396aaaa2f",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 371,
+          "line": 410,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -2158,7 +1518,7 @@
         {
           "fingerprint": "7ada331ee17778c0dab3645d5874ede6160825e83f85f9fca4689093097c4f48",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 375,
+          "line": 414,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -2166,7 +1526,7 @@
         {
           "fingerprint": "c55c1157f2035311ffa452b6a22cd25297aed2f60dd5f2884f0520dcc9fe4cbe",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 378,
+          "line": 417,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -2334,7 +1694,7 @@
         {
           "fingerprint": "426387ff8eb924d99c133861f004cafb1b41ce02410942021c493a65f6711baa",
           "file": "src/server/routes/provider.ts",
-          "line": 207,
+          "line": 213,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -2550,7 +1910,7 @@
       ]
     },
     "security_scan": {
-      "count": 485,
+      "count": 459,
       "findings": [
         {
           "fingerprint": "5408e4d4e3ebb995a544fa9cf884f57c72d8f2ce3470fe51fc3889c2ad26d767",
@@ -2579,7 +1939,7 @@
         {
           "fingerprint": "aa0287bb13256b6090a6ec1a6f1d23ae58de910950d2cd4a3225bd99ee654932",
           "file": "src/auth/encryption.ts",
-          "line": 66,
+          "line": 67,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -3129,46 +2489,6 @@
           "summary": "path_traversal user-controlled"
         },
         {
-          "fingerprint": "2a4c3f834099fab4b1780dbea1285f00fbe1ccb51af5ca5ce31c8b01c7ee6686",
-          "file": "src/cli/cmd/tui/component/dialog-ax-engine-download.tsx",
-          "line": 37,
-          "severity": "high",
-          "kind": "ssrf",
-          "summary": "ssrf user-controlled"
-        },
-        {
-          "fingerprint": "2f318b2e33c3fe6f27234d3427bbb825d253caf07ec8b4aefc79c604aa58a879",
-          "file": "src/cli/cmd/tui/component/dialog-ax-engine-download.tsx",
-          "line": 42,
-          "severity": "high",
-          "kind": "ssrf",
-          "summary": "ssrf user-controlled"
-        },
-        {
-          "fingerprint": "db40d8f18828abe8c059aad7d6d419d1c64c6f229c2a9389abe46e09f065a446",
-          "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 132,
-          "severity": "high",
-          "kind": "ssrf",
-          "summary": "ssrf user-controlled"
-        },
-        {
-          "fingerprint": "bc053cf9af193966c346b889d050dc6fc5e61c861afc53a168f53323d5147743",
-          "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 157,
-          "severity": "high",
-          "kind": "ssrf",
-          "summary": "ssrf user-controlled"
-        },
-        {
-          "fingerprint": "2038e8dcd79b2062011f169c1a70bb0893b93db815b92626192af728b1e5980e",
-          "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 184,
-          "severity": "high",
-          "kind": "ssrf",
-          "summary": "ssrf user-controlled"
-        },
-        {
           "fingerprint": "b68cbee8d18b91d300de146d7ffd04debf4e4505a232cc9e371966e1f8398e08",
           "file": "src/cli/cmd/tui/component/prompt/frecency.tsx",
           "line": 30,
@@ -3223,14 +2543,6 @@
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "f49d741da7cfafd6edac93075505a084cb52ac4a2f6160d56e99886c78e8241e",
-          "file": "src/cli/cmd/tui/routes/session/dialog-capability-catalog.tsx",
-          "line": 30,
-          "severity": "high",
-          "kind": "ssrf",
-          "summary": "ssrf user-controlled"
         },
         {
           "fingerprint": "47d9ee53d5297f6d6198f2d29c78ac17db7030be89fa5ddef6f65f5b220fb6e4",
@@ -5059,143 +4371,7 @@
         {
           "fingerprint": "7b9493ff52d767b5178a83157f1fdf0574c116e58815598aa2c22e0ed4dc89d3",
           "file": "src/provider/ax-engine/model-cache.ts",
-          "line": 828,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "0a215a9f59578ce38724068a90ac5cfcbb171c5e3179ec9b33d29e31847acbc1",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 7,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "8881619c7787d3deac1fb9748b268370f27dacbfc8edc5aca66b8ba65384f8fe",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 8,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "c28777aa3ac5489ecb593d55f9b17ba5c86eea2711ce75f9032135acb92db85e",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 9,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "9c8b7debe38b1f37cab0d04e9434f5c841e6a6227a2100d426abe6365ab53c80",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 11,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "e16d38711689dec8033917a91e82b217d66c96d91362284eb1891f99d73c271c",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 12,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "f206e17b2313831cb978b64592cc1d90d4ebd734c8641ba35f82382077f19ac3",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 13,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "99871bd500b8586a845d11da4be08367a3279038871c33e2098fe989c7af93f5",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 14,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "add4308cf8f99f198773c44e23250fb0908e25f11b5ad3f14c0784871da91f9c",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 15,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "f57d5b1e173480918f4f5478915f737c6bd2be172986c865ba2730926bea25fb",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 16,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "d01805a920ed168a0bb36341ef62e7807a57beac9ca6f25e01fbb9a8d25e353f",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 17,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "718c5699711bb7539a49df92774c7205de868d182fae829009457d29dff34353",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 18,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "9da9a9a4c9f4b17b3e4524e33c8db0487cb516c661f7c4f3ce5fc3255ee78e94",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 19,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "a7f0023e82c09f29f3ed1607cc42ed3567bcd8e70e76b550703c16cb883b9c1a",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 20,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "785878c90a35c20ef6bfb001b1a004d69456e6c45dc99f0bc421e7520979652d",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 23,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "217528ecf03ef63c6b29ca357b9f98af866e9e72d6c44166788a1eaa0cd91821",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 27,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "e23653c1b372ac58b40ce0b2fb30882188290afea0e35c81c47cf1b026f68e5b",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 31,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "fac5446a6e1ac877841ca283bc5e1f669b40a8d22cf53e5dc9383f4356cc1137",
-          "file": "src/provider/ax-engine/paths.ts",
-          "line": 35,
+          "line": 845,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5203,7 +4379,7 @@
         {
           "fingerprint": "a9e914206cb3f620108625c68109366670168de993db74c0694b289eb933fa88",
           "file": "src/provider/ax-engine/provider-loader.ts",
-          "line": 296,
+          "line": 299,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf user-controlled"
@@ -6099,31 +5275,7 @@
         {
           "fingerprint": "f13a6c8f33afa4842a781a2ebb81eb8b569aaafe91fec0e00dd605f9ebb2eb19",
           "file": "src/tool/truncate.ts",
-          "line": 20,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "588ad3abc2c3c9c6ddb58c429044b678d4c68648a476966bc919ab09f99e9888",
-          "file": "src/tool/truncate.ts",
-          "line": 87,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "b8d2cb4ac2286724ee0f4cf5d799efb95a9b0ee6c929c3d787a084b26427a88d",
-          "file": "src/tool/truncate.ts",
-          "line": 95,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "a22d2688a0f0ea6e9e5287c7f9bc7873b5c5953fe1781c7d3de52322c7953306",
-          "file": "src/tool/truncate.ts",
-          "line": 104,
+          "line": 19,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -6131,7 +5283,7 @@
         {
           "fingerprint": "6c461d0678bff5df244494adcd4dd13b1ccaf621966a006fabbdbcd8f90a57af",
           "file": "src/tool/truncate.ts",
-          "line": 162,
+          "line": 168,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -6856,7 +6008,7 @@
         {
           "fingerprint": "55545e1db1319289400cfccebb76e265f1284f4100753c3fcc307fdd97985d4d",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 44,
+          "line": 45,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6864,7 +6016,7 @@
         {
           "fingerprint": "c6cd457032177da8bc60b58a53d7e200580a96ef745c2dc2c373f35182ccca44",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 45,
+          "line": 46,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6872,7 +6024,7 @@
         {
           "fingerprint": "219c4942259907e3b73838c128fe05371eb3e6888e5fec648ea2a8b86878583f",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 331,
+          "line": 332,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6880,7 +6032,7 @@
         {
           "fingerprint": "c5bdaee3490d4731b799f797c3e1130fafd2a82656ae7dc482a32a2aac498735",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 743,
+          "line": 744,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"

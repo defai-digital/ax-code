@@ -4,6 +4,7 @@ import { useSDK } from "./sdk"
 import { useToast } from "../ui/toast"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
 import { scheduleTuiTimeout } from "@tui/util/timer"
+import { urlAllowlistServerRoute } from "@tui/util/server-url"
 import {
   activeAxEngineJobForModel,
   axEngineJobActive,
@@ -70,7 +71,7 @@ export const { provider: AxEngineDownloadsProvider, use: useAxEngineDownloads } 
     }
 
     async function fetchJobs(): Promise<AxEngineDownloadJobView[]> {
-      const response = await sdk.fetch(new URL("/provider/ax-engine/downloads", sdk.url), {
+      const response = await sdk.fetch(urlAllowlistServerRoute(sdk.url, "/provider/ax-engine/downloads"), {
         headers: directoryRequestHeaders({ directory: sdk.directory }),
       })
       if (!response.ok) return []

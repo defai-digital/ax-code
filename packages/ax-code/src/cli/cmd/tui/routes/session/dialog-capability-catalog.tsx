@@ -3,6 +3,7 @@ import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
 import { useSDK } from "@tui/context/sdk"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
+import { urlAllowlistServerRoute } from "@tui/util/server-url"
 import { createAbortableResourceFetcher } from "../../util/abortable-resource"
 import {
   capabilityCatalogOptions,
@@ -26,7 +27,7 @@ async function loadCapabilityCatalog(sdk: ReturnType<typeof useSDK>, signal: Abo
     return normalizeCapabilityCatalogItems(result.data)
   }
 
-  const url = new URL("/capability", sdk.url)
+  const url = urlAllowlistServerRoute(sdk.url, "/capability")
   const response = await sdk.fetch(url, {
     signal,
     headers: directoryRequestHeaders({ directory: sdk.directory, accept: "application/json" }),

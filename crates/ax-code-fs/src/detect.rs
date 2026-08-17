@@ -308,7 +308,10 @@ static LIFECYCLE_RULES: LazyLock<Vec<ResourceRule>> = LazyLock::new(|| {
         },
         ResourceRule {
             rtype: "child_process",
-            create_re: Regex::new(r"(?:spawn|Bun\.spawn|exec|execFile|fork)\s*\(").unwrap(),
+            create_re: Regex::new(
+                r"(?:^|[^\w.])(?:spawn|execFile|exec|fork)\s*\(|(?:Bun|Process)\.spawn\s*\(",
+            )
+            .unwrap(),
             cleanup_patterns: vec![
                 Regex::new(r"\.kill\s*\(").unwrap(),
                 Regex::new(r#"\.on\s*\(\s*["'`](?:exit|close)["'`]"#).unwrap(),
@@ -1177,5 +1180,35 @@ function run() {
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].resource_type, "timer");
         assert_eq!(findings[0].line, 5);
+    }
+
+    #[test]
+    fn lifecycle_child_process_ignores_regex_exec_but_detects_process_spawn() {
+        let regex_content = r#"
+function match(value) {
+  return matcher.exec(value)
+}
+"#;
+        let regex_findings = scan_lifecycle(
+            regex_content,
+            "src/match.ts",
+            &enabled(&["child_process"]),
+            10,
+        );
+        assert!(regex_findings.is_empty());
+
+        let spawn_content = r#"
+function run(command) {
+  return Process.spawn([command])
+}
+"#;
+        let spawn_findings = scan_lifecycle(
+            spawn_content,
+            "src/run.ts",
+            &enabled(&["child_process"]),
+            10,
+        );
+        assert_eq!(spawn_findings.len(), 1);
+        assert_eq!(spawn_findings[0].resource_type, "child_process");
     }
 }

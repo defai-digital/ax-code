@@ -44,11 +44,11 @@ export function axEngineModelStateAnnotation(entry: {
  * so their picker description stays clean.
  */
 export function axEngineModelStateAnnotations(entries: readonly AxEngineCatalogEntryState[]): Map<string, string> {
-  const annotations = new Map<string, string>()
-  for (const entry of entries) {
-    if (entry.local?.present) continue
-    const annotation = axEngineModelStateAnnotation({ state: entry.fit?.state, blockers: entry.fit?.blockers })
-    if (annotation) annotations.set(entry.id, annotation)
-  }
-  return annotations
+  return new Map(
+    entries.flatMap((entry) => {
+      if (entry.local?.present) return []
+      const annotation = axEngineModelStateAnnotation({ state: entry.fit?.state, blockers: entry.fit?.blockers })
+      return annotation ? ([[entry.id, annotation]] as const) : []
+    }),
+  )
 }

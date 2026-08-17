@@ -72,7 +72,7 @@ const RESOURCE_RULES: ResourceRule[] = [
   },
   {
     type: "child_process",
-    createRe: /(?:spawn|Bun\.spawn|exec|execFile|fork)\s*\(/g,
+    createRe: /(?:^|[^\w.])(?:spawn|execFile|exec|fork)\s*\(|(?:Bun|Process)\.spawn\s*\(/g,
     cleanupPatterns: [/\.kill\s*\(/, /\.on\s*\(\s*["'`](?:exit|close)["'`]/],
     description: "Child process spawned without kill or exit handler — may become orphaned",
     severity: "high",

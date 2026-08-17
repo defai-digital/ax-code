@@ -15,6 +15,7 @@ import { DialogPrivateGpuConnect } from "./dialog-private-gpu"
 import { useKeyboard } from "@ax-code/opentui-solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
+import { urlAllowlistServerRoute } from "@tui/util/server-url"
 import { useToast } from "../ui/toast"
 import { which } from "@/util/which"
 import { Log } from "@/util/log"
@@ -129,7 +130,7 @@ async function axEngineRequest<T>(
   path: "status" | "prepare" | "start" | "stop",
   body?: Record<string, unknown>,
 ): Promise<T> {
-  const response = await sdk.fetch(new URL(`/provider/ax-engine/${path}`, sdk.url), {
+  const response = await sdk.fetch(urlAllowlistServerRoute(sdk.url, `/provider/ax-engine/${path}`), {
     method: path === "status" ? "GET" : "POST",
     headers: directoryRequestHeaders({
       directory: sdk.directory,
@@ -154,7 +155,7 @@ async function privateGpuConnectionRequest(
   sdk: ReturnType<typeof useSDK>,
   body: { providerID: string; baseURL: string; apiKey: string },
 ): Promise<PrivateGpuConnectionView> {
-  const response = await sdk.fetch(new URL("/provider/private-gpu/connection", sdk.url), {
+  const response = await sdk.fetch(urlAllowlistServerRoute(sdk.url, "/provider/private-gpu/connection"), {
     method: "PUT",
     headers: directoryRequestHeaders({
       directory: sdk.directory,
@@ -181,7 +182,7 @@ async function axEngineConnectionRequest(
   sdk: ReturnType<typeof useSDK>,
   body?: { mode: "managed" } | { mode: "attach"; baseURL: string; apiKey?: string },
 ): Promise<AxEngineConnectionView> {
-  const response = await sdk.fetch(new URL("/provider/ax-engine/connection", sdk.url), {
+  const response = await sdk.fetch(urlAllowlistServerRoute(sdk.url, "/provider/ax-engine/connection"), {
     method: body ? "PUT" : "GET",
     headers: directoryRequestHeaders({
       directory: sdk.directory,
