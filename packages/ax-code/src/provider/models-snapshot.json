@@ -147463,7 +147463,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 228000
+          "output": 262144
         }
       },
       "nvidia/nemotron-3-super-120b-a12b": {
@@ -148000,6 +148000,42 @@
           "output": 16384
         }
       },
+      "z-ai/glm-5.2:free": {
+        "id": "z-ai/glm-5.2:free",
+        "name": "Z.ai: GLM 5.2 (free)",
+        "description": "GLM 5.2 is a large-scale reasoning model from Z.ai. It supports text input and output with a 1M-token context window, and is suited for long-horizon agent workflows, project-level software engineering,...",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": false,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 128000,
+          "output": 128000
+        }
+      },
       "z-ai/glm-5": {
         "id": "z-ai/glm-5",
         "name": "GLM-5",
@@ -148067,8 +148103,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1024000,
-          "output": 128000
+          "context": 262144,
+          "output": 262144
         }
       },
       "deepseek/deepseek-v3.1-terminus": {
@@ -148249,7 +148285,7 @@
         "open_weights": true,
         "limit": {
           "context": 1048576,
-          "output": 393216
+          "output": 384000
         }
       },
       "deepseek/deepseek-v3.2": {
@@ -148709,7 +148745,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 16384
         }
       },
       "google/gemini-3-pro-image": {

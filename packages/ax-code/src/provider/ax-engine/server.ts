@@ -28,6 +28,7 @@ export const AxEngineServerState = z.object({
   modelRevision: z.string().optional(),
   binaryPath: z.string(),
   contextTokens: z.number().int().positive().optional(),
+  maxOutputTokens: z.number().int().positive().optional(),
   speculationProfile: z.string().optional(),
   mtpMode: z.string().optional(),
   startedAt: z.number(),
@@ -59,6 +60,13 @@ export type AxEngineServerOptions = {
    * regardless of its declared contextTokens.
    */
   contextTokens?: number
+  /**
+   * Per-request output-token budget the server enforces (`--max-batch-tokens`).
+   * Must match the catalog's per-model outputTokens: a 16k-context model
+   * launched at the 8192 default only leaves ~7.4k usable input tokens, which
+   * the preflight fit check then (correctly) blocks as unfit for the agent.
+   */
+  maxOutputTokens?: number
   speculationProfile?: string
   mtpMode?: string
   apiKey?: string
@@ -462,6 +470,7 @@ function ensureServerKey(options: AxEngineServerOptions): string {
     options.modelPath,
     options.apiModelID,
     options.contextTokens ?? "",
+    options.maxOutputTokens ?? "",
     options.speculationProfile ?? "",
     options.mtpMode ?? "",
     options.baseURL ?? "",
@@ -502,6 +511,12 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   // server whose contextTokens differ from the request — e.g. an older build
   // that started it at the default 16384 — must be relaunched, not reused.
   const contextMatches = (existing?.contextTokens ?? undefined) === (options.contextTokens ?? undefined)
+  const maxOutputTokens = options.maxOutputTokens ?? AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS
+  // State files written before maxOutputTokens was recorded predate per-model
+  // output budgets; treat them as mismatched so the server is relaunched once
+  // with the correct --max-batch-tokens instead of silently reusing a server
+  // whose output budget belongs to a different model.
+  const maxOutputTokensMatches = existing?.maxOutputTokens === maxOutputTokens
   const speculationProfile = options.speculationProfile ?? AX_ENGINE_SPECULATION_PROFILE
   const mtpMode = options.mtpMode ?? AX_ENGINE_MTP_MODE
   const speculationMatches = existing?.speculationProfile === speculationProfile
@@ -509,7 +524,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   if (existing) {
     const alive = await serverProcessAlive(existing)
     if (alive && (await isServerReady(existing.baseURL, options.signal, options.apiKey))) {
-      if (contextMatches && speculationMatches && mtpModeMatches) {
+      if (contextMatches && maxOutputTokensMatches && speculationMatches && mtpModeMatches) {
         if (existing.modelID === options.modelID && existing.modelPath === options.modelPath) return existing
         try {
           await loadServerModel({
@@ -525,6 +540,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
             apiModelID: options.apiModelID,
             modelPath: options.modelPath,
             modelRevision: options.modelRevision,
+            maxOutputTokens,
             speculationProfile,
             mtpMode,
             lastHealthAt: Date.now(),
@@ -565,7 +581,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   const serverArgs = axEngineServerLaunchArgs({
     apiModelID: options.apiModelID,
     contextTokens: options.contextTokens,
-    maxOutputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
+    maxOutputTokens,
     speculationProfile,
     mtpMode,
   })
@@ -607,6 +623,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     modelRevision: options.modelRevision,
     binaryPath: options.binaryPath,
     contextTokens: options.contextTokens,
+    maxOutputTokens,
     speculationProfile,
     mtpMode,
     startedAt: Date.now(),

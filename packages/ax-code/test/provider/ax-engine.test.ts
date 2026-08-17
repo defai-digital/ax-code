@@ -846,6 +846,23 @@ describe("ax-engine server launch args", () => {
     ])
   })
 
+  test("honors a per-model output-token budget instead of the global default", () => {
+    // 16k-context coding models declare 4096 output tokens; launching them at
+    // the 8192 default leaves too little usable input for the agent fit check.
+    expect(axEngineServerLaunchArgs({ apiModelID: "qwen3-coder-next-axq-4bit", maxOutputTokens: 4_096 })).toEqual([
+      "--model-id",
+      "qwen3-coder-next-axq-4bit",
+      "--speculation-profile",
+      "agentic",
+      "--max-batch-tokens",
+      "4096",
+      "--disable-ngram-acceleration",
+      "--max-concurrent-requests",
+      "1",
+      "--mlx-mtp-disable-ngram-stacking",
+    ])
+  })
+
   test("rounds a non-block-aligned context window up to the next whole block", () => {
     expect(axEngineServerLaunchArgs({ apiModelID: "qwen3", contextTokens: 16_385 })).toEqual([
       "--model-id",
