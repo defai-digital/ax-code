@@ -259,12 +259,29 @@ async function hasRunnablePackageContract(dir: string, modelID: AxEngineModelID,
 }
 
 async function readPrepareState(): Promise<{ state?: AxEnginePrepareState; error?: unknown }> {
+  let raw: unknown
   try {
-    return { state: AxEnginePrepareState.parse(await Filesystem.readJson(AxEnginePaths.prepareState)) }
+    raw = await Filesystem.readJson(AxEnginePaths.prepareState)
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return {}
     return { error }
   }
+  const parsed = AxEnginePrepareState.safeParse(raw)
+  if (parsed.success) return { state: parsed.data }
+  const candidate = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : undefined
+  const staleCatalogEntry =
+    (typeof candidate?.modelID === "string" && !isAxEngineModelID(candidate.modelID)) ||
+    (typeof candidate?.quantization === "string" &&
+      !AX_ENGINE_QUANTIZATION_IDS.includes(candidate.quantization as AxEngineQuantization))
+  if (staleCatalogEntry) {
+    // A model or quantization removed from the catalog is stale state from an
+    // older build. Treat only that compatibility case as absent: malformed
+    // current-schema state must remain actionable instead of being silently
+    // mistaken for an unprepared model.
+    log.warn("ignoring prepared model state from an older catalog", { error: toErrorMessage(parsed.error) })
+    return {}
+  }
+  return { error: parsed.error }
 }
 
 export async function clearPreparedStateForPath(target: string): Promise<boolean> {

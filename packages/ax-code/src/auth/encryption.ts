@@ -12,6 +12,7 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync } from "crypto"
+import { execFileSync } from "child_process"
 import { readFileSync, writeFileSync, mkdirSync } from "fs"
 import path from "path"
 import os from "os"
@@ -109,6 +110,60 @@ function machineId(): string {
   return `${os.hostname()}-${os.platform()}-${os.arch()}-${secret}`
 }
 
+/**
+ * The hostname feeding machineId() is not stable: on macOS the transient
+ * (DHCP-assigned) hostname differs from the mDNS name (`LocalHostName.local`)
+ * and changes when the machine moves networks. Credentials encrypted under a
+ * previous hostname are unrecoverable unless decryption also tries the known
+ * variants — the mDNS name with and without the ".local" suffix.
+ */
+let hostnameVariantsCache: string[] | undefined
+function hostnameVariants(): string[] {
+  if (hostnameVariantsCache) return hostnameVariantsCache
+  const variants = new Set<string>()
+  const add = (hostname: string) => {
+    const base = hostname.endsWith(".local") ? hostname.slice(0, -".local".length) : hostname
+    if (base) {
+      variants.add(base)
+      variants.add(`${base}.local`)
+    }
+  }
+  add(os.hostname())
+  if (os.platform() === "darwin") {
+    try {
+      add(
+        execFileSync("scutil", ["--get", "LocalHostName"], {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        }).trim(),
+      )
+    } catch {
+      // scutil unavailable — fall through with the current hostname only
+    }
+  }
+  variants.delete(os.hostname())
+  hostnameVariantsCache = [...variants]
+  return hostnameVariantsCache
+}
+
+/**
+ * All derivation passwords worth trying, most likely first: the current
+ * machine ID (with install secret when present), then hostname variants.
+ * Each hostname contributes a secret-backed and a legacy secret-less form.
+ */
+function candidatePasswords(): string[] {
+  const secret = getInstallSecret()
+  const passwords = new Set<string>()
+  const add = (hostname: string) => {
+    const base = `${hostname}-${os.platform()}-${os.arch()}`
+    if (secret) passwords.add(`${base}-${secret}`)
+    passwords.add(base)
+  }
+  add(os.hostname())
+  for (const hostname of hostnameVariants()) add(hostname)
+  return [...passwords]
+}
+
 // PBKDF2 is deterministic, so within one process the same
 // (password, salt, iterations) triple always yields the same key. Auth.all()
 // is called from several init paths (config load, provider state) and each
@@ -159,16 +214,26 @@ export function encrypt(plaintext: string): EncryptedValue {
 }
 
 /**
- * Decrypt an encrypted value back to plaintext
- * Tries current iterations first, falls back to legacy for backward compat.
+ * Decrypt an encrypted value back to plaintext.
+ * Tries the version-appropriate derivation for every known machine ID first
+ * (the current one, then hostname variants — see hostnameVariants), then
+ * falls back to legacy iteration counts for backward compat.
  *
- * The current-iteration catch block swallows the error so the function
- * can silently upgrade old ciphertexts (encrypted with
- * PBKDF2_LEGACY_ITERATIONS) without failing. This is intentional backward
- * compatibility, but we log at debug level so genuine corruption is still
- * traceable via logs — previously the failure was completely invisible.
+ * Individual attempt failures are swallowed so old ciphertexts (legacy
+ * iteration counts, previous hostnames) upgrade silently. They are logged at
+ * debug level so genuine corruption is still traceable via logs — previously
+ * the failure was completely invisible.
  */
 export function decrypt(value: EncryptedValue): string {
+  return decryptDetailed(value).plaintext
+}
+
+/**
+ * Like decrypt(), but also reports whether a non-primary derivation was
+ * needed so callers can flag the entry for re-encryption under the current
+ * machine ID.
+ */
+function decryptDetailed(value: EncryptedValue): { plaintext: string; usedFallbackDerivation: boolean } {
   const encrypted = decodeBase64Field(value.encrypted, "encrypted")
   const iv = decodeBase64Field(value.iv, "iv", IV_LENGTH)
   const tag = decodeBase64Field(value.tag, "tag", AUTH_TAG_LENGTH)
@@ -180,48 +245,38 @@ export function decrypt(value: EncryptedValue): string {
   // legacy entries to a proper 32-byte random salt.
   const salt = value.salt ? decodeBase64Field(value.salt, "salt", SALT_LENGTH) : iv.subarray(0, SALT_LENGTH)
 
-  // v2 entries were derived with the reduced iteration count.
-  if (value.version >= 2) {
+  const passwords = candidatePasswords()
+  const primaryIterations = value.version >= 2 ? PBKDF2_ITERATIONS_V2 : PBKDF2_ITERATIONS
+
+  // Pass 1: the derivation a current build would have used, across every
+  // known machine ID. This recovers entries written under a previous
+  // hostname without paying for legacy-iteration attempts on the hot path.
+  for (const [index, password] of passwords.entries()) {
     try {
-      return decryptWith(encrypted, iv, salt, tag, PBKDF2_ITERATIONS_V2)
+      return {
+        plaintext: decryptWithPassword(password, encrypted, iv, salt, tag, primaryIterations),
+        usedFallbackDerivation: index !== 0,
+      }
     } catch {
-      log.debug("v2 iterations failed, trying v1 fallbacks")
+      log.debug(`key derivation attempt failed (machine id #${index}, current iterations)`)
     }
   }
 
-  // Try current machineId (with install secret) + current iterations
-  try {
-    return decryptWith(encrypted, iv, salt, tag, PBKDF2_ITERATIONS)
-  } catch {
-    log.debug("current key+iterations failed, trying fallbacks")
-  }
-
-  // Try current machineId + legacy iterations
-  try {
-    return decryptWith(encrypted, iv, salt, tag, PBKDF2_LEGACY_ITERATIONS)
-  } catch {
-    log.debug("current key+legacy iterations failed")
-  }
-
-  // Try legacy machineId (without install secret) + current iterations
-  const legacy = legacyMachineId()
-  if (legacy !== machineId()) {
-    try {
-      return decryptWithPassword(legacy, encrypted, iv, salt, tag, PBKDF2_ITERATIONS)
-    } catch {
-      log.debug("legacy key+current iterations failed")
-    }
-
-    // Try legacy machineId + legacy iterations (last resort)
-    try {
-      return decryptWithPassword(legacy, encrypted, iv, salt, tag, PBKDF2_LEGACY_ITERATIONS)
-    } catch {
-      log.debug("legacy key+legacy iterations failed")
-      throw new Error("decryption failed — all key derivation attempts exhausted")
+  // Pass 2: legacy iteration counts (pre-v2 builds and ax-cli imports).
+  for (const password of passwords) {
+    for (const iterations of [PBKDF2_ITERATIONS, PBKDF2_LEGACY_ITERATIONS]) {
+      if (iterations === primaryIterations) continue
+      try {
+        return {
+          plaintext: decryptWithPassword(password, encrypted, iv, salt, tag, iterations),
+          usedFallbackDerivation: true,
+        }
+      } catch {
+        log.debug("key derivation attempt failed (legacy iterations)")
+      }
     }
   }
 
-  // No install secret means machineId === legacyMachineId, all attempts exhausted
   throw new Error("decryption failed — all key derivation attempts exhausted")
 }
 
@@ -235,13 +290,6 @@ function decodeBase64Field(value: string, field: string, expectedLength?: number
     throw new Error(`invalid encrypted auth field length: ${field}`)
   }
   return decoded
-}
-
-function decryptWith(encrypted: Buffer, iv: Buffer, salt: Buffer, tag: Buffer, iterations: number): string {
-  const key = deriveKey(salt, iterations)
-  const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH })
-  decipher.setAuthTag(tag)
-  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8")
 }
 
 function decryptWithPassword(
@@ -304,13 +352,18 @@ export function decryptField<T extends Record<string, unknown>>(obj: T, field: s
   const val = obj[field]
   if (!isEncrypted(val)) return obj
   try {
-    const plaintext = decrypt(val)
-    // Re-encrypt when the entry uses the legacy IV-as-salt derivation, or
-    // when it predates the current version and encrypt() would actually
+    const { plaintext, usedFallbackDerivation } = decryptDetailed(val)
+    // Re-encrypt when the entry uses the legacy IV-as-salt derivation, when a
+    // fallback machine ID (e.g. a previous hostname) was needed to decrypt,
+    // or when it predates the current version and encrypt() would actually
     // upgrade it (it only writes v2 when the install secret exists —
     // without that guard, secret-less environments would re-mark v1
     // entries on every start and rewrite the file for nothing).
-    if (isLegacySalt(val) || (val.version < ENCRYPTION_VERSION && getInstallSecret() !== "")) {
+    if (
+      isLegacySalt(val) ||
+      usedFallbackDerivation ||
+      (val.version < ENCRYPTION_VERSION && getInstallSecret() !== "")
+    ) {
       return { ...obj, [field]: plaintext, __needsReEncrypt: true }
     }
     return { ...obj, [field]: plaintext }

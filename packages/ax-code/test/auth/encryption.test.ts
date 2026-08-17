@@ -83,6 +83,34 @@ test("isEncrypted accepts both versions", () => {
   expect(isEncrypted(encryptV1("a"))).toBe(true)
 })
 
+test("decrypt recovers v2 entries written under a previous hostname", () => {
+  // macOS toggles between the mDNS name ("host.local") and transient
+  // DHCP-assigned hostnames; entries written under the other form must
+  // still decrypt and be flagged for re-encryption under the current one.
+  const current = os.hostname()
+  const previous = current.endsWith(".local") ? current.slice(0, -".local".length) : `${current}.local`
+  machineId() // ensure the install secret exists, then read it
+  const secret = readFileSync(path.join(Global.Path.data, ".install-secret"), "utf-8").trim()
+
+  const salt = randomBytes(SALT_LENGTH)
+  const iv = randomBytes(IV_LENGTH)
+  const key = pbkdf2Sync(`${previous}-${os.platform()}-${os.arch()}-${secret}`, salt, 10_000, KEY_LENGTH, "sha256")
+  const cipher = createCipheriv("aes-256-gcm", key, iv, { authTagLength: AUTH_TAG_LENGTH })
+  const encrypted = Buffer.concat([cipher.update("previous-hostname-key", "utf8"), cipher.final()])
+  const value: EncryptedValue = {
+    encrypted: encrypted.toString("base64"),
+    iv: iv.toString("base64"),
+    salt: salt.toString("base64"),
+    tag: cipher.getAuthTag().toString("base64"),
+    version: 2,
+  }
+
+  expect(decrypt(value)).toBe("previous-hostname-key")
+  const result = decryptField({ type: "api", key: value } as Record<string, unknown>, "key")
+  expect(result.key).toBe("previous-hostname-key")
+  expect(result.__needsReEncrypt).toBe(true)
+})
+
 test("logs a warning and falls back to legacy machine id when install secret is unavailable", async () => {
   const { __resetInstallSecretCacheForTests, encrypt: encryptAgain } = await import("../../src/auth/encryption")
   const { Log } = await import("../../src/util/log")

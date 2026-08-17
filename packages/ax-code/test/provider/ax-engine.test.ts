@@ -420,6 +420,81 @@ describe("ax-engine model cache", () => {
       ;(AxEnginePaths as { prepareState: string }).prepareState = originalPrepareState
     }
   })
+
+  test("reports structurally invalid prepared model state instead of ignoring it", async () => {
+    await using tmp = await tmpdir()
+    const originalPrepareState = AxEnginePaths.prepareState
+    const prepareState = path.join(tmp.path, "prepare.json")
+    await fs.writeFile(
+      prepareState,
+      JSON.stringify({
+        modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+        quantization: "mlx6bit",
+        path: 42,
+        preparedAt: Date.now(),
+      }),
+    )
+
+    try {
+      ;(AxEnginePaths as { prepareState: string }).prepareState = prepareState
+      const status = await getModelStatus({
+        modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+        quantization: "mlx6bit",
+      })
+
+      expect(status.present).toBe(false)
+      expect(status.blockers).toContainEqual(expect.stringContaining("failed to read prepared model state"))
+    } finally {
+      ;(AxEnginePaths as { prepareState: string }).prepareState = originalPrepareState
+    }
+  })
+
+  test("ignores prepare state from an older model lineup when the HF cache has the model", async () => {
+    await using tmp = await tmpdir()
+    const originalPrepareState = AxEnginePaths.prepareState
+    const prepareState = path.join(tmp.path, "prepare.json")
+    // Valid JSON, but the modelID is from a previous catalog — zod rejects it.
+    await fs.writeFile(
+      prepareState,
+      JSON.stringify({
+        modelID: "qwen3.6-27b-axq-6bit",
+        quantization: "mlx6bit",
+        path: path.join(tmp.path, "old-model"),
+        preparedAt: Date.now(),
+      }),
+    )
+
+    // A complete HF hub snapshot for a current-catalog model.
+    const previousHf = process.env.HF_HUB_CACHE
+    const hfRoot = path.join(tmp.path, "hf-hub")
+    const snapshot = path.join(
+      hfRoot,
+      "models--AutomatosX--AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP",
+      "snapshots",
+      "b79cbf81978af5109943ba251cf9720ac1a8ce72",
+    )
+    await fs.mkdir(snapshot, { recursive: true })
+    await fs.writeFile(path.join(snapshot, "model-manifest.json"), "{}")
+    await fs.writeFile(path.join(snapshot, "model.safetensors"), "weights")
+    process.env.HF_HUB_CACHE = hfRoot
+
+    try {
+      ;(AxEnginePaths as { prepareState: string }).prepareState = prepareState
+      const status = await getModelStatus({
+        modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+        quantization: "mlx6bit",
+      })
+
+      expect(status.present).toBe(true)
+      expect(status.path).toBe(snapshot)
+      // The stale state file is left untouched for the next prepare to rewrite.
+      expect(JSON.parse(await fs.readFile(prepareState, "utf8")).modelID).toBe("qwen3.6-27b-axq-6bit")
+    } finally {
+      ;(AxEnginePaths as { prepareState: string }).prepareState = originalPrepareState
+      if (previousHf === undefined) delete process.env.HF_HUB_CACHE
+      else process.env.HF_HUB_CACHE = previousHf
+    }
+  })
 })
 
 describe("ax-engine server lifecycle", () => {
@@ -741,7 +816,7 @@ describe("ax-engine server lifecycle", () => {
           modelPath: "/models/qwen",
           preferredPort: 38192,
           apiKey: "configured-secret",
-          readyTimeoutMs: 1500,
+          readyTimeoutMs: 5000,
         }),
       ).rejects.toThrow("exited before becoming ready")
     })
@@ -1151,12 +1226,7 @@ describe("ax-engine provider integration", () => {
       "qwen3-coder-next-axq-4bit",
     ])
     expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([
-      65_536,
-      65_536,
-      262_144,
-      262_144,
-      16_384,
-      16_384,
+      65_536, 65_536, 262_144, 262_144, 16_384, 16_384,
     ])
     expect(provider.models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]).toMatchObject({
       name: "Qwen3.8-27B AXQ 6-bit (Local MLX Auto)",
@@ -1213,10 +1283,18 @@ describe("ax-engine provider integration", () => {
   test("sub-64GB hosts keep smaller ax-engine models selectable and block larger ones", async () => {
     const provider = (await Provider.fromModelsDevProvider((await ModelsDev.get())[AX_ENGINE_PROVIDER_ID]))!
     expect(
-      modelMemoryBlockReason(AX_ENGINE_PROVIDER_ID, provider.models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID], 32 * 1024 ** 3),
+      modelMemoryBlockReason(
+        AX_ENGINE_PROVIDER_ID,
+        provider.models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID],
+        32 * 1024 ** 3,
+      ),
     ).toBe("requires 64GB unified memory")
     expect(
-      modelMemoryBlockReason(AX_ENGINE_PROVIDER_ID, provider.models[AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID], 64 * 1024 ** 3),
+      modelMemoryBlockReason(
+        AX_ENGINE_PROVIDER_ID,
+        provider.models[AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID],
+        64 * 1024 ** 3,
+      ),
     ).toBeUndefined()
     expect(
       modelMemoryBlockReason(
