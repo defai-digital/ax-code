@@ -16,6 +16,7 @@ import {
   render,
   renderCompare,
   resolve,
+  sourceCommand,
   threshold,
   verdict,
 } from "../../script/perf-index"
@@ -158,6 +159,23 @@ describe("perf.gate", () => {
     })
 
     process.argv = prev
+  })
+
+  test("builds the benchmark command with the Node source launcher", () => {
+    const prev = process.argv
+    process.argv = ["node", "script/perf-index.ts"]
+    try {
+      const command = sourceCommand(resolve("/repo", undefined, {}))
+      const entry = command.findIndex((item) => item.endsWith("src/index-node-tui.ts"))
+
+      expect(command[0]).toBe(process.execPath)
+      expect(command[1]).toMatch(/script[/\\]node-ffi-runner\.mjs$/)
+      expect(command.filter((item) => item === "--import")).toHaveLength(2)
+      expect(entry).toBeGreaterThan(0)
+      expect(command.slice(entry + 1, entry + 5)).toEqual(["debug", "perf", "index", "--json"])
+    } finally {
+      process.argv = prev
+    }
   })
 
   test("parses boolean values passed as separate argv items", () => {

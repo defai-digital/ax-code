@@ -102,6 +102,24 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AX_CODE_DISABLE_SHARE: "true"
+      PERF_LIMIT: ${{ inputs.limit }}
+      PERF_REPEAT: ${{ inputs.repeat }}
+      PERF_WARMUP: ${{ inputs.warmup }}
+      PERF_CONCURRENCY: ${{ inputs.concurrency }}
+      PERF_PROBE: ${{ inputs.probe }}
+      PERF_NATIVE_PROFILE: ${{ inputs.native_profile }}
+      PERF_MAX_ELAPSED_MEDIAN_MS: ${{ inputs.max_elapsed_median_ms }}
+      PERF_MAX_TOTAL_MEDIAN_MS: ${{ inputs.max_total_median_ms }}
+      PERF_MAX_PHASE_MEDIAN_MS: ${{ inputs.max_phase_median_ms }}
+      PERF_BASELINE: ${{ inputs.baseline }}
+      PERF_BASELINE_SUMMARY: ${{ inputs.baseline_summary }}
+      PERF_PROMOTE_BASELINE: ${{ inputs.promote_baseline }}
+      PERF_BASELINE_OUT: ${{ inputs.baseline_out }}
+      PERF_BASELINE_SUMMARY_OUT: ${{ inputs.baseline_summary_out }}
+      PERF_SUMMARY_OUT: ${{ inputs.summary_out }}
+      PERF_MAX_ELAPSED_REGRESSION_PCT: ${{ inputs.max_elapsed_regression_pct }}
+      PERF_MAX_TOTAL_REGRESSION_PCT: ${{ inputs.max_total_regression_pct }}
+      PERF_MAX_PHASE_REGRESSION_PCT: ${{ inputs.max_phase_regression_pct }}
     steps:
       - uses: actions/checkout@v7
 
@@ -113,7 +131,8 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Validate workflow_dispatch inputs
+      - name: Validate and resolve workflow_dispatch inputs
+        id: paths
         if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
@@ -128,12 +147,49 @@ jobs:
             fi
           }
 
-          require_positive_int "limit" "${{ inputs.limit }}"
-          require_positive_int "repeat" "${{ inputs.repeat }}"
-          require_positive_int "warmup" "${{ inputs.warmup }}"
-          require_positive_int "concurrency" "${{ inputs.concurrency }}"
+          require_non_negative_int() {
+            local name="$1"
+            local value="$2"
+            if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+              echo "FAIL: ${name} must be a non-negative integer, got '${value}'"
+              exit 1
+            fi
+          }
 
-          case "${{ inputs.probe }}" in
+          resolve_repo_json() {
+            local name="$1"
+            local value="$2"
+            if [ -z "$value" ]; then
+              printf '%s=\n' "$name" >> "$GITHUB_OUTPUT"
+              return
+            fi
+            if [[ "$value" = /* ]]; then
+              echo "FAIL: ${name} must be relative to packages/ax-code, got '${value}'"
+              exit 1
+            fi
+
+            local absolute
+            absolute="$(realpath -m -- "$GITHUB_WORKSPACE/packages/ax-code/$value")"
+            case "$absolute" in
+              "$GITHUB_WORKSPACE"/*) ;;
+              *)
+                echo "FAIL: ${name} must stay inside the repository, got '${value}'"
+                exit 1
+                ;;
+            esac
+            if [[ "$absolute" != *.json ]]; then
+              echo "FAIL: ${name} must resolve to a JSON file, got '${value}'"
+              exit 1
+            fi
+            printf '%s=%s\n' "$name" "${absolute#"$GITHUB_WORKSPACE"/}" >> "$GITHUB_OUTPUT"
+          }
+
+          require_positive_int "limit" "$PERF_LIMIT"
+          require_positive_int "repeat" "$PERF_REPEAT"
+          require_non_negative_int "warmup" "$PERF_WARMUP"
+          require_positive_int "concurrency" "$PERF_CONCURRENCY"
+
+          case "$PERF_PROBE" in
             true|false) ;;
             *)
               echo "FAIL: probe must be true or false"
@@ -141,7 +197,7 @@ jobs:
               ;;
           esac
 
-          case "${{ inputs.native_profile }}" in
+          case "$PERF_NATIVE_PROFILE" in
             true|false) ;;
             *)
               echo "FAIL: native_profile must be true or false"
@@ -149,22 +205,43 @@ jobs:
               ;;
           esac
 
-          for value in "${{ inputs.max_elapsed_median_ms }}" "${{ inputs.max_total_median_ms }}" "${{ inputs.max_elapsed_regression_pct }}" "${{ inputs.max_total_regression_pct }}"; do
+          for value in "$PERF_MAX_ELAPSED_MEDIAN_MS" "$PERF_MAX_TOTAL_MEDIAN_MS" "$PERF_MAX_ELAPSED_REGRESSION_PCT" "$PERF_MAX_TOTAL_REGRESSION_PCT"; do
             if [ -n "$value" ] && ! [[ "$value" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
               echo "FAIL: numeric input expected, got '$value'"
               exit 1
             fi
           done
 
-          for value in "${{ inputs.baseline }}" "${{ inputs.baseline_summary }}" "${{ inputs.baseline_out }}" "${{ inputs.baseline_summary_out }}" "${{ inputs.summary_out }}"; do
-            if [ -n "$value" ] && [[ "$value" == *$'\n'* ]]; then
-              echo "FAIL: path input must not include newlines, got '$value'"
+          for value in "$PERF_BASELINE" "$PERF_BASELINE_SUMMARY" "$PERF_BASELINE_OUT" "$PERF_BASELINE_SUMMARY_OUT" "$PERF_SUMMARY_OUT"; do
+            if [ -n "$value" ] && [[ "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
+              echo "FAIL: path input must not include line breaks"
               exit 1
             fi
           done
 
+          if [ -z "$PERF_SUMMARY_OUT" ]; then
+            echo "FAIL: summary_out must not be empty"
+            exit 1
+          fi
+          if [ "$PERF_PROMOTE_BASELINE" = "true" ] && { [ -z "$PERF_BASELINE_OUT" ] || [ -z "$PERF_BASELINE_SUMMARY_OUT" ]; }; then
+            echo "FAIL: promoted baseline output paths must not be empty"
+            exit 1
+          fi
+
+          resolve_repo_json baseline "$PERF_BASELINE"
+          resolve_repo_json baseline_summary "$PERF_BASELINE_SUMMARY"
+          resolve_repo_json baseline_out "$PERF_BASELINE_OUT"
+          resolve_repo_json baseline_summary_out "$PERF_BASELINE_SUMMARY_OUT"
+          resolve_repo_json summary_out "$PERF_SUMMARY_OUT"
+
       - name: Run perf benchmark
         shell: bash
+        env:
+          PERF_BASELINE_PATH: ${{ steps.paths.outputs.baseline }}
+          PERF_BASELINE_SUMMARY_PATH: ${{ steps.paths.outputs.baseline_summary }}
+          PERF_BASELINE_OUT_PATH: ${{ steps.paths.outputs.baseline_out }}
+          PERF_BASELINE_SUMMARY_OUT_PATH: ${{ steps.paths.outputs.baseline_summary_out }}
+          PERF_SUMMARY_OUT_PATH: ${{ steps.paths.outputs.summary_out }}
         run: |
           set -euo pipefail
 
@@ -177,60 +254,62 @@ jobs:
             --config
             perf-index.jsonc
             --limit
-            "${{ inputs.limit }}"
+            "$PERF_LIMIT"
             --repeat
-            "${{ inputs.repeat }}"
+            "$PERF_REPEAT"
             --warmup
-            "${{ inputs.warmup }}"
+            "$PERF_WARMUP"
             --concurrency
-            "${{ inputs.concurrency }}"
+            "$PERF_CONCURRENCY"
             --summary-out
-            "${{ inputs.summary_out }}"
-            "--probe=${{ inputs.probe }}"
-            "--native-profile=${{ inputs.native_profile }}"
+            "$GITHUB_WORKSPACE/$PERF_SUMMARY_OUT_PATH"
+            "--probe=$PERF_PROBE"
+            "--native-profile=$PERF_NATIVE_PROFILE"
           )
 
-          if [ -n "${{ inputs.max_elapsed_median_ms }}" ]; then
-            cmd+=(--max-elapsed-median-ms "${{ inputs.max_elapsed_median_ms }}")
+          if [ -n "$PERF_MAX_ELAPSED_MEDIAN_MS" ]; then
+            cmd+=(--max-elapsed-median-ms "$PERF_MAX_ELAPSED_MEDIAN_MS")
           fi
-          if [ -n "${{ inputs.max_total_median_ms }}" ]; then
-            cmd+=(--max-total-median-ms "${{ inputs.max_total_median_ms }}")
+          if [ -n "$PERF_MAX_TOTAL_MEDIAN_MS" ]; then
+            cmd+=(--max-total-median-ms "$PERF_MAX_TOTAL_MEDIAN_MS")
           fi
-          if [ -n "${{ inputs.max_phase_median_ms }}" ]; then
+          if [ -n "$PERF_MAX_PHASE_MEDIAN_MS" ]; then
             while IFS= read -r item; do
               [ -z "$item" ] && continue
               cmd+=(--max-phase-median-ms "$item")
-            done < <(printf '%s' "${{ inputs.max_phase_median_ms }}" | tr ',' '\n')
+            done < <(printf '%s' "$PERF_MAX_PHASE_MEDIAN_MS" | tr ',' '\n')
           fi
-          if [ -n "${{ inputs.baseline }}" ]; then
-            cmd+=(--baseline "${{ inputs.baseline }}")
+          if [ -n "$PERF_BASELINE" ]; then
+            cmd+=(--baseline "$GITHUB_WORKSPACE/$PERF_BASELINE_PATH")
           fi
-          if [ -n "${{ inputs.baseline_summary }}" ]; then
-            cmd+=(--baseline-summary "${{ inputs.baseline_summary }}")
+          if [ -n "$PERF_BASELINE_SUMMARY" ]; then
+            cmd+=(--baseline-summary "$GITHUB_WORKSPACE/$PERF_BASELINE_SUMMARY_PATH")
           fi
-          if [ "${{ inputs.promote_baseline }}" = "true" ]; then
-            cmd+=(--write-baseline "${{ inputs.baseline_out }}")
-            cmd+=(--write-baseline-summary "${{ inputs.baseline_summary_out }}")
+          if [ "$PERF_PROMOTE_BASELINE" = "true" ]; then
+            cmd+=(--write-baseline "$GITHUB_WORKSPACE/$PERF_BASELINE_OUT_PATH")
+            cmd+=(--write-baseline-summary "$GITHUB_WORKSPACE/$PERF_BASELINE_SUMMARY_OUT_PATH")
           fi
-          if [ -n "${{ inputs.max_elapsed_regression_pct }}" ]; then
-            cmd+=(--max-elapsed-regression-pct "${{ inputs.max_elapsed_regression_pct }}")
+          if [ -n "$PERF_MAX_ELAPSED_REGRESSION_PCT" ]; then
+            cmd+=(--max-elapsed-regression-pct "$PERF_MAX_ELAPSED_REGRESSION_PCT")
           fi
-          if [ -n "${{ inputs.max_total_regression_pct }}" ]; then
-            cmd+=(--max-total-regression-pct "${{ inputs.max_total_regression_pct }}")
+          if [ -n "$PERF_MAX_TOTAL_REGRESSION_PCT" ]; then
+            cmd+=(--max-total-regression-pct "$PERF_MAX_TOTAL_REGRESSION_PCT")
           fi
-          if [ -n "${{ inputs.max_phase_regression_pct }}" ]; then
+          if [ -n "$PERF_MAX_PHASE_REGRESSION_PCT" ]; then
             while IFS= read -r item; do
               [ -z "$item" ] && continue
               cmd+=(--max-phase-regression-pct "$item")
-            done < <(printf '%s' "${{ inputs.max_phase_regression_pct }}" | tr ',' '\n')
+            done < <(printf '%s' "$PERF_MAX_PHASE_REGRESSION_PCT" | tr ',' '\n')
           fi
 
           "${cmd[@]}"
 
       - name: Render perf markdown report
+        env:
+          PERF_SUMMARY_OUT_PATH: ${{ steps.paths.outputs.summary_out }}
         run: |
           pnpm --dir packages/ax-code run perf:report \
-            --summary "${{ inputs.summary_out }}" \
+            --summary "$GITHUB_WORKSPACE/$PERF_SUMMARY_OUT_PATH" \
             --out "../../.internal/reports/performance/perf-index-report.md"
 
       - name: Upload perf artifact
@@ -240,14 +319,16 @@ jobs:
           name: ax-code-perf-report
           path: .internal/reports/performance/perf-index.json
           if-no-files-found: ignore
+          include-hidden-files: true
 
       - name: Upload perf summary
-        if: always()
+        if: always() && steps.paths.outputs.summary_out != ''
         uses: actions/upload-artifact@v7
         with:
           name: ax-code-perf-summary
-          path: packages/ax-code/${{ inputs.summary_out }}
+          path: ${{ steps.paths.outputs.summary_out }}
           if-no-files-found: ignore
+          include-hidden-files: true
 
       - name: Upload perf markdown report
         if: always()
@@ -256,19 +337,22 @@ jobs:
           name: ax-code-perf-markdown
           path: .internal/reports/performance/perf-index-report.md
           if-no-files-found: ignore
+          include-hidden-files: true
 
       - name: Upload promoted baseline
-        if: always() && inputs.promote_baseline
+        if: always() && inputs.promote_baseline && steps.paths.outputs.baseline_out != ''
         uses: actions/upload-artifact@v7
         with:
           name: ax-code-perf-baseline
-          path: packages/ax-code/${{ inputs.baseline_out }}
+          path: ${{ steps.paths.outputs.baseline_out }}
           if-no-files-found: ignore
+          include-hidden-files: true
 
       - name: Upload promoted baseline summary
-        if: always() && inputs.promote_baseline
+        if: always() && inputs.promote_baseline && steps.paths.outputs.baseline_summary_out != ''
         uses: actions/upload-artifact@v7
         with:
           name: ax-code-perf-baseline-summary
-          path: packages/ax-code/${{ inputs.baseline_summary_out }}
+          path: ${{ steps.paths.outputs.baseline_summary_out }}
           if-no-files-found: ignore
+          include-hidden-files: true

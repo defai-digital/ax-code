@@ -3,6 +3,7 @@ import { existsSync } from "fs"
 import { spawn } from "child_process"
 import os from "os"
 import path from "path"
+import { fileURLToPath } from "node:url"
 import { parse } from "jsonc-parser"
 import type { Bench, CacheMode } from "../src/cli/cmd/debug/perf"
 
@@ -826,8 +827,23 @@ export function verdict(
   }
 }
 
-async function run(cwd: string, opts: Opts) {
-  const cmd = [process.execPath, "run", "./src/index.ts", "debug", "perf", "index", "--json"]
+export function sourceCommand(opts: Opts) {
+  const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+  const repositoryRoot = path.resolve(packageRoot, "../..")
+  const cmd = [
+    process.execPath,
+    path.join(repositoryRoot, "script/node-ffi-runner.mjs"),
+    "--import",
+    import.meta.resolve("tsx"),
+    "--import",
+    path.join(repositoryRoot, "script/solid-loader.mjs"),
+    "--conditions=node",
+    path.join(packageRoot, "src/index-node-tui.ts"),
+    "debug",
+    "perf",
+    "index",
+    "--json",
+  ]
   cmd.push("--cache-mode", opts.cacheMode)
   if (opts.limit !== undefined) cmd.push("--limit", String(opts.limit))
   cmd.push("--repeat", String(opts.repeat))
@@ -835,7 +851,11 @@ async function run(cwd: string, opts: Opts) {
   cmd.push("--concurrency", String(opts.concurrency))
   if (opts.probe) cmd.push("--probe")
   if (opts.nativeProfile) cmd.push("--native-profile")
+  return cmd
+}
 
+async function run(cwd: string, opts: Opts) {
+  const cmd = sourceCommand(opts)
   const { code, stdout, stderr } = await spawnCapture(cmd, { cwd, captureStderr: true })
   if (code !== 0) {
     throw new Error(stderr || stdout || `perf benchmark failed with exit code ${code}`)
