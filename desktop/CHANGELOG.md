@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.6.2] - 2026-08-17
+
+### Added
+
+- Add status, notifications, progress, and rewind controls.
+- Enable kitty keyboard protocol by default.
+
+### Changed
+
+- Retire direct xAI cloud integration.
+
+### Fixed
+
+- Harden Windows, PTY, SQLite, and CLI setup.
+- Set process title and ignore tui-backend in doctor instance check.
+- Retry draft visibility.
+
 ## [7.6.1] - 2026-08-17
 
 ### Fixed
