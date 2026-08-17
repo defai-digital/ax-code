@@ -7,6 +7,11 @@ export namespace AxEnginePaths {
   export const root = path.join(Global.Path.cache, "ax-engine")
   export const models = path.join(root, "models")
   export const downloads = path.join(root, "downloads")
+  // Durable L2 prefix-cache directory for managed servers (AX_MLX_PREFIX_CACHE_DIR).
+  // Cache keys fold in the model artifact fingerprint, so one shared directory is
+  // safe across models and survives hot-swaps/restarts — switching back to a model
+  // no longer re-prefills the whole conversation. Disposable: delete to reclaim.
+  export const prefixCache = path.join(root, "prefix-cache")
   // Managed ax-engine binary installs, one versioned subdir each.
   export const bin = path.join(root, "bin")
   export const state = path.join(Global.Path.state, "ax-engine")

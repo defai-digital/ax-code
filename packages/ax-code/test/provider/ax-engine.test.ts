@@ -863,6 +863,42 @@ describe("ax-engine server launch args", () => {
     ])
   })
 
+  test("split-knob binaries get scheduler width plus a separate output budget", () => {
+    expect(
+      axEngineServerLaunchArgs({
+        apiModelID: "qwen3-coder-next-axq-4bit",
+        maxOutputTokens: 4_096,
+        binaryVersion: "7.1.0",
+      }),
+    ).toEqual([
+      "--model-id",
+      "qwen3-coder-next-axq-4bit",
+      "--speculation-profile",
+      "agentic",
+      "--max-batch-tokens",
+      "8192",
+      "--max-output-tokens",
+      "4096",
+      "--disable-ngram-acceleration",
+      "--max-concurrent-requests",
+      "1",
+      "--mlx-mtp-disable-ngram-stacking",
+    ])
+  })
+
+  test("older or unknown binaries keep the conflated knob", () => {
+    for (const binaryVersion of ["7.0.2", "6.11.0", undefined, "not-a-version"]) {
+      const args = axEngineServerLaunchArgs({
+        apiModelID: "qwen3-coder-next-axq-4bit",
+        maxOutputTokens: 4_096,
+        binaryVersion,
+      })
+      expect(args).toContain("--max-batch-tokens")
+      expect(args[args.indexOf("--max-batch-tokens") + 1]).toBe("4096")
+      expect(args).not.toContain("--max-output-tokens")
+    }
+  })
+
   test("rounds a non-block-aligned context window up to the next whole block", () => {
     expect(axEngineServerLaunchArgs({ apiModelID: "qwen3", contextTokens: 16_385 })).toEqual([
       "--model-id",

@@ -106,6 +106,7 @@ export async function prepareAxEngine(
     preferredPort: AX_ENGINE_DEFAULT_PORT,
     contextTokens: AX_ENGINE_MODEL_DEFINITIONS[model.modelID].contextTokens,
     maxOutputTokens: AX_ENGINE_MODEL_DEFINITIONS[model.modelID].outputTokens,
+    binaryVersion: dependency.version,
     signal: input.signal,
   })
 

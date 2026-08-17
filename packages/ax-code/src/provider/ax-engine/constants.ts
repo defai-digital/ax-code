@@ -20,6 +20,11 @@ export const AX_ENGINE_API_KEY = "local"
 // launch arg (kept aligned in server.ts).
 export const AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS = 8_192
 export const AX_ENGINE_MIN_VERSION = "6.11.0"
+// First ax-engine version whose server accepts --max-output-tokens: the
+// advertised per-request output budget, split from --max-batch-tokens (the
+// scheduler's per-step width). Older binaries only know the conflated knob,
+// so they keep receiving the per-model budget as --max-batch-tokens.
+export const AX_ENGINE_MAX_OUTPUT_TOKENS_FLAG_MIN_VERSION = "7.1.0"
 export const AX_ENGINE_SPECULATION_PROFILE = "agentic"
 export const AX_ENGINE_MTP_MODE = "pure"
 export const AX_ENGINE_RECOMMENDED_MEMORY_BYTES = 64 * 1024 ** 3

@@ -146,6 +146,7 @@ async function ensureManagedReady(provider: Provider.Info, options: AxEngineMode
     preferredPort: AX_ENGINE_DEFAULT_PORT,
     contextTokens: AX_ENGINE_MODEL_DEFINITIONS[modelID].contextTokens,
     maxOutputTokens: AX_ENGINE_MODEL_DEFINITIONS[modelID].outputTokens,
+    binaryVersion: dependency.version,
     apiKey: resolveAxEngineApiKey(provider.options, provider.key),
     signal,
   })

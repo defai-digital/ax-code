@@ -1,6 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
 import { Socket } from "node:net"
+import semver from "semver"
 import z from "zod"
 import { FileLock } from "@/util/filelock"
 import { Filesystem } from "@/util/filesystem"
@@ -10,6 +11,7 @@ import {
   AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
   AX_ENGINE_DEFAULT_PORT,
   AX_ENGINE_ERROR,
+  AX_ENGINE_MAX_OUTPUT_TOKENS_FLAG_MIN_VERSION,
   AX_ENGINE_MTP_MODE,
   AX_ENGINE_MODEL_IDS,
   AX_ENGINE_SPECULATION_PROFILE,
@@ -29,6 +31,7 @@ export const AxEngineServerState = z.object({
   binaryPath: z.string(),
   contextTokens: z.number().int().positive().optional(),
   maxOutputTokens: z.number().int().positive().optional(),
+  maxOutputTokensFlag: z.boolean().optional(),
   speculationProfile: z.string().optional(),
   mtpMode: z.string().optional(),
   startedAt: z.number(),
@@ -67,6 +70,12 @@ export type AxEngineServerOptions = {
    * the preflight fit check then (correctly) blocks as unfit for the agent.
    */
   maxOutputTokens?: number
+  /**
+   * Detected ax-engine binary version (from dependency status). Gates the
+   * --max-output-tokens flag: binaries at or above
+   * AX_ENGINE_MAX_OUTPUT_TOKENS_FLAG_MIN_VERSION accept the split knob.
+   */
+  binaryVersion?: string
   speculationProfile?: string
   mtpMode?: string
   apiKey?: string
@@ -82,6 +91,17 @@ export type AxEngineServerOptions = {
 const AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS = 16
 
 /**
+ * Whether the resolved ax-engine binary accepts --max-output-tokens (the
+ * advertised per-request output budget, split from --max-batch-tokens
+ * scheduler width). Unknown/unparseable versions stay on the conflated knob,
+ * which every supported binary accepts.
+ */
+export function supportsMaxOutputTokensFlag(binaryVersion: string | undefined): boolean {
+  const parsed = binaryVersion ? semver.coerce(binaryVersion) : undefined
+  return parsed ? semver.gte(parsed, AX_ENGINE_MAX_OUTPUT_TOKENS_FLAG_MIN_VERSION) : false
+}
+
+/**
  * Build the `ax-engine serve … -- <args>` passthrough args. When contextTokens
  * is provided, size the KV-cache block pool so the server window equals it;
  * otherwise the server falls back to its 1024×16 = 16384 default.
@@ -90,12 +110,23 @@ export function axEngineServerLaunchArgs(input: {
   apiModelID: string
   contextTokens?: number
   maxOutputTokens?: number
+  binaryVersion?: string
   speculationProfile?: string
   mtpMode?: string
 }): string[] {
   const args = ["--model-id", input.apiModelID]
   args.push("--speculation-profile", input.speculationProfile ?? AX_ENGINE_SPECULATION_PROFILE)
-  args.push("--max-batch-tokens", String(input.maxOutputTokens ?? AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS))
+  const maxOutputTokens = input.maxOutputTokens ?? AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS
+  if (supportsMaxOutputTokensFlag(input.binaryVersion)) {
+    // Split-knob servers: scheduler width stays at the benchmark-tuned default
+    // while the advertised per-request output budget follows the model catalog.
+    args.push("--max-batch-tokens", String(AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS))
+    args.push("--max-output-tokens", String(maxOutputTokens))
+  } else {
+    // Older binaries only know the conflated knob: --max-batch-tokens doubles
+    // as the advertised output budget, so it must carry the per-model value.
+    args.push("--max-batch-tokens", String(maxOutputTokens))
+  }
   // Match AX Studio's validated posture: packaged MTP remains available, while
   // the independent n-gram draft path is disabled for stable direct fallback.
   args.push("--disable-ngram-acceleration")
@@ -416,6 +447,12 @@ async function loadServerModel(input: {
     body: JSON.stringify({
       model_id: input.apiModelID,
       model_path: input.modelPath,
+      // Managed mode runs a single resident model per host. Without this the
+      // server defaults to availability-first replacement, which builds the
+      // incoming model BESIDE the outgoing one — transient dual residency of
+      // two 27B-class weight sets (plus KV/compile state) on a unified-memory
+      // Mac. memory_constrained drains first and rolls back on failure.
+      load_policy: "memory_constrained",
     }),
   })
   if (!response.ok) {
@@ -471,6 +508,7 @@ function ensureServerKey(options: AxEngineServerOptions): string {
     options.apiModelID,
     options.contextTokens ?? "",
     options.maxOutputTokens ?? "",
+    options.binaryVersion ?? "",
     options.speculationProfile ?? "",
     options.mtpMode ?? "",
     options.baseURL ?? "",
@@ -517,6 +555,12 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   // with the correct --max-batch-tokens instead of silently reusing a server
   // whose output budget belongs to a different model.
   const maxOutputTokensMatches = existing?.maxOutputTokens === maxOutputTokens
+  // The launch shape also depends on whether the binary takes the split
+  // --max-output-tokens flag; a binary upgrade must relaunch the server even
+  // when the model budget itself is unchanged. Pre-flag state files default
+  // to the conflated mode they were launched with.
+  const maxOutputTokensFlag = supportsMaxOutputTokensFlag(options.binaryVersion)
+  const maxOutputTokensFlagMatches = (existing?.maxOutputTokensFlag ?? false) === maxOutputTokensFlag
   const speculationProfile = options.speculationProfile ?? AX_ENGINE_SPECULATION_PROFILE
   const mtpMode = options.mtpMode ?? AX_ENGINE_MTP_MODE
   const speculationMatches = existing?.speculationProfile === speculationProfile
@@ -524,7 +568,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   if (existing) {
     const alive = await serverProcessAlive(existing)
     if (alive && (await isServerReady(existing.baseURL, options.signal, options.apiKey))) {
-      if (contextMatches && maxOutputTokensMatches && speculationMatches && mtpModeMatches) {
+      if (contextMatches && maxOutputTokensMatches && maxOutputTokensFlagMatches && speculationMatches && mtpModeMatches) {
         if (existing.modelID === options.modelID && existing.modelPath === options.modelPath) return existing
         try {
           await loadServerModel({
@@ -541,6 +585,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
             modelPath: options.modelPath,
             modelRevision: options.modelRevision,
             maxOutputTokens,
+            maxOutputTokensFlag,
             speculationProfile,
             mtpMode,
             lastHealthAt: Date.now(),
@@ -569,6 +614,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
 
   await fs.mkdir(AxEnginePaths.state, { recursive: true })
   await fs.mkdir(AxEnginePaths.log, { recursive: true })
+  await fs.mkdir(AxEnginePaths.prefixCache, { recursive: true })
 
   const baseURL = options.baseURL?.replace(/\/+$/, "")
   const port = baseURL
@@ -582,6 +628,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     apiModelID: options.apiModelID,
     contextTokens: options.contextTokens,
     maxOutputTokens,
+    binaryVersion: options.binaryVersion,
     speculationProfile,
     mtpMode,
   })
@@ -600,6 +647,10 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
         env: {
           ...Env.sanitize(process.env),
           AX_ENGINE_API_KEY: options.apiKey ?? resolveAxEngineApiKey(),
+          // Durable L2 prefix cache: hot-swaps and restarts discard the
+          // in-memory store; without this, switching back to a 27B model
+          // re-prefills the full conversation (~40k tokens at ~170 tok/s).
+          AX_MLX_PREFIX_CACHE_DIR: AxEnginePaths.prefixCache,
         },
       },
     )
@@ -624,6 +675,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     binaryPath: options.binaryPath,
     contextTokens: options.contextTokens,
     maxOutputTokens,
+    maxOutputTokensFlag,
     speculationProfile,
     mtpMode,
     startedAt: Date.now(),
