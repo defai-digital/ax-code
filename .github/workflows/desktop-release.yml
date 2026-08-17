@@ -786,6 +786,8 @@ jobs:
       needs.verify-release-assets.result == 'success'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
+
       - name: Publish release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -14459,7 +14459,8 @@
       "qwen3-vl-235b-a22b-thinking": {
         "id": "qwen3-vl-235b-a22b-thinking",
         "name": "Qwen3 VL 235B A22B Thinking",
-        "description": "Compact GPT model for low-latency assistance and high-volume workloads",
+        "description": "Qwen vision-language thinking model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -14471,8 +14472,10 @@
         ],
         "tool_call": false,
         "structured_output": false,
-        "release_date": "2025-08-26",
-        "last_updated": "2025-08-26",
+        "temperature": true,
+        "knowledge": "2025-03-31",
+        "release_date": "2025-09-23",
+        "last_updated": "2025-09-23",
         "modalities": {
           "input": [
             "text",
@@ -24627,14 +24630,16 @@
       "qwen/Qwen3-VL-235B-A22B-Instruct": {
         "id": "qwen/Qwen3-VL-235B-A22B-Instruct",
         "name": "Qwen3 VL 235B A22B Instruct",
-        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
+        "description": "Qwen vision-language instruct model for visual reasoning, documents, and agent tasks",
         "family": "qwen",
         "attachment": true,
         "reasoning": false,
         "tool_call": false,
         "structured_output": false,
-        "release_date": "2024-01-01",
-        "last_updated": "2024-01-01",
+        "temperature": true,
+        "knowledge": "2025-03-31",
+        "release_date": "2025-09-23",
+        "last_updated": "2025-09-23",
         "modalities": {
           "input": [
             "text",
