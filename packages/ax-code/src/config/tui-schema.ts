@@ -33,6 +33,33 @@ export const TuiOptions = z.object({
     })
     .optional()
     .describe("Idle recap settings"),
+  notifications: z
+    .object({
+      enabled: z
+        .boolean()
+        .optional()
+        .describe(
+          "Emit a terminal-native notification (OSC 9, BEL fallback) when a turn completes, a permission is requested, or a question is asked (default true)",
+        ),
+    })
+    .optional()
+    .describe("Terminal notification settings"),
+  status_line: z
+    .object({
+      command: z
+        .string()
+        .optional()
+        .describe(
+          "Shell command whose first stdout line is rendered in the TUI status line. Receives a JSON snapshot (model, cwd, session id, version, ...) on stdin.",
+        ),
+      interval_ms: z
+        .number()
+        .min(500)
+        .optional()
+        .describe("Status line refresh interval in milliseconds (default 3000, min 500)"),
+    })
+    .optional()
+    .describe("Custom status line settings"),
 })
 
 export const TuiInfo = z

@@ -56,7 +56,9 @@ import {
   runModeTransition,
   type RunMode,
 } from "./component/prompt/run-mode-view-model"
-import { TuiConfigProvider } from "./context/tui-config"
+import { TuiConfigProvider, useTuiConfig } from "./context/tui-config"
+import { notifyTerminal } from "./util/terminal-notify"
+import { createTurnCompleteTracker } from "./util/turn-complete-tracker"
 import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Log } from "@/util/log"
@@ -66,7 +68,10 @@ import {
   destroyTuiRenderer,
   getTuiRenderProfile,
   renderTui,
+  setTuiTerminalProgress,
   setTuiTerminalTitle,
+  shouldAnimateTuiTitleSpinner,
+  supportsTuiTerminalProgress,
 } from "./renderer"
 import type { EventSource } from "./context/sdk"
 import { Installation } from "@/installation"
@@ -198,6 +203,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const toast = useToast()
   const { theme, mode, setMode, locked, lock, unlock } = useTheme()
   const sync = useSync()
+  const tuiConfig = useTuiConfig()
   const exit = useExit()
   const promptRef = usePromptRef()
   const [sessionRoute, setSessionRoute] = createSignal<Component | undefined>()
@@ -301,7 +307,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         await DialogAlert.show(
           dialog,
           "Effort",
-          `${model ?? "This model"} does not expose effort levels.\n\nEffort is available on Anthropic Claude, OpenAI GPT/Codex CLI, xAI Grok/Grok Build CLI, Google Gemini, Claude Code, and OpenAI-compatible providers. Other providers can define custom levels under provider.<id>.models.<model>.variants in ax-code.json.`,
+          `${model ?? "This model"} does not expose effort levels.\n\nEffort is available on Anthropic Claude, OpenAI GPT/Codex CLI, Grok Build CLI, Google Gemini, Claude Code, and OpenAI-compatible providers. Other providers can define custom levels under provider.<id>.models.<model>.variants in ax-code.json.`,
         )
         return
       }
@@ -440,29 +446,118 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   }
   const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
 
+  const sessionWorking = () => {
+    if (route.data.type !== "session") return false
+    const status = sync.data.session_status?.[route.data.sessionID]
+    return status?.type === "busy" || status?.type === "retry"
+  }
+
+  // While a session is working, show a busy indicator in the terminal tab.
+  // Preferred: the terminal-native OSC 9;4 progress indicator (Windows
+  // Terminal / ConEmu / Ghostty / WezTerm), like kimi-code. Fallback: an
+  // animated braille spinner in the title text (like codex) for terminals
+  // without 9;4 support (iTerm2, Terminal.app, ...).
+  const terminalProgressSupported = supportsTuiTerminalProgress()
+
+  createEffect(() => {
+    setTuiTerminalProgress(terminalTitleEnabled() && sessionWorking(), renderProfile)
+  })
+  // The progress keepalive interval is module state in renderer.ts, outside
+  // Solid's cleanup tracking. If this component is torn down while a session
+  // is still working (the error boundary replaces the app with the fatal-error
+  // screen), nothing else stops it — the indicator would keep re-arming every
+  // second on a crashed session until the user force-exits.
+  onCleanup(() => setTuiTerminalProgress(false, renderProfile))
+
+  const TITLE_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+  const [titleSpinnerFrame, setTitleSpinnerFrame] = createSignal(0)
+
+  // Advance the spinner only while a session is working on a terminal without
+  // native progress support; the interval is disposed as soon as the session
+  // goes idle or the route changes.
+  createEffect(() => {
+    if (
+      !shouldAnimateTuiTitleSpinner({
+        profile: renderProfile,
+        terminalTitleEnabled: terminalTitleEnabled(),
+        terminalProgressSupported,
+        sessionWorking: sessionWorking(),
+      })
+    )
+      return
+    const timer = setInterval(() => setTitleSpinnerFrame((frame) => frame + 1), 120)
+    onCleanup(() => clearInterval(timer))
+  })
+
   // Update terminal window title based on current route and session
   createEffect(() => {
     if (!terminalTitleEnabled()) {
-      clearTuiTerminalTitle(renderer, renderProfile)
+      clearTuiTerminalTitle(renderProfile)
       return
     }
     if (!renderProfile.allowTerminalTitle) return
 
+    const spinner =
+      !terminalProgressSupported && sessionWorking()
+        ? `${TITLE_SPINNER_FRAMES[titleSpinnerFrame() % TITLE_SPINNER_FRAMES.length]} `
+        : ""
+
     if (route.data.type === "home") {
-      setTuiTerminalTitle(renderer, "ax-code", renderProfile)
+      setTuiTerminalTitle(`${spinner}ax-code`, renderProfile)
       return
     }
 
     if (route.data.type === "session") {
       const session = sync.session.get(route.data.sessionID)
       if (!session || SessionApi.isDefaultTitle(session.title)) {
-        setTuiTerminalTitle(renderer, "ax-code", renderProfile)
+        setTuiTerminalTitle(`${spinner}ax-code`, renderProfile)
         return
       }
 
       // Truncate title to 40 chars max
       const title = session.title.length > 40 ? session.title.slice(0, 37) + "..." : session.title
-      setTuiTerminalTitle(renderer, `ax-code | ${title}`, renderProfile)
+      setTuiTerminalTitle(`${spinner}ax-code | ${title}`, renderProfile)
+    }
+  })
+
+  // Terminal-native notifications (OSC 9 / BEL fallback, ported from
+  // kimi-code). Fire-once keys live in util/terminal-notify.ts, so reactive
+  // re-runs of these effects never re-notify for the same event.
+  const notificationsEnabled = () => tuiConfig.notifications?.enabled ?? true
+
+  // Notify when the agent's turn completes: the viewed session's status
+  // transitions from busy/retry to idle. The tracker (util/turn-complete-tracker.ts)
+  // resets its baseline on route changes and hands out a unique fire-once key
+  // per transition; unrelated re-renders return undefined.
+  const turnComplete = createTurnCompleteTracker()
+  createEffect(() => {
+    const sessionID = route.data.type === "session" ? route.data.sessionID : undefined
+    const status = sessionID === undefined ? undefined : sync.data.session_status?.[sessionID]?.type
+    const key = turnComplete.update(sessionID, status)
+    if (!key || sessionID === undefined) return
+    if (!notificationsEnabled()) return
+    const session = sync.session.get(sessionID)
+    const sessionTitle = session && !SessionApi.isDefaultTitle(session.title) ? session.title : undefined
+    notifyTerminal({
+      title: "ax-code",
+      body: sessionTitle ? `Task complete: ${sessionTitle}` : "Task complete",
+      key,
+    })
+  })
+
+  // Notify when a permission approval or question is pending. The request's
+  // own id is the fire-once key, so a request notifies exactly once.
+  createEffect(() => {
+    if (!notificationsEnabled()) return
+    for (const requests of Object.values(sync.data.permission)) {
+      for (const request of requests) {
+        notifyTerminal({ title: "ax-code", body: "Permission requested", key: `permission:${request.id}` })
+      }
+    }
+    for (const requests of Object.values(sync.data.question)) {
+      for (const request of requests) {
+        notifyTerminal({ title: "ax-code", body: "Question from agent", key: `question:${request.id}` })
+      }
     }
   })
 
@@ -1224,21 +1319,27 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         dialog.clear()
       },
     },
-    {
-      title: "Suspend terminal",
-      value: "terminal.suspend",
-      keybind: "terminal_suspend",
-      category: "System",
-      hidden: true,
-      onSelect: () => {
-        // Lifecycle-managed SIGCONT (ADR-047 D2). Disposed on App cleanup and
-        // replaced if suspend is invoked again before resume.
-        terminalSuspend.suspend({
-          suspend: () => renderer.suspend(),
-          resume: () => renderer.resume(),
-        })
-      },
-    },
+    // SIGTSTP does not exist on Windows, so process-group suspension would
+    // throw there. Do not register a command the platform cannot execute.
+    ...(process.platform === "win32"
+      ? []
+      : [
+          {
+            title: "Suspend terminal",
+            value: "terminal.suspend",
+            keybind: "terminal_suspend",
+            category: "System",
+            hidden: true,
+            onSelect: () => {
+              // Lifecycle-managed SIGCONT (ADR-047 D2). Disposed on App cleanup and
+              // replaced if suspend is invoked again before resume.
+              terminalSuspend.suspend({
+                suspend: () => renderer.suspend(),
+                resume: () => renderer.resume(),
+              })
+            },
+          },
+        ]),
     {
       title: terminalTitleEnabled() ? "Disable terminal title" : "Enable terminal title",
       value: "terminal.title.toggle",
@@ -1248,7 +1349,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         setTerminalTitleEnabled((prev) => {
           const next = !prev
           kv.set("terminal_title_enabled", next)
-          if (!next) clearTuiTerminalTitle(renderer, renderProfile)
+          if (!next) clearTuiTerminalTitle(renderProfile)
           return next
         })
         dialog.clear()

@@ -167,7 +167,9 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(renderer).not.toContain("testing:")
     expect(renderer).toContain("useThread: advancedTerminal")
     expect(renderer).toContain('screenMode: advancedTerminal ? "alternate-screen" : "main-screen"')
-    expect(renderer).toContain("allowTerminalTitle: advancedTerminal && !terminalTitleDisabled")
+    // Terminal title is decoupled from the advanced profile (probe-free OSC
+    // escape); only AX_CODE_DISABLE_TERMINAL_TITLE disables it.
+    expect(renderer).toContain("allowTerminalTitle: !terminalTitleDisabled")
     expect(renderer).toContain("autoFocus: false")
     expect(renderer).toContain("openConsoleOnError: false")
     expect(renderer).toContain("useMouse: true")
@@ -213,7 +215,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(theme).not.toContain("onMount(() => {\n      resolveSystemTheme(store.mode)")
   })
 
-  test("keeps terminal title writes behind the advanced terminal profile", async () => {
+  test("routes all terminal title writes through the profile-gated helpers", async () => {
     const app = await fs.readFile(APP_SRC, "utf8")
     const exitContext = await fs.readFile(EXIT_CONTEXT_SRC, "utf8")
     const renderer = await fs.readFile(RENDERER_SRC, "utf8")
@@ -221,9 +223,44 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(renderer).toContain("allowTerminalTitle")
     expect(renderer).toContain("setTuiTerminalTitle")
     expect(renderer).toContain("clearTuiTerminalTitle")
+    // Title/progress are written directly to stdout (kimi-code style), not
+    // routed through OpenTUI's flaky native setTerminalTitle.
+    expect(renderer).not.toContain("renderer.setTerminalTitle")
+    expect(renderer).toContain("supportsTuiTerminalProgress")
+    expect(renderer).toContain("setTuiTerminalProgress")
     expect(app).toContain("setTuiTerminalTitle")
     expect(app).toContain("clearTuiTerminalTitle")
+    expect(app).toContain("setTuiTerminalProgress")
+    // The braille spinner animates the title on terminals without OSC 9;4
+    // progress support.
+    expect(app).toContain("TITLE_SPINNER_FRAMES")
+    expect(app).toContain("setTitleSpinnerFrame")
+    // The progress keepalive interval is module state in renderer.ts, outside
+    // Solid's cleanup tracking — App must stop it on unmount (the error
+    // boundary replaces the app without otherwise clearing progress).
+    expect(app).toContain("onCleanup(() => setTuiTerminalProgress(false, renderProfile))")
     expect(exitContext).toContain("await destroyTuiRenderer(renderer)")
+  })
+
+  test("gates OSC progress on terminal support and TTY stdout", async () => {
+    const renderer = await fs.readFile(RENDERER_SRC, "utf8")
+
+    // OSC 9;4 must never reach terminals without support: iTerm2/kitty parse
+    // plain OSC 9;<text> as a desktop notification, so activation there would
+    // spam a bogus "4;3" notification every second via the keepalive.
+    expect(renderer).toContain("if (!profile.allowTerminalTitle || !supported) active = false")
+    // Piped/redirected stdout (explicit isTTY false) must not receive escape
+    // bytes; undefined isTTY (test fakes, some real contexts) still writes.
+    expect(renderer).toContain("if (stream.isTTY === false) return false")
+  })
+
+  test("does not register the terminal suspend command on Windows", async () => {
+    const app = await fs.readFile(APP_SRC, "utf8")
+
+    // SIGTSTP does not exist on Windows (process.kill(0, "SIGTSTP") throws),
+    // so the command must be gated out at registration time.
+    expect(app).toContain('...(process.platform === "win32"')
+    expect(app).toContain('value: "terminal.suspend"')
   })
 
   test("does not eagerly import the heavy session route on app startup", async () => {

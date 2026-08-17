@@ -12,7 +12,13 @@ type RawModeStream = {
 }
 
 export const TUI_MOUSE_TRACKING_DISABLE_SEQUENCE = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l"
-export const TUI_TERMINAL_CRASH_RESET_SEQUENCE = `${TUI_MOUSE_TRACKING_DISABLE_SEQUENCE}\x1b[?2004l\x1b[?25h\x1b[?1049l`
+// OSC 9;4 tab progress (Windows Terminal / ConEmu / Ghostty / WezTerm).
+// Shown while the agent works; cleared on teardown/crash so the indicator
+// never lingers on a dead tab. Kept here (not renderer.ts) so the crash
+// reset can emit it without a terminal-cleanup -> renderer import cycle.
+export const TUI_TERMINAL_PROGRESS_ACTIVE_SEQUENCE = "\x1b]9;4;3\x07"
+export const TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE = "\x1b]9;4;0\x07"
+export const TUI_TERMINAL_CRASH_RESET_SEQUENCE = `${TUI_MOUSE_TRACKING_DISABLE_SEQUENCE}\x1b[?2004l\x1b[?25h\x1b[?1049l${TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE}`
 
 // Cursor-home + erase-entire-display. In main-screen mode the renderer paints
 // directly on the normal terminal buffer (no alternate screen to restore on

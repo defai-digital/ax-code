@@ -70,6 +70,45 @@ export function promptEscapeClearIntent(input: {
   }
 }
 
+export const DOUBLE_ESCAPE_REWIND_MS = 600
+
+// The rewind gesture is two CONSECUTIVE escapes. Any other key must disarm the
+// window — including keys the prompt key handler consumes before it reaches
+// the escape-intent chain (submit, paste, shell-mode switch, autocomplete),
+// which would otherwise leave a stale arm that a later lone Esc completes.
+export function escapeRewindDisarmKey(keyName?: string) {
+  return keyName !== "escape"
+}
+
+// Double-Esc on an idle session (with no draft) opens the rollback dialog.
+// The first Esc only arms the window and must NOT be consumed by the caller —
+// other escape behaviors (dialog close, selection clear) still apply to it.
+export function promptEscapeRewindIntent(input: {
+  keyName?: string
+  hasDraft: boolean
+  onSessionRoute: boolean
+  sessionIdle: boolean
+  previousIdleEscapeAt?: number
+  now: number
+  windowMs?: number
+}): {
+  action: "arm" | "rewind" | "passthrough"
+  nextIdleEscapeAt?: number
+} {
+  if (input.keyName !== "escape") return { action: "passthrough" }
+  if (input.hasDraft || !input.onSessionRoute || !input.sessionIdle) return { action: "passthrough" }
+
+  const windowMs = input.windowMs ?? DOUBLE_ESCAPE_REWIND_MS
+  if (input.previousIdleEscapeAt !== undefined && input.now - input.previousIdleEscapeAt <= windowMs) {
+    return { action: "rewind" }
+  }
+
+  return {
+    action: "arm",
+    nextIdleEscapeAt: input.now,
+  }
+}
+
 export function isPromptExitCommand(input: string) {
   const trimmed = input.trim()
   return trimmed === "exit" || trimmed === "quit" || trimmed === ":q"

@@ -76,6 +76,8 @@ import { Log } from "@/util/log"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import {
   promptEscapeClearIntent,
+  promptEscapeRewindIntent,
+  escapeRewindDisarmKey,
   createPromptPasteSubmitGate,
   isPromptExitCommand,
   isUnmodifiedPromptSubmitKey,
@@ -117,6 +119,12 @@ import {
 } from "./prompt-helpers"
 import { PLACEHOLDERS, SHELL_PLACEHOLDERS, SUBMIT_ACCEPT_TIMEOUT_MS } from "./prompt-config"
 import type { AsyncSessionRoute, PromptProps, PromptRef } from "./prompt-types"
+import { Installation } from "@/installation"
+import { useTuiConfig } from "../../context/tui-config"
+import { runStatusLineCommand } from "../../util/status-line"
+import { DialogRollback } from "../../routes/session/dialog-rollback"
+import { SessionRollbackView } from "../../routes/session/rollback"
+import { promptState } from "../../routes/session/messages"
 
 export type { PromptProps, PromptRef } from "./prompt-types"
 
@@ -157,6 +165,7 @@ export function Prompt(props: PromptProps) {
   const renderer = useRenderer()
   const { theme, syntax } = useTheme()
   const kv = useKV()
+  const tuiConfig = useTuiConfig()
   const [submitPending, setSubmitPending] = createSignal(false)
   const [submitStage, setSubmitStage] = createSignal<SubmitStage | undefined>()
   const [draftSessionID, setDraftSessionID] = createSignal<string | undefined>()
@@ -224,6 +233,49 @@ export function Prompt(props: PromptProps) {
   })
   const [localStatusTick, setLocalStatusTick] = createSignal(0)
   const statusTick = () => props.statusTick?.() ?? localStatusTick()
+
+  // Custom status line (tui.json `status_line.command`): runs the user's shell
+  // command on an interval with a small JSON snapshot on stdin and renders its
+  // first stdout line under the prompt. The interval helper already guards
+  // against overlapping runs; failures/hangs resolve to undefined (no line).
+  const [statusLine, setStatusLine] = createSignal<string | undefined>()
+  createEffect(() => {
+    const config = tuiConfig.status_line
+    const command = config?.command?.trim()
+    if (!command) {
+      setStatusLine(undefined)
+      return
+    }
+    const intervalMs = Math.max(500, config?.interval_ms ?? 3000)
+    let stale = false
+    const run = async () => {
+      const model = local.model.current()
+      const cwd = sdk.directory ?? process.cwd()
+      const text = await runStatusLineCommand(
+        command,
+        {
+          model: model ? `${model.providerID}/${model.modelID}` : undefined,
+          agent: local.agent.current().name,
+          cwd,
+          sessionID: props.sessionID,
+          version: Installation.VERSION,
+        },
+        { cwd },
+      )
+      // Cleanup (unmount, or an effect re-run on model/agent/session switch)
+      // cancels the interval but cannot stop an in-flight command — drop its
+      // late result so a snapshot for the old session never overwrites the
+      // current one.
+      if (stale) return
+      setStatusLine(text)
+    }
+    void run()
+    const cancel = scheduleTuiInterval(run, { name: "prompt-status-line", delayMs: intervalMs, unref: true })
+    onCleanup(() => {
+      stale = true
+      cancel()
+    })
+  })
   const pendingCancelHint = createMemo(() => {
     const hints = new Set<string>()
     const sessionInterrupt = keybind.print("session_interrupt")
@@ -237,6 +289,51 @@ export function Prompt(props: PromptProps) {
   let submitInFlight = false
   let cancelRouteHandoff: (() => void) | undefined
   let lastDraftEscapeAt: number | undefined
+  let lastIdleEscapeAt: number | undefined
+
+  // Double-Esc on an idle session opens the rollback dialog (Kimi-style rewind).
+  // Mirrors the "View rollback points" command in routes/session/display-commands.ts,
+  // including its abort-then-revert select handler.
+  function openRollbackDialog() {
+    const sessionID = props.sessionID
+    if (!sessionID) return
+    const rollbackMessages = () =>
+      (sync.data.message[sessionID] ?? []).map((item) => ({
+        info: item,
+        parts: sync.data.part[item.id] ?? [],
+      }))
+    dialog.replace(() => (
+      <DialogRollback
+        sessionID={sessionID}
+        messages={rollbackMessages()}
+        onSelect={async (point) => {
+          // The v2 SDK client resolves `{error}` instead of rejecting, so both
+          // calls must check the result. Thrown errors are toasted by
+          // DialogRollback, which keeps the dialog open for retry.
+          const current = sync.data.session_status?.[sessionID]
+          if (current && current.type !== "idle") {
+            const aborted = await sdk.client.session.abort({ sessionID })
+            if (aborted.error) {
+              log.warn("session rollback abort failed", { error: aborted.error, sessionID })
+              throw new Error("Failed to stop the running session before rollback")
+            }
+          }
+          const result = await sdk.client.session.revert({
+            sessionID,
+            messageID: point.messageID,
+            partID: point.partID,
+          })
+          if (result.error) {
+            log.warn("session rollback revert failed", { error: result.error, sessionID })
+            throw new Error("Failed to rollback to selected step")
+          }
+          const messageID = SessionRollbackView.promptID(rollbackMessages(), point)
+          // PromptRef.set replaces one prompt value; it is not Map/Set growth.
+          if (messageID) ref.set(promptState(sync.data.part[messageID] ?? [])) // @scan-suppress lifecycle_scan
+        }}
+      />
+    ))
+  }
 
   function upsertSessionInStore(session: (typeof sync.data.session)[number]) {
     sync.set(
@@ -1807,6 +1904,11 @@ export function Prompt(props: PromptProps) {
               }}
               keyBindings={textareaKeybindings()}
               onKeyDown={async (e: KeyEvent) => {
+                // Disarm the double-Esc rewind window on any non-escape key up
+                // front — keys consumed by early returns below (submit, paste,
+                // mode switches, autocomplete) never reach the escape-intent
+                // chain and would otherwise leave a stale arm behind.
+                if (escapeRewindDisarmKey(e.name)) lastIdleEscapeAt = undefined
                 const pendingIntent = pendingSubmitKeyIntent({
                   pending: submitPending() || submitInFlight,
                   appExit: keybind.match("app_exit", e),
@@ -1931,6 +2033,24 @@ export function Prompt(props: PromptProps) {
                 if (escapeIntent.action === "clear") {
                   clearPromptDraft()
                   e.preventDefault()
+                  return
+                }
+                // Double-Esc with no draft on an idle session opens the rollback
+                // dialog. The first Esc only arms the window and falls through
+                // unconsumed, so dialog-close/selection-clear escape behavior
+                // elsewhere keeps working.
+                const rewindIntent = promptEscapeRewindIntent({
+                  keyName: e.name,
+                  hasDraft: store.prompt.input !== "" || store.prompt.parts.length > 0,
+                  onSessionRoute: route.data.type === "session" && !!props.sessionID,
+                  sessionIdle: status().type === "idle",
+                  previousIdleEscapeAt: lastIdleEscapeAt,
+                  now: Date.now(),
+                })
+                lastIdleEscapeAt = rewindIntent.nextIdleEscapeAt
+                if (rewindIntent.action === "rewind") {
+                  e.preventDefault()
+                  openRollbackDialog()
                   return
                 }
                 if (!autocomplete?.visible) {
@@ -2108,6 +2228,13 @@ export function Prompt(props: PromptProps) {
             </Show>
           </box>
         </Card>
+        <Show when={statusLine()}>
+          {(line) => (
+            <box flexShrink={0}>
+              <text fg={theme.textMuted}>{line()}</text>
+            </box>
+          )}
+        </Show>
         <box
           flexDirection={footerLayout().stacked ? "column" : "row"}
           justifyContent={footerLayout().stacked ? "flex-start" : "space-between"}

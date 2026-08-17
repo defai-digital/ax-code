@@ -297,7 +297,6 @@ export function displayCommands(input: {
       slash: {
         name: "sidebar",
         aliases: ["toggle-sidebar"],
-        hidden: true,
       },
       onSelect: (dialog: DialogContext) => {
         batch(() => {

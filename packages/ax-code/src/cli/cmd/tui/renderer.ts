@@ -4,16 +4,19 @@ import { Clipboard } from "@tui/util/clipboard"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
 import { toErrorMessage } from "@/util/error-message"
-import { clearTuiMainScreen, disableTuiMouseTracking, flushTuiStdout } from "./terminal-cleanup"
+import {
+  clearTuiMainScreen,
+  disableTuiMouseTracking,
+  flushTuiStdout,
+  TUI_TERMINAL_PROGRESS_ACTIVE_SEQUENCE,
+  TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE,
+} from "./terminal-cleanup"
 
 const log = Log.create({ service: "tui.renderer" })
 
 export type TuiRenderRoot = () => JSX.Element
 export type TuiRenderOptions = CliRendererConfig
-export type TuiTerminalTitleRenderer = {
-  setTerminalTitle: (title: string) => void
-}
-export type TuiDestroyRenderer = TuiTerminalTitleRenderer & {
+export type TuiDestroyRenderer = {
   destroy: () => void
 }
 export type TuiRenderProfile = {
@@ -51,7 +54,12 @@ export function resolveTuiRenderProfile(input: {
     // default — Shift+Enter/Ctrl+Enter newline bindings depend on it.
     useKittyKeyboard: input.kittyKeyboard ?? true,
     screenMode: advancedTerminal ? "alternate-screen" : "main-screen",
-    allowTerminalTitle: advancedTerminal && !terminalTitleDisabled,
+    // Terminal title/progress are fire-and-forget OSC escapes written
+    // directly to stdout (probe-free, same risk class as the kitty keyboard
+    // flags push), so they are decoupled from the advanced profile and
+    // enabled by default. Without the title write the terminal tab just
+    // shows "node". AX_CODE_DISABLE_TERMINAL_TITLE opts out of both.
+    allowTerminalTitle: !terminalTitleDisabled,
   }
 }
 
@@ -106,21 +114,118 @@ export function createTuiRenderOptions(
   return createTuiRenderOptionsFromProfile(getTuiRenderProfile(), input)
 }
 
+type TuiSequenceStream = {
+  write: (chunk: string) => boolean
+  writable?: boolean
+  destroyed?: boolean
+  isTTY?: boolean
+}
+
+function writeTuiSequence(stream: TuiSequenceStream, sequence: string) {
+  // Explicit non-TTY (piped/redirected stdout): escape bytes would pollute the
+  // redirected output, and the progress keepalive would write every second.
+  // Undefined isTTY (test fakes, some real contexts) still writes.
+  if (stream.isTTY === false) return false
+  if (stream.writable === false || stream.destroyed) return false
+  try {
+    stream.write(sequence)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Control chars (BEL terminates the OSC sequence, ESC would break out of it)
+// must never reach the terminal from a session title.
+function sanitizeTuiTerminalTitle(title: string) {
+  return title.replace(/[\x00-\x1f\x7f-\x9f]/g, " ")
+}
+
+// The title is written directly to stdout as an OSC 0 escape instead of
+// routing through OpenTUI's native setTerminalTitle — the native write proved
+// flaky in the compatible profile (same approach as kimi-code).
 export function setTuiTerminalTitle(
-  renderer: TuiTerminalTitleRenderer,
   title: string,
   profile: TuiRenderProfile = getTuiRenderProfile(),
+  stream: TuiSequenceStream = process.stdout,
 ) {
   if (!profile.allowTerminalTitle) return false
-  renderer.setTerminalTitle(title)
-  return true
+  return writeTuiSequence(stream, `\x1b]0;${sanitizeTuiTerminalTitle(title)}\x07`)
 }
 
 export function clearTuiTerminalTitle(
-  renderer: TuiTerminalTitleRenderer,
   profile: TuiRenderProfile = getTuiRenderProfile(),
+  stream: TuiSequenceStream = process.stdout,
 ) {
-  return setTuiTerminalTitle(renderer, "", profile)
+  return setTuiTerminalTitle("", profile, stream)
+}
+
+// OSC 9;4 tab progress indicator (Windows Terminal / ConEmu / Ghostty /
+// WezTerm). Shown while the agent is working so busy sessions stand out in
+// the tab bar; terminals without support get the braille title spinner
+// fallback in app.tsx instead.
+export const TUI_TERMINAL_PROGRESS_KEEPALIVE_MS = 1_000
+
+export function supportsTuiTerminalProgress(env: NodeJS.ProcessEnv = process.env) {
+  if ((env["WT_SESSION"] ?? "").length > 0) return true
+  if (env["ConEmuANSI"] === "ON") return true
+  const termProgram = env["TERM_PROGRAM"] ?? ""
+  if (termProgram === "ghostty" || termProgram === "WezTerm") return true
+  if ((env["TERM"] ?? "") === "xterm-ghostty") return true
+  return false
+}
+
+export function shouldAnimateTuiTitleSpinner(input: {
+  profile: TuiRenderProfile
+  terminalTitleEnabled: boolean
+  terminalProgressSupported: boolean
+  sessionWorking: boolean
+}) {
+  return (
+    input.profile.allowTerminalTitle &&
+    input.terminalTitleEnabled &&
+    !input.terminalProgressSupported &&
+    input.sessionWorking
+  )
+}
+
+let terminalProgressActive = false
+let terminalProgressTimer: ReturnType<typeof setInterval> | undefined
+
+export function setTuiTerminalProgress(
+  active: boolean,
+  profile: TuiRenderProfile = getTuiRenderProfile(),
+  stream: TuiSequenceStream = process.stdout,
+  supported: boolean = supportsTuiTerminalProgress(),
+) {
+  // OSC 9;4 must never reach terminals that lack support: iTerm2/kitty parse
+  // plain OSC 9;<text> as a desktop notification, so the activation sequence
+  // (plus its 1s keepalive) would surface a bogus "4;3" notification while
+  // the agent works. Treat unsupported as inactive, same as the title opt-out.
+  if (!profile.allowTerminalTitle || !supported) active = false
+  if (active === terminalProgressActive) return false
+  terminalProgressActive = active
+  if (terminalProgressTimer) {
+    clearInterval(terminalProgressTimer)
+    terminalProgressTimer = undefined
+  }
+  if (!active) return writeTuiSequence(stream, TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE)
+  // The indicator times out on some terminals, so re-arm it on an interval
+  // (unref'd — teardown always clears it explicitly).
+  const wrote = writeTuiSequence(stream, TUI_TERMINAL_PROGRESS_ACTIVE_SEQUENCE)
+  if (!wrote) {
+    // The write never reached the terminal (degraded stdout), so nothing is
+    // showing and no keepalive is running. Roll the dedupe flag back —
+    // otherwise it would latch "active" and swallow every future activation
+    // for the rest of the process, even after stdout recovers.
+    terminalProgressActive = false
+    return false
+  }
+  terminalProgressTimer = setInterval(() => {
+    writeTuiSequence(stream, TUI_TERMINAL_PROGRESS_ACTIVE_SEQUENCE)
+  }, TUI_TERMINAL_PROGRESS_KEEPALIVE_MS)
+  terminalProgressTimer.unref?.()
+  return true
 }
 
 export async function destroyTuiRenderer(
@@ -129,7 +234,14 @@ export async function destroyTuiRenderer(
 ) {
   let destroyError: unknown
   try {
-    clearTuiTerminalTitle(renderer, profile)
+    setTuiTerminalProgress(false, profile)
+  } catch (err) {
+    log.warn("failed to clear terminal progress during teardown", {
+      error: toErrorMessage(err),
+    })
+  }
+  try {
+    clearTuiTerminalTitle(profile)
   } catch (err) {
     log.warn("failed to clear terminal title during teardown", {
       error: toErrorMessage(err),
