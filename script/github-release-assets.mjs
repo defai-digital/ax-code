@@ -73,7 +73,8 @@ export async function githubRequest(url, init = {}, options = {}) {
       throw responseError(response, body)
     }
 
-    const retryAfterSeconds = Number(response.headers.get("retry-after"))
+    const retryAfter = response.headers.get("retry-after")
+    const retryAfterSeconds = retryAfter === null ? Number.NaN : Number(retryAfter)
     const delay =
       Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0 ? retryAfterSeconds * 1_000 : retryDelaysMs[attempt]
     attempt += 1

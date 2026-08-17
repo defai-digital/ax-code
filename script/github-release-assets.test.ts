@@ -68,12 +68,12 @@ describe("GitHub draft release assets", () => {
     const response = await githubRequest(
       "https://api.github.com/repos/acme/app/releases",
       {},
-      { fetchImpl, sleepImpl, retryDelaysMs: [0], token: "test-token", log },
+      { fetchImpl, sleepImpl, retryDelaysMs: [25], token: "test-token", log },
     )
 
     expect(response.status).toBe(200)
     expect(fetchImpl).toHaveBeenCalledTimes(2)
-    expect(sleepImpl).toHaveBeenCalledWith(0)
+    expect(sleepImpl).toHaveBeenCalledWith(25)
     expect(log).toHaveBeenCalledWith(expect.stringContaining("returned 503"))
   })
 })
