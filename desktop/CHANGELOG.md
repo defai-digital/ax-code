@@ -4,6 +4,91 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.6.0] - 2026-08-17
+
+### Added
+
+- Watch ax-engine downloads — progress chip, completion toasts, submit guard.
+- Idle recap — auto post-turn summary banner in TUI.
+- Similarity-merge paraphrased council findings into agreement tiers.
+- Add ax-code task list, show, cancel, and retry.
+- Cascade stop, cap background fan-out, resume after restart.
+- Push background subagent results to the parent.
+- Spawn background subagents onto TaskQueue.
+- Show running subagents on a TaskQueue-backed rail.
+- Add dedicated alibaba-pai Ornith 397B-FP8 capability entry.
+- Remove npm guard from Ornith thinking control.
+- Register local 35B in AX Engine and tighten family detection.
+- Vendor native Zig libraries in-repo, drop upstream npm coupling.
+- Phase 1–2 ratatui dogfood skeleton (ADR-054 TUI revamp 2).
+- Add a shared craft prompt so every model acts as an orchestrator.
+- Add Work-session wiring and session-scoped browser snapshots.
+- Add AX Work Phase 1 contract, Work agent, and planning docs.
+- Add type-first provider connect pickers on Desktop and TUI.
+- Add Nebius Token Factory to Private GPU cloud catalogs.
+- Add private GPU cloud providers to TUI and Desktop.
+
+### Changed
+
+- Ax-engine: memory-constrained hot-swap, split output flag, durable prefix cache.
+- Ax-engine: launch server with the model's declared output budget.
+- Tui: show per-message tok/s and cache-hit in assistant footer.
+- Keep the system prompt stable for prompt-cache hits.
+- Feat(ax-engine)!: six-model AXQuant catalog with TUI download offer.
+- Update env forwarding test for retired gemini-cli.
+- Feat(provider)!: retire gemini-cli and antigravity-cli providers.
+- Harden GLM selectability for no-separator IDs and future vision SKUs.
+- Recover pasted tool XML after a forced wrap-up and bind council aliases.
+- Rework the tool-only stall breaker around progress, not finish reason.
+- Make Ornith thinking control explicitly exclusive with DashScope path.
+- Slim shipped vendor tree and extract reviewable patches.
+- Persist private GPU models, fix provider type select, and proxy desktop API websockets.
+- Perf(tui): coalesce deltas before the RPC boundary; surface backend stream health.
+- Remove experimental Ratatui sidecar.
+- Perf(tui): paint streaming text as plain text, mount rich renderer once at finalize.
+- Perf(tui): keep streaming rows mounted, batch event windows, calm chrome paints.
+- Align GPT, Claude, Gemini, and Trinity prompts with craft.
+- Remove the Work surface and relocate computer use to ax-work.
+- Align Kimi, GLM, Qwen, DeepSeek, and MiniMax with OpenCode.
+- Shrink the default slash menu to high-value commands.
+- Keep MiniMax PAI thinking out of visible text and session titles.
+- Harden ax-engine truncated-turn recovery to stop multi-minute re-pastes.
+- Defer ax-engine force-text after large tool results and harden recovery.
+
+### Fixed
+
+- Tolerate first-launch executable scanning.
+- Recover credentials and stale model state.
+- Stop think-tag metadata from breaking prompt validation.
+- Make ax-engine download state visible and stop dead model selections.
+- Accept mlx4bit in ax-engine model action schema.
+- Raise ax-engine output cap and parse prefilled think blocks.
+- Surface silent failures in the UI.
+- Bound window loadURL, reap orphan processes, escalate stuck kills.
+- Close loopback security gaps, stop silent project loss, retry failed backend starts.
+- Unblock deterministic tests hidden behind earlier gates.
+- Typecheck task/TUI gates and bump osv-scanner-action.
+- Restore main GitHub Actions gates.
+- Preserve newlines for plain-text CLI providers.
+- Clear busy status after resume joins an active prompt loop.
+- Ten correctness fixes from TUI code review.
+- Resolve prompt contradictions, enrich thin tool descriptions.
+- Make CLI providers honor generateObject responseFormat json.
+- Stop cleanly on terminal autonomy caps, exempt generated files.
+- Let providers logout remove undecryptable credentials.
+- Surface undecryptable credentials, harden council/arena fan-out.
+- Make GLM/Qwen family matching separator- and case-insensitive.
+- Dedupe model-support capability sources, add MiniMax registry.
+- Tighten Ornith family detection.
+- Shorten Autonomous labels to Auto.
+- Make bash_output wait abort-safe and ignore consumed backlog.
+- Wait on bash_output so idle polls cannot burn the tool-only breaker.
+- Collapse Qwen 3.x system turns and strip MiniMax empty reasoning.
+- Collapse system messages and add 35B/397B family support.
+- Type Token Plan Qwen fallback as RawModel via assertion.
+- Long-lived SSE subscribe and fail-closed smoke (ADR-054).
+- Fix ax-engine force-text trap that kills pure read-only tasks.
+
 ## [7.5.1] - 2026-08-11
 
 ### Added
