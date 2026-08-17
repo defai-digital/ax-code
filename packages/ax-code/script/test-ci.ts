@@ -169,7 +169,7 @@ async function run(
   } satisfies Result
 }
 
-async function mergeCoverageReports(blobDir: string, coverageDir: string) {
+async function mergeCoverageReports(blobDir: string, coverageDir: string, ignoredUnhandledErrors: number) {
   const command = [
     vitestCli(),
     `--merge-reports=${blobDir}`,
@@ -180,6 +180,7 @@ async function mergeCoverageReports(blobDir: string, coverageDir: string) {
     "--coverage.reporter=lcov",
     `--coverage.reportsDirectory=${coverageDir}`,
   ]
+  if (ignoredUnhandledErrors > 0) command.push("--dangerouslyIgnoreUnhandledErrors")
   const proc = spawn(process.execPath, command, {
     cwd: root,
     stdio: ["inherit", "pipe", "pipe"],
@@ -308,7 +309,7 @@ async function main() {
       }
 
       const result = aggregateRunResults(group, runNumber, dir, results)
-      if (blobDir && result.code === 0) await mergeCoverageReports(blobDir, result.coverageDir!)
+      if (blobDir && result.code === 0) await mergeCoverageReports(blobDir, result.coverageDir!, result.ignored)
       return result
     } finally {
       if (coverageWorkDir) await fs.rm(coverageWorkDir, { recursive: true, force: true })
