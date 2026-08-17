@@ -237,6 +237,9 @@ export function cli(argv = hideBin(process.argv)) {
 
 export async function run() {
   clearForcedExitTimer()
+  try {
+    process.title = "ax-code"
+  } catch {}
   // Must happen before any TUI output: the native renderer writes raw UTF-8
   // bytes to the console handle, which mojibake under legacy Windows code
   // pages (#307, #315, #338).

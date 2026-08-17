@@ -4,6 +4,10 @@ import fs from "node:fs"
 import path from "node:path"
 import { prepareNodeArgs } from "./node-ffi-runner-args.mjs"
 
+try {
+  process.title = "ax-code"
+} catch {}
+
 const nodeName = process.platform === "win32" ? "node.exe" : "node"
 const ffiArgs = ["--experimental-ffi", "--disable-warning=ExperimentalWarning"]
 

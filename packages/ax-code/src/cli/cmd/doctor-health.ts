@@ -9,7 +9,8 @@ export type DoctorCheck = {
   detail: string
 }
 
-const READ_ONLY_AX_CODE_PATTERNS = [/(\s|^)doctor(\s|$)/, /(\s|^)--version(\s|$)/]
+// tui-backend is the TUI's own stdio backend subprocess, not a competing instance.
+const READ_ONLY_AX_CODE_PATTERNS = [/(\s|^)doctor(\s|$)/, /(\s|^)--version(\s|$)/, /(\s|^)tui-backend(\s|$)/]
 const RECENT_LOG_WINDOW_MS = 24 * 60 * 60 * 1000
 const MAX_RECENT_LOG_FILES = 5
 const DEFAULT_RUN_TIMEOUT_MS = 5_000

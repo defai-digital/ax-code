@@ -135,6 +135,9 @@ export function cli(argv = hideBin(process.argv)) {
 
 export async function run() {
   clearForcedExitTimer()
+  try {
+    process.title = "ax-code"
+  } catch {}
   const cmd = cli()
   try {
     await cmd.parse()

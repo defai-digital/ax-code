@@ -29,6 +29,19 @@ describe("doctor running instances", () => {
     })
   })
 
+  test("ignores the TUI backend subprocess", async () => {
+    const check = await getRunningInstancesCheck({
+      currentPid: 100,
+      run: async () => "100 ax-code\n200 node /opt/ax-code/index.js tui-backend --stdio\n",
+    })
+
+    expect(check).toEqual({
+      name: "Running instances",
+      status: "ok",
+      detail: "No other ax-code processes",
+    })
+  })
+
   test("ignores malformed non-decimal pgrep pid fields", async () => {
     const check = await getRunningInstancesCheck({
       currentPid: 100,
