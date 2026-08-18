@@ -9,6 +9,7 @@ let configSpy: MockInstance | undefined
 let methodSpy: MockInstance | undefined
 let latestSpy: MockInstance | undefined
 let installSpy: MockInstance | undefined
+let launcherSpy: MockInstance | undefined
 let publishSpy: MockInstance | undefined
 
 afterEach(() => {
@@ -16,6 +17,7 @@ afterEach(() => {
   methodSpy?.mockRestore()
   latestSpy?.mockRestore()
   installSpy?.mockRestore()
+  launcherSpy?.mockRestore()
   publishSpy?.mockRestore()
 })
 
@@ -24,6 +26,12 @@ function setup(input: { config?: object; method?: Installation.Method; latest: s
   methodSpy = vi.spyOn(Installation, "method").mockResolvedValue(input.method ?? "curl")
   latestSpy = vi.spyOn(Installation, "latest").mockResolvedValue(input.latest)
   installSpy = vi.spyOn(Installation, "upgrade").mockResolvedValue(undefined as any)
+  launcherSpy = vi.spyOn(Installation, "verifyActiveLauncher").mockResolvedValue({
+    ok: true,
+    launchers: ["/usr/local/bin/ax-code"],
+    activePath: "/usr/local/bin/ax-code",
+    activeVersion: input.latest,
+  })
   publishSpy = vi.spyOn(Bus, "publish").mockResolvedValue(undefined as any)
 }
 
@@ -95,13 +103,30 @@ describe("cli upgrade", () => {
     expect(publishSpy).toHaveBeenCalledWith(Installation.Event.UpdateAvailable, { version: patch })
   })
 
-  test("never auto-installs when the install method is unknown", async () => {
+  test("notifies without auto-installing when the install method is unknown", async () => {
     setup({ method: "unknown", latest: patch })
 
     await upgrade()
 
     expect(installSpy).not.toHaveBeenCalled()
-    expect(publishSpy).not.toHaveBeenCalled()
+    expect(publishSpy).toHaveBeenCalledWith(Installation.Event.UpdateAvailable, { version: patch })
+  })
+
+  test("includes PATH-shadow warnings after a background patch update", async () => {
+    setup({ latest: patch })
+    launcherSpy!.mockResolvedValue({
+      ok: false,
+      launchers: ["/old/bin/ax-code", "/new/bin/ax-code"],
+      activePath: "/old/bin/ax-code",
+      activeVersion: current,
+    })
+
+    await upgrade()
+
+    expect(publishSpy).toHaveBeenCalledWith(Installation.Event.Updated, {
+      version: patch,
+      warnings: [expect.stringContaining("/old/bin/ax-code")],
+    })
   })
 
   test("falls back to the update-available notification when the install fails", async () => {

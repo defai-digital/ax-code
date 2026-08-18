@@ -8,6 +8,7 @@ export type EventInstallationUpdated = {
   type: "installation.updated"
   properties: {
     version: string
+    warnings?: Array<string>
   }
 }
 

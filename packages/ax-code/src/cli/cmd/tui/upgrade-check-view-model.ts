@@ -28,3 +28,9 @@ export function nextTuiStartupUpgradeCheckState(input: {
     checkedAt: input.nowMs,
   }
 }
+
+export function formatTuiUpgradeCompleteMessage(version: string, warnings: readonly string[] = []) {
+  const message = `Successfully updated to ax-code v${version}. Please restart the application.`
+  if (!warnings.length) return message
+  return `${message}\n\nWarnings:\n${warnings.map((warning) => `- ${warning}`).join("\n")}`
+}

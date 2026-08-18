@@ -187,6 +187,28 @@ describe("installation", () => {
       expect(result.activeVersion).toBe("1.9.7")
       expect(result.launchers).toEqual(["/Users/devop/.local/bin/ax-code", "/opt/homebrew/bin/ax-code"])
     })
+
+    test("formats actionable warnings for missing and shadowed launchers", () => {
+      expect(Installation.launcherWarnings("2.0.0", { ok: false, launchers: [] })[0]).toMatch(
+        /No `ax-code` launcher found on PATH/,
+      )
+      expect(
+        Installation.launcherWarnings("2.0.0", {
+          ok: false,
+          launchers: ["/old/bin/ax-code", "/new/bin/ax-code"],
+          activePath: "/old/bin/ax-code",
+          activeVersion: "1.9.7",
+        })[0],
+      ).toMatch(/\/old\/bin\/ax-code \(v1\.9\.7\)/)
+      expect(
+        Installation.launcherWarnings("2.0.0", {
+          ok: true,
+          launchers: ["/new/bin/ax-code"],
+          activePath: "/new/bin/ax-code",
+          activeVersion: "2.0.0",
+        }),
+      ).toEqual([])
+    })
   })
 
   describe("method", () => {
@@ -375,6 +397,22 @@ describe("installation", () => {
       await expect(promise).rejects.toThrow(/integrity check failed/)
     })
 
+    test("hard-fails when a present installer sidecar is malformed", async () => {
+      const promise = withTestDependencies(
+        {
+          platform: "linux",
+          fetch: (url) => {
+            if (url.endsWith("/install")) return new Response("#!/bin/bash\n", { status: 200 })
+            if (url.endsWith("/install.sha256")) return new Response("not-a-digest\n", { status: 200 })
+            return new Response("not found", { status: 404 })
+          },
+        },
+        () => Installation.upgrade("curl", "5.3.0"),
+      )
+
+      await expect(promise).rejects.toThrow(/sidecar does not contain a SHA-256 digest/)
+    })
+
     test("proceeds when the installer script sha256 sidecar matches", async () => {
       const script = "#!/bin/bash\necho verified\n"
       const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(script))
@@ -387,7 +425,8 @@ describe("installation", () => {
           platform: "linux",
           fetch: (url) => {
             if (url.endsWith("/install")) return new Response(script, { status: 200 })
-            if (url.endsWith("/install.sha256")) return new Response(`${expected}  install\n`, { status: 200 })
+            if (url.endsWith("/install.sha256"))
+              return new Response(`${expected.toUpperCase()}  install\n`, { status: 200 })
             return new Response("not found", { status: 404 })
           },
         },

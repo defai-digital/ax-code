@@ -38,6 +38,7 @@ export namespace Installation {
       "installation.updated",
       z.object({
         version: z.string(),
+        warnings: z.array(z.string()).optional(),
       }),
     ),
     UpdateAvailable: BusEvent.define(
@@ -232,24 +233,25 @@ export namespace Installation {
   async function fetchInstallerScript(scriptUrl: string) {
     const sha256Url = `${scriptUrl}.sha256`
     const response = await fetchOk(scriptUrl)
-    const body = await response.text()
-    // Encode once; reuse for both the SHA-256 check and execution so the
-    // hash is computed over exactly the bytes that get run.
-    const bodyBytes = new TextEncoder().encode(body)
+    // Preserve the response bytes exactly. Decoding to text and re-encoding
+    // can strip a BOM or replace malformed UTF-8, invalidating a legitimate
+    // sidecar (or hashing bytes different from those written to disk).
+    const bodyBytes = new Uint8Array(await response.arrayBuffer())
     try {
       const sha256Res = await dependencies.fetch(sha256Url)
       if (!sha256Res.ok) {
         log.warn("install script .sha256 sidecar not found — skipping integrity check")
       } else {
         const expected = (await sha256Res.text()).trim().split(/\s+/)[0]
-        if (expected) {
-          const hashBuffer = await crypto.subtle.digest("SHA-256", bodyBytes)
-          const actual = Array.from(new Uint8Array(hashBuffer))
-            .map((b) => b.toString(16).padStart(2, "0"))
-            .join("")
-          if (actual !== expected)
-            throw new Error(`Install script integrity check failed: expected ${expected}, got ${actual}`)
+        if (!/^[a-f0-9]{64}$/i.test(expected)) {
+          throw new Error("Install script integrity check failed: .sha256 sidecar does not contain a SHA-256 digest")
         }
+        const hashBuffer = await crypto.subtle.digest("SHA-256", bodyBytes)
+        const actual = Array.from(new Uint8Array(hashBuffer))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("")
+        if (actual !== expected.toLowerCase())
+          throw new Error(`Install script integrity check failed: expected ${expected}, got ${actual}`)
       }
     } catch (e) {
       const msg = toErrorMessage(e)
@@ -413,6 +415,20 @@ export namespace Installation {
     launchers: string[]
     activePath?: string
     activeVersion?: string
+  }
+
+  export function launcherWarnings(target: string, launcher: LauncherCheck): string[] {
+    if (launcher.ok) return []
+    if (!launcher.activePath) {
+      return [
+        "No `ax-code` launcher found on PATH after the upgrade — restart your shell or check that the install directory is still on PATH.",
+      ]
+    }
+    return [
+      launcher.activeVersion
+        ? `PATH resolves \`ax-code\` to ${launcher.activePath} (v${launcher.activeVersion}) — running \`ax-code\` will keep using that version until the stale launcher is removed or PATH is fixed.`
+        : `PATH resolves \`ax-code\` to ${launcher.activePath}, whose version could not be determined — it may not be v${target}.`,
+    ]
   }
 
   export async function verifyActiveLauncher(target: string, binName = "ax-code"): Promise<LauncherCheck> {

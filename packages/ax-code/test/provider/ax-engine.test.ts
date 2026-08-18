@@ -1522,7 +1522,7 @@ describe("ax-engine provider integration", () => {
     expect(seen).toEqual(["http://127.0.0.1:31418/v1/chat/completions"])
   })
 
-  test("maps the public Qwen3.6-27B model id to the ax-engine runtime id", async () => {
+  test("maps the public Qwen3.8-27B model id to the ax-engine runtime id", async () => {
     globalThis.fetch = (async () =>
       new Response(JSON.stringify({ data: [liveCard(AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID)] }), {
         status: 200,

@@ -497,20 +497,7 @@ export const GlobalRoutes = lazy(() =>
         // just installed — shadowed launchers are the most common reason an
         // upgrade "succeeds" yet `ax-code` keeps running the old version.
         const launcher = await Installation.verifyActiveLauncher(target).catch(() => undefined)
-        const warnings: string[] = []
-        if (launcher && !launcher.ok) {
-          if (launcher.activePath) {
-            warnings.push(
-              launcher.activeVersion
-                ? `PATH resolves \`ax-code\` to ${launcher.activePath} (v${launcher.activeVersion}) — running \`ax-code\` will keep using that version until the stale launcher is removed or PATH is fixed.`
-                : `PATH resolves \`ax-code\` to ${launcher.activePath}, whose version could not be determined — it may not be v${target}.`,
-            )
-          } else {
-            warnings.push(
-              "No `ax-code` launcher found on PATH after the upgrade — restart your shell or check that the install directory is still on PATH.",
-            )
-          }
-        }
+        const warnings = launcher ? Installation.launcherWarnings(target, launcher) : []
         GlobalBus.emit("event", {
           directory: "global",
           payload: {

@@ -87,6 +87,7 @@ import { createTerminalSuspendController } from "@tui/util/terminal-suspend"
 import { resolveSessionFirstRoute } from "./navigation/launch-policy"
 import { resolveDesktopHandoff } from "./navigation/desktop-handoff"
 import { launchWebUi } from "@/desktop/webui"
+import { formatTuiUpgradeCompleteMessage } from "./upgrade-check-view-model"
 
 const FALLBACK_COLOR_MODE = "dark" as const
 
@@ -1482,6 +1483,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   ])
 
   let updateHandlerDisposed = false
+  let interactiveUpgradeVersion: string | undefined
   const eventUnsubs = [
     sdk.event.on(TuiEvent.CommandExecute.type, (evt) => {
       command.trigger(evt.properties.command)
@@ -1566,10 +1568,15 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         duration: 30000,
       })
 
+      // The upgrade route emits installation.updated before returning. Mark
+      // this version as interactive so its event is not also rendered as a
+      // silent-background-update toast (SSE delivery may trail the response).
+      interactiveUpgradeVersion = version
       const result = await sdk.client.global.upgrade({ target: version })
       if (updateHandlerDisposed) return
 
       if (result.error || !result.data?.success) {
+        interactiveUpgradeVersion = undefined
         const reason =
           (result.data as { success: false; error: string } | undefined)?.error ||
           unknownErrorMessage(result.error) ||
@@ -1586,30 +1593,26 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       await DialogAlert.show(
         dialog,
         "Update Complete",
-        `Successfully updated to ax-code v${result.data.version}. Please restart the application.`,
+        formatTuiUpgradeCompleteMessage(result.data.version, result.data.warnings),
       )
       if (updateHandlerDisposed) return
-
-      if (result.data.warnings?.length) {
-        toast.show({
-          variant: "warning",
-          title: "Update Warning",
-          message: result.data.warnings.join("\n"),
-          duration: 15000,
-        })
-      }
 
       exit()
     }),
 
     sdk.event.on("installation.updated", (evt) => {
+      if (interactiveUpgradeVersion === evt.properties.version) return
       // Silent background patch upgrade finished — the running process still
       // holds the old binary, so the new version only takes effect on restart.
+      const warnings = evt.properties.warnings ?? []
       toast.show({
-        variant: "info",
-        title: "Updated",
-        message: `ax-code was updated to v${evt.properties.version} in the background. Restart to use the new version.`,
-        duration: 10000,
+        variant: warnings.length ? "warning" : "info",
+        title: warnings.length ? "Updated with warning" : "Updated",
+        message: [
+          `ax-code was updated to v${evt.properties.version} in the background. Restart to use the new version.`,
+          ...warnings,
+        ].join("\n"),
+        duration: warnings.length ? 15000 : 10000,
       })
     }),
   ]

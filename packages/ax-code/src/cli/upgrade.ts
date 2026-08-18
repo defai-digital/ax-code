@@ -26,7 +26,6 @@ export async function upgrade() {
     return
   }
 
-  if (Installation.VERSION === latest) return
   if (config.autoupdate === false || Flag.AX_CODE_DISABLE_AUTOUPDATE) return
 
   const kind = Installation.getReleaseType(Installation.VERSION, latest)
@@ -36,12 +35,24 @@ export async function upgrade() {
     return
   }
 
-  if (method === "unknown") return
+  // An unrecognized install channel is unsafe to mutate automatically, but
+  // hiding patch releases entirely leaves those users permanently stale.
+  if (method === "unknown") {
+    await Bus.publish(Installation.Event.UpdateAvailable, { version: latest })
+    return
+  }
   // Log upgrade failures and publish an UpdateAvailable event so the user
   // is not silently left stuck on an outdated version — a silent
   // `.catch(() => {})` would make them believe the upgrade succeeded.
   await Installation.upgrade(method, latest)
-    .then(() => Bus.publish(Installation.Event.Updated, { version: latest }))
+    .then(async () => {
+      const launcher = await Installation.verifyActiveLauncher(latest).catch(() => undefined)
+      const warnings = launcher ? Installation.launcherWarnings(latest, launcher) : []
+      await Bus.publish(
+        Installation.Event.Updated,
+        warnings.length ? { version: latest, warnings } : { version: latest },
+      )
+    })
     .catch(async (err) => {
       log.error("upgrade failed", { method, version: latest, err })
       await Bus.publish(Installation.Event.UpdateAvailable, { version: latest })

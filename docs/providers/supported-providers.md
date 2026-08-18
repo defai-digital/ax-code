@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-07-26
+Last reviewed: 2026-08-18
 Owner: ax-code runtime
 
 This page lists the provider presets AX Code exposes in the default setup flows. The source of truth is the runtime provider allowlist in
@@ -102,15 +102,15 @@ For Kimi Code membership, install the local `kimi` binary, run `kimi login`, the
 
 ## AX Engine Local Provider
 
-`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and exposes curated AutomatosX AXQ 6-bit MLX packs. The 27B and 9B packs include an AXQuant MTP sidecar; the coding specialist is direct decode.
+`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and exposes exactly three curated AutomatosX AXQ 6-bit MLX packs. Qwen3.8-27B includes an AXQuant MTP sidecar; Ornith and Qwen3-Coder-Next use direct decode.
 
 | Provider id | Model id                    | Display name                           | Context | Output |
 | ----------- | --------------------------- | -------------------------------------- | ------: | -----: |
-| `ax-engine` | `qwen3.6-27b-axq-6bit`      | Qwen3.6-27B AXQ 6-bit (Local MLX Auto) |  65,536 |  2,048 |
-| `ax-engine` | `qwen3.5-9b-axq-6bit`       | Qwen3.5-9B AXQ 6-bit (Local MLX Auto)  |  32,768 |  2,048 |
-| `ax-engine` | `qwen3-coder-next-axq-6bit` | Qwen3-Coder-Next AXQ 6-bit (Local MLX) |  32,768 |  8,192 |
+| `ax-engine` | `qwen3.8-27b-axq-6bit`      | Qwen3.8-27B AXQ 6-bit (Local MLX Auto) |  65,536 | 16,384 |
+| `ax-engine` | `ornith-35b-axq-6bit`       | Ornith-1.0-35B AXQ 6-bit (Local MLX)   | 262,144 | 32,000 |
+| `ax-engine` | `qwen3-coder-next-axq-6bit` | Qwen3-Coder-Next AXQ 6-bit (Local MLX) |  32,768 | 16,384 |
 
-The default local model is `qwen3.6-27b-axq-6bit`. See [AX Engine Model Selection](ax-engine-model-selection.md) for ranking, memory, and disk guidance.
+The default local model is `qwen3.8-27b-axq-6bit`. See [AX Engine Model Selection](ax-engine-model-selection.md) for ranking, memory, and disk guidance.
 
 For a configured local AX Engine server, `/v1/models` is authoritative: AX Code discovers the live model IDs, context/output limits, modalities, and structured tool-call support. A model that does not advertise structured tool calling is not used for coding-agent requests.
 

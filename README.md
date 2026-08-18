@@ -221,11 +221,11 @@ Grok runs exclusively through `Grok Build CLI`. Select `grok-build-cli` in `/con
 
 Default setup flows support three provider families:
 
-| Family                   | Providers                                                                                         | Model source                                                     |
-| ------------------------ | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Cloud API providers      | Google, GroqCloud, OpenRouter, Hugging Face, UnoRouter, Alibaba plans, GitHub Copilot, and Z.AI   | Hosted provider model catalogs bundled with AX Code              |
-| CLI providers            | Claude Code, Gemini CLI, Codex CLI, Grok Build CLI, Qoder CLI, Antigravity CLI, and Kimi Code CLI | One model ID per CLI bridge, using the local vendor CLI session  |
-| AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                        | Curated 6-bit MLX Auto models: MTP packages with Direct fallback |
+| Family                   | Providers                                                                                         | Model source                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Cloud API providers      | Google, GroqCloud, OpenRouter, Hugging Face, UnoRouter, Alibaba plans, GitHub Copilot, and Z.AI   | Hosted provider model catalogs bundled with AX Code             |
+| CLI providers            | Claude Code, Gemini CLI, Codex CLI, Grok Build CLI, Qoder CLI, Antigravity CLI, and Kimi Code CLI | One model ID per CLI bridge, using the local vendor CLI session |
+| AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                        | Three curated AXQ 6-bit MLX models served from the live catalog |
 
 See [Supported Providers and Models](docs/providers/supported-providers.md) for provider IDs, credential variables, and
 the command that lists the exact model IDs bundled with your installed release.
@@ -236,9 +236,9 @@ free quotas and account terms are controlled by the external provider.
 ## Local AX Engine Models
 
 AX Engine local inference is optimized for eligible Apple Silicon Macs. The built-in AX Code provider uses a
-curated 6-bit MLX model set, automatically preferring packaged MTP and falling back to Direct decode, and defaults to Qwen3.6-27B for the best daily balance of offline coding,
-reasoning, and local memory fit. See [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md) for the
-ranking, GLM-4.7-Flash placement, and memory-based recommendations.
+curated AXQ 6-bit MLX model set and defaults to Qwen3.8-27B AXQ with its packaged MTP sidecar. Ornith-1.0-35B
+provides the long-context reasoning option, while Qwen3-Coder-Next is the larger coding specialist. See
+[AX Engine Model Selection](docs/providers/ax-engine-model-selection.md) for memory and disk guidance.
 
 ## Documentation
 
