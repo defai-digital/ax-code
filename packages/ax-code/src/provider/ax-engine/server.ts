@@ -8,6 +8,7 @@ import { Filesystem } from "@/util/filesystem"
 import { Process } from "@/util/process"
 import { Env } from "@/util/env"
 import {
+  AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS,
   AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
   AX_ENGINE_DEFAULT_PORT,
   AX_ENGINE_ERROR,
@@ -32,6 +33,7 @@ export const AxEngineServerState = z.object({
   contextTokens: z.number().int().positive().optional(),
   maxOutputTokens: z.number().int().positive().optional(),
   maxOutputTokensFlag: z.boolean().optional(),
+  maxConcurrentRequests: z.number().int().positive().optional(),
   speculationProfile: z.string().optional(),
   mtpMode: z.string().optional(),
   startedAt: z.number(),
@@ -76,6 +78,13 @@ export type AxEngineServerOptions = {
    * AX_ENGINE_MAX_OUTPUT_TOKENS_FLAG_MIN_VERSION accept the split knob.
    */
   binaryVersion?: string
+  /**
+   * In-flight requests the server may run at once. Defaults to 1 — AX Code
+   * owns one foreground agent stream, and serializing engine jobs keeps a
+   * cancelled stream from racing a retry against shared prefix/speculation
+   * state. Higher values are an opt-in for high-memory hosts.
+   */
+  maxConcurrentRequests?: number
   speculationProfile?: string
   mtpMode?: string
   apiKey?: string
@@ -111,6 +120,7 @@ export function axEngineServerLaunchArgs(input: {
   contextTokens?: number
   maxOutputTokens?: number
   binaryVersion?: string
+  maxConcurrentRequests?: number
   speculationProfile?: string
   mtpMode?: string
 }): string[] {
@@ -130,10 +140,11 @@ export function axEngineServerLaunchArgs(input: {
   // Match AX Studio's validated posture: packaged MTP remains available, while
   // the independent n-gram draft path is disabled for stable direct fallback.
   args.push("--disable-ngram-acceleration")
-  // AX Code currently owns one foreground agent stream at a time. Serializing
+  // AX Code defaults to one foreground agent stream at a time. Serializing
   // engine jobs prevents a cancelled stream from racing a retry against shared
-  // prefix/speculation state.
-  args.push("--max-concurrent-requests", "1")
+  // prefix/speculation state; higher values are an explicit opt-in.
+  const maxConcurrentRequests = input.maxConcurrentRequests ?? AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS
+  args.push("--max-concurrent-requests", String(maxConcurrentRequests))
   if ((input.mtpMode ?? AX_ENGINE_MTP_MODE) === "pure") {
     args.push("--mlx-mtp-disable-ngram-stacking")
   }
@@ -508,6 +519,7 @@ function ensureServerKey(options: AxEngineServerOptions): string {
     options.apiModelID,
     options.contextTokens ?? "",
     options.maxOutputTokens ?? "",
+    options.maxConcurrentRequests ?? AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS,
     options.binaryVersion ?? "",
     options.speculationProfile ?? "",
     options.mtpMode ?? "",
@@ -561,6 +573,12 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   // to the conflated mode they were launched with.
   const maxOutputTokensFlag = supportsMaxOutputTokensFlag(options.binaryVersion)
   const maxOutputTokensFlagMatches = (existing?.maxOutputTokensFlag ?? false) === maxOutputTokensFlag
+  // The concurrency cap is fixed at launch (--max-concurrent-requests), so a
+  // running server started with a different value must be relaunched, not
+  // reused. State files predating this field were launched at the default.
+  const maxConcurrentRequests = options.maxConcurrentRequests ?? AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS
+  const maxConcurrentRequestsMatches =
+    (existing?.maxConcurrentRequests ?? AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS) === maxConcurrentRequests
   const speculationProfile = options.speculationProfile ?? AX_ENGINE_SPECULATION_PROFILE
   const mtpMode = options.mtpMode ?? AX_ENGINE_MTP_MODE
   const speculationMatches = existing?.speculationProfile === speculationProfile
@@ -568,7 +586,14 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   if (existing) {
     const alive = await serverProcessAlive(existing)
     if (alive && (await isServerReady(existing.baseURL, options.signal, options.apiKey))) {
-      if (contextMatches && maxOutputTokensMatches && maxOutputTokensFlagMatches && speculationMatches && mtpModeMatches) {
+      if (
+        contextMatches &&
+        maxOutputTokensMatches &&
+        maxOutputTokensFlagMatches &&
+        maxConcurrentRequestsMatches &&
+        speculationMatches &&
+        mtpModeMatches
+      ) {
         if (existing.modelID === options.modelID && existing.modelPath === options.modelPath) return existing
         try {
           await loadServerModel({
@@ -586,6 +611,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
             modelRevision: options.modelRevision,
             maxOutputTokens,
             maxOutputTokensFlag,
+            maxConcurrentRequests,
             speculationProfile,
             mtpMode,
             lastHealthAt: Date.now(),
@@ -629,6 +655,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     contextTokens: options.contextTokens,
     maxOutputTokens,
     binaryVersion: options.binaryVersion,
+    maxConcurrentRequests,
     speculationProfile,
     mtpMode,
   })
@@ -676,6 +703,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     contextTokens: options.contextTokens,
     maxOutputTokens,
     maxOutputTokensFlag,
+    maxConcurrentRequests,
     speculationProfile,
     mtpMode,
     startedAt: Date.now(),

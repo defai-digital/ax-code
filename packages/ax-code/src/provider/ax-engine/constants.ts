@@ -33,6 +33,29 @@ export const AX_ENGINE_RECOMMENDED_MEMORY_BYTES = 64 * 1024 ** 3
 export const AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES = AX_ENGINE_RECOMMENDED_MEMORY_BYTES
 export const AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES = 96 * 1024 ** 3
 
+// Managed servers default to one in-flight request: AX Code owns a single
+// foreground agent stream, and serializing engine jobs keeps a cancelled stream
+// from racing a retry against shared prefix/speculation state. Power users on
+// high-memory hosts can opt into more via provider options
+// (`provider.ax-engine.options.maxConcurrentRequests` in ax-code.json) or the
+// AX_ENGINE_MAX_CONCURRENT_REQUESTS env var.
+export const AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS = 1
+export const AX_ENGINE_MAX_CONCURRENT_REQUESTS_ENV = "AX_ENGINE_MAX_CONCURRENT_REQUESTS"
+
+function parseMaxConcurrentRequests(value: unknown): number | undefined {
+  const parsed = typeof value === "string" && value.trim() ? Number(value.trim()) : value
+  if (typeof parsed !== "number" || !Number.isInteger(parsed) || parsed < 1) return undefined
+  return parsed
+}
+
+export function resolveAxEngineMaxConcurrentRequests(options: Record<string, unknown> = {}) {
+  return (
+    parseMaxConcurrentRequests(options.maxConcurrentRequests) ??
+    parseMaxConcurrentRequests(process.env[AX_ENGINE_MAX_CONCURRENT_REQUESTS_ENV]) ??
+    AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS
+  )
+}
+
 export function resolveAxEngineApiKey(options: Record<string, unknown> = {}, savedKey?: unknown) {
   const saved = typeof savedKey === "string" && savedKey.trim() ? savedKey.trim() : undefined
   const configured = typeof options.apiKey === "string" && options.apiKey.trim() ? options.apiKey.trim() : undefined

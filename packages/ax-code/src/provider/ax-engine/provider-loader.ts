@@ -10,6 +10,7 @@ import {
   AX_ENGINE_PROVIDER_ID,
   isAxEngineModelID,
   resolveAxEngineApiKey,
+  resolveAxEngineMaxConcurrentRequests,
 } from "./constants"
 import { requirePlatformEligibility } from "./platform"
 import { getDependencyStatus } from "./dependency"
@@ -147,6 +148,7 @@ async function ensureManagedReady(provider: Provider.Info, options: AxEngineMode
     contextTokens: AX_ENGINE_MODEL_DEFINITIONS[modelID].contextTokens,
     maxOutputTokens: AX_ENGINE_MODEL_DEFINITIONS[modelID].outputTokens,
     binaryVersion: dependency.version,
+    maxConcurrentRequests: resolveAxEngineMaxConcurrentRequests(provider.options),
     apiKey: resolveAxEngineApiKey(provider.options, provider.key),
     signal,
   })

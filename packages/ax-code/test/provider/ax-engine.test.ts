@@ -50,6 +50,7 @@ import {
   prepareAxEngine,
   resolveDownloadDestination,
   resolveAxEngineApiKey,
+  resolveAxEngineMaxConcurrentRequests,
   selectCurrentAxEngineModelJobs,
   type AxEngineModelJobSummary,
 } from "../../src/provider/ax-engine"
@@ -992,6 +993,46 @@ describe("ax-engine server launch args", () => {
       "--total-blocks",
       "1025",
     ])
+  })
+
+  test("passes an explicit concurrency cap through to the server", () => {
+    // Default stays 1 (serialized engine jobs); an explicit opt-in must reach
+    // the server's --max-concurrent-requests flag unchanged.
+    const args = axEngineServerLaunchArgs({ apiModelID: "qwen3", maxConcurrentRequests: 4 })
+    expect(args[args.indexOf("--max-concurrent-requests") + 1]).toBe("4")
+  })
+})
+
+describe("resolveAxEngineMaxConcurrentRequests", () => {
+  test("prefers provider options over the default", () => {
+    expect(resolveAxEngineMaxConcurrentRequests({ maxConcurrentRequests: 4 })).toBe(4)
+  })
+
+  test("falls back to 1 for missing or invalid values", () => {
+    const previous = process.env.AX_ENGINE_MAX_CONCURRENT_REQUESTS
+    delete process.env.AX_ENGINE_MAX_CONCURRENT_REQUESTS
+    try {
+      expect(resolveAxEngineMaxConcurrentRequests()).toBe(1)
+      expect(resolveAxEngineMaxConcurrentRequests({ maxConcurrentRequests: 0 })).toBe(1)
+      expect(resolveAxEngineMaxConcurrentRequests({ maxConcurrentRequests: 1.5 })).toBe(1)
+      expect(resolveAxEngineMaxConcurrentRequests({ maxConcurrentRequests: "nope" })).toBe(1)
+    } finally {
+      if (previous === undefined) delete process.env.AX_ENGINE_MAX_CONCURRENT_REQUESTS
+      else process.env.AX_ENGINE_MAX_CONCURRENT_REQUESTS = previous
+    }
+  })
+
+  test("accepts a numeric string from the environment", () => {
+    const previous = process.env.AX_ENGINE_MAX_CONCURRENT_REQUESTS
+    process.env.AX_ENGINE_MAX_CONCURRENT_REQUESTS = "3"
+    try {
+      expect(resolveAxEngineMaxConcurrentRequests()).toBe(3)
+      // Provider options still win over the environment.
+      expect(resolveAxEngineMaxConcurrentRequests({ maxConcurrentRequests: 2 })).toBe(2)
+    } finally {
+      if (previous === undefined) delete process.env.AX_ENGINE_MAX_CONCURRENT_REQUESTS
+      else process.env.AX_ENGINE_MAX_CONCURRENT_REQUESTS = previous
+    }
   })
 })
 
