@@ -90,7 +90,7 @@ export const UpgradeCommand = {
     checkSpinner.start("Checking for updates...")
     let target: string
     try {
-      target = args.target ? args.target.replace(/^v/, "") : await Installation.latest()
+      target = args.target ? args.target.replace(/^v/, "") : await Installation.latest(method)
     } catch (err) {
       checkSpinner.stop("Failed to check for updates")
       prompts.log.error(err instanceof Error ? err.message : String(err))

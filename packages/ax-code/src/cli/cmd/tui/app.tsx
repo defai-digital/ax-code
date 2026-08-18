@@ -1590,7 +1590,27 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       )
       if (updateHandlerDisposed) return
 
+      if (result.data.warnings?.length) {
+        toast.show({
+          variant: "warning",
+          title: "Update Warning",
+          message: result.data.warnings.join("\n"),
+          duration: 15000,
+        })
+      }
+
       exit()
+    }),
+
+    sdk.event.on("installation.updated", (evt) => {
+      // Silent background patch upgrade finished — the running process still
+      // holds the old binary, so the new version only takes effect on restart.
+      toast.show({
+        variant: "info",
+        title: "Updated",
+        message: `ax-code was updated to v${evt.properties.version} in the background. Restart to use the new version.`,
+        duration: 10000,
+      })
     }),
   ]
   onCleanup(() => {

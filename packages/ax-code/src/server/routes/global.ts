@@ -468,6 +468,9 @@ export const GlobalRoutes = lazy(() =>
                   z.object({
                     success: z.literal(true),
                     version: z.string(),
+                    // Post-upgrade PATH-shadowing diagnostics, e.g. a stale
+                    // launcher earlier on PATH resolving to the old version.
+                    warnings: z.array(z.string()).optional(),
                   }),
                 ),
               },
@@ -490,6 +493,24 @@ export const GlobalRoutes = lazy(() =>
           return invalidRequest(c, { message: "Invalid version string", details: { resource: "version" } })
         }
         await Installation.upgrade(method, target)
+        // Verify the PATH-visible launcher actually resolves to the version
+        // just installed — shadowed launchers are the most common reason an
+        // upgrade "succeeds" yet `ax-code` keeps running the old version.
+        const launcher = await Installation.verifyActiveLauncher(target).catch(() => undefined)
+        const warnings: string[] = []
+        if (launcher && !launcher.ok) {
+          if (launcher.activePath) {
+            warnings.push(
+              launcher.activeVersion
+                ? `PATH resolves \`ax-code\` to ${launcher.activePath} (v${launcher.activeVersion}) — running \`ax-code\` will keep using that version until the stale launcher is removed or PATH is fixed.`
+                : `PATH resolves \`ax-code\` to ${launcher.activePath}, whose version could not be determined — it may not be v${target}.`,
+            )
+          } else {
+            warnings.push(
+              "No `ax-code` launcher found on PATH after the upgrade — restart your shell or check that the install directory is still on PATH.",
+            )
+          }
+        }
         GlobalBus.emit("event", {
           directory: "global",
           payload: {
@@ -497,7 +518,11 @@ export const GlobalRoutes = lazy(() =>
             properties: { version: target },
           },
         })
-        return c.json({ success: true as const, version: target })
+        return c.json(
+          warnings.length
+            ? { success: true as const, version: target, warnings }
+            : { success: true as const, version: target },
+        )
       },
     ),
 )

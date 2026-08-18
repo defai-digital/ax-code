@@ -1,4 +1,6 @@
 import path from "path"
+import os from "os"
+import fs from "fs/promises"
 import { buffer } from "node:stream/consumers"
 import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
@@ -7,6 +9,7 @@ import {
   LEGACY_HOMEBREW_TAP,
   HOMEBREW_FORMULA_API_URL,
   INSTALL_SCRIPT_URL,
+  INSTALL_PS1_SCRIPT_URL,
   GITHUB_LATEST_RELEASE_API_URL,
 } from "@/constants/project"
 import { Flag } from "../flag/flag"
@@ -131,6 +134,9 @@ export namespace Installation {
     fetch: typeof fetch
     run: (cmd: string[], opts?: RunOptions) => Promise<CommandResult>
     which: (cmd: string) => string[]
+    // Injectable so the Windows installer branch can be exercised in tests
+    // regardless of the host OS.
+    platform: NodeJS.Platform
   }
 
   const defaultDependencies: Dependencies = {
@@ -139,6 +145,7 @@ export namespace Installation {
     // extraDirs: false — the shadow-launcher check reports what the shell
     // would actually resolve, not ax-code's own fallback install locations.
     which: (cmd) => whichAll(cmd, undefined, { extraDirs: false }),
+    platform: process.platform,
   }
 
   let dependencies = defaultDependencies
@@ -219,17 +226,16 @@ export namespace Installation {
     return canonical
   }
 
-  async function upgradeCurl(target: string) {
-    const scriptUrl = INSTALL_SCRIPT_URL
+  // Fetches a remote installer script and verifies it against its optional
+  // `.sha256` sidecar. A hash mismatch is a hard failure; a missing sidecar
+  // only warns and proceeds so existing deployments without one keep working.
+  async function fetchInstallerScript(scriptUrl: string) {
     const sha256Url = `${scriptUrl}.sha256`
     const response = await fetchOk(scriptUrl)
     const body = await response.text()
-    // Encode once; reuse for both the SHA-256 check and the bash stdin
-    // so the hash is computed over exactly the bytes that get executed.
+    // Encode once; reuse for both the SHA-256 check and execution so the
+    // hash is computed over exactly the bytes that get run.
     const bodyBytes = new TextEncoder().encode(body)
-    // Verify SHA256 integrity sidecar when available. A hash mismatch
-    // is a hard failure; a missing sidecar file only warns and proceeds
-    // so existing deployments without a .sha256 file keep working.
     try {
       const sha256Res = await dependencies.fetch(sha256Url)
       if (!sha256Res.ok) {
@@ -250,10 +256,40 @@ export namespace Installation {
       if (msg.startsWith("Install script integrity check failed")) throw e
       log.warn("could not verify install script integrity", { error: e })
     }
+    return bodyBytes
+  }
+
+  async function upgradeCurl(target: string) {
+    if (dependencies.platform === "win32") return upgradeWindows(target)
+    const bodyBytes = await fetchInstallerScript(INSTALL_SCRIPT_URL)
     return dependencies.run(["bash"], {
       input: bodyBytes,
       env: { VERSION: target },
     })
+  }
+
+  // Windows-native self-upgrade: download the PowerShell installer and run it
+  // with Windows PowerShell. The installer minisign-verifies the release
+  // archive itself against a pinned public key, matching the bash path.
+  async function upgradeWindows(target: string) {
+    const bodyBytes = await fetchInstallerScript(INSTALL_PS1_SCRIPT_URL)
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-upgrade-"))
+    try {
+      const scriptPath = path.join(dir, "install.ps1")
+      await fs.writeFile(scriptPath, bodyBytes)
+      return await dependencies.run([
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        scriptPath,
+        "-Version",
+        target,
+      ])
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true }).catch(() => {})
+    }
   }
 
   export async function info(): Promise<Info> {

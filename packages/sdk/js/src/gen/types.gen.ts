@@ -4192,6 +4192,7 @@ export type GlobalUpgradeResponses = {
   200: {
     success: true
     version: string
+    warnings?: Array<string>
   }
 }
 
@@ -12778,7 +12779,7 @@ export type ProviderAxEngineModelsResponses = {
 
 export type ProviderAxEngineModelDownloadData = {
   body?: {
-    quantization?: "mlx6bit" | "mlx4bit"
+    quantization?: "mlx6bit"
   }
   path: {
     modelID: string
@@ -12852,7 +12853,7 @@ export type ProviderAxEngineDownloadCancelResponses = {
 
 export type ProviderAxEngineModelDeleteData = {
   body?: {
-    quantization?: "mlx6bit" | "mlx4bit"
+    quantization?: "mlx6bit"
   }
   path: {
     modelID: string
@@ -12925,13 +12926,7 @@ export type ProviderAxEnginePrepareData = {
   body?: {
     modelPath?: string
     binaryPath?: string
-    modelID?:
-      | "qwen3.8-27b-axq-6bit"
-      | "qwen3.8-27b-axq-4bit"
-      | "ornith-35b-axq-6bit"
-      | "ornith-35b-axq-4bit"
-      | "qwen3-coder-next-axq-6bit"
-      | "qwen3-coder-next-axq-4bit"
+    modelID?: "qwen3.8-27b-axq-6bit" | "ornith-35b-axq-6bit" | "qwen3-coder-next-axq-6bit"
     quantization?: "mlx4bit" | "mlx6bit"
     download?: boolean
     start?: boolean
@@ -12963,13 +12958,7 @@ export type ProviderAxEngineStartData = {
   body?: {
     modelPath?: string
     binaryPath?: string
-    modelID?:
-      | "qwen3.8-27b-axq-6bit"
-      | "qwen3.8-27b-axq-4bit"
-      | "ornith-35b-axq-6bit"
-      | "ornith-35b-axq-4bit"
-      | "qwen3-coder-next-axq-6bit"
-      | "qwen3-coder-next-axq-4bit"
+    modelID?: "qwen3.8-27b-axq-6bit" | "ornith-35b-axq-6bit" | "qwen3-coder-next-axq-6bit"
     quantization?: "mlx4bit" | "mlx6bit"
     download?: boolean
   }

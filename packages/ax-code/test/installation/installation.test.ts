@@ -16,6 +16,7 @@ function withTestDependencies<T>(
       opts?: { cwd?: string; env?: Record<string, string>; input?: Uint8Array },
     ) => Promise<{ code: number; stdout: string; stderr: string }> | { code: number; stdout: string; stderr: string }
     which?: (cmd: string) => string[]
+    platform?: NodeJS.Platform
   },
   fn: () => Promise<T>,
 ) {
@@ -27,6 +28,7 @@ function withTestDependencies<T>(
         return result ?? { code: 0, stdout: "", stderr: "" }
       },
       which: (cmd) => options.which?.(cmd) ?? [],
+      ...(options.platform ? { platform: options.platform } : {}),
     },
     fn,
   )
@@ -301,6 +303,96 @@ describe("installation", () => {
       )
 
       expect(calls.some((cmd) => cmd[0] === "brew" && cmd[1] === "link")).toBe(false)
+    })
+
+    test("pipes the bash installer to bash with VERSION on non-Windows", async () => {
+      const script = "#!/bin/bash\necho install\n"
+      const calls: Array<{ cmd: string[]; env?: Record<string, string>; input?: Uint8Array }> = []
+
+      await withTestDependencies(
+        {
+          platform: "linux",
+          fetch: (url) => {
+            if (url.endsWith("/install")) return new Response(script, { status: 200 })
+            // Missing .sha256 sidecar warns and proceeds.
+            return new Response("not found", { status: 404 })
+          },
+          run: (cmd, opts) => {
+            calls.push({ cmd, env: opts?.env, input: opts?.input })
+            return { code: 0, stdout: "", stderr: "" }
+          },
+        },
+        () => Installation.upgrade("curl", "5.3.0"),
+      )
+
+      const bash = calls.find((c) => c.cmd[0] === "bash")
+      expect(bash).toBeDefined()
+      expect(bash?.env?.VERSION).toBe("5.3.0")
+      expect(new TextDecoder().decode(bash?.input)).toBe(script)
+    })
+
+    test("runs the PowerShell installer via powershell.exe on Windows", async () => {
+      const script = "param([string]$Version)\nWrite-Host $Version\n"
+      const calls: string[][] = []
+
+      await withTestDependencies(
+        {
+          platform: "win32",
+          fetch: (url) => {
+            if (url.endsWith("/install.ps1")) return new Response(script, { status: 200 })
+            return new Response("not found", { status: 404 })
+          },
+          run: (cmd) => {
+            calls.push(cmd)
+            return { code: 0, stdout: "", stderr: "" }
+          },
+        },
+        () => Installation.upgrade("curl", "5.3.0"),
+      )
+
+      const ps = calls.find((cmd) => cmd[0] === "powershell.exe")
+      expect(ps).toBeDefined()
+      expect(ps).toContain("-ExecutionPolicy")
+      expect(ps).toContain("Bypass")
+      expect(ps).toContain("-File")
+      expect(ps?.slice(-2)).toEqual(["-Version", "5.3.0"])
+      expect(calls.some((cmd) => cmd[0] === "bash")).toBe(false)
+    })
+
+    test("hard-fails when the installer script sha256 sidecar mismatches", async () => {
+      const promise = withTestDependencies(
+        {
+          platform: "linux",
+          fetch: (url) => {
+            if (url.endsWith("/install")) return new Response("#!/bin/bash\n", { status: 200 })
+            if (url.endsWith("/install.sha256")) return new Response(`${"0".repeat(64)}  install\n`, { status: 200 })
+            return new Response("not found", { status: 404 })
+          },
+        },
+        () => Installation.upgrade("curl", "5.3.0"),
+      )
+
+      await expect(promise).rejects.toThrow(/integrity check failed/)
+    })
+
+    test("proceeds when the installer script sha256 sidecar matches", async () => {
+      const script = "#!/bin/bash\necho verified\n"
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(script))
+      const expected = Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("")
+
+      await withTestDependencies(
+        {
+          platform: "linux",
+          fetch: (url) => {
+            if (url.endsWith("/install")) return new Response(script, { status: 200 })
+            if (url.endsWith("/install.sha256")) return new Response(`${expected}  install\n`, { status: 200 })
+            return new Response("not found", { status: 404 })
+          },
+        },
+        () => Installation.upgrade("curl", "5.3.0"),
+      )
     })
   })
 })

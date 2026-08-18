@@ -596,6 +596,12 @@
                     },
                     "version": {
                       "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -31085,8 +31091,7 @@
                   "quantization": {
                     "type": "string",
                     "enum": [
-                      "mlx6bit",
-                      "mlx4bit"
+                      "mlx6bit"
                     ]
                   }
                 }
@@ -31234,8 +31239,7 @@
                   "quantization": {
                     "type": "string",
                     "enum": [
-                      "mlx6bit",
-                      "mlx4bit"
+                      "mlx6bit"
                     ]
                   }
                 }
@@ -31375,11 +31379,8 @@
                     "type": "string",
                     "enum": [
                       "qwen3.8-27b-axq-6bit",
-                      "qwen3.8-27b-axq-4bit",
                       "ornith-35b-axq-6bit",
-                      "ornith-35b-axq-4bit",
-                      "qwen3-coder-next-axq-6bit",
-                      "qwen3-coder-next-axq-4bit"
+                      "qwen3-coder-next-axq-6bit"
                     ]
                   },
                   "quantization": {
@@ -31458,11 +31459,8 @@
                     "type": "string",
                     "enum": [
                       "qwen3.8-27b-axq-6bit",
-                      "qwen3.8-27b-axq-4bit",
                       "ornith-35b-axq-6bit",
-                      "ornith-35b-axq-4bit",
-                      "qwen3-coder-next-axq-6bit",
-                      "qwen3-coder-next-axq-4bit"
+                      "qwen3-coder-next-axq-6bit"
                     ]
                   },
                   "quantization": {

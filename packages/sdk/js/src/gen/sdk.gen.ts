@@ -5492,7 +5492,7 @@ export class Model extends HeyApiClient {
     parameters: {
       modelID: string
       directory?: string
-      quantization?: "mlx6bit" | "mlx4bit"
+      quantization?: "mlx6bit"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5533,7 +5533,7 @@ export class Model extends HeyApiClient {
     parameters: {
       modelID: string
       directory?: string
-      quantization?: "mlx6bit" | "mlx4bit"
+      quantization?: "mlx6bit"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5755,13 +5755,7 @@ export class AxEngine extends HeyApiClient {
       directory?: string
       modelPath?: string
       binaryPath?: string
-      modelID?:
-        | "qwen3.8-27b-axq-6bit"
-        | "qwen3.8-27b-axq-4bit"
-        | "ornith-35b-axq-6bit"
-        | "ornith-35b-axq-4bit"
-        | "qwen3-coder-next-axq-6bit"
-        | "qwen3-coder-next-axq-4bit"
+      modelID?: "qwen3.8-27b-axq-6bit" | "ornith-35b-axq-6bit" | "qwen3-coder-next-axq-6bit"
       quantization?: "mlx4bit" | "mlx6bit"
       download?: boolean
       start?: boolean
@@ -5810,13 +5804,7 @@ export class AxEngine extends HeyApiClient {
       directory?: string
       modelPath?: string
       binaryPath?: string
-      modelID?:
-        | "qwen3.8-27b-axq-6bit"
-        | "qwen3.8-27b-axq-4bit"
-        | "ornith-35b-axq-6bit"
-        | "ornith-35b-axq-4bit"
-        | "qwen3-coder-next-axq-6bit"
-        | "qwen3-coder-next-axq-4bit"
+      modelID?: "qwen3.8-27b-axq-6bit" | "ornith-35b-axq-6bit" | "qwen3-coder-next-axq-6bit"
       quantization?: "mlx4bit" | "mlx6bit"
       download?: boolean
     },
