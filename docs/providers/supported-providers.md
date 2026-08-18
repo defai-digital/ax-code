@@ -108,7 +108,7 @@ For Kimi Code membership, install the local `kimi` binary, run `kimi login`, the
 | ----------- | --------------------------- | -------------------------------------- | ------: | -----: |
 | `ax-engine` | `qwen3.6-27b-axq-6bit`      | Qwen3.6-27B AXQ 6-bit (Local MLX Auto) |  65,536 |  2,048 |
 | `ax-engine` | `qwen3.5-9b-axq-6bit`       | Qwen3.5-9B AXQ 6-bit (Local MLX Auto)  |  32,768 |  2,048 |
-| `ax-engine` | `qwen3-coder-next-axq-6bit` | Qwen3-Coder-Next AXQ 6-bit (Local MLX) |  16,384 |  2,048 |
+| `ax-engine` | `qwen3-coder-next-axq-6bit` | Qwen3-Coder-Next AXQ 6-bit (Local MLX) |  32,768 |  8,192 |
 
 The default local model is `qwen3.6-27b-axq-6bit`. See [AX Engine Model Selection](ax-engine-model-selection.md) for ranking, memory, and disk guidance.
 

@@ -42,7 +42,7 @@ AX Code ranks local AX Engine models by practical agent usability, not by a sing
 
 | Rank | AX Code model id             | Model                       | Local role                  | Why it is placed there                                                                                         |
 | ---: | ---------------------------- | --------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------- |
-|    1 | `qwen3-coder-next-axq-6bit`  | Qwen3-Coder-Next AXQ 6-bit  | Dedicated coding specialist | Best fit for repository editing and tool use on 96 GB+ hosts; direct decode with a conservative 16K context.   |
+|    1 | `qwen3-coder-next-axq-6bit`  | Qwen3-Coder-Next AXQ 6-bit  | Dedicated coding specialist | Best fit for repository editing and tool use on 96 GB+ hosts; direct decode with a memory-safe 32K context (256K-native model). |
 |    2 | `qwen3.6-27b-axq-6bit`       | Qwen3.6-27B AXQ 6-bit       | Default daily driver        | Certified AutomatosX AXQ 6-bit + MTP snapshot; best practical balance for offline coding on 48-64 GB+ machines. |
 |    3 | `qwen3.5-9b-axq-6bit`        | Qwen3.5-9B AXQ 6-bit        | Light local option          | Smallest AXQ pack (~8.4 GB); MTP sidecar; best fit when unified memory is tight.                               |
 

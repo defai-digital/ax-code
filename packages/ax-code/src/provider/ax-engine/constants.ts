@@ -15,9 +15,11 @@ export const AX_ENGINE_API_KEY = "local"
 // 2 048 proved too small for agentic turns: a single long tool call (e.g. a
 // find/wc pipeline with exclusions) plus its reasoning preamble saturates the
 // budget and the JSON arguments are cut mid-string, forcing the truncated-turn
-// recovery loop to burn extra turns. 8 192 keeps headroom while staying well
-// under the global OUTPUT_TOKEN_MAX cap and the server's --max-batch-tokens
-// launch arg (kept aligned in server.ts).
+// recovery loop to burn extra turns. 8 192 is the fallback budget and the
+// scheduler width kept for split-knob servers; each catalog model advertises
+// its own outputTokens tuned to its context window (up to the 32 000
+// OUTPUT_TOKEN_MAX request-layer ceiling in provider/transform.ts, matching
+// the opencode/Claude Code agentic default).
 export const AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS = 8_192
 export const AX_ENGINE_MIN_VERSION = "6.11.0"
 // First ax-engine version whose server accepts --max-output-tokens: the
@@ -141,7 +143,9 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineModelID, AxEngineModelD
     toolcall: true,
     minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
     contextTokens: 65_536,
-    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
+    // 16 384 covers whole-file writes without finish=length truncation while
+    // keeping 49 152 tokens (75%) of the window for the prompt.
+    outputTokens: 16_384,
     quantizations: {
       mlx6bit: {
         hfRepo: "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP",
@@ -164,7 +168,8 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineModelID, AxEngineModelD
     toolcall: true,
     minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
     contextTokens: 65_536,
-    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
+    // See the 6-bit entry: 16 384 output keeps whole-file writes safe.
+    outputTokens: 16_384,
     quantizations: {
       mlx4bit: {
         hfRepo: "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP",
@@ -190,7 +195,11 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineModelID, AxEngineModelD
     toolcall: true,
     minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
     contextTokens: 262_144,
-    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
+    // The 262 144-token window easily affords the largest budget the request
+    // layer allows: 32 000 == OUTPUT_TOKEN_MAX (provider/transform.ts), the
+    // opencode/Claude Code agentic default. Catalog, server
+    // (--max-output-tokens), and request max_tokens stay aligned.
+    outputTokens: 32_000,
     quantizations: {
       mlx6bit: {
         hfRepo: "AutomatosX/AX-Ornith-1.0-35B-MLX-AXQ-6bit",
@@ -213,7 +222,8 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineModelID, AxEngineModelD
     toolcall: true,
     minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
     contextTokens: 262_144,
-    outputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
+    // See the 6-bit entry: 32 000 output, matching the OUTPUT_TOKEN_MAX ceiling.
+    outputTokens: 32_000,
     quantizations: {
       mlx4bit: {
         hfRepo: "AutomatosX/AX-Ornith-1.0-35B-MLX-AXQ-4bit",
@@ -238,11 +248,13 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineModelID, AxEngineModelD
     reasoning: false,
     toolcall: true,
     minMemoryBytes: AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES,
-    contextTokens: 16_384,
-    // Half the big-model default: reserving 8 192 of a 16 384-token window for
-    // output would leave only 8 192 for input. 4 096 keeps tool-call JSON safe
-    // from mid-string truncation while preserving a usable prompt budget.
-    outputTokens: 4_096,
+    // Qwen3-Coder-Next is a 256K-native 80B-A3B MoE; SGLang's local-serving
+    // docs recommend --context-length 32768 as the memory-safe setting, and the
+    // KV cache stays small next to the ~55.7 GiB weights on 96 GB+ hosts.
+    contextTokens: 32_768,
+    // Doubling the window lets output double too: 8 192 stops mid-file
+    // truncation while the input budget still improves (12 288 → 24 576).
+    outputTokens: 8_192,
     quantizations: {
       mlx6bit: {
         hfRepo: "AutomatosX/AX-Qwen3-Coder-Next-MLX-AXQ-6bit",
@@ -264,9 +276,11 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineModelID, AxEngineModelD
     reasoning: false,
     toolcall: true,
     minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
-    contextTokens: 16_384,
-    // See the 6-bit entry: 4 096 output keeps the 16 384-token window usable.
-    outputTokens: 4_096,
+    // See the 6-bit entry: 32 768 context is the memory-safe local setting for
+    // this 256K-native model; KV cost stays small next to the ~44.6 GiB weights.
+    contextTokens: 32_768,
+    // See the 6-bit entry: 8 192 output with a larger 24 576-token input budget.
+    outputTokens: 8_192,
     quantizations: {
       mlx4bit: {
         hfRepo: "AutomatosX/AX-Qwen3-Coder-Next-MLX-AXQ-4bit",
