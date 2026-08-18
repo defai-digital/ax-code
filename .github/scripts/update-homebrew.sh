@@ -6,7 +6,10 @@
 # release assets are available.
 #
 # Inputs (env):
-#   GITHUB_REF_NAME — release tag (e.g. v5.5.1)
+#   AX_CODE_RELEASE_TAG — release tag (e.g. v5.5.1). Preferred because
+#                         GITHUB_REF_NAME remains the branch name when a
+#                         workflow_dispatch run resumes an existing release.
+#   GITHUB_REF_NAME     — fallback release tag for tag-push/manual runs
 #   GH_TOKEN        — read access to the ax-code release assets
 #   TAP_TOKEN       — legacy write token for the Homebrew tap repositories.
 #   HOMEBREW_TAP_TOKEN — preferred write token for the shared and legacy taps.
@@ -14,7 +17,13 @@
 #                    tap write access.
 set -euo pipefail
 
-VERSION="${GITHUB_REF_NAME#v}"
+RELEASE_TAG="${AX_CODE_RELEASE_TAG:-${GITHUB_REF_NAME:-}}"
+if [ -z "${RELEASE_TAG}" ]; then
+  echo "::error::AX_CODE_RELEASE_TAG or GITHUB_REF_NAME is required"
+  exit 1
+fi
+
+VERSION="${RELEASE_TAG#v}"
 TAG="v${VERSION}"
 RELEASE_BASE="https://github.com/defai-digital/ax-code/releases/download/${TAG}"
 SOURCE_REPO="${GITHUB_REPOSITORY:-defai-digital/ax-code}"

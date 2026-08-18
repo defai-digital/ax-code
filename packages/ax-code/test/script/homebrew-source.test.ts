@@ -262,6 +262,20 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("!contains(inputs.tag || github.ref_name, '-')")
   })
 
+  test("release resume jobs use the explicit tag instead of reserved GitHub ref variables", async () => {
+    const workflow = await readFile(releaseWorkflow, "utf-8")
+    const homebrewScript = await readFile(path.join(repoRoot, ".github/scripts/update-homebrew.sh"), "utf-8")
+
+    // GITHUB_REF_NAME is `main` for workflow_dispatch and GitHub does not let
+    // jobs override reserved GITHUB_* variables through an env block.
+    expect(workflow).toContain('VERSION="${AX_CODE_RELEASE_TAG#v}"')
+    expect(workflow).not.toContain('GITHUB_REF_NAME: ${{ inputs.tag || github.ref_name }}')
+    expect(homebrewScript).toContain('RELEASE_TAG="${AX_CODE_RELEASE_TAG:-${GITHUB_REF_NAME:-}}"')
+    expect(homebrewScript.indexOf('RELEASE_TAG="${AX_CODE_RELEASE_TAG')).toBeLessThan(
+      homebrewScript.indexOf('VERSION="${RELEASE_TAG#v}"'),
+    )
+  })
+
   test("Homebrew verifies the detached release signature before hashing", async () => {
     const script = await readFile(path.join(repoRoot, ".github/scripts/update-homebrew.sh"), "utf-8")
 

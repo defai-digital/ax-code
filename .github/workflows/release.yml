@@ -470,7 +470,6 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y minisign
       - name: Update Homebrew tap
         env:
-          GITHUB_REF_NAME: ${{ inputs.tag || github.ref_name }}
           # Read this repo's release assets with the default token. Pass both
           # tap-write secret names so the script can fall back if one is present
           # but lacks access to one of the Homebrew tap repositories.
@@ -498,11 +497,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Generate CLI winget manifests
-        env:
-          GITHUB_REF_NAME: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${AX_CODE_RELEASE_TAG#v}"
           pnpm exec tsx tools/winget/generate-manifests.ts \
             --version "$VERSION" \
             --package cli \
