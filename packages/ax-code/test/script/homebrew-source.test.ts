@@ -265,6 +265,12 @@ describe("distribution support guardrails", () => {
   test("release resume jobs use the explicit tag instead of reserved GitHub ref variables", async () => {
     const workflow = await readFile(releaseWorkflow, "utf-8")
     const homebrewScript = await readFile(path.join(repoRoot, ".github/scripts/update-homebrew.sh"), "utf-8")
+    const validateJob = workflow.match(/\n  validate:[\s\S]*?(?=\n  build:|$)/)
+    const buildJob = workflow.match(/\n  build:[\s\S]*?(?=\n  publish:|$)/)
+    const publishJob = workflow.match(/\n  publish:[\s\S]*?(?=\n  homebrew:|$)/)
+    const homebrewJob = workflow.match(/\n  homebrew:[\s\S]*?(?=\n  winget-manifests:|$)/)
+    const wingetJob = workflow.match(/\n  winget-manifests:[\s\S]*?(?=\n  [\w-]+:|$)/)
+    const requestedTagCheckout = "ref: ${{ inputs.tag || github.ref }}"
 
     // GITHUB_REF_NAME is `main` for workflow_dispatch and GitHub does not let
     // jobs override reserved GITHUB_* variables through an env block.
@@ -277,6 +283,19 @@ describe("distribution support guardrails", () => {
     expect(workflow).toContain("postpublish_only:")
     expect(workflow).toContain("if: ${{ !inputs.postpublish_only }}")
     expect(workflow).toContain("needs.publish.result == 'success' || inputs.postpublish_only")
+
+    // A full resume must validate, build, and publish the immutable requested
+    // tag rather than newer code from the dispatch branch. Post-publish-only
+    // jobs intentionally use the dispatch branch so recovery benefits from the
+    // latest Homebrew and Winget tooling without replacing release assets.
+    for (const job of [validateJob, buildJob, publishJob]) {
+      expect(job).not.toBeNull()
+      expect(job![0]).toContain(requestedTagCheckout)
+    }
+    for (const job of [homebrewJob, wingetJob]) {
+      expect(job).not.toBeNull()
+      expect(job![0]).not.toContain(requestedTagCheckout)
+    }
   })
 
   test("Homebrew verifies the detached release signature before hashing", async () => {
