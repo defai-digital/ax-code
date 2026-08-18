@@ -18,6 +18,9 @@ import { MessageTable, PartTable } from "./session.sql"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { ContextTier } from "./context-tier"
 import { sessionAssistantPath, zeroTokenUsage } from "./prompt-message-builders"
+import { estimateRequestTokens } from "./prompt-request"
+import { SystemPrompt } from "./system"
+import type { ModelMessage } from "ai"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -54,9 +57,7 @@ export namespace SessionCompaction {
     return Math.max(total, componentTotal(tokens))
   }
 
-  export async function budget(model: Provider.Model) {
-    const config = await Config.get()
-    if (config.compaction?.auto === false) return undefined
+  function calculateBudget(model: Provider.Model, configuredReserved?: number) {
     const context = model.limit.context
     if (context === 0) return undefined
 
@@ -73,13 +74,72 @@ export namespace SessionCompaction {
       model.providerID === "ax-engine" && !declaredInput
         ? Math.max(Math.ceil(cap * DEFAULT_RESERVED_FRACTION), model.limit.output)
         : Math.ceil(cap * DEFAULT_RESERVED_FRACTION)
-    const reserved = config.compaction?.reserved ?? defaultReserved
+    const reserved = configuredReserved ?? defaultReserved
+    const usable = Math.max(0, cap - reserved)
+    return { cap, reserved, usable }
+  }
+
+  /** The input budget for an actual compaction request, even when automatic compaction is disabled. */
+  export async function requestBudget(model: Provider.Model) {
+    const config = await Config.get()
+    return calculateBudget(model, config.compaction?.reserved)
+  }
+
+  /** The budget used to decide whether automatic compaction should run. */
+  export async function budget(model: Provider.Model) {
+    const config = await Config.get()
+    if (config.compaction?.auto === false) return undefined
+    const result = calculateBudget(model, config.compaction?.reserved)
+    if (!result) return undefined
     // Clamp tiny usable budgets off: if reserved nearly consumes the cap,
     // any realistic compacted message still overflows and compaction fires
     // on every step.
-    const usable = Math.max(0, cap - reserved)
-    if (usable < MIN_USABLE_TOKENS) return undefined
-    return { cap, reserved, usable }
+    if (result.usable < MIN_USABLE_TOKENS) return undefined
+    return result
+  }
+
+  // Extra headroom for provider framing and estimation error. The actual
+  // compaction system/user prompts are measured separately below.
+  const COMPACTION_REQUEST_HEADROOM_TOKENS = 2_000
+
+  /**
+   * Trim the oldest messages so a compaction request fits the model window.
+   * Walks from newest to oldest and keeps the longest suffix whose estimated
+   * tokens fit the budget. An optional boundary predicate prevents returning
+   * a suffix that starts in the middle of a conversation turn.
+   */
+  export function trimMessagesForCompaction<T>(input: {
+    messages: T[]
+    estimate: (message: T) => number
+    budgetTokens: number
+    canStartWith?: (message: T) => boolean
+  }): { messages: T[]; omitted: number } {
+    let total = 0
+    let keepFrom = input.messages.length
+    for (let i = input.messages.length - 1; i >= 0; i--) {
+      const message = input.messages[i]!
+      const estimate = input.estimate(message)
+      const next = total + (Number.isFinite(estimate) ? Math.max(0, estimate) : Number.POSITIVE_INFINITY)
+      if (next > input.budgetTokens) break
+      total = next
+      if (!input.canStartWith || input.canStartWith(message)) keepFrom = i
+    }
+    return { messages: input.messages.slice(keepFrom), omitted: keepFrom }
+  }
+
+  function omittedHistoryNotice(omitted: number) {
+    return (
+      `\n\nNote: the ${omitted} oldest message(s) were omitted from this summary input because the ` +
+      `full history exceeds the model's context window. Summarize only what is visible above, explicitly ` +
+      `state that earlier history was omitted, and do not invent details from it.`
+    )
+  }
+
+  function compactionPromptMessage(text: string): ModelMessage {
+    return {
+      role: "user",
+      content: [{ type: "text", text }],
+    }
   }
 
   // Super-Long runs compact earlier (~75% of the usable budget instead of
@@ -356,6 +416,16 @@ export namespace SessionCompaction {
       model,
       abort: input.abort,
     })
+    const stopForContextOverflow = async (message: string) => {
+      processor.message.error = new MessageV2.ContextOverflowError({ message }).toObject()
+      processor.message.finish = "error"
+      // The pre-flight rejection below returns before processor.process runs,
+      // which is the only other place time.completed gets set. Without it the
+      // message looks in-flight forever and the TUI queues every later turn.
+      processor.message.time.completed = Date.now()
+      await Session.updateMessage(processor.message)
+      return "stop" as const
+    }
     // Allow plugins to inject context or replace compaction prompt
     const compacting = await Plugin.trigger(
       "experimental.session.compacting",
@@ -396,6 +466,78 @@ When constructing the summary, try to stick to this template:
     const promptText = compacting.prompt ?? [defaultPrompt, ...compacting.context].join("\n\n")
     const msgs = [...messages]
     await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
+    // If the history to summarize exceeds the compaction model's own window,
+    // the summarization request itself overflows and compaction hard-fails,
+    // which bricks the session for small-context models (observed: a
+    // ~100k-token session switched to a 32k local model could never compact
+    // and every prompt failed with ContextOverflowError). Drop the oldest
+    // messages until the request fits — losing old detail beats never
+    // compacting. The prompt notes the omission so the summary stays honest.
+    const historyGroups: Array<{ modelMessages: ModelMessage[] }> = []
+    for (const message of msgs) {
+      historyGroups.push({
+        modelMessages: await MessageV2.toModelMessages([message], model, { stripMedia: true }),
+      })
+    }
+    let selectedGroups = historyGroups
+    let finalPromptText = promptText
+    const tokenBudget = await requestBudget(model)
+    if (tokenBudget) {
+      const system = SystemPrompt.request({ agent, model, system: [], userSystem: userMessage.system })
+      const historyModelMessages = historyGroups.flatMap((group) => group.modelMessages)
+      const untrimmedTokens =
+        estimateRequestTokens({
+          system,
+          messages: [...historyModelMessages, compactionPromptMessage(promptText)],
+        }) + COMPACTION_REQUEST_HEADROOM_TOKENS
+
+      if (untrimmedTokens > tokenBudget.usable) {
+        // Budget the longest possible omission notice up front. The actual
+        // omitted count can only use the same or fewer digits, so the final
+        // request remains within the estimate after selection.
+        const promptWithNotice = promptText + omittedHistoryNotice(historyGroups.length)
+        const fixedTokens =
+          estimateRequestTokens({ system, messages: [compactionPromptMessage(promptWithNotice)] }) +
+          COMPACTION_REQUEST_HEADROOM_TOKENS
+        const trimmed = trimMessagesForCompaction({
+          messages: historyGroups,
+          estimate: (group) => estimateRequestTokens({ system: [], messages: group.modelMessages }),
+          budgetTokens: tokenBudget.usable - fixedTokens,
+          // Starting with an assistant/tool-result fragment can be rejected by
+          // strict providers and separates tool results from their user turn.
+          canStartWith: (group) => group.modelMessages[0]?.role === "user",
+        })
+        selectedGroups = trimmed.messages
+        if (trimmed.omitted > 0) {
+          log.info("trimmed oldest messages so compaction fits the model window", {
+            sessionID: input.sessionID,
+            omitted: trimmed.omitted,
+            kept: trimmed.messages.length,
+            budgetUsable: tokenBudget.usable,
+          })
+          finalPromptText = promptText + omittedHistoryNotice(trimmed.omitted)
+        }
+      }
+
+      const finalModelMessages = selectedGroups.flatMap((group) => group.modelMessages)
+      const finalTokens =
+        estimateRequestTokens({
+          system,
+          messages: [...finalModelMessages, compactionPromptMessage(finalPromptText)],
+        }) + COMPACTION_REQUEST_HEADROOM_TOKENS
+      if (finalTokens > tokenBudget.usable) {
+        log.warn("compaction instructions exceed model window after omitting history", {
+          sessionID: input.sessionID,
+          estimatedTokens: finalTokens,
+          budgetUsable: tokenBudget.usable,
+        })
+        return stopForContextOverflow(
+          "Compaction instructions exceed this model's context window even with conversation history omitted. " +
+            "Reduce custom compaction or system instructions, or switch to a model with a larger context window.",
+        )
+      }
+    }
+    const historyModelMessages = selectedGroups.flatMap((group) => group.modelMessages)
     const result = await processor.process({
       user: userMessage,
       agent,
@@ -403,30 +545,18 @@ When constructing the summary, try to stick to this template:
       sessionID: input.sessionID,
       tools: {},
       system: [],
-      messages: [
-        ...(await MessageV2.toModelMessages(msgs, model, { stripMedia: true })),
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: promptText,
-            },
-          ],
-        },
-      ],
+      messages: [...historyModelMessages, compactionPromptMessage(finalPromptText)],
       model,
     })
 
     if (result === "compact") {
-      processor.message.error = new MessageV2.ContextOverflowError({
-        message: replay
-          ? "Session too large to compact - context exceeds model limit even after stripping media"
-          : "Conversation history too large to compact - exceeds model context limit",
-      }).toObject()
-      processor.message.finish = "error"
-      await Session.updateMessage(processor.message)
-      return "stop"
+      return stopForContextOverflow(
+        replay
+          ? "Session too large to compact - context exceeds model limit even after trimming and stripping media. " +
+              "Start a new session, or switch to a model with a larger context window."
+          : "Conversation history is too large for this model's context window even after trimming. " +
+              "Start a new session, or switch to a model with a larger context window.",
+      )
     }
     if (result === "stop") return "stop"
 

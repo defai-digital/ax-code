@@ -417,7 +417,9 @@ describe("session.compaction.isOverflow", () => {
       fn: async () => {
         const model = createModel({ context: 100_000, output: 32_000 })
         const tokens = { input: 75_000, output: 5_000, reasoning: 0, cache: { read: 0, write: 0 } }
+        expect(await SessionCompaction.budget(model)).toBeUndefined()
         expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
+        expect(await SessionCompaction.requestBudget(model)).toEqual({ cap: 100_000, reserved: 10_000, usable: 90_000 })
       },
     })
   })
@@ -1147,5 +1149,69 @@ describe("session.compaction.prune tier-aware", () => {
         expect(classified[9].tier).toBe(1)
       },
     })
+  })
+})
+
+describe("session.compaction.trimMessagesForCompaction", () => {
+  const msg = (tokens: number) => ({ tokens })
+  const estimate = (m: { tokens: number }) => m.tokens
+
+  test("keeps everything when it fits", () => {
+    const messages = [msg(100), msg(100), msg(100)]
+    const result = SessionCompaction.trimMessagesForCompaction({ messages, estimate, budgetTokens: 1000 })
+    expect(result.messages).toEqual(messages)
+    expect(result.omitted).toBe(0)
+  })
+
+  test("drops the oldest messages first until the suffix fits", () => {
+    const messages = [msg(500), msg(400), msg(300), msg(200)]
+    const result = SessionCompaction.trimMessagesForCompaction({ messages, estimate, budgetTokens: 900 })
+    expect(result.messages).toEqual([msg(400), msg(300), msg(200)])
+    expect(result.omitted).toBe(1)
+  })
+
+  test("returns an empty suffix when the newest message alone exceeds the budget", () => {
+    const messages = [msg(100), msg(5000)]
+    const result = SessionCompaction.trimMessagesForCompaction({ messages, estimate, budgetTokens: 100 })
+    expect(result.messages).toEqual([])
+    expect(result.omitted).toBe(2)
+  })
+
+  test("starts at the oldest valid boundary that fits", () => {
+    const messages = [
+      { role: "user", tokens: 500 },
+      { role: "assistant", tokens: 100 },
+      { role: "user", tokens: 300 },
+      { role: "assistant", tokens: 200 },
+    ]
+    const result = SessionCompaction.trimMessagesForCompaction({
+      messages,
+      estimate: (message) => message.tokens,
+      budgetTokens: 600,
+      canStartWith: (message) => message.role === "user",
+    })
+    expect(result.messages).toEqual(messages.slice(2))
+    expect(result.omitted).toBe(2)
+  })
+
+  test("returns empty rather than an assistant-only suffix", () => {
+    const messages = [
+      { role: "user", tokens: 500 },
+      { role: "assistant", tokens: 100 },
+    ]
+    const result = SessionCompaction.trimMessagesForCompaction({
+      messages,
+      estimate: (message) => message.tokens,
+      budgetTokens: 100,
+      canStartWith: (message) => message.role === "user",
+    })
+    expect(result.messages).toEqual([])
+    expect(result.omitted).toBe(2)
+  })
+
+  test("handles empty input", () => {
+    const result = SessionCompaction.trimMessagesForCompaction({ messages: [], estimate, budgetTokens: 100 })
+    expect(result.messages).toEqual([])
+    expect(result.omitted).toBe(0)
   })
 })
