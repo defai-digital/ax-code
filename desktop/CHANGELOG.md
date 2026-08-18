@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.6.3] - 2026-08-17
+
+### Fixed
+
+- Make request concurrency configurable.
+- Tune per-model context and output token budgets.
+
 ## [7.6.2] - 2026-08-17
 
 ### Added
