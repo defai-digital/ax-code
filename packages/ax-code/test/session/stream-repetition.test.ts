@@ -61,6 +61,15 @@ describe("stream-repetition", () => {
     expect(detection).toBeUndefined()
   })
 
+  test("many unique long paragraphs do not trigger or grow without bound", () => {
+    const guard = StreamRepetition.create(fast)
+    let detection: StreamRepetition.Detection | undefined
+    for (let i = 0; i < 300; i++) {
+      detection = detection ?? guard.push(`Unique paragraph ${i} with enough characters to pass the segment floor.\n`)
+    }
+    expect(detection).toBeUndefined()
+  })
+
   test("short lines repeated often do not trigger the segment check", () => {
     const guard = StreamRepetition.create(fast)
     let detection: StreamRepetition.Detection | undefined

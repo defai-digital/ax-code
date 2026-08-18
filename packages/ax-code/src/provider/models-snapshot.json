@@ -44343,90 +44343,6 @@
       }
     }
   },
-  "scx": {
-    "id": "scx",
-    "env": [
-      "SCX_API_KEY"
-    ],
-    "npm": "@ai-sdk/openai-compatible",
-    "api": "https://api.scx.ai/v1",
-    "name": "SCX.ai",
-    "doc": "https://platform.scx.ai/docs",
-    "models": {
-      "MiniMax-M2.7": {
-        "id": "MiniMax-M2.7",
-        "name": "MiniMax-M2.7",
-        "description": "Open MiniMax flagship for coding agents, office automation, and complex environments",
-        "family": "minimax",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-03-18",
-        "last_updated": "2026-03-18",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 192000,
-          "output": 64000
-        }
-      },
-      "gpt-oss-120b": {
-        "id": "gpt-oss-120b",
-        "name": "GPT OSS 120B",
-        "description": "Open GPT reasoning model for self-hosted agents and controllable deployments",
-        "family": "gpt-oss",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2025-08-05",
-        "last_updated": "2025-08-05",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 131072,
-          "output": 131072
-        }
-      }
-    }
-  },
   "auriko": {
     "id": "auriko",
     "env": [
@@ -84265,6 +84181,42 @@
           "output": 4096
         }
       },
+      "mistralai--mistral-medium": {
+        "id": "mistralai--mistral-medium",
+        "name": "Mistral Medium 3.5",
+        "description": "Balanced Mistral model for enterprise assistants, multilingual work, and tools",
+        "family": "mistral-medium",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-29",
+        "last_updated": "2026-04-29",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        }
+      },
       "sonar": {
         "id": "sonar",
         "name": "sonar",
@@ -84894,6 +84846,36 @@
         "limit": {
           "context": 8191,
           "output": 1536
+        }
+      },
+      "gemini-embedding-2": {
+        "id": "gemini-embedding-2",
+        "name": "Gemini Embedding 2",
+        "description": "Multimodal embedding model mapping text, images, video, audio, and PDFs into a unified embedding space",
+        "family": "gemini",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "knowledge": "2025-11",
+        "release_date": "2026-04-22",
+        "last_updated": "2026-04-22",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 3072
         }
       },
       "sonar-pro": {
@@ -86365,6 +86347,176 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
+          "output": 131072
+        }
+      }
+    }
+  },
+  "scx-ai": {
+    "id": "scx-ai",
+    "env": [
+      "SCX_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "https://api.scx.ai/v1",
+    "name": "SCX.ai",
+    "doc": "https://platform.scx.ai/docs",
+    "models": {
+      "MiniMax-M2.7": {
+        "id": "MiniMax-M2.7",
+        "name": "MiniMax-M2.7",
+        "description": "Open MiniMax flagship for coding agents, office automation, and complex environments",
+        "family": "minimax",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-03-18",
+        "last_updated": "2026-03-18",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 196608,
+          "output": 196608
+        }
+      },
+      "Qwen3.8-Max": {
+        "id": "Qwen3.8-Max",
+        "name": "Qwen3.8 Max",
+        "description": "2.4-trillion-parameter MoE flagship for coding, professional work, multimodal understanding, and long-horizon agentic workflows",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-03",
+        "last_updated": "2026-08-03",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "input": 983616,
+          "output": 131072
+        }
+      },
+      "gpt-oss-120b": {
+        "id": "gpt-oss-120b",
+        "name": "GPT OSS 120B",
+        "description": "Open GPT reasoning model for self-hosted agents and controllable deployments",
+        "family": "gpt-oss",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2025-08-05",
+        "last_updated": "2025-08-05",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 131072
+        }
+      },
+      "GLM-5.2": {
+        "id": "GLM-5.2",
+        "name": "GLM-5.2",
+        "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
           "output": 131072
         }
       }
@@ -132398,7 +132550,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 8000,
+          "context": 1048576,
           "output": 128000
         }
       },
@@ -150022,6 +150174,42 @@
           "output": 16384
         }
       },
+      "z-ai/glm-5.2:free": {
+        "id": "z-ai/glm-5.2:free",
+        "name": "Z.ai: GLM 5.2 (free)",
+        "description": "GLM 5.2 is a large-scale reasoning model from Z.ai. It supports text input and output with a 1M-token context window, and is suited for long-horizon agent workflows, project-level software engineering,...",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 256000,
+          "output": 256000
+        }
+      },
       "z-ai/glm-5": {
         "id": "z-ai/glm-5",
         "name": "GLM-5",
@@ -150090,7 +150278,7 @@
         "open_weights": true,
         "limit": {
           "context": 1048576,
-          "output": 262144
+          "output": 131072
         }
       },
       "deepseek/deepseek-v3.1-terminus": {

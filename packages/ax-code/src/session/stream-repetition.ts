@@ -38,6 +38,8 @@ export namespace StreamRepetition {
   export const MIN_TAIL_REPEATS = 3
   /** Cap on anchor occurrences scanned per tail check (cost bound). */
   const MAX_ANCHOR_OCCURRENCES = 16
+  /** Cap unique paragraph keys counted per window (cost bound). */
+  const MAX_SEGMENT_KEYS = 256
 
   export type Detection = {
     kind: "segment" | "tail"
@@ -71,6 +73,7 @@ export namespace StreamRepetition {
       if (count > maxRepeats) {
         return { kind: "segment", unit: segment.slice(0, 200), count }
       }
+      if (counts.size >= MAX_SEGMENT_KEYS && !counts.has(segment)) continue
       counts.set(segment, count)
     }
     return undefined
