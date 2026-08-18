@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.6.4] - 2026-08-18
+
+### Fixed
+
+- Finish upgrade verification and catalog docs.
+- Drop 4-bit packs for a 6-bit-only local lineup.
+- Add Windows self-upgrade and post-update verification.
+
 ## [7.6.3] - 2026-08-17
 
 ### Fixed
