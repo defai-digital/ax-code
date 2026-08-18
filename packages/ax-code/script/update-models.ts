@@ -732,12 +732,38 @@ cloneProvider("alibaba-coding-plan-cn", "alibaba-token-plan-cn", {
 })
 
 // Trim Alibaba plan providers to the curated set of chat/reasoning/image models
-// served through the plan. Entries that models.dev hasn't published yet are
-// silently skipped — the whitelist is forward-looking so they appear automatically
-// once upstream catches up. Image models (qwen-image-*, wan*) are kept here per
-// product intent even though ax-code's chat picker can't drive image generation
-// — they show up so callers using the provider via SDK / API can pick them.
-const alibabaModels = [
+// served through each plan. Alibaba enforces exact-string model allowlists that
+// DIFFER per plan (verified 2026-08-18 against the official docs):
+//   Coding Plan (intl + CN share the same list):
+//     https://www.alibabacloud.com/help/en/model-studio/coding-plan
+//     qwen3.7-plus, qwen3.6-plus, qwen3.5-plus, qwen3-max-2026-01-23,
+//     qwen3-coder-next, qwen3-coder-plus, kimi-k2.5, glm-5, glm-4.7, MiniMax-M2.5
+//   Token Plan (Team Edition):
+//     https://www.alibabacloud.com/help/en/model-studio/token-plan-overview
+//     qwen3.7-max, qwen3.7-plus, qwen3.6-plus, qwen3.6-flash, deepseek-v4-*,
+//     kimi-k2.7-code/2.6/2.5, glm-5.2/5.1/5, MiniMax-M2.5, qwen-image/wan images.
+// Superseded SKUs (kimi-k2.5/k2.6, glm-4.7, glm-5.1, deepseek-v3.2) stay
+// excluded per the global supersession filters; glm-5 is dropped in favor of
+// the glm-5.2 flagship on the Token Plan (GLM-first-party users have the
+// zai/zhipuai coding plans). Entries that models.dev hasn't published yet are
+// silently skipped — the whitelists are forward-looking so they appear
+// automatically once upstream catches up. Image models (qwen-image-*, wan*)
+// are kept on the Token Plan per product intent even though ax-code's chat
+// picker can't drive image generation — they show up so callers using the
+// provider via SDK / API can pick them.
+const alibabaCodingPlanModels = [
+  // Qwen text / reasoning (coding-plan exclusive coder SKUs)
+  "qwen3.7-plus",
+  "qwen3.6-plus",
+  "qwen3.5-plus",
+  "qwen3-max-2026-01-23",
+  "qwen3-coder-next",
+  "qwen3-coder-plus",
+  // Third-party vendors aggregated under the Coding Plan
+  "glm-5",
+  "MiniMax-M2.5",
+]
+const alibabaTokenPlanModels = [
   // Qwen text / reasoning
   "qwen3.7-max",
   "qwen3.7-plus",
@@ -746,8 +772,10 @@ const alibabaModels = [
   // DeepSeek text / reasoning
   "deepseek-v4-pro",
   "deepseek-v4-flash",
-  // Other vendors aggregated under the Alibaba plan
+  // Other vendors aggregated under the Token Plan
   "kimi-k2.7-code",
+  "glm-5.2",
+  "MiniMax-M2.5",
   // Qwen image generation
   "qwen-image-2.0",
   "qwen-image-2.0-pro",
@@ -755,12 +783,21 @@ const alibabaModels = [
   "wan2.7-image",
   "wan2.7-image-pro",
 ]
+const alibabaPlanModels: Record<string, string[]> = {
+  "alibaba-coding-plan": alibabaCodingPlanModels,
+  "alibaba-coding-plan-cn": alibabaCodingPlanModels,
+  "alibaba-token-plan": alibabaTokenPlanModels,
+  "alibaba-token-plan-cn": alibabaTokenPlanModels,
+}
 const alibabaModelFallbackProviders: Record<string, string[]> = {
   "qwen3.7-plus": ["llmgateway", "opencode-go", "nano-gpt"],
   "qwen3.6-flash": ["aihubmix"],
   "deepseek-v4-pro": ["auriko", "cortecs", "302ai", "llmgateway"],
   "deepseek-v4-flash": ["cortecs", "auriko", "302ai", "llmgateway"],
   "kimi-k2.7-code": ["moonshot", "moonshot-cn", "302ai", "llmgateway"],
+  "glm-5": ["zhipuai"],
+  "MiniMax-M2.5": ["minimax", "minimax-cn"],
+  "glm-5.2": ["zhipuai"],
 }
 const alibabaModelFallbackDefaults: Record<string, RawModel> = {
   "kimi-k2.7-code": kimiCodingModel("kimi-k2.7-code", "Kimi K2.7 Code"),
@@ -827,11 +864,11 @@ function withAlibabaModelFallbackDefault(mid: string, model: unknown) {
     ...clonedModel,
   }
 }
-for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"]) {
+for (const [id, planModels] of Object.entries(alibabaPlanModels)) {
   if (!fetched[id]) continue
   const models = fetched[id].models ?? {}
   const kept: Record<string, unknown> = {}
-  for (const mid of alibabaModels) {
+  for (const mid of planModels) {
     if (models[mid]) kept[mid] = withAlibabaModelFallbackDefault(mid, models[mid])
     if (kept[mid]) continue
 
@@ -988,6 +1025,11 @@ function glmCodingModel(id: string, name: string, context: number, releaseDate: 
   } as RawModel
 }
 const glmInjectedModels: Array<{ id: string; name: string; context: number; release: string }> = [
+  // GLM-5.3 is the current coding-plan flagship (live for Max/Pro/Lite tiers
+  // per https://docs.z.ai/devpack/latest-model); the [1m] suffix unlocks the
+  // documented 1M-token window the same way as glm-5.2[1m].
+  { id: "glm-5.3", name: "GLM-5.3", context: 1000000, release: "2026-08-14" },
+  { id: "glm-5.3[1m]", name: "GLM-5.3 (1M context)", context: 1000000, release: "2026-08-14" },
   { id: "glm-5.2", name: "GLM-5.2", context: 200000, release: "2026-06-13" },
   { id: "glm-5.2[1m]", name: "GLM-5.2 (1M context)", context: 1000000, release: "2026-06-13" },
 ]
@@ -1062,6 +1104,8 @@ for (const [id, api] of Object.entries(apiOverrides)) {
 }
 
 const docOverrides: Record<string, string> = {
+  "alibaba-coding-plan": "https://www.alibabacloud.com/help/en/model-studio/coding-plan",
+  "alibaba-coding-plan-cn": "https://help.aliyun.com/zh/model-studio/coding-plan",
   "alibaba-token-plan": "https://www.alibabacloud.com/help/en/model-studio/opencode-token-plan",
   "alibaba-token-plan-cn": "https://help.aliyun.com/zh/model-studio/opencode-token-plan",
   "ax-studio": "https://github.com/defai-digital/ax-studio",
@@ -1074,7 +1118,7 @@ for (const [id, doc] of Object.entries(docOverrides)) {
 // these with input modalities ["text","image","video"] but attachment=false,
 // which leaves ax-code's picker refusing image uploads even though the upstream
 // API accepts them. Override here so the capability flag matches the modality.
-const alibabaAttachmentForceTrue = ["qwen3.7-plus", "qwen3.6-plus"]
+const alibabaAttachmentForceTrue = ["qwen3.7-plus", "qwen3.6-plus", "qwen3.5-plus"]
 for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"]) {
   const models = fetched[id]?.models as Record<string, { attachment?: boolean }> | undefined
   if (!models) continue

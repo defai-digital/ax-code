@@ -2479,6 +2479,29 @@ describe("ProviderTransform.maxOutputTokens", () => {
     expect(ProviderTransform.maxOutputTokens(model)).toBe(16_384)
   })
 
+  // qwen3.8-max ships on alibaba-token-plan (snapshot: 1M ctx / 131 072 out)
+  // and is part of the 3.7–3.9 capability family — it must inherit the same
+  // elevated ceilings as 3.7 instead of the generic 4k Alibaba cap.
+  test("raises Alibaba quota cap to 16 384 for qwen3.8-max on Alibaba routes", () => {
+    for (const providerID of ["alibaba-token-plan", "alibaba-token-plan-cn", "alibaba-coding-plan"]) {
+      const model = {
+        id: "qwen3.8-max",
+        providerID: ProviderID.make(providerID),
+        limit: { output: 131_072 },
+      } as any
+      expect(ProviderTransform.maxOutputTokens(model), providerID).toBe(16_384)
+    }
+  })
+
+  test("raises output cap to 65 536 for qwen3.8-max on non-Alibaba routes", () => {
+    const model = {
+      id: "qwen3.8-max",
+      providerID: ProviderID.make("togetherai"),
+      limit: { output: 131_072 },
+    } as any
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(65_536)
+  })
+
   test("keeps generic 4 096 Alibaba cap for non-Qwen3.7 models", () => {
     const model = {
       id: "qwen3.6-plus",
@@ -2630,6 +2653,17 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
   test("raises thinking_budget to 16 384 for qwen3.7-plus on Alibaba Token Plan", () => {
     const result = ProviderTransform.options({
       model: createModel("qwen3.7-plus"),
+      sessionID: "session-test",
+      providerOptions: {},
+    })
+
+    expect(result.enable_thinking).toBe(true)
+    expect(result.thinking_budget).toBe(16_384)
+  })
+
+  test("raises thinking_budget to 16 384 for qwen3.8-max on Alibaba Token Plan", () => {
+    const result = ProviderTransform.options({
+      model: createModel("qwen3.8-max"),
       sessionID: "session-test",
       providerOptions: {},
     })

@@ -2148,9 +2148,25 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
       expect(codingPlanCn.key).toBe("test-coding-plan-cn-key")
       expect(tokenPlan.key).toBe("test-token-plan-key")
       expect(tokenPlanCn.key).toBe("test-token-plan-cn-key")
-      const expectedAlibabaPlanModels = [
+      // Catalogs follow Alibaba's official exact-string allowlists, which
+      // differ per plan (verified 2026-08-18, see script/update-models.ts):
+      // coding plans carry the qwen3.x-plus/coder SKUs plus glm-5/MiniMax,
+      // token plans carry the max/flagship SKUs, DeepSeek, and image models.
+      const expectedCodingPlanModels = [
+        "MiniMax-M2.5",
+        "glm-5",
+        "qwen3-coder-next",
+        "qwen3-coder-plus",
+        "qwen3-max-2026-01-23",
+        "qwen3.5-plus",
+        "qwen3.6-plus",
+        "qwen3.7-plus",
+      ]
+      const expectedTokenPlanModels = [
+        "MiniMax-M2.5",
         "deepseek-v4-flash",
         "deepseek-v4-pro",
+        "glm-5.2",
         "kimi-k2.7-code",
         "qwen-image-2.0",
         "qwen-image-2.0-pro",
@@ -2158,12 +2174,13 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
         "qwen3.6-plus",
         "qwen3.7-max",
         "qwen3.7-plus",
+        "qwen3.8-max",
+        "qwen3.8-max-preview",
         "wan2.7-image",
         "wan2.7-image-pro",
       ]
-      const expectedTokenPlanModels = [...expectedAlibabaPlanModels, "qwen3.8-max", "qwen3.8-max-preview"].sort()
-      expect(Object.keys(codingPlan.models).sort()).toEqual(expectedAlibabaPlanModels)
-      expect(Object.keys(codingPlanCn.models).sort()).toEqual(expectedAlibabaPlanModels)
+      expect(Object.keys(codingPlan.models).sort()).toEqual(expectedCodingPlanModels)
+      expect(Object.keys(codingPlanCn.models).sort()).toEqual(expectedCodingPlanModels)
       expect(Object.keys(tokenPlan.models).sort()).toEqual(expectedTokenPlanModels)
       expect(Object.keys(tokenPlanCn.models).sort()).toEqual(expectedTokenPlanModels)
       for (const modelID of ["qwen3.8-max", "qwen3.8-max-preview"] as const) {

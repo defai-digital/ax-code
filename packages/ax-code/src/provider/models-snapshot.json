@@ -34045,6 +34045,74 @@
         },
         "status": "active"
       },
+      "glm-5.2": {
+        "id": "glm-5.2",
+        "name": "GLM-5.2",
+        "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "MiniMax-M2.5": {
+        "id": "MiniMax-M2.5",
+        "name": "MiniMax-M2.5",
+        "description": "MiniMax model for chat, coding, office work, and agentic tasks",
+        "family": "minimax",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "release_date": "2026-02-12",
+        "last_updated": "2026-02-12",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 196608,
+          "input": 196601,
+          "output": 24576
+        }
+      },
       "qwen-image-2.0": {
         "id": "qwen-image-2.0",
         "name": "Qwen Image 2.0",
@@ -43465,59 +43533,19 @@
     "name": "Hetzner",
     "doc": "https://experiments.hetzner.com/docs/inference",
     "models": {
-      "DeepSeek-V4-Flash-0731": {
-        "id": "DeepSeek-V4-Flash-0731",
-        "name": "DeepSeek V4 Flash 0731",
-        "description": "Official DeepSeek V4 Flash release with enhanced agentic capabilities and integrated DSpark speculative decoding",
-        "family": "deepseek-flash",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "high",
-              "max"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "knowledge": "2025-05",
-        "release_date": "2026-07-31",
-        "last_updated": "2026-07-31",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 512000,
-          "output": 384000
-        },
-        "status": "beta"
-      },
-      "Kimi-K2.7-Code": {
-        "id": "Kimi-K2.7-Code",
-        "name": "Kimi K2.7 Code",
-        "description": "Coding-focused Kimi model, stronger on long-horizon repo work with less overthinking",
-        "family": "kimi-k2",
+      "Qwen3.8-27B": {
+        "id": "Qwen3.8-27B",
+        "name": "Qwen3.8-27B",
+        "description": "Dense 27B vision-language model for coding, agent tasks, and image and video understanding",
+        "family": "qwen",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [],
         "tool_call": true,
         "structured_output": true,
-        "temperature": false,
-        "knowledge": "2025-01",
-        "release_date": "2026-06-12",
-        "last_updated": "2026-06-12",
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
         "modalities": {
           "input": [
             "text",
@@ -43531,43 +43559,6 @@
         "limit": {
           "context": 262144,
           "output": 262144
-        },
-        "status": "beta"
-      },
-      "GLM-5.2-NVFP4": {
-        "id": "GLM-5.2-NVFP4",
-        "name": "GLM-5.2 NVFP4",
-        "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "high",
-              "max"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-06-13",
-        "last_updated": "2026-06-13",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 512000,
-          "output": 131072
         },
         "status": "beta"
       },
@@ -62904,6 +62895,78 @@
     "name": "Zhipu AI Coding Plan",
     "doc": "https://docs.bigmodel.cn/cn/coding-plan/overview",
     "models": {
+      "glm-5.3": {
+        "id": "glm-5.3",
+        "name": "GLM-5.3",
+        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "glm-5.3[1m]": {
+        "id": "glm-5.3[1m]",
+        "name": "GLM-5.3 (1M context)",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
       "glm-5.2": {
         "id": "glm-5.2",
         "name": "GLM-5.2",
@@ -62961,45 +63024,6 @@
         "temperature": true,
         "release_date": "2026-06-13",
         "last_updated": "2026-06-13",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 131072
-        }
-      },
-      "glm-5.3": {
-        "id": "glm-5.3",
-        "name": "GLM-5.3",
-        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "high",
-              "max"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-08-14",
-        "last_updated": "2026-08-14",
         "modalities": {
           "input": [
             "text"
@@ -65889,6 +65913,42 @@
           "output": 131072
         }
       },
+      "zai/glm-5.3": {
+        "id": "zai/glm-5.3",
+        "name": "GLM-5.3",
+        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
       "zai/glm-5.2": {
         "id": "zai/glm-5.2",
         "name": "GLM-5.2",
@@ -67458,7 +67518,7 @@
         "name": "Qwen3.5 397B A17B",
         "description": "Large open Qwen multimodal MoE for visual agents and long technical tasks",
         "family": "qwen",
-        "attachment": true,
+        "attachment": false,
         "reasoning": true,
         "reasoning_options": [
           {
@@ -67472,8 +67532,7 @@
         "last_updated": "2026-02-15",
         "modalities": {
           "input": [
-            "text",
-            "image"
+            "text"
           ],
           "output": [
             "text"
@@ -67481,8 +67540,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 256000,
-          "output": 64000
+          "context": 131072,
+          "output": 32768
         }
       },
       "qwen/qwen3.5-flash": {
@@ -68160,6 +68219,33 @@
         "limit": {
           "context": 1000000,
           "output": 250000
+        }
+      },
+      "qwen/qwen3.8-2.4t-a95b": {
+        "id": "qwen/qwen3.8-2.4t-a95b",
+        "name": "Qwen3.8 2.4T A95B",
+        "description": "Open-weight sparse MoE (2.4T total, 95B active), the open-weight twin of Qwen3.8 Max for coding, research, complex reasoning, and agentic workflows",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": false,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 1010000
         }
       },
       "sakana/sakana-namazu": {
@@ -75510,36 +75596,6 @@
     "name": "Alibaba Coding Plan (China)",
     "doc": "https://help.aliyun.com/zh/model-studio/coding-plan",
     "models": {
-      "qwen3.7-max": {
-        "id": "qwen3.7-max",
-        "name": "Qwen3.7 Max 🌐",
-        "description": "Qwen frontier model tuned for agent frameworks, coding assistants, and long tasks",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          }
-        ],
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-05-21",
-        "last_updated": "2026-05-21",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 65536
-        }
-      },
       "qwen3.7-plus": {
         "id": "qwen3.7-plus",
         "name": "Qwen3.7 Plus 🌐",
@@ -75606,11 +75662,11 @@
           "output": 65536
         }
       },
-      "qwen3.6-flash": {
-        "id": "qwen3.6-flash",
-        "name": "Qwen3.6 Flash 🌐",
+      "qwen3.5-plus": {
+        "id": "qwen3.5-plus",
+        "name": "Qwen3.5 Plus 🌐",
         "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
-        "family": "qwen3.6",
+        "family": "qwen",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -75619,15 +75675,14 @@
           }
         ],
         "tool_call": true,
-        "structured_output": true,
         "temperature": true,
-        "release_date": "2026-04-27",
-        "last_updated": "2026-04-27",
+        "knowledge": "2025-04",
+        "release_date": "2026-02-16",
+        "last_updated": "2026-02-16",
         "modalities": {
           "input": [
             "text",
-            "image",
-            "video"
+            "image"
           ],
           "output": [
             "text"
@@ -75639,21 +75694,70 @@
           "output": 65536
         }
       },
-      "deepseek-v4-pro": {
-        "id": "deepseek-v4-pro",
-        "name": "DeepSeek V4 Pro",
-        "family": "deepseek-thinking",
+      "qwen3-max-2026-01-23": {
+        "id": "qwen3-max-2026-01-23",
+        "name": "Qwen3 Max 🌐",
+        "description": "Flagship Qwen model for complex reasoning, coding, and agentic workflows",
+        "family": "qwen",
         "attachment": false,
-        "reasoning": true,
+        "reasoning": false,
         "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2026-01-23",
+        "last_updated": "2026-01-23",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
         },
+        "open_weights": false,
+        "limit": {
+          "context": 262144,
+          "output": 32768
+        }
+      },
+      "qwen3-coder-next": {
+        "id": "qwen3-coder-next",
+        "name": "Qwen3 Coder Next 🌐",
+        "description": "Qwen coding model for software agents, repository edits, and code reasoning",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
         "structured_output": true,
         "temperature": true,
-        "knowledge": "2025-05",
-        "release_date": "2026-04-24",
-        "last_updated": "2026-04-24",
+        "release_date": "2026-02-03",
+        "last_updated": "2026-02-03",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 65536
+        }
+      },
+      "qwen3-coder-plus": {
+        "id": "qwen3-coder-plus",
+        "name": "Qwen3 Coder Plus 🌐",
+        "description": "Qwen coding model for software agents, repository edits, and code reasoning",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2025-07-23",
+        "last_updated": "2025-07-23",
         "modalities": {
           "input": [
             "text"
@@ -75665,23 +75769,57 @@
         "open_weights": true,
         "limit": {
           "context": 1000000,
-          "output": 384000
+          "output": 65536
         }
       },
-      "deepseek-v4-flash": {
-        "id": "deepseek-v4-flash",
-        "name": "DeepSeek V4 Flash",
-        "family": "deepseek-flash",
+      "glm-5": {
+        "id": "glm-5",
+        "name": "GLM-5",
+        "description": "Flagship GLM model for hybrid reasoning, coding, and agentic engineering",
+        "family": "glm",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
         },
         "temperature": true,
-        "knowledge": "2025-05",
-        "release_date": "2026-04-24",
-        "last_updated": "2026-04-24",
+        "release_date": "2026-02-11",
+        "last_updated": "2026-02-11",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 202752,
+          "output": 16384
+        }
+      },
+      "MiniMax-M2.5": {
+        "id": "MiniMax-M2.5",
+        "name": "MiniMax-M2.5",
+        "description": "MiniMax model for chat, coding, office work, and agentic tasks",
+        "family": "minimax",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "release_date": "2026-02-12",
+        "last_updated": "2026-02-12",
         "modalities": {
           "input": [
             "text"
@@ -75692,136 +75830,9 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1048576,
-          "output": 384000
+          "context": 196608,
+          "output": 24576
         }
-      },
-      "kimi-k2.7-code": {
-        "id": "kimi-k2.7-code",
-        "name": "Kimi K2.7 Code",
-        "family": "kimi-k2.7-code",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-06-28",
-        "last_updated": "2026-06-28",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 262144,
-          "output": 262144
-        },
-        "status": "active"
-      },
-      "qwen-image-2.0": {
-        "id": "qwen-image-2.0",
-        "name": "Qwen Image 2.0",
-        "family": "qwen-image",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2026-06-10",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "image"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 8192,
-          "output": 1
-        },
-        "status": "active"
-      },
-      "qwen-image-2.0-pro": {
-        "id": "qwen-image-2.0-pro",
-        "name": "Qwen Image 2.0 Pro",
-        "family": "qwen-image",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2026-06-10",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "image"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 8192,
-          "output": 1
-        },
-        "status": "active"
-      },
-      "wan2.7-image": {
-        "id": "wan2.7-image",
-        "name": "Wan 2.7 Image",
-        "family": "wan",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2026-06-10",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "image"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 8192,
-          "output": 1
-        },
-        "status": "active"
-      },
-      "wan2.7-image-pro": {
-        "id": "wan2.7-image-pro",
-        "name": "Wan 2.7 Image Pro",
-        "family": "wan",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2026-06-10",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "image"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 8192,
-          "output": 1
-        },
-        "status": "active"
       }
     }
   },
@@ -78460,6 +78471,78 @@
     "name": "Z.AI Coding Plan",
     "doc": "https://docs.z.ai/devpack/overview",
     "models": {
+      "glm-5.3": {
+        "id": "glm-5.3",
+        "name": "GLM-5.3",
+        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "glm-5.3[1m]": {
+        "id": "glm-5.3[1m]",
+        "name": "GLM-5.3 (1M context)",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
       "glm-5.2": {
         "id": "glm-5.2",
         "name": "GLM-5.2",
@@ -78517,45 +78600,6 @@
         "temperature": true,
         "release_date": "2026-06-13",
         "last_updated": "2026-06-13",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 131072
-        }
-      },
-      "glm-5.3": {
-        "id": "glm-5.3",
-        "name": "GLM-5.3",
-        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "high",
-              "max"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-08-14",
-        "last_updated": "2026-08-14",
         "modalities": {
           "input": [
             "text"
@@ -82382,36 +82426,6 @@
     "name": "Alibaba Coding Plan",
     "doc": "https://www.alibabacloud.com/help/en/model-studio/coding-plan",
     "models": {
-      "qwen3.7-max": {
-        "id": "qwen3.7-max",
-        "name": "Qwen3.7 Max 🌐",
-        "description": "Qwen frontier model tuned for agent frameworks, coding assistants, and long tasks",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          }
-        ],
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-05-21",
-        "last_updated": "2026-05-21",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 65536
-        }
-      },
       "qwen3.7-plus": {
         "id": "qwen3.7-plus",
         "name": "Qwen3.7 Plus 🌐",
@@ -82478,11 +82492,11 @@
           "output": 65536
         }
       },
-      "qwen3.6-flash": {
-        "id": "qwen3.6-flash",
-        "name": "Qwen3.6 Flash 🌐",
+      "qwen3.5-plus": {
+        "id": "qwen3.5-plus",
+        "name": "Qwen3.5 Plus 🌐",
         "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
-        "family": "qwen3.6",
+        "family": "qwen",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -82491,10 +82505,10 @@
           }
         ],
         "tool_call": true,
-        "structured_output": true,
         "temperature": true,
-        "release_date": "2026-04-27",
-        "last_updated": "2026-04-27",
+        "knowledge": "2025-04",
+        "release_date": "2026-02-16",
+        "last_updated": "2026-02-16",
         "modalities": {
           "input": [
             "text",
@@ -82511,21 +82525,70 @@
           "output": 65536
         }
       },
-      "deepseek-v4-pro": {
-        "id": "deepseek-v4-pro",
-        "name": "DeepSeek V4 Pro",
-        "family": "deepseek-thinking",
+      "qwen3-max-2026-01-23": {
+        "id": "qwen3-max-2026-01-23",
+        "name": "Qwen3 Max 🌐",
+        "description": "Flagship Qwen model for complex reasoning, coding, and agentic workflows",
+        "family": "qwen",
         "attachment": false,
-        "reasoning": true,
+        "reasoning": false,
         "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2026-01-23",
+        "last_updated": "2026-01-23",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
         },
+        "open_weights": false,
+        "limit": {
+          "context": 262144,
+          "output": 32768
+        }
+      },
+      "qwen3-coder-next": {
+        "id": "qwen3-coder-next",
+        "name": "Qwen3 Coder Next 🌐",
+        "description": "Qwen coding model for software agents, repository edits, and code reasoning",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
         "structured_output": true,
         "temperature": true,
-        "knowledge": "2025-05",
-        "release_date": "2026-04-24",
-        "last_updated": "2026-04-24",
+        "release_date": "2026-02-03",
+        "last_updated": "2026-02-03",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 65536
+        }
+      },
+      "qwen3-coder-plus": {
+        "id": "qwen3-coder-plus",
+        "name": "Qwen3 Coder Plus 🌐",
+        "description": "Qwen coding model for software agents, repository edits, and code reasoning",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2025-07-23",
+        "last_updated": "2025-07-23",
         "modalities": {
           "input": [
             "text"
@@ -82537,23 +82600,57 @@
         "open_weights": true,
         "limit": {
           "context": 1000000,
-          "output": 384000
+          "output": 65536
         }
       },
-      "deepseek-v4-flash": {
-        "id": "deepseek-v4-flash",
-        "name": "DeepSeek V4 Flash",
-        "family": "deepseek-flash",
+      "glm-5": {
+        "id": "glm-5",
+        "name": "GLM-5",
+        "description": "Flagship GLM model for hybrid reasoning, coding, and agentic engineering",
+        "family": "glm",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
         },
         "temperature": true,
-        "knowledge": "2025-05",
-        "release_date": "2026-04-24",
-        "last_updated": "2026-04-24",
+        "release_date": "2026-02-11",
+        "last_updated": "2026-02-11",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 202752,
+          "output": 16384
+        }
+      },
+      "MiniMax-M2.5": {
+        "id": "MiniMax-M2.5",
+        "name": "MiniMax-M2.5",
+        "description": "MiniMax model for chat, coding, office work, and agentic tasks",
+        "family": "minimax",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "release_date": "2026-02-12",
+        "last_updated": "2026-02-12",
         "modalities": {
           "input": [
             "text"
@@ -82564,136 +82661,10 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1048576,
-          "output": 384000
+          "context": 196608,
+          "input": 196601,
+          "output": 24576
         }
-      },
-      "kimi-k2.7-code": {
-        "id": "kimi-k2.7-code",
-        "name": "Kimi K2.7 Code",
-        "family": "kimi-k2.7-code",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-06-28",
-        "last_updated": "2026-06-28",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 262144,
-          "output": 262144
-        },
-        "status": "active"
-      },
-      "qwen-image-2.0": {
-        "id": "qwen-image-2.0",
-        "name": "Qwen Image 2.0",
-        "family": "qwen-image",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2026-06-10",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "image"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 8192,
-          "output": 1
-        },
-        "status": "active"
-      },
-      "qwen-image-2.0-pro": {
-        "id": "qwen-image-2.0-pro",
-        "name": "Qwen Image 2.0 Pro",
-        "family": "qwen-image",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2026-06-10",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "image"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 8192,
-          "output": 1
-        },
-        "status": "active"
-      },
-      "wan2.7-image": {
-        "id": "wan2.7-image",
-        "name": "Wan 2.7 Image",
-        "family": "wan",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2026-06-10",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "image"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 8192,
-          "output": 1
-        },
-        "status": "active"
-      },
-      "wan2.7-image-pro": {
-        "id": "wan2.7-image-pro",
-        "name": "Wan 2.7 Image Pro",
-        "family": "wan",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2026-06-10",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "image"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 8192,
-          "output": 1
-        },
-        "status": "active"
       }
     }
   },
@@ -106592,6 +106563,9 @@
           }
         ],
         "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
         "structured_output": true,
         "temperature": true,
         "knowledge": "2025-01",
@@ -106634,6 +106608,9 @@
           }
         ],
         "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
         "structured_output": true,
         "temperature": true,
         "knowledge": "2025-08",
@@ -106704,7 +106681,20 @@
         "family": "deepseek-flash",
         "attachment": false,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
@@ -106767,16 +106757,16 @@
             "type": "effort",
             "values": [
               "none",
-              "minimal",
               "low",
-              "medium",
               "high",
-              "xhigh",
               "max"
             ]
           }
         ],
         "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
@@ -122876,6 +122866,42 @@
         "limit": {
           "context": 202800,
           "output": 131100
+        }
+      },
+      "zai/glm-5.3": {
+        "id": "zai/glm-5.3",
+        "name": "GLM 5.3",
+        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 12800
         }
       },
       "zai/glm-5.2": {
@@ -146215,6 +146241,73 @@
         },
         "status": "active"
       },
+      "glm-5.2": {
+        "id": "glm-5.2",
+        "name": "GLM-5.2",
+        "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "MiniMax-M2.5": {
+        "id": "MiniMax-M2.5",
+        "name": "MiniMax-M2.5",
+        "description": "MiniMax model for chat, coding, office work, and agentic tasks",
+        "family": "minimax",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "release_date": "2026-02-12",
+        "last_updated": "2026-02-12",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 196608,
+          "output": 24576
+        }
+      },
       "qwen-image-2.0": {
         "id": "qwen-image-2.0",
         "name": "Qwen Image 2.0",
@@ -150174,42 +150267,6 @@
           "output": 16384
         }
       },
-      "z-ai/glm-5.2:free": {
-        "id": "z-ai/glm-5.2:free",
-        "name": "Z.ai: GLM 5.2 (free)",
-        "description": "GLM 5.2 is a large-scale reasoning model from Z.ai. It supports text input and output with a 1M-token context window, and is suited for long-horizon agent workflows, project-level software engineering,...",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "high",
-              "xhigh"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-06-13",
-        "last_updated": "2026-06-13",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 256000,
-          "output": 256000
-        }
-      },
       "z-ai/glm-5": {
         "id": "z-ai/glm-5",
         "name": "GLM-5",
@@ -150245,6 +150302,42 @@
           "output": 128000
         }
       },
+      "z-ai/glm-5.3": {
+        "id": "z-ai/glm-5.3",
+        "name": "GLM-5.3",
+        "description": "GLM-5.3 is a large-scale reasoning model from Z.ai, built for complex software engineering and long-horizon agent tasks. It supports text input and output with a 1M-token context window, and improves...",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        }
+      },
       "z-ai/glm-5.2": {
         "id": "z-ai/glm-5.2",
         "name": "GLM-5.2",
@@ -150278,7 +150371,7 @@
         "open_weights": true,
         "limit": {
           "context": 1048576,
-          "output": 131072
+          "output": 262144
         }
       },
       "deepseek/deepseek-v3.1-terminus": {
@@ -157408,6 +157501,40 @@
           "output": 262144
         }
       },
+      "liquid/lfm-2.5-2.6b:free": {
+        "id": "liquid/lfm-2.5-2.6b:free",
+        "name": "LiquidAI: LFM2.5-2.6B (free)",
+        "description": "LFM2.5-2.6B is a compact reasoning model from Liquid AI. It is suited for agent workflows, data extraction, RAG, and long-context processing. Liquid advises against using it for agentic coding or...",
+        "family": "liquid",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-11",
+        "last_updated": "2026-08-11",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 128000,
+          "output": 8192
+        }
+      },
       "allenai/olmo-3-32b-think": {
         "id": "allenai/olmo-3-32b-think",
         "name": "AllenAI: Olmo 3 32B Think",
@@ -158304,8 +158431,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 1024000,
-          "output": 384000
+          "context": 262144,
+          "output": 262144
         }
       },
       "inclusionai/ring-2.6-1t": {
@@ -165534,6 +165661,42 @@
           "output": 32768
         }
       },
+      "z-ai-glm-5-3": {
+        "id": "z-ai-glm-5-3",
+        "name": "GLM 5.3",
+        "description": "Flagship GLM model for hybrid reasoning, coding, and agentic engineering",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-18",
+        "last_updated": "2026-08-18",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
       "qwen-3-7-max": {
         "id": "qwen-3-7-max",
         "name": "Qwen 3.7 Max",
@@ -167705,6 +167868,38 @@
         "modalities": {
           "input": [
             "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        }
+      },
+      "Qwen/Qwen3.8-27B": {
+        "id": "Qwen/Qwen3.8-27B",
+        "name": "Qwen3.8 27B",
+        "description": "Qwen3.8-27B is a dense multimodal model suited for coding, research, multimodal interaction, and long-running agent tasks.",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
           ],
           "output": [
             "text"

@@ -124,11 +124,19 @@ export function isQwen37MaxModel(modelId: string): boolean {
   // Providers spell the same model differently: "qwen3.7-max" (Alibaba,
   // most gateways), "Qwen/Qwen3.7-Max" (Together), "qwen-3-7-max" (Venice).
   // Normalize separators away so every spelling is recognized.
+  //
+  // Minors 3.7–3.9 are one capability family — the registry pattern in
+  // model-capabilities.ts matches the same window, and transform.ts keys its
+  // elevated output/thinking ceilings on this predicate. A newer flagship
+  // minor (3.8-max on alibaba-token-plan) must inherit them instead of
+  // falling back to the generic 4k Alibaba cap. 3.6 is deliberately
+  // excluded: it ships a different capability set.
   const normalized = normalizeProviderModelId(modelId)
-  return normalized.includes("qwen37max")
+  return /qwen3[789]max/.test(normalized)
 }
 
 export function isQwen37PlusModel(modelId: string): boolean {
+  // Same 3.7–3.9 family window as isQwen37MaxModel.
   const normalized = normalizeProviderModelId(modelId)
-  return normalized.includes("qwen37plus")
+  return /qwen3[789]plus/.test(normalized)
 }

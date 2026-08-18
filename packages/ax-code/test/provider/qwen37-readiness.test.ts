@@ -167,6 +167,22 @@ describe("isQwen37MaxModel", () => {
     expect(isQwen37MaxModel("claude-opus-4")).toBe(false)
     expect(isQwen37MaxModel("gpt-4o")).toBe(false)
   })
+
+  // Minors 3.7–3.9 are one capability family (see the registry pattern in
+  // model-capabilities.ts); 3.8-max ships on alibaba-token-plan with the
+  // same 1M context and must inherit the family ceilings in transform.ts.
+  test("recognizes qwen3.8/3.9 max spellings across providers", () => {
+    expect(isQwen37MaxModel("qwen3.8-max")).toBe(true)
+    expect(isQwen37MaxModel("qwen-3-8-max")).toBe(true)
+    expect(isQwen37MaxModel("qwen3.8-max-preview")).toBe(true)
+    expect(isQwen37MaxModel("Qwen/Qwen3.8-Max")).toBe(true)
+    expect(isQwen37MaxModel("qwen3.9-max")).toBe(true)
+  })
+
+  test("still excludes qwen3.6 max (different capability set)", () => {
+    expect(isQwen37MaxModel("qwen3.6-max")).toBe(false)
+    expect(isQwen37MaxModel("qwen3.6-max-preview")).toBe(false)
+  })
 })
 
 describe("isQwen37PlusModel", () => {
@@ -198,5 +214,12 @@ describe("isQwen37PlusModel", () => {
   test("does not match unrelated models", () => {
     expect(isQwen37PlusModel("claude-opus-4")).toBe(false)
     expect(isQwen37PlusModel("gpt-4o")).toBe(false)
+  })
+
+  test("recognizes qwen3.8/3.9 plus spellings across providers", () => {
+    expect(isQwen37PlusModel("qwen3.8-plus")).toBe(true)
+    expect(isQwen37PlusModel("qwen-3-8-plus")).toBe(true)
+    expect(isQwen37PlusModel("Qwen/Qwen3.8-Plus")).toBe(true)
+    expect(isQwen37PlusModel("qwen3.9-plus")).toBe(true)
   })
 })
