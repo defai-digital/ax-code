@@ -150,7 +150,7 @@ describe("Model Capability Registry", () => {
     })
 
     it("returns explicit Ornith 35B capabilities for AX Engine ids", () => {
-      for (const id of ["ornith-35b-axq-4bit", "AX-Ornith-1.0-35B-MLX-AXQ-4bit"]) {
+      for (const id of ["ornith-35b-axq-6bit", "AX-Ornith-1.0-35B-MLX-AXQ-6bit"]) {
         const caps = getModelCapabilities(id, "ax-engine")
         expect(caps.contextWindow).toBe(262_144)
         expect(caps.thinking).toBe("supported")
@@ -291,7 +291,7 @@ describe("Model Capability Registry", () => {
     })
 
     it("supports the long-agent profile for local Ornith 35B", () => {
-      expect(supportsLongAgent("ornith-35b-axq-4bit", "ax-engine")).toBe(true)
+      expect(supportsLongAgent("ornith-35b-axq-6bit", "ax-engine")).toBe(true)
     })
 
     it("supports the long-agent profile for cloud Ornith 397B on Alibaba PAI", () => {
@@ -340,7 +340,7 @@ describe("Model Capability Registry", () => {
     })
 
     it("should return 128k for local Ornith 35B", () => {
-      expect(getContextPackBudget("ornith-35b-axq-4bit", "ax-engine")).toBe(128_000)
+      expect(getContextPackBudget("ornith-35b-axq-6bit", "ax-engine")).toBe(128_000)
     })
 
     it("should return 128k for cloud Ornith 397B on Alibaba PAI", () => {

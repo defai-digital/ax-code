@@ -119,7 +119,7 @@ describe("ProviderTransform.options - Kimi / alibaba-pai promptCacheKey", () => 
   test("enables Ornith chat-template thinking on local 35B and PAI 397B", () => {
     const sessionID = "ses_ornith"
     const local = ProviderTransform.options({
-      model: mkModel({ providerID: "ax-engine", id: "ax-engine/ornith-35b-axq-4bit", apiID: "ornith-35b-axq-4bit" }),
+      model: mkModel({ providerID: "ax-engine", id: "ax-engine/ornith-35b-axq-6bit", apiID: "ornith-35b-axq-6bit" }),
       sessionID,
       providerOptions: {},
     })
@@ -305,10 +305,10 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
 
   test("Ornith uses official 0.6 / 0.95 sampling even when family is qwen", () => {
     const local = {
-      id: "ax-engine/ornith-35b-axq-4bit",
+      id: "ax-engine/ornith-35b-axq-6bit",
       providerID: ProviderID.make("ax-engine"),
       family: "qwen",
-      api: { id: "ornith-35b-axq-4bit", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
+      api: { id: "ornith-35b-axq-6bit", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
     } as any
     const cloud = {
       id: "alibaba-pai/Ornith-1.0-397B-FP8",
@@ -344,9 +344,9 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
 
   test("does not advertise unsupported reasoning-effort variants for Ornith", () => {
     const model = {
-      id: "ax-engine/ornith-35b-axq-4bit",
+      id: "ax-engine/ornith-35b-axq-6bit",
       providerID: ProviderID.make("ax-engine"),
-      api: { id: "ornith-35b-axq-4bit", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
+      api: { id: "ornith-35b-axq-6bit", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
       capabilities: { reasoning: true },
     } as any
 
@@ -398,7 +398,7 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
       providerID: ProviderID.make("custom"),
       api: {
         id: "coding-model",
-        url: "https://gateway.example/v1/models/ornith-35b-axq-4bit",
+        url: "https://gateway.example/v1/models/ornith-35b-axq-6bit",
         npm: "@ai-sdk/openai-compatible",
       },
     } as any
@@ -624,7 +624,7 @@ describe("ProviderTransform.providerOptions", () => {
     })
     const sanitized = ProviderTransform.sanitizeOptions(model, {
       modelID: "qwen3-coder-next",
-      quantization: "mlx4bit",
+      quantization: "mlx6bit",
       modelPath: "/models/qwen",
       binaryPath: "/bin/ax-engine",
       baseURL: "http://127.0.0.1:31418/v1",
@@ -2868,7 +2868,7 @@ describe("ProviderTransform.smallOptions - Alibaba thinking models", () => {
   })
 
   test("disables Ornith chat-template thinking on local and PAI title calls", () => {
-    expect(ProviderTransform.smallOptions(createModel("ax-engine", "ornith-35b-axq-4bit", true))).toEqual({
+    expect(ProviderTransform.smallOptions(createModel("ax-engine", "ornith-35b-axq-6bit", true))).toEqual({
       chat_template_kwargs: { enable_thinking: false },
     })
     expect(ProviderTransform.smallOptions(createModel("alibaba-pai", "Ornith-1.0-397B-FP8", true))).toEqual({
@@ -3182,9 +3182,9 @@ describe("ProviderTransform.options - z.ai / Zhipu GLM snapshot guard", () => {
 describe("ProviderTransform.assumesPrefilledThinkBlock", () => {
   function ornithModel(npm = "@ai-sdk/openai-compatible") {
     return {
-      id: "ax-engine/ornith-35b-axq-4bit",
+      id: "ax-engine/ornith-35b-axq-6bit",
       providerID: "ax-engine",
-      api: { id: "ornith-35b-axq-4bit", url: "http://127.0.0.1/v1", npm },
+      api: { id: "ornith-35b-axq-6bit", url: "http://127.0.0.1/v1", npm },
     } as any
   }
 
@@ -3207,9 +3207,9 @@ describe("ProviderTransform.assumesPrefilledThinkBlock", () => {
 
   test("false for non-Ornith models and non-openai-compatible SDKs", () => {
     const qwen = {
-      id: "ax-engine/qwen3.8-27b-axq-4bit",
+      id: "ax-engine/qwen3.8-27b-axq-6bit",
       providerID: "ax-engine",
-      api: { id: "qwen3.8-27b-axq-4bit", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
+      api: { id: "qwen3.8-27b-axq-6bit", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
     } as any
     const options = { chat_template_kwargs: { enable_thinking: true } }
     expect(ProviderTransform.assumesPrefilledThinkBlock(qwen, options)).toBe(false)
@@ -3220,9 +3220,9 @@ describe("ProviderTransform.assumesPrefilledThinkBlock", () => {
 describe("ProviderTransform.message - Ornith reasoning history", () => {
   test("strips reasoning parts from Ornith assistant messages on input", () => {
     const model = {
-      id: "ax-engine/ornith-35b-axq-4bit",
+      id: "ax-engine/ornith-35b-axq-6bit",
       providerID: "ax-engine",
-      api: { id: "ornith-35b-axq-4bit", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
+      api: { id: "ornith-35b-axq-6bit", url: "http://127.0.0.1/v1", npm: "@ai-sdk/openai-compatible" },
       capabilities: { interleaved: false },
     } as any
     const result = ProviderTransform.message(

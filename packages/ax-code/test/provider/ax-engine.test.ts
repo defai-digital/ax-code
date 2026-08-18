@@ -18,9 +18,8 @@ import { getAxEngineDoctorCheck } from "../../src/cli/cmd/doctor"
 import { shouldShowProviderInList } from "../../src/server/routes/provider"
 import {
   AX_ENGINE_ERROR,
-  AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID,
+  AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
   AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
-  AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID,
   AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
   AX_ENGINE_PROVIDER_ID,
   AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
@@ -282,8 +281,10 @@ describe("ax-engine capability status", () => {
 describe("ax-engine model cache", () => {
   test("normalizes unknown quantization to the conservative default", () => {
     expect(normalizeQuantization("mlx6bit")).toBe("mlx6bit")
+    // 4-bit packs were dropped from the catalog, so "mlx4bit" no longer owns a
+    // quantization slot on any model and falls back to the default.
     expect(normalizeQuantization("mlx4bit")).toBe("mlx6bit")
-    expect(normalizeQuantization("mlx4bit", AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID)).toBe("mlx4bit")
+    expect(normalizeQuantization("mlx4bit", AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID)).toBe("mlx6bit")
     expect(normalizeQuantization("surprise")).toBe("mlx6bit")
     expect(normalizeQuantization("toString")).toBe("mlx6bit")
     expect(normalizeQuantization("constructor")).toBe("mlx6bit")
@@ -926,9 +927,9 @@ describe("ax-engine server launch args", () => {
     // Catalog models declare their own output budget; launching one at the
     // 8192 default instead of its declared budget would desync the server's
     // enforced cap from what the model advertises to the agent.
-    expect(axEngineServerLaunchArgs({ apiModelID: "qwen3-coder-next-axq-4bit", maxOutputTokens: 4_096 })).toEqual([
+    expect(axEngineServerLaunchArgs({ apiModelID: "qwen3-coder-next-axq-6bit", maxOutputTokens: 4_096 })).toEqual([
       "--model-id",
-      "qwen3-coder-next-axq-4bit",
+      "qwen3-coder-next-axq-6bit",
       "--speculation-profile",
       "agentic",
       "--max-batch-tokens",
@@ -943,13 +944,13 @@ describe("ax-engine server launch args", () => {
   test("split-knob binaries get scheduler width plus a separate output budget", () => {
     expect(
       axEngineServerLaunchArgs({
-        apiModelID: "qwen3-coder-next-axq-4bit",
+        apiModelID: "qwen3-coder-next-axq-6bit",
         maxOutputTokens: 4_096,
         binaryVersion: "7.1.0",
       }),
     ).toEqual([
       "--model-id",
-      "qwen3-coder-next-axq-4bit",
+      "qwen3-coder-next-axq-6bit",
       "--speculation-profile",
       "agentic",
       "--max-batch-tokens",
@@ -966,7 +967,7 @@ describe("ax-engine server launch args", () => {
   test("older or unknown binaries keep the conflated knob", () => {
     for (const binaryVersion of ["7.0.2", "6.11.0", undefined, "not-a-version"]) {
       const args = axEngineServerLaunchArgs({
-        apiModelID: "qwen3-coder-next-axq-4bit",
+        apiModelID: "qwen3-coder-next-axq-6bit",
         maxOutputTokens: 4_096,
         binaryVersion,
       })
@@ -1261,15 +1262,10 @@ describe("ax-engine provider integration", () => {
     expect(provider).toBeDefined()
     expect(Object.keys(provider.models)).toEqual([
       "qwen3.8-27b-axq-6bit",
-      "qwen3.8-27b-axq-4bit",
       "ornith-35b-axq-6bit",
-      "ornith-35b-axq-4bit",
       "qwen3-coder-next-axq-6bit",
-      "qwen3-coder-next-axq-4bit",
     ])
-    expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([
-      65_536, 65_536, 262_144, 262_144, 32_768, 32_768,
-    ])
+    expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([65_536, 262_144, 32_768])
     expect(provider.models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]).toMatchObject({
       name: "Qwen3.8-27B AXQ 6-bit (Local MLX Auto)",
       tool_call: true,
@@ -1282,27 +1278,15 @@ describe("ax-engine provider integration", () => {
       status: "beta",
       experimental: { localRuntime: "ax-engine" },
     })
-    expect(provider.models[AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID]).toMatchObject({
-      name: "Ornith-1.0-35B AXQ 4-bit (Local MLX)",
-      family: AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID,
+    expect(provider.models[AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID]).toMatchObject({
+      name: "Ornith-1.0-35B AXQ 6-bit (Local MLX)",
+      family: AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
       reasoning: true,
       tool_call: true,
       limit: { context: 262_144, input: 230_144, output: 32_000 },
       options: {
-        modelID: AX_ENGINE_ORNITH_35B_AXQ_4BIT_MODEL_ID,
-        quantization: "mlx4bit",
-        minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
-      },
-      status: "beta",
-      experimental: { localRuntime: "ax-engine" },
-    })
-    expect(provider.models[AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID]).toMatchObject({
-      name: "Qwen3.8-27B AXQ 4-bit (Local MLX Auto)",
-      tool_call: true,
-      limit: { context: 65_536, input: 49_152, output: 16_384 },
-      options: {
-        modelID: AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID,
-        quantization: "mlx4bit",
+        modelID: AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
+        quantization: "mlx6bit",
         minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
       },
       status: "beta",
@@ -1311,7 +1295,7 @@ describe("ax-engine provider integration", () => {
     expect(provider.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]).toMatchObject({
       name: "Qwen3-Coder-Next AXQ 6-bit (Local MLX)",
       tool_call: true,
-      limit: { context: 32_768, input: 24_576, output: 8_192 },
+      limit: { context: 32_768, input: 16_384, output: 16_384 },
       options: {
         modelID: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
         quantization: "mlx6bit",
@@ -1334,7 +1318,7 @@ describe("ax-engine provider integration", () => {
     expect(
       modelMemoryBlockReason(
         AX_ENGINE_PROVIDER_ID,
-        provider.models[AX_ENGINE_QWEN38_27B_AXQ_4BIT_MODEL_ID],
+        provider.models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID],
         64 * 1024 ** 3,
       ),
     ).toBeUndefined()

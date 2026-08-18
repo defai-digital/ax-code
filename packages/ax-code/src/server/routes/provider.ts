@@ -72,7 +72,7 @@ export const AxEnginePrepareBody = z
     modelPath: z.string().optional(),
     binaryPath: z.string().optional(),
     modelID: z.enum(AX_ENGINE_MODEL_IDS).optional(),
-    quantization: z.enum(["mlx4bit", "mlx6bit"]).optional(),
+    quantization: z.enum(AX_ENGINE_QUANTIZATION_IDS).optional(),
     download: JsonBoolean.optional(),
     start: JsonBoolean.optional(),
   })
@@ -84,7 +84,7 @@ export const AxEngineStartBody = z
     modelPath: z.string().optional(),
     binaryPath: z.string().optional(),
     modelID: z.enum(AX_ENGINE_MODEL_IDS).optional(),
-    quantization: z.enum(["mlx4bit", "mlx6bit"]).optional(),
+    quantization: z.enum(AX_ENGINE_QUANTIZATION_IDS).optional(),
     download: JsonBoolean.optional(),
   })
   .optional()
@@ -92,10 +92,8 @@ export const AxEngineStartBody = z
 
 export const AxEngineModelActionBody = z
   .object({
-    // Both catalog quantizations are valid here — the TUI sends the model's
-    // own quantization (mlx4bit for the 4-bit packs), and restricting this to
-    // mlx6bit made every 4-bit download/delete request fail validation with a
-    // bare 400. normalizeQuantization downstream still pins the value to the
+    // The catalog is 6-bit only, so this enum currently accepts just
+    // "mlx6bit". normalizeQuantization downstream still pins the value to the
     // quantization the selected model actually ships.
     quantization: z.enum(AX_ENGINE_QUANTIZATION_IDS).optional(),
   })

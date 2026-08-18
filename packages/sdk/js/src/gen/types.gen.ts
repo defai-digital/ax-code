@@ -12927,7 +12927,7 @@ export type ProviderAxEnginePrepareData = {
     modelPath?: string
     binaryPath?: string
     modelID?: "qwen3.8-27b-axq-6bit" | "ornith-35b-axq-6bit" | "qwen3-coder-next-axq-6bit"
-    quantization?: "mlx4bit" | "mlx6bit"
+    quantization?: "mlx6bit"
     download?: boolean
     start?: boolean
   }
@@ -12959,7 +12959,7 @@ export type ProviderAxEngineStartData = {
     modelPath?: string
     binaryPath?: string
     modelID?: "qwen3.8-27b-axq-6bit" | "ornith-35b-axq-6bit" | "qwen3-coder-next-axq-6bit"
-    quantization?: "mlx4bit" | "mlx6bit"
+    quantization?: "mlx6bit"
     download?: boolean
   }
   path?: never

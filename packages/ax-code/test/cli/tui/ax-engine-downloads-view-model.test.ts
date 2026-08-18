@@ -9,7 +9,7 @@ import {
 } from "../../../src/cli/cmd/tui/component/ax-engine-downloads-view-model"
 
 function job(overrides: Partial<AxEngineDownloadJobView> = {}): AxEngineDownloadJobView {
-  return { id: "job-1", modelID: "ornith-35b-axq-4bit", status: "running", ...overrides }
+  return { id: "job-1", modelID: "ornith-35b-axq-6bit", status: "running", ...overrides }
 }
 
 describe("activeAxEngineJobForModel", () => {
@@ -19,7 +19,7 @@ describe("activeAxEngineJobForModel", () => {
       job({ id: "other", modelID: "qwen3.8-27b-axq-6bit" }),
       job({ id: "active", status: "running", percent: 41.6 }),
     ]
-    expect(activeAxEngineJobForModel(jobs, "ornith-35b-axq-4bit")?.id).toBe("active")
+    expect(activeAxEngineJobForModel(jobs, "ornith-35b-axq-6bit")?.id).toBe("active")
     expect(activeAxEngineJobForModel(jobs, "qwen3-coder-next-axq-6bit")).toBeUndefined()
   })
 })
@@ -60,15 +60,15 @@ describe("axEngineJobTransitions", () => {
 describe("axEngineJobToast", () => {
   test("composes per-outcome messages", () => {
     expect(axEngineJobToast({ job: job({ status: "complete" }), to: "complete" })).toEqual({
-      message: "ornith-35b-axq-4bit download complete — the model is ready to use",
+      message: "ornith-35b-axq-6bit download complete — the model is ready to use",
       variant: "success",
     })
     expect(axEngineJobToast({ job: job({ status: "failed", error: "disk full" }), to: "failed" })).toEqual({
-      message: "ornith-35b-axq-4bit download failed: disk full",
+      message: "ornith-35b-axq-6bit download failed: disk full",
       variant: "error",
     })
     expect(axEngineJobToast({ job: job({ status: "cancelled" }), to: "cancelled" })).toEqual({
-      message: "ornith-35b-axq-4bit download cancelled",
+      message: "ornith-35b-axq-6bit download cancelled",
       variant: "info",
     })
   })

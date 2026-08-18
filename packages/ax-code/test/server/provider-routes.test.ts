@@ -276,10 +276,11 @@ describe("provider routes", () => {
     expect(AxEngineModelActionBody.parse({ quantization: "mlx6bit" })).toEqual({ quantization: "mlx6bit" })
   })
 
-  test("ax-engine model action schema accepts the 4-bit quantization the TUI sends", () => {
-    // The TUI posts the selected model's own quantization; 4-bit packs send
-    // "mlx4bit", which the old mlx6bit-only enum rejected with a bare 400.
-    expect(AxEngineModelActionBody.parse({ quantization: "mlx4bit" })).toEqual({ quantization: "mlx4bit" })
+  test("ax-engine model action schema only accepts catalog quantizations", () => {
+    // The catalog is 6-bit only; dropped 4-bit packs and unknown values fail
+    // validation with a 400 instead of being silently normalized downstream.
+    expect(AxEngineModelActionBody.parse({ quantization: "mlx6bit" })).toEqual({ quantization: "mlx6bit" })
+    expect(AxEngineModelActionBody.safeParse({ quantization: "mlx4bit" }).success).toBe(false)
     expect(AxEngineModelActionBody.safeParse({ quantization: "mlx8bit" }).success).toBe(false)
   })
 
@@ -389,22 +390,12 @@ describe("provider routes", () => {
     const body = (await response.json()) as { models: Array<{ id: string }> }
     expect(body.models.map((model) => model.id)).toEqual([
       "qwen3.8-27b-axq-6bit",
-      "qwen3.8-27b-axq-4bit",
       "ornith-35b-axq-6bit",
-      "ornith-35b-axq-4bit",
       "qwen3-coder-next-axq-6bit",
-      "qwen3-coder-next-axq-4bit",
     ])
     expect((body as { catalog?: { source?: string; modelIDs?: string[] } }).catalog).toMatchObject({
       source: "packages/ax-code/src/provider/ax-engine/constants.ts",
-      modelIDs: [
-        "qwen3.8-27b-axq-6bit",
-        "qwen3.8-27b-axq-4bit",
-        "ornith-35b-axq-6bit",
-        "ornith-35b-axq-4bit",
-        "qwen3-coder-next-axq-6bit",
-        "qwen3-coder-next-axq-4bit",
-      ],
+      modelIDs: ["qwen3.8-27b-axq-6bit", "ornith-35b-axq-6bit", "qwen3-coder-next-axq-6bit"],
     })
   })
 

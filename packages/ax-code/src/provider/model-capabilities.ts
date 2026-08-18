@@ -430,7 +430,7 @@ const MODEL_REGISTRY: ModelRegistration[] = [
     },
   },
   {
-    pattern: "AX-Ornith-1.0-35B-MLX-AXQ-4bit",
+    pattern: "AX-Ornith-1.0-35B-MLX-AXQ-6bit",
     providerIds: ["ax-engine"],
     capabilities: {
       contextWindow: 262_144,

@@ -5756,7 +5756,7 @@ export class AxEngine extends HeyApiClient {
       modelPath?: string
       binaryPath?: string
       modelID?: "qwen3.8-27b-axq-6bit" | "ornith-35b-axq-6bit" | "qwen3-coder-next-axq-6bit"
-      quantization?: "mlx4bit" | "mlx6bit"
+      quantization?: "mlx6bit"
       download?: boolean
       start?: boolean
     },
@@ -5805,7 +5805,7 @@ export class AxEngine extends HeyApiClient {
       modelPath?: string
       binaryPath?: string
       modelID?: "qwen3.8-27b-axq-6bit" | "ornith-35b-axq-6bit" | "qwen3-coder-next-axq-6bit"
-      quantization?: "mlx4bit" | "mlx6bit"
+      quantization?: "mlx6bit"
       download?: boolean
     },
     options?: Options<never, ThrowOnError>,
