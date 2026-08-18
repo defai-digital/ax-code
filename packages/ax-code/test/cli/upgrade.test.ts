@@ -3,6 +3,7 @@ import semver from "semver"
 import { Bus } from "../../src/bus"
 import { upgrade } from "../../src/cli/upgrade"
 import { Config } from "../../src/config/config"
+import { Flag } from "../../src/flag/flag"
 import { Installation } from "../../src/installation"
 
 let configSpy: MockInstance | undefined
@@ -11,6 +12,7 @@ let latestSpy: MockInstance | undefined
 let installSpy: MockInstance | undefined
 let launcherSpy: MockInstance | undefined
 let publishSpy: MockInstance | undefined
+let originalDisableAutoUpdate: boolean | undefined
 
 afterEach(() => {
   configSpy?.mockRestore()
@@ -19,9 +21,18 @@ afterEach(() => {
   installSpy?.mockRestore()
   launcherSpy?.mockRestore()
   publishSpy?.mockRestore()
+  if (originalDisableAutoUpdate !== undefined) {
+    ;(Flag as { AX_CODE_DISABLE_AUTOUPDATE: boolean }).AX_CODE_DISABLE_AUTOUPDATE = originalDisableAutoUpdate
+    originalDisableAutoUpdate = undefined
+  }
 })
 
 function setup(input: { config?: object; method?: Installation.Method; latest: string }) {
+  // Release validation intentionally exports AX_CODE_DISABLE_AUTOUPDATE=1.
+  // These decision-matrix tests must control the flag explicitly instead of
+  // inheriting the runner environment.
+  originalDisableAutoUpdate = Flag.AX_CODE_DISABLE_AUTOUPDATE
+  ;(Flag as { AX_CODE_DISABLE_AUTOUPDATE: boolean }).AX_CODE_DISABLE_AUTOUPDATE = false
   configSpy = vi.spyOn(Config, "global").mockResolvedValue((input.config ?? {}) as any)
   methodSpy = vi.spyOn(Installation, "method").mockResolvedValue(input.method ?? "curl")
   latestSpy = vi.spyOn(Installation, "latest").mockResolvedValue(input.latest)
@@ -87,6 +98,16 @@ describe("cli upgrade", () => {
 
   test("does nothing when autoupdate is disabled", async () => {
     setup({ config: { autoupdate: false }, latest: patch })
+
+    await upgrade()
+
+    expect(installSpy).not.toHaveBeenCalled()
+    expect(publishSpy).not.toHaveBeenCalled()
+  })
+
+  test("does nothing when the process-level auto-update flag is disabled", async () => {
+    setup({ latest: patch })
+    ;(Flag as { AX_CODE_DISABLE_AUTOUPDATE: boolean }).AX_CODE_DISABLE_AUTOUPDATE = true
 
     await upgrade()
 
