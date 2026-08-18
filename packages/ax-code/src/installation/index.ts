@@ -275,8 +275,12 @@ export namespace Installation {
   // archive itself against a pinned public key, matching the bash path.
   async function upgradeWindows(target: string) {
     const bodyBytes = await fetchInstallerScript(INSTALL_PS1_SCRIPT_URL)
+    // mkdtemp appends a random suffix and creates the private directory atomically.
+    // @scan-suppress security_scan — os.tmpdir plus a trusted constant prefix
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-upgrade-"))
     try {
+      // dir is the fresh mkdtemp result, and the child name is a constant.
+      // @scan-suppress security_scan — no user-controlled path segment exists
       const scriptPath = path.join(dir, "install.ps1")
       await fs.writeFile(scriptPath, bodyBytes)
       return await dependencies.run([
