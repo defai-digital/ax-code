@@ -23,8 +23,10 @@ export function isHarmlessInterrupt(reason: unknown): boolean {
 
     const code = typeof rec.code === "string" ? rec.code : typeof rec.code === "number" ? String(rec.code) : ""
     // User closed the terminal, stream destroyed mid-write, connection reset on cancel.
+    // EIO: write against a tty that is already gone (window closed, SSH drop).
     if (
       code === "EPIPE" ||
+      code === "EIO" ||
       code === "ECONNRESET" ||
       code === "ERR_STREAM_DESTROYED" ||
       code === "ERR_STREAM_PREMATURE_CLOSE" ||

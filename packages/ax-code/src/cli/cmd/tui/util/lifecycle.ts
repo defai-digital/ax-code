@@ -117,6 +117,53 @@ export function createTuiRejectionHandler(input: { onError?: (error: unknown) =>
   }
 }
 
+// Error codes produced by writes against a stdio stream whose terminal is
+// already gone (window closed, SSH drop, `exit` in the host shell). Node
+// delivers these asynchronously as 'error' events on the stdout/stderr
+// sockets, so the try/catch in the write helpers (terminal-cleanup.ts,
+// renderer.ts) can never see them. Without an 'error' listener each one
+// escalates to uncaughtException — and the crash handler's own terminal-reset
+// write re-triggers it, crash-looping the process with repeated "write EIO"
+// fatals (observed on tty loss).
+const DEAD_STDIO_ERROR_CODES = new Set(["EIO", "EPIPE", "ECONNRESET", "ERR_STREAM_DESTROYED"])
+
+type ErrorEmitter = {
+  on(event: "error", listener: (error: unknown) => void): unknown
+  off(event: "error", listener: (error: unknown) => void): unknown
+}
+
+// Swallow dead-stdio 'error' events on the given streams (defaults to
+// process.stdout + process.stderr) so a vanished terminal cannot kill the
+// process through async write failures. Unknown error codes are re-thrown,
+// preserving the previous uncaughtException behavior for genuinely broken
+// streams. Returns an unregister for the installed listeners.
+export function guardTuiStdioErrors(
+  input: TuiLifecycleOptions & { streams?: ErrorEmitter[] } = { name: "tui-stdio-guard" },
+) {
+  const logger = input.logger ?? log
+  const streams = input.streams ?? [process.stdout, process.stderr]
+  const unregister = streams.map((stream) => {
+    const listener = (error: unknown) => {
+      const code = (error as { code?: unknown } | null)?.code
+      if (typeof code === "string" && DEAD_STDIO_ERROR_CODES.has(code)) {
+        logger.warn("ignored dead-stdio write error", { lifecycleName: input.name, code })
+        return
+      }
+      throw error
+    }
+    stream.on("error", listener)
+    let disposed = false
+    return () => {
+      if (disposed) return
+      disposed = true
+      runTuiCleanup(() => stream.off("error", listener), input)
+    }
+  })
+  return () => {
+    for (const off of unregister) off()
+  }
+}
+
 // Register a crash handler on fatal process events and return a single
 // unregister for the pair. Shared by thread.ts (passes its own handler that
 // also records diagnostics) and attach.ts (uses createTuiCrashHandler) so both
@@ -129,6 +176,7 @@ export function registerTuiCrashHandlers(
 ) {
   const prefix = input.namePrefix ?? "tui"
   const unregister = [
+    guardTuiStdioErrors({ name: `${prefix}-stdio-guard` }),
     registerTuiProcessHandler("uncaughtException", handler, { name: `${prefix}-uncaught-exception` }),
     registerTuiProcessHandler("unhandledRejection", input.onRejection ?? createTuiRejectionHandler(), {
       name: `${prefix}-unhandled-rejection`,

@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events"
 import { describe, expect, test, vi, beforeEach, afterEach } from "vitest"
 
 // Mock terminal cleanup so tests do not touch the real TTY.
@@ -6,7 +7,12 @@ vi.mock("../../../src/cli/cmd/tui/terminal-cleanup", () => ({
   flushTuiStdout: vi.fn(async () => undefined),
 }))
 
-import { createTuiCrashHandler, createTuiRejectionHandler, registerTuiCrashHandlers } from "../../../src/cli/cmd/tui/util/lifecycle"
+import {
+  createTuiCrashHandler,
+  createTuiRejectionHandler,
+  guardTuiStdioErrors,
+  registerTuiCrashHandlers,
+} from "../../../src/cli/cmd/tui/util/lifecycle"
 import { resetTuiTerminalState, flushTuiStdout } from "../../../src/cli/cmd/tui/terminal-cleanup"
 
 describe("createTuiCrashHandler", () => {
@@ -99,5 +105,61 @@ describe("registerTuiCrashHandlers", () => {
       unregister()
     }
     expect(process.listeners("unhandledRejection")).not.toContain(onRejection)
+  })
+
+  test("installs stdio error guards on stdout and stderr", () => {
+    const unregister = registerTuiCrashHandlers(vi.fn(), { namePrefix: "test" })
+    try {
+      expect(process.stdout.listenerCount("error")).toBeGreaterThan(0)
+      expect(process.stderr.listenerCount("error")).toBeGreaterThan(0)
+    } finally {
+      unregister()
+    }
+  })
+})
+
+describe("guardTuiStdioErrors", () => {
+  function fakeStream() {
+    // EventEmitter mirrors real stdout behavior: emitting 'error' with no
+    // listener throws, with a listener it is delivered.
+    const emitter = new EventEmitter()
+    return emitter as unknown as EventEmitter & {
+      on(event: "error", listener: (error: unknown) => void): unknown
+      off(event: "error", listener: (error: unknown) => void): unknown
+    }
+  }
+
+  test("swallows dead-stdio errors (EIO/EPIPE) instead of letting them crash the process", () => {
+    const stream = fakeStream()
+    const logger = { warn: vi.fn() }
+    const unregister = guardTuiStdioErrors({ name: "test", logger, streams: [stream] })
+    try {
+      const eio = Object.assign(new Error("write EIO"), { code: "EIO" })
+      expect(() => stream.emit("error", eio)).not.toThrow()
+      const epipe = Object.assign(new Error("write EPIPE"), { code: "EPIPE" })
+      expect(() => stream.emit("error", epipe)).not.toThrow()
+      expect(logger.warn).toHaveBeenCalledTimes(2)
+    } finally {
+      unregister()
+    }
+  })
+
+  test("re-throws unknown error codes to preserve fatal behavior", () => {
+    const stream = fakeStream()
+    const unregister = guardTuiStdioErrors({ name: "test", logger: { warn: vi.fn() }, streams: [stream] })
+    try {
+      const boom = Object.assign(new Error("boom"), { code: "EBADF" })
+      expect(() => stream.emit("error", boom)).toThrow("boom")
+    } finally {
+      unregister()
+    }
+  })
+
+  test("unregister removes the listener", () => {
+    const stream = fakeStream()
+    const unregister = guardTuiStdioErrors({ name: "test", logger: { warn: vi.fn() }, streams: [stream] })
+    expect(stream.listenerCount("error")).toBe(1)
+    unregister()
+    expect(stream.listenerCount("error")).toBe(0)
   })
 })

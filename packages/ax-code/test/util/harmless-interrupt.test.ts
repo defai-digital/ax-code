@@ -27,6 +27,8 @@ describe("isHarmlessInterrupt", () => {
     const err = Object.assign(new Error("write EPIPE"), { code: "EPIPE" })
     expect(isHarmlessInterrupt(err)).toBe(true)
     expect(isHarmlessInterrupt(Object.assign(new Error("reset"), { code: "ECONNRESET" }))).toBe(true)
+    // Write against a tty that is already gone (window closed, SSH drop).
+    expect(isHarmlessInterrupt(Object.assign(new Error("write EIO"), { code: "EIO" }))).toBe(true)
   })
 
   test("matches common abort message forms", () => {
