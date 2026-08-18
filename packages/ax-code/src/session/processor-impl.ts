@@ -7,6 +7,7 @@ import { SessionSummary } from "./summary"
 import { Bus } from "@/bus"
 import { SessionRetry } from "./retry"
 import { SessionStatus } from "./status"
+import { StreamRepetition } from "./stream-repetition"
 import { Plugin } from "@/plugin"
 import { ScopedFlag } from "@/flag/scoped"
 import { DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN } from "@/constants/session"
@@ -322,6 +323,32 @@ export namespace SessionProcessor {
             let lastHeartbeat = Date.now()
             const HEARTBEAT_INTERVAL_MS = 15_000
 
+            // In-stream repetition guard: every other loop guard in this
+            // pipeline works on completed turns, so a model repeating itself
+            // inside a single reasoning/text stream (common with small local
+            // models) would otherwise generate forever with a fresh heartbeat
+            // and no error. Fed with text/reasoning deltas below; a detection
+            // aborts the turn with a typed, non-retryable error.
+            const repetitionGuard = StreamRepetition.create()
+            const guardStreamOutput = (delta: string) => {
+              const detection = repetitionGuard.push(delta)
+              if (!detection) return
+              log.warn("model output repetition detected, aborting stream", {
+                sessionId: input.sessionID,
+                command: "session.process",
+                status: "output_loop",
+                kind: detection.kind,
+                count: detection.count,
+                unit: detection.unit,
+              })
+              throw new MessageV2.OutputLoopError({
+                message:
+                  `Model output loop detected: the model repeated the same content ${detection.count} times ` +
+                  `within a single response ("${detection.unit}"). The turn was stopped to prevent an endless ` +
+                  "generation loop. Re-prompt with a smaller scope, or switch to a different model.",
+              }).toObject()
+            }
+
             for await (const value of stream.fullStream) {
               input.abort.throwIfAborted()
 
@@ -362,6 +389,7 @@ export namespace SessionProcessor {
                   if (value.id in reasoningMap) {
                     const part = reasoningMap[value.id]
                     part.text += value.text
+                    guardStreamOutput(value.text)
                     if (value.providerMetadata) part.metadata = value.providerMetadata
                     deltaBatcher.push(part.id, value.text)
                     // Coalesce SQLite progress snapshots for long reasoning.
@@ -433,7 +461,7 @@ export namespace SessionProcessor {
                     throw new Error(
                       `Tool call rate limit exceeded: ${rateLimitMaxCalls} calls in ${rateLimitWindowMs / 1000}s. ` +
                         "This may indicate a runaway agent loop. " +
-                        'Raise via autonomy.budget.tool_calls.rate in ax-code.json (or /limits to inspect).',
+                        "Raise via autonomy.budget.tool_calls.rate in ax-code.json (or /limits to inspect).",
                     )
                   }
                   toolCallTimestamps.push(now)
@@ -849,6 +877,10 @@ export namespace SessionProcessor {
                   // empty (GitHub issue #301).
                   stepStartTime = Date.now()
                   stepParts = []
+                  // Judge repetition per model step: identical phrasing across
+                  // separate steps is normal (e.g. recapping a plan), identical
+                  // phrasing many times within one step is a generation loop.
+                  repetitionGuard.reset()
                   stepToolCallCount = 0
                   stepErrorSurfaces = []
                   stepTouchedFiles = []
@@ -1091,6 +1123,7 @@ export namespace SessionProcessor {
                 case "text-delta":
                   if (currentText) {
                     currentText.text += value.text
+                    guardStreamOutput(value.text)
                     if (value.providerMetadata) currentText.metadata = value.providerMetadata
                     deltaBatcher.push(currentText.id, value.text)
                     // Coalesce progress snapshots so multi-KB streams do not

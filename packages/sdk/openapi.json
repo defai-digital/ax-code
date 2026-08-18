@@ -35570,6 +35570,30 @@
           "data"
         ]
       },
+      "MessageOutputLoopError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "const": "MessageOutputLoopError"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "data"
+        ]
+      },
       "MessageAbortedError": {
         "type": "object",
         "properties": {
@@ -35783,6 +35807,9 @@
               },
               {
                 "$ref": "#/components/schemas/MessageOutputLengthError"
+              },
+              {
+                "$ref": "#/components/schemas/MessageOutputLoopError"
               },
               {
                 "$ref": "#/components/schemas/MessageAbortedError"
@@ -41154,6 +41181,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/MessageOutputLengthError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MessageOutputLoopError"
                   },
                   {
                     "$ref": "#/components/schemas/MessageAbortedError"

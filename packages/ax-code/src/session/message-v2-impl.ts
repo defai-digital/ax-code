@@ -31,6 +31,7 @@ export namespace MessageV2 {
   }
 
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
+  export const OutputLoopError = NamedError.create("MessageOutputLoopError", z.object({ message: z.string() }))
   export const AbortedError = NamedError.create("MessageAbortedError", z.object({ message: z.string() }))
   export const StructuredOutputError = NamedError.create(
     "StructuredOutputError",
@@ -414,6 +415,7 @@ export namespace MessageV2 {
         AuthError.Schema,
         NamedError.Unknown.Schema,
         OutputLengthError.Schema,
+        OutputLoopError.Schema,
         AbortedError.Schema,
         StructuredOutputError.Schema,
         ContextOverflowError.Schema,
@@ -1144,6 +1146,8 @@ export namespace MessageV2 {
       case MessageV2.AbortedError.isInstance(e):
         return normalizeToPlain(e) as ReturnType<typeof fromError>
       case MessageV2.OutputLengthError.isInstance(e):
+        return normalizeToPlain(e) as ReturnType<typeof fromError>
+      case MessageV2.OutputLoopError.isInstance(e):
         return normalizeToPlain(e) as ReturnType<typeof fromError>
       case LoadAPIKeyError.isInstance(e):
         return new MessageV2.AuthError(

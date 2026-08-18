@@ -2,7 +2,7 @@ import { MAX_CONSECUTIVE_ERRORS } from "@/constants/session"
 import { Log } from "../util/log"
 import { Session } from "."
 import type { MessageV2 } from "./message-v2"
-import { findFallbackModel } from "./prompt-provider-fallback"
+import { findFallbackModel, isLocalProvider } from "./prompt-provider-fallback"
 import {
   consecutiveErrorDecision,
   providerFallbackLookupDecision,
@@ -51,6 +51,7 @@ type PromptLoopErrorDeps = {
     preferredModelID?: MessageV2.User["model"]["modelID"],
     excludedProviderIDs?: Iterable<MessageV2.User["model"]["providerID"]>,
   ) => Promise<MessageV2.User["model"] | undefined>
+  isLocal?: (providerID: MessageV2.User["model"]["providerID"]) => Promise<boolean>
   warn?: (message: string, fields: Record<string, unknown>) => void
   publishError?: (input: { sessionID: SessionID; message: string }) => void
 }
@@ -171,51 +172,86 @@ export async function handlePromptLoopError(
     error: input.error,
   })
   if (fallbackLookup.action === "lookup") {
-    const fallback = await (deps.findFallback ?? findFallbackModel)(
-      input.currentModel.providerID,
-      input.currentModel.modelID,
-      input.failedProviderIDs,
-    ).catch(() => undefined)
-    if (fallback) {
-      const fallbackSwitch = providerFallbackSwitchState({
-        current: input.currentModel,
-        fallback,
-        errorMessage: fallbackLookup.errorMessage,
-        consecutiveErrors: input.consecutiveErrors,
-      })
-      ;(deps.warn ?? log.warn)("switching to fallback provider", {
-        command: "session.prompt.loop",
-        from: fallbackSwitch.from,
-        to: fallbackSwitch.to,
-        reason: fallbackSwitch.reason,
-      })
-      // The request is continuing automatically. Publishing a session.error
-      // here makes every client show a terminal failure even when the
-      // fallback returns a successful response in the same turn.
-      return {
-        action: "fallback",
-        fallbackModel: fallback,
-        consecutiveErrors: fallbackSwitch.nextConsecutiveErrors,
+    // Privacy guard: never migrate a session off a local provider. The user
+    // chose local inference to keep prompts and code on this machine, so
+    // silently retrying against a remote provider would leak their data.
+    // Transient local failures (engine busy, overloaded) fall through to the
+    // ordinary consecutive-error retry path below; terminal ones stop here.
+    if (await (deps.isLocal ?? isLocalProvider)(input.currentModel.providerID)) {
+      if (fallbackLookup.stopWithoutFallback) {
+        const reason = fallbackLookup.errorMessage?.trim() || "unknown error"
+        const punctuation = /[.!?]$/.test(reason) ? "" : "."
+        const message =
+          `Provider ${input.currentModel.providerID} failed: ${reason}${punctuation} ` +
+          "No fallback was attempted because this is a local provider — switching to a remote " +
+          "provider would send your prompts and code off this machine. Resolve the local issue " +
+          "or pick a different model explicitly and try again."
+        ;(deps.warn ?? log.warn)("local provider failed, no fallback attempted (data privacy)", {
+          command: "session.prompt.loop",
+          status: "error",
+          errorCode: "LOCAL_PROVIDER_NO_FALLBACK",
+          providerID: input.currentModel.providerID,
+          reason: fallbackLookup.errorMessage ?? "unknown error",
+        })
+        ;(deps.publishError ?? Session.publishError)({
+          sessionID: input.sessionID,
+          message,
+        })
+        return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
       }
-    }
-
-    if (fallbackLookup.stopWithoutFallback) {
-      const message = providerFallbackUnavailableMessage({
-        providerID: input.currentModel.providerID,
-        errorMessage: fallbackLookup.errorMessage,
-      })
-      ;(deps.warn ?? log.warn)("no fallback provider available", {
+      ;(deps.warn ?? log.warn)("local provider failed, skipping remote fallback (data privacy)", {
         command: "session.prompt.loop",
-        status: "error",
-        errorCode: "PROVIDER_FALLBACK_UNAVAILABLE",
         providerID: input.currentModel.providerID,
         reason: fallbackLookup.errorMessage ?? "unknown error",
+        consecutiveErrors: input.consecutiveErrors,
       })
-      ;(deps.publishError ?? Session.publishError)({
-        sessionID: input.sessionID,
-        message,
-      })
-      return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
+    } else {
+      const fallback = await (deps.findFallback ?? findFallbackModel)(
+        input.currentModel.providerID,
+        input.currentModel.modelID,
+        input.failedProviderIDs,
+      ).catch(() => undefined)
+      if (fallback) {
+        const fallbackSwitch = providerFallbackSwitchState({
+          current: input.currentModel,
+          fallback,
+          errorMessage: fallbackLookup.errorMessage,
+          consecutiveErrors: input.consecutiveErrors,
+        })
+        ;(deps.warn ?? log.warn)("switching to fallback provider", {
+          command: "session.prompt.loop",
+          from: fallbackSwitch.from,
+          to: fallbackSwitch.to,
+          reason: fallbackSwitch.reason,
+        })
+        // The request is continuing automatically. Publishing a session.error
+        // here makes every client show a terminal failure even when the
+        // fallback returns a successful response in the same turn.
+        return {
+          action: "fallback",
+          fallbackModel: fallback,
+          consecutiveErrors: fallbackSwitch.nextConsecutiveErrors,
+        }
+      }
+
+      if (fallbackLookup.stopWithoutFallback) {
+        const message = providerFallbackUnavailableMessage({
+          providerID: input.currentModel.providerID,
+          errorMessage: fallbackLookup.errorMessage,
+        })
+        ;(deps.warn ?? log.warn)("no fallback provider available", {
+          command: "session.prompt.loop",
+          status: "error",
+          errorCode: "PROVIDER_FALLBACK_UNAVAILABLE",
+          providerID: input.currentModel.providerID,
+          reason: fallbackLookup.errorMessage ?? "unknown error",
+        })
+        ;(deps.publishError ?? Session.publishError)({
+          sessionID: input.sessionID,
+          message,
+        })
+        return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
+      }
     }
   }
 

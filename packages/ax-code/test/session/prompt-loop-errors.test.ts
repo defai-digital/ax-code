@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { handlePromptLoopError, resolvePromptLoopErrorTransition } from "../../src/session/prompt-loop-errors"
+import { isLoopbackBaseURL } from "../../src/session/prompt-provider-fallback"
 import { SessionID } from "../../src/session/schema"
 import { MessageV2 } from "../../src/session/message-v2"
 
@@ -557,5 +558,135 @@ describe("prompt loop error transitions", () => {
       fallbackModelOverride: fallbackModel,
       resetCachedModel: false,
     })
+  })
+})
+
+describe("local provider fallback privacy guard", () => {
+  const localModel = {
+    providerID: "ax-engine" as ProviderID,
+    modelID: "ornith-35b-axq-6bit" as ModelID,
+  }
+
+  test("never looks up a remote fallback for a local provider; transient errors fall through to retry", async () => {
+    const sessionID = SessionID.descending()
+    const warnings: { message: string; fields: Record<string, unknown> }[] = []
+    const published: { sessionID: SessionID; message: string }[] = []
+
+    const result = await handlePromptLoopError(
+      {
+        sessionID,
+        currentModel: localModel,
+        error: {
+          name: "APIError",
+          data: { statusCode: 429, message: "server is at its maximum concurrent engine-job limit; retry shortly" },
+        },
+        consecutiveErrors: 2,
+        step: 3,
+      },
+      {
+        async isLocal(providerID) {
+          expect(providerID).toBe(localModel.providerID)
+          return true
+        },
+        async findFallback() {
+          throw new Error("fallback lookup must not run for a local provider")
+        },
+        warn(message, fields) {
+          warnings.push({ message, fields })
+        },
+        publishError(input) {
+          published.push(input)
+        },
+      },
+    )
+
+    // Not a terminal account failure: ordinary consecutive-error handling
+    // decides (here: keep retrying the local engine).
+    expect(result).toEqual({ action: "continue", consecutiveErrors: 2 })
+    expect(published).toEqual([])
+    expect(warnings[0]?.message).toBe("local provider failed, skipping remote fallback (data privacy)")
+  })
+
+  test("stops with a privacy explanation for terminal local provider failures instead of falling back", async () => {
+    const sessionID = SessionID.descending()
+    const published: { sessionID: SessionID; message: string }[] = []
+
+    const result = await handlePromptLoopError(
+      {
+        sessionID,
+        currentModel: localModel,
+        error: {
+          name: "APIError",
+          data: { statusCode: 401, message: "unauthorized" },
+        },
+        consecutiveErrors: 1,
+        step: 1,
+      },
+      {
+        async isLocal() {
+          return true
+        },
+        async findFallback() {
+          throw new Error("fallback lookup must not run for a local provider")
+        },
+        warn() {},
+        publishError(input) {
+          published.push(input)
+        },
+      },
+    )
+
+    expect(result.action).toBe("stop")
+    expect(published).toHaveLength(1)
+    expect(published[0]!.message).toContain("Provider ax-engine failed: unauthorized.")
+    expect(published[0]!.message).toContain("local provider")
+    expect(published[0]!.message).not.toContain("Switching to")
+  })
+
+  test("non-local providers still fall back as before", async () => {
+    const result = await handlePromptLoopError(
+      {
+        sessionID: SessionID.descending(),
+        currentModel: primaryModel,
+        error: {
+          name: "APIError",
+          data: { statusCode: 429, message: "rate limited" },
+        },
+        consecutiveErrors: 2,
+        step: 4,
+      },
+      {
+        async isLocal() {
+          return false
+        },
+        async findFallback() {
+          return fallbackModel
+        },
+        warn() {},
+        publishError() {},
+      },
+    )
+
+    expect(result).toEqual({
+      action: "fallback",
+      fallbackModel,
+      consecutiveErrors: 1,
+    })
+  })
+})
+
+describe("isLoopbackBaseURL", () => {
+  test("detects loopback URLs", () => {
+    expect(isLoopbackBaseURL("http://127.0.0.1:31418/v1")).toBe(true)
+    expect(isLoopbackBaseURL("http://localhost:11434/v1")).toBe(true)
+    expect(isLoopbackBaseURL("http://[::1]:8080")).toBe(true)
+  })
+
+  test("rejects remote and malformed URLs", () => {
+    expect(isLoopbackBaseURL("https://api.z.ai/api/coding/paas/v4")).toBe(false)
+    expect(isLoopbackBaseURL("https://api.openai.com/v1")).toBe(false)
+    expect(isLoopbackBaseURL("not a url")).toBe(false)
+    expect(isLoopbackBaseURL(undefined)).toBe(false)
+    expect(isLoopbackBaseURL("")).toBe(false)
   })
 })

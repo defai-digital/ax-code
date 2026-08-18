@@ -189,6 +189,13 @@ export type MessageOutputLengthError = {
   }
 }
 
+export type MessageOutputLoopError = {
+  name: "MessageOutputLoopError"
+  data: {
+    message: string
+  }
+}
+
 export type MessageAbortedError = {
   name: "MessageAbortedError"
   data: {
@@ -250,6 +257,7 @@ export type AssistantMessage = {
     | ProviderAuthError
     | UnknownError
     | MessageOutputLengthError
+    | MessageOutputLoopError
     | MessageAbortedError
     | StructuredOutputError
     | ContextOverflowError
@@ -1638,6 +1646,7 @@ export type EventSessionError = {
       | ProviderAuthError
       | UnknownError
       | MessageOutputLengthError
+      | MessageOutputLoopError
       | MessageAbortedError
       | StructuredOutputError
       | ContextOverflowError

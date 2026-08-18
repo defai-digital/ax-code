@@ -104339,9 +104339,9 @@
           {
             "type": "effort",
             "values": [
-              "low",
-              "medium",
-              "high"
+              "none",
+              "high",
+              "xhigh"
             ]
           }
         ],
@@ -140394,7 +140394,8 @@
               "low",
               "medium",
               "high",
-              "xhigh"
+              "xhigh",
+              "max"
             ]
           }
         ],
