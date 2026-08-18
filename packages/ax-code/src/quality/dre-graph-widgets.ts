@@ -1,4 +1,4 @@
-import { esc, tone } from "./dre-graph-format"
+import { esc, num, tone } from "./dre-graph-format"
 
 export function chip(input: { label: string; kind?: string }) {
   return `<span class="chip ${esc(input.kind ?? "neutral")}">${esc(input.label)}</span>`
@@ -93,11 +93,13 @@ export function barChart(input: {
   items: { label: string; value: number; detail?: string }[]
   max?: number
   unit?: string
+  format?: (value: number) => string
   colorFn?: (v: number) => string
 }) {
   if (input.items.length === 0) return `<p class="empty">No data.</p>`
   const max = input.max ?? Math.max(...input.items.map((i) => i.value), 1)
   const colorFn = input.colorFn ?? (() => "var(--accent)")
+  const format = input.format ?? ((value: number) => `${value}`)
   return [
     `<div class="bar-chart">`,
     input.items
@@ -108,12 +110,32 @@ export function barChart(input: {
           `<div class="bar-row">`,
           `<span class="bar-label">${esc(item.label)}</span>`,
           `<div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%;background:${color}"></div></div>`,
-          `<span class="bar-value" style="color:${color}">${item.value}${input.unit ? esc(input.unit) : ""}</span>`,
+          `<span class="bar-value" style="color:${color}">${esc(format(item.value))}${input.unit ? esc(input.unit) : ""}</span>`,
           item.detail ? `<span class="bar-detail">${esc(item.detail)}</span>` : "",
           `</div>`,
         ].join("")
       })
       .join(""),
+    `</div>`,
+  ].join("")
+}
+
+/** Vertical per-day activity bars: height = tokens, tooltip = day detail. */
+export function dailyChart(input: { days: { day: string; sessions: number; tokens: number }[] }) {
+  if (input.days.length === 0) return `<p class="empty">No data.</p>`
+  const max = Math.max(...input.days.map((d) => d.tokens), 1)
+  return [
+    `<div class="daily-chart">`,
+    ...input.days.map((d) => {
+      const pct = d.tokens > 0 ? Math.min(100, Math.max(4, (d.tokens / max) * 100)) : 0
+      const sessions = `${d.sessions} session${d.sessions === 1 ? "" : "s"}`
+      return [
+        `<div class="daily-col" title="${esc(`${d.day} — ${num(d.tokens)} tokens · ${sessions}`)}">`,
+        `<div class="daily-bar-track"><div class="daily-bar" style="height:${pct.toFixed(1)}%"></div></div>`,
+        `<span class="daily-label">${esc(d.day.slice(5))}</span>`,
+        `</div>`,
+      ].join("")
+    }),
     `</div>`,
   ].join("")
 }

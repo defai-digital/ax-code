@@ -6,6 +6,8 @@ import { Recorder } from "../../src/replay/recorder"
 import { EventQuery } from "../../src/replay/query"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
+import { MessageV2 } from "../../src/session/message-v2"
+import { MessageID } from "../../src/session/schema"
 import { Storage } from "../../src/storage/storage"
 import { promises as fsp } from "fs"
 import path from "path"
@@ -218,6 +220,64 @@ describe("dre graph quality readiness", () => {
         } finally {
           EventQuery.deleteBySession(sid)
           await clearSessionLabels(sid)
+          await Session.remove(sid)
+        }
+      },
+    })
+  })
+
+  test("trivial chat session hides trust sections and leads with usage", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "trivial-chat" })
+        const sid = session.id
+        const app = Server.Default()
+
+        try {
+          const user = await Session.updateMessage({
+            id: MessageID.ascending(),
+            sessionID: sid,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "build",
+            model: { providerID: "test", modelID: "test-model" },
+          } as unknown as MessageV2.Info)
+          await Session.updateMessage({
+            id: MessageID.ascending(),
+            parentID: user.id,
+            sessionID: sid,
+            role: "assistant",
+            mode: "build",
+            agent: "build",
+            path: { cwd: tmp.path, root: tmp.path },
+            tokens: { input: 1200, output: 300, reasoning: 0, cache: { read: 6000, write: 0 } },
+            modelID: "test-model",
+            providerID: "test",
+            time: { created: Date.now() },
+          } as MessageV2.Assistant)
+
+          const dir = encodeURIComponent(tmp.path)
+          const response = await app.request(`/dre-graph/session/${sid}?directory=${dir}`)
+          expect(response.status).toBe(200)
+          const html = await response.text()
+
+          expect(html).toContain(`<title>AX Code · Session Report · trivial-chat</title>`)
+          expect(html).toContain(`id="usage"`)
+          expect(html).toContain(`1.2k`)
+          expect(html).toContain(`id="summary"`)
+          expect(html).toContain(`id="timeline"`)
+          expect(html).toContain(`format=svggantt`)
+          expect(html).toContain(`id="activity"`)
+          // No risk substance: trust sections and their nav links stay out
+          expect(html).not.toContain(`id="verdict"`)
+          expect(html).not.toContain(`id="risk"`)
+          expect(html).not.toContain(`id="validation"`)
+          expect(html).not.toContain(`id="branches"`)
+          expect(html).not.toContain(`href="#verdict"`)
+        } finally {
           await Session.remove(sid)
         }
       },

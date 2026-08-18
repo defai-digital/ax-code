@@ -56,6 +56,15 @@ export function num(value?: number) {
   return (value ?? 0).toLocaleString()
 }
 
+/** Compact large counters for dashboard tiles/charts: 1234 → "1.2k", 2.5M → "2.5M". */
+export function compact(value?: number) {
+  const n = value ?? 0
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 10_000) return `${Math.round(n / 1000)}k`
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
+  return `${n}`
+}
+
 export function tone(value?: string | null) {
   const text = (value ?? "").toLowerCase()
   if (text.includes("critical")) return "critical"

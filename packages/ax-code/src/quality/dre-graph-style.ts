@@ -418,6 +418,13 @@ export function style() {
     .bar-value { font-size: 12px; font-weight: 600; text-align: right; font-family: ui-monospace, SFMono-Regular, monospace; }
     .bar-detail { grid-column: 1 / -1; font-size: 11px; color: var(--muted); margin-top: -4px; padding-left: 0; }
 
+    /* Daily activity chart */
+    .daily-chart { display: flex; gap: 4px; align-items: flex-end; }
+    .daily-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+    .daily-bar-track { height: 72px; width: 100%; display: flex; align-items: flex-end; background: var(--surface); border-radius: 3px; overflow: hidden; }
+    .daily-bar { width: 100%; background: var(--accent); border-radius: 2px 2px 0 0; transition: height 0.4s ease; }
+    .daily-label { font-size: 9px; color: var(--muted); white-space: nowrap; font-family: ui-monospace, SFMono-Regular, monospace; }
+
     /* ── Verdict ── */
     .verdict { padding: 20px 24px; }
     .verdict-inner { max-width: 1200px; margin: 0 auto; background: var(--panel); border: 1px solid var(--line-subtle); border-radius: var(--radius); padding: 24px 28px; box-shadow: var(--shadow-md); }

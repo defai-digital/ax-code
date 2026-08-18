@@ -43,6 +43,7 @@ configure a workflow, understand a runtime boundary, or integrate AX Code with a
 - [Auto-Route](guides/auto-route.md) — specialist routing and optional complexity routing.
 - [Model Effort](guides/effort.md) — thinking levels and provider-specific behavior.
 - [Lifecycle Hooks](guides/hooks.md) — hook events and bundled policy packs.
+- [Web Dashboard](guides/dashboard.md) — workspace usage, activity, model/tool breakdowns, and per-session reports.
 
 ## Providers
 
