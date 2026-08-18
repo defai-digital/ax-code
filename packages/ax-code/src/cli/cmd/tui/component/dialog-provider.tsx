@@ -40,6 +40,7 @@ import {
 } from "./dialog-provider-options"
 import { providerConnectCategoryMeta } from "@/mode/provider-category"
 import { requireDedicatedPrivateGpuVendor } from "@/provider/private-gpu/presets"
+import { disableProviderPatch, enableProviderPatch } from "@/provider/enablement"
 
 const OFFLINE_PROVIDER_HOSTS: Record<string, { envVar: string; defaultHost: string }> = {
   "ax-studio": { envVar: "AX_STUDIO_HOST", defaultHost: "http://localhost:18080" },
@@ -272,6 +273,36 @@ function showAxEngineAttachedStatusDialog(input: {
       </box>
     </box>
   ))
+}
+
+// Temporarily turn a provider off/on via global config `disabled_providers`.
+// Credentials in auth.json are kept, so this is reversible — unlike
+// Disconnect, which deletes them. The server's global config update already
+// disposes all instances, so a bootstrap reflects the change immediately.
+export async function setProviderDisabled(input: {
+  sdk: ReturnType<typeof useSDK>
+  sync: ReturnType<typeof useSync>
+  toast: ReturnType<typeof useToast>
+  dialog: ReturnType<typeof useDialog>
+  providerID: string
+  providerName: string
+  disabled: boolean
+}) {
+  const current = await input.sdk.client.global.config.get()
+  const patch = input.disabled
+    ? disableProviderPatch(current.data as any, input.providerID)
+    : enableProviderPatch(current.data as any, input.providerID)
+  const updated = await input.sdk.client.global.config.update({ config: patch as any })
+  if (updated.error) {
+    input.toast.show({ variant: "error", message: JSON.stringify(updated.error) })
+    return
+  }
+  await input.sync.bootstrap()
+  input.toast.show({
+    variant: "success",
+    message: input.disabled ? `Disabled ${input.providerName} — credentials kept` : `Enabled ${input.providerName}`,
+  })
+  input.dialog.clear()
 }
 
 export function createDialogProviderOptions() {
@@ -762,7 +793,7 @@ export function createDialogProviderOptions() {
                     ))
 
                   if (isConnected) {
-                    const action = await new Promise<"use" | "endpoint" | null>((resolve) => {
+                    const action = await new Promise<"use" | "endpoint" | "disable" | null>((resolve) => {
                       dialog.replace(
                         () => (
                           <DialogSelect
@@ -778,6 +809,11 @@ export function createDialogProviderOptions() {
                                 value: "endpoint" as const,
                                 description: offlineProviderPreset(provider.id, sync.data.config),
                               },
+                              {
+                                title: "Disable",
+                                value: "disable" as const,
+                                description: "Turn off temporarily — keeps endpoint config",
+                              },
                             ]}
                             onSelect={(option) => resolve(option.value)}
                           />
@@ -787,6 +823,8 @@ export function createDialogProviderOptions() {
                     })
                     if (action === "use") dialog.replace(() => <DialogModel providerID={provider.id} />)
                     else if (action === "endpoint") promptEndpoint()
+                    else if (action === "disable")
+                      await setProviderDisabled({ sdk, sync, toast, dialog, providerID: provider.id, providerName: provider.name, disabled: true })
                   } else {
                     promptEndpoint()
                   }
@@ -819,7 +857,7 @@ export function createDialogProviderOptions() {
                   }
 
                   if (isConnected) {
-                    const action = await new Promise<"use" | "disconnect" | null>((resolve) => {
+                    const action = await new Promise<"use" | "disconnect" | "disable" | null>((resolve) => {
                       dialog.replace(
                         () => (
                           <DialogSelect
@@ -829,6 +867,11 @@ export function createDialogProviderOptions() {
                                 title: "Use CLI default",
                                 value: "use" as const,
                                 description: "Uses your CLI configuration",
+                              },
+                              {
+                                title: "Disable",
+                                value: "disable" as const,
+                                description: "Turn off temporarily — keeps the connection",
                               },
                               {
                                 title: "Disconnect",
@@ -846,6 +889,8 @@ export function createDialogProviderOptions() {
                       await selectDefaultModelForProvider(provider.id, provider.name)
                       toast.show({ variant: "success", message: `Using ${provider.name}` })
                       dialog.clear()
+                    } else if (action === "disable") {
+                      await setProviderDisabled({ sdk, sync, toast, dialog, providerID: provider.id, providerName: provider.name, disabled: true })
                     } else if (action === "disconnect") {
                       const removed = await sdk.client.auth.remove({ providerID: provider.id })
                       if (removed.error) {
@@ -878,7 +923,7 @@ export function createDialogProviderOptions() {
 
                 // If provider already has a saved key, offer to use it or replace it
                 if (isConnected) {
-                  const action = await new Promise<"use" | "replace" | "remove" | null>((resolve) => {
+                  const action = await new Promise<"use" | "replace" | "disable" | "remove" | null>((resolve) => {
                     dialog.replace(
                       () => (
                         <DialogSelect
@@ -895,6 +940,11 @@ export function createDialogProviderOptions() {
                               description: "Enter a new API key",
                             },
                             {
+                              title: "Disable",
+                              value: "disable" as const,
+                              description: "Turn off temporarily — keeps credentials",
+                            },
+                            {
                               title: "Disconnect",
                               value: "remove" as const,
                               description: "Remove saved credentials",
@@ -909,6 +959,10 @@ export function createDialogProviderOptions() {
                   if (action === null) return
                   if (action === "use") {
                     dialog.replace(() => <DialogModel providerID={provider.id} />)
+                    return
+                  }
+                  if (action === "disable") {
+                    await setProviderDisabled({ sdk, sync, toast, dialog, providerID: provider.id, providerName: provider.name, disabled: true })
                     return
                   }
                   if (action === "remove") {
@@ -1027,9 +1081,20 @@ export function createDialogProviderOptions() {
 export function DialogProvider() {
   const options = createDialogProviderOptions()
   const dialog = useDialog()
+  const sync = useSync()
+  const sdk = useSDK()
+  const toast = useToast()
 
-  const typeOptions = createMemo(() =>
-    providerDialogTypeOptions(options().map((option) => option.value)).map((type) => ({
+  // Disabled providers are filtered out of provider.list server-side, so they
+  // never appear in the category lists. Surface them from config here, since
+  // this dialog is the only way back without hand-editing ax-code.json.
+  const disabledProviders = createMemo(() => sync.data.config?.disabled_providers ?? [])
+
+  const typeOptions = createMemo(() => {
+    // Widened from the providerDialogTypeOptions return type so the synthetic
+    // "Disabled" entry (not a real connect category) can be appended.
+    const types: { title: string; value: string; description?: string; hint?: string; onSelect(): void }[] =
+      providerDialogTypeOptions(options().map((option) => option.value)).map((type) => ({
       ...type,
       onSelect() {
         // Replace the dialog instead of swapping DialogSelect in place. An
@@ -1052,8 +1117,78 @@ export function DialogProvider() {
           />
         ))
       },
-    })),
-  )
+    }))
+    if (disabledProviders().length > 0) {
+      types.push({
+        title: "Disabled",
+        value: "__disabled__",
+        description: `${disabledProviders().length} provider${disabledProviders().length === 1 ? "" : "s"} turned off — re-enable or disconnect`,
+        hint: undefined,
+        onSelect() {
+          dialog.replace(() => (
+            <DialogSelect
+              title="Disabled providers"
+              options={disabledProviders().map((providerID) => ({
+                title: providerID,
+                value: providerID,
+                description: "Currently disabled — credentials kept",
+                onSelect() {
+                  return runProviderDialogAction({
+                    providerID,
+                    action: "manage-disabled-provider",
+                    fallbackMessage: `Failed to update ${providerID}`,
+                    toast,
+                    run: async () => {
+                      const action = await new Promise<"enable" | "disconnect" | null>((resolve) => {
+                        dialog.replace(
+                          () => (
+                            <DialogSelect
+                              title={`${providerID} — disabled`}
+                              options={[
+                                {
+                                  title: "Enable",
+                                  value: "enable" as const,
+                                  description: "Turn back on — uses saved credentials",
+                                },
+                                {
+                                  title: "Disconnect",
+                                  value: "disconnect" as const,
+                                  description: "Remove saved credentials",
+                                },
+                              ]}
+                              onSelect={(option) => resolve(option.value)}
+                            />
+                          ),
+                          () => resolve(null),
+                        )
+                      })
+                      if (action === "enable") {
+                        await setProviderDisabled({ sdk, sync, toast, dialog, providerID, providerName: providerID, disabled: false })
+                      } else if (action === "disconnect") {
+                        // Re-enable first so the provider is not left behind in
+                        // disabled_providers with no credentials.
+                        await setProviderDisabled({ sdk, sync, toast, dialog, providerID, providerName: providerID, disabled: false })
+                        const removed = await sdk.client.auth.remove({ providerID })
+                        if (removed.error) {
+                          toast.show({ variant: "error", message: JSON.stringify(removed.error) })
+                          return
+                        }
+                        await sdk.client.instance.dispose()
+                        await sync.bootstrap()
+                        toast.show({ variant: "success", message: `Disconnected ${providerID}` })
+                        dialog.clear()
+                      }
+                    },
+                  })
+                },
+              }))}
+            />
+          ))
+        },
+      })
+    }
+    return types
+  })
 
   return <DialogSelect title="Provider type" options={typeOptions()} />
 }

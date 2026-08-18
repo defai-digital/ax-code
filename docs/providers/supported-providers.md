@@ -12,6 +12,14 @@ This page lists the provider presets AX Code exposes in the default setup flows.
 
 Use `/connect` in the terminal UI or `ax-code providers login <provider-id>` for interactive setup. Headless and CI environments can also provide the listed environment variables.
 
+### Managing connected providers
+
+The sidebar shows a **Providers** section listing every connected (and temporarily disabled) provider; click a row or **manage** to open the provider manager, which is also available as the `/providers` command. From there you can select a model, disable, or disconnect each provider, or jump to the full `/connect` flow.
+
+- **Replace a key**: select the provider in `/connect` and choose **Replace key**, or re-run `ax-code providers login <provider-id>`.
+- **Disable temporarily**: choose **Disable** in `/providers` or `/connect`, or run `ax-code providers disable <provider-id>`. This adds the provider to `disabled_providers` in the global config and keeps the saved credentials. Disabled providers stay visible in `/providers` and under **Disabled** in `/connect`, and can be turned back on with **Enable** or `ax-code providers enable <provider-id>`.
+- **Disconnect permanently**: choose **Disconnect** in `/providers` or `/connect`, or run `ax-code providers logout <provider-id>` — this deletes the stored credential from `auth.json`.
+
 Hosted model catalogs are bundled with each AX Code release and filtered for usable coding-agent capabilities. Run
 `ax-code models <provider-id>` for the authoritative model IDs in your installed release; the raw registry and copied
 web lists can contain models AX Code hides because they lack text output or tool calling. A provider preset does not

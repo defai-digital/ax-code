@@ -14,6 +14,7 @@ import { toErrorMessage } from "../../util/error-message"
 import { AX_ENGINE_MODEL_IDS, AX_ENGINE_QUANTIZATION_IDS } from "@/provider/ax-engine"
 import { Filesystem } from "@/util/filesystem"
 import { DEFAULT_SETUP_PROVIDER_IDS } from "@/provider/default-setup-providers"
+import { disableProviderPatch, enableProviderPatch } from "@/provider/enablement"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -238,6 +239,8 @@ export const ProvidersCommand = cmd({
       .command(ProvidersListCommand)
       .command(ProvidersLoginCommand)
       .command(ProvidersLogoutCommand)
+      .command(ProvidersDisableCommand)
+      .command(ProvidersEnableCommand)
       .command(ProvidersAxEngineCommand)
       .demandCommand(),
   async handler() {},
@@ -440,12 +443,19 @@ export const ProvidersListCommand = cmd({
     prompts.intro(`Credentials ${UI.Style.TEXT_DIM}${displayPath}`)
     const results = Object.entries(await Auth.all())
     const database = await ModelsDev.get()
+    const disabledProviders = await Instance.provide({
+      directory: process.cwd(),
+      fn: async () => new Set((await Config.get()).disabled_providers ?? []),
+    }).catch(() => new Set<string>())
 
     for (const [providerID, result] of results) {
       const name = database[providerID]?.name || providerID
       const type =
         getCliProviderDefinition(providerID) && result.type === "api" && result.key === "cli" ? "cli" : result.type
-      prompts.log.info(`${name} ${UI.Style.TEXT_DIM}${type}`)
+      const disabled = disabledProviders.has(providerID)
+        ? `${UI.Style.TEXT_DIM}(disabled — \`providers enable ${providerID}\` to re-enable)`
+        : ""
+      prompts.log.info(`${name} ${UI.Style.TEXT_DIM}${type}${disabled}`)
     }
 
     prompts.outro(`${results.length} credentials`)
@@ -812,5 +822,118 @@ export const ProvidersLogoutCommand = cmd({
     }
     await removeProviderAuth(providerID)
     prompts.outro("Logout successful")
+  },
+})
+
+export const ProvidersDisableCommand = cmd({
+  command: "disable [provider]",
+  describe: "temporarily disable a provider without removing its credentials",
+  builder: (yargs) =>
+    yargs.positional("provider", {
+      describe: "provider id to disable",
+      type: "string",
+    }),
+  async handler(args) {
+    const prompts = await import("@clack/prompts")
+    const { ModelsDev } = await import("../../provider/models")
+    UI.empty()
+    prompts.intro("Disable provider")
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const config = await Config.get()
+        const disabled = new Set(config.disabled_providers ?? [])
+        const credentials = Object.keys(await Auth.all())
+        const configured = Object.keys(config.provider ?? {})
+        const candidates = [...new Set([...credentials, ...configured])].filter((id) => !disabled.has(id))
+
+        let providerID = args.provider
+        if (!providerID) {
+          if (!process.stdin.isTTY) {
+            prompts.log.error("Provider is required in non-interactive mode. Use `ax-code providers disable <id>`.")
+            return
+          }
+          if (candidates.length === 0) {
+            prompts.log.error("No connected or configured providers to disable")
+            return
+          }
+          const database = await ModelsDev.get()
+          const selected = await prompts.select({
+            message: "Select provider to disable (credentials are kept)",
+            options: candidates.map((id) => ({
+              label: database[id]?.name || id,
+              value: id,
+            })),
+          })
+          if (prompts.isCancel(selected)) throw new UI.CancelledError()
+          providerID = selected
+        }
+
+        if (disabled.has(providerID)) {
+          prompts.log.info(`${providerID} is already disabled`)
+          prompts.outro("Done")
+          return
+        }
+        // Persist globally so the provider stays off across projects; the
+        // credential remains in auth.json for `providers enable` later.
+        await Config.updateGlobal(disableProviderPatch(await Config.getGlobal(), providerID))
+        prompts.log.success(`Disabled ${providerID} — credentials kept, re-enable with \`providers enable ${providerID}\``)
+        prompts.outro("Done")
+      },
+    })
+  },
+})
+
+export const ProvidersEnableCommand = cmd({
+  command: "enable [provider]",
+  describe: "re-enable a previously disabled provider",
+  builder: (yargs) =>
+    yargs.positional("provider", {
+      describe: "provider id to re-enable",
+      type: "string",
+    }),
+  async handler(args) {
+    const prompts = await import("@clack/prompts")
+    const { ModelsDev } = await import("../../provider/models")
+    UI.empty()
+    prompts.intro("Enable provider")
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const config = await Config.get()
+        const disabled = config.disabled_providers ?? []
+
+        let providerID = args.provider
+        if (!providerID) {
+          if (!process.stdin.isTTY) {
+            prompts.log.error("Provider is required in non-interactive mode. Use `ax-code providers enable <id>`.")
+            return
+          }
+          if (disabled.length === 0) {
+            prompts.log.info("No disabled providers")
+            return
+          }
+          const database = await ModelsDev.get()
+          const selected = await prompts.select({
+            message: "Select provider to re-enable",
+            options: disabled.map((id) => ({
+              label: database[id]?.name || id,
+              value: id,
+            })),
+          })
+          if (prompts.isCancel(selected)) throw new UI.CancelledError()
+          providerID = selected
+        }
+
+        if (!disabled.includes(providerID) && !(config.enabled_providers && !config.enabled_providers.includes(providerID))) {
+          prompts.log.info(`${providerID} is not disabled`)
+          prompts.outro("Done")
+          return
+        }
+        await Config.updateGlobal(enableProviderPatch(await Config.getGlobal(), providerID))
+        prompts.log.success(`Enabled ${providerID}`)
+        prompts.outro("Done")
+      },
+    })
   },
 })

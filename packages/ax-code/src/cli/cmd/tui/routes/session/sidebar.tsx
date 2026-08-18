@@ -319,6 +319,21 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
   const hasProviders = createMemo(() => sync.data.provider.length > 0)
   const gettingStartedDismissed = createMemo(() => kv.get("dismissed_getting_started", false))
 
+  // Connected providers plus config-disabled ones (the server filters disabled
+  // providers out of every provider list, so config is the only place they
+  // still appear). Rows open the manage dialog with enable/disable/disconnect.
+  const providerRows = createMemo(() => {
+    const connectedProviders = sync.data.provider.map((provider) => ({
+      id: provider.id,
+      name: provider.name,
+      disabled: false,
+    }))
+    const disabledProviders = (sync.data.config?.disabled_providers ?? [])
+      .filter((id) => !sync.data.provider.some((provider) => provider.id === id))
+      .map((id) => ({ id, name: id, disabled: true }))
+    return [...connectedProviders, ...disabledProviders]
+  })
+
   return (
     <Show when={session()}>
       {(session) => (
@@ -404,6 +419,44 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       )}
                     </For>
                   </Show>
+                </box>
+              </Show>
+              <Show when={providerRows().length > 0}>
+                <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
+                  <box flexDirection="row" justifyContent="space-between">
+                    <text fg={theme.text}>
+                      <b>Providers</b>
+                      <span style={{ fg: theme.textMuted }}> ({providerRows().length})</span>
+                    </text>
+                    <text
+                      fg={theme.textMuted}
+                      onMouseUp={() => {
+                        command.trigger("provider.manage")
+                      }}
+                    >
+                      manage
+                    </text>
+                  </box>
+                  <box border={["top"]} borderColor={theme.borderSubtle} />
+                  <For each={providerRows()}>
+                    {(provider) => (
+                      <box
+                        flexDirection="row"
+                        gap={1}
+                        onMouseUp={() => {
+                          command.trigger("provider.manage")
+                        }}
+                      >
+                        <text flexShrink={0} style={{ fg: provider.disabled ? theme.textMuted : theme.success }}>
+                          •
+                        </text>
+                        <text fg={theme.text} wrapMode="word">
+                          {provider.name}{" "}
+                          <span style={{ fg: theme.textMuted }}>{provider.disabled ? "Disabled" : "Connected"}</span>
+                        </text>
+                      </box>
+                    )}
+                  </For>
                 </box>
               </Show>
               {/* Debugging & Refactoring Engine section. Always shows a

@@ -288,6 +288,18 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     }
   }
 
+  async function showProvidersDialog() {
+    const marker = dialog.stack.at(-1)
+    try {
+      const { DialogProviders } = await import("@tui/component/dialog-providers")
+      if (dialog.stack.at(-1) !== marker) return
+      dialog.replace(() => <DialogProviders />)
+    } catch (error) {
+      Log.Default.warn("failed to load providers dialog", { error })
+      toast.show({ message: "Failed to open providers dialog", variant: "error" })
+    }
+  }
+
   async function showModelDialog() {
     const marker = dialog.stack.at(-1)
     try {
@@ -1138,6 +1150,17 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
       onSelect: () => {
         void showProviderDialog()
+      },
+      category: "Provider",
+    },
+    {
+      title: "Manage providers",
+      value: "provider.manage",
+      slash: {
+        name: "providers",
+      },
+      onSelect: () => {
+        void showProvidersDialog()
       },
       category: "Provider",
     },

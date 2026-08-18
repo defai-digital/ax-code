@@ -3,11 +3,14 @@ import * as prompts from "@clack/prompts"
 import fs from "fs/promises"
 import path from "path"
 import { Auth } from "../../src/auth"
+import { Config } from "../../src/config/config"
 import {
   DEFAULT_LOGIN_PROVIDER_IDS,
   ProvidersAxEngineCommand,
-  ProvidersLoginCommand,
+  ProvidersDisableCommand,
+  ProvidersEnableCommand,
   ProvidersListCommand,
+  ProvidersLoginCommand,
   ProvidersLogoutCommand,
 } from "../../src/cli/cmd/providers"
 import { Process } from "../../src/util/process"
@@ -223,6 +226,67 @@ describe("providers command", () => {
       introSpy.mockRestore()
       errorSpy.mockRestore()
       selectSpy.mockRestore()
+    }
+  })
+
+  test("providers disable then enable round-trips global disabled_providers", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const successSpy = vi.spyOn(prompts.log, "success").mockImplementation(() => {})
+
+    try {
+      await ProvidersDisableCommand.handler({ provider: "google" } as any)
+      expect((await Config.getGlobal()).disabled_providers ?? []).toContain("google")
+      expect(successSpy).toHaveBeenCalledWith(
+        "Disabled google — credentials kept, re-enable with `providers enable google`",
+      )
+
+      await ProvidersEnableCommand.handler({ provider: "google" } as any)
+      expect((await Config.getGlobal()).disabled_providers ?? []).not.toContain("google")
+      expect(successSpy).toHaveBeenCalledWith("Enabled google")
+      expect(outroSpy).toHaveBeenCalledWith("Done")
+    } finally {
+      // Defensive: never leak a disabled google into later tests in this PID.
+      await Config.updateGlobal({ disabled_providers: [] }).catch(() => undefined)
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      successSpy.mockRestore()
+    }
+  })
+
+  test("providers disable is a no-op for an already disabled provider", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const infoSpy = vi.spyOn(prompts.log, "info").mockImplementation(() => {})
+
+    try {
+      await Config.updateGlobal({ disabled_providers: ["google"] })
+      await ProvidersDisableCommand.handler({ provider: "google" } as any)
+
+      expect(infoSpy).toHaveBeenCalledWith("google is already disabled")
+      expect((await Config.getGlobal()).disabled_providers).toEqual(["google"])
+    } finally {
+      await Config.updateGlobal({ disabled_providers: [] }).catch(() => undefined)
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      infoSpy.mockRestore()
+    }
+  })
+
+  test("providers enable reports a provider that is not disabled", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const infoSpy = vi.spyOn(prompts.log, "info").mockImplementation(() => {})
+
+    try {
+      await ProvidersEnableCommand.handler({ provider: "google" } as any)
+
+      expect(infoSpy).toHaveBeenCalledWith("google is not disabled")
+      expect(outroSpy).toHaveBeenCalledWith("Done")
+    } finally {
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      infoSpy.mockRestore()
     }
   })
 
