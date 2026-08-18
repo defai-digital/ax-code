@@ -930,8 +930,7 @@ export namespace SessionPrompt {
       // budget the same way — `tools: {}` means "no overrides" (all tools
       // still counted), not "zero tools".
       const omitToolSchemas =
-        Boolean(responseOnlyProfile) ||
-        ((forceTextOnlyTurn || isLastStep) && lastUser.format?.type !== "json_schema")
+        Boolean(responseOnlyProfile) || ((forceTextOnlyTurn || isLastStep) && lastUser.format?.type !== "json_schema")
       const preflightCompaction = await maybeSchedulePreflightCompaction({
         sessionID,
         agent: lastUser.agent,
@@ -1534,10 +1533,7 @@ export namespace SessionPrompt {
         if (axEngineReadOnlyTurn) {
           consecutiveAxEngineReadOnlyTurns += 1
           if (hasUsableReadOnlyEvidence(currentParts)) axEngineReadOnlyHasEvidence = true
-          const freshLargeEvidence = hasLargeSuccessfulReadOnlyOutput(
-            currentParts,
-            AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS,
-          )
+          const freshLargeEvidence = hasLargeSuccessfulReadOnlyOutput(currentParts, AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS)
           const readOnlyTransition = readOnlyExplorationDecision({
             consecutiveTurns: consecutiveAxEngineReadOnlyTurns,
             nudged: axEngineReadOnlyNudged,
@@ -1691,6 +1687,21 @@ export namespace SessionPrompt {
         break
       }
       if (processor.message.error) {
+        if (MessageV2.OutputLoopError.isInstance(processor.message.error)) {
+          // A blind retry would resend identical context and likely re-trigger
+          // the same generation loop. Give the model an explicit course
+          // correction first (same pattern as the tool-only turn nudge).
+          log.info("injecting output-loop recovery continuation", {
+            command: "session.prompt.loop",
+            status: "nudge",
+            sessionID,
+          })
+          await createAutonomousTextContinuation({
+            sessionID,
+            messages: msgs,
+            text: AutonomousContinuationPrompt.outputLoopRecovery(),
+          })
+        }
         const delay = SessionRetry.delay(Math.max(1, consecutiveErrors))
         log.info("backing off before outer prompt retry", {
           sessionID,

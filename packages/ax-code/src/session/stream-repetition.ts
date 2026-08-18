@@ -154,4 +154,22 @@ export namespace StreamRepetition {
       },
     }
   }
+
+  /** Characters of a looped part kept when persisting the aborted turn. */
+  export const TRUNCATED_LOOP_HEAD_CHARS = 2000
+
+  /**
+   * Truncate text captured from a looped stream before it is persisted.
+   * Keeping the full repetition would re-induce the same pattern when the
+   * aborted message is fed back on retry, and bloats storage — the head
+   * (usually the model's actual plan) is the only part worth keeping.
+   */
+  export function truncateLoopedText(text: string, headChars = TRUNCATED_LOOP_HEAD_CHARS): string {
+    if (text.length <= headChars) return text
+    const omitted = text.length - headChars
+    return (
+      text.slice(0, headChars) +
+      `\n\n[${omitted} characters omitted: repetitive output removed by the output-loop guard]`
+    )
+  }
 }

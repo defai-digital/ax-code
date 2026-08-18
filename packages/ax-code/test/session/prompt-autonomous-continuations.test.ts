@@ -87,6 +87,15 @@ describe("autonomous continuation prompt builders", () => {
     expect(text).toContain("empty-turn recovery 1/1")
   })
 
+  test("builds output-loop recovery guidance", () => {
+    const text = AutonomousContinuationPrompt.outputLoopRecovery()
+
+    expect(text).toContain("output loop")
+    expect(text).toContain("first reasonable plan")
+    expect(text).toContain("act on it with tools")
+    expect(text).not.toContain("undefined")
+  })
+
   test("builds a concise tool-free AX Engine truncation recovery", () => {
     const text = AutonomousContinuationPrompt.axEngineTruncatedModelTurnRecovery()
 

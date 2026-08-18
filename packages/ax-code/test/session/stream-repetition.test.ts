@@ -88,3 +88,26 @@ describe("stream-repetition", () => {
     expect(detection).toBeUndefined()
   })
 })
+
+describe("truncateLoopedText", () => {
+  test("keeps short text untouched", () => {
+    expect(StreamRepetition.truncateLoopedText("short plan text")).toBe("short plan text")
+  })
+
+  test("truncates long looped text to the head with an omission marker", () => {
+    const looped = `${phrase}\n`.repeat(100)
+    const result = StreamRepetition.truncateLoopedText(looped)
+
+    expect(result.length).toBeLessThan(looped.length)
+    expect(result.startsWith(looped.slice(0, 200))).toBe(true)
+    expect(result).toContain(
+      `${looped.length - StreamRepetition.TRUNCATED_LOOP_HEAD_CHARS} characters omitted: repetitive output removed by the output-loop guard`,
+    )
+  })
+
+  test("respects a custom head limit", () => {
+    const result = StreamRepetition.truncateLoopedText("x".repeat(1000), 100)
+    expect(result.startsWith("x".repeat(100))).toBe(true)
+    expect(result).toContain("900 characters omitted")
+  })
+})

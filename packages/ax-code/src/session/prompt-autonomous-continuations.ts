@@ -120,6 +120,16 @@ export namespace AutonomousContinuationPrompt {
     )
   }
 
+  export function outputLoopRecovery() {
+    return (
+      `Your previous response was stopped by the runtime because it repeated the same content several ` +
+      `times without making progress (an output loop). Do not resume that repetition and do not re-litigate ` +
+      `decisions you already made. Proceed now with the first reasonable plan you had: act on it with tools, ` +
+      `and only report completion after taking action. If a decision genuinely requires the user, ask exactly ` +
+      `one concrete question instead of deliberating further.`
+    )
+  }
+
   export function truncatedModelTurnRecovery(input: { attempt: number; maxAttempts: number }) {
     return (
       `The previous autonomous model turn was truncated by the provider before it completed. ` +

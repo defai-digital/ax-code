@@ -1222,6 +1222,16 @@ export namespace SessionProcessor {
               stepIndex: attempt,
             })
             const error = MessageV2.fromError(e, { providerID: input.model.providerID })
+            if (MessageV2.OutputLoopError.isInstance(error)) {
+              // Truncate the looped text before the finalization below persists
+              // it: the full repetition would re-induce the same pattern when
+              // the aborted message is fed back on the retry, and bloats the
+              // session record (observed: a 100KB reasoning part of pure loop).
+              for (const part of Object.values(reasoningMap)) {
+                part.text = StreamRepetition.truncateLoopedText(part.text)
+              }
+              if (currentText) currentText.text = StreamRepetition.truncateLoopedText(currentText.text)
+            }
             if (MessageV2.ContextOverflowError.isInstance(error)) {
               needsCompaction = true
               Session.publishError({
