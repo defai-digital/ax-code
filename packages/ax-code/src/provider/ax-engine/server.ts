@@ -7,6 +7,7 @@ import { FileLock } from "@/util/filelock"
 import { Filesystem } from "@/util/filesystem"
 import { Process } from "@/util/process"
 import { Env } from "@/util/env"
+import { Log } from "@/util/log"
 import {
   AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS,
   AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
@@ -48,6 +49,8 @@ export const AxEngineServerRuntimeStatus = z.object({
   blockers: z.array(z.string()).default([]),
 })
 export type AxEngineServerRuntimeStatus = z.infer<typeof AxEngineServerRuntimeStatus>
+
+const log = Log.create({ service: "ax-engine.server" })
 
 export type AxEngineServerOptions = {
   binaryPath: string
@@ -623,6 +626,25 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
           await removeServerState()
         }
       } else {
+        // The concurrency cap is fixed at launch, so changing
+        // maxConcurrentRequests (or any other launch param) only takes effect
+        // through this relaunch. Name the mismatched fields — without this,
+        // "the server is still running with the old value" is undebuggable.
+        log.info("relaunching ax-engine server: launch parameters changed", {
+          pid: existing.pid,
+          mismatches: [
+            !contextMatches ? `contextTokens: ${existing.contextTokens} -> ${options.contextTokens}` : undefined,
+            !maxOutputTokensMatches ? `maxOutputTokens: ${existing.maxOutputTokens} -> ${maxOutputTokens}` : undefined,
+            !maxOutputTokensFlagMatches ? "maxOutputTokensFlag changed" : undefined,
+            !maxConcurrentRequestsMatches
+              ? `maxConcurrentRequests: ${existing.maxConcurrentRequests ?? AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS} -> ${maxConcurrentRequests}`
+              : undefined,
+            !speculationMatches
+              ? `speculationProfile: ${existing.speculationProfile} -> ${speculationProfile}`
+              : undefined,
+            !mtpModeMatches ? `mtpMode: ${existing.mtpMode} -> ${mtpMode}` : undefined,
+          ].filter(Boolean),
+        })
         await terminateServerProcess(existing)
         await removeServerState()
       }
@@ -655,6 +677,15 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     contextTokens: options.contextTokens,
     maxOutputTokens,
     binaryVersion: options.binaryVersion,
+    maxConcurrentRequests,
+    speculationProfile,
+    mtpMode,
+  })
+  log.info("starting ax-engine server", {
+    port,
+    modelID: options.modelID,
+    contextTokens: options.contextTokens,
+    maxOutputTokens,
     maxConcurrentRequests,
     speculationProfile,
     mtpMode,
