@@ -274,6 +274,9 @@ describe("distribution support guardrails", () => {
     expect(homebrewScript.indexOf('RELEASE_TAG="${AX_CODE_RELEASE_TAG')).toBeLessThan(
       homebrewScript.indexOf('VERSION="${RELEASE_TAG#v}"'),
     )
+    expect(workflow).toContain("postpublish_only:")
+    expect(workflow).toContain("if: ${{ !inputs.postpublish_only }}")
+    expect(workflow).toContain("needs.publish.result == 'success' || inputs.postpublish_only")
   })
 
   test("Homebrew verifies the detached release signature before hashing", async () => {

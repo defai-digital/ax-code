@@ -10,6 +10,11 @@ on:
         description: Existing release tag to resume, for example v7.6.1
         required: true
         type: string
+      postpublish_only:
+        description: Resume Homebrew, Winget, and install smoke for an already-published release
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: release-${{ github.ref }}
@@ -29,6 +34,7 @@ env:
 
 jobs:
   validate:
+    if: ${{ !inputs.postpublish_only }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -460,7 +466,10 @@ jobs:
     # to the shared defai-digital/homebrew-tap repository and the legacy
     # product tap retained for upgrade compatibility.
     needs: publish
-    if: ${{ !contains(inputs.tag || github.ref_name, '-') }}
+    if: >-
+      always() &&
+      !contains(inputs.tag || github.ref_name, '-') &&
+      (needs.publish.result == 'success' || inputs.postpublish_only)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -482,7 +491,10 @@ jobs:
   # them to the GitHub release for maintainers submitting to winget-pkgs.
   winget-manifests:
     needs: publish
-    if: ${{ !contains(inputs.tag || github.ref_name, '-') }}
+    if: >-
+      always() &&
+      !contains(inputs.tag || github.ref_name, '-') &&
+      (needs.publish.result == 'success' || inputs.postpublish_only)
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -533,7 +545,7 @@ jobs:
     if: >-
       always() &&
       !contains(inputs.tag || github.ref_name, '-') &&
-      needs.publish.result == 'success'
+      (needs.publish.result == 'success' || inputs.postpublish_only)
     uses: ./.github/workflows/install-matrix-smoke.yml
     with:
       version: ${{ inputs.tag || github.ref_name }}
