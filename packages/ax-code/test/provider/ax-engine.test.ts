@@ -21,6 +21,8 @@ import {
   AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
   AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
   AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
+  AX_ENGINE_MODEL_CONTEXT_TOKENS,
+  AX_ENGINE_MODEL_DEFINITIONS,
   AX_ENGINE_PROVIDER_ID,
   AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
   AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES,
@@ -921,6 +923,23 @@ describe("ax-engine server launch args", () => {
       "--total-blocks",
       "2048",
     ])
+  })
+
+  test("preserves the managed 64K/256K/32K context policy through server allocation", () => {
+    expect(AX_ENGINE_MODEL_CONTEXT_TOKENS).toEqual({
+      [AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]: 65_536,
+      [AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID]: 262_144,
+      [AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]: 32_768,
+    })
+
+    for (const [modelID, contextTokens] of Object.entries(AX_ENGINE_MODEL_CONTEXT_TOKENS)) {
+      const definition = AX_ENGINE_MODEL_DEFINITIONS[modelID as keyof typeof AX_ENGINE_MODEL_DEFINITIONS]
+      expect(definition.contextTokens).toBe(contextTokens)
+
+      const args = axEngineServerLaunchArgs({ apiModelID: definition.apiModelID, contextTokens })
+      expect(args[args.indexOf("--block-size-tokens") + 1]).toBe("16")
+      expect(args[args.indexOf("--total-blocks") + 1]).toBe(String(contextTokens / 16))
+    }
   })
 
   test("honors a per-model output-token budget instead of the global default", () => {

@@ -11,6 +11,14 @@ import { MessageV2 } from "../../src/session/message-v2"
 import { markEstimatedUsage } from "../../src/provider/usage"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import type { Provider } from "../../src/provider/provider"
+import {
+  AX_ENGINE_MODEL_DEFINITIONS,
+  AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
+  AX_ENGINE_PROVIDER_ID,
+  AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
+  AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+  type AxEngineModelID,
+} from "../../src/provider/ax-engine"
 import { MessageID, PartID } from "../../src/session/schema"
 
 Log.init({ print: false })
@@ -41,7 +49,71 @@ function createModel(opts: { context: number; output: number; input?: number; np
   } as Provider.Model
 }
 
+function createManagedAxEngineModel(modelID: AxEngineModelID): Provider.Model {
+  const definition = AX_ENGINE_MODEL_DEFINITIONS[modelID]
+  return {
+    ...createModel({
+      context: definition.contextTokens,
+      input: definition.contextTokens - definition.outputTokens,
+      output: definition.outputTokens,
+      npm: "@ai-sdk/openai-compatible",
+    }),
+    id: modelID,
+    providerID: AX_ENGINE_PROVIDER_ID,
+    name: definition.name,
+  } as Provider.Model
+}
+
 describe("session.compaction.isOverflow", () => {
+  test("locks managed AX Engine compaction budgets to each model window", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const cases = [
+          {
+            modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+            limit: { context: 65_536, input: 49_152, output: 16_384 },
+            budget: { cap: 49_152, reserved: 4_916, usable: 44_236 },
+            superLongTrigger: 33_177,
+          },
+          {
+            modelID: AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
+            limit: { context: 262_144, input: 230_144, output: 32_000 },
+            budget: { cap: 230_144, reserved: 23_015, usable: 207_129 },
+            superLongTrigger: 155_347,
+          },
+          {
+            modelID: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
+            limit: { context: 32_768, input: 16_384, output: 16_384 },
+            budget: { cap: 16_384, reserved: 1_639, usable: 14_745 },
+            superLongTrigger: 11_059,
+          },
+        ] as const
+
+        for (const item of cases) {
+          const model = createManagedAxEngineModel(item.modelID)
+          expect(model.limit).toEqual(item.limit)
+          expect(await SessionCompaction.budget(model)).toEqual(item.budget)
+
+          const justBelow = {
+            input: item.budget.usable - 1,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          }
+          const atTrigger = { ...justBelow, input: item.budget.usable }
+          const atSuperLongTrigger = { ...justBelow, input: item.superLongTrigger }
+
+          expect(await SessionCompaction.isOverflow({ tokens: justBelow, model })).toBe(false)
+          expect(await SessionCompaction.isOverflow({ tokens: atTrigger, model })).toBe(true)
+          expect(await SessionCompaction.isOverflow({ tokens: atSuperLongTrigger, model })).toBe(false)
+          expect(await SessionCompaction.isOverflow({ tokens: atSuperLongTrigger, model, superLong: true })).toBe(true)
+        }
+      },
+    })
+  })
+
   test("returns true when token count exceeds usable context", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({

@@ -46,11 +46,38 @@ AX Code ranks local AX Engine models by practical agent usability, not by a sing
 |    2 | `ornith-35b-axq-6bit`       | Ornith-1.0-35B AXQ 6-bit   | Long-context reasoning model |                  262,144 / 32,000 |
 |    3 | `qwen3-coder-next-axq-6bit` | Qwen3-Coder-Next AXQ 6-bit | Large coding specialist      |                   32,768 / 16,384 |
 
+The managed context policy is deliberately model-specific: 64K for Qwen3.8-27B, the full 256K window for
+Ornith-1.0-35B, and a memory-safe 32K window for Qwen3-Coder-Next. AX Code does not normalize these local
+limits to a shared cloud-provider context tier.
+
 `qwen3.8-27b-axq-6bit` is the default. Its packaged AXQuant MTP snapshot is the smallest current built-in
 download (about 19.4 GiB), and the catalog reserves a 16,384-token output budget inside its 65,536-token window.
 
 Ornith-1.0-35B is the reasoning and long-context choice. Qwen3-Coder-Next is the largest coding-specialist
 artifact and requires the 96 GB memory tier, so neither replaces Qwen3.8-27B as the broad default.
+
+## Compaction policy
+
+AX Code derives compaction from the active AX Engine model card. It first reserves the model's full output
+allowance inside the context window, then keeps 10% of the remaining input capacity as safety headroom. Prompt
+preflight uses the same budget before a request is sent, and provider-reported usage can schedule compaction after
+a completed turn. A provider context-overflow response is the final fallback: AX Code compacts and retries with a
+loop guard.
+
+| Model                      | Context | Output allowance | Input cap | 10% safety | Normal trigger | Super-Long trigger |
+| -------------------------- | ------: | ---------------: | --------: | ---------: | -------------: | -----------------: |
+| Qwen3.8-27B AXQ 6-bit      |  65,536 |           16,384 |    49,152 |      4,916 |         44,236 |             33,177 |
+| Ornith-1.0-35B AXQ 6-bit   | 262,144 |           32,000 |   230,144 |     23,015 |        207,129 |            155,347 |
+| Qwen3-Coder-Next AXQ 6-bit |  32,768 |           16,384 |    16,384 |      1,639 |         14,745 |             11,059 |
+
+Normal sessions compact at the listed usable-input boundary. Unattended Super-Long runs compact at 75% of that
+boundary because long local prompts increase every turn's latency and KV-cache pressure. `/compact` remains
+available for an earlier manual checkpoint, and `compaction.reserved` in `ax-code.json` can replace the 10% safety
+value when a deployment needs more headroom.
+
+Ornith's 128,000-token long-agent context-pack budget is separate from session compaction. It limits how much
+retrieved evidence one Super-Long planning pass can inject, leaving space for system instructions, tools, session
+history, and output; it does not reduce Ornith's 256K model window to 128K.
 
 ## Acquisition and acceleration
 

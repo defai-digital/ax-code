@@ -118,6 +118,18 @@ export const AX_ENGINE_MODEL_IDS = [
 ] as const
 export type AxEngineModelID = (typeof AX_ENGINE_MODEL_IDS)[number]
 
+// Managed serving policy, intentionally model-specific rather than normalized
+// to a cloud-provider context tier. These values drive both the provider's
+// advertised limit and the AX Engine KV-cache block capacity:
+// - Qwen3.8-27B: 64K daily-driver window
+// - Ornith-1.0-35B: full 256K long-context window
+// - Qwen3-Coder-Next: 32K memory-safe coding window
+export const AX_ENGINE_MODEL_CONTEXT_TOKENS = {
+  [AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]: 65_536,
+  [AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID]: 262_144,
+  [AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]: 32_768,
+} as const satisfies Record<AxEngineModelID, number>
+
 export const AX_ENGINE_QUANTIZATION_IDS = ["mlx6bit"] as const
 export type AxEngineQuantization = (typeof AX_ENGINE_QUANTIZATION_IDS)[number]
 
@@ -142,6 +154,7 @@ export type AxEngineModelDefinition = {
   reasoning: boolean
   toolcall: boolean
   minMemoryBytes: number
+  /** Managed provider/server context cap from AX_ENGINE_MODEL_CONTEXT_TOKENS. */
   contextTokens: number
   outputTokens: number
   /** Each catalog model ships exactly one quantization today; the map shape keeps room for more. */
@@ -160,7 +173,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineModelID, AxEngineModelD
     reasoning: false,
     toolcall: true,
     minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
-    contextTokens: 65_536,
+    contextTokens: AX_ENGINE_MODEL_CONTEXT_TOKENS[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID],
     // 16 384 covers whole-file writes without finish=length truncation while
     // keeping 49 152 tokens (75%) of the window for the prompt.
     outputTokens: 16_384,
@@ -188,7 +201,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineModelID, AxEngineModelD
     reasoning: true,
     toolcall: true,
     minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
-    contextTokens: 262_144,
+    contextTokens: AX_ENGINE_MODEL_CONTEXT_TOKENS[AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID],
     // The 262 144-token window easily affords the largest budget the request
     // layer allows: 32 000 == OUTPUT_TOKEN_MAX (provider/transform.ts), the
     // opencode/Claude Code agentic default. Catalog, server
@@ -221,7 +234,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineModelID, AxEngineModelD
     // Qwen3-Coder-Next is a 256K-native 80B-A3B MoE; SGLang's local-serving
     // docs recommend --context-length 32768 as the memory-safe setting, and the
     // KV cache stays small next to the ~55.7 GiB weights on 96 GB+ hosts.
-    contextTokens: 32_768,
+    contextTokens: AX_ENGINE_MODEL_CONTEXT_TOKENS[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID],
     // 16 384 covers whole-file writes without finish=length truncation (8 192
     // was the observed truncation threshold on agentic turns); the input
     // budget stays usable at 16 384 tokens.
