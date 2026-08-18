@@ -247,7 +247,6 @@ const removedProviderSources = Object.fromEntries(
   ),
 )
 for (const id of [
-  "groq",
   "azure",
   "azure-cognitive-services",
   "openrouter",
@@ -430,41 +429,84 @@ function openRouterModel(input: {
   } as RawModel
 }
 
-// GroqCloud is not yet published by models.dev in this snapshot line. Keep the
-// first-party OpenAI-compatible Groq provider narrow and docs-backed so it
-// survives snapshot regeneration without pulling in stale Groq model aliases.
-fetched["groq"] = {
-  id: "groq",
-  name: "GroqCloud",
-  env: ["GROQ_API_KEY"],
-  npm: "@ai-sdk/openai-compatible",
-  api: "https://api.groq.com/openai/v1",
-  doc: "https://console.groq.com/docs/models",
-  models: {
-    "qwen/qwen3.6-27b": groqModel({
-      id: "qwen/qwen3.6-27b",
-      name: "Qwen/Qwen3.6-27B",
-      family: "qwen",
-      attachment: true,
-      reasoning: true,
-      structuredOutput: false,
-      context: 131_072,
-      output: 32_768,
-      releaseDate: "2026-04-27",
-      inputModalities: ["text", "image"],
-    }),
-    "openai/gpt-oss-120b": groqModel({
-      id: "openai/gpt-oss-120b",
-      name: "GPT OSS 120B",
-      family: "gpt-oss",
-      attachment: false,
-      reasoning: true,
-      structuredOutput: true,
-      context: 131_072,
-      output: 65_536,
-      releaseDate: "2025-08-05",
-    }),
-  },
+// GroqCloud is published by models.dev again. Keep the provider to the
+// docs-backed chat allowlist (https://console.groq.com/docs/models): Groq also
+// serves speech-to-text (whisper), TTS (orpheus), guardrail classifiers
+// (prompt-guard), deprecated llama/allam SKUs no longer in the docs model
+// table, server-side "Compound" systems (8k completion, built-in tools only),
+// and an enterprise-only MiniMax SKU — none of which a coding agent can drive.
+// When models.dev lags or the allowlist filters everything out, fall back to
+// the inline docs-backed definitions so the provider never regresses to zero
+// models.
+const GROQ_CHAT_MODEL_ALLOWLIST = new Set<string>([
+  "qwen/qwen3.6-27b",
+  "openai/gpt-oss-120b",
+  "openai/gpt-oss-20b",
+  "openai/gpt-oss-safeguard-20b",
+])
+{
+  const upstreamModels = (fetched["groq"]?.models ?? {}) as Record<string, RawModel>
+  const kept = Object.fromEntries(Object.entries(upstreamModels).filter(([mid]) => GROQ_CHAT_MODEL_ALLOWLIST.has(mid)))
+  fetched["groq"] = {
+    id: "groq",
+    name: "GroqCloud",
+    env: ["GROQ_API_KEY"],
+    npm: "@ai-sdk/openai-compatible",
+    api: "https://api.groq.com/openai/v1",
+    doc: "https://console.groq.com/docs/models",
+    // Docs-backed fallback: qwen3.6-27b caps at 16 384 completion tokens per
+    // the Groq models table — NOT the 32 768 an earlier revision carried.
+    models:
+      Object.keys(kept).length > 0
+        ? kept
+        : {
+            "qwen/qwen3.6-27b": groqModel({
+              id: "qwen/qwen3.6-27b",
+              name: "Qwen/Qwen3.6-27B",
+              family: "qwen",
+              attachment: true,
+              reasoning: true,
+              structuredOutput: false,
+              context: 131_072,
+              output: 16_384,
+              releaseDate: "2026-04-27",
+              inputModalities: ["text", "image"],
+            }),
+            "openai/gpt-oss-120b": groqModel({
+              id: "openai/gpt-oss-120b",
+              name: "GPT OSS 120B",
+              family: "gpt-oss",
+              attachment: false,
+              reasoning: true,
+              structuredOutput: true,
+              context: 131_072,
+              output: 65_536,
+              releaseDate: "2025-08-05",
+            }),
+            "openai/gpt-oss-20b": groqModel({
+              id: "openai/gpt-oss-20b",
+              name: "GPT OSS 20B",
+              family: "gpt-oss",
+              attachment: false,
+              reasoning: true,
+              structuredOutput: true,
+              context: 131_072,
+              output: 65_536,
+              releaseDate: "2025-08-05",
+            }),
+            "openai/gpt-oss-safeguard-20b": groqModel({
+              id: "openai/gpt-oss-safeguard-20b",
+              name: "Safety GPT OSS 20B",
+              family: "gpt-oss",
+              attachment: false,
+              reasoning: true,
+              structuredOutput: true,
+              context: 131_072,
+              output: 65_536,
+              releaseDate: "2025-10-29",
+            }),
+          },
+  }
 }
 
 // OpenRouter publishes a very broad marketplace catalog. Keep the built-in AX
@@ -1049,17 +1091,20 @@ for (const providerID of GLM_CODING_PROVIDER_IDS) {
   provider.models = merged
 }
 
-// General Zhipu AI API (open.bigmodel.cn/api/paas/v4) gets the GLM-5.2 base
-// flagship only — the [1m] long-context variants stay scoped to the coding
-// endpoints where the suffix is documented. The general API ships GLM-5.2
-// shortly after the coding-plan launch, so inject it forward-looking until
-// models.dev publishes it; prefer the upstream entry once it does.
+// General Zhipu AI API (open.bigmodel.cn/api/paas/v4) gets the current GLM
+// flagships — GLM-5.3 shipped on the general PAYG API (listed on
+// https://docs.z.ai/guides/overview/pricing) around the coding-plan launch,
+// GLM-5.2 shortly before it. The [1m] long-context variants stay scoped to
+// the coding endpoints where the suffix is documented. Inject both
+// forward-looking until models.dev publishes them; prefer the upstream entry
+// once it does (upstream glm-5.2 already carries the 1M context).
 {
   const provider = fetched["zhipuai"]
   if (provider) {
     const models = (provider.models ?? {}) as Record<string, RawModel>
     const merged: Record<string, RawModel> = {
-      "glm-5.2": models["glm-5.2"] ?? glmCodingModel("glm-5.2", "GLM-5.2", 200000, "2026-06-13"),
+      "glm-5.3": models["glm-5.3"] ?? glmCodingModel("glm-5.3", "GLM-5.3", 1000000, "2026-08-14"),
+      "glm-5.2": models["glm-5.2"] ?? glmCodingModel("glm-5.2", "GLM-5.2", 1000000, "2026-06-13"),
     }
     for (const [mid, model] of Object.entries(models)) {
       if (!merged[mid]) merged[mid] = model

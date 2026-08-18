@@ -75,8 +75,43 @@ test("GroqCloud provider exposes documented Qwen and GPT-OSS models", async () =
 
       expect(groq?.name).toBe("GroqCloud")
       expect(groq?.models[ModelID.make("qwen/qwen3.6-27b")]?.api.url).toBe("https://api.groq.com/openai/v1")
-      expect(groq?.models[ModelID.make("qwen/qwen3.6-27b")]?.limit).toEqual({ context: 131_072, output: 32_768 })
+      // 16,384 is Groq's documented max completion for qwen3.6-27b
+      // (https://console.groq.com/docs/models) — not 32,768.
+      expect(groq?.models[ModelID.make("qwen/qwen3.6-27b")]?.limit).toEqual({ context: 131_072, output: 16_384 })
       expect(groq?.models[ModelID.make("openai/gpt-oss-120b")]?.limit).toEqual({ context: 131_072, output: 65_536 })
+      expect(groq?.models[ModelID.make("openai/gpt-oss-20b")]?.limit).toEqual({ context: 131_072, output: 65_536 })
+      expect(groq?.models[ModelID.make("openai/gpt-oss-safeguard-20b")]?.limit).toEqual({
+        context: 131_072,
+        output: 65_536,
+      })
+      // Non-chat and non-allowlisted SKUs never reach the provider catalog.
+      expect(groq?.models[ModelID.make("whisper-large-v3")]).toBeUndefined()
+      expect(groq?.models[ModelID.make("groq/compound")]).toBeUndefined()
+      expect(groq?.models[ModelID.make("llama-3.3-70b-versatile")]).toBeUndefined()
+    },
+  })
+})
+
+test("Zhipu general API exposes current GLM flagships and hides legacy SKUs", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("ZHIPU_API_KEY", "test-zhipu")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const zhipuai = providers[ProviderID.make("zhipuai")]
+
+      expect(zhipuai?.name).toBeDefined()
+      expect(zhipuai?.models[ModelID.make("glm-5.3")]?.api.url).toBe("https://open.bigmodel.cn/api/paas/v4")
+      expect(zhipuai?.models[ModelID.make("glm-5.3")]?.limit).toEqual({ context: 1_000_000, output: 131_072 })
+      expect(zhipuai?.models[ModelID.make("glm-5.2")]?.limit).toEqual({ context: 1_000_000, output: 131_072 })
+      // glm-5.1 is hidden by the global GLM filters; 4.x drops entirely.
+      expect(zhipuai?.models[ModelID.make("glm-5.1")]).toBeUndefined()
+      expect(zhipuai?.models[ModelID.make("glm-4.7")]).toBeUndefined()
+      // [1m] variants stay scoped to the coding endpoints.
+      expect(zhipuai?.models[ModelID.make("glm-5.2[1m]")]).toBeUndefined()
     },
   })
 })
@@ -631,8 +666,13 @@ test("model blacklist excludes specific models", async () => {
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
             groq: {
-              // Blacklisting both curated Groq models drops the provider.
-              blacklist: ["qwen/qwen3.6-27b", "openai/gpt-oss-120b"],
+              // Blacklisting every curated Groq model drops the provider.
+              blacklist: [
+                "qwen/qwen3.6-27b",
+                "openai/gpt-oss-120b",
+                "openai/gpt-oss-20b",
+                "openai/gpt-oss-safeguard-20b",
+              ],
             },
           },
         }),
