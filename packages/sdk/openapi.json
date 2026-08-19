@@ -42667,6 +42667,9 @@
               "explore": {
                 "$ref": "#/components/schemas/AgentConfig"
               },
+              "scout": {
+                "$ref": "#/components/schemas/AgentConfig"
+              },
               "title": {
                 "$ref": "#/components/schemas/AgentConfig"
               },
