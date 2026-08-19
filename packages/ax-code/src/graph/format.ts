@@ -7,6 +7,7 @@ const AGENT_DISPLAY: Record<string, string> = {
   react: "Reasoner",
   general: "Assistant",
   explore: "Researcher",
+  scout: "Scout",
   security: "Security",
   architect: "Architect",
   debug: "Debugger",

@@ -179,6 +179,8 @@ export namespace Skill {
     "simplify",
     "verify",
     "run",
+    "verified-change",
+    "safe-db-migration",
   ])
 
   /** Built-in skills the agent can load, but that must not appear in `/` autocomplete. */

@@ -30,7 +30,7 @@ export namespace WriteIsolation {
    * Known read-only specialist names used when permission rules are sparse.
    * Explore is always treated as research-only even if rules are incomplete.
    */
-  const READ_ONLY_AGENT_NAMES = new Set(["explore", "title", "summary", "compaction"])
+  const READ_ONLY_AGENT_NAMES = new Set(["explore", "scout", "title", "summary", "compaction"])
 
   export function classifyAgentWriteClass(agent: AgentLike): AgentWriteClass {
     if (READ_ONLY_AGENT_NAMES.has(agent.name)) return "read-only"

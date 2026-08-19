@@ -17,6 +17,14 @@ describe("WriteIsolation.classifyAgentWriteClass", () => {
     ).toBe("read-only")
   })
 
+  test("scout is always read-only", () => {
+    expect(
+      WriteIsolation.classifyAgentWriteClass(
+        agent("scout", [{ permission: "bash", pattern: "*", action: "allow" }]),
+      ),
+    ).toBe("read-only")
+  })
+
   test("deny-all with selective read tools is read-only", () => {
     const klass = WriteIsolation.classifyAgentWriteClass(
       agent("research", [

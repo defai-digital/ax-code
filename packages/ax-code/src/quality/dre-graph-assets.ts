@@ -155,7 +155,7 @@ export function executionSummaryScript(sid: string, directory?: string) {
     `<script>`,
     `const _AGENT = {`,
     `  build:'Dev', plan:'Planner', react:'Reasoner', general:'Assistant',`,
-    `  explore:'Researcher', security:'Security', architect:'Architect',`,
+    `  explore:'Researcher', scout:'Scout', security:'Security', architect:'Architect',`,
     `  debug:'Debugger', perf:'Perf', devops:'DevOps', test:'Tester',`,
     `};`,
     `function _agentName(n) { return _AGENT[n] || (n ? n.charAt(0).toUpperCase()+n.slice(1) : 'Agent'); }`,

@@ -651,6 +651,7 @@ export const Info = z
         // subagent
         general: Agent.optional(),
         explore: Agent.optional(),
+        scout: Agent.optional(),
         // specialized
         title: Agent.optional(),
         summary: Agent.optional(),

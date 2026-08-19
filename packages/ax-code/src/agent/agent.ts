@@ -9,6 +9,7 @@ import { Truncate } from "../tool/truncate"
 import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
+import PROMPT_SCOUT from "./prompt/scout.txt"
 import PROMPT_GENERAL from "./prompt/general.txt"
 import PROMPT_REACT from "./prompt/react.txt"
 import PROMPT_SECURITY from "./prompt/security.txt"
@@ -134,6 +135,7 @@ export namespace Agent {
       "plan",
       "general",
       "explore",
+      "scout",
       "react",
       "security",
       "architect",
@@ -227,6 +229,22 @@ export namespace Agent {
         ),
         description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
         prompt: PROMPT_EXPLORE,
+        options: {},
+        mode: "subagent",
+        native: true,
+      },
+      scout: {
+        name: "scout",
+        displayName: "Scout",
+        permission: Permission.merge(
+          defaults,
+          policy("scout"),
+          exploreReadOnlyWithWeb,
+          denySubagentFanout,
+          user,
+        ),
+        description: `Read-only agent for upstream docs and dependency source. Use this when you need the installed version of a library, official documentation, changelog, or published API behavior — not a tour of the user's application code. Prefer lockfiles and in-repo installed trees (node_modules, vendor, etc.) plus WebFetch of official docs. Do not modify the project. For local codebase questions, use explore instead.`,
+        prompt: PROMPT_SCOUT,
         options: {},
         mode: "subagent",
         native: true,

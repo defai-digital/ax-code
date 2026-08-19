@@ -40,6 +40,7 @@ test("returns default native agents when no config", async () => {
       expect(names).toContain("plan")
       expect(names).toContain("general")
       expect(names).toContain("explore")
+      expect(names).toContain("scout")
       expect(names).toContain("test")
       expect(names).toContain("compaction")
       expect(names).toContain("title")
@@ -90,6 +91,29 @@ test("explore agent denies edit and write", async () => {
       expect(evalPerm(explore, "write")).toBe("deny")
       expect(evalPerm(explore, "todoread")).toBe("deny")
       expect(evalPerm(explore, "todowrite")).toBe("deny")
+    },
+  })
+})
+
+test("scout agent is a read-only upstream-research subagent", async () => {
+  const { Truncate } = await import("../../src/tool/truncate")
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const scout = await Agent.get("scout")
+      expect(scout).toBeDefined()
+      expect(scout?.mode).toBe("subagent")
+      expect(scout?.displayName).toBe("Scout")
+      expect(scout?.hidden).toBeUndefined()
+      expect(evalPerm(scout, "edit")).toBe("deny")
+      expect(evalPerm(scout, "write")).toBe("deny")
+      expect(evalPerm(scout, "bash")).toBe("deny")
+      expect(evalPerm(scout, "task")).toBe("deny")
+      expect(evalPerm(scout, "webfetch")).toBe("allow")
+      expect(evalPerm(scout, "websearch")).toBe("allow")
+      expect(Permission.evaluate("external_directory", "/some/other/path", scout!.permission).action).toBe("ask")
+      expect(Permission.evaluate("external_directory", Truncate.GLOB, scout!.permission).action).toBe("allow")
     },
   })
 })

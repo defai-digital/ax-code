@@ -21,6 +21,8 @@ The default `/` menu is a control plane (`/plan`, `/review`, `/debug`, `/status`
 | `run`              | Launch and observe the app         | Agent-only   |
 | `simplify`         | Tighten recently changed code      | Agent-only   |
 | `verify`           | Runtime verification report        | Agent-only   |
+| `verified-change`  | Edit only after a failing signal, then re-run the same check | `/verified-change` |
+| `safe-db-migration` | Expand/backfill/contract schema changes with rollback notes | `/safe-db-migration` |
 
 Skills use `SKILL.md` with YAML frontmatter (`name`, `description`, optional `paths`, `allowed-tools`).
 

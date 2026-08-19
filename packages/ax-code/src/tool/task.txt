@@ -16,7 +16,7 @@ When NOT to use the Task tool:
 
 
 Usage notes:
-1. Launch multiple agents concurrently whenever possible, to maximize performance. Prefer the task_parallel tool for independent read-only digs (explore agents). You may also use a single message with multiple task tool uses. Do not run concurrent writers.
+1. Launch multiple agents concurrently whenever possible, to maximize performance. Prefer the task_parallel tool for independent read-only digs (explore or scout agents). You may also use a single message with multiple task tool uses. Do not run concurrent writers.
 2. Foreground is the default and waits for the child's final message. Set background=true for independent work that can run while you continue. Background returns immediately with a task_id and state: running. You will be notified when it finishes. DO NOT sleep, poll for progress, ask the task for status, or duplicate this task's work.
 3. When a foreground agent is done, it will return a single message back to you. The result returned by the agent is not visible to the user. To show the user the result, you should send a text message back to the user with a concise summary of the result. The output includes a task_id you can reuse later to continue the same subagent session.
 4. Each agent invocation starts with a fresh context unless you provide task_id to resume the same subagent session (which continues with its previous messages and tool outputs). When starting fresh, your prompt should contain a highly detailed task description for the agent to perform autonomously and you should specify exactly what information the agent should return back to you in its final and only message to you.
@@ -29,6 +29,7 @@ Example usage (NOTE: The agents below are fictional examples for illustration on
 <example_agent_descriptions>
 "code-reviewer": use this agent after you are done writing a significant piece of code
 "explore": use this agent to answer questions about how an unfamiliar part of the codebase works
+"scout": use this agent to inspect upstream docs or the installed version of a dependency
 </example_agent_descriptions>
 
 <example>
@@ -58,4 +59,12 @@ user: "Where is session state persisted?"
 The user is asking about an unfamiliar area of the codebase; delegate the search to the explore agent instead of running many searches inline
 </commentary>
 assistant: "I'm going to use the Task tool to launch the explore agent to trace how session state is persisted"
+</example>
+
+<example>
+user: "Does this zod version still support discriminatedUnion the way we call it?"
+<commentary>
+The question is about installed-dependency behavior, not local code. Use scout, not explore.
+</commentary>
+assistant: "I'll use the scout agent to check the installed zod version and its source/docs"
 </example>
