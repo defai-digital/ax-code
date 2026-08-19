@@ -22,6 +22,7 @@ describe("WorkflowTemplate", () => {
     expect(templates.map((template) => template.id)).toContain("builtin:issue-triage")
     expect(templates.map((template) => template.id)).toContain("builtin:noop-dry-run")
     expect(templates.map((template) => template.id)).toContain("builtin:verified-bug-sweep")
+    expect(templates.map((template) => template.id)).toContain("builtin:issue-to-verified-fix")
     expect(templates.find((template) => template.id === "builtin:verified-bug-sweep")?.specHash).toMatch(
       /^sha256:[a-f0-9]{64}$/,
     )

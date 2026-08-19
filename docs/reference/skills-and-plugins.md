@@ -7,7 +7,7 @@ Owner: AX Code runtime
 
 Discoverable registry of built-in skills and how to add project skills.
 
-The default `/` menu is a control plane (`/plan`, `/review`, `/debug`, `/status`, `/model`). Built-in skills stay available to the agent through the skill tool; they are not listed as slash commands.
+The default `/` menu is a control plane (`/plan`, `/review`, `/debug`, `/status`, `/model`). Older built-in skills stay agent-only (skill tool). The backend reliability pack is also listed as slash commands.
 
 ## Built-in skills (shipped under `packages/ax-code/skills/`)
 
@@ -23,6 +23,10 @@ The default `/` menu is a control plane (`/plan`, `/review`, `/debug`, `/status`
 | `verify`           | Runtime verification report        | Agent-only   |
 | `verified-change`  | Edit only after a failing signal, then re-run the same check | `/verified-change` |
 | `safe-db-migration` | Expand/backfill/contract schema changes with rollback notes | `/safe-db-migration` |
+| `api-contract` | Additive-first public API / schema evolution | `/api-contract` |
+| `incident-observability` | Evidence-first incident diagnosis before a patch | `/incident-observability` |
+| `auth-boundaries` | Authn/authz, tenant isolation, negative tests | `/auth-boundaries` |
+| `queue-worker` | Idempotent queue/worker changes and duplicate delivery | `/queue-worker` |
 
 Skills use `SKILL.md` with YAML frontmatter (`name`, `description`, optional `paths`, `allowed-tools`).
 

@@ -181,6 +181,10 @@ export namespace Skill {
     "run",
     "verified-change",
     "safe-db-migration",
+    "api-contract",
+    "incident-observability",
+    "auth-boundaries",
+    "queue-worker",
   ])
 
   /** Built-in skills the agent can load, but that must not appear in `/` autocomplete. */

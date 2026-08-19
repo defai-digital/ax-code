@@ -58660,6 +58660,51 @@
           "output": 65536
         }
       },
+      "muse-spark-1.2": {
+        "id": "muse-spark-1.2",
+        "name": "Muse Spark 1.2",
+        "description": "Muse Spark 1.2 is a coding-focused update to Muse Spark 1.1 with improvements in code generation, complex debugging, codebase understanding, and end-to-end developer workflows.",
+        "family": "muse",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-05",
+        "last_updated": "2026-08-05",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai"
+        }
+      },
       "glm-5.3": {
         "id": "glm-5.3",
         "name": "GLM-5.3",
@@ -119481,6 +119526,42 @@
           "output": 32768
         }
       },
+      "glm-5-3": {
+        "id": "glm-5-3",
+        "name": "GLM 5.3",
+        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
       "qwen3-6-27b": {
         "id": "qwen3-6-27b",
         "name": "Qwen3.6 27B",
@@ -120145,9 +120226,6 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
               "none",
@@ -120156,11 +120234,6 @@
               "high",
               "max"
             ]
-          },
-          {
-            "type": "budget_tokens",
-            "min": 128,
-            "max": 32768
           }
         ],
         "tool_call": true,
@@ -160922,40 +160995,6 @@
           "output": 262144
         }
       },
-      "liquid/lfm-2.5-2.6b:free": {
-        "id": "liquid/lfm-2.5-2.6b:free",
-        "name": "LiquidAI: LFM2.5-2.6B (free)",
-        "description": "LFM2.5-2.6B is a compact reasoning model from Liquid AI. It is suited for agent workflows, data extraction, RAG, and long-context processing. Liquid advises against using it for agentic coding or...",
-        "family": "liquid",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-08-11",
-        "last_updated": "2026-08-11",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 128000,
-          "output": 8192
-        }
-      },
       "allenai/olmo-3-32b-think": {
         "id": "allenai/olmo-3-32b-think",
         "name": "AllenAI: Olmo 3 32B Think",
@@ -161908,7 +161947,7 @@
           }
         ],
         "tool_call": true,
-        "structured_output": true,
+        "structured_output": false,
         "temperature": true,
         "release_date": "2026-07-23",
         "last_updated": "2026-07-23",

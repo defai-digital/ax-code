@@ -72,6 +72,15 @@ describe("workflow spec v1", () => {
     expect(parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun).id).toBe("noop-dry-run")
   })
 
+  test("parses the issue-to-verified-fix fixture", () => {
+    const spec = getParsedWorkflowFixtureSpec("issueToVerifiedFix")
+    expect(spec.id).toBe("issue-to-verified-fix")
+    expect(spec.permissions.writePolicy).toBe("serialized")
+    expect(spec.verification.mode).toBe("required")
+    expect(spec.phases.map((phase) => phase.id)).toEqual(["reproduce", "implement", "recheck", "report"])
+    expect(spec.verification.requiredArtifactIds).toEqual(["before-signal", "after-signal"])
+  })
+
   test("resolves workflow input values with defaults", () => {
     const spec = parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage)
 

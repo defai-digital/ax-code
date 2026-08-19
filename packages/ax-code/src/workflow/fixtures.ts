@@ -212,6 +212,125 @@ export const WorkflowFixtureSpecs = {
       },
     ],
   },
+
+  issueToVerifiedFix: {
+    schemaVersion: 1,
+    id: "issue-to-verified-fix",
+    name: "Issue to Verified Fix",
+    description: "Reproduce a failure, apply a minimal fix, then re-run the same check before reporting done.",
+    tags: ["fix", "verification"],
+    inputs: [
+      {
+        id: "issue",
+        label: "Issue",
+        description: "Bug report, failing test, or symptom to fix.",
+        type: "string",
+        required: true,
+      },
+    ],
+    budget: {
+      maxTotalTokens: 200_000,
+      maxConcurrentAgents: 2,
+      maxTotalAgents: 8,
+      maxToolCalls: 400,
+    },
+    modelPolicy: {
+      cheapModel: "cheap",
+      strongModel: "strong",
+      plannerModel: "strong",
+      workerModel: "strong",
+      verifierModel: "cheap",
+      synthesizerModel: "strong",
+      effort: "workflow",
+    },
+    permissions: {
+      writePolicy: "serialized",
+      allowedTools: ["file.read", "rg", "edit", "bash", "verify_project"],
+      networkPolicy: "inherit",
+      escalationPolicy: "ask",
+    },
+    artifacts: [
+      {
+        id: "before-signal",
+        kind: "verification",
+        retention: "session",
+        redaction: {
+          status: "none",
+          summary: "Command and output captured before the edit.",
+        },
+      },
+      {
+        id: "after-signal",
+        kind: "verification",
+        retention: "session",
+        redaction: {
+          status: "none",
+          summary: "Same command re-run after the edit.",
+        },
+      },
+      {
+        id: "fix-report",
+        kind: "summary",
+        retention: "session",
+        exposeToMainContext: true,
+        redaction: {
+          status: "none",
+          summary: "Minimal fix plus before/after evidence.",
+        },
+      },
+    ],
+    verification: {
+      mode: "required",
+      workflow: "debug",
+      requiredArtifactIds: ["before-signal", "after-signal"],
+    },
+    synthesis: {
+      agent: "synthesizer",
+      outputFormat: "findings",
+      exposeToMainContext: true,
+      requiredArtifactIds: ["fix-report"],
+    },
+    phases: [
+      {
+        id: "reproduce",
+        name: "Reproduce",
+        kind: "sequential",
+        agent: "planner",
+        prompt:
+          "Identify the smallest check that demonstrates the issue. Run it before any edit. Record command, input, observed result, and expected result in the before-signal artifact. Stop if the failure cannot be reproduced.",
+        outputs: ["before-signal"],
+      },
+      {
+        id: "implement",
+        name: "Implement",
+        kind: "sequential",
+        agent: "worker",
+        prompt:
+          "Apply the smallest change that addresses the reproduced failure. Do not refactor neighbors. Follow the verified-change skill.",
+        dependsOn: ["reproduce"],
+      },
+      {
+        id: "recheck",
+        name: "Recheck",
+        kind: "verification",
+        agent: "verifier",
+        prompt:
+          "Re-run the exact before-signal command. It must now pass. Record output in after-signal. If it still fails, do not mark the run successful.",
+        dependsOn: ["implement"],
+        outputs: ["after-signal"],
+      },
+      {
+        id: "report",
+        name: "Report",
+        kind: "synthesis",
+        agent: "synthesizer",
+        prompt:
+          "Summarize the reproduced failure, files changed, and before/after commands. Do not claim success if after-signal failed.",
+        dependsOn: ["recheck"],
+        outputs: ["fix-report"],
+      },
+    ],
+  },
 } satisfies Record<string, unknown>
 
 export const InvalidWorkflowFixtureSpecs = {
