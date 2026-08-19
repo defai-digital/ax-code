@@ -342,6 +342,61 @@ describe("update-models script", () => {
     expect(after).toBe(before)
   })
 
+  test("drops MiniMax Token Plan SKUs older than M2.7 and keeps PAYG older models", async () => {
+    await using tmp = await tmpdir()
+    const fixturePath = path.join(tmp.path, "models-fixture.json")
+    const snapshotPath = path.join(tmp.path, "models-snapshot.json")
+    const minimaxModels = {
+      "MiniMax-M2": { id: "MiniMax-M2", name: "MiniMax-M2", family: "minimax" },
+      "MiniMax-M2.1": { id: "MiniMax-M2.1", name: "MiniMax-M2.1", family: "minimax" },
+      "MiniMax-M2.5": { id: "MiniMax-M2.5", name: "MiniMax-M2.5", family: "minimax" },
+      "MiniMax-M2.5-highspeed": { id: "MiniMax-M2.5-highspeed", name: "MiniMax-M2.5-highspeed", family: "minimax" },
+      "MiniMax-M2.7": { id: "MiniMax-M2.7", name: "MiniMax-M2.7", family: "minimax" },
+      "MiniMax-M2.7-highspeed": { id: "MiniMax-M2.7-highspeed", name: "MiniMax-M2.7-highspeed", family: "minimax" },
+      "MiniMax-M3": { id: "MiniMax-M3", name: "MiniMax-M3", family: "minimax" },
+    }
+    await writeFile(
+      fixturePath,
+      JSON.stringify({
+        minimax: {
+          id: "minimax",
+          name: "MiniMax (minimax.io)",
+          models: minimaxModels,
+        },
+        "minimax-coding-plan": {
+          id: "minimax-coding-plan",
+          name: "MiniMax Token Plan (minimax.io)",
+          models: minimaxModels,
+        },
+        "minimax-cn-coding-plan": {
+          id: "minimax-cn-coding-plan",
+          name: "MiniMax Token Plan (minimaxi.com)",
+          models: minimaxModels,
+        },
+      }),
+    )
+    await writeFile(snapshotPath, "{}\n")
+
+    const result = runUpdateModels({
+      ...process.env,
+      AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+      AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+    })
+
+    expect(result.status).toBe(0)
+    const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
+    for (const id of ["minimax-coding-plan", "minimax-cn-coding-plan"]) {
+      expect(Object.keys(data[id]?.models ?? {}).sort()).toEqual([
+        "MiniMax-M2.7",
+        "MiniMax-M2.7-highspeed",
+        "MiniMax-M3",
+      ])
+    }
+    expect(data.minimax?.models?.["MiniMax-M2"]).toBeDefined()
+    expect(data.minimax?.models?.["MiniMax-M2.5"]).toBeDefined()
+    expect(data.minimax?.models?.["MiniMax-M2.7"]).toBeDefined()
+  })
+
   test("handles network failure gracefully", async () => {
     const result = runUpdateModels({
       ...process.env,

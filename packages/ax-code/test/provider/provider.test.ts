@@ -159,10 +159,17 @@ test("MiniMax Token Plan providers use the Anthropic endpoint and expose M3", as
       expect(intl?.models[ModelID.make("MiniMax-M3")]?.api.url).toBe("https://api.minimax.io/anthropic/v1")
       expect(intl?.models[ModelID.make("MiniMax-M3")]?.api.npm).toBe("@ai-sdk/anthropic")
       expect(intl?.models[ModelID.make("MiniMax-M2.7")]).toBeDefined()
+      expect(intl?.models[ModelID.make("MiniMax-M2.7-highspeed")]).toBeDefined()
+      expect(intl?.models[ModelID.make("MiniMax-M2")]).toBeUndefined()
+      expect(intl?.models[ModelID.make("MiniMax-M2.1")]).toBeUndefined()
+      expect(intl?.models[ModelID.make("MiniMax-M2.5")]).toBeUndefined()
+      expect(intl?.models[ModelID.make("MiniMax-M2.5-highspeed")]).toBeUndefined()
 
       expect(cn?.name).toBe("MiniMax Token Plan (minimaxi.com)")
       expect(cn?.key).toBe("sk-cp-test-cn")
       expect(cn?.models[ModelID.make("MiniMax-M3")]?.api.url).toBe("https://api.minimaxi.com/anthropic/v1")
+      expect(cn?.models[ModelID.make("MiniMax-M2.7")]).toBeDefined()
+      expect(cn?.models[ModelID.make("MiniMax-M2.5")]).toBeUndefined()
     },
   })
 })
@@ -1850,6 +1857,30 @@ test("getSmallModel returns appropriate small model", async () => {
       const model = await Provider.getSmallModel(ProviderID.google)
       expect(model).toBeDefined()
       expect(model?.id).toBeDefined()
+    },
+  })
+})
+
+test("getSmallModel uses MiniMax Token Plan highspeed after the M2.7 floor", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("MINIMAX_TOKEN_PLAN_API_KEY", "sk-cp-test-intl")
+    },
+    fn: async () => {
+      const model = await Provider.getSmallModel(ProviderID.make("minimax-coding-plan"))
+      expect(model).toBeDefined()
+      expect(String(model?.id)).toBe("MiniMax-M2.7-highspeed")
     },
   })
 })

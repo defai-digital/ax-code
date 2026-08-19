@@ -1198,7 +1198,11 @@ export namespace Provider {
         priority = ["glm-4.7-flash", "glm-5.2", "glm-5"]
       }
       if (providerID.startsWith("minimax")) {
-        priority = ["MiniMax-M2.5", "MiniMax-M2.1", "MiniMax-M2.7"]
+        // Token Plan catalogs start at M2.7; prefer the highspeed SKU for aux
+        // calls. PAYG still has M2.5 / M2.1 as cheaper small-model options.
+        priority = providerID.includes("coding-plan")
+          ? ["MiniMax-M2.7-highspeed", "MiniMax-M2.7"]
+          : ["MiniMax-M2.5", "MiniMax-M2.1", "MiniMax-M2.7"]
       }
       if (providerID.startsWith("alibaba")) {
         priority = ["qwen3.6-flash", "deepseek-v4-flash", "deepseek-v4-pro", "qwen3.6-plus"]

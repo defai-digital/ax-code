@@ -1293,6 +1293,37 @@ for (const [id, env] of Object.entries(envOverrides)) {
   if (fetched[id]) fetched[id].env = env
 }
 
+// MiniMax Token Plan (legacy *-coding-plan ids): drop MiniMax-M* SKUs older
+// than M2.7. PAYG minimax / minimax-cn keep the full catalog; Alibaba plans
+// still serve MiniMax-M2.5 through their own allowlists.
+const MINIMAX_PLAN_PROVIDER_IDS = ["minimax-coding-plan", "minimax-cn-coding-plan"] as const
+const MINIMAX_PLAN_MIN_VERSION = { major: 2, minor: 7 }
+function parseMinimaxMVersion(probe: string): { major: number; minor: number } | undefined {
+  const segment = (probe.split("/").pop() ?? probe).toLowerCase()
+  const match = segment.match(/^minimax-m(\d+)(?:\.(\d+))?/)
+  if (!match) return undefined
+  return { major: Number(match[1]), minor: Number(match[2] ?? 0) }
+}
+function isOlderThanMinimaxPlanFloor(model: RawModel, mid: string): boolean {
+  for (const probe of [mid, model.id, model.name]) {
+    if (typeof probe !== "string") continue
+    const version = parseMinimaxMVersion(probe)
+    if (!version) continue
+    return (
+      version.major < MINIMAX_PLAN_MIN_VERSION.major ||
+      (version.major === MINIMAX_PLAN_MIN_VERSION.major && version.minor < MINIMAX_PLAN_MIN_VERSION.minor)
+    )
+  }
+  return false
+}
+for (const id of MINIMAX_PLAN_PROVIDER_IDS) {
+  const models = fetched[id]?.models as Record<string, RawModel> | undefined
+  if (!models) continue
+  for (const [mid, model] of Object.entries(models)) {
+    if (isOlderThanMinimaxPlanFloor(model, mid)) delete models[mid]
+  }
+}
+
 // Inject the 1M-context beta header on Claude models that declare
 // limit.context: 1_000_000. models.dev publishes the limit but not the
 // header that opts the request into the long-context beta — without the
