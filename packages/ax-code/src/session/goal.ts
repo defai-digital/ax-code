@@ -1,8 +1,9 @@
 import z from "zod"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
-import { Database, eq, sql } from "@/storage/db"
+import { eq, sql } from "@/storage/db"
 import { SessionGoalTable } from "./session.sql"
+import { SessionShard } from "./shard"
 import { SessionID } from "./schema"
 import type { MessageV2 } from "./message-v2"
 
@@ -82,7 +83,8 @@ export namespace SessionGoal {
   }
 
   export async function get(sessionID: SessionID): Promise<Info | undefined> {
-    return Database.use((db) => {
+    const store = SessionShard.storeFor(sessionID)
+    return store.use((db) => {
       const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, sessionID)).get()
       return row ? fromRow(row) : undefined
     })
@@ -130,7 +132,8 @@ export namespace SessionGoal {
       time_created: now,
       time_updated: now,
     } satisfies typeof SessionGoalTable.$inferInsert
-    const goal = Database.transaction((db) => {
+    const store = SessionShard.storeFor(input.sessionID, { write: true })
+    const goal = store.transaction((db) => {
       if (input.replace) {
         db.insert(SessionGoalTable)
           .values(values)
@@ -178,7 +181,8 @@ export namespace SessionGoal {
 
   export async function setStatus(input: { sessionID: SessionID; status: Status }): Promise<Info> {
     const now = Date.now()
-    const goal = Database.transaction((db) => {
+    const store = SessionShard.storeFor(input.sessionID, { write: true })
+    const goal = store.transaction((db) => {
       const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()
       if (!row) throw new Error("No goal is set for this session")
       assertCanSetStatus(row, input.status)
@@ -201,7 +205,7 @@ export namespace SessionGoal {
   }
 
   export async function clear(sessionID: SessionID) {
-    Database.use((db) => {
+    SessionShard.storeFor(sessionID, { write: true }).use((db) => {
       db.delete(SessionGoalTable).where(eq(SessionGoalTable.session_id, sessionID)).run()
     })
     publish(undefined, sessionID)
@@ -215,7 +219,10 @@ export namespace SessionGoal {
    */
   export async function copyTo(input: { from: SessionID; to: SessionID }): Promise<Info | undefined> {
     const now = Date.now()
-    const goal = Database.transaction((db) => {
+    // `from` and `to` are always the same project (fork), so resolve the store
+    // once from the write target and use it for both the read and the write.
+    const store = SessionShard.storeFor(input.to, { write: true })
+    const goal = store.transaction((db) => {
       const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.from)).get()
       if (!row) return undefined
       const values = {
@@ -267,7 +274,8 @@ export namespace SessionGoal {
     const shouldUpdate = tokenDelta > 0 || input.message.time.completed !== undefined
     const now = Date.now()
 
-    const updated = Database.transaction((db) => {
+    const store = SessionShard.storeFor(input.sessionID, { write: true })
+    const updated = store.transaction((db) => {
       const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()
       if (!row) return undefined
       // Only goals doing work accrue usage: active goals and the single

@@ -922,11 +922,12 @@ export namespace Session {
     }),
     async (input) => {
       // CASCADE delete handles parts automatically
-      Database.use((db) => {
+      const store = SessionShard.storeFor(input.sessionID, { write: true })
+      store.use((db) => {
         db.delete(MessageTable)
           .where(and(eq(MessageTable.id, input.messageID), eq(MessageTable.session_id, input.sessionID)))
           .run()
-        Database.effect(() =>
+        store.effect(() =>
           Bus.publishDetached(MessageV2.Event.Removed, {
             sessionID: input.sessionID,
             messageID: input.messageID,
@@ -944,7 +945,8 @@ export namespace Session {
       partID: PartID.zod,
     }),
     async (input) => {
-      Database.use((db) => {
+      const store = SessionShard.storeFor(input.sessionID, { write: true })
+      store.use((db) => {
         db.delete(PartTable)
           .where(
             and(
@@ -954,7 +956,7 @@ export namespace Session {
             ),
           )
           .run()
-        Database.effect(() =>
+        store.effect(() =>
           Bus.publishDetached(MessageV2.Event.PartRemoved, {
             sessionID: input.sessionID,
             messageID: input.messageID,
@@ -1076,7 +1078,8 @@ export namespace Session {
       delta: z.string().max(100_000),
     }),
     async (input) => {
-      const part = Database.use((db) =>
+      const store = SessionShard.storeFor(input.sessionID)
+      const part = store.use((db) =>
         db
           .select({ id: PartTable.id })
           .from(PartTable)

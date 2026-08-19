@@ -135,6 +135,31 @@ export namespace Shard {
     `CREATE INDEX IF NOT EXISTS "event_log_session_sequence_idx" ON "event_log" ("session_id","sequence")`,
     `CREATE INDEX IF NOT EXISTS "event_log_session_type_sequence_idx" ON "event_log" ("session_id","event_type","sequence")`,
     `CREATE INDEX IF NOT EXISTS "event_log_time_created_idx" ON "event_log" ("time_created")`,
+    // Slice 3: todo + session_goal. `todo` keeps the composite primary key
+    // (session_id, position) from session.sql.ts so onConflictDoNothing during
+    // backfill is idempotent. `session_goal.session_id` is the primary key.
+    `CREATE TABLE IF NOT EXISTS "todo" (
+      "session_id" text NOT NULL,
+      "content" text NOT NULL,
+      "status" text NOT NULL,
+      "priority" text NOT NULL,
+      "position" integer NOT NULL,
+      "time_created" integer NOT NULL,
+      "time_updated" integer NOT NULL,
+      PRIMARY KEY ("session_id","position")
+    )`,
+    `CREATE INDEX IF NOT EXISTS "todo_session_idx" ON "todo" ("session_id")`,
+    `CREATE TABLE IF NOT EXISTS "session_goal" (
+      "session_id" text PRIMARY KEY NOT NULL,
+      "objective" text NOT NULL,
+      "status" text NOT NULL,
+      "token_budget" integer,
+      "tokens_used" integer NOT NULL DEFAULT 0,
+      "time_used_seconds" integer NOT NULL DEFAULT 0,
+      "time_created" integer NOT NULL,
+      "time_updated" integer NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "session_goal_status_idx" ON "session_goal" ("status")`,
   ]
 
   function open(projectID: ProjectID): ShardClient {

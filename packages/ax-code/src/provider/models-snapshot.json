@@ -20285,6 +20285,46 @@
           "output": 131072
         }
       },
+      "x-ai/grok-4.6": {
+        "id": "x-ai/grok-4.6",
+        "name": "Grok 4.6",
+        "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "input": 500000,
+          "output": 500000
+        }
+      },
       "x-ai/grok-4.5": {
         "id": "x-ai/grok-4.5",
         "name": "Grok 4.5",
@@ -29897,62 +29937,6 @@
           ]
         },
         "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 384000
-        }
-      },
-      "deepseek-chat": {
-        "id": "deepseek-chat",
-        "name": "DeepSeek Chat",
-        "description": "DeepSeek chat model for instruction following, coding, and analysis",
-        "family": "deepseek",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2025-09",
-        "release_date": "2025-12-01",
-        "last_updated": "2026-02-28",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 1000000,
-          "output": 384000
-        }
-      },
-      "deepseek-reasoner": {
-        "id": "deepseek-reasoner",
-        "name": "DeepSeek Reasoner",
-        "description": "DeepSeek reasoning model for multi-step analysis, math, coding, and tools",
-        "family": "deepseek-thinking",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "temperature": true,
-        "knowledge": "2025-09",
-        "release_date": "2025-12-01",
-        "last_updated": "2026-02-28",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
         "limit": {
           "context": 1000000,
           "output": 384000
@@ -44934,6 +44918,45 @@
         "limit": {
           "context": 1000000,
           "output": 384000
+        }
+      },
+      "x-ai/grok-4.6": {
+        "id": "x-ai/grok-4.6",
+        "name": "Grok 4.6",
+        "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 500000
         }
       },
       "x-ai/grok-4.5": {
@@ -67200,6 +67223,45 @@
           "output": 128000
         }
       },
+      "xai/grok-4.6": {
+        "id": "xai/grok-4.6",
+        "name": "Grok 4.6",
+        "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 500000
+        }
+      },
       "xai/grok-4.5": {
         "id": "xai/grok-4.5",
         "name": "Grok 4.5",
@@ -82155,6 +82217,45 @@
           "output": 128000
         }
       },
+      "xai/grok-4.6": {
+        "id": "xai/grok-4.6",
+        "name": "Grok 4.6",
+        "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 500000
+        }
+      },
       "perplexity/sonar": {
         "id": "perplexity/sonar",
         "name": "Sonar",
@@ -88327,6 +88428,45 @@
         "provider": {
           "npm": "@ai-sdk/google",
           "api": "https://api.ofox.ai/gemini/v1beta"
+        }
+      },
+      "x-ai/grok-4.6": {
+        "id": "x-ai/grok-4.6",
+        "name": "Grok 4.6",
+        "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 65536
         }
       },
       "x-ai/grok-4.5": {
@@ -98622,6 +98762,48 @@
           "npm": "@ai-sdk/openai"
         }
       },
+      "grok-4.6": {
+        "id": "grok-4.6",
+        "name": "Grok 4.6",
+        "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 500000
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai"
+        }
+      },
       "gpt-5.4-pro": {
         "id": "gpt-5.4-pro",
         "name": "GPT-5.4 Pro",
@@ -102026,6 +102208,49 @@
           "context": 400000,
           "input": 272000,
           "output": 128000
+        }
+      },
+      "grok-4.6": {
+        "id": "grok-4.6",
+        "name": "Grok 4.6",
+        "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          },
+          {
+            "type": "budget_tokens"
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 500000
         }
       },
       "gpt-5.4-pro": {
@@ -109752,7 +109977,7 @@
       },
       "deepseek-ai/DeepSeek-V4-Pro": {
         "id": "deepseek-ai/DeepSeek-V4-Pro",
-        "name": "Deepseek V4 Pro",
+        "name": "DeepSeek V4 Pro",
         "description": "Open MoE flagship with million-token context for coding and long agent runs",
         "family": "deepseek-thinking",
         "attachment": false,
@@ -109796,7 +110021,7 @@
       },
       "deepseek-ai/DeepSeek-V4-Flash-0731": {
         "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
-        "name": "Deepseek V4 Flash 0731",
+        "name": "DeepSeek V4 Flash 0731",
         "description": "Official DeepSeek V4 Flash release with enhanced agentic capabilities and integrated DSpark speculative decoding",
         "family": "deepseek-flash",
         "attachment": false,
@@ -109867,7 +110092,7 @@
       },
       "deepseek-ai/DeepSeek-V4-Pro-0813": {
         "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
-        "name": "Deepseek V4 Pro 0813",
+        "name": "DeepSeek V4 Pro 0813",
         "description": "Flagship DeepSeek model for coding, reasoning, and agentic work",
         "family": "deepseek-thinking",
         "attachment": false,
@@ -128886,6 +129111,45 @@
           "output": 16384
         }
       },
+      "xai/grok-4.6": {
+        "id": "xai/grok-4.6",
+        "name": "Grok 4.6",
+        "description": "Grok model for agentic tool use, reasoning, coding, and live assistance",
+        "family": "grok",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 500000
+        }
+      },
       "xai/grok-4.5": {
         "id": "xai/grok-4.5",
         "name": "Grok 4.5",
@@ -135616,6 +135880,46 @@
           "output": 128000
         }
       },
+      "xai/grok-4.6": {
+        "id": "xai/grok-4.6",
+        "name": "Grok 4.6",
+        "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 500000
+        }
+      },
       "xai/grok-4.5": {
         "id": "xai/grok-4.5",
         "name": "Grok 4.5",
@@ -135638,6 +135942,46 @@
         "temperature": true,
         "release_date": "2026-07-08",
         "last_updated": "2026-07-08",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 500000
+        }
+      },
+      "xai/grok-latest": {
+        "id": "xai/grok-latest",
+        "name": "Grok 4.6",
+        "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
         "modalities": {
           "input": [
             "text",
@@ -143612,6 +143956,45 @@
           "output": 32768
         }
       },
+      "grok-4-6": {
+        "id": "grok-4-6",
+        "name": "Grok 4.6",
+        "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 500000
+        }
+      },
       "qwen3-coder-flash": {
         "id": "qwen3-coder-flash",
         "name": "Qwen3 Coder Flash",
@@ -150241,6 +150624,46 @@
           "output": 128000
         }
       },
+      "grok-4.6": {
+        "id": "grok-4.6",
+        "name": "Grok 4.6",
+        "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "input": 372000,
+          "output": 128000
+        }
+      },
       "claude-sonnet-4.6": {
         "id": "claude-sonnet-4.6",
         "name": "Claude Sonnet 4.6",
@@ -154342,7 +154765,7 @@
         "open_weights": false,
         "limit": {
           "context": 65536,
-          "output": 66000
+          "output": 65536
         }
       },
       "google/gemma-3-4b-it": {
@@ -155311,6 +155734,46 @@
         "limit": {
           "context": 262144,
           "output": 32768
+        }
+      },
+      "x-ai/grok-4.6": {
+        "id": "x-ai/grok-4.6",
+        "name": "Grok 4.6",
+        "description": "Grok 4.6 is SpaceXAI's smartest model with frontier performance on coding, knowledge work, and STEM.",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 500000
         }
       },
       "x-ai/grok-4.5": {
@@ -168052,6 +168515,45 @@
           "output": 50000
         }
       },
+      "grok-4-6": {
+        "id": "grok-4-6",
+        "name": "Grok 4.6",
+        "description": "Grok model for agentic tool use, reasoning, coding, and live assistance",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-10",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 200000
+        }
+      },
       "claude-opus-4-8-fast": {
         "id": "claude-opus-4-8-fast",
         "name": "Claude Opus 4.8 Fast",
@@ -171683,6 +172185,35 @@
         "limit": {
           "context": 200000,
           "output": 100000
+        }
+      },
+      "grok-4.6": {
+        "id": "grok-4.6",
+        "name": "Grok 4.6",
+        "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 32768
         }
       },
       "gemini-3.1-pro-preview": {

@@ -1,7 +1,7 @@
 import { Database, eq, inArray, NotFoundError } from "../storage/db"
 import { Shard } from "../storage/shard"
 import { ProjectShardTable, type ShardState } from "../storage/shard.sql"
-import { SessionTable, MessageTable, PartTable } from "./session.sql"
+import { SessionTable, MessageTable, PartTable, TodoTable, SessionGoalTable } from "./session.sql"
 import { EventLogTable } from "../replay/event-log.sql"
 import { SessionID } from "./schema"
 import type { ProjectID } from "../project/schema"
@@ -18,8 +18,9 @@ export namespace SessionShard {
   // Backfill coverage version. Each slice that moves a table into the shard
   // bumps this so projects backfilled under an earlier slice re-run the
   // (idempotent) copy on next access. 1 = message/part (Slice 1),
-  // 2 = +event_log (Slice 2). New slices bump to 3, 4, ...
-  export const BACKFILL_VERSION = 2
+  // 2 = +event_log (Slice 2), 3 = +todo/session_goal (Slice 3). New slices
+  // bump to 4, 5, ...
+  export const BACKFILL_VERSION = 3
 
   // Structurally interchangeable with the registry Database: `Shard.TxOrDb` is
   // kept identical to `Database.TxOrDb` (see shard.ts) so a Shard handle is
@@ -121,6 +122,16 @@ export namespace SessionShard {
         : Database.use((db) =>
             db.select().from(EventLogTable).where(inArray(EventLogTable.session_id, sessionIDs)).all(),
           )
+    const todos =
+      sessionIDs.length === 0
+        ? []
+        : Database.use((db) => db.select().from(TodoTable).where(inArray(TodoTable.session_id, sessionIDs)).all())
+    const goals =
+      sessionIDs.length === 0
+        ? []
+        : Database.use((db) =>
+            db.select().from(SessionGoalTable).where(inArray(SessionGoalTable.session_id, sessionIDs)).all(),
+          )
 
     Shard.handle(projectID).transaction((db) => {
       for (const message of messages) {
@@ -131,6 +142,12 @@ export namespace SessionShard {
       }
       for (const event of events) {
         db.insert(EventLogTable).values(event).onConflictDoNothing().run()
+      }
+      for (const todo of todos) {
+        db.insert(TodoTable).values(todo).onConflictDoNothing().run()
+      }
+      for (const goal of goals) {
+        db.insert(SessionGoalTable).values(goal).onConflictDoNothing().run()
       }
     })
 
