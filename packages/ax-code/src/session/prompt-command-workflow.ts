@@ -3,12 +3,14 @@ import { WorkflowTemplate } from "../workflow/template"
 import { WorkflowScheduler } from "../workflow/scheduler"
 import type { WorkflowArtifactRecord, WorkflowRunDetail } from "../workflow/state"
 import { summarizeWorkflowRunDetail } from "../workflow/projection"
-import { isWorkflowRuntimeEnabled } from "../workflow/spec"
+import { isWorkflowStartAllowed, isWorkflowTemplateAlwaysAvailable } from "../workflow/spec"
 import type { SessionID } from "./schema"
 
 export class WorkflowCommandRuntimeDisabledError extends Error {
   constructor() {
-    super("Workflow runtime is disabled. Set AX_CODE_WORKFLOW_RUNTIME=1 to enable workflow-backed commands.")
+    super(
+      "Workflow runtime is disabled. Set AX_CODE_WORKFLOW_RUNTIME=1 to enable workflow-backed commands, or use /verified-fix for the shipped issue-to-verified-fix template.",
+    )
     this.name = "WorkflowCommandRuntimeDisabledError"
   }
 }
@@ -39,18 +41,24 @@ export async function createWorkflowCommandRun(input: {
   arguments: string
   sessionID: SessionID
 }): Promise<WorkflowRunDetail> {
-  if (!isWorkflowRuntimeEnabled()) throw new WorkflowCommandRuntimeDisabledError()
   if (!input.command.workflow) throw new Error(`Command is not workflow-backed: ${input.commandName}`)
+  if (!isWorkflowStartAllowed(input.command.workflow)) throw new WorkflowCommandRuntimeDisabledError()
+
+  const inputValues = parseWorkflowCommandArguments(input.arguments)
+  if (inputValues.issue === undefined && typeof inputValues.arguments === "string") {
+    inputValues.issue = inputValues.arguments
+  }
+  delete inputValues.arguments
 
   const run = await WorkflowTemplate.createRun({
     templateID: WorkflowTemplate.ID.parse(input.command.workflow),
     parentSessionID: input.sessionID,
     sourceTaskID: `command:${input.commandName}`,
-    inputValues: parseWorkflowCommandArguments(input.arguments),
+    inputValues,
   })
   return WorkflowScheduler.start(run.id, {
     allowScaleBeyondDefaults: false,
-    allowWriteWorkflows: false,
+    allowWriteWorkflows: isWorkflowTemplateAlwaysAvailable(input.command.workflow),
     durableChildren: true,
     enqueueChildren: true,
   })

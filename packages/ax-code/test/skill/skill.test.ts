@@ -111,6 +111,22 @@ test("loads built-in debug skills with debug agent metadata", async () => {
   })
 })
 
+test("reliability pack skills are builtin and slash-discoverable", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skills = await Skill.all()
+      for (const name of Skill.RELIABILITY_PACK_NAMES) {
+        expect(Skill.BUILTIN_NAMES.has(name), name).toBe(true)
+        expect(Skill.SLASH_HIDDEN_BUILTIN_SKILLS.has(name), name).toBe(false)
+        expect(skills.find((skill) => skill.name === name)?.name, name).toBe(name)
+      }
+    },
+  })
+})
+
 test("built-in skill instructions are portable across repositories", async () => {
   await using tmp = await tmpdir({ git: true })
 

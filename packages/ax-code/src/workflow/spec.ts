@@ -472,3 +472,14 @@ export function applyWorkflowModelPolicyOverride(
 export function isWorkflowRuntimeEnabled() {
   return Flag.AX_CODE_WORKFLOW_RUNTIME
 }
+
+/** Builtin templates users can start without enabling the full workflow runtime. */
+export const WORKFLOW_ALWAYS_AVAILABLE_TEMPLATE_IDS = new Set(["builtin:issue-to-verified-fix"])
+
+export function isWorkflowTemplateAlwaysAvailable(templateID: string | undefined) {
+  return templateID !== undefined && WORKFLOW_ALWAYS_AVAILABLE_TEMPLATE_IDS.has(templateID)
+}
+
+export function isWorkflowStartAllowed(templateID?: string) {
+  return isWorkflowRuntimeEnabled() || isWorkflowTemplateAlwaysAvailable(templateID)
+}

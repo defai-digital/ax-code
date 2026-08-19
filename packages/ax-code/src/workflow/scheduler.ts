@@ -6,7 +6,7 @@ import type { TaskQueueID } from "../session/schema"
 import { KeyedSerialQueue } from "../util/queue"
 import { JsonBoolean } from "../util/schema"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "./budget"
-import { isWorkflowRuntimeEnabled, type WorkflowSpecV1 } from "./spec"
+import { isWorkflowRuntimeEnabled, isWorkflowStartAllowed, type WorkflowSpecV1 } from "./spec"
 import { planWorkflowDryRun, type WorkflowDryRunPhase } from "./planner"
 import { WorkflowRun } from "./run"
 import { WorkflowPhaseID, type WorkflowRunDetail, WorkflowRunID } from "./state"
@@ -44,7 +44,15 @@ export namespace WorkflowScheduler {
   }
 
   export async function start(runID: WorkflowRunID, options: StartOptions = {}) {
-    assertEnabled()
+    if (!isWorkflowRuntimeEnabled()) {
+      let specID: string | undefined
+      try {
+        specID = (await WorkflowRun.getDetail(runID)).spec.id
+      } catch {
+        throw new WorkflowSchedulerDisabledError()
+      }
+      await assertEnabledForSpec(specID)
+    }
     return startLocks().run(`workflow-run:${Instance.project.id}:${runID}`, () => startUnlocked(runID, options))
   }
 
@@ -53,6 +61,7 @@ export namespace WorkflowScheduler {
     const signal = options.signal
     const parsed = StartOptions.parse(options)
     const initial = await WorkflowRun.getDetail(runID)
+    await assertEnabledForSpec(initial.spec.id)
     if (initial.status === "completed" || initial.status === "cancelled" || initial.status === "failed") {
       return initial
     }
@@ -200,8 +209,8 @@ export namespace WorkflowScheduler {
   }
 
   export async function cancel(runID: WorkflowRunID) {
-    assertEnabled()
     const detail = await WorkflowRun.getDetail(runID)
+    await assertEnabledForSpec(detail.spec.id)
     for (const child of detail.children) {
       if (child.taskQueueID) {
         await cancelWorkflowQueueItem(child.taskQueueID).catch(() => undefined)
@@ -220,9 +229,9 @@ export namespace WorkflowScheduler {
   }
 
   export async function pause(runID: WorkflowRunID) {
-    assertEnabled()
     const TaskQueue = await loadTaskQueue()
     const detail = await WorkflowRun.getDetail(runID)
+    await assertEnabledForSpec(detail.spec.id)
     for (const child of detail.children) {
       if (isTerminalChildStatus(child.status) || child.status === "paused") continue
       if (child.taskQueueID) {
@@ -258,9 +267,9 @@ export namespace WorkflowScheduler {
   }
 
   export async function resume(runID: WorkflowRunID) {
-    assertEnabled()
     const TaskQueue = await loadTaskQueue()
     const detail = await WorkflowRun.getDetail(runID)
+    await assertEnabledForSpec(detail.spec.id)
     for (const child of detail.children) {
       if (child.status !== "paused") continue
       if (child.taskQueueID) {
@@ -281,12 +290,14 @@ export namespace WorkflowScheduler {
   }
 
   export async function retry(runID: WorkflowRunID) {
-    assertEnabled()
+    const detail = await WorkflowRun.getDetail(runID)
+    await assertEnabledForSpec(detail.spec.id)
     return retryChildren(runID)
   }
 
   export async function retryPhase(runID: WorkflowRunID, phaseID: WorkflowPhaseID) {
-    assertEnabled()
+    const detail = await WorkflowRun.getDetail(runID)
+    await assertEnabledForSpec(detail.spec.id)
     return retryChildren(runID, phaseID)
   }
 }
@@ -482,8 +493,9 @@ export class WorkflowUnsupportedMergeStrategyError extends Error {
   }
 }
 
-function assertEnabled() {
-  if (!isWorkflowRuntimeEnabled()) throw new WorkflowSchedulerDisabledError()
+async function assertEnabledForSpec(specID: string) {
+  if (isWorkflowStartAllowed(`builtin:${specID}`)) return
+  throw new WorkflowSchedulerDisabledError()
 }
 
 function assertExecutableMergeStrategies(spec: WorkflowSpecV1) {

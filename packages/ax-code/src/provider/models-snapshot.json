@@ -88090,6 +88090,42 @@
           "output": 131072
         }
       },
+      "z-ai/glm-5.3": {
+        "id": "z-ai/glm-5.3",
+        "name": "GLM-5.3",
+        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
       "z-ai/glm-5.2": {
         "id": "z-ai/glm-5.2",
         "name": "GLM-5.2",
@@ -88584,6 +88620,43 @@
         "provider": {
           "npm": "@ai-sdk/google",
           "api": "https://api.ofox.ai/gemini/v1beta"
+        }
+      },
+      "x-ai/grok-4.5": {
+        "id": "x-ai/grok-4.5",
+        "name": "Grok 4.5",
+        "description": "xAI's Grok model for chat, coding, agentic tools, and lower hallucination risk",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-07-08",
+        "last_updated": "2026-07-08",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 65536
         }
       },
       "moonshotai/kimi-k2.7-code": {

@@ -187,6 +187,16 @@ export namespace Skill {
     "queue-worker",
   ])
 
+  /** Visible reliability pack — also listed as slash commands. */
+  export const RELIABILITY_PACK_NAMES = [
+    "verified-change",
+    "safe-db-migration",
+    "api-contract",
+    "incident-observability",
+    "auth-boundaries",
+    "queue-worker",
+  ] as const
+
   /** Built-in skills the agent can load, but that must not appear in `/` autocomplete. */
   export const SLASH_HIDDEN_BUILTIN_SKILLS = new Set([
     "debug-only",

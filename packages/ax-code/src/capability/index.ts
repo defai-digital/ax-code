@@ -7,6 +7,7 @@ import { Instance } from "../project/instance"
 import { InstructionPrompt } from "../session/instruction"
 import { Skill } from "../skill"
 import { Filesystem } from "../util/filesystem"
+import { isWorkflowTemplateAlwaysAvailable } from "../workflow/spec"
 import { WorkflowTemplate } from "../workflow/template"
 
 export namespace Capability {
@@ -76,7 +77,7 @@ export namespace Capability {
         argumentHint: command.argumentHint,
         requiresArguments: command.requiresArguments,
         workflow: command.workflow,
-        requiresWorkflowRuntime: command.workflow !== undefined,
+        requiresWorkflowRuntime: command.workflow !== undefined && !isWorkflowTemplateAlwaysAvailable(command.workflow),
         allowShell: command.allowShell,
         mcpPrompt: command.mcpPrompt,
         permissionImpact: command.workflow

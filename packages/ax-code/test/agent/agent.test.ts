@@ -112,6 +112,8 @@ test("scout agent is a read-only upstream-research subagent", async () => {
       expect(evalPerm(scout, "task")).toBe("deny")
       expect(evalPerm(scout, "webfetch")).toBe("allow")
       expect(evalPerm(scout, "websearch")).toBe("allow")
+      expect(scout?.prompt).toContain("Non-vendored dependency")
+      expect(scout?.prompt).toContain("WebFetch")
       expect(Permission.evaluate("external_directory", "/some/other/path", scout!.permission).action).toBe("ask")
       expect(Permission.evaluate("external_directory", Truncate.GLOB, scout!.permission).action).toBe("allow")
     },

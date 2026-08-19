@@ -13,6 +13,7 @@ import {
   WorkflowSpecV1,
   getParsedWorkflowFixtureSpec,
   isWorkflowRuntimeEnabled,
+  isWorkflowStartAllowed,
   parseWorkflowSpecV1,
   resolveWorkflowInputValues,
 } from "../../src/workflow"
@@ -445,10 +446,13 @@ describe("workflow spec v1", () => {
       delete process.env.AX_CODE_WORKFLOW_RUNTIME
       expect(Flag.AX_CODE_WORKFLOW_RUNTIME).toBe(false)
       expect(isWorkflowRuntimeEnabled()).toBe(false)
+      expect(isWorkflowStartAllowed("builtin:issue-to-verified-fix")).toBe(true)
+      expect(isWorkflowStartAllowed("builtin:noop-dry-run")).toBe(false)
 
       process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
       expect(Flag.AX_CODE_WORKFLOW_RUNTIME).toBe(true)
       expect(isWorkflowRuntimeEnabled()).toBe(true)
+      expect(isWorkflowStartAllowed("builtin:issue-to-verified-fix")).toBe(true)
     } finally {
       if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous

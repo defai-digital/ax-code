@@ -243,7 +243,7 @@ export namespace Agent {
           denySubagentFanout,
           user,
         ),
-        description: `Read-only agent for upstream docs and dependency source. Use this when you need the installed version of a library, official documentation, changelog, or published API behavior — not a tour of the user's application code. Prefer lockfiles and in-repo installed trees (node_modules, vendor, etc.) plus WebFetch of official docs. Do not modify the project. For local codebase questions, use explore instead.`,
+        description: `Read-only agent for upstream docs and dependency source. Use this when you need the installed version of a library, official documentation, changelog, or published API behavior — not a tour of the user's application code. Prefer lockfiles and in-repo installed trees when present. If the dependency is not vendored in the workspace, fetch tagged official docs or source with WebFetch/WebSearch. Do not modify the project. For local codebase questions, use explore instead.`,
         prompt: PROMPT_SCOUT,
         options: {},
         mode: "subagent",

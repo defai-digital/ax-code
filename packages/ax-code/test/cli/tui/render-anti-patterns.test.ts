@@ -1013,6 +1013,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(autocomplete).toContain('"council"')
     expect(autocomplete).toContain('"plan"')
     expect(autocomplete).toContain('"debug"')
+    expect(autocomplete).toContain('"verified-fix"')
     expect(autocomplete).not.toContain('"adr"')
     expect(autocomplete).not.toContain('"prd"')
     expect(autocomplete).toContain("defaultCommandSlashAllowlist")

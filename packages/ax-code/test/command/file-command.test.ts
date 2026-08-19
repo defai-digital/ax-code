@@ -129,6 +129,7 @@ test("exposes plan and debug builtins and hides document-generator commands", as
         const names = (await Command.list()).map((command) => command.name)
         expect(names).toContain("plan")
         expect(names).toContain("debug")
+        expect(names).toContain("verified-fix")
         expect(names).toContain("review")
         expect(names).not.toContain("adr")
         expect(names).not.toContain("prd")
@@ -144,6 +145,11 @@ test("exposes plan and debug builtins and hides document-generator commands", as
         const plan = await Command.get("plan")
         expect(plan).toBeDefined()
         expect(plan!.agent).toBe("plan")
+
+        const verifiedFix = await Command.get("verified-fix")
+        expect(verifiedFix).toBeDefined()
+        expect(verifiedFix!.workflow).toBe("builtin:issue-to-verified-fix")
+        expect(verifiedFix!.agent).toBe("debug")
       },
     })
   })

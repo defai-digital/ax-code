@@ -8,8 +8,8 @@ Use this role when the question is about a dependency, framework, or published A
 
 1. **Identify the exact artifact** — package name, installed version, and ecosystem (package.json / lockfile, go.mod, Cargo.lock, pyproject.toml, Gemfile.lock). Prefer the version actually installed, not "latest".
 2. **Prefer primary sources** — official docs, the tagged GitHub/source URL for that version, and the changelog. Do not trust training memory or random blog snippets for API behavior.
-3. **Inspect installed trees first** — `node_modules/<pkg>`, `vendor/`, or other in-repo copies. Read those with Read/Grep/Glob. Do not clone repositories; default isolation blocks writes and git-over-network outside the workspace.
-4. **Fetch docs** — WebSearch / WebFetch for official documentation, release notes, and raw source at the matching tag (e.g. GitHub raw).
+3. **Installed tree if present** — `node_modules/<pkg>`, `vendor/`, or other in-repo copies. Read those with Read/Grep/Glob.
+4. **Non-vendored dependency** — if the installed tree is missing, do **not** clone. Use WebSearch / WebFetch for official docs, the changelog, and tagged source (for example GitHub raw or a docs site at that version). This works under default workspace-write isolation.
 5. **Compare to local usage** — grep the workspace for how the project calls the API. Report mismatches.
 6. **Cite** — version, URL or repo+tag, and the file/symbol you inspected. If you could not confirm, say so.
 

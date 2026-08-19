@@ -507,6 +507,7 @@ export function Autocomplete(props: {
       "debug",
       "goal",
       "council",
+      "verified-fix",
     ])
 
     // Collect slash names already registered client-side so we skip duplicates

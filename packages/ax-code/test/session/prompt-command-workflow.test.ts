@@ -34,6 +34,35 @@ test("parseWorkflowCommandArguments supports key=value JSON assignments and raw 
   expect(parseWorkflowCommandArguments("")).toEqual({})
 })
 
+test("createWorkflowCommandRun starts issue-to-verified-fix without the runtime flag", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+  delete process.env.AX_CODE_WORKFLOW_RUNTIME
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const run = await createWorkflowCommandRun({
+          commandName: "verified-fix",
+          command: { workflow: "builtin:issue-to-verified-fix" },
+          arguments: "login returns 500",
+          sessionID: session.id,
+        })
+
+        expect(run.sourceTemplateID).toBe("builtin:issue-to-verified-fix")
+        expect(run.sourceTaskID).toBe("command:verified-fix")
+        expect(run.parentSessionID).toBe(session.id)
+        expect(run.spec.permissions.writePolicy).toBe("serialized")
+        expect(["queued", "running", "completed", "failed", "blocked", "paused"]).toContain(run.status)
+      },
+    })
+  } finally {
+    if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+    else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+  }
+})
+
 test("createWorkflowCommandRun fails clearly when runtime flag is disabled", async () => {
   const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
   delete process.env.AX_CODE_WORKFLOW_RUNTIME

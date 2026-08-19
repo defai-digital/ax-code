@@ -19,6 +19,7 @@ import PROMPT_MODE from "./template/mode.txt"
 import PROMPT_WIKI from "./template/wiki.txt"
 import PROMPT_COMMIT from "./template/commit.txt"
 import PROMPT_PR from "./template/pr.txt"
+import PROMPT_VERIFIED_FIX from "./template/verified-fix.txt"
 
 export namespace Command {
   export const Event = {
@@ -126,6 +127,7 @@ export namespace Command {
     WIKI: "wiki",
     COMMIT: "commit",
     PR: "pr",
+    VERIFIED_FIX: "verified-fix",
   } as const
 
   const state = Instance.state(async () => {
@@ -288,6 +290,20 @@ export namespace Command {
         return PROMPT_PR
       },
       hints: hints(PROMPT_PR),
+    }
+    commands[Default.VERIFIED_FIX] = {
+      name: Default.VERIFIED_FIX,
+      description: "reproduce a failure, apply a minimal fix, then re-run the same check [issue]",
+      source: "command",
+      sourceTool: "builtin",
+      scope: "builtin",
+      agent: "debug",
+      argumentHint: "<issue, failing test, or symptom>",
+      workflow: "builtin:issue-to-verified-fix",
+      get template() {
+        return PROMPT_VERIFIED_FIX
+      },
+      hints: hints(PROMPT_VERIFIED_FIX),
     }
 
     for (const [name, command] of Object.entries(cfg.command ?? {})) {
