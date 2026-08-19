@@ -90,6 +90,7 @@ import { upsert } from "../../context/sync-util"
 import { summarizedPasteViews } from "./paste-view-model"
 import { withTimeout } from "@/util/timeout"
 import { footerContextGauge, footerSessionStatusView, footerTokenChip } from "../../routes/session/footer-view-model"
+import { calculateCompactionBudget, effectiveTokenTotal } from "@/session/compaction-budget"
 import { runMode, runModeLabel } from "./run-mode-view-model"
 import { Gauge } from "@tui/ui/primitives/gauge"
 import { KeyHint } from "@tui/ui/primitives/key-hint"
@@ -1810,8 +1811,9 @@ export function Prompt(props: PromptProps) {
   })
 
   // Context-window usage for the footer gauge (ADR-031 R8). Anchored on
-  // the most recent assistant message with usage data, against that
-  // model's context limit.
+  // the most recent assistant message with usage data, measured against
+  // the compaction budget (not the raw context limit) so 100% means
+  // "the next turn triggers auto-compaction".
   const contextGauge = createMemo(() => {
     if (!props.sessionID) return
     const msgs = sync.data.message[props.sessionID]
@@ -1819,7 +1821,29 @@ export function Prompt(props: PromptProps) {
     const last = Usage.last(msgs) as any
     if (!last?.tokens) return
     const model = sync.data.provider.find((x: any) => x.id === last.providerID)?.models?.[last.modelID]
-    return footerContextGauge({ totalTokens: Usage.total(last), contextLimit: model?.limit?.context })
+    const budget = model ? calculateCompactionBudget(model, sync.data.config.compaction?.reserved) : undefined
+    return footerContextGauge({
+      totalTokens: effectiveTokenTotal(last.tokens),
+      budget,
+      compactionAuto: sync.data.config.compaction?.auto,
+      contextLimit: model?.limit?.context,
+    })
+  })
+
+  // Number of compaction markers in the synced window. Surfaced next to
+  // the gauge so the bar dropping after an auto-compaction reads as
+  // information ("context was compacted") instead of a glitch.
+  const compactionCount = createMemo(() => {
+    if (!props.sessionID) return 0
+    const msgs = sync.data.message[props.sessionID]
+    if (!msgs) return 0
+    let count = 0
+    for (const msg of msgs) {
+      for (const part of sync.data.part[msg.id] ?? []) {
+        if (part.type === "compaction") count++
+      }
+    }
+    return count
   })
 
   const busyStatus = createMemo(() => {
@@ -2368,7 +2392,10 @@ export function Prompt(props: PromptProps) {
             >
               <Show when={contextGauge()}>
                 <box flexDirection="row" flexShrink={0} paddingRight={1}>
-                  <Gauge view={contextGauge()} />
+                  <Gauge
+                    view={contextGauge()}
+                    label={compactionCount() > 0 ? `compacted×${compactionCount()}` : undefined}
+                  />
                 </box>
               </Show>
               <box flexDirection="row" flexShrink={0}>

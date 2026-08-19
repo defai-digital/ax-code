@@ -21,6 +21,12 @@ import { sessionAssistantPath, zeroTokenUsage } from "./prompt-message-builders"
 import { estimateRequestTokens } from "./prompt-request"
 import { SystemPrompt } from "./system"
 import type { ModelMessage } from "ai"
+import {
+  MIN_USABLE_TOKENS,
+  SUPER_LONG_USABLE_FRACTION,
+  calculateCompactionBudget,
+  effectiveTokenTotal,
+} from "./compaction-budget"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -38,58 +44,21 @@ export namespace SessionCompaction {
     ),
   }
 
-  // Default headroom reserved for the next response: 10% of the input
-  // budget. Keeps compaction firing at ~90% of capacity across every model
-  // — small (8k) or large (1M / 2M) — without coupling to model.output,
-  // which is unreliable: some snapshot entries report output == context,
-  // which would zero out usable under any `context - output` formula.
-  // Users can override with an explicit `compaction.reserved` token count
-  // in ax-code.json.
-  const DEFAULT_RESERVED_FRACTION = 0.1
-  const MIN_USABLE_TOKENS = 1_000
-
-  function componentTotal(tokens: MessageV2.Assistant["tokens"]) {
-    return tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write
-  }
-
-  function effectiveTotal(tokens: MessageV2.Assistant["tokens"]) {
-    const total = typeof tokens.total === "number" && Number.isFinite(tokens.total) ? tokens.total : 0
-    return Math.max(total, componentTotal(tokens))
-  }
-
-  function calculateBudget(model: Provider.Model, configuredReserved?: number) {
-    const context = model.limit.context
-    if (context === 0) return undefined
-
-    // For prompt-cached providers (Claude) limit.input is the input cap and
-    // is smaller than limit.context; otherwise context is the cap. Use `||`
-    // so a stray `limit.input: 0` falls through to context — `??` would
-    // treat 0 as a valid cap and never compact.
-    const declaredInput = model.limit.input
-    const cap = declaredInput || context
-    // AX Engine rejects prompt + requested output above context. New model
-    // cards expose an explicit input cap, but retain a safe fallback for older
-    // config overrides that only declare context/output.
-    const defaultReserved =
-      model.providerID === "ax-engine" && !declaredInput
-        ? Math.max(Math.ceil(cap * DEFAULT_RESERVED_FRACTION), model.limit.output)
-        : Math.ceil(cap * DEFAULT_RESERVED_FRACTION)
-    const reserved = configuredReserved ?? defaultReserved
-    const usable = Math.max(0, cap - reserved)
-    return { cap, reserved, usable }
-  }
+  // Budget math lives in ./compaction-budget (shared with the TUI footer
+  // gauge). Users can override the reserved headroom with an explicit
+  // `compaction.reserved` token count in ax-code.json.
 
   /** The input budget for an actual compaction request, even when automatic compaction is disabled. */
   export async function requestBudget(model: Provider.Model) {
     const config = await Config.get()
-    return calculateBudget(model, config.compaction?.reserved)
+    return calculateCompactionBudget(model, config.compaction?.reserved)
   }
 
   /** The budget used to decide whether automatic compaction should run. */
   export async function budget(model: Provider.Model) {
     const config = await Config.get()
     if (config.compaction?.auto === false) return undefined
-    const result = calculateBudget(model, config.compaction?.reserved)
+    const result = calculateCompactionBudget(model, config.compaction?.reserved)
     if (!result) return undefined
     // Clamp tiny usable budgets off: if reserved nearly consumes the cap,
     // any realistic compacted message still overflows and compaction fires
@@ -143,11 +112,7 @@ export namespace SessionCompaction {
   }
 
   // Super-Long runs compact earlier (~75% of the usable budget instead of
-  // 100%): nobody is watching to /compact manually, per-turn latency grows
-  // with history — which is the dominant cost on local inference — and a
-  // multi-day run otherwise spends its tail end permanently near the cap.
-  const SUPER_LONG_USABLE_FRACTION = 0.75
-
+  // 100%); see SUPER_LONG_USABLE_FRACTION in ./compaction-budget.
   export async function isOverflow(input: {
     tokens: MessageV2.Assistant["tokens"]
     model: Provider.Model
@@ -156,7 +121,7 @@ export namespace SessionCompaction {
     const tokenBudget = await budget(input.model)
     if (!tokenBudget) return false
     const limit = input.superLong ? tokenBudget.usable * SUPER_LONG_USABLE_FRACTION : tokenBudget.usable
-    return effectiveTotal(input.tokens) >= limit
+    return effectiveTokenTotal(input.tokens) >= limit
   }
 
   const PRUNE_PROTECTED_TOOLS = ["skill"]

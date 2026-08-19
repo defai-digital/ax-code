@@ -1,5 +1,6 @@
 import { formatDuration } from "@/util/format"
 import { Locale } from "@/util/locale"
+import { compactionGaugeLimit, type CompactionBudget } from "@/session/compaction-budget"
 
 export type FooterSessionStatus =
   | {
@@ -102,14 +103,23 @@ export type FooterContextGaugeTone = "muted" | "warning" | "error"
 export type FooterContextGauge = { ratio: number; percent: number; tone: FooterContextGaugeTone }
 
 // Context-window usage for the footer gauge (ADR-031 R8). Undefined when
-// the model's context limit is unknown or no tokens have accumulated —
-// the caller hides the gauge entirely rather than guessing.
+// no usable limit is known or no tokens have accumulated — the caller
+// hides the gauge entirely rather than guessing.
+//
+// Denominator is the compaction budget (SessionCompaction's usable input
+// tokens) when available, so 100% means "the next turn triggers
+// auto-compaction" and the warning/error tones actually fire. With
+// auto-compaction disabled the raw input cap is used instead. Only when
+// the budget can't be computed (no model limits) do we fall back to the
+// advertised context limit.
 export function footerContextGauge(input: {
   totalTokens?: number
   contextLimit?: number
+  budget?: CompactionBudget
+  compactionAuto?: boolean
 }): FooterContextGauge | undefined {
   const total = input.totalTokens ?? 0
-  const limit = input.contextLimit ?? 0
+  const limit = compactionGaugeLimit({ budget: input.budget, auto: input.compactionAuto }) ?? input.contextLimit ?? 0
   if (total <= 0 || limit <= 0) return undefined
   const ratio = Math.min(1, total / limit)
   const percent = Math.round(ratio * 100)
