@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.7.0] - 2026-08-19
+
+### Added
+
+- Improve CLI provider alias resolution and model ranking.
+- Add scout subagent and backend verification skills.
+- Add dedicated guardian model + fail-closed tests.
+- Add opt-in semantic pre-approval guardian for RISK actions.
+- Rework web dashboard around usage and activity.
+- Add temporary disable/enable and provider manager UI.
+- Log server launch params and relaunch mismatches.
+
+### Changed
+
+- Revert(provider): remove unverified capability overrides.
+- Lock model-specific context policy.
+- Document safe upgrade temp paths.
+- Isolate auto-update flag in release CI.
+
+### Fixed
+
+- Register verified Kimi and DeepSeek capabilities.
+- Regenerate scout agent schema.
+- Harden connected CLI model selection.
+- Block dangerous git config keys from autonomous writes.
+- Harden autonomous mode against self-escalation and config bypass.
+- Preserve active sessions on toggles.
+- Refresh Groq and Zhipu API catalogs from official docs.
+- Align plan catalogs with official Alibaba/Z.ai allowlists.
+- Trim compaction history to fit small model windows.
+- Stop crash loop when the terminal dies mid-session.
+- Cap stream-repetition segment map to pass self-scan.
+- Recover from output loops with guidance, not blind retries.
+- Stop in-stream model output loops; never fall back off local providers.
+- Build resumed releases from requested tag.
+- Resume postpublish distribution jobs.
+- Honor resumed release tag in postpublish jobs.
+
 ## [7.6.4] - 2026-08-18
 
 ### Fixed
