@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.7.1] - 2026-08-19
+
+### Added
+
+- MiniMax Token Plan rename, Z.AI general API, GLM-4.7-Flash free SKU.
+- Symbol relevance signals, DRE auto-notes, warm-up hints.
+- Generate GitHub release notes from changelog sections.
+- Add symbol-anchored cross-session notes.
+- Ship Scout WebFetch path and /verified-fix command.
+- Add backend reliability skills and verified-fix workflow.
+
+### Fixed
+
+- Bound warmup signal accumulator.
+- Tool-calling backstop resets streak and fires at the cap (#390).
+- Survive SQLITE_BUSY on bootstrap project persist (#391).
+- Strip inherited AX*CODE*\* host-session flags before the suite runs.
+- Measure footer context gauge against the compaction budget.
+
 ## [7.7.0] - 2026-08-19
 
 Scout subagent, an optional risk guardian, a usage-focused dashboard, and safer autonomous mode.
