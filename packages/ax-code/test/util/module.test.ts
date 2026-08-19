@@ -56,4 +56,60 @@ describe("util.module", () => {
     await using tmp = await tmpdir()
     expect(Module.resolve("missing-package", tmp.path)).toBeUndefined()
   })
+
+  test("resolveEntry returns a file path unchanged", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "create.js")
+    await Filesystem.write(file, "export {}\n")
+    expect(Module.resolveEntry(file)).toBe(file)
+  })
+
+  test("resolveEntry follows ESM exports.import like @ai-sdk/anthropic", async () => {
+    await using tmp = await tmpdir()
+    const pkg = path.join(tmp.path, "node_modules/@ai-sdk/anthropic")
+    const entry = path.join(pkg, "dist/index.js")
+    await Filesystem.write(entry, "export function createAnthropic() {}\n")
+    await Filesystem.writeJson(path.join(pkg, "package.json"), {
+      name: "@ai-sdk/anthropic",
+      type: "module",
+      exports: {
+        ".": {
+          types: "./dist/index.d.ts",
+          import: "./dist/index.js",
+          default: "./dist/index.js",
+        },
+      },
+    })
+    expect(Module.resolveEntry(pkg)).toBe(entry)
+  })
+
+  test("resolveEntry falls back to package.json main", async () => {
+    await using tmp = await tmpdir()
+    const pkg = path.join(tmp.path, "sdk")
+    const entry = path.join(pkg, "lib/api.js")
+    await Filesystem.write(entry, "export {}\n")
+    await Filesystem.writeJson(path.join(pkg, "package.json"), {
+      name: "sdk",
+      main: "lib/api.js",
+    })
+    expect(Module.resolveEntry(pkg)).toBe(entry)
+  })
+
+  test("resolveEntry returns undefined for a directory with no package entry", async () => {
+    await using tmp = await tmpdir()
+    await Filesystem.write(path.join(tmp.path, ".keep"), "")
+    expect(Module.resolveEntry(tmp.path)).toBeUndefined()
+  })
+
+  test("resolveEntry rejects a main that escapes the package directory", async () => {
+    await using tmp = await tmpdir()
+    const pkg = path.join(tmp.path, "sdk")
+    const outside = path.join(tmp.path, "escape.js")
+    await Filesystem.write(outside, "export {}\n")
+    await Filesystem.writeJson(path.join(pkg, "package.json"), {
+      name: "sdk",
+      main: "../escape.js",
+    })
+    expect(Module.resolveEntry(pkg)).toBeUndefined()
+  })
 })

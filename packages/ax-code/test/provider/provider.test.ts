@@ -1387,6 +1387,69 @@ test("local provider file URLs are detected case-insensitively", async () => {
   })
 })
 
+test("local provider file URLs that point at a package directory import the entry file", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      const pkg = path.join(dir, "local-sdk")
+      await fs.mkdir(path.join(pkg, "dist"), { recursive: true })
+      await fs.writeFile(
+        path.join(pkg, "dist/index.js"),
+        `export function createLocalProvider() {
+  return {
+    languageModel(modelID) {
+      return { id: modelID }
+    }
+  }
+}
+`,
+      )
+      await fs.writeFile(
+        path.join(pkg, "package.json"),
+        JSON.stringify({
+          name: "local-sdk",
+          type: "module",
+          exports: {
+            ".": {
+              import: "./dist/index.js",
+              default: "./dist/index.js",
+            },
+          },
+        }),
+      )
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          provider: {
+            "local-file-provider": {
+              name: "Local File Provider",
+              npm: pathToFileURL(pkg).href,
+              env: [],
+              models: {
+                "local-model": {
+                  name: "Local Model",
+                  tool_call: true,
+                  limit: { context: 1000, output: 100 },
+                },
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const model = await Provider.getModel(ProviderID.make("local-file-provider"), ModelID.make("local-model"))
+      const language = await Provider.getLanguage(model)
+      expect((language as { id?: string }).id).toBe("local-model")
+    },
+  })
+})
+
 test("model options are merged from existing model", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

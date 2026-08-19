@@ -8,6 +8,7 @@ import { toErrorMessage } from "@/util/error-message"
 import { BunProc } from "../bun"
 import { Plugin } from "../plugin"
 import { NamedError } from "@ax-code/util/error"
+import { Module } from "@ax-code/util/module"
 import { ModelsDev } from "./models"
 import { Auth } from "../auth"
 import { Env } from "../env"
@@ -56,6 +57,17 @@ export namespace Provider {
     } catch {
       return false
     }
+  }
+
+  function providerImportSpecifier(installedPath: string) {
+    const fsPath = isFileUrlSpecifier(installedPath) ? fileURLToPath(installedPath) : installedPath
+    const entry = Module.resolveEntry(fsPath)
+    if (!entry) {
+      throw new Error(
+        `Could not resolve provider package entry for ${installedPath}. Node cannot import a package directory; the package needs a file entry (exports/module/main).`,
+      )
+    }
+    return pathToFileURL(entry).href
   }
 
   // Emitted after background model discovery (CLI subprocess probes, local
@@ -980,7 +992,7 @@ export namespace Provider {
         }
 
         const mod = await withTimeout(
-          import(installedPath),
+          import(providerImportSpecifier(installedPath)),
           15_000,
           `loading provider module timed out: ${model.api.npm}`,
         )
