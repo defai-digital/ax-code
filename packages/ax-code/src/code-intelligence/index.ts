@@ -639,6 +639,7 @@ export namespace CodeIntelligence {
 
   const SIGNAL_WEIGHTS: Record<SymbolSignalType, number> = { bug: 3, impact: 2, note: 1 }
   const SIGNAL_DECAY_HALF_LIFE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+  const SIGNAL_WARMUP_SCAN_LIMIT = 256
 
   export function recordSignal(
     projectID: ProjectID,
@@ -654,9 +655,13 @@ export namespace CodeIntelligence {
   export function topWarmupFiles(projectID: ProjectID, opts?: { limit?: number; now?: number }): WarmupFile[] {
     const limit = Math.min(Math.max(opts?.limit ?? 8, 0), 40)
     const now = opts?.now ?? Date.now()
-    const rows = CodeGraphQuery.recentSignals(projectID, 256)
+    const rows = CodeGraphQuery.recentSignals(projectID, SIGNAL_WARMUP_SCAN_LIMIT)
     const byFile = new Map<string, number>()
     for (const row of rows) {
+      // recentSignals already bounds the input, but keep the accumulator's
+      // invariant explicit so future query changes cannot turn this hot-path
+      // Map into process-lifetime growth.
+      if (!byFile.has(row.file) && byFile.size >= SIGNAL_WARMUP_SCAN_LIMIT) continue
       const weight = SIGNAL_WEIGHTS[row.signal_type] ?? 1
       const age = Math.max(0, now - row.last_seen_at)
       const decay = Math.exp(-age / SIGNAL_DECAY_HALF_LIFE_MS)
