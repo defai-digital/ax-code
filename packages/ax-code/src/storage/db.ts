@@ -327,15 +327,86 @@ export namespace Database {
     } catch (err) {
       if (err instanceof Context.NotFound) {
         const effects: Effect[] = []
-        const result = Client().transaction<T>((tx) => {
-          return requireSyncTransactionResult(
-            ctx.provide({ tx, effects }, () => callback(tx)) as SyncTransactionResult<T>,
-          ) as SyncTransactionResult<T>
-        }) as SyncTransactionResult<T>
+        // BEGIN IMMEDIATE (not the driver's default deferred BEGIN) so the
+        // RESERVED write lock is acquired up front rather than at the first
+        // write statement. Under a deferred BEGIN two processes can both open
+        // a read snapshot and then deadlock upgrading to writer — one hits
+        // SQLITE_BUSY at its first write even though the other hasn't
+        // committed. Acquiring the write lock immediately closes that window
+        // for every write transaction at this single choke point.
+        const result = Client().transaction<T>(
+          (tx) => {
+            return requireSyncTransactionResult(
+              ctx.provide({ tx, effects }, () => callback(tx)) as SyncTransactionResult<T>,
+            ) as SyncTransactionResult<T>
+          },
+          { behavior: "immediate" },
+        ) as SyncTransactionResult<T>
         runEffects(effects)
         return result
       }
       throw err
     }
+  }
+
+  export type BusyRetryOptions = {
+    attempts?: number
+    baseMs?: number
+    maxMs?: number
+    // Injectable for deterministic tests (vi.useFakeTimers). Default to a real
+    // Math.random and a real setTimeout-backed sleep.
+    random?: () => number
+    sleep?: (ms: number) => Promise<void>
+  }
+
+  const DEFAULT_BUSY_RETRY_ATTEMPTS = 3
+  const DEFAULT_BUSY_RETRY_BASE_MS = 50
+  const DEFAULT_BUSY_RETRY_MAX_MS = 1_000
+
+  function busyRetryBackoffMs(attempt: number, baseMs: number, maxMs: number, random: () => number): number {
+    // Exponential backoff capped at maxMs, then full jitter in [0, cap]. The
+    // cap is inclusive so a single-option `baseMs === maxMs` yields a uniform
+    // [0, baseMs] delay, matching a fixed-delay retry under jitter.
+    const cap = Math.min(baseMs * 2 ** attempt, maxMs)
+    return Math.floor(random() * (cap + 1))
+  }
+
+  /**
+   * Run a synchronous work function, transparently retrying on SQLITE_BUSY
+   * ("database is locked") with exponential backoff + full jitter. Only
+   * transient cross-process writer contention is retried; a non-busy failure
+   * (corruption, read-only, schema) propagates immediately. The work function
+   * must be idempotent — each retry re-runs it from scratch because SQLite has
+   * already rolled back whatever partial write tripped the busy error.
+   */
+  export async function withBusyRetry<T>(fn: () => T, options: BusyRetryOptions = {}): Promise<T> {
+    const attempts = Math.max(1, options.attempts ?? DEFAULT_BUSY_RETRY_ATTEMPTS)
+    const baseMs = options.baseMs ?? DEFAULT_BUSY_RETRY_BASE_MS
+    const maxMs = options.maxMs ?? DEFAULT_BUSY_RETRY_MAX_MS
+    const random = options.random ?? Math.random
+    const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+    let lastError: unknown
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      try {
+        return fn()
+      } catch (error) {
+        lastError = error
+        if (!isBusyError(error) || attempt === attempts - 1) throw error
+        await sleep(busyRetryBackoffMs(attempt, baseMs, maxMs, random))
+      }
+    }
+    throw lastError
+  }
+
+  /**
+   * `withBusyRetry` specialized for `Database.transaction`. The transaction
+   * callback is re-invoked in full on each attempt so a busy failure re-runs
+   * against a fresh BEGIN IMMEDIATE transaction (SQLite aborted the prior one).
+   */
+  export function transactionWithBusyRetry<T>(
+    callback: (tx: TxOrDb) => T,
+    options: BusyRetryOptions = {},
+  ): Promise<SyncTransactionResult<T>> {
+    return withBusyRetry(() => transaction(callback), options)
   }
 }

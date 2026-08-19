@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import { Global } from "../../src/global"
 import { Installation } from "../../src/installation"
@@ -77,5 +77,29 @@ describe("Database.applyStartupPragmas", () => {
         },
       },
     ])
+  })
+})
+
+describe("Database.transaction", () => {
+  test("opens write transactions with BEGIN IMMEDIATE", () => {
+    // Assert at the raw node:sqlite layer: the drizzle driver turns
+    // { behavior: "immediate" } into a prepared `begin immediate`
+    // statement (drizzle-orm/node-sqlite/session.js). Spying on the
+    // drizzle wrapper's `transaction` method does not observe the
+    // internal call path, so capture prepare() on $client instead.
+    const client = Database.Client()
+    const raw = client.$client
+    const prepared: string[] = []
+    const original = raw.prepare.bind(raw)
+    const spy = vi.spyOn(raw, "prepare").mockImplementation((sql: string) => {
+      prepared.push(sql)
+      return original(sql)
+    })
+    try {
+      expect(Database.transaction(() => 42)).toBe(42)
+    } finally {
+      spy.mockRestore()
+    }
+    expect(prepared.map((sql) => sql.trim().toLowerCase())).toContain("begin immediate")
   })
 })

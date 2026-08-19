@@ -224,30 +224,28 @@ export namespace Project {
   // busy_timeout (#391). Discovery already holds the project in memory, so
   // bootstrap must not die on SQLITE_BUSY — retry the write in the background
   // and let startup continue. Non-busy failures (corruption, read-only) stay
-  // fatal.
+  // fatal. Retry pacing (exponential backoff + jitter) is delegated to
+  // Database.withBusyRetry; the wrapper below only adds the unref'd background
+  // scheduling so a pending retry never blocks startup or keeps a CLI process
+  // alive.
   function deferPersist(result: Info, data: DiscoveryResult) {
-    let remaining = PERSIST_RETRY_ATTEMPTS
-    const attempt = () => {
-      try {
-        persist(result, data)
-        log.info("persisted discovered project after retry", { projectID: result.id })
-      } catch (error) {
-        remaining -= 1
-        if (remaining > 0 && Database.isBusyError(error)) {
-          schedule()
-          return
-        }
-        log.warn("giving up persisting discovered project", {
-          projectID: result.id,
-          error: toErrorMessage(error),
+    const run = () =>
+      Database.withBusyRetry(() => persist(result, data), {
+        attempts: PERSIST_RETRY_ATTEMPTS,
+        baseMs: PERSIST_RETRY_DELAY_MS,
+        maxMs: PERSIST_RETRY_DELAY_MS,
+      })
+        .then(() => {
+          log.info("persisted discovered project after retry", { projectID: result.id })
         })
-      }
-    }
-    const schedule = () => {
-      // unref so a pending retry never keeps a CLI process alive
-      setTimeout(attempt, PERSIST_RETRY_DELAY_MS).unref?.()
-    }
-    schedule()
+        .catch((error) => {
+          log.warn("giving up persisting discovered project", {
+            projectID: result.id,
+            error: toErrorMessage(error),
+          })
+        })
+    // unref so a pending retry never keeps a CLI process alive
+    setTimeout(() => void run(), PERSIST_RETRY_DELAY_MS).unref?.()
   }
 
   async function fromDirectoryPromise(directory: string) {

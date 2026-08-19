@@ -277,9 +277,18 @@ export namespace SessionGoal {
       // (assertCanSetStatus), and a completed goal would report
       // ever-growing final usage.
       if (row.status !== "active" && row.status !== "budget_limited") return fromRow(row)
-      if (!shouldUpdate) return fromRow(row)
+      // A turn with no measurable token accrual and sub-second duration has
+      // nothing to persist. Skip the write (and the write transaction) for
+      // token-less tool-call/error turns instead of issuing a no-op UPDATE that
+      // only touches time_updated — the status CASE cannot transition when
+      // tokens_used is unchanged.
+      if (!shouldUpdate || (tokenDelta === 0 && elapsedSeconds === 0)) return fromRow(row)
 
-      db.update(SessionGoalTable)
+      // Fold the re-read into the UPDATE via RETURNING so a single statement
+      // both accrues usage and returns the post-update goal (avoids the second
+      // SELECT round-trip inside the write transaction).
+      const next = db
+        .update(SessionGoalTable)
         .set({
           tokens_used: sql`${SessionGoalTable.tokens_used} + ${tokenDelta}`,
           time_used_seconds: sql`${SessionGoalTable.time_used_seconds} + ${elapsedSeconds}`,
@@ -293,8 +302,11 @@ export namespace SessionGoal {
           time_updated: now,
         })
         .where(eq(SessionGoalTable.session_id, input.sessionID))
-        .run()
-      return fromRow(db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()!)
+        .returning()
+        .get()
+      // The row was read above inside this same BEGIN IMMEDIATE transaction,
+      // so the UPDATE is guaranteed to return the (now updated) row.
+      return fromRow(next!)
     })
     publish(updated)
     return updated

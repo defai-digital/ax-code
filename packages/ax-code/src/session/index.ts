@@ -322,11 +322,13 @@ export namespace Session {
       }
 
       // Pre-compute the full insert plan so we can commit every message and
-      // every part in a single atomic transaction. If anything throws
-      // mid-fork (process crash, I/O error), SQLite rolls back and no
-      // partial session is left behind — the previous loop issued one
-      // auto-commit write per message/part, so a crash after the first few
-      // messages left an un-resumable half-fork.
+      // every part without issuing one auto-commit write per message/part (the
+      // original loop left an un-resumable half-fork on crash). Batches commit
+      // independently to bound how long a single write transaction holds the
+      // global DB lock — inserts are idempotent (onConflictDoUpdate with
+      // preallocated stable IDs), so a batch can be re-run safely. If any
+      // batch throws, the child session is deleted (FK cascade removes its
+      // messages/parts) so no partial fork is left behind.
       const plan = filtered
         .filter((msg) => {
           if (msg.info.role === "assistant" && msg.info.parentID && !idMap.has(msg.info.parentID)) return false
@@ -354,27 +356,47 @@ export namespace Session {
           return { info, parts }
         })
 
-      Database.transaction((db) => {
-        for (const { info } of plan) {
-          const { id, sessionID, ...data } = info
-          db.insert(MessageTable)
-            .values({ id, session_id: sessionID, time_created: info.time.created, data })
-            .onConflictDoUpdate({ target: MessageTable.id, set: { data } })
-            .run()
-        }
-        const partTime = Date.now()
-        for (const { parts } of plan) {
-          for (const part of parts) {
-            const { id, messageID, sessionID, ...data } = part
-            db.insert(PartTable)
-              .values({ id, message_id: messageID, session_id: sessionID, time_created: partTime, data })
-              .onConflictDoUpdate({ target: PartTable.id, set: { data } })
+      const FORK_BATCH_SIZE = 250
+      const partTime = Date.now()
+      const insertBatch = (batch: Array<{ info: MessageV2.Info; parts: MessageV2.Part[] }>) => {
+        Database.transaction((db) => {
+          for (const { info } of batch) {
+            const { id, sessionID, ...data } = info
+            db.insert(MessageTable)
+              .values({ id, session_id: sessionID, time_created: info.time.created, data })
+              .onConflictDoUpdate({ target: MessageTable.id, set: { data } })
               .run()
           }
-        }
-      })
+          for (const { parts } of batch) {
+            for (const part of parts) {
+              const { id, messageID, sessionID, ...data } = part
+              db.insert(PartTable)
+                .values({ id, message_id: messageID, session_id: sessionID, time_created: partTime, data })
+                .onConflictDoUpdate({ target: PartTable.id, set: { data } })
+                .run()
+            }
+          }
+        })
+      }
 
-      // Publish events after the transaction commits so subscribers never
+      try {
+        for (let i = 0; i < plan.length; i += FORK_BATCH_SIZE) {
+          insertBatch(plan.slice(i, i + FORK_BATCH_SIZE))
+        }
+      } catch (error) {
+        // Compensating cleanup: drop the partially-populated child so a failed
+        // fork never leaves a half-written session behind. FK onDelete:cascade
+        // (session.sql.ts) removes its messages and parts. Best-effort — a
+        // cleanup failure must not mask the original error.
+        try {
+          Database.use((db) => db.delete(SessionTable).where(eq(SessionTable.id, session.id)).run())
+        } catch {
+          // Swallow: the original fork error is what the caller must see.
+        }
+        throw error
+      }
+
+      // Publish events after all batches commit so subscribers never
       // observe a partial fork.
       for (const { info, parts } of plan) {
         await Bus.publish(MessageV2.Event.Updated, { info })
@@ -961,32 +983,38 @@ export namespace Session {
     return part
   })
 
-  // Batch variant of updatePart: one transaction instead of one DB
-  // round-trip per part. Used by compaction pruning, which can touch
-  // hundreds of parts at once.
+  // Batch variant of updatePart: one transaction per chunk instead of one DB
+  // round-trip per part. Used by compaction pruning, which can touch hundreds
+  // of parts at once. Chunked so a single transaction never holds the write
+  // lock for an unbounded number of rows — inserts are idempotent via
+  // onConflictDoUpdate, so splitting the batch into separate commits is safe.
   export async function updateParts(parts: MessageV2.Part[]) {
     if (parts.length === 0) return parts
     const time = Date.now()
-    Database.transaction((db) => {
-      for (const part of parts) {
-        const { id, messageID, sessionID, ...data } = part
-        db.insert(PartTable)
-          .values({
-            id,
-            message_id: messageID,
-            session_id: sessionID,
-            time_created: time,
-            data,
-          })
-          .onConflictDoUpdate({ target: PartTable.id, set: { data, time_updated: time } })
-          .run()
-      }
-      Database.effect(() => {
-        for (const part of parts) {
-          Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } })
+    const PARTS_BATCH_SIZE = 500
+    for (let i = 0; i < parts.length; i += PARTS_BATCH_SIZE) {
+      const batch = parts.slice(i, i + PARTS_BATCH_SIZE)
+      Database.transaction((db) => {
+        for (const part of batch) {
+          const { id, messageID, sessionID, ...data } = part
+          db.insert(PartTable)
+            .values({
+              id,
+              message_id: messageID,
+              session_id: sessionID,
+              time_created: time,
+              data,
+            })
+            .onConflictDoUpdate({ target: PartTable.id, set: { data, time_updated: time } })
+            .run()
         }
+        Database.effect(() => {
+          for (const part of batch) {
+            Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } })
+          }
+        })
       })
-    })
+    }
     return parts
   }
 
