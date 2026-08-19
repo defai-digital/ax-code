@@ -45,7 +45,7 @@ import { BusEvent } from "../bus/bus-event"
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
 import { isSupportedHost as isAxEngineSupportedHost } from "./ax-engine/platform"
 import { isRetiredProviderID } from "./retired-providers"
-import { CLI_PROVIDER_DEFINITIONS } from "./cli/config"
+import { isGenericCliFallbackModel } from "./cli/ids"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -1236,16 +1236,11 @@ export namespace Provider {
   // (`kimi-cli`) and the model resolved from the CLI's own settings
   // (`kimi-code/k3`). Prefer that resolved model when it exists.
   const MODEL_ID_PRIORITY = ["gpt-5", "claude-sonnet-4"]
-  const CLI_PROVIDER_IDS = new Set(Object.keys(CLI_PROVIDER_DEFINITIONS))
 
   export function sort<T extends { id: string; providerID?: string }>(models: T[]) {
     return sortBy(
       models,
-      [
-        (model) =>
-          model.providerID && CLI_PROVIDER_IDS.has(model.providerID) && model.id === model.providerID ? 1 : 0,
-        "asc",
-      ],
+      [(model) => (isGenericCliFallbackModel(model) ? 1 : 0), "asc"],
       [
         (model) => {
           const index = MODEL_ID_PRIORITY.findIndex((filter) => model.id.includes(filter))

@@ -20,6 +20,9 @@ import { isRetiredProviderID } from "../provider/retired-providers"
 /** Colloquial names users type ("grok", "codex") → connected provider IDs. */
 const PROVIDER_ALIASES: Record<string, string[]> = {
   grok: ["grok-build-cli"],
+  "grok-build": ["grok-build-cli"],
+  grokbuild: ["grok-build-cli"],
+  grokbuildcli: ["grok-build-cli"],
   "grok-4": ["grok-build-cli"],
   "grok-4.5": ["grok-build-cli"],
   xai: ["grok-build-cli"],
@@ -36,12 +39,19 @@ const PROVIDER_ALIASES: Record<string, string[]> = {
   qodercli: ["qoder-cli"],
 }
 
+function normalizeProviderName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-")
+}
+
 export function resolveConnectedProviderID(requested: string, connectedIDs: readonly string[]): string | undefined {
   if (connectedIDs.includes(requested)) return requested
   const lower = requested.trim().toLowerCase()
   const exact = connectedIDs.find((id) => id.toLowerCase() === lower)
   if (exact) return exact
-  const normalized = lower.replace(/[\s_]+/g, "-")
+  const normalized = normalizeProviderName(lower)
   const normalizedExact = connectedIDs.find((id) => id.toLowerCase().replace(/_/g, "-") === normalized)
   if (normalizedExact) return normalizedExact
   for (const alias of PROVIDER_ALIASES[normalized] ?? []) {
@@ -96,6 +106,10 @@ export function resolveExplicitMemberSelection(input: {
         `The connected list is authoritative — do not grep models-snapshot or re-probe credentials.`,
     }
   }
+  const aliasNote =
+    normalizeProviderName(resolvedProvider) === normalizeProviderName(input.requestedProvider)
+      ? undefined
+      : `Provider ${JSON.stringify(input.requestedProvider)} resolved to connected alias ${resolvedProvider}.`
   const models = input.selectableModels[resolvedProvider] ?? []
   if (models.length === 0) {
     return {
@@ -103,16 +117,25 @@ export function resolveExplicitMemberSelection(input: {
     }
   }
   if (!input.requestedModel) {
-    return { member: { providerID: resolvedProvider, modelID: models[0]! } }
+    return {
+      member: { providerID: resolvedProvider, modelID: models[0]! },
+      ...(aliasNote ? { note: aliasNote } : {}),
+    }
   }
   const requestedModel = input.requestedModel
   const exact = models.find((id) => id === requestedModel || id.toLowerCase() === requestedModel.toLowerCase())
-  if (exact) return { member: { providerID: resolvedProvider, modelID: exact } }
+  if (exact) {
+    return {
+      member: { providerID: resolvedProvider, modelID: exact },
+      ...(aliasNote ? { note: aliasNote } : {}),
+    }
+  }
+  const fallbackNote =
+    `Requested ${JSON.stringify(`${input.requestedProvider}/${requestedModel}`)} is not selectable; ` +
+    `using ${resolvedProvider}/${models[0]}.`
   return {
     member: { providerID: resolvedProvider, modelID: models[0]! },
-    note:
-      `Requested ${JSON.stringify(`${input.requestedProvider}/${requestedModel}`)} is not selectable; ` +
-      `using ${resolvedProvider}/${models[0]}.`,
+    note: [aliasNote, fallbackNote].filter(Boolean).join(" "),
   }
 }
 

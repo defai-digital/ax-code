@@ -1,16 +1,11 @@
 import os from "os"
+import { CLI_PROVIDER_IDS } from "./cli/ids"
 
 // Providers allowed to surface models that don't advertise tool calling. For
 // most providers a non-toolcall model is hidden from the picker because the
 // agent needs tools, but these CLI providers serve models a user may
 // legitimately want anyway.
-const TOOLCALL_OPTIONAL_PROVIDER_IDS = new Set([
-  "claude-code",
-  "codex-cli",
-  "grok-build-cli",
-  "qoder-cli",
-  "kimi-cli",
-])
+const TOOLCALL_OPTIONAL_PROVIDER_IDS = new Set<string>(CLI_PROVIDER_IDS)
 
 type SelectableModel = {
   tool_call?: boolean

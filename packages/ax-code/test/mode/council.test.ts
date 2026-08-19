@@ -393,6 +393,7 @@ describe("Council.providerFamily", () => {
     expect(Council.providerFamily("xai")).toBe("grok")
     expect(Council.providerFamily("grok-build-cli")).toBe("grok")
     expect(Council.providerFamily("kimi-cli")).toBe("kimi")
+    expect(Council.providerFamily("kimi-cloud-plan")).toBe("kimi")
     expect(Council.providerFamily("qoder-cli")).toBe("qoder")
     expect(Council.providerFamily("alibaba")).toBe("alibaba")
     expect(Council.providerFamily("qwen-max")).toBe("alibaba")

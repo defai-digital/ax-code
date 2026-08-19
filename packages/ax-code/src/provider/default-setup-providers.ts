@@ -6,6 +6,8 @@
 // here so /connect, providers login, and the Desktop setup dialog surface them
 // without requiring enabled_providers opt-in — same pattern OpenCode uses for
 // native deepseek + meta blocks.
+import { CLI_PROVIDER_IDS } from "./cli/ids"
+
 export const DEFAULT_SETUP_PROVIDER_IDS = [
   "google",
   "deepseek",
@@ -35,9 +37,5 @@ export const DEFAULT_SETUP_PROVIDER_IDS = [
   "tencent-ti",
   "github-copilot",
   "zai-coding-plan",
-  "claude-code",
-  "codex-cli",
-  "grok-build-cli",
-  "qoder-cli",
-  "kimi-cli",
+  ...CLI_PROVIDER_IDS,
 ] as const

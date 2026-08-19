@@ -99,32 +99,22 @@ export async function defaultModel(
 
   if (specified && !providers.length) return specified
 
-  const axcodeProvider = providers.find((p) => p.id === "ax-code")
-  if (axcodeProvider) {
-    if (axcodeProvider.models["big-pickle"]) {
-      return { providerID: ProviderID.axCode, modelID: ModelID.make("big-pickle") }
-    }
-    const [best] = Provider.sort(Object.values(axcodeProvider.models))
+  // Provider order comes from the connected-provider response. Keep provider
+  // selection separate from Provider.sort(), which only ranks models within
+  // one provider and must not create a hidden cross-provider preference.
+  for (const provider of providers) {
+    const [best] = Provider.sort(Object.values(provider.models))
     if (best) {
       return {
-        providerID: ProviderID.make(best.providerID),
+        providerID: ProviderID.make(provider.id),
         modelID: ModelID.make(best.id),
       }
     }
   }
 
-  const models = providers.flatMap((p) => Object.values(p.models))
-  const [best] = Provider.sort(models)
-  if (best) {
-    return {
-      providerID: ProviderID.make(best.providerID),
-      modelID: ModelID.make(best.id),
-    }
-  }
-
   if (specified) return specified
 
-  return { providerID: ProviderID.axCode, modelID: ModelID.make("big-pickle") }
+  throw new Error("No connected provider has an available model")
 }
 
 export function parseUri(uri: string): ParsedACPResource {

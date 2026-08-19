@@ -40,6 +40,7 @@ import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { resolvePromptIsolationPolicy } from "./prompt-runtime-policy"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { attachThinkTagStream } from "@/provider/think-tags"
+import { isKnownCliProviderID } from "@/provider/cli/ids"
 
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 
@@ -635,14 +636,7 @@ export namespace LLM {
 
   export function isCliProviderID(providerID: string | undefined): boolean {
     if (!providerID) return false
-    return (
-      providerID.endsWith("-cli") ||
-      providerID === "claude-code" ||
-      providerID === "codex-cli" ||
-      providerID === "qoder-cli" ||
-      providerID === "kimi-cli" ||
-      providerID === "grok-build-cli"
-    )
+    return providerID.endsWith("-cli") || isKnownCliProviderID(providerID)
   }
 
   export function streamIdleTimeoutMs(providerID?: string): number {

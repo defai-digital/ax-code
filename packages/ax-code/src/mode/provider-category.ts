@@ -8,17 +8,13 @@
  * are Private GPU cloud.
  */
 
+import { CLI_PROVIDER_IDS } from "../provider/cli/ids"
+
 export type ProviderConnectCategory = "local" | "private-gpu" | "cli" | "api"
 
 export const LOCAL_RUNTIME_PROVIDER_IDS = ["ax-engine", "ax-studio", "ollama"] as const
 
-export const CLI_PLAN_PROVIDER_IDS = [
-  "claude-code",
-  "codex-cli",
-  "grok-build-cli",
-  "qoder-cli",
-  "kimi-cli",
-] as const
+export const CLI_PLAN_PROVIDER_IDS = CLI_PROVIDER_IDS
 
 export const DEDICATED_PRIVATE_GPU_PROVIDER_IDS = [
   "alibaba-pai",

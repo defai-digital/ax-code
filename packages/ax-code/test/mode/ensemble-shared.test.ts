@@ -10,6 +10,8 @@ describe("resolveConnectedProviderID", () => {
 
   test("maps colloquial grok/xai to grok-build-cli when connected", () => {
     expect(resolveConnectedProviderID("grok", connected)).toBe("grok-build-cli")
+    expect(resolveConnectedProviderID("Grok Build", connected)).toBe("grok-build-cli")
+    expect(resolveConnectedProviderID("grokbuild", connected)).toBe("grok-build-cli")
     expect(resolveConnectedProviderID("xai", connected)).toBe("grok-build-cli")
   })
 
@@ -23,14 +25,15 @@ describe("resolveConnectedProviderID", () => {
   })
 
   test("maps colloquial names for cli providers", () => {
-    const cliConnected = ["google", "grok-build-cli", "kimi-cli", "qoder-cli", "claude-code", "codex-cli"]
-    expect(resolveConnectedProviderID("gemini", cliConnected)).toBe("google")
+    const cliConnected = ["grok-build-cli", "kimi-cli", "qoder-cli", "claude-code", "codex-cli"]
+    expect(resolveConnectedProviderID("gemini", cliConnected)).toBeUndefined()
     expect(resolveConnectedProviderID("kimi", cliConnected)).toBe("kimi-cli")
     expect(resolveConnectedProviderID("Kimi Code", cliConnected)).toBe("kimi-cli")
     expect(resolveConnectedProviderID("Grok Build CLI", cliConnected)).toBe("grok-build-cli")
     expect(resolveConnectedProviderID("qodercli", cliConnected)).toBe("qoder-cli")
     expect(resolveConnectedProviderID("claude", cliConnected)).toBe("claude-code")
     expect(resolveConnectedProviderID("openai", cliConnected)).toBe("codex-cli")
+    expect(resolveConnectedProviderID("gemini", ["google"])).toBe("google")
   })
 })
 
@@ -51,7 +54,22 @@ describe("resolveExplicitMemberSelection", () => {
     })
     expect(result).toEqual({
       member: { providerID: "grok-build-cli", modelID: "grok-build-cli" },
-      note: 'Requested "xai/grok-4" is not selectable; using grok-build-cli/grok-build-cli.',
+      note:
+        'Provider "xai" resolved to connected alias grok-build-cli. ' +
+        'Requested "xai/grok-4" is not selectable; using grok-build-cli/grok-build-cli.',
+    })
+  })
+
+  test("reports a provider alias even when the requested model is selectable", () => {
+    const result = resolveExplicitMemberSelection({
+      requestedProvider: "Grok Build",
+      connectedIDs,
+      selectableModels,
+    })
+
+    expect(result).toEqual({
+      member: { providerID: "grok-build-cli", modelID: "grok-build-cli" },
+      note: 'Provider "Grok Build" resolved to connected alias grok-build-cli.',
     })
   })
 

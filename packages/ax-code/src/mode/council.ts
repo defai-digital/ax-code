@@ -436,6 +436,8 @@ export namespace Council {
       gemini: "google",
       xai: "grok",
       grok: "grok",
+      kimi: "kimi",
+      qoder: "qoder",
       alibaba: "alibaba",
       qwen: "alibaba",
       zai: "zhipu",
