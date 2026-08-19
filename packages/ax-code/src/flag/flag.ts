@@ -88,6 +88,7 @@ export namespace Flag {
     AX_CODE_DISABLE_CLAUDE_CODE_SKILLS || truthy("AX_CODE_DISABLE_EXTERNAL_SKILLS")
   export declare const AX_CODE_DISABLE_PROJECT_CONFIG: boolean
   export declare const AX_CODE_AUTONOMOUS: boolean
+  export declare const AX_CODE_AUTONOMOUS_GUARDIAN: boolean
   export declare const AX_CODE_SMART_LLM: boolean
   export declare const AX_CODE_WORKFLOW_RUNTIME: boolean
   export declare const AX_CODE_TUI_SESSION_FIRST: boolean
@@ -248,6 +249,12 @@ defineBooleanFlag("AX_CODE_DISABLE_PROJECT_CONFIG")
 // autonomous pairs with the default sandbox (workspace-write, network off).
 // Config `autonomous: false` is reconciled into this env at config load.
 defineBooleanFlag("AX_CODE_AUTONOMOUS", true)
+
+// Opt-in semantic pre-approval guardian for RISK-class permissions in
+// autonomous mode (Codex auto_review equivalent). Off by default: each RISK
+// approval then adds a model round-trip, so enable only when the latency/cost
+// trade-off is acceptable. A "deny" never overrides an explicit user allow rule.
+defineBooleanFlag("AX_CODE_AUTONOMOUS_GUARDIAN")
 
 // Evaluate each access so toggles and env overrides remain live.
 defineBooleanFlag("AX_CODE_SMART_LLM")

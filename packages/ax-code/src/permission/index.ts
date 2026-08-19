@@ -17,11 +17,24 @@ import path from "path"
 import z from "zod"
 import { evaluate as evalRule, EXACT_GRANT_ONLY } from "./evaluate"
 import { classify as classifyRisk } from "./risk-classes"
+import { Guardian } from "./guardian"
 import { PermissionID } from "./schema"
 import { Flag } from "@/flag/flag"
 import { ScopedFlag } from "@/flag/scoped"
 import { ProjectConfigTrust } from "@/config/project-config-trust"
 import { FileLock } from "@/util/filelock"
+
+// Permissions the opt-in semantic guardian evaluates. The highest-risk RISK
+// classes only — arbitrary execution, network egress, external writes, and
+// subagent spawn — so the guardian does not add a model round-trip to
+// high-frequency permissions like `edit`.
+const GUARDIAN_PERMISSIONS: ReadonlySet<string> = new Set([
+  "bash",
+  "webfetch",
+  "websearch",
+  "external_directory",
+  "task",
+])
 
 export namespace Permission {
   const log = Log.create({ service: "permission" })
@@ -367,6 +380,40 @@ export namespace Permission {
         log.info("autonomous: prompting unknown permission", { permission: request.permission })
         // fall through to ask path below
       } else {
+        // Optional semantic pre-review for RISK-class permissions (Codex
+        // auto_review equivalent), opt-in via AX_CODE_AUTONOMOUS_GUARDIAN.
+        // "deny" fails closed, "allow" auto-approves, and "ask" (plus any
+        // guardian failure/timeout) falls through to the ask path below.
+        if (Guardian.enabled() && GUARDIAN_PERMISSIONS.has(request.permission)) {
+          const verdict = await Guardian.review({
+            permission: request.permission,
+            patterns: request.patterns,
+          })
+          if (verdict.action === "deny") {
+            log.warn("autonomous guardian denied risk permission", {
+              permission: request.permission,
+              reason: verdict.reason,
+            })
+            throw new DeniedError({
+              ruleset: [
+                {
+                  permission: request.permission,
+                  action: "deny" as const,
+                  pattern: "*",
+                  reason: `guardian: ${verdict.reason}`,
+                },
+              ],
+              agent: input.agent,
+            })
+          }
+          if (verdict.action === "allow") {
+            log.info("autonomous guardian auto-approved risk permission", {
+              permission: request.permission,
+              reason: verdict.reason,
+            })
+            return
+          }
+        }
         log.info("autonomous risk-class: falling through to ruleset", {
           permission: request.permission,
           patterns: request.patterns,

@@ -150561,7 +150561,7 @@
         "open_weights": true,
         "limit": {
           "context": 1048576,
-          "output": 262144
+          "output": 131072
         }
       },
       "deepseek/deepseek-v3.1-terminus": {
@@ -151506,7 +151506,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 16384
         }
       },
       "google/gemma-3n-e4b-it": {
@@ -157223,7 +157223,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 16384
         }
       },
       "qwen/qwen3.8-27b": {
@@ -157480,7 +157480,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 81920
+          "output": 262144
         }
       },
       "qwen/qwen3-coder-plus": {
