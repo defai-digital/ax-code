@@ -6,6 +6,10 @@ import { SessionID } from "../session/schema"
 import { Log } from "../util/log"
 import { NamedError } from "@ax-code/util/error"
 import z from "zod"
+import { Flag } from "../flag/flag"
+import { Shard } from "../storage/shard"
+import { SessionShard } from "../session/shard"
+import type { ProjectID } from "../project/schema"
 
 export namespace EventQuery {
   const log = Log.create({ service: "replay.query" })
@@ -65,7 +69,8 @@ export namespace EventQuery {
   }
 
   export function bySession(sessionID: SessionID): ReplayEvent[] {
-    const rows = Database.use((db) =>
+    const store = SessionShard.storeFor(sessionID)
+    const rows = store.use((db) =>
       db
         .select()
         .from(EventLogTable)
@@ -85,7 +90,8 @@ export namespace EventQuery {
    * a partial slice produces wrong divergence results.
    */
   export function bySessionStrict(sessionID: SessionID): ReplayEvent[] {
-    const rows = Database.use((db) =>
+    const store = SessionShard.storeFor(sessionID)
+    const rows = store.use((db) =>
       db
         .select()
         .from(EventLogTable)
@@ -101,7 +107,8 @@ export namespace EventQuery {
   export function recentBySession(sessionID: SessionID, limit = 500): ReplayEvent[] {
     const normalizedLimit = normalizeRecentLimit(limit)
     if (normalizedLimit === 0) return []
-    const rows = Database.use((db) =>
+    const store = SessionShard.storeFor(sessionID)
+    const rows = store.use((db) =>
       db
         .select()
         .from(EventLogTable)
@@ -114,7 +121,8 @@ export namespace EventQuery {
   }
 
   export function bySessionWithTimestamp(sessionID: SessionID): { event_data: ReplayEvent; time_created: number }[] {
-    const rows = Database.use((db) =>
+    const store = SessionShard.storeFor(sessionID)
+    const rows = store.use((db) =>
       db
         .select({
           event_data: EventLogTable.event_data,
@@ -141,7 +149,8 @@ export namespace EventQuery {
     sessionID: SessionID,
     type: string,
   ): { event_data: ReplayEvent; time_created: number }[] {
-    const rows = Database.use((db) =>
+    const store = SessionShard.storeFor(sessionID)
+    const rows = store.use((db) =>
       db
         .select({
           event_data: EventLogTable.event_data,
@@ -169,7 +178,8 @@ export namespace EventQuery {
   ): { event_data: ReplayEvent; time_created: number }[] {
     const normalizedLimit = normalizeRecentLimit(limit)
     if (normalizedLimit === 0) return []
-    const rows = Database.use((db) =>
+    const store = SessionShard.storeFor(sessionID)
+    const rows = store.use((db) =>
       db
         .select({
           event_data: EventLogTable.event_data,
@@ -191,7 +201,8 @@ export namespace EventQuery {
     sequence: number
     time_created: number
   }[] {
-    const rows = Database.use((db) =>
+    const store = SessionShard.storeFor(sessionID)
+    const rows = store.use((db) =>
       db
         .select({
           id: EventLogTable.id,
@@ -211,7 +222,8 @@ export namespace EventQuery {
   }
 
   export function bySessionAndType(sessionID: SessionID, type: string): ReplayEvent[] {
-    const rows = Database.use((db) =>
+    const store = SessionShard.storeFor(sessionID)
+    const rows = store.use((db) =>
       db
         .select()
         .from(EventLogTable)
@@ -227,7 +239,8 @@ export namespace EventQuery {
   export function count(sessionID: SessionID): number {
     // Use COUNT(*) via .get() instead of loading every row to count
     // them. See code-intelligence/query.ts countNodes for rationale.
-    const row = Database.use((db) =>
+    const store = SessionShard.storeFor(sessionID)
+    const row = store.use((db) =>
       db
         .select({ count: sql<number>`count(*)` })
         .from(EventLogTable)
@@ -235,6 +248,23 @@ export namespace EventQuery {
         .get(),
     )
     return row?.count ?? 0
+  }
+
+  export type AllSinceRow = {
+    session_id: SessionID
+    event_data: ReplayEvent
+    time_created: number
+    sequence: number
+  }
+
+  // Composite ordering key shared by allSince (both the SQL ORDER BY and the
+  // in-memory fan-out merge). (time_created, session_id, sequence) is a total
+  // order: sequence is unique per session, session_id is globally unique, and
+  // time_created is a tiebreaker that is stable for a single event.
+  function compareAllSince(a: AllSinceRow, b: AllSinceRow): number {
+    if (a.time_created !== b.time_created) return a.time_created - b.time_created
+    if (a.session_id !== b.session_id) return (a.session_id as string) < (b.session_id as string) ? -1 : 1
+    return a.sequence - b.sequence
   }
 
   export function allSince(input: {
@@ -245,7 +275,7 @@ export namespace EventQuery {
       session_id: SessionID
       sequence: number
     }
-  }): { session_id: SessionID; event_data: ReplayEvent; time_created: number; sequence: number }[] {
+  }): AllSinceRow[] {
     const parsed = z
       .object({
         since: z.number().int().min(0),
@@ -259,6 +289,7 @@ export namespace EventQuery {
           .optional(),
       })
       .parse(input)
+    const limit = parsed.limit ?? ALL_SINCE_LIMIT
     const where = parsed.cursor
       ? and(
           gte(EventLogTable.time_created, parsed.since),
@@ -277,7 +308,10 @@ export namespace EventQuery {
           ),
         )
       : gte(EventLogTable.time_created, parsed.since)
-    return Database.use((db) =>
+
+    // The predicate + ORDER BY is identical for the global table and every
+    // shard; `db` is the registry or a shard client (structurally the same).
+    const run = (db: Database.TxOrDb): AllSinceRow[] =>
       db
         .select({
           session_id: EventLogTable.session_id,
@@ -288,9 +322,31 @@ export namespace EventQuery {
         .from(EventLogTable)
         .where(where)
         .orderBy(EventLogTable.time_created, EventLogTable.session_id, EventLogTable.sequence)
-        .limit(parsed.limit ?? ALL_SINCE_LIMIT)
-        .all(),
-    )
+        .limit(limit)
+        .all()
+
+    if (!Flag.AX_CODE_SHARD_SESSIONS) {
+      return Database.use((db) => run(db))
+    }
+
+    // Fan-out: global event_log retains every row until the later contract
+    // step, while fully-sharded projects also have a copy in their shard. Run
+    // the predicate on BOTH, merge by the composite key, dedupe (a backfilled
+    // row exists in both places), then take the top `limit`.
+    const rows = Database.use((db) => run(db))
+    for (const projectID of SessionShard.activeProjectIDs()) {
+      rows.push(...Shard.handle(projectID).use((db) => run(db)))
+    }
+    const seen = new Set<string>()
+    const unique: AllSinceRow[] = []
+    for (const row of rows) {
+      const key = `${row.time_created}\u0000${row.session_id}\u0000${row.sequence}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      unique.push(row)
+    }
+    unique.sort(compareAllSince)
+    return unique.slice(0, limit)
   }
 
   export function insert(event: {
@@ -301,7 +357,8 @@ export namespace EventQuery {
     event_data: ReplayEvent
     sequence: number
   }) {
-    Database.use((db) =>
+    const store = SessionShard.storeFor(event.session_id, { write: true })
+    store.use((db) =>
       db
         .insert(EventLogTable)
         .values({
@@ -330,23 +387,70 @@ export namespace EventQuery {
   export function insertMany(events: InsertEvent[]) {
     if (events.length === 0) return
     const now = Date.now()
-    const rows = events.map((event) => ({ ...event, time_created: now, time_updated: now }))
     const CHUNK = 250
-    // Wrap multi-chunk inserts in a transaction so a crash between chunks
-    // can't leave the event log with gaps in sequence numbers (BUG-009).
-    // Recorder.flush() coalesces a microtask tick of emits into one
-    // insertMany call and relies on all-or-nothing persistence.
-    Database.transaction((db) => {
-      for (let i = 0; i < rows.length; i += CHUNK) {
-        db.insert(EventLogTable)
-          .values(rows.slice(i, i + CHUNK))
-          .run()
+    if (!Flag.AX_CODE_SHARD_SESSIONS) {
+      // Wrap multi-chunk inserts in a transaction so a crash between chunks
+      // can't leave the event log with gaps in sequence numbers (BUG-009).
+      // Recorder.flush() coalesces a microtask tick of emits into one
+      // insertMany call and relies on all-or-nothing persistence.
+      Database.transaction((db) => {
+        for (let i = 0; i < events.length; i += CHUNK) {
+          db.insert(EventLogTable)
+            .values(events.slice(i, i + CHUNK).map((event) => ({ ...event, time_created: now, time_updated: now })))
+            .run()
+        }
+      })
+      return
+    }
+    // Flag on: a single flush batch may span sessions in different projects,
+    // so group by project and write each project's events to its own shard in
+    // one transaction each. Memoize session -> project: a recorder flush is
+    // typically hundreds of events from one session, and the resolution is a
+    // registry SELECT per lookup.
+    const byProject = new Map<ProjectID, InsertEvent[]>()
+    const projectBySessionID = new Map<string, ProjectID>()
+    for (const event of events) {
+      let projectID = projectBySessionID.get(event.session_id)
+      if (!projectID) {
+        projectID = SessionShard.projectIDForSession(event.session_id)
+        projectBySessionID.set(event.session_id, projectID)
       }
-    })
+      const group = byProject.get(projectID)
+      if (group) group.push(event)
+      else byProject.set(projectID, [event])
+    }
+    for (const [projectID, group] of byProject) {
+      const store = SessionShard.storeForProject(projectID, { write: true })
+      store.transaction((db) => {
+        for (let i = 0; i < group.length; i += CHUNK) {
+          db.insert(EventLogTable)
+            .values(group.slice(i, i + CHUNK).map((event) => ({ ...event, time_created: now, time_updated: now })))
+            .run()
+        }
+      })
+    }
   }
 
   export function deleteBySession(sessionID: SessionID) {
-    Database.use((db) => db.delete(EventLogTable).where(eq(EventLogTable.session_id, sessionID)).run())
+    const store = SessionShard.storeFor(sessionID, { write: true })
+    store.use((db) => db.delete(EventLogTable).where(eq(EventLogTable.session_id, sessionID)).run())
+    if (Flag.AX_CODE_SHARD_SESSIONS) {
+      // Global rows are retained until the contract step; remove them too so
+      // the allSince global leg can't resurrect events deleted from the shard.
+      Database.use((db) => db.delete(EventLogTable).where(eq(EventLogTable.session_id, sessionID)).run())
+    }
+  }
+
+  function pruneStore(db: Database.TxOrDb, cutoff: number): number {
+    const row = db
+      .select({ count: sql<number>`count(*)` })
+      .from(EventLogTable)
+      .where(lte(EventLogTable.time_created, cutoff))
+      .get()
+    const count = row?.count ?? 0
+    if (count === 0) return 0
+    db.delete(EventLogTable).where(lte(EventLogTable.time_created, cutoff)).run()
+    return count
   }
 
   export function pruneOlderThan(cutoffMs: number): number {
@@ -357,16 +461,13 @@ export namespace EventQuery {
     // memory just to get `.length`, then ran a separate DELETE — two
     // full scans plus a race window. COUNT(*) is O(1) memory and the
     // transaction ensures the two queries see the same snapshot.
-    return Database.transaction((db) => {
-      const row = db
-        .select({ count: sql<number>`count(*)` })
-        .from(EventLogTable)
-        .where(lte(EventLogTable.time_created, cutoff))
-        .get()
-      const count = row?.count ?? 0
-      if (count === 0) return 0
-      db.delete(EventLogTable).where(lte(EventLogTable.time_created, cutoff)).run()
-      return count
-    })
+    if (!Flag.AX_CODE_SHARD_SESSIONS) {
+      return Database.transaction((db) => pruneStore(db, cutoff))
+    }
+    let total = Database.transaction((db) => pruneStore(db, cutoff))
+    for (const projectID of SessionShard.activeProjectIDs()) {
+      total += Shard.handle(projectID).transaction((db) => pruneStore(db, cutoff))
+    }
+    return total
   }
 }

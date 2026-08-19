@@ -91,8 +91,9 @@ export namespace Shard {
     db.$client.close()
   }
 
-  // Session-scoped tables that live in the shard (Slice 1: message + part).
-  // Data-driven so later slices append event_log/todo/session_goal/task_queue/
+  // Session-scoped tables that live in the shard (Slice 1: message + part;
+  // Slice 2: event_log).
+  // Data-driven so later slices append todo/session_goal/task_queue/
   // scheduled_task/workflow_*. Written as raw DDL rather than reusing the
   // migration journal because (1) the original migrations create every table in
   // one mixed migration, so per-table statement filtering would require parsing
@@ -120,6 +121,20 @@ export namespace Shard {
     )`,
     `CREATE INDEX IF NOT EXISTS "part_message_id_id_idx" ON "part" ("message_id","id")`,
     `CREATE INDEX IF NOT EXISTS "part_session_idx" ON "part" ("session_id")`,
+    `CREATE TABLE IF NOT EXISTS "event_log" (
+      "id" text PRIMARY KEY NOT NULL,
+      "session_id" text NOT NULL,
+      "step_id" text,
+      "event_type" text NOT NULL,
+      "event_data" text NOT NULL,
+      "sequence" integer NOT NULL,
+      "time_created" integer NOT NULL,
+      "time_updated" integer NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "event_log_session_idx" ON "event_log" ("session_id")`,
+    `CREATE INDEX IF NOT EXISTS "event_log_session_sequence_idx" ON "event_log" ("session_id","sequence")`,
+    `CREATE INDEX IF NOT EXISTS "event_log_session_type_sequence_idx" ON "event_log" ("session_id","event_type","sequence")`,
+    `CREATE INDEX IF NOT EXISTS "event_log_time_created_idx" ON "event_log" ("time_created")`,
   ]
 
   function open(projectID: ProjectID): ShardClient {

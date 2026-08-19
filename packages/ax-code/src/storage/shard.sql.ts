@@ -1,4 +1,4 @@
-import { sqliteTable, text } from "drizzle-orm/sqlite-core"
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core"
 import type { ProjectID } from "../project/schema"
 import { Timestamps } from "./schema.sql"
 
@@ -14,5 +14,9 @@ export const ProjectShardTable = sqliteTable("project_shard", {
   project_id: text().$type<ProjectID>().primaryKey(),
   shard_file: text().notNull(),
   state: text().$type<ShardState>().notNull(),
+  // Which backfill coverage version this shard was last copied at. See
+  // SessionShard.BACKFILL_VERSION (src/session/shard.ts); a stale version makes
+  // the shard re-run its (idempotent) copy on next access.
+  backfill_version: integer().notNull().default(0),
   ...Timestamps,
 })
