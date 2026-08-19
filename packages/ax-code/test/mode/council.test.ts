@@ -372,6 +372,15 @@ describe("Council.selectDiverseMembers", () => {
 
     expect(unique.map((member) => member.id)).toEqual([1, 3])
   })
+
+  test("keeps Grok Build, Kimi Code, and Qoder as distinct ensemble families", () => {
+    const selected = Council.selectDiverseMembers(
+      [{ providerID: "grok-build-cli" }, { providerID: "kimi-cli" }, { providerID: "qoder-cli" }],
+      3,
+    )
+
+    expect(selected.map((member) => member.providerID)).toEqual(["grok-build-cli", "kimi-cli", "qoder-cli"])
+  })
 })
 
 describe("Council.providerFamily", () => {
@@ -383,6 +392,8 @@ describe("Council.providerFamily", () => {
     expect(Council.providerFamily("gemini-3-pro")).toBe("google")
     expect(Council.providerFamily("xai")).toBe("grok")
     expect(Council.providerFamily("grok-build-cli")).toBe("grok")
+    expect(Council.providerFamily("kimi-cli")).toBe("kimi")
+    expect(Council.providerFamily("qoder-cli")).toBe("qoder")
     expect(Council.providerFamily("alibaba")).toBe("alibaba")
     expect(Council.providerFamily("qwen-max")).toBe("alibaba")
     expect(Council.providerFamily("zhipu")).toBe("zhipu")

@@ -2126,6 +2126,29 @@ test("provider.sort prioritizes preferred models", () => {
   expect(sorted[sorted.length - 1].id).not.toContain("sonnet-4")
 })
 
+test("provider.sort does not prioritize removed model families", () => {
+  const models = [
+    { id: "big-pickle", name: "Big Pickle" },
+    { id: "gemini-3-pro", name: "Gemini 3 Pro" },
+    { id: "z-current-model", name: "Current" },
+  ] as any[]
+
+  expect(Provider.sort(models).map((model) => model.id)).toEqual(["z-current-model", "gemini-3-pro", "big-pickle"])
+})
+
+test.each([
+  ["grok-build-cli", "grok-4.5"],
+  ["kimi-cli", "kimi-code/k3"],
+  ["qoder-cli", "glm-5"],
+])("provider.sort prefers the resolved %s model over its generic CLI fallback", (providerID, resolvedModelID) => {
+  const models = [
+    { id: providerID, providerID, name: "CLI fallback" },
+    { id: resolvedModelID, providerID, name: "CLI configured model" },
+  ]
+
+  expect(Provider.sort(models).map((model) => model.id)).toEqual([resolvedModelID, providerID])
+})
+
 test("multiple providers can be configured simultaneously", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

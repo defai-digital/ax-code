@@ -576,6 +576,58 @@ const MODEL_REGISTRY: ModelRegistration[] = [
     pattern: /minimax[\.\-_]?m2/i,
     capabilities: minimaxCapabilities(196_608),
   },
+
+  // Kimi K2.7 Code — gateway fallback (Together / Baseten / DeepInfra / Nebius
+  // serve it alongside the first-party Kimi Cloud Plan). 262K context and
+  // interleaved reasoning are documented by Moonshot; without this entry the
+  // model collapsed to DEFAULT_CAPABILITIES (32k, thinking blocked), which
+  // disabled long-agent optimization and wide context packing on GPU vendors.
+  {
+    pattern: /kimi[\.\-_]?k2[\.\-_]?7/i,
+    capabilities: {
+      contextWindow: 262_144,
+      thinking: "supported",
+      preserveThinking: "experimental",
+      promptCache: "supported",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "standard",
+    },
+  },
+
+  // DeepSeek V4 — gateway fallback (DeepInfra / Together / Baseten / NVIDIA /
+  // Nebius plus the first-party deepseek provider). 1M context, thinking on
+  // by default, and documented context caching per api-docs.deepseek.com.
+  {
+    pattern: /deepseek[\.\-_]?v4/i,
+    capabilities: {
+      contextWindow: 1_000_000,
+      thinking: "supported",
+      preserveThinking: "experimental",
+      promptCache: "supported",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "standard",
+    },
+  },
+
+  // DeepSeek V3.2 — gateway fallback (DeepInfra / Nebius). Hybrid-thinking
+  // 163K context generation; same caching semantics as V4.
+  {
+    pattern: /deepseek[\.\-_]?v3[\.\-_]?2/i,
+    capabilities: {
+      contextWindow: 163_840,
+      thinking: "supported",
+      preserveThinking: "experimental",
+      promptCache: "supported",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "standard",
+    },
+  },
 ]
 
 /**

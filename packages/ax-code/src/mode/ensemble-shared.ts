@@ -30,15 +30,21 @@ const PROVIDER_ALIASES: Record<string, string[]> = {
   anthropic: ["anthropic", "claude-code"],
   gemini: ["google"],
   kimi: ["kimi-cli"],
+  "kimi-code": ["kimi-cli"],
+  "kimi-code-cli": ["kimi-cli"],
   qoder: ["qoder-cli"],
+  qodercli: ["qoder-cli"],
 }
 
 export function resolveConnectedProviderID(requested: string, connectedIDs: readonly string[]): string | undefined {
   if (connectedIDs.includes(requested)) return requested
-  const lower = requested.toLowerCase()
+  const lower = requested.trim().toLowerCase()
   const exact = connectedIDs.find((id) => id.toLowerCase() === lower)
   if (exact) return exact
-  for (const alias of PROVIDER_ALIASES[lower] ?? []) {
+  const normalized = lower.replace(/[\s_]+/g, "-")
+  const normalizedExact = connectedIDs.find((id) => id.toLowerCase().replace(/_/g, "-") === normalized)
+  if (normalizedExact) return normalizedExact
+  for (const alias of PROVIDER_ALIASES[normalized] ?? []) {
     if (connectedIDs.includes(alias)) return alias
     const match = connectedIDs.find((id) => id.toLowerCase() === alias.toLowerCase())
     if (match) return match

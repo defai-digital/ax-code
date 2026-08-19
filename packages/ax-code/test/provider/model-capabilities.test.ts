@@ -217,6 +217,49 @@ describe("Model Capability Registry", () => {
     })
   })
 
+  describe("Kimi and DeepSeek gateway fallbacks", () => {
+    // Kimi K2.7 Code ships on Together / Baseten / DeepInfra / Nebius beside
+    // the first-party plan; without a registry entry it collapsed to
+    // DEFAULT_CAPABILITIES and lost long-agent eligibility on GPU vendors.
+    it("covers Kimi K2.7 Code across gateway spellings", () => {
+      for (const [id, provider] of [
+        ["moonshotai/Kimi-K2.7-Code", "togetherai"],
+        ["moonshotai/Kimi-K2.7-Code", "baseten"],
+        ["kimi-k2.7-code", "kimi-cloud-plan"],
+        ["Kimi_K2_7_Code", "deepinfra"],
+      ] as const) {
+        const caps = getModelCapabilities(id, provider)
+        expect(caps.contextWindow, id).toBe(262_144)
+        expect(caps.thinking, id).toBe("supported")
+        expect(supportsLongAgent(id, provider)).toBe(true)
+      }
+    })
+
+    it("covers DeepSeek V4 and V3.2 across gateway spellings", () => {
+      for (const [id, provider] of [
+        ["deepseek-ai/DeepSeek-V4-Pro", "deepinfra"],
+        ["deepseek-v4-flash", "deepseek"],
+        ["deepseek-ai/DeepSeek-V4-Pro-0813", "nvidia"],
+      ] as const) {
+        expect(getModelCapabilities(id, provider).contextWindow, id).toBe(1_000_000)
+        expect(supportsLongAgent(id, provider), id).toBe(true)
+      }
+      expect(getModelCapabilities("deepseek-ai/DeepSeek-V3.2", "nebius").contextWindow).toBe(163_840)
+      // v3-0324 is the older March build — must not match the V3.2 pattern.
+      expect(getModelCapabilities("deepseek-ai/DeepSeek-V3-0324", "deepinfra").contextWindow).toBe(32_000)
+    })
+
+    it("keeps the dedicated private-GPU catch-all authoritative over gateway fallbacks", () => {
+      const caps = getModelCapabilities("moonshotai/Kimi-K2.7-Code", "alibaba-pai")
+      expect(caps.contextWindow).toBe(1_048_576)
+      expect(caps.rateLimitTier).toBe("unlimited")
+    })
+
+    it("still defaults older Kimi generations (k2.5)", () => {
+      expect(getModelCapabilities("kimi-k2.5", "some-gateway").contextWindow).toBe(32_000)
+    })
+  })
+
   describe("supportsLongAgent", () => {
     it("should return true for Qwen 3.7 Max on Alibaba", () => {
       expect(supportsLongAgent("qwen-3-7-max", "alibaba-coding-plan")).toBe(true)
