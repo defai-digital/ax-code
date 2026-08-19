@@ -392,10 +392,13 @@ export namespace Session {
         // Compensating cleanup: drop the partially-populated child so a failed
         // fork never leaves a half-written session behind. This is a REGISTRY
         // op (deletes the `session` row); FK onDelete:cascade (session.sql.ts)
-        // removes any registry-side rows. Shard-side message/part cleanup is a
-        // later slice (Session.remove routing). Best-effort — a cleanup failure
-        // must not mask the original error.
+        // removes any registry-side rows. The shard copies' session_id FKs were
+        // dropped, so delete them explicitly (Session.remove routing). The child
+        // session's project is already known from `session` (no registry lookup
+        // needed). Best-effort — a cleanup failure must not mask the original
+        // error.
         try {
+          SessionShard.deleteSessions(session.projectID, [session.id])
           Database.use((db) => db.delete(SessionTable).where(eq(SessionTable.id, session.id)).run())
         } catch {
           // Swallow: the original fork error is what the caller must see.
@@ -812,6 +815,23 @@ export namespace Session {
       }
       db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
     })
+    // Shard-side cascade (Slice 5): the registry FK cascade only covers the
+    // global copies of message/part/todo/session_goal/event_log/task_queue.
+    // Their `session_id` FKs were dropped in the shard (§5 of the plan), so
+    // delete the shard copies explicitly. Resolve each removed session's project
+    // from the `Info` we already hold (before the registry rows are gone) and
+    // batch per project so each shard runs a single transaction.
+    const removedByProject = new Map<ProjectID, SessionID[]>()
+    const trackRemoved = (info: Info) => {
+      const ids = removedByProject.get(info.projectID) ?? []
+      ids.push(info.id)
+      removedByProject.set(info.projectID, ids)
+    }
+    trackRemoved(session)
+    for (const desc of allDescendants) trackRemoved(desc)
+    for (const [projectID, ids] of removedByProject) {
+      SessionShard.deleteSessions(projectID, ids)
+    }
     // Cleanup ordering — every step before the final publish must finish
     // so subscribers can treat `session.deleted` as an "all resources
     // released" signal (BUG-013):

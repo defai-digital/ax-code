@@ -15,6 +15,9 @@ import { ProjectID } from "./schema"
 import { toErrorMessage } from "../util/error-message"
 import path from "path"
 import { createHash } from "node:crypto"
+import fs from "fs/promises"
+import { Shard } from "../storage/shard"
+import { ProjectShardTable } from "../storage/shard.sql"
 
 export namespace Project {
   const log = Log.create({ service: "project" })
@@ -544,5 +547,28 @@ export namespace Project {
 
   export function removeSandbox(id: ProjectID, directory: string) {
     return removeSandboxPromise(id, directory)
+  }
+
+  /**
+   * Delete a project from the registry and (flag ON) its per-project shard
+   * file + `project_shard` index row (Slice 5). Registry FKs cascade the
+   * `session`/`permission`/`task_queue`/`scheduled_task`/`workflow_run` global
+   * copies when the `project` row is removed; the shard file is not reachable by
+   * any FK, so it is unlinked explicitly after closing its open handle (a live
+   * SQLite handle holds the inode and blocks unlink on Windows). Unlink is
+   * best-effort — a missing/held file must not fail project removal.
+   */
+  export async function remove(id: ProjectID): Promise<void> {
+    Database.use((db) => db.delete(ProjectTable).where(eq(ProjectTable.id, id)).run())
+    if (!Flag.AX_CODE_SHARD_SESSIONS) return
+
+    Shard.close(id)
+    const file = Shard.pathFor(id)
+    await Promise.all([
+      fs.rm(file, { force: true }),
+      fs.rm(file + "-wal", { force: true }),
+      fs.rm(file + "-shm", { force: true }),
+    ]).catch(() => undefined)
+    Database.use((db) => db.delete(ProjectShardTable).where(eq(ProjectShardTable.project_id, id)).run())
   }
 }
