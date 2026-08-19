@@ -74,6 +74,10 @@ describe("isModelSupportedForProvider", () => {
     expect(isModelSupportedForProvider("zai", "glm-5-turbo")).toBe(false)
     expect(isModelSupportedForProvider("zai", "glm-5.10")).toBe(true)
     expect(isModelSupportedForProvider("zhipuai", "glm-4.5")).toBe(false)
+    expect(isModelSupportedForProvider("zai", "glm-4.7-flash")).toBe(true)
+    expect(isModelSupportedForProvider("zhipuai", "glm-4.7-flash")).toBe(true)
+    expect(isModelSupportedForProvider("zai", "glm-4.7-flashx")).toBe(false)
+    expect(isModelSupportedForProvider("zai", "glm-4.7")).toBe(false)
   })
 
   test("GLM real-catalog text SKUs are offered", () => {
@@ -96,6 +100,7 @@ describe("isModelSupportedForProvider", () => {
       "glm-5.2:free",
       "glm-5.2@eu",
       "glm5.2-fast",
+      "glm-4.7-flash",
     ]) {
       expect(isModelSupportedForProvider("zai", id)).toBe(true)
     }

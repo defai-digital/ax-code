@@ -47,6 +47,7 @@ metadata, credential flow, and provider endpoint; it does not mean every model o
 | `google`         | Free-tier Gemini API models                           | Only models marked free in [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing) qualify. Google states that free-tier content may be used to improve its products.                    |
 | `unorouter`      | Model IDs ending in `:free`                           | UnoRouter is a third-party gateway. Its [free-model limits](https://unorouter.com/en/docs/platform/errors-and-rate-limits) are intentionally low and availability can fluctuate.                     |
 | `huggingface`    | Recurring Inference Providers credit                  | Free accounts currently receive a small monthly credit, subject to change; see [Hugging Face pricing](https://huggingface.co/docs/inference-providers/en/pricing). A full agent task can exhaust it. |
+| `zai`            | `glm-4.7-flash` (GLM-4.7-Flash (Free))                | Z.AI's documented $0 PAYG text model on `https://api.z.ai/api/paas/v4`. This is not the Z.AI Coding Plan endpoint; connect the `zai` provider, not `zai-coding-plan`.                                 |
 | `openrouter`     | `openrouter/free` or a model-specific `:free` variant | The provider preset is built in, but the AX Code curated snapshot does not currently list the free router. Add it explicitly as shown below.                                                         |
 
 For UnoRouter, connect with `ax-code providers login unorouter`, run `ax-code models unorouter`, and choose a model
@@ -119,8 +120,8 @@ At this page's review date, the services named by that catalog map to AX Code as
 | Custom protocol only                  | Api.Airforce, Kluster AI, LLM7.io, Pollinations AI                                                                                                                                                              | No AX Code preset. Configure the exact endpoint and model only if its current API is compatible with the [custom provider contract](custom-provider.md).                                                 |
 
 In particular, the `github-copilot` preset is not the `github-models` API listed by some catalogs. Do not substitute
-one provider ID or credential flow for the other. The registry-backed `zhipuai` provider also filters out GLM 3 and
-GLM 4 models, so a catalog's GLM-4.x free offer is not an AX Code model path.
+one provider ID or credential flow for the other. The `zai` and `zhipuai` general APIs keep GLM-4.7-Flash (Free) as
+the documented $0 exception; other GLM 3 and GLM 4 SKUs stay filtered out.
 
 ## Safe evaluation practices
 

@@ -111,7 +111,8 @@ describe("update-models script", () => {
     expect(data.groq?.env).toEqual(["GROQ_API_KEY"])
     expect(data.groq?.api).toBe("https://api.groq.com/openai/v1")
     expect(data.groq?.npm).toBe("@ai-sdk/openai-compatible")
-    expect(data.groq?.models?.["qwen/qwen3.6-27b"]?.limit).toEqual({ context: 131_072, output: 32_768 })
+    // Groq's models table caps qwen3.6-27b completion at 16 384 tokens.
+    expect(data.groq?.models?.["qwen/qwen3.6-27b"]?.limit).toEqual({ context: 131_072, output: 16_384 })
     expect(data.groq?.models?.["qwen/qwen3.6-27b"]?.modalities?.input).toEqual(["text", "image"])
     expect(data.groq?.models?.["openai/gpt-oss-120b"]?.limit).toEqual({ context: 131_072, output: 65_536 })
     expect(data.groq?.models?.["openai/gpt-oss-120b"]?.tool_call).toBe(true)
@@ -237,6 +238,86 @@ describe("update-models script", () => {
     expect(data.chutes?.models?.["coding-glm-5.1-free"]).toBeUndefined()
     expect(data.chutes?.models?.["zai-glm-5-1"]).toBeUndefined()
     expect(data.chutes?.models?.["zai-org/glm-5.2-tee"]).toBeDefined()
+  })
+
+  test("keeps Z.AI and injects GLM-4.7-Flash (Free) on the general APIs only", async () => {
+    await using tmp = await tmpdir()
+    const fixturePath = path.join(tmp.path, "models-fixture.json")
+    const snapshotPath = path.join(tmp.path, "models-snapshot.json")
+    await writeFile(
+      fixturePath,
+      JSON.stringify({
+        zai: {
+          id: "zai",
+          name: "Z.AI",
+          env: ["ZHIPU_API_KEY"],
+          npm: "@ai-sdk/openai-compatible",
+          api: "https://api.z.ai/api/paas/v4",
+          models: {
+            "glm-4.7-flash": {
+              id: "glm-4.7-flash",
+              name: "GLM-4.7-Flash",
+              family: "glm-flash",
+            },
+            "glm-4.5-flash": {
+              id: "glm-4.5-flash",
+              name: "GLM-4.5-Flash",
+              family: "glm-flash",
+            },
+            "glm-5.2": {
+              id: "glm-5.2",
+              name: "GLM-5.2",
+              family: "glm",
+            },
+          },
+        },
+        zhipuai: {
+          id: "zhipuai",
+          name: "Zhipu AI",
+          models: {
+            "glm-4.7-flash": {
+              id: "glm-4.7-flash",
+              name: "GLM-4.7-Flash",
+              family: "glm-flash",
+            },
+          },
+        },
+        "zai-coding-plan": {
+          id: "zai-coding-plan",
+          name: "Z.AI Coding Plan",
+          models: {
+            "glm-5.2": {
+              id: "glm-5.2",
+              name: "GLM-5.2",
+              family: "glm",
+            },
+            "glm-4.7-flash": {
+              id: "glm-4.7-flash",
+              name: "GLM-4.7-Flash",
+              family: "glm-flash",
+            },
+          },
+        },
+      }),
+    )
+    await writeFile(snapshotPath, "{}\n")
+
+    const result = runUpdateModels({
+      ...process.env,
+      AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+      AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+    })
+
+    expect(result.status).toBe(0)
+    const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
+    expect(data.zai?.name).toBe("Z.AI")
+    expect(data.zai?.api).toBe("https://api.z.ai/api/paas/v4")
+    expect(data.zai?.models?.["glm-4.7-flash"]?.name).toBe("GLM-4.7-Flash (Free)")
+    expect(data.zai?.models?.["glm-4.5-flash"]).toBeUndefined()
+    expect(data.zai?.models?.["glm-5.2"]).toBeDefined()
+    expect(data.zhipuai?.models?.["glm-4.7-flash"]?.name).toBe("GLM-4.7-Flash (Free)")
+    // Coding plan is subscription-only; the free PAYG SKU stays off that endpoint.
+    expect(data["zai-coding-plan"]?.models?.["glm-4.7-flash"]).toBeUndefined()
   })
 
   test("idempotent — running twice produces same result", async () => {

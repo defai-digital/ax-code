@@ -149,6 +149,16 @@ describe("Model Capability Registry", () => {
       expect(caps.thinking).toBe("blocked")
     })
 
+    it("returns GLM-4.7-Flash capabilities on Z.AI / Zhipu general APIs", () => {
+      for (const providerID of ["zai", "zhipuai"]) {
+        const caps = getModelCapabilities("glm-4.7-flash", providerID)
+        expect(caps.contextWindow).toBe(200_000)
+        expect(caps.thinking).toBe("supported")
+        expect(caps.toolCalling).toBe("supported")
+        expect(caps.structuredOutput).toBe("supported")
+      }
+    })
+
     it("returns explicit Ornith 35B capabilities for AX Engine ids", () => {
       for (const id of ["ornith-35b-axq-6bit", "AX-Ornith-1.0-35B-MLX-AXQ-6bit"]) {
         const caps = getModelCapabilities(id, "ax-engine")

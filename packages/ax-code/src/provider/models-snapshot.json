@@ -49485,6 +49485,157 @@
       }
     }
   },
+  "zai": {
+    "id": "zai",
+    "env": [
+      "ZHIPU_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "https://api.z.ai/api/paas/v4",
+    "name": "Z.AI",
+    "doc": "https://docs.z.ai/guides/overview/pricing",
+    "models": {
+      "glm-5.3": {
+        "id": "glm-5.3",
+        "name": "GLM-5.3",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "glm-5.2": {
+        "id": "glm-5.2",
+        "name": "GLM-5.2",
+        "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "glm-5": {
+        "id": "glm-5",
+        "name": "GLM-5",
+        "description": "General GLM flagship for coding, analysis, and tool-heavy engineering workflows",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "release_date": "2026-02-12",
+        "last_updated": "2026-02-12",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 204800,
+          "output": 131072
+        }
+      },
+      "glm-4.7-flash": {
+        "id": "glm-4.7-flash",
+        "name": "GLM-4.7-Flash (Free)",
+        "description": "Budget GLM lane for fast coding help, routing, and everyday automation",
+        "family": "glm-flash",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2026-01-19",
+        "last_updated": "2026-01-19",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 200000,
+          "output": 131072
+        }
+      }
+    }
+  },
   "routing-run": {
     "id": "routing-run",
     "env": [
@@ -51331,6 +51482,7 @@
   "minimax-cn-coding-plan": {
     "id": "minimax-cn-coding-plan",
     "env": [
+      "MINIMAX_TOKEN_PLAN_CN_API_KEY",
       "MINIMAX_API_KEY"
     ],
     "npm": "@ai-sdk/anthropic",
@@ -69006,42 +69158,6 @@
     "name": "Inceptron",
     "doc": "https://docs.inceptron.io",
     "models": {
-      "MiniMaxAI/MiniMax-M2.5": {
-        "id": "MiniMaxAI/MiniMax-M2.5",
-        "name": "MiniMax M2.5",
-        "description": "Prior MiniMax coding model for agent workflows, office edits, and automation",
-        "family": "minimax",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-02-12",
-        "last_updated": "2026-02-12",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 196608,
-          "output": 196608
-        }
-      },
       "moonshotai/Kimi-K2.7-Code": {
         "id": "moonshotai/Kimi-K2.7-Code",
         "name": "Kimi K2.7 Code",
@@ -78282,6 +78398,7 @@
   "minimax-coding-plan": {
     "id": "minimax-coding-plan",
     "env": [
+      "MINIMAX_TOKEN_PLAN_API_KEY",
       "MINIMAX_API_KEY"
     ],
     "npm": "@ai-sdk/anthropic",
@@ -93970,6 +94087,41 @@
         "open_weights": true,
         "limit": {
           "context": 204800,
+          "output": 131072
+        }
+      },
+      "glm-4.7-flash": {
+        "id": "glm-4.7-flash",
+        "name": "GLM-4.7-Flash (Free)",
+        "description": "Budget GLM lane for fast coding help, routing, and everyday automation",
+        "family": "glm-flash",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2026-01-19",
+        "last_updated": "2026-01-19",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 200000,
           "output": 131072
         }
       }
@@ -133300,44 +133452,6 @@
           "output": 256000
         }
       },
-      "deepinfra/Qwen/Qwen3.8-27B": {
-        "id": "deepinfra/Qwen/Qwen3.8-27B",
-        "name": "Qwen3.8 27B",
-        "description": "Dense 27B vision-language model for coding, agent tasks, and image and video understanding",
-        "family": "qwen",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "xhigh"
-            ]
-          }
-        ],
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2026-08-14",
-        "last_updated": "2026-08-14",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 262144,
-          "output": 32768
-        }
-      },
       "deepinfra/thinkingmachines/Inkling": {
         "id": "deepinfra/thinkingmachines/Inkling",
         "name": "Inkling",
@@ -137239,6 +137353,45 @@
           "output": 32768
         }
       },
+      "qwen/qwen3.8-27b": {
+        "id": "qwen/qwen3.8-27b",
+        "name": "Qwen3.8 27B",
+        "description": "Dense 27B vision-language model for coding, agent tasks, and image and video understanding",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 32768
+        }
+      },
       "qwen/qwq-plus": {
         "id": "qwen/qwq-plus",
         "name": "QwQ Plus",
@@ -138081,7 +138234,7 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 131072,
+          "context": 262144,
           "output": 16384
         }
       },
@@ -138435,44 +138588,6 @@
         "limit": {
           "context": 32768,
           "output": 8192
-        }
-      },
-      "cloudflare/@cf/qwen/qwen3.8-27b": {
-        "id": "cloudflare/@cf/qwen/qwen3.8-27b",
-        "name": "Qwen3.8 27B",
-        "description": "Dense 27B vision-language model for coding, agent tasks, and image and video understanding",
-        "family": "qwen",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "xhigh"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2026-08-14",
-        "last_updated": "2026-08-14",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 262144,
-          "output": 32768
         }
       },
       "fireworks_ai/gpt-oss-120b": {
@@ -138974,44 +139089,6 @@
         "limit": {
           "context": 1048576,
           "output": 384000
-        }
-      },
-      "tensorx/qwen/qwen3.8-27b": {
-        "id": "tensorx/qwen/qwen3.8-27b",
-        "name": "Qwen3.8 27B",
-        "description": "Dense 27B vision-language model for coding, agent tasks, and image and video understanding",
-        "family": "qwen",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "xhigh"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2026-08-14",
-        "last_updated": "2026-08-14",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 262144,
-          "output": 32768
         }
       },
       "flexai/Muse-Glimmer-30B": {
@@ -145158,6 +145235,42 @@
         "limit": {
           "context": 262144,
           "output": 65536
+        }
+      },
+      "glm-5.3": {
+        "id": "glm-5.3",
+        "name": "GLM-5.3",
+        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
         }
       },
       "hermes-4-405b": {
@@ -163025,6 +163138,42 @@
           "output": 4096
         }
       },
+      "~z-ai/glm-latest": {
+        "id": "~z-ai/glm-latest",
+        "name": "Z.ai: GLM Latest",
+        "description": "This model always redirects to the latest GLM model from Z.ai.",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-08-19",
+        "last_updated": "2026-08-19",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        }
+      },
       "nex-agi/nex-n2-mini": {
         "id": "nex-agi/nex-n2-mini",
         "name": "Nex AGI: Nex-N2-Mini",
@@ -163695,7 +163844,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 196608,
+          "context": 65536,
           "output": 196608
         }
       },

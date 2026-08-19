@@ -10,6 +10,9 @@ describe("cloud API providers: DeepSeek + Meta Muse Spark", () => {
   test("deepseek and meta are native setup/login providers", () => {
     expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("deepseek")
     expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("meta")
+    expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("zai")
+    expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("minimax-coding-plan")
+    expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("minimax-cn-coding-plan")
     expect(
       shouldShowProviderInList({
         key: "deepseek",

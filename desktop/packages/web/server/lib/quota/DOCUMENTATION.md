@@ -28,8 +28,8 @@ These provider IDs are currently dispatchable via `fetchQuotaForProvider(provide
 | `openrouter`             | OpenRouter                         | `providers/openrouter.js`             | `openrouter`                                                               |
 | `zai-coding-plan`        | z.ai                               | `providers/zai.js`                    | `zai-coding-plan`, `zai`, `z.ai`                                           |
 | `zhipuai-coding-plan`    | Zhipu AI Coding Plan               | `providers/zhipuai-coding-plan.js`    | `zhipuai-coding-plan`, `zhipuai`, `zhipu`                                  |
-| `minimax-coding-plan`    | MiniMax Coding Plan (minimax.io)   | `providers/minimax-coding-plan.js`    | `minimax-coding-plan`                                                      |
-| `minimax-cn-coding-plan` | MiniMax Coding Plan (minimaxi.com) | `providers/minimax-cn-coding-plan.js` | `minimax-cn-coding-plan`                                                   |
+| `minimax-coding-plan`    | MiniMax Token Plan (minimax.io)    | `providers/minimax-coding-plan.js`    | `minimax-coding-plan`                                                      |
+| `minimax-cn-coding-plan` | MiniMax Token Plan (minimaxi.com)  | `providers/minimax-cn-coding-plan.js` | `minimax-cn-coding-plan`                                                   |
 | `ollama-cloud`           | Ollama Cloud                       | `providers/ollama-cloud.js`           | Cookie file at `~/.config/ollama-quota/cookie` (raw session cookie string) |
 | `wafer`                  | Wafer.ai                           | `providers/wafer.js`                  | `wafer`, `wafer-ai`, `wafer_ai`, `wafer.ai`                                |
 

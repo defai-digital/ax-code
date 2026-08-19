@@ -36,6 +36,11 @@ export const DEFAULT_SETUP_PROVIDER_IDS = [
   "modelarts",
   "tencent-ti",
   "github-copilot",
+  "zai",
   "zai-coding-plan",
+  // models.dev still publishes these as *-coding-plan; MiniMax renamed the
+  // product to Token Plan. Display names and docs use Token Plan.
+  "minimax-coding-plan",
+  "minimax-cn-coding-plan",
   ...CLI_PROVIDER_IDS,
 ] as const

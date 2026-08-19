@@ -1,9 +1,9 @@
-// MiniMax Coding Plan Provider (minimaxi.com)
+// MiniMax Token Plan Provider (minimaxi.com)
 import { readAuthFile } from "../../ax-code/auth.js"
 import { getAuthEntry, normalizeAuthEntry, buildResult, toUsageWindow, toNumber, toTimestamp } from "../utils/index.js"
 
 export const providerId = "minimax-cn-coding-plan"
-export const providerName = "MiniMax Coding Plan (minimaxi.com)"
+export const providerName = "MiniMax Token Plan (minimaxi.com)"
 export const aliases = ["minimax-cn-coding-plan"]
 
 export const isConfigured = () => {

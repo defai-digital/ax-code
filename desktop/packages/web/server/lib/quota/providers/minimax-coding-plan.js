@@ -2,7 +2,7 @@ import { readAuthFile } from "../../ax-code/auth.js"
 import { getAuthEntry, normalizeAuthEntry, buildResult, toUsageWindow, toNumber, toTimestamp } from "../utils/index.js"
 
 export const providerId = "minimax-coding-plan"
-export const providerName = "MiniMax Coding Plan (minimax.io)"
+export const providerName = "MiniMax Token Plan (minimax.io)"
 export const aliases = ["minimax-coding-plan"]
 
 export const isConfigured = () => {

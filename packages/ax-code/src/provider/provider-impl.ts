@@ -1183,7 +1183,10 @@ export namespace Provider {
     if (provider) {
       let priority = ["gemini-3-flash", "gemini-flash", "llama-3.1-8b", "llama3-8b"]
       if (providerID.startsWith("zai")) {
-        priority = ["glm-5.2", "glm-5"]
+        priority = ["glm-4.7-flash", "glm-5.2", "glm-5"]
+      }
+      if (providerID.startsWith("minimax")) {
+        priority = ["MiniMax-M2.5", "MiniMax-M2.1", "MiniMax-M2.7"]
       }
       if (providerID.startsWith("alibaba")) {
         priority = ["qwen3.6-flash", "deepseek-v4-flash", "deepseek-v4-pro", "qwen3.6-plus"]

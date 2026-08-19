@@ -257,7 +257,6 @@ for (const id of [
   "kimi-for-coding",
   "alibaba",
   "alibaba-cn",
-  "zai",
 ]) {
   delete fetched[id]
 }
@@ -272,7 +271,9 @@ for (const id of [
 //   - Grok: only grok-4.5 (plus official aliases grok-4.5-latest / grok-build-latest).
 //     All other Grok variants (4.3, Build 0.1, code-fast, 4.2/4.1, betas) drop.
 //   - GLM (Z.AI): only non-vision selected v5+ SKUs (glm-5.1, glm-5.1[1m],
-//     glm-5-turbo, glm-5v, and every glm-4.x / glm-3.x drop).
+//     glm-5-turbo, glm-5v, and every glm-4.x / glm-3.x drop), except the
+//     documented free PAYG SKU glm-4.7-flash which is re-injected on the
+//     zai / zhipuai general APIs after this filter.
 //   - Gemini: only v3+ (Gemini 1.x/2.x drops from ax-code's model picker).
 //   - GPT-5.5: hidden from API/provider model pickers; use Codex CLI default instead.
 //
@@ -343,6 +344,15 @@ function isUnsupportedModel(m: RawModel): boolean {
   // GPT-5.5: do not expose via API/provider pickers; Codex CLI owns the default model choice.
   if (probes.some((p) => p.includes("gpt-5.5") || p.includes("gpt-5-5") || p.includes("gpt55"))) return true
   return false
+}
+// GLM-4.7-Flash is the documented free PAYG text SKU on the Z.AI / Zhipu
+// general APIs. The global GLM-4.x filter drops it; stash the upstream
+// metadata so we can re-inject it onto those two providers only.
+const GLM_PAYG_PROVIDER_IDS = ["zai", "zhipuai"] as const
+const glm47FlashSources: Record<string, RawModel> = {}
+for (const providerID of GLM_PAYG_PROVIDER_IDS) {
+  const model = fetched[providerID]?.models?.["glm-4.7-flash"] as RawModel | undefined
+  if (model) glm47FlashSources[providerID] = cloneJsonValue(model)
 }
 for (const [, provider] of Object.entries(fetched) as Array<[string, { models?: Record<string, RawModel> }]>) {
   if (!provider.models) continue
@@ -1091,26 +1101,78 @@ for (const providerID of GLM_CODING_PROVIDER_IDS) {
   provider.models = merged
 }
 
-// General Zhipu AI API (open.bigmodel.cn/api/paas/v4) gets the current GLM
-// flagships — GLM-5.3 shipped on the general PAYG API (listed on
+// General Z.AI / Zhipu PAYG APIs (api.z.ai/api/paas/v4 and
+// open.bigmodel.cn/api/paas/v4) get the current GLM flagships — GLM-5.3
+// shipped on the general PAYG API (listed on
 // https://docs.z.ai/guides/overview/pricing) around the coding-plan launch,
 // GLM-5.2 shortly before it. The [1m] long-context variants stay scoped to
 // the coding endpoints where the suffix is documented. Inject both
 // forward-looking until models.dev publishes them; prefer the upstream entry
 // once it does (upstream glm-5.2 already carries the 1M context).
-{
-  const provider = fetched["zhipuai"]
-  if (provider) {
-    const models = (provider.models ?? {}) as Record<string, RawModel>
-    const merged: Record<string, RawModel> = {
-      "glm-5.3": models["glm-5.3"] ?? glmCodingModel("glm-5.3", "GLM-5.3", 1000000, "2026-08-14"),
-      "glm-5.2": models["glm-5.2"] ?? glmCodingModel("glm-5.2", "GLM-5.2", 1000000, "2026-06-13"),
-    }
-    for (const [mid, model] of Object.entries(models)) {
-      if (!merged[mid]) merged[mid] = model
-    }
-    provider.models = merged
+if (!fetched["zai"]) {
+  fetched["zai"] = {
+    id: "zai",
+    name: "Z.AI",
+    env: ["ZHIPU_API_KEY"],
+    npm: "@ai-sdk/openai-compatible",
+    api: "https://api.z.ai/api/paas/v4",
+    doc: "https://docs.z.ai/guides/overview/pricing",
+    models: {},
   }
+}
+for (const providerID of GLM_PAYG_PROVIDER_IDS) {
+  const provider = fetched[providerID]
+  if (!provider) continue
+  const models = (provider.models ?? {}) as Record<string, RawModel>
+  const merged: Record<string, RawModel> = {
+    "glm-5.3": models["glm-5.3"] ?? glmCodingModel("glm-5.3", "GLM-5.3", 1000000, "2026-08-14"),
+    "glm-5.2": models["glm-5.2"] ?? glmCodingModel("glm-5.2", "GLM-5.2", 1000000, "2026-06-13"),
+  }
+  for (const [mid, model] of Object.entries(models)) {
+    if (!merged[mid]) merged[mid] = model
+  }
+  provider.models = merged
+}
+
+// GLM-4.7-Flash is Z.AI's documented free PAYG text model (200k / 128k,
+// https://docs.z.ai/guides/overview/pricing). Re-inject it on the general
+// APIs only — it is not on the coding-plan endpoints. Prefer stashed
+// upstream metadata; fall back to the docs-backed template.
+function glm47FlashFreeModel(): RawModel {
+  return {
+    id: "glm-4.7-flash",
+    name: "GLM-4.7-Flash (Free)",
+    description: "Budget GLM lane for fast coding help, routing, and everyday automation",
+    family: "glm-flash",
+    attachment: false,
+    reasoning: true,
+    reasoning_options: [{ type: "toggle" }],
+    tool_call: true,
+    interleaved: { field: "reasoning_content" },
+    structured_output: true,
+    temperature: true,
+    knowledge: "2025-04",
+    release_date: "2026-01-19",
+    last_updated: "2026-01-19",
+    modalities: { input: ["text"], output: ["text"] },
+    open_weights: true,
+    limit: { context: 200000, output: 131072 },
+  } as RawModel
+}
+for (const providerID of GLM_PAYG_PROVIDER_IDS) {
+  const provider = fetched[providerID]
+  if (!provider) continue
+  const models = (provider.models ?? {}) as Record<string, RawModel>
+  const upstream = glm47FlashSources[providerID] ?? models["glm-4.7-flash"]
+  models["glm-4.7-flash"] = {
+    ...glm47FlashFreeModel(),
+    ...(upstream ?? {}),
+    id: "glm-4.7-flash",
+    name: "GLM-4.7-Flash (Free)",
+    tool_call: true,
+    structured_output: true,
+  } as RawModel
+  provider.models = models
 }
 
 // Strip cost fields from every model — cost telemetry is removed from
@@ -1221,6 +1283,11 @@ const envOverrides: Record<string, string[]> = {
   "alibaba-coding-plan-cn": ["ALIBABA_CODING_PLAN_CN_API_KEY", "ALIBABA_CODING_PLAN_API_KEY"],
   "alibaba-token-plan": ["ALIBABA_TOKEN_PLAN_INTL_API_KEY", "ALIBABA_TOKEN_PLAN_API_KEY"],
   "alibaba-token-plan-cn": ["ALIBABA_TOKEN_PLAN_CN_API_KEY", "ALIBABA_TOKEN_PLAN_API_KEY"],
+  // MiniMax Token Plan (models.dev still uses the legacy *-coding-plan ids).
+  // Prefer plan-specific keys so a PAYG MINIMAX_API_KEY does not also light
+  // up the subscription providers. Keep MINIMAX_API_KEY as a fallback.
+  "minimax-coding-plan": ["MINIMAX_TOKEN_PLAN_API_KEY", "MINIMAX_API_KEY"],
+  "minimax-cn-coding-plan": ["MINIMAX_TOKEN_PLAN_CN_API_KEY", "MINIMAX_API_KEY"],
 }
 for (const [id, env] of Object.entries(envOverrides)) {
   if (fetched[id]) fetched[id].env = env

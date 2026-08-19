@@ -351,6 +351,23 @@ const MODEL_REGISTRY: ModelRegistration[] = [
     },
   },
 
+  // GLM-4.7-Flash — Z.AI / Zhipu free PAYG SKU (200k context, toggleable thinking).
+  // Must stay ahead of any broader glm-4 match; GLM 4.x is otherwise hidden.
+  {
+    pattern: /glm[\.\-_]?4[\.\-_]?7[\.\-_]?flash(?!x)/i,
+    providerIds: ["zai", "zai-coding-plan", "zhipuai", "zhipuai-coding-plan"],
+    capabilities: {
+      contextWindow: 200_000,
+      thinking: "supported",
+      preserveThinking: "experimental",
+      promptCache: "experimental",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "standard",
+    },
+  },
+
   // GLM 5.x — Z.AI / Zhipu (official routes)
   // models-snapshot.json declares GLM-5.2 as a 1M-context reasoning model
   // (reasoning + effort high/xhigh, tool_call, structured_output). Without

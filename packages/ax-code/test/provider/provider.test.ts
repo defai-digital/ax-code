@@ -107,11 +107,62 @@ test("Zhipu general API exposes current GLM flagships and hides legacy SKUs", as
       expect(zhipuai?.models[ModelID.make("glm-5.3")]?.api.url).toBe("https://open.bigmodel.cn/api/paas/v4")
       expect(zhipuai?.models[ModelID.make("glm-5.3")]?.limit).toEqual({ context: 1_000_000, output: 131_072 })
       expect(zhipuai?.models[ModelID.make("glm-5.2")]?.limit).toEqual({ context: 1_000_000, output: 131_072 })
-      // glm-5.1 is hidden by the global GLM filters; 4.x drops entirely.
+      // glm-5.1 is hidden by the global GLM filters; paid 4.x drops.
       expect(zhipuai?.models[ModelID.make("glm-5.1")]).toBeUndefined()
       expect(zhipuai?.models[ModelID.make("glm-4.7")]).toBeUndefined()
+      // Free PAYG SKU is the documented GLM-4 exception on the general API.
+      expect(zhipuai?.models[ModelID.make("glm-4.7-flash")]?.name).toBe("GLM-4.7-Flash (Free)")
+      expect(zhipuai?.models[ModelID.make("glm-4.7-flash")]?.limit).toEqual({ context: 200_000, output: 131_072 })
       // [1m] variants stay scoped to the coding endpoints.
       expect(zhipuai?.models[ModelID.make("glm-5.2[1m]")]).toBeUndefined()
+    },
+  })
+})
+
+test("Z.AI general API exposes GLM-4.7-Flash (Free) and current flagships", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("ZHIPU_API_KEY", "test-zhipu")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const zai = providers[ProviderID.make("zai")]
+
+      expect(zai?.name).toBe("Z.AI")
+      expect(zai?.models[ModelID.make("glm-4.7-flash")]?.name).toBe("GLM-4.7-Flash (Free)")
+      expect(zai?.models[ModelID.make("glm-4.7-flash")]?.api.url).toBe("https://api.z.ai/api/paas/v4")
+      expect(zai?.models[ModelID.make("glm-4.7-flash")]?.limit).toEqual({ context: 200_000, output: 131_072 })
+      expect(zai?.models[ModelID.make("glm-5.3")]?.api.url).toBe("https://api.z.ai/api/paas/v4")
+      expect(zai?.models[ModelID.make("glm-4.7")]).toBeUndefined()
+      expect(zai?.models[ModelID.make("glm-4.5-flash")]).toBeUndefined()
+    },
+  })
+})
+
+test("MiniMax Token Plan providers use the Anthropic endpoint and expose M3", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("MINIMAX_TOKEN_PLAN_API_KEY", "sk-cp-test-intl")
+      Env.set("MINIMAX_TOKEN_PLAN_CN_API_KEY", "sk-cp-test-cn")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const intl = providers[ProviderID.make("minimax-coding-plan")]
+      const cn = providers[ProviderID.make("minimax-cn-coding-plan")]
+
+      expect(intl?.name).toBe("MiniMax Token Plan (minimax.io)")
+      expect(intl?.key).toBe("sk-cp-test-intl")
+      expect(intl?.models[ModelID.make("MiniMax-M3")]?.api.url).toBe("https://api.minimax.io/anthropic/v1")
+      expect(intl?.models[ModelID.make("MiniMax-M3")]?.api.npm).toBe("@ai-sdk/anthropic")
+      expect(intl?.models[ModelID.make("MiniMax-M2.7")]).toBeDefined()
+
+      expect(cn?.name).toBe("MiniMax Token Plan (minimaxi.com)")
+      expect(cn?.key).toBe("sk-cp-test-cn")
+      expect(cn?.models[ModelID.make("MiniMax-M3")]?.api.url).toBe("https://api.minimaxi.com/anthropic/v1")
     },
   })
 })

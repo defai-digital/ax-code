@@ -41,7 +41,15 @@ These providers call hosted APIs or hosted account-plan endpoints.
 | `alibaba-token-plan`     | Alibaba Token Plan          | `ALIBABA_TOKEN_PLAN_INTL_API_KEY`, `ALIBABA_TOKEN_PLAN_API_KEY`    |
 | `alibaba-token-plan-cn`  | Alibaba Token Plan (China)  | `ALIBABA_TOKEN_PLAN_CN_API_KEY`, `ALIBABA_TOKEN_PLAN_API_KEY`      |
 | `github-copilot`         | GitHub Copilot              | `GITHUB_TOKEN`                                                     |
+| `zai`                    | Z.AI                        | `ZHIPU_API_KEY`                                                    |
 | `zai-coding-plan`        | Z.AI Coding Plan            | `ZHIPU_API_KEY`                                                    |
+| `minimax-coding-plan`    | MiniMax Token Plan          | `MINIMAX_TOKEN_PLAN_API_KEY`, `MINIMAX_API_KEY`                    |
+| `minimax-cn-coding-plan` | MiniMax Token Plan (China)  | `MINIMAX_TOKEN_PLAN_CN_API_KEY`, `MINIMAX_API_KEY`                 |
+
+MiniMax renamed Coding Plan to Token Plan. The provider IDs stay `minimax-coding-plan` /
+`minimax-cn-coding-plan` to match models.dev and OpenCode. Use a Token Plan key
+(`sk-cp-…`) from [platform.minimax.io](https://platform.minimax.io/user-center/payment/token-plan)
+(international) or [platform.minimaxi.com](https://platform.minimaxi.com) (China).
 
 > `huggingface` is the **hosted Serverless Inference Providers router** (`https://router.huggingface.co/v1`).
 > It is unrelated to the local Hugging Face snapshot cache that AX Engine uses to store downloaded

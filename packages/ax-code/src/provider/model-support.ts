@@ -18,6 +18,9 @@ const GLM_HIDDEN_FINAL_SEGMENTS = new Set<string>([
   "glm5turbo",
 ])
 const GLM_HIDDEN_FINAL_PATTERN = /(?:^|[^a-z0-9])glm-?5[.-]1(?:$|[^0-9])/
+// Free PAYG SKU on the Z.AI / Zhipu general APIs. GLM 4.x is otherwise hidden;
+// this is the one documented $0 text model (not glm-4.7-flashx).
+const GLM_ALLOWED_FINAL_PATTERN = /(?:^|[^a-z0-9])glm-?4[.-]?7-?flash(?:$|[^a-z0-9])/
 const GLM_PROVIDER_IDS = new Set(["zhipuai", "zhipuai-coding-plan", "zai", "zai-coding-plan"])
 
 type ModelSupportProbeInput = {
@@ -107,6 +110,8 @@ export function supportsGlmModels(probes: readonly string[]) {
   // text-only agent traffic. Probes include a dash-stripped form, so /glm\d+v/
   // matches glm-5v, glm5v, and any future glm-6v across separator styles.
   if (probes.some((probe) => /glm\d+v/.test(probe))) return false
+  // GLM-4.7-Flash is the documented free PAYG text SKU on z.ai / Zhipu.
+  if (probes.some((probe) => GLM_ALLOWED_FINAL_PATTERN.test(modelIdFinalSegment(probe)))) return true
   // Allow selected non-vision GLM 5 and any future GLM N≥5. Drops hidden SKUs, glm-Nv, and glm-3.x / glm-4.x.
   return hasGlmMajorVersionAtLeastFive(probes)
 }
