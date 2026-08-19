@@ -1,4 +1,5 @@
 import { type SQLiteTransaction } from "drizzle-orm/sqlite-core"
+import { type NodeSQLiteDatabase } from "drizzle-orm/node-sqlite"
 import type { StatementResultingChanges } from "node:sqlite"
 import type { DrizzleTypeError } from "drizzle-orm"
 import path from "path"
@@ -13,8 +14,8 @@ import type { ProjectID } from "../project/schema"
 // Per-project SQLite shards (Phase 2). Slice 0 lays the foundation: path
 // derivation, an LRU-bounded handle cache, a scoped `{ use, transaction,
 // effect }` handle with its own AsyncLocalStorage context, and teardown wired
-// into Database.close(). No session-scoped table has moved yet — the shard
-// schema is empty until Slice 1.
+// into Database.close(). Slice 1 adds the message/part schema and the routing
+// helper in src/session/shard.ts.
 export namespace Shard {
   export const MAX_OPEN = 8
 
@@ -24,7 +25,11 @@ export namespace Shard {
   // `$client` (see #db), so `ReturnType<typeof init>` carries `$client.close()`.
   type ShardClient = ReturnType<typeof init>
   export type Transaction = SQLiteTransaction<"sync", StatementResultingChanges>
-  export type TxOrDb = Transaction | ShardClient
+  // Deliberately NOT `ShardClient` (which adds `$client`): a callback `tx` only
+  // runs query builders, so keep the union identical to Database.TxOrDb
+  // (db.ts) so a Shard handle is structurally interchangeable with Database in
+  // the routing helper (src/session/shard.ts).
+  export type TxOrDb = Transaction | NodeSQLiteDatabase
   type SyncTransactionResult<T> =
     T extends Promise<any> ? DrizzleTypeError<"Sync drivers can't use async functions in transactions!"> : T
 
@@ -86,6 +91,37 @@ export namespace Shard {
     db.$client.close()
   }
 
+  // Session-scoped tables that live in the shard (Slice 1: message + part).
+  // Data-driven so later slices append event_log/todo/session_goal/task_queue/
+  // scheduled_task/workflow_*. Written as raw DDL rather than reusing the
+  // migration journal because (1) the original migrations create every table in
+  // one mixed migration, so per-table statement filtering would require parsing
+  // SQL, and (2) the original message/part DDL declares `session_id` FKs into
+  // the registry `session` table, which cannot exist in the shard — the session
+  // table stays in the registry. `session_id`/`message_id` are therefore plain
+  // columns; the registry `session` row is the source of truth for project
+  // membership.
+  const SHARD_SCHEMA_DDL = [
+    `CREATE TABLE IF NOT EXISTS "message" (
+      "id" text PRIMARY KEY NOT NULL,
+      "session_id" text NOT NULL,
+      "time_created" integer NOT NULL,
+      "time_updated" integer NOT NULL,
+      "data" text NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "message_session_time_created_id_idx" ON "message" ("session_id","time_created","id")`,
+    `CREATE TABLE IF NOT EXISTS "part" (
+      "id" text PRIMARY KEY NOT NULL,
+      "message_id" text NOT NULL,
+      "session_id" text NOT NULL,
+      "time_created" integer NOT NULL,
+      "time_updated" integer NOT NULL,
+      "data" text NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "part_message_id_id_idx" ON "part" ("message_id","id")`,
+    `CREATE INDEX IF NOT EXISTS "part_session_idx" ON "part" ("session_id")`,
+  ]
+
   function open(projectID: ProjectID): ShardClient {
     const key = projectID as string
     const existing = cache.get(key)
@@ -100,12 +136,7 @@ export namespace Shard {
     log.info("opening shard", { projectID, file })
     const db = init(file)
     applyStartupPragmas(db, file)
-
-    // Slice 0: the shard schema is empty — no session-scoped table has moved.
-    // TODO(Slice 1): apply the session-scoped subset of the migration journal
-    // here (derived from AX_CODE_MIGRATIONS / the dev journal, filtered to
-    // message/part/event_log/todo/session_goal/task_queue/scheduled_task and
-    // workflow_* tables) so a shard file gets its schema on first open.
+    for (const statement of SHARD_SCHEMA_DDL) db.run(statement)
 
     cache.set(key, db)
     while (cache.size > MAX_OPEN) {

@@ -16,6 +16,7 @@ import { Lock } from "@/util/lock"
 import { Log } from "../util/log"
 import { uniqueItems } from "../util/string-list"
 import { MessageV2 } from "./message-v2"
+import { SessionShard } from "./shard"
 import { Instance } from "../project/instance"
 import { SessionPrompt } from "./prompt"
 import { SelfCorrection } from "./correction"
@@ -358,8 +359,12 @@ export namespace Session {
 
       const FORK_BATCH_SIZE = 250
       const partTime = Date.now()
+      // The child session (`session.id`) was already created in the registry by
+      // createNext, so storeFor resolves its project from the registry `session`
+      // row. Backfill runs on this first shard write for the project.
+      const store = SessionShard.storeFor(session.id, { write: true })
       const insertBatch = (batch: Array<{ info: MessageV2.Info; parts: MessageV2.Part[] }>) => {
-        Database.transaction((db) => {
+        store.transaction((db) => {
           for (const { info } of batch) {
             const { id, sessionID, ...data } = info
             db.insert(MessageTable)
@@ -385,9 +390,11 @@ export namespace Session {
         }
       } catch (error) {
         // Compensating cleanup: drop the partially-populated child so a failed
-        // fork never leaves a half-written session behind. FK onDelete:cascade
-        // (session.sql.ts) removes its messages and parts. Best-effort — a
-        // cleanup failure must not mask the original error.
+        // fork never leaves a half-written session behind. This is a REGISTRY
+        // op (deletes the `session` row); FK onDelete:cascade (session.sql.ts)
+        // removes any registry-side rows. Shard-side message/part cleanup is a
+        // later slice (Session.remove routing). Best-effort — a cleanup failure
+        // must not mask the original error.
         try {
           Database.use((db) => db.delete(SessionTable).where(eq(SessionTable.id, session.id)).run())
         } catch {
@@ -888,7 +895,8 @@ export namespace Session {
     const time_created = msg.time.created
     const { id, sessionID, ...data } = msg
     const time_updated = Date.now()
-    Database.use((db) => {
+    const store = SessionShard.storeFor(sessionID, { write: true })
+    store.use((db) => {
       db.insert(MessageTable)
         .values({
           id,
@@ -898,7 +906,7 @@ export namespace Session {
         })
         .onConflictDoUpdate({ target: MessageTable.id, set: { data, time_updated } })
         .run()
-      Database.effect(() =>
+      store.effect(() =>
         Bus.publishDetached(MessageV2.Event.Updated, {
           info: msg,
         }),
@@ -963,7 +971,8 @@ export namespace Session {
   export const updatePart = fn(UpdatePartInput, async (part) => {
     const { id, messageID, sessionID, ...data } = part
     const time = Date.now()
-    Database.use((db) => {
+    const store = SessionShard.storeFor(sessionID, { write: true })
+    store.use((db) => {
       db.insert(PartTable)
         .values({
           id,
@@ -974,7 +983,7 @@ export namespace Session {
         })
         .onConflictDoUpdate({ target: PartTable.id, set: { data, time_updated: time } })
         .run()
-      Database.effect(() =>
+      store.effect(() =>
         Bus.publishDetached(MessageV2.Event.PartUpdated, {
           part: { ...part },
         }),
@@ -992,9 +1001,11 @@ export namespace Session {
     if (parts.length === 0) return parts
     const time = Date.now()
     const PARTS_BATCH_SIZE = 500
+    // All parts in a batch belong to one session (compaction pruning).
+    const store = SessionShard.storeFor(parts[0].sessionID, { write: true })
     for (let i = 0; i < parts.length; i += PARTS_BATCH_SIZE) {
       const batch = parts.slice(i, i + PARTS_BATCH_SIZE)
-      Database.transaction((db) => {
+      store.transaction((db) => {
         for (const part of batch) {
           const { id, messageID, sessionID, ...data } = part
           db.insert(PartTable)
@@ -1008,7 +1019,7 @@ export namespace Session {
             .onConflictDoUpdate({ target: PartTable.id, set: { data, time_updated: time } })
             .run()
         }
-        Database.effect(() => {
+        store.effect(() => {
           for (const part of batch) {
             Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } })
           }
@@ -1021,7 +1032,8 @@ export namespace Session {
   export async function updateMessageWithParts(info: MessageV2.Info, parts: MessageV2.Part[]) {
     const messageTimeUpdated = Date.now()
     const partTime = Date.now()
-    Database.transaction((db) => {
+    const store = SessionShard.storeFor(info.sessionID, { write: true })
+    store.transaction((db) => {
       const { id, sessionID, ...data } = info
       db.insert(MessageTable)
         .values({

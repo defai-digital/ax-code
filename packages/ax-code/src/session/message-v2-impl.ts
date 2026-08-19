@@ -8,6 +8,7 @@ import { Snapshot } from "@/snapshot"
 import { fn } from "@/util/fn"
 import { Database, NotFoundError, and, desc, eq, gt, inArray, lt, or } from "@/storage/db"
 import { MessageTable, PartTable, SessionTable } from "./session.sql"
+import { SessionShard } from "./shard"
 import { ProviderError } from "@/provider/error"
 import { iife } from "@/util/iife"
 import { Log } from "@/util/log"
@@ -584,11 +585,11 @@ export namespace MessageV2 {
       and(eq(MessageTable.time_created, row.time), lt(MessageTable.id, row.id)),
     )
 
-  async function hydrate(rows: (typeof MessageTable.$inferSelect)[]) {
+  async function hydrate(rows: (typeof MessageTable.$inferSelect)[], store: SessionShard.Store) {
     const ids = rows.map((row) => row.id)
     const partByMessage = new Map<string, MessageV2.Part[]>()
     if (ids.length > 0) {
-      const partRows = Database.use((db) =>
+      const partRows = store.use((db) =>
         db
           .select()
           .from(PartTable)
@@ -943,11 +944,12 @@ export namespace MessageV2 {
       before: z.string().optional(),
     }),
     async (input) => {
+      const store = SessionShard.storeFor(input.sessionID)
       const before = input.before ? cursor.decode(input.before) : undefined
       const where = before
         ? and(eq(MessageTable.session_id, input.sessionID), older(before))
         : eq(MessageTable.session_id, input.sessionID)
-      const rows = Database.use((db) =>
+      const rows = store.use((db) =>
         db
           .select()
           .from(MessageTable)
@@ -957,6 +959,8 @@ export namespace MessageV2 {
           .all(),
       )
       if (rows.length === 0) {
+        // Session existence check stays a registry read (SessionTable lives in
+        // the registry, not the shard).
         const row = Database.use((db) =>
           db.select({ id: SessionTable.id }).from(SessionTable).where(eq(SessionTable.id, input.sessionID)).get(),
         )
@@ -969,7 +973,7 @@ export namespace MessageV2 {
 
       const more = rows.length > input.limit
       const page = more ? rows.slice(0, input.limit) : rows
-      const items = await hydrate(page)
+      const items = await hydrate(page, store)
       items.reverse()
       const tail = page.at(-1)
       return {
@@ -993,14 +997,20 @@ export namespace MessageV2 {
     }
   })
 
-  export const parts = fn(MessageID.zod, async (message_id) => {
-    const rows = Database.use((db) =>
+  async function partsInStore(message_id: MessageID, store: SessionShard.Store) {
+    const rows = store.use((db) =>
       db.select().from(PartTable).where(eq(PartTable.message_id, message_id)).orderBy(PartTable.id).all(),
     )
     return rows.flatMap((row) => {
       const next = part(row)
       return next ? [next] : []
     })
+  }
+
+  export const parts = fn(MessageID.zod, async (message_id) => {
+    // messageID-only read: resolve via the ambient project (the callers run
+    // inside the session's own project context) — see SessionShard.ambientStore.
+    return partsInStore(message_id, SessionShard.ambientStore())
   })
 
   export const get = fn(
@@ -1009,7 +1019,8 @@ export namespace MessageV2 {
       messageID: MessageID.zod,
     }),
     async (input): Promise<WithParts> => {
-      const row = Database.use((db) =>
+      const store = SessionShard.storeFor(input.sessionID)
+      const row = store.use((db) =>
         db
           .select()
           .from(MessageTable)
@@ -1021,14 +1032,15 @@ export namespace MessageV2 {
       if (!next) throw new NotFoundError({ message: `Message not found: ${input.messageID}` })
       return {
         info: next,
-        parts: await parts(input.messageID),
+        parts: await partsInStore(input.messageID, store),
       }
     },
   )
 
   /** Fetch messages created after the given message ID, ordered oldest first */
   export async function after(sessionID: SessionID, afterID: MessageID): Promise<WithParts[]> {
-    const rows = Database.use((db) =>
+    const store = SessionShard.storeFor(sessionID)
+    const rows = store.use((db) =>
       db
         .select()
         .from(MessageTable)
@@ -1036,7 +1048,7 @@ export namespace MessageV2 {
         .orderBy(MessageTable.id)
         .all(),
     )
-    return hydrate(rows)
+    return hydrate(rows, store)
   }
 
   export async function filterCompacted(stream: AsyncIterable<MessageV2.WithParts>) {
