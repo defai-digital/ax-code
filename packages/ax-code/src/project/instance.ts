@@ -12,6 +12,7 @@ import { Context } from "../util/context"
 import { ScopedFlag } from "@/flag/scoped"
 import { Project } from "./project"
 import { State } from "./state"
+import { Database } from "../storage/db"
 
 export interface Shape {
   directory: string
@@ -22,6 +23,11 @@ const context = Context.create<Shape>("instance")
 // Let directory-scoped feature flags resolve against the active instance
 // without a flag → instance import cycle.
 ScopedFlag.setDirectoryResolver(() => context.peek()?.directory)
+// Let Database resolve the ambient projectID for per-project shard routing
+// (Phase 2) without a db.ts → instance.ts import cycle. Mirrors the
+// ScopedFlag resolver above: the callback reads the async-local instance
+// context lazily, so it returns undefined outside Instance.provide.
+Database.setProjectResolver(() => context.peek()?.project.id)
 const cache = new Map<string, Promise<Shape>>()
 const lifecycle = {
   listeners: new Set<(event: Instance.LifecycleEvent) => void>(),

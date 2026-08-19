@@ -19,7 +19,9 @@ import { init } from "#db"
 import { NativeStore } from "@/code-intelligence/native-store"
 import { DurableStoragePolicy } from "./policy"
 import { Recorder } from "@/replay/recorder"
+import { Shard } from "./shard"
 import { toErrorMessage } from "../util/error-message"
+import type { ProjectID } from "../project/schema"
 
 declare const AX_CODE_MIGRATIONS: { sql: string; timestamp: number; name: string }[] | undefined
 
@@ -162,31 +164,33 @@ export namespace Database {
       })
     }
     const client = Client.peek()
-    if (!client) {
-      NativeStore.close()
-      return
+    if (client) {
+      try {
+        // Keep the file-backed SQLite database as the durable source of truth,
+        // but opportunistically shrink the WAL during graceful shutdown. This
+        // addresses the "disk sidecar keeps growing" class of problems without
+        // introducing a separate in-memory source of truth or async sync window
+        // where acknowledged writes can be lost.
+        client.run(`PRAGMA wal_checkpoint(${DurableStoragePolicy.shutdownCheckpointMode})`)
+      } catch (error) {
+        log.warn("failed to truncate wal during shutdown", {
+          path: Path,
+          error: toErrorMessage(error),
+        })
+      }
+      client.$client.close()
+      Client.reset()
     }
-    try {
-      // Keep the file-backed SQLite database as the durable source of truth,
-      // but opportunistically shrink the WAL during graceful shutdown. This
-      // addresses the "disk sidecar keeps growing" class of problems without
-      // introducing a separate in-memory source of truth or async sync window
-      // where acknowledged writes can be lost.
-      client.run(`PRAGMA wal_checkpoint(${DurableStoragePolicy.shutdownCheckpointMode})`)
-    } catch (error) {
-      log.warn("failed to truncate wal during shutdown", {
-        path: Path,
-        error: toErrorMessage(error),
-      })
-    }
-    client.$client.close()
-    Client.reset()
     // Release the native code-intelligence index store's SQLite handle
     // alongside the main DB. Without this, `ax-code-index.db` and its WAL
     // stay open for the lifetime of the process — a real fd / WAL leak in
     // long-running server / desktop / TUI hosts (BUG-008). NativeStore.close
     // is idempotent and safe to call when the addon isn't loaded.
     NativeStore.close()
+    // Close + evict every open per-project shard handle (idempotent). Shard
+    // handles are opened lazily, so an empty cache is a no-op — but a
+    // long-running server / desktop host may hold up to Shard.MAX_OPEN of them.
+    Shard.closeAll()
   }
 
   // node:sqlite reports lock contention as errcode 5 (SQLITE_BUSY — extended
@@ -197,6 +201,21 @@ export namespace Database {
     const errcode = (error as { errcode?: unknown } | null | undefined)?.errcode
     if (typeof errcode === "number") return (errcode & 0xff) === 5
     return error instanceof Error && error.message.includes("database is locked")
+  }
+
+  // Resolver for the ambient projectID, wired by project/instance.ts at module
+  // init (see the ScopedFlag.setDirectoryResolver precedent there). Kept as an
+  // indirection so db.ts never imports instance.ts — instance.ts imports
+  // project.ts which imports db.ts, so a direct import would be a cycle.
+  // Session-scoped shard routing (Slice 1+) reads this to pick a shard.
+  let projectResolver: (() => ProjectID | undefined) | undefined
+
+  export function setProjectResolver(fn: () => ProjectID | undefined) {
+    projectResolver = fn
+  }
+
+  export function resolveProjectID(): ProjectID | undefined {
+    return projectResolver?.()
   }
 
   export type TxOrDb = Transaction | Client

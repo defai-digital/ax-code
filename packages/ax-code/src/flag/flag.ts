@@ -222,6 +222,10 @@ export namespace Flag {
   export const AX_CODE_DISABLE_CHANNEL_DB = truthy("AX_CODE_DISABLE_CHANNEL_DB")
   export const AX_CODE_SKIP_MIGRATIONS = truthy("AX_CODE_SKIP_MIGRATIONS")
   export const AX_CODE_STRICT_CONFIG_DEPS = truthy("AX_CODE_STRICT_CONFIG_DEPS")
+  // Phase 2 per-project DB sharding (slice 0: foundation only). Default off;
+  // slice 0 is inert with the flag on OR off — no call sites route to shards
+  // yet. Later slices gate shard routing on this flag for staged rollout.
+  export const AX_CODE_SHARD_SESSIONS = truthy("AX_CODE_SHARD_SESSIONS")
   // Visual Browser Agent (ADR-047): snapshot-first browser automation for
   // local web UI review and repair. Gated behind feature flag until the
   // Playwright runtime dependency and permission model are stable.
