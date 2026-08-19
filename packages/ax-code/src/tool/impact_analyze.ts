@@ -3,8 +3,10 @@ import { Tool } from "./tool"
 import DESCRIPTION from "./impact_analyze.txt"
 import { Instance } from "../project/instance"
 import { DebugEngine } from "../debug-engine"
+import { CodeIntelligence } from "../code-intelligence"
 import { CodeNodeID } from "../code-intelligence/id"
 import { ToolNumber } from "./schema"
+import { Log } from "../util/log"
 
 // Tool wrapper around DebugEngine.analyzeImpact. Read-only, no file
 // writes, no cloud calls. See PRD §4.4 and ADR-008.
@@ -38,7 +40,7 @@ export const ImpactAnalyzeTool = Tool.define("impact_analyze", {
       .optional()
       .describe("Hard cap on nodes visited (default 2000, max 10000)"),
   }),
-  execute: async (args) => {
+  execute: async (args, ctx) => {
     const projectID = Instance.project.id
 
     // Narrow the zod-validated shape to the DebugEngine input type.
@@ -56,6 +58,34 @@ export const ImpactAnalyzeTool = Tool.define("impact_analyze", {
       maxVisited: args.maxVisited,
       scope: "worktree",
     })
+
+    // Auto-record a caveat note + relevance signal (ADR-056 Phase 2).
+    // Fail-open; only when exactly one seed resolved (else ambiguous anchor).
+    try {
+      if (report.seeds.length === 1 && report.seeds[0]) {
+        const seed = CodeIntelligence.getSymbol(projectID, report.seeds[0], { scope: "worktree" })
+        if (seed) {
+          CodeIntelligence.recordNote(projectID, {
+            qualifiedName: seed.qualifiedName,
+            file: seed.file,
+            kind: "caveat",
+            body: `Impact risk ${report.riskLabel} (score ${report.riskScore}) across ${report.affectedSymbols.length} symbols`,
+            sessionId: ctx.sessionID,
+            origin: "auto",
+            symbolNameAtWrite: seed.name,
+            symbolKindAtWrite: seed.kind,
+            signatureAtWrite: seed.signature ?? undefined,
+          })
+          CodeIntelligence.recordSignal(projectID, {
+            qualifiedName: seed.qualifiedName,
+            file: seed.file,
+            signalType: "impact",
+          })
+        }
+      }
+    } catch (err) {
+      Log.Default.warn("impact_analyze auto-note failed", { err })
+    }
 
     const lines: string[] = []
     lines.push(`Seeds: ${report.seeds.length}`)

@@ -624,7 +624,11 @@ export namespace GraphContext {
     const notes: CodeIntelligence.SymbolNote[] = []
     const seenNotes = new Set<string>()
     for (const symbol of symbols) {
-      for (const note of CodeIntelligence.notesForSymbol(projectID, symbol.qualifiedName, { limit: 3, scope })) {
+      for (const note of CodeIntelligence.notesForSymbol(projectID, symbol.qualifiedName, {
+        limit: 3,
+        scope,
+        current: { name: symbol.name, kind: symbol.kind, signature: symbol.signature ?? null },
+      })) {
         if (seenNotes.has(note.id)) continue
         seenNotes.add(note.id)
         notes.push(note)

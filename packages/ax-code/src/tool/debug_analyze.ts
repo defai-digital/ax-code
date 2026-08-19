@@ -3,6 +3,7 @@ import { Tool } from "./tool"
 import DESCRIPTION from "./debug_analyze.txt"
 import { Instance } from "../project/instance"
 import { DebugEngine } from "../debug-engine"
+import { CodeIntelligence } from "../code-intelligence"
 import { CodeNodeID } from "../code-intelligence/id"
 import { Session } from "../session"
 import { QualityShadow } from "../quality/shadow-runtime"
@@ -52,6 +53,33 @@ export const DebugAnalyzeTool = Tool.define("debug_analyze", {
       chainDepth: args.chainDepth,
       scope: "worktree",
     })
+
+    // Auto-record a hypothesis note + relevance signal (ADR-056 Phase 2).
+    // Fail-open: a failed write must never fail the analysis.
+    try {
+      const anchor = result.chain.find((f) => f.symbol && f.role === "failure") ?? result.chain.find((f) => f.symbol)
+      if (anchor?.symbol && result.rootCauseHypothesis) {
+        const sym = anchor.symbol
+        CodeIntelligence.recordNote(projectID, {
+          qualifiedName: sym.qualifiedName,
+          file: sym.file,
+          kind: "hypothesis",
+          body: result.rootCauseHypothesis.summary,
+          sessionId: ctx.sessionID,
+          origin: "auto",
+          symbolNameAtWrite: sym.name,
+          symbolKindAtWrite: sym.kind,
+          signatureAtWrite: sym.signature ?? undefined,
+        })
+        CodeIntelligence.recordSignal(projectID, {
+          qualifiedName: sym.qualifiedName,
+          file: sym.file,
+          signalType: "bug",
+        })
+      }
+    } catch (err) {
+      log.warn("debug_analyze auto-note failed", { err })
+    }
 
     const lines: string[] = []
     lines.push(`Chain (${result.chain.length} frame${result.chain.length === 1 ? "" : "s"}):`)

@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core"
+import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from "drizzle-orm/sqlite-core"
 import { ProjectTable } from "../project/project.sql"
 import type { ProjectID } from "../project/schema"
 import type { CodeNodeID, CodeEdgeID, CodeFileID, LspCacheID, CodeSymbolNoteID } from "./id"
@@ -230,6 +230,11 @@ export const LspCacheTable = sqliteTable(
 // with write-time dedupe on (qualified_name, kind, normalized body).
 export type SymbolNoteKind = "hypothesis" | "fact" | "caveat"
 
+// "explicit" (agent-authored via the symbol-note tool) vs "auto" (derived
+// automatically by DRE). Partitioning the cap by origin keeps auto notes from
+// evicting deliberately-authored ones.
+export type NoteOrigin = "explicit" | "auto"
+
 export const CodeSymbolNoteTable = sqliteTable(
   "code_symbol_note",
   {
@@ -248,14 +253,60 @@ export const CodeSymbolNoteTable = sqliteTable(
     content_hash_at_write: text(),
     // Session that produced the note, for provenance (never enforced via FK).
     session_id: text(),
-    // Signature at write time, for future rename re-anchoring on (name, kind,
-    // signature). Informational in v1.
+    // Signature at write time, for rename re-anchoring on (name, kind, signature).
     signature_at_write: text(),
+    // Symbol identity at write time, for rename re-anchoring. Captured from the
+    // resolved Symbol when the note is written via a symbol-aware path.
+    symbol_name_at_write: text(),
+    symbol_kind_at_write: text(),
+    // "explicit" (agent-authored) vs "auto" (DRE-derived). Drives the
+    // partitioned per-symbol cap so auto notes cannot evict explicit ones.
+    origin: text().$type<NoteOrigin>().notNull().default("explicit"),
     ...Timestamps,
   },
   (table) => [
     index("code_symbol_note_project_idx").on(table.project_id),
     index("code_symbol_note_qualified_idx").on(table.project_id, table.qualified_name),
     index("code_symbol_note_file_idx").on(table.project_id, table.file),
+    index("code_symbol_note_identity_idx").on(
+      table.project_id,
+      table.symbol_name_at_write,
+      table.symbol_kind_at_write,
+      table.signature_at_write,
+    ),
+  ],
+)
+
+// Symbol-anchored relevance signals (ADR-056 Phase 3).
+//
+// Lossy, high-write-rate, decaying counters — deliberately SEPARATE from
+// code_symbol_note (which is durable, capped, user-visible content). Keyed by
+// (project_id, qualified_name, signal_type) — NOT node id — for the same
+// reason as notes: reindex is delete-then-insert and node ids churn.
+//
+// Only user/agent-initiated entry points (DRE analyzeBug/analyzeImpact, the
+// explicit symbol-note tool) emit signals; graph-context reads and prewarm
+// consumption are signal-silent to avoid a self-reinforcing feedback loop.
+// Decay is computed lazily at read time from last_seen_at; no background job.
+export type SymbolSignalType = "bug" | "impact" | "note"
+
+export const CodeSymbolSignalTable = sqliteTable(
+  "code_symbol_signal",
+  {
+    project_id: text()
+      .$type<ProjectID>()
+      .notNull()
+      .references(() => ProjectTable.id, { onDelete: "cascade" }),
+    qualified_name: text().notNull(),
+    file: text().notNull(),
+    signal_type: text().$type<SymbolSignalType>().notNull(),
+    hit_count: integer().notNull().default(1),
+    last_seen_at: integer().notNull(),
+    ...Timestamps,
+  },
+  (table) => [
+    primaryKey({ columns: [table.project_id, table.qualified_name, table.signal_type] }),
+    index("code_symbol_signal_project_idx").on(table.project_id),
+    index("code_symbol_signal_lastseen_idx").on(table.project_id, table.last_seen_at),
   ],
 )

@@ -5,7 +5,7 @@ import { CodeGraphBuilder } from "./builder"
 import { CodeGraphWatcher } from "./watcher"
 import { CodeSymbolNoteID } from "./id"
 import type { CodeNodeID } from "./id"
-import type { CodeNodeKind, CodeEdgeKind, SymbolNoteKind } from "./schema.sql"
+import type { CodeNodeKind, CodeEdgeKind, SymbolNoteKind, NoteOrigin, SymbolSignalType } from "./schema.sql"
 import type { ProjectID } from "../project/schema"
 
 const log = Log.create({ service: "code-intelligence" })
@@ -463,14 +463,17 @@ export namespace CodeIntelligence {
     kind: SymbolNoteKind
     body: string
     sessionId: string | null
+    origin: NoteOrigin
     createdAt: number
     freshness: SymbolNoteFreshness
     explain: {
       source: "session-note"
       noteId: string
       sessionId: string | null
+      origin: NoteOrigin
       createdAt: number
       freshness: SymbolNoteFreshness
+      reanchoredFrom?: string
     }
   }
 
@@ -487,7 +490,11 @@ export namespace CodeIntelligence {
     return "fresh"
   }
 
-  function noteRowToPublic(projectID: ProjectID, row: CodeGraphQuery.SymbolNoteRow): SymbolNote {
+  function noteRowToPublic(
+    projectID: ProjectID,
+    row: CodeGraphQuery.SymbolNoteRow,
+    reanchoredFrom?: string,
+  ): SymbolNote {
     const freshness = noteFreshness(projectID, row.file, row.content_hash_at_write)
     return {
       id: row.id,
@@ -496,17 +503,22 @@ export namespace CodeIntelligence {
       kind: row.kind,
       body: row.body,
       sessionId: row.session_id,
+      origin: row.origin,
       createdAt: row.time_created,
       freshness,
       explain: {
         source: "session-note",
         noteId: row.id,
         sessionId: row.session_id,
+        origin: row.origin,
         createdAt: row.time_created,
         freshness,
+        ...(reanchoredFrom ? { reanchoredFrom } : {}),
       },
     }
   }
+
+  const MAX_AUTO_NOTES_PER_SYMBOL = 2
 
   export function recordNote(
     projectID: ProjectID,
@@ -517,10 +529,14 @@ export namespace CodeIntelligence {
       body: string
       sessionId?: string
       signatureAtWrite?: string
+      symbolNameAtWrite?: string
+      symbolKindAtWrite?: string
+      origin?: NoteOrigin
     },
   ): SymbolNote {
     const body = normalizeNoteBody(input.body)
     if (body.length === 0) throw new Error("recordNote: body must be non-empty")
+    const origin = input.origin ?? "explicit"
     // Dedupe on (qualified_name, kind, normalized body).
     const existing = CodeGraphQuery.notesForQualifiedName(projectID, input.qualifiedName).find(
       (row) => row.kind === input.kind && normalizeNoteBody(row.body) === body,
@@ -539,12 +555,24 @@ export namespace CodeIntelligence {
       content_hash_at_write: fileRow?.sha ?? null,
       session_id: input.sessionId ?? null,
       signature_at_write: input.signatureAtWrite ?? null,
+      symbol_name_at_write: input.symbolNameAtWrite ?? null,
+      symbol_kind_at_write: input.symbolKindAtWrite ?? null,
+      origin,
       time_created: t,
       time_updated: t,
     }
     CodeGraphQuery.insertSymbolNote(row)
 
-    // Enforce the per-symbol cap (newest wins).
+    // Partitioned per-symbol cap: auto notes evict auto notes first (max 2),
+    // then the total cap (5) evicts the oldest regardless of origin.
+    if (origin === "auto") {
+      const autoCount = CodeGraphQuery.notesForQualifiedName(projectID, input.qualifiedName).filter(
+        (r) => r.origin === "auto",
+      ).length
+      if (autoCount > MAX_AUTO_NOTES_PER_SYMBOL) {
+        CodeGraphQuery.deleteOldestNotesByOrigin(projectID, input.qualifiedName, "auto", MAX_AUTO_NOTES_PER_SYMBOL)
+      }
+    }
     if (CodeGraphQuery.countNotesForQualifiedName(projectID, input.qualifiedName) > MAX_NOTES_PER_SYMBOL) {
       CodeGraphQuery.deleteOldestNotesForQualifiedName(projectID, input.qualifiedName, MAX_NOTES_PER_SYMBOL)
     }
@@ -555,14 +583,36 @@ export namespace CodeIntelligence {
   export function notesForSymbol(
     projectID: ProjectID,
     qualifiedName: string,
-    opts?: { limit?: number; scope?: Scope },
+    opts?: {
+      limit?: number
+      scope?: Scope
+      current?: { name: string; kind: string; signature: string | null }
+    },
   ): SymbolNote[] {
     const scope = opts?.scope ?? "none"
     const limit = normalizeResultLimit(opts?.limit)
     const queryLimit = scope === "none" ? limit : undefined
-    const rows = CodeGraphQuery.notesForQualifiedName(projectID, qualifiedName, queryLimit)
+    let rows = CodeGraphQuery.notesForQualifiedName(projectID, qualifiedName, queryLimit)
+    let reanchoredFrom: string | undefined
+    // Rename re-anchoring (ADR-056 Phase 3): if the exact qualified_name anchor
+    // misses, fall back to (name, kind, signature) identity. Re-anchor only when
+    // the tuple is fully non-null and resolves to exactly one distinct old anchor.
+    if (rows.length === 0 && opts?.current?.signature) {
+      const identity = CodeGraphQuery.notesForSymbolIdentity(
+        projectID,
+        opts.current.name,
+        opts.current.kind,
+        opts.current.signature,
+        qualifiedName,
+      )
+      const anchors = new Set(identity.map((r) => r.qualified_name))
+      if (anchors.size === 1) {
+        rows = identity
+        reanchoredFrom = [...anchors][0]
+      }
+    }
     const filtered = rows.filter((row) => inScope(row.file, scope))
-    return applyResultLimit(filtered, limit).map((row) => noteRowToPublic(projectID, row))
+    return applyResultLimit(filtered, limit).map((row) => noteRowToPublic(projectID, row, reanchoredFrom))
   }
 
   export function notesForFile(
@@ -576,5 +626,45 @@ export namespace CodeIntelligence {
     if (!inScope(file, scope)) return []
     const rows = CodeGraphQuery.notesForFile(projectID, file, queryLimit)
     return applyResultLimit(rows, limit).map((row) => noteRowToPublic(projectID, row))
+  }
+
+  // ─── Symbol relevance signals (ADR-056 Phase 3) ───────────────────
+  //
+  // Lossy, decaying counters. Emit only from cold user/agent entry points
+  // (DRE tools, explicit note tool) — never from graph-context reads or prewarm
+  // consumption, to avoid a self-reinforcing feedback loop. Fail-open: a failed
+  // write logs at warn level and never fails the caller.
+
+  export type WarmupFile = { file: string; score: number }
+
+  const SIGNAL_WEIGHTS: Record<SymbolSignalType, number> = { bug: 3, impact: 2, note: 1 }
+  const SIGNAL_DECAY_HALF_LIFE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+
+  export function recordSignal(
+    projectID: ProjectID,
+    input: { qualifiedName: string; file: string; signalType: SymbolSignalType },
+  ): void {
+    try {
+      CodeGraphQuery.upsertSignal(projectID, input)
+    } catch (err) {
+      log.warn("recordSignal failed", { err })
+    }
+  }
+
+  export function topWarmupFiles(projectID: ProjectID, opts?: { limit?: number; now?: number }): WarmupFile[] {
+    const limit = Math.min(Math.max(opts?.limit ?? 8, 0), 40)
+    const now = opts?.now ?? Date.now()
+    const rows = CodeGraphQuery.recentSignals(projectID, 256)
+    const byFile = new Map<string, number>()
+    for (const row of rows) {
+      const weight = SIGNAL_WEIGHTS[row.signal_type] ?? 1
+      const age = Math.max(0, now - row.last_seen_at)
+      const decay = Math.exp(-age / SIGNAL_DECAY_HALF_LIFE_MS)
+      byFile.set(row.file, (byFile.get(row.file) ?? 0) + weight * row.hit_count * decay)
+    }
+    return [...byFile.entries()]
+      .map(([file, score]) => ({ file, score }))
+      .sort((a, b) => b.score - a.score || a.file.localeCompare(b.file))
+      .slice(0, limit)
   }
 }

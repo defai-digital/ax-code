@@ -16,6 +16,7 @@ import { ScheduledTask } from "@/session/scheduled-task"
 import { TaskQueue } from "@/session/task-queue"
 import { Provider } from "../provider/provider"
 import { DiagnosticCorrelation } from "../debug-engine/diagnostic-correlation"
+import { CodeIntelligence } from "../code-intelligence"
 import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
 import { toErrorMessage } from "@/util/error-message"
 import {
@@ -38,6 +39,16 @@ function fireAndForget(label: string, task: () => Promise<unknown> | unknown) {
     Promise.resolve(task()).catch(handle)
   } catch (err) {
     handle(err)
+  }
+}
+
+// Signal-guided prewarm hints (ADR-056 Phase 3). Fail-open: a bad migration,
+// missing table, or a query error must never block startup prewarm.
+function safeWarmupHints(): string[] {
+  try {
+    return CodeIntelligence.topWarmupFiles(Instance.project.id, { limit: 4 }).map((f) => f.file)
+  } catch {
+    return []
   }
 }
 
@@ -150,6 +161,7 @@ export async function InstanceBootstrap() {
         methods: [...INDEXER_SEMANTIC_METHODS],
         maxFiles: BOOTSTRAP_PREWARM_MAX_FILES,
         maxLanguages: BOOTSTRAP_PREWARM_MAX_LANGUAGES,
+        preferredFiles: safeWarmupHints(),
       }),
   })
   background({

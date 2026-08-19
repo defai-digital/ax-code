@@ -722,6 +722,19 @@ export namespace LSP {
     const selected: string[] = []
     const seenLanguages = new Set<string>()
 
+    // Signal-guided priority files (ADR-056 Phase 3): consumed before the
+    // ripgrep fallback so historically-hot files win a prewarm slot. Each hint
+    // is validated for language + client availability and skipped otherwise.
+    for (const probe of opts.preferredFiles ?? []) {
+      if (selected.length >= maxFiles || seenLanguages.size >= maxLanguages) break
+      const language = LSPPrewarm.detectLanguage(probe)
+      if (language === "unknown" || language === "plaintext") continue
+      if (seenLanguages.has(language)) continue
+      if (!(await hasPrewarmClients(probe, opts))) continue
+      selected.push(probe)
+      seenLanguages.add(language)
+    }
+
     for await (const rel of Ripgrep.files({ cwd: Instance.directory, limit: WORKSPACE_PROBE_SCAN_LIMIT })) {
       if (selected.length >= maxFiles || seenLanguages.size >= maxLanguages) break
 

@@ -36,6 +36,7 @@ import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { LspTool } from "./lsp"
 import { CodeIntelligenceTool } from "./code-intelligence"
+import { SymbolNoteTool } from "./symbol_note"
 import { DebugAnalyzeTool } from "./debug_analyze"
 import { RefactorPlanTool } from "./refactor_plan"
 import { DedupScanTool } from "./dedup_scan"
@@ -269,7 +270,7 @@ export namespace ToolRegistry {
       DebugApplyVerificationTool,
       DebugRepairFromEnvelopeTool,
       ...(Flag.AX_CODE_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
-      ...(Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE ? [CodeIntelligenceTool] : []),
+      ...(Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE ? [CodeIntelligenceTool, SymbolNoteTool] : []),
       ...(debugEngineEnabled ? [...DEBUG_ENGINE_TOOLS] : []),
       ...(cfg.experimental?.batch_tool === true ? [BatchTool] : []),
       ...(Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE && Flag.AX_CODE_CLIENT === "cli" ? [PlanExitTool] : []),

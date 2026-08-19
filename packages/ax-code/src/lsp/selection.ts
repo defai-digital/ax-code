@@ -13,6 +13,9 @@ export type ClientOptions = {
 export type PrewarmSelectionOptions = {
   maxFiles?: number
   maxLanguages?: number
+  // Signal-guided priority files (ADR-056 Phase 3). Consumed before the
+  // ripgrep fallback; each is validated and skipped if invalid. Fail-open.
+  preferredFiles?: string[]
 }
 
 export type ClientSelection = {

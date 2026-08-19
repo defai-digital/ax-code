@@ -1,0 +1,5 @@
+Record a durable, symbol-anchored note on a code symbol so it resurfaces in later sessions through graph context.
+
+Use this to persist what you have learned about a specific symbol: a confirmed root cause, a refactor rationale, or a caveat about its behavior. Notes are keyed by symbol identity (qualified name) and carry a content-hash freshness tag (fresh / stale / orphaned), so the next session sees your conclusion and can tell whether the code has since changed.
+
+Accept a `symbolId` (a CodeNodeID from findSymbol), a `kind` (hypothesis | fact | caveat), and a bounded `body`. The tool resolves the canonical symbol and derives its file, qualified name, and signature automatically. Notes are capped at 5 per symbol with write-time dedupe.

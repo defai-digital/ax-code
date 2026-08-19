@@ -1,4 +1,4 @@
-import { Database, eq, and, or, inArray, desc, lt, gte, sql } from "../storage/db"
+import { Database, eq, and, or, inArray, desc, lt, gte, ne, sql } from "../storage/db"
 import {
   CodeNodeTable,
   CodeEdgeTable,
@@ -6,11 +6,14 @@ import {
   CodeIndexCursorTable,
   LspCacheTable,
   CodeSymbolNoteTable,
+  CodeSymbolSignalTable,
   type CodeNodeKind,
   type CodeEdgeKind,
   type LspCacheOperation,
   type LspCacheCompleteness,
   type SymbolNoteKind,
+  type SymbolSignalType,
+  type NoteOrigin,
 } from "./schema.sql"
 import { LspCacheID, CodeSymbolNoteID } from "./id"
 import type { CodeNodeID } from "./id"
@@ -571,6 +574,7 @@ export namespace CodeGraphQuery {
       db.delete(CodeFileTable).where(eq(CodeFileTable.project_id, projectID)).run()
       db.delete(CodeIndexCursorTable).where(eq(CodeIndexCursorTable.project_id, projectID)).run()
       db.delete(CodeSymbolNoteTable).where(eq(CodeSymbolNoteTable.project_id, projectID)).run()
+      db.delete(CodeSymbolSignalTable).where(eq(CodeSymbolSignalTable.project_id, projectID)).run()
     })
   }
 
@@ -844,5 +848,156 @@ export namespace CodeGraphQuery {
 
   export function clearSymbolNotes(projectID: ProjectID): void {
     Database.use((db) => db.delete(CodeSymbolNoteTable).where(eq(CodeSymbolNoteTable.project_id, projectID)).run())
+  }
+
+  // Evict notes beyond the newest `keep` for a single (project, symbol, origin).
+  // Used by the partitioned cap: auto notes evict auto notes first.
+  export function deleteOldestNotesByOrigin(
+    projectID: ProjectID,
+    qualifiedName: string,
+    origin: NoteOrigin,
+    keep: number,
+  ): void {
+    const rows = Database.use((db) =>
+      db
+        .select({ id: CodeSymbolNoteTable.id })
+        .from(CodeSymbolNoteTable)
+        .where(
+          and(
+            eq(CodeSymbolNoteTable.project_id, projectID),
+            eq(CodeSymbolNoteTable.qualified_name, qualifiedName),
+            eq(CodeSymbolNoteTable.origin, origin),
+          ),
+        )
+        .orderBy(desc(CodeSymbolNoteTable.time_created))
+        .all(),
+    )
+    const toDelete = rows.slice(keep).map((r) => r.id)
+    if (toDelete.length === 0) return
+    Database.use((db) =>
+      db
+        .delete(CodeSymbolNoteTable)
+        .where(
+          and(
+            eq(CodeSymbolNoteTable.project_id, projectID),
+            inArray(CodeSymbolNoteTable.id, toDelete as CodeSymbolNoteID[]),
+          ),
+        )
+        .run(),
+    )
+  }
+
+  // ─── Symbol relevance signals (ADR-056 Phase 3) ─────────────────────
+  //
+  // Lossy, decaying counters. Main-DB only (not NativeStore), like notes.
+  // Emitted only from cold user/agent entry points; never from graph-context
+  // reads or prewarm consumption.
+
+  export type SignalRow = typeof CodeSymbolSignalTable.$inferSelect
+
+  export function upsertSignal(
+    projectID: ProjectID,
+    signal: { qualifiedName: string; file: string; signalType: SymbolSignalType },
+    now = Date.now(),
+  ): void {
+    Database.transaction((db) => {
+      const existing = db
+        .select({ hit_count: CodeSymbolSignalTable.hit_count })
+        .from(CodeSymbolSignalTable)
+        .where(
+          and(
+            eq(CodeSymbolSignalTable.project_id, projectID),
+            eq(CodeSymbolSignalTable.qualified_name, signal.qualifiedName),
+            eq(CodeSymbolSignalTable.signal_type, signal.signalType),
+          ),
+        )
+        .get()
+      if (existing) {
+        db.update(CodeSymbolSignalTable)
+          .set({ hit_count: existing.hit_count + 1, last_seen_at: now, time_updated: now })
+          .where(
+            and(
+              eq(CodeSymbolSignalTable.project_id, projectID),
+              eq(CodeSymbolSignalTable.qualified_name, signal.qualifiedName),
+              eq(CodeSymbolSignalTable.signal_type, signal.signalType),
+            ),
+          )
+          .run()
+      } else {
+        db.insert(CodeSymbolSignalTable)
+          .values({
+            project_id: projectID,
+            qualified_name: signal.qualifiedName,
+            file: signal.file,
+            signal_type: signal.signalType,
+            hit_count: 1,
+            last_seen_at: now,
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+      }
+    })
+  }
+
+  export function recentSignals(projectID: ProjectID, limit = 256): SignalRow[] {
+    const normalizedLimit = normalizeQueryLimit(limit) ?? 256
+    if (normalizedLimit === 0) return []
+    return Database.use((db) =>
+      db
+        .select()
+        .from(CodeSymbolSignalTable)
+        .where(eq(CodeSymbolSignalTable.project_id, projectID))
+        .orderBy(desc(CodeSymbolSignalTable.last_seen_at))
+        .limit(normalizedLimit)
+        .all(),
+    )
+  }
+
+  // Delete signals older than `before` (ms). Returns rows removed.
+  export function pruneSignals(projectID: ProjectID, before: number): number {
+    return Database.use(
+      (db) =>
+        db
+          .delete(CodeSymbolSignalTable)
+          .where(and(eq(CodeSymbolSignalTable.project_id, projectID), lt(CodeSymbolSignalTable.last_seen_at, before)))
+          .returning({ qualified_name: CodeSymbolSignalTable.qualified_name })
+          .all().length,
+    )
+  }
+
+  export function clearSignals(projectID: ProjectID): void {
+    Database.use((db) => db.delete(CodeSymbolSignalTable).where(eq(CodeSymbolSignalTable.project_id, projectID)).run())
+  }
+
+  // ─── Note identity lookup (ADR-056 Phase 3 rename re-anchoring) ─────
+  //
+  // Find notes by symbol identity (name, kind, signature) rather than the
+  // qualified_name anchor. Used at read time when the exact anchor misses —
+  // a rename/move changes qualified_name but keeps (name, kind, signature).
+  // Requires a non-null signature: a null tuple is ambiguous and must not
+  // re-anchor (enforced by the caller).
+  export function notesForSymbolIdentity(
+    projectID: ProjectID,
+    name: string,
+    kind: string,
+    signature: string,
+    excludeQualifiedName?: string,
+  ): SymbolNoteRow[] {
+    const filters = [
+      eq(CodeSymbolNoteTable.project_id, projectID),
+      eq(CodeSymbolNoteTable.symbol_name_at_write, name),
+      eq(CodeSymbolNoteTable.symbol_kind_at_write, kind),
+      eq(CodeSymbolNoteTable.signature_at_write, signature),
+    ]
+    if (excludeQualifiedName) filters.push(ne(CodeSymbolNoteTable.qualified_name, excludeQualifiedName))
+    return Database.use((db) =>
+      db
+        .select()
+        .from(CodeSymbolNoteTable)
+        .where(and(...filters))
+        .orderBy(desc(CodeSymbolNoteTable.time_created))
+        .all(),
+    )
   }
 }
