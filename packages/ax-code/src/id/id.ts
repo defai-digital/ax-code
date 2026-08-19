@@ -18,6 +18,7 @@ export namespace Identifier {
     code_edge: "ced",
     code_file: "cfi",
     code_intel_lsp_cache: "lsc",
+    code_symbol_note: "csn",
     refactor_plan: "rpl",
     embedding_cache: "ebc",
     audit_semantic_call: "asc",

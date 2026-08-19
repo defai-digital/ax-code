@@ -3,8 +3,9 @@ import { Instance } from "../project/instance"
 import { CodeGraphQuery } from "./query"
 import { CodeGraphBuilder } from "./builder"
 import { CodeGraphWatcher } from "./watcher"
+import { CodeSymbolNoteID } from "./id"
 import type { CodeNodeID } from "./id"
-import type { CodeNodeKind, CodeEdgeKind } from "./schema.sql"
+import type { CodeNodeKind, CodeEdgeKind, SymbolNoteKind } from "./schema.sql"
 import type { ProjectID } from "../project/schema"
 
 const log = Log.create({ service: "code-intelligence" })
@@ -440,5 +441,140 @@ export namespace CodeIntelligence {
     if (data == null) return true
     if (Array.isArray(data)) return data.length === 0
     return false
+  }
+
+  // ─── Symbol-anchored cross-session notes (ADR-056) ───────────────────
+  //
+  // Durable, symbol-level conclusions that survive sessions. Keyed by
+  // (project_id, qualified_name) — NOT node id — because reindex is
+  // delete-then-insert and node ids are ephemeral. No FK into code_node,
+  // so watcher reindexes never cascade away learned knowledge.
+  //
+  // Staleness: content_hash_at_write is compared against CodeFileTable.sha
+  // at read time and each note is tagged fresh | stale | orphaned. This is
+  // surfaced in the note's `explain` so consumers can route on it.
+
+  export type SymbolNoteFreshness = "fresh" | "stale" | "orphaned"
+
+  export type SymbolNote = {
+    id: CodeSymbolNoteID
+    qualifiedName: string
+    file: string
+    kind: SymbolNoteKind
+    body: string
+    sessionId: string | null
+    createdAt: number
+    freshness: SymbolNoteFreshness
+    explain: {
+      source: "session-note"
+      noteId: string
+      sessionId: string | null
+      createdAt: number
+      freshness: SymbolNoteFreshness
+    }
+  }
+
+  const MAX_NOTES_PER_SYMBOL = 5
+
+  function normalizeNoteBody(body: string): string {
+    return body.trim()
+  }
+
+  function noteFreshness(projectID: ProjectID, file: string, contentHashAtWrite: string | null): SymbolNoteFreshness {
+    const fileRow = CodeGraphQuery.getFile(projectID, file)
+    if (!fileRow) return "orphaned"
+    if (contentHashAtWrite === null || fileRow.sha !== contentHashAtWrite) return "stale"
+    return "fresh"
+  }
+
+  function noteRowToPublic(projectID: ProjectID, row: CodeGraphQuery.SymbolNoteRow): SymbolNote {
+    const freshness = noteFreshness(projectID, row.file, row.content_hash_at_write)
+    return {
+      id: row.id,
+      qualifiedName: row.qualified_name,
+      file: row.file,
+      kind: row.kind,
+      body: row.body,
+      sessionId: row.session_id,
+      createdAt: row.time_created,
+      freshness,
+      explain: {
+        source: "session-note",
+        noteId: row.id,
+        sessionId: row.session_id,
+        createdAt: row.time_created,
+        freshness,
+      },
+    }
+  }
+
+  export function recordNote(
+    projectID: ProjectID,
+    input: {
+      qualifiedName: string
+      file: string
+      kind: SymbolNoteKind
+      body: string
+      sessionId?: string
+      signatureAtWrite?: string
+    },
+  ): SymbolNote {
+    const body = normalizeNoteBody(input.body)
+    if (body.length === 0) throw new Error("recordNote: body must be non-empty")
+    // Dedupe on (qualified_name, kind, normalized body).
+    const existing = CodeGraphQuery.notesForQualifiedName(projectID, input.qualifiedName).find(
+      (row) => row.kind === input.kind && normalizeNoteBody(row.body) === body,
+    )
+    if (existing) return noteRowToPublic(projectID, existing)
+
+    const fileRow = CodeGraphQuery.getFile(projectID, input.file)
+    const t = Date.now()
+    const row: CodeGraphQuery.SymbolNoteRow = {
+      id: CodeSymbolNoteID.ascending(),
+      project_id: projectID,
+      qualified_name: input.qualifiedName,
+      file: input.file,
+      kind: input.kind,
+      body,
+      content_hash_at_write: fileRow?.sha ?? null,
+      session_id: input.sessionId ?? null,
+      signature_at_write: input.signatureAtWrite ?? null,
+      time_created: t,
+      time_updated: t,
+    }
+    CodeGraphQuery.insertSymbolNote(row)
+
+    // Enforce the per-symbol cap (newest wins).
+    if (CodeGraphQuery.countNotesForQualifiedName(projectID, input.qualifiedName) > MAX_NOTES_PER_SYMBOL) {
+      CodeGraphQuery.deleteOldestNotesForQualifiedName(projectID, input.qualifiedName, MAX_NOTES_PER_SYMBOL)
+    }
+
+    return noteRowToPublic(projectID, row)
+  }
+
+  export function notesForSymbol(
+    projectID: ProjectID,
+    qualifiedName: string,
+    opts?: { limit?: number; scope?: Scope },
+  ): SymbolNote[] {
+    const scope = opts?.scope ?? "none"
+    const limit = normalizeResultLimit(opts?.limit)
+    const queryLimit = scope === "none" ? limit : undefined
+    const rows = CodeGraphQuery.notesForQualifiedName(projectID, qualifiedName, queryLimit)
+    const filtered = rows.filter((row) => inScope(row.file, scope))
+    return applyResultLimit(filtered, limit).map((row) => noteRowToPublic(projectID, row))
+  }
+
+  export function notesForFile(
+    projectID: ProjectID,
+    file: string,
+    opts?: { limit?: number; scope?: Scope },
+  ): SymbolNote[] {
+    const scope = opts?.scope ?? "none"
+    const limit = normalizeResultLimit(opts?.limit)
+    const queryLimit = scope === "none" ? limit : undefined
+    if (!inScope(file, scope)) return []
+    const rows = CodeGraphQuery.notesForFile(projectID, file, queryLimit)
+    return applyResultLimit(rows, limit).map((row) => noteRowToPublic(projectID, row))
   }
 }

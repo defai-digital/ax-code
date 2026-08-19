@@ -1,7 +1,7 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { ProjectTable } from "../project/project.sql"
 import type { ProjectID } from "../project/schema"
-import type { CodeNodeID, CodeEdgeID, CodeFileID, LspCacheID } from "./id"
+import type { CodeNodeID, CodeEdgeID, CodeFileID, LspCacheID, CodeSymbolNoteID } from "./id"
 import { Timestamps } from "../storage/schema.sql"
 
 // Graph node: a named, locatable entity in the codebase. The union is
@@ -211,5 +211,51 @@ export const LspCacheTable = sqliteTable(
     ),
     // Cheap scan for pruneExpired().
     index("code_intel_lsp_cache_expires_idx").on(table.expires_at),
+  ],
+)
+
+// Symbol-anchored cross-session notes (ADR-056).
+//
+// Durable, symbol-level conclusions that survive sessions: root causes,
+// refactor rationale, caveats. Keyed by (project_id, qualified_name) — NOT
+// node id — because reindex is delete-then-insert (deleteNodesInFile mints
+// fresh CodeNodeIDs), so node ids are ephemeral. No FK into code_node: a
+// watcher reindex or pruneOrphanFiles must never cascade away learned
+// knowledge. Notes whose symbol no longer resolves are surfaced as
+// "orphaned" at read time, not deleted.
+//
+// Staleness: content_hash_at_write stores CodeFileTable.sha at write time;
+// the read path compares it to the current hash and tags the note
+// fresh | stale | orphaned. Capped at 5 notes per symbol (newest wins)
+// with write-time dedupe on (qualified_name, kind, normalized body).
+export type SymbolNoteKind = "hypothesis" | "fact" | "caveat"
+
+export const CodeSymbolNoteTable = sqliteTable(
+  "code_symbol_note",
+  {
+    id: text().$type<CodeSymbolNoteID>().primaryKey(),
+    project_id: text()
+      .$type<ProjectID>()
+      .notNull()
+      .references(() => ProjectTable.id, { onDelete: "cascade" }),
+    // Stable anchor. Embeds the file path (e.g. "src/…::Class::method"), so
+    // a rename orphans the note — accepted in v1 and surfaced as "orphaned".
+    qualified_name: text().notNull(),
+    file: text().notNull(),
+    kind: text().$type<SymbolNoteKind>().notNull(),
+    body: text().notNull(),
+    // CodeFileTable.sha at write time. Null when the file wasn't indexed.
+    content_hash_at_write: text(),
+    // Session that produced the note, for provenance (never enforced via FK).
+    session_id: text(),
+    // Signature at write time, for future rename re-anchoring on (name, kind,
+    // signature). Informational in v1.
+    signature_at_write: text(),
+    ...Timestamps,
+  },
+  (table) => [
+    index("code_symbol_note_project_idx").on(table.project_id),
+    index("code_symbol_note_qualified_idx").on(table.project_id, table.qualified_name),
+    index("code_symbol_note_file_idx").on(table.project_id, table.file),
   ],
 )

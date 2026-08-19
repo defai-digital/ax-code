@@ -80,6 +80,7 @@ export type GraphContextPack = {
   frameworkBindings: FrameworkBinding[]
   heuristicBindings: HeuristicBinding[]
   impact?: ImpactSummary
+  notes: CodeIntelligence.SymbolNote[]
   omitted: {
     symbols: number
     snippets: number
@@ -513,6 +514,15 @@ function formatOutput(pack: Omit<GraphContextPack, "output">): string {
     lines.push("")
   }
 
+  if (pack.notes.length > 0) {
+    lines.push(`## Prior Session Notes`)
+    lines.push(`> Prior session observations — verify before relying on them.`)
+    for (const note of pack.notes) {
+      lines.push(`- [${note.freshness}] [${note.kind}] ${note.qualifiedName}: ${note.body}`)
+    }
+    lines.push("")
+  }
+
   lines.push(`## Recommendations`)
   for (const recommendation of pack.recommendations) {
     lines.push(`- ${recommendation}`)
@@ -608,6 +618,19 @@ export namespace GraphContext {
       await Promise.all(symbols.slice(0, maxSnippets).map((symbol) => readSnippet(symbol, scope)))
     ).filter((item): item is Snippet => item !== undefined)
 
+    // Prior-session symbol notes (ADR-056). Attached to selected symbols and
+    // rendered in a structurally distinct section so the agent can reuse prior
+    // conclusions without confusing them with graph facts.
+    const notes: CodeIntelligence.SymbolNote[] = []
+    const seenNotes = new Set<string>()
+    for (const symbol of symbols) {
+      for (const note of CodeIntelligence.notesForSymbol(projectID, symbol.qualifiedName, { limit: 3, scope })) {
+        if (seenNotes.has(note.id)) continue
+        seenNotes.add(note.id)
+        notes.push(note)
+      }
+    }
+
     const frameworkBindings: FrameworkBinding[] = []
     const heuristicSignals: HeuristicBinding[] = []
     const linesByFile = new Map<string, string[] | undefined>()
@@ -641,6 +664,11 @@ export namespace GraphContext {
     if (heuristicSignals.length > 0) {
       recommendations.push("Treat heuristic signals as navigation hints, not proof of runtime behavior.")
     }
+    if (notes.some((note) => note.freshness !== "fresh")) {
+      recommendations.push(
+        "Prior session notes marked stale/orphaned may reference code that has since changed — re-verify before relying on them.",
+      )
+    }
 
     const packWithoutOutput = {
       query: opts.query,
@@ -650,6 +678,7 @@ export namespace GraphContext {
       frameworkBindings: frameworkBindings.slice(0, 20),
       heuristicBindings: heuristicSignals.slice(0, 20),
       impact,
+      notes,
       omitted: {
         symbols: Math.max(0, allSymbols.length - symbols.length),
         snippets: Math.max(0, symbols.length - snippets.length),

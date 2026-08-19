@@ -16,3 +16,6 @@ export type CodeFileID = BrandedIdentifier<"CodeFileID">
 
 export const LspCacheID = defineBrandedIdentifier("LspCacheID", "code_intel_lsp_cache")
 export type LspCacheID = BrandedIdentifier<"LspCacheID">
+
+export const CodeSymbolNoteID = defineBrandedIdentifier("CodeSymbolNoteID", "code_symbol_note")
+export type CodeSymbolNoteID = BrandedIdentifier<"CodeSymbolNoteID">

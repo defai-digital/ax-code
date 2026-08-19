@@ -5,12 +5,14 @@ import {
   CodeFileTable,
   CodeIndexCursorTable,
   LspCacheTable,
+  CodeSymbolNoteTable,
   type CodeNodeKind,
   type CodeEdgeKind,
   type LspCacheOperation,
   type LspCacheCompleteness,
+  type SymbolNoteKind,
 } from "./schema.sql"
-import { LspCacheID } from "./id"
+import { LspCacheID, CodeSymbolNoteID } from "./id"
 import type { CodeNodeID } from "./id"
 import type { ProjectID } from "../project/schema"
 import { Flag } from "../flag/flag"
@@ -371,10 +373,7 @@ export namespace CodeGraphQuery {
         .select({ path: CodeFileTable.path })
         .from(CodeFileTable)
         .where(
-          and(
-            eq(CodeFileTable.project_id, projectID),
-            sql`${CodeFileTable.path} LIKE ${escaped + "%"} ESCAPE '\\'`,
-          ),
+          and(eq(CodeFileTable.project_id, projectID), sql`${CodeFileTable.path} LIKE ${escaped + "%"} ESCAPE '\\'`),
         )
         .all()
     })
@@ -571,6 +570,7 @@ export namespace CodeGraphQuery {
       db.delete(CodeNodeTable).where(eq(CodeNodeTable.project_id, projectID)).run()
       db.delete(CodeFileTable).where(eq(CodeFileTable.project_id, projectID)).run()
       db.delete(CodeIndexCursorTable).where(eq(CodeIndexCursorTable.project_id, projectID)).run()
+      db.delete(CodeSymbolNoteTable).where(eq(CodeSymbolNoteTable.project_id, projectID)).run()
     })
   }
 
@@ -757,5 +757,92 @@ export namespace CodeGraphQuery {
         .returning({ id: LspCacheTable.id })
         .all().length
     })
+  }
+
+  // ─── Symbol notes (ADR-056) ─────────────────────────────────────────
+  //
+  // Symbol-anchored cross-session notes. Main-DB only (not routed through
+  // NativeStore — same policy as LspCacheTable): the native IndexStore does
+  // not implement note ops, and notes are independent of the graph rows.
+
+  export type SymbolNoteRow = typeof CodeSymbolNoteTable.$inferSelect
+  export type SymbolNoteInsert = typeof CodeSymbolNoteTable.$inferInsert
+
+  export function insertSymbolNote(row: SymbolNoteInsert): void {
+    Database.use((db) => db.insert(CodeSymbolNoteTable).values(row).run())
+  }
+
+  export function notesForQualifiedName(projectID: ProjectID, qualifiedName: string, limit?: number): SymbolNoteRow[] {
+    const normalizedLimit = normalizeQueryLimit(limit)
+    if (normalizedLimit === 0) return []
+    const q = Database.use((db) =>
+      db
+        .select()
+        .from(CodeSymbolNoteTable)
+        .where(
+          and(eq(CodeSymbolNoteTable.project_id, projectID), eq(CodeSymbolNoteTable.qualified_name, qualifiedName)),
+        )
+        .orderBy(desc(CodeSymbolNoteTable.time_created)),
+    )
+    return normalizedLimit === undefined ? q.all() : q.limit(normalizedLimit).all()
+  }
+
+  export function notesForFile(projectID: ProjectID, file: string, limit?: number): SymbolNoteRow[] {
+    const normalizedLimit = normalizeQueryLimit(limit)
+    if (normalizedLimit === 0) return []
+    const q = Database.use((db) =>
+      db
+        .select()
+        .from(CodeSymbolNoteTable)
+        .where(and(eq(CodeSymbolNoteTable.project_id, projectID), eq(CodeSymbolNoteTable.file, file)))
+        .orderBy(desc(CodeSymbolNoteTable.time_created)),
+    )
+    return normalizedLimit === undefined ? q.all() : q.limit(normalizedLimit).all()
+  }
+
+  export function countNotesForQualifiedName(projectID: ProjectID, qualifiedName: string): number {
+    const row = Database.use((db) =>
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(CodeSymbolNoteTable)
+        .where(
+          and(eq(CodeSymbolNoteTable.project_id, projectID), eq(CodeSymbolNoteTable.qualified_name, qualifiedName)),
+        )
+        .get(),
+    )
+    return row?.count ?? 0
+  }
+
+  // Evict notes beyond the newest `keep` for a single (project, symbol). The
+  // per-symbol set is tiny (capped at 5), so materializing IDs and deleting
+  // via IN-clause is simpler and avoids SQLite's parameterized-LIMIT quirks.
+  export function deleteOldestNotesForQualifiedName(projectID: ProjectID, qualifiedName: string, keep: number): void {
+    const rows = Database.use((db) =>
+      db
+        .select({ id: CodeSymbolNoteTable.id })
+        .from(CodeSymbolNoteTable)
+        .where(
+          and(eq(CodeSymbolNoteTable.project_id, projectID), eq(CodeSymbolNoteTable.qualified_name, qualifiedName)),
+        )
+        .orderBy(desc(CodeSymbolNoteTable.time_created))
+        .all(),
+    )
+    const toDelete = rows.slice(keep).map((r) => r.id)
+    if (toDelete.length === 0) return
+    Database.use((db) =>
+      db
+        .delete(CodeSymbolNoteTable)
+        .where(
+          and(
+            eq(CodeSymbolNoteTable.project_id, projectID),
+            inArray(CodeSymbolNoteTable.id, toDelete as CodeSymbolNoteID[]),
+          ),
+        )
+        .run(),
+    )
+  }
+
+  export function clearSymbolNotes(projectID: ProjectID): void {
+    Database.use((db) => db.delete(CodeSymbolNoteTable).where(eq(CodeSymbolNoteTable.project_id, projectID)).run())
   }
 }
