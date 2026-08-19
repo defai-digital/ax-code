@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.7.2] - 2026-08-19
+
+### Added
+
+- Catalog family filters, dialog polish, and install fixes.
+- Shard-aware session/project lifecycle cleanup (Phase 2 slice 5).
+- Shard task_queue, scheduled_task, workflow tables (Phase 2 slice 4).
+- Shard todo + session_goal, close message routing gaps (Phase 2 slice 3).
+- Shard the replay event log with allSince fan-out (Phase 2 slice 2).
+- Route message/part tables to per-project shards (Phase 2 slice 1).
+- Per-project shard foundation (Phase 2 slice 0).
+
+### Changed
+
+- Add multi-model routing best practices.
+- Add example multi-model setup for DeepSeek V4 Pro + Qwen3.8 Max.
+
+### Fixed
+
+- Drop MiniMax Token Plan SKUs older than M2.7.
+- Resolve SDK package entry before import().
+- Harden SQLite writes for concurrent agent workloads.
+
 ## [7.7.1] - 2026-08-19
 
 ### Added
