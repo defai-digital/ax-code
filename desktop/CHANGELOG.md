@@ -6,51 +6,52 @@ All notable changes to this project will be documented in this file.
 
 ## [7.7.0] - 2026-08-19
 
+Scout subagent, an optional risk guardian, a usage-focused dashboard, and safer autonomous mode.
+
 ### Added
 
 - Improve CLI provider alias resolution and model ranking.
-- Add scout subagent and backend verification skills.
-- Add dedicated guardian model + fail-closed tests.
-- Add opt-in semantic pre-approval guardian for RISK actions.
-- Rework web dashboard around usage and activity.
-- Add temporary disable/enable and provider manager UI.
-- Log server launch params and relaunch mismatches.
+- Add a scout subagent plus backend verification skills.
+- Add a dedicated guardian model with fail-closed tests.
+- Add an opt-in semantic pre-approval guardian for RISK actions.
+- Rework the web dashboard around usage, activity, and provider management.
+- Add temporary provider disable/enable controls.
+- Log server launch parameters and detect relaunch mismatches.
 
 ### Changed
 
-- Revert(provider): remove unverified capability overrides.
-- Lock model-specific context policy.
-- Document safe upgrade temp paths.
-- Isolate auto-update flag in release CI.
+- Remove unverified provider capability overrides.
+- Lock model-specific context-window policy.
+- Document safe upgrade temporary paths.
+- Isolate the auto-update flag in release CI.
 
 ### Fixed
 
 - Register verified Kimi and DeepSeek capabilities.
-- Regenerate scout agent schema.
-- Harden connected CLI model selection.
+- Harden connected CLI model selection and regenerate the scout agent schema.
 - Block dangerous git config keys from autonomous writes.
 - Harden autonomous mode against self-escalation and config bypass.
-- Preserve active sessions on toggles.
-- Refresh Groq and Zhipu API catalogs from official docs.
-- Align plan catalogs with official Alibaba/Z.ai allowlists.
-- Trim compaction history to fit small model windows.
-- Stop crash loop when the terminal dies mid-session.
-- Cap stream-repetition segment map to pass self-scan.
-- Recover from output loops with guidance, not blind retries.
-- Stop in-stream model output loops; never fall back off local providers.
-- Build resumed releases from requested tag.
-- Resume postpublish distribution jobs.
-- Honor resumed release tag in postpublish jobs.
+- Preserve active sessions when dashboard toggles change.
+- Refresh Groq and Zhipu catalogs and align Alibaba / Z.ai plan allowlists.
+- Trim compaction history so it fits small model windows.
+- Stop crash loops when the terminal dies mid-session.
+- Stop in-stream output loops and recover with guidance instead of blind retries.
+- Never fall back off local providers after a stream loop.
+- Resume signed releases and post-publish jobs from the requested tag.
 
 ## [7.6.4] - 2026-08-18
 
+Local models are 6-bit only, Windows can self-upgrade, and upgrade verification is complete.
+
 ### Fixed
 
-- Finish upgrade verification and catalog docs.
-- Drop 4-bit packs for a 6-bit-only local lineup.
+- Finish upgrade verification and catalog documentation.
+- Drop 4-bit packs so the local lineup is 6-bit only.
 - Add Windows self-upgrade and post-update verification.
 
 ## [7.6.3] - 2026-08-17
+
+Configurable request concurrency and per-model token budgets.
 
 ### Fixed
 
@@ -59,37 +60,41 @@ All notable changes to this project will be documented in this file.
 
 ## [7.6.2] - 2026-08-17
 
+Status, notifications, progress, and rewind controls, plus Windows/PTY/SQLite hardening. Direct xAI cloud integration is retired.
+
 ### Added
 
 - Add status, notifications, progress, and rewind controls.
-- Enable kitty keyboard protocol by default.
+- Enable the kitty keyboard protocol by default.
 
 ### Changed
 
-- Retire direct xAI cloud integration.
+- Retire the direct xAI cloud integration.
 
 ### Fixed
 
 - Harden Windows, PTY, SQLite, and CLI setup.
-- Set process title and ignore tui-backend in doctor instance check.
-- Retry draft visibility.
+- Set the process title and ignore tui-backend in the doctor instance check.
+- Retry draft release visibility.
 
 ## [7.6.1] - 2026-08-17
+
+Legacy-terminal newline handling, resumable signed releases, and OpenTUI Node fallbacks.
 
 ### Fixed
 
 - Let Ctrl+J insert a newline instead of submitting in legacy terminals.
-- Make signed release publication safely resumable after transient GitHub API failures.
+- Make signed release publication resumable after transient GitHub API failures.
 - Restore valid Node.js fallback modules for Bun-only OpenTUI entrypoints.
-- Make unexecutable tool text recovery budget consecutive.
-- Report the actual coverage runtime.
+- Make unexecutable tool-text recovery budget consecutive.
+- Report the actual coverage runtime and merge sharded coverage reports.
 - Preserve harmless merge interrupts.
-- Merge sharded coverage reports.
-- Build performance workflow dependencies.
-- Repair performance workflow execution.
+- Repair performance-workflow dependencies and execution.
 - Resolve repository self-scan regressions.
 
 ## [7.6.0] - 2026-08-17
+
+Local AX Engine catalog, background task queue, private GPU providers, and TUI streaming performance.
 
 ### Added
 

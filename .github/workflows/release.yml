@@ -398,16 +398,17 @@ jobs:
           # published release before re-verifying all detached signatures.
           if ! RELEASE_JSON="$(node script/github-release-assets.mjs inspect --repo "$REPOSITORY" --tag "$TAG" 2>/dev/null)"; then
             VERSION="${TAG#v}"
-            NOTES_FILE=".internal/release/release-notes-v${VERSION}.md"
-            NOTES_ARGS=()
-            if [ -f "$NOTES_FILE" ]; then
-              NOTES_ARGS=(--notes-file "$NOTES_FILE")
-            fi
+            NOTES_FILE="$RUNNER_TEMP/release-notes-v${VERSION}.md"
+            node script/extract-changelog-notes.mjs \
+              --version "$VERSION" \
+              --channel cli \
+              --sibling "desktop-v${VERSION}" \
+              --out "$NOTES_FILE"
             node script/github-release-assets.mjs create \
               --repo "$REPOSITORY" \
               --tag "$TAG" \
-              --name "$TAG" \
-              "${NOTES_ARGS[@]}" \
+              --name "AX Code CLI ${TAG}" \
+              --notes-file "$NOTES_FILE" \
               "${PRERELEASE_ARGS[@]}"
           else
             IS_DRAFT="$(node -e 'console.log(JSON.parse(process.argv[1]).draft)' "$RELEASE_JSON")"

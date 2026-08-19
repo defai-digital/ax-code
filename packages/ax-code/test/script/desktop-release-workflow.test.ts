@@ -7,6 +7,20 @@ const desktopReleaseWorkflow = path.join(repoRoot, ".github/workflows/desktop-re
 const sdkBuildScript = path.join(repoRoot, "packages/sdk/js/script/build.ts")
 
 describe("desktop release workflow", () => {
+  test("attaches the shared changelog section as GitHub release notes", async () => {
+    const text = await readFile(desktopReleaseWorkflow, "utf-8")
+    const job = text.match(/  create-release:[\s\S]*?(?=\n  package-web:|$)/)
+
+    expect(job, "create-release job should exist").not.toBeNull()
+    expect(job![0]).toContain("node script/extract-changelog-notes.mjs")
+    expect(job![0]).toContain("--channel desktop")
+    expect(job![0]).toContain("--out artifacts/desktop-release-notes.md")
+    expect(job![0]).toContain("name: AX Code Desktop v${{ steps.version.outputs.version }}")
+    expect(job![0]).toContain("body_path: artifacts/desktop-release-notes.md")
+    expect(job![0]).toContain("generate_release_notes: false")
+    expect(job![0]).not.toContain("changelog.split(/^## /m)")
+  })
+
   test("build jobs generate the SDK before packaging Desktop artifacts", async () => {
     const text = await readFile(desktopReleaseWorkflow, "utf-8")
 

@@ -100,15 +100,11 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          node - <<'NODE'
-          const fs = require('fs');
-          const version = process.env.VERSION;
-          const changelog = fs.readFileSync('desktop/CHANGELOG.md', 'utf8');
-          const section = changelog.split(/^## /m).find((part) => part.startsWith(`[${version}]`));
-          if (!section) throw new Error(`desktop/CHANGELOG.md is missing [${version}]`);
-          fs.mkdirSync('artifacts', { recursive: true });
-          fs.writeFileSync('artifacts/desktop-release-notes.md', `## ${section}`.trim() + '\n');
-          NODE
+          node script/extract-changelog-notes.mjs \
+            --version "$VERSION" \
+            --channel desktop \
+            --sibling "v${VERSION}" \
+            --out artifacts/desktop-release-notes.md
 
       - name: Require an absent or draft release
         if: ${{ github.event.inputs.dry_run != 'true' }}
@@ -135,7 +131,7 @@ jobs:
           draft: true
           generate_release_notes: false
           body_path: artifacts/desktop-release-notes.md
-          name: v${{ steps.version.outputs.version }}
+          name: AX Code Desktop v${{ steps.version.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

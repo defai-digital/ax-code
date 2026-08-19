@@ -28086,44 +28086,6 @@
           "output": 65536
         }
       },
-      "TEE/deepseek-v4-pro-0813": {
-        "id": "TEE/deepseek-v4-pro-0813",
-        "name": "DeepSeek V4 Pro 0813 TEE",
-        "description": "DeepSeek V4 Pro snapshot with million-token context and support for thinking and non-thinking modes",
-        "family": "deepseek-thinking",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1048576,
-          "input": 1048576,
-          "output": 1048576
-        }
-      },
       "TEE/deepseek-v3.2": {
         "id": "TEE/deepseek-v3.2",
         "name": "DeepSeek V3.2 TEE",
@@ -28579,44 +28541,6 @@
           "context": 131072,
           "input": 131072,
           "output": 8192
-        }
-      },
-      "TEE/deepseek-v4-pro-0813:thinking": {
-        "id": "TEE/deepseek-v4-pro-0813:thinking",
-        "name": "DeepSeek V4 Pro 0813 Thinking TEE",
-        "description": "DeepSeek V4 Pro snapshot with million-token context and support for thinking and non-thinking modes",
-        "family": "deepseek-thinking",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1048576,
-          "input": 1048576,
-          "output": 1048576
         }
       },
       "dots-studio/dots-3-note-preview": {
@@ -58415,7 +58339,7 @@
       },
       "gpt-5.6-luna": {
         "id": "gpt-5.6-luna",
-        "name": "GPT-5.6 Luna (2x usage)",
+        "name": "GPT-5.6 Luna",
         "description": "Cost-efficient GPT-5.6 model for fast, high-volume workloads",
         "family": "gpt-luna",
         "attachment": true,
@@ -58660,51 +58584,6 @@
           "output": 65536
         }
       },
-      "muse-spark-1.2": {
-        "id": "muse-spark-1.2",
-        "name": "Muse Spark 1.2",
-        "description": "Muse Spark 1.2 is a coding-focused update to Muse Spark 1.1 with improvements in code generation, complex debugging, codebase understanding, and end-to-end developer workflows.",
-        "family": "muse",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "minimal",
-              "low",
-              "medium",
-              "high",
-              "xhigh"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-08-05",
-        "last_updated": "2026-08-05",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video",
-            "pdf",
-            "audio"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1048576,
-          "output": 131072
-        },
-        "provider": {
-          "npm": "@ai-sdk/openai"
-        }
-      },
       "glm-5.3": {
         "id": "glm-5.3",
         "name": "GLM-5.3",
@@ -58916,7 +58795,7 @@
       },
       "hy3": {
         "id": "hy3",
-        "name": "Hy3",
+        "name": "Hy3 (8x usage)",
         "description": "Tencent Hy reasoning model for coding, instruction following, and agent tasks",
         "family": "Hy",
         "attachment": false,
@@ -58947,6 +58826,51 @@
         "limit": {
           "context": 256000,
           "output": 64000
+        }
+      },
+      "muse-spark-1.2-contributor": {
+        "id": "muse-spark-1.2-contributor",
+        "name": "Muse Spark 1.2 Contributor",
+        "description": "Muse Spark 1.2 is a coding-focused update to Muse Spark 1.1 with improvements in code generation, complex debugging, codebase understanding, and end-to-end developer workflows.",
+        "family": "muse",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-05",
+        "last_updated": "2026-08-05",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       }
     }
@@ -98836,7 +98760,7 @@
       },
       "gpt-5.6-sol": {
         "id": "gpt-5.6-sol",
-        "name": "GPT-5.6 Sol",
+        "name": "GPT-5.6 Sol (50% Off)",
         "description": "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
         "family": "gpt-sol",
         "attachment": true,
@@ -108292,13 +108216,9 @@
           {
             "type": "effort",
             "values": [
-              "none",
-              "minimal",
               "low",
-              "medium",
               "high",
-              "xhigh",
-              "max"
+              "xhigh"
             ]
           }
         ],
@@ -108318,7 +108238,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1048576,
+          "context": 1000000,
           "output": 384000
         }
       },
@@ -154155,7 +154075,7 @@
         "open_weights": true,
         "limit": {
           "context": 1048576,
-          "output": 384000
+          "output": 393216
         }
       },
       "deepseek/deepseek-v3.2": {
@@ -154349,7 +154269,7 @@
         "open_weights": false,
         "limit": {
           "context": 163840,
-          "output": 65536
+          "output": 163840
         }
       },
       "deepseek/deepseek-r1-distill-llama-70b": {
@@ -157551,6 +157471,47 @@
           "output": 128000
         }
       },
+      "openai/gpt-5.6-sol-discounted": {
+        "id": "openai/gpt-5.6-sol-discounted",
+        "name": "OpenAI: GPT-5.6 Sol (50% off)",
+        "description": "GPT-5.6 Sol served by OpenAI through Vercel AI Gateway at 50% lower cost than other available inference providers. This promotion runs through September 18, 2026.",
+        "family": "gpt",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2025-08-26",
+        "last_updated": "2025-08-26",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "output": 128000
+        }
+      },
       "openai/o4-mini-high": {
         "id": "openai/o4-mini-high",
         "name": "OpenAI: o4 Mini High",
@@ -159808,7 +159769,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 65536
+          "output": 262144
         }
       },
       "qwen/qwen3-vl-235b-a22b-thinking": {
@@ -161690,47 +161651,6 @@
           "output": 128000
         }
       },
-      "stealth/gpt-5.6-sol": {
-        "id": "stealth/gpt-5.6-sol",
-        "name": "Stealth: GPT-5.6 Sol (20% off)",
-        "description": "Your prompts and completions may be retained and used to train or improve the provider's services. This third-party-served variant of GPT-5.6 Sol is offered at 20% lower cost than standard GPT-5.6 Sol pricing and is not served by OpenAI or Kilo Code.",
-        "family": "gpt",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high",
-              "xhigh",
-              "max"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2025-08-26",
-        "last_updated": "2025-08-26",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1050000,
-          "output": 128000
-        }
-      },
       "stealth/claude-sonnet-4.6": {
         "id": "stealth/claude-sonnet-4.6",
         "name": "Stealth: Claude Sonnet 4.6 (20% off)",
@@ -162040,7 +161960,7 @@
       },
       "inclusionai/ring-2.6-1t": {
         "id": "inclusionai/ring-2.6-1t",
-        "name": "inclusionAI: Ring-2.6-1T",
+        "name": "inclusionAI: Ring-2.6-1T (retires Aug 24)",
         "description": "Reasoning model for deliberate analysis, multi-step problem solving, and tool use",
         "family": "ring",
         "attachment": false,
@@ -162110,7 +162030,7 @@
       },
       "inclusionai/ling-2.6-1t": {
         "id": "inclusionai/ling-2.6-1t",
-        "name": "inclusionAI: Ling-2.6-1T",
+        "name": "inclusionAI: Ling-2.6-1T (retires Aug 24)",
         "description": "Tool-capable chat model for instruction following and agentic application workflows",
         "family": "ling",
         "attachment": false,
@@ -162136,7 +162056,7 @@
       },
       "inclusionai/ling-2.6-flash": {
         "id": "inclusionai/ling-2.6-flash",
-        "name": "inclusionAI: Ling-2.6-flash",
+        "name": "inclusionAI: Ling-2.6-flash (retires Aug 24)",
         "description": "Efficient model for low-latency assistance, extraction, and routine automation",
         "family": "ling",
         "attachment": false,
