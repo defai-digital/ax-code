@@ -53091,6 +53091,50 @@
           "output": 128000
         }
       },
+      "xai.grok-4.6": {
+        "id": "xai.grok-4.6",
+        "name": "Grok 4.6",
+        "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-18",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 500000
+        },
+        "provider": {
+          "npm": "@ai-sdk/amazon-bedrock/mantle",
+          "api": "https://bedrock-mantle.${AWS_REGION}.api.aws/openai/v1",
+          "shape": "responses"
+        }
+      },
       "anthropic.claude-sonnet-4-6": {
         "id": "anthropic.claude-sonnet-4-6",
         "name": "Claude Sonnet 4.6",

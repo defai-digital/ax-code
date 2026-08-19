@@ -1,0 +1,58 @@
+{
+  "$schema": "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+
+  // Default executor: Qwen3.8 Max handles the high-volume build lane and all
+  // unpinned agents (general, scout, react, test, devops, perf). It is kept as
+  // the single global model rather than duplicating it under agent.build.
+  "model": "alibaba-token-plan/qwen3.8-max",
+
+  // Aux lane: DeepSeek V4 Flash is used for session titles, recaps, and the
+  // low-complexity classifier. Pinned explicitly because getSmallModel("deepseek")
+  // currently returns undefined and the Alibaba fallback would pick an older
+  // flash model.
+  "small_model": "deepseek/deepseek-v4-flash",
+
+  "agent": {
+    // Reasoning-dense lanes: keep diagnosis, planning, architecture, and
+    // security review on DeepSeek V4 Pro. Cross-provider review avoids
+    // correlated blind spots in Qwen-generated code.
+    "plan": { "model": "deepseek/deepseek-v4-pro" },
+    "architect": { "model": "deepseek/deepseek-v4-pro" },
+    "security": { "model": "deepseek/deepseek-v4-pro" },
+    "debug": { "model": "deepseek/deepseek-v4-pro" },
+
+    // Read-only / mechanical lanes: route to the same-provider flash model.
+    "explore": { "model": "deepseek/deepseek-v4-flash" },
+
+    // Compaction bypasses small_model and would otherwise fall back to the
+    // session model, so pin it explicitly to Flash.
+    "compaction": { "model": "deepseek/deepseek-v4-flash" }
+  },
+
+  // Consumed only by the replanner when a plan phase fails and needs to be
+  // re-planned. It does not affect general planning or the plan agent above.
+  "experimental": {
+    "planner_architect_model": "deepseek/deepseek-v4-pro"
+  },
+
+  "autonomous": true,
+  "super_long": false,
+  "isolation": {
+    "mode": "full-access",
+    "network": true
+  },
+  "modes": {
+    "council": {
+      "timeoutMs": 300000
+    },
+    "arena": {
+      "enabled": true,
+      "maxContestants": 3,
+      "strategy": "verify_first"
+    },
+    "budget": {
+      "maxEstimatedUsd": 0.5,
+      "estimatedUsdPerMember": 0.05
+    }
+  }
+}
