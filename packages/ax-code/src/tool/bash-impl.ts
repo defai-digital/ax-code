@@ -58,6 +58,71 @@ const BROWSER_OPEN_RE = /^(open|xdg-open|start|sensible-browser)\s+/
 // remote URLs that happen to end in .html (e.g. https://example.com/page.html).
 const LOCAL_HTML_PATH_RE = /^(?!https?:\/\/).*\.html?(?:\s*$|#|\?)/i
 
+// git config keys that can execute code when set: hook injection, arbitrary
+// command wrappers, external protocol handlers, filter processes, pagers.
+// These are stable git keys, so a hardcoded allowlist is appropriate — mirrors
+// Isolation.NETWORK_COMMANDS. Matching is case-insensitive (git normalizes key
+// case before lookup).
+const DANGEROUS_GIT_CONFIG_KEYS = [
+  "core.hookspath",
+  "core.fsmonitor",
+  "core.sshcommand",
+  "core.editor",
+  "core.pager",
+  "alias.",
+  "include.path",
+  "includeif.",
+  "credential.helper",
+  "protocol.",
+  "extensions.",
+  "filter.",
+  "pager.",
+  "diff.external",
+  "gpg.program",
+  "sequence.editor",
+] as const
+
+// git config invocations that only read; these never write .git/config.
+const GIT_CONFIG_READ_FLAGS = new Set([
+  "--get",
+  "--get-regexp",
+  "--get-all",
+  "--get-urlmatch",
+  "--list",
+  "--name-only",
+  "--show-origin",
+  "--show-scope",
+  "--show-names",
+])
+
+// Extract the config key (first positional arg, skipping flags and the values
+// of --file/-f/--type/-t). Returns undefined when no key is present.
+function gitConfigKey(args: string[]): string | undefined {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === "--file" || arg === "-f" || arg === "--type" || arg === "-t") {
+      i++ // skip the flag's value
+      continue
+    }
+    if (arg.startsWith("-")) continue
+    return arg.toLowerCase()
+  }
+  return undefined
+}
+
+// The file a `git config` write lands in: --file <path>, or the worktree's
+// .git/config by default. --global/--system write outside the worktree and are
+// out of scope (isolation already guards external writes).
+function gitConfigWriteTarget(args: string[]): string | undefined {
+  if (args.includes("--global") || args.includes("--system")) return undefined
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === "--file" || arg === "-f") return args[i + 1]
+    if (arg.startsWith("--file=")) return arg.slice("--file=".length)
+  }
+  return path.join(".git", "config")
+}
+
 // Patterns that identify intentional (non-development) browser opens.
 // These are allowed through even when targeting localhost/local files.
 const BROWSER_INTENT_PASSTHROUGH_RE = /(?:callback|oauth|auth|token|dre-graph|mcp)/i
@@ -449,6 +514,26 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             if (arg.startsWith("-")) continue
             await recordResolvedPath(arg)
             break
+          }
+          return
+        }
+
+        if (name === "git" && args[0] === "config") {
+          // git config writes to .git/config (or --file <path>) internally,
+          // not via a shell redirect, so the implicit destination is surfaced
+          // here. Only dangerous keys (hook injection, arbitrary command
+          // wrappers, protocol handlers) are treated as write targets — benign
+          // keys (user.email, user.name) stay untouched to avoid false
+          // positives, and reads (--get/--list/...) are skipped entirely.
+          const rest = args.slice(1)
+          const isRead = rest.some((arg) => GIT_CONFIG_READ_FLAGS.has(arg))
+          const key = gitConfigKey(rest)
+          if (!isRead && key && DANGEROUS_GIT_CONFIG_KEYS.some((prefix) => key.startsWith(prefix))) {
+            const target = gitConfigWriteTarget(rest)
+            if (target) {
+              const resolved = await recordResolvedPath(target)
+              if (resolved) redirectWritePaths.add(resolved)
+            }
           }
           return
         }
