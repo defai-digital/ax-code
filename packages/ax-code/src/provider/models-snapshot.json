@@ -134244,6 +134244,42 @@
           "output": 131072
         }
       },
+      "zai/glm-5.3": {
+        "id": "zai/glm-5.3",
+        "name": "GLM-5.3",
+        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        }
+      },
       "zai/glm-5.2": {
         "id": "zai/glm-5.2",
         "name": "GLM-5.2",
@@ -161066,6 +161102,40 @@
         "limit": {
           "context": 1000000,
           "output": 262144
+        }
+      },
+      "liquid/lfm-2.5-2.6b:free": {
+        "id": "liquid/lfm-2.5-2.6b:free",
+        "name": "LiquidAI: LFM2.5-2.6B (free)",
+        "description": "LFM2.5-2.6B is a compact reasoning model from Liquid AI. It is suited for agent workflows, data extraction, RAG, and long-context processing. Liquid advises against using it for agentic coding or...",
+        "family": "liquid",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-11",
+        "last_updated": "2026-08-11",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 128000,
+          "output": 8192
         }
       },
       "allenai/olmo-3-32b-think": {

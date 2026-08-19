@@ -4,6 +4,15 @@ import { transform as esbuildTransform } from "esbuild"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { defaultExcludedTests } from "./script/test-group"
+import { sanitizeAxCodeEnv } from "./test/support/sanitize-env"
+
+// Sanitize inherited AX_CODE_* runtime flags at config-evaluation time, in
+// the coordinator, before worker forks inherit this process env. Running it
+// here (not only in a setupFile) makes setupFiles ordering irrelevant —
+// vitest does not guarantee array-order execution. The first setupFile
+// re-runs it in workers; the call is idempotent. See
+// test/support/sanitize-env.ts for why this exists.
+sanitizeAxCodeEnv()
 
 const dir = path.dirname(fileURLToPath(import.meta.url))
 const normalizeVitePath = (input: string) => input.replaceAll("\\", "/")
@@ -80,10 +89,16 @@ export default defineConfig({
     exclude: includeFiles
       ? ["**/node_modules/**", "test-vitest/**", ...defaultExcludedTests.filter((file) => !includeFiles.includes(file))]
       : ["**/node_modules/**", "test-vitest/**", ...defaultExcludedTests],
-    // Order matters: vitest.setup installs the Bun compat shim first; preload
-    // then sets per-process (pid) XDG/home isolation so parallel forks don't
-    // collide on the shared global SQLite db, and clears provider env vars.
-    setupFiles: [path.join(dir, "test/support/vitest.setup.ts"), path.join(dir, "test/preload.ts")],
+    // Order matters: vitest.env strips inherited AX_CODE_* host-session flags
+    // before any src/ import (see sanitize-env.ts); vitest.setup then installs
+    // the Bun compat shim; preload sets per-process (pid) XDG/home isolation
+    // so parallel forks don't collide on the shared global SQLite db, and
+    // clears provider env vars.
+    setupFiles: [
+      path.join(dir, "test/support/vitest.env.ts"),
+      path.join(dir, "test/support/vitest.setup.ts"),
+      path.join(dir, "test/preload.ts"),
+    ],
     // Inline these deps so vitest transforms them and their ESM exports become
     // spyable (vi.spyOn). Bun allowed spying on frozen ESM namespaces; Node does
     // not, so tests that spy on a library's exports need the module inlined.
