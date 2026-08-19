@@ -15,6 +15,20 @@ import { isLocalHostname } from "@/util/local-host"
 import { axEngineLoader } from "./ax-engine/provider-loader"
 import { PRIVATE_GPU_LOADERS } from "./private-gpu/loader"
 import { isRecord } from "@/util/record"
+import { ModelsDev } from "./models"
+import {
+  claudeDisplayName,
+  claudeFamilyId,
+  latestAnthropicFamilyModels,
+} from "./anthropic-families"
+import {
+  grokDisplayName,
+  grokFallbackLatest,
+  grokFamilyId,
+  latestGrokFamilyModels,
+} from "./grok-families"
+import { kimiDisplayName, kimiFallbackModels, kimiFamilyId, latestKimiFamilyModels } from "./kimi-families"
+import { codexDisplayName, codexFallbackModels, codexFamilyId, latestCodexFamilyModels } from "./codex-families"
 
 const log = Log.create({ service: "provider.loaders" })
 
@@ -387,6 +401,230 @@ function cliModels(providerID: string, provider: Provider.Info, resolved?: strin
   return models
 }
 
+function overlayCliCatalogModel(
+  base: Provider.Model,
+  catalog: ModelsDev.Model,
+  providerID: string,
+  displayName: string,
+  family?: string,
+  publishedID?: string,
+): Provider.Model {
+  const id = publishedID ?? catalog.id.split("/").pop() ?? catalog.id
+  const input = catalog.modalities?.input ?? []
+  return {
+    ...base,
+    id: ModelID.make(id),
+    providerID: ProviderID.make(providerID),
+    api: { ...base.api, id },
+    name: displayName,
+    family: family ?? catalog.family ?? base.family,
+    limit: catalog.limit ?? base.limit,
+    release_date: catalog.release_date || base.release_date,
+    capabilities: {
+      ...base.capabilities,
+      reasoning: catalog.reasoning,
+      attachment: catalog.attachment,
+      toolcall: catalog.tool_call,
+      input: {
+        ...base.capabilities.input,
+        image: input.includes("image") || base.capabilities.input.image,
+        pdf: input.includes("pdf") || base.capabilities.input.pdf,
+      },
+    },
+  }
+}
+
+async function claudeCodeFamilyModels(
+  provider: Provider.Info,
+  resolved?: string,
+): Promise<Record<string, Provider.Model>> {
+  const base = Object.values(provider.models)[0]
+  if (!base) return {}
+  const catalog = (await ModelsDev.get()).anthropic?.models ?? {}
+  const models: Record<string, Provider.Model> = {}
+  for (const item of latestAnthropicFamilyModels(catalog)) {
+    models[item.id] = overlayCliCatalogModel(
+      base,
+      item,
+      "claude-code",
+      claudeDisplayName(item.name, item.id),
+      claudeFamilyId({ id: item.id, family: item.family }),
+    )
+  }
+  if (resolved && resolved !== "claude-code" && !models[resolved] && catalog[resolved]) {
+    const item = catalog[resolved]!
+    models[resolved] = overlayCliCatalogModel(
+      base,
+      item,
+      "claude-code",
+      claudeDisplayName(item.name, resolved),
+      claudeFamilyId({ id: item.id, family: item.family }),
+    )
+  } else if (resolved && resolved !== "claude-code" && !models[resolved]) {
+    const id = ModelID.make(resolved)
+    models[id] = {
+      ...base,
+      id,
+      providerID: ProviderID.make("claude-code"),
+      api: { ...base.api, id: resolved },
+      name: claudeDisplayName(undefined, resolved),
+    }
+  }
+  return models
+}
+
+function collectGrokCatalog(snapshot: Record<string, ModelsDev.Provider>): Record<string, ModelsDev.Model> {
+  const collected: Record<string, ModelsDev.Model> = {}
+  for (const provider of Object.values(snapshot)) {
+    for (const [id, model] of Object.entries(provider.models ?? {})) {
+      if (!grokFamilyId({ id: model.id ?? id, family: model.family })) continue
+      const key = (model.id ?? id).split("/").pop() ?? id
+      if (!collected[key]) collected[key] = { ...model, id: key }
+    }
+  }
+  const fallback = grokFallbackLatest()
+  if (!collected[fallback.id]) {
+    collected[fallback.id] = fallback as ModelsDev.Model
+  }
+  return collected
+}
+
+async function grokBuildFamilyModels(
+  provider: Provider.Info,
+  resolved?: string,
+): Promise<Record<string, Provider.Model>> {
+  const base = Object.values(provider.models)[0]
+  if (!base) return {}
+  const catalog = collectGrokCatalog(await ModelsDev.get())
+  const models: Record<string, Provider.Model> = {}
+  for (const item of latestGrokFamilyModels(catalog)) {
+    models[item.id] = overlayCliCatalogModel(
+      base,
+      item,
+      "grok-build-cli",
+      grokDisplayName(item.name, item.id),
+      grokFamilyId({ id: item.id, family: item.family }),
+    )
+  }
+  if (resolved && resolved !== "grok-build-cli" && !models[resolved] && catalog[resolved]) {
+    const item = catalog[resolved]!
+    models[resolved] = overlayCliCatalogModel(
+      base,
+      item,
+      "grok-build-cli",
+      grokDisplayName(item.name, resolved),
+      grokFamilyId({ id: item.id, family: item.family }),
+    )
+  } else if (resolved && resolved !== "grok-build-cli" && !models[resolved]) {
+    const id = ModelID.make(resolved)
+    models[id] = {
+      ...base,
+      id,
+      providerID: ProviderID.make("grok-build-cli"),
+      api: { ...base.api, id: resolved },
+      name: grokDisplayName(undefined, resolved),
+    }
+  }
+  return models
+}
+
+function collectCodexCatalog(snapshot: Record<string, ModelsDev.Provider>): Record<string, ModelsDev.Model> {
+  const collected: Record<string, ModelsDev.Model> = {}
+  const openai = snapshot.openai?.models ?? {}
+  for (const [id, model] of Object.entries(openai)) {
+    if (!codexFamilyId({ id: model.id ?? id, family: model.family })) continue
+    const key = (model.id ?? id).split("/").pop() ?? id
+    if (!collected[key]) collected[key] = { ...model, id: key }
+  }
+  for (const item of codexFallbackModels()) {
+    if (!collected[item.id]) collected[item.id] = item as ModelsDev.Model
+  }
+  return collected
+}
+
+async function codexCliFamilyModels(
+  provider: Provider.Info,
+  resolved?: string,
+): Promise<Record<string, Provider.Model>> {
+  const base = Object.values(provider.models)[0]
+  if (!base) return {}
+  const catalog = collectCodexCatalog(await ModelsDev.get())
+  const models: Record<string, Provider.Model> = {}
+  for (const item of latestCodexFamilyModels(catalog)) {
+    models[item.id] = overlayCliCatalogModel(
+      base,
+      item,
+      "codex-cli",
+      codexDisplayName(item.name, item.id),
+      codexFamilyId({ id: item.id, family: item.family }),
+    )
+  }
+  if (resolved && resolved !== "codex-cli" && !models[resolved] && catalog[resolved]) {
+    const item = catalog[resolved]!
+    models[resolved] = overlayCliCatalogModel(
+      base,
+      item,
+      "codex-cli",
+      codexDisplayName(item.name, resolved),
+      codexFamilyId({ id: item.id, family: item.family }),
+    )
+  } else if (resolved && resolved !== "codex-cli" && !models[resolved]) {
+    const id = ModelID.make(resolved)
+    models[id] = {
+      ...base,
+      id,
+      providerID: ProviderID.make("codex-cli"),
+      api: { ...base.api, id: resolved },
+      name: codexDisplayName(undefined, resolved),
+    }
+  }
+  return models
+}
+
+async function kimiCliFamilyModels(
+  provider: Provider.Info,
+  resolved?: string,
+): Promise<Record<string, Provider.Model>> {
+  const base = Object.values(provider.models)[0]
+  if (!base) return {}
+  const catalog: Record<string, ModelsDev.Model> = {}
+  for (const item of kimiFallbackModels()) {
+    catalog[item.id] = item as ModelsDev.Model
+  }
+  const models: Record<string, Provider.Model> = {}
+  for (const item of latestKimiFamilyModels(catalog)) {
+    models[item.id] = overlayCliCatalogModel(
+      base,
+      item,
+      "kimi-cli",
+      kimiDisplayName(item.name, item.id),
+      kimiFamilyId({ id: item.id, family: item.family }),
+      item.id,
+    )
+  }
+  if (resolved && resolved !== "kimi-cli" && !models[resolved] && catalog[resolved]) {
+    const item = catalog[resolved]!
+    models[resolved] = overlayCliCatalogModel(
+      base,
+      item,
+      "kimi-cli",
+      kimiDisplayName(item.name, resolved),
+      kimiFamilyId({ id: item.id, family: item.family }),
+      resolved,
+    )
+  } else if (resolved && resolved !== "kimi-cli" && !models[resolved]) {
+    const id = ModelID.make(resolved)
+    models[id] = {
+      ...base,
+      id,
+      providerID: ProviderID.make("kimi-cli"),
+      api: { ...base.api, id: resolved },
+      name: kimiDisplayName(undefined, resolved),
+    }
+  }
+  return models
+}
+
 function cliModel(providerID: string, provider: Provider.Info, modelID: string): Provider.Model | undefined {
   const base = Object.values(provider.models)[0]
   if (!base) return
@@ -432,13 +670,33 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
           workspaceArg: opts.workspaceArg,
         })
       },
-      async discoverModels() {
+      async discoverModels(current) {
         const path = await resolveCliBinary(opts.providerID, opts.binary)
         if (!path) return {}
         const authError = await checkCliProviderAuth(opts.providerID, path)
         if (authError) return {}
         const resolved = await resolveCliModel(opts.providerID)
-        return cliModels(opts.providerID, provider, resolved.model)
+        if (opts.providerID === "claude-code") {
+          const models = await claudeCodeFamilyModels(current, resolved.model)
+          if (Object.keys(models).length > 0) delete current.models[opts.providerID]
+          return models
+        }
+        if (opts.providerID === "grok-build-cli") {
+          const models = await grokBuildFamilyModels(current, resolved.model)
+          if (Object.keys(models).length > 0) delete current.models[opts.providerID]
+          return models
+        }
+        if (opts.providerID === "kimi-cli") {
+          const models = await kimiCliFamilyModels(current, resolved.model)
+          if (Object.keys(models).length > 0) delete current.models[opts.providerID]
+          return models
+        }
+        if (opts.providerID === "codex-cli") {
+          const models = await codexCliFamilyModels(current, resolved.model)
+          if (Object.keys(models).length > 0) delete current.models[opts.providerID]
+          return models
+        }
+        return cliModels(opts.providerID, current, resolved.model)
       },
     }
   }

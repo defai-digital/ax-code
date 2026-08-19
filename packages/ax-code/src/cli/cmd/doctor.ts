@@ -23,15 +23,18 @@ import { getTuiPreloadCheck } from "./doctor-preload"
 import { getDoctorDatabaseCheck } from "./doctor-storage"
 import { getRecentLogsChecks, getRunningInstancesCheck } from "./doctor-health"
 import path from "path"
+import { realpathSync } from "fs"
+import { access } from "fs/promises"
 import { ProjectIdentity } from "../../project/project-identity"
 import { isLoopbackHostname } from "../../runtime/listen-security"
 import { DEFAULT_SERVER_PORT } from "@/server/constants"
 import type { Isolation as IsolationConfig } from "../../config/schema"
-import { access } from "fs/promises"
 import { Isolation } from "../../isolation"
 import { toErrorMessage } from "@/util/error-message"
 import { isPlausiblySupportedHost } from "@/provider/ax-engine/platform"
 import { getAxEngineStatus } from "@/provider/ax-engine/status"
+import { whichAll } from "../../util/which"
+import { Process } from "../../util/process"
 
 type DoctorCheck = { name: string; status: "ok" | "warn" | "fail"; detail: string }
 
@@ -46,6 +49,73 @@ export function getRuntimeCheck(): DoctorCheck {
     detail: process.versions.bun
       ? `Bun ${process.versions.bun} (${runtimeMode()})`
       : `Node ${process.version} (${runtimeMode()})`,
+  }
+}
+
+export function isHomebrewManagedPath(
+  binaryPath: string,
+  realpath: (p: string) => string = (p) => {
+    try {
+      return realpathSync(p)
+    } catch {
+      return p
+    }
+  },
+): boolean {
+  return realpath(binaryPath).includes(`${path.sep}Cellar${path.sep}`)
+}
+
+function describeLauncher(entry: { path: string; version?: string; homebrew: boolean }) {
+  const version = entry.version ? ` (v${entry.version})` : ""
+  const brew = entry.homebrew ? " [Homebrew]" : ""
+  return `${entry.path}${version}${brew}`
+}
+
+export async function getPathLauncherCheck(
+  input: {
+    whichAll?: (cmd: string) => string[]
+    versionOf?: (bin: string) => Promise<string | undefined>
+    isHomebrew?: (bin: string) => boolean
+  } = {},
+): Promise<DoctorCheck | undefined> {
+  const launchers = (input.whichAll ?? ((cmd: string) => whichAll(cmd, undefined, { extraDirs: false })))("ax-code")
+  if (launchers.length < 2) return
+
+  const versionOf =
+    input.versionOf ??
+    (async (bin: string) => {
+      try {
+        const result = await Process.run([bin, "--version"], { timeout: 5_000, nothrow: true })
+        return result.stdout.toString().trim() || undefined
+      } catch {
+        return undefined
+      }
+    })
+  const isHomebrew = input.isHomebrew ?? ((bin: string) => isHomebrewManagedPath(bin))
+
+  const entries = []
+  for (const launcher of launchers) {
+    entries.push({
+      path: launcher,
+      version: await versionOf(launcher),
+      homebrew: isHomebrew(launcher),
+    })
+  }
+
+  const [first, ...others] = entries
+  if (!first) return
+
+  const brewLater = others.filter((entry) => entry.homebrew)
+  const versionConflict = others.some((entry) => entry.version && first.version && entry.version !== first.version)
+  if (!brewLater.length && !versionConflict) return
+
+  return {
+    name: "PATH launchers",
+    status: "warn",
+    detail:
+      `${describeLauncher(first)} is first on PATH and shadows ${others.map(describeLauncher).join(", ")}. ` +
+      "`brew upgrade ax-code` will not change the ax-code command until this launcher is moved aside " +
+      `(mv ${first.path} ${first.path}.bak; hash -r).`,
   }
 }
 
@@ -244,6 +314,9 @@ export const DoctorCommand: CommandModule = {
       status: "ok",
       detail: `ax-code ${Installation.VERSION} (${Installation.CHANNEL})`,
     })
+
+    const pathLaunchers = await getPathLauncherCheck()
+    if (pathLaunchers) checks.push(pathLaunchers)
 
     // 2. Runtime
     checks.push(getRuntimeCheck())

@@ -14,6 +14,7 @@ import path from "path"
 import { fileURLToPath } from "url"
 import { readJson, writeText } from "./fs-compat"
 import { cloneJsonValue, formatModelsSnapshot, modelsSnapshotChanged, RETIRED_PROVIDER_IDS } from "./models-snapshot"
+import { isHiddenDeepseekLegacySku } from "../src/provider/deepseek-catalog"
 
 const dir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const snapshotPath = process.env.AX_CODE_MODELS_SNAPSHOT_PATH || path.join(dir, "src/provider/models-snapshot.json")
@@ -297,11 +298,14 @@ function probesOf(m: RawModel): string[] {
 function isGrokProbe(probe: string): boolean {
   return /(^|[^a-z0-9])grok([^a-z0-9]|$)/.test(probe) || probe.includes("grok-")
 }
-// Grok allow-list. Only Grok 4.5 + official aliases survive; every other grok
-// variant is dropped. Match on the final segment so account-prefixed reseller
-// ids (e.g. "x-ai/grok-4.5") still resolve. `grok-build-cli` is the local CLI
-// bridge model id, not a hosted xAI SKU.
+// Grok allow-list. Only Grok 4.6/4.5 + official aliases survive; every other
+// grok variant is dropped. Match on the final segment so account-prefixed
+// reseller ids (e.g. "x-ai/grok-4.5") still resolve. `grok-build-cli` is the
+// local CLI bridge model id, not a hosted xAI SKU.
 const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>([
+  "grok-4.6",
+  "grok-4-6",
+  "grok-4.6-latest",
   "grok-4.5",
   "grok-4-5",
   "grok-4.5-latest",
@@ -795,13 +799,15 @@ cloneProvider("alibaba-coding-plan-cn", "alibaba-token-plan-cn", {
 //     qwen3.7-max, qwen3.7-plus, qwen3.6-plus, qwen3.6-flash, deepseek-v4-*,
 //     kimi-k2.7-code/2.6/2.5, glm-5.2/5.1/5, MiniMax-M2.5, qwen-image/wan images.
 // Superseded SKUs (kimi-k2.5/k2.6, glm-4.7, glm-5.1, deepseek-v3.2) stay
-// excluded per the global supersession filters; glm-5 is dropped in favor of
-// the glm-5.2 flagship on the Token Plan (GLM-first-party users have the
-// zai/zhipuai coding plans). Entries that models.dev hasn't published yet are
-// silently skipped — the whitelists are forward-looking so they appear
-// automatically once upstream catches up. Image models (qwen-image-*, wan*)
-// are kept on the Token Plan per product intent even though ax-code's chat
-// picker can't drive image generation — they show up so callers using the
+// excluded per the global supersession filters. Token Plan also hides
+// DeepSeek / GLM / MiniMax in ax-code so those vendors are reached via
+// their first-party providers (deepseek, zai/zhipuai, minimax), and
+// drops any SKU whose id or name contains "preview". Entries
+// that models.dev hasn't published yet are silently skipped — the
+// whitelists are forward-looking so they appear automatically once
+// upstream catches up. Image models (qwen-image-*, wan*) are kept on
+// the Token Plan per product intent even though ax-code's chat picker
+// can't drive image generation — they show up so callers using the
 // provider via SDK / API can pick them.
 const alibabaCodingPlanModels = [
   // Qwen text / reasoning (coding-plan exclusive coder SKUs)
@@ -821,13 +827,9 @@ const alibabaTokenPlanModels = [
   "qwen3.7-plus",
   "qwen3.6-plus",
   "qwen3.6-flash",
-  // DeepSeek text / reasoning
-  "deepseek-v4-pro",
-  "deepseek-v4-flash",
-  // Other vendors aggregated under the Token Plan
+  // Other vendors aggregated under the Token Plan (DeepSeek/GLM/MiniMax
+  // stay off this picker — use the first-party providers instead)
   "kimi-k2.7-code",
-  "glm-5.2",
-  "MiniMax-M2.5",
   // Qwen image generation
   "qwen-image-2.0",
   "qwen-image-2.0-pro",
@@ -944,8 +946,8 @@ for (const [id, planModels] of Object.entries(alibabaPlanModels)) {
 }
 
 // Token Plan Team Edition allowlist (not Coding Plan): Qwen 3.8 Max.
-// Official ID is qwen3.8-max-preview; some consoles also expose qwen3.8-max.
-const tokenPlanOnlyModels = ["qwen3.8-max-preview", "qwen3.8-max"] as const
+// Keep the GA id only; the *-preview alias is stripped below.
+const tokenPlanOnlyModels = ["qwen3.8-max"] as const
 const tokenPlanQwen38 = {
   id: "qwen3.8-max",
   name: "Qwen3.8 Max",
@@ -983,10 +985,16 @@ for (const id of ["alibaba-token-plan", "alibaba-token-plan-cn"]) {
     models[mid] = {
       ...base,
       id: mid,
-      name: mid === "qwen3.8-max-preview" ? "Qwen3.8 Max Preview" : "Qwen3.8 Max",
+      name: "Qwen3.8 Max",
       family: "qwen",
     }
     delete (models[mid] as { provider?: unknown }).provider
+  }
+  for (const [mid, model] of Object.entries(models) as Array<[string, RawModel]>) {
+    const probes = [mid, model.id, model.name]
+    if (probes.some((probe) => typeof probe === "string" && probe.toLowerCase().includes("preview"))) {
+      delete models[mid]
+    }
   }
   fetched[id].models = models
 }
@@ -1321,6 +1329,15 @@ for (const id of MINIMAX_PLAN_PROVIDER_IDS) {
   if (!models) continue
   for (const [mid, model] of Object.entries(models)) {
     if (isOlderThanMinimaxPlanFloor(model, mid)) delete models[mid]
+  }
+}
+
+// First-party DeepSeek: hide the legacy chat/reasoner aliases. V4 Flash/Pro
+// are the current coding SKUs; chat/reasoner remain on resellers.
+const deepseek = fetched["deepseek"] as { models?: Record<string, RawModel> } | undefined
+if (deepseek?.models) {
+  for (const [mid, model] of Object.entries(deepseek.models)) {
+    if (isHiddenDeepseekLegacySku(mid, model.name)) delete deepseek.models[mid]
   }
 }
 

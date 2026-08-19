@@ -105,7 +105,7 @@ export function defaultProviderConnectCategory(providerIDs: readonly string[]): 
   return providerConnectCategoriesPresent(providerIDs)[0]
 }
 
-export function providerConnectTypeOptionDescription(category: ProviderConnectCategory, count: number): string {
+export function providerConnectTypeOptionDescription(count: number): string {
   const noun = count === 1 ? "provider" : "providers"
-  return `${count} ${noun} · ${providerConnectCategoryHint(category)}`
+  return `${count} ${noun}`
 }

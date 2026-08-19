@@ -6,7 +6,6 @@ import {
   KeyEvent,
   MouseButton,
   decodePasteBytes,
-  RGBA,
 } from "@ax-code/opentui-core"
 import {
   createEffect,
@@ -91,11 +90,8 @@ import { summarizedPasteViews } from "./paste-view-model"
 import { withTimeout } from "@/util/timeout"
 import { footerContextGauge, footerSessionStatusView, footerTokenChip } from "../../routes/session/footer-view-model"
 import { calculateCompactionBudget, effectiveTokenTotal } from "@/session/compaction-budget"
-import { runMode, runModeLabel } from "./run-mode-view-model"
 import { Gauge } from "@tui/ui/primitives/gauge"
 import { KeyHint } from "@tui/ui/primitives/key-hint"
-import { selectedForeground } from "@tui/context/theme"
-import { footerToggleLabel } from "./footer-toggle"
 import { footerHintWidth, promptFooterLayout } from "./footer-layout"
 import { WorkMode } from "@/mode/work-mode"
 import { computeSessionMainPaneWidth } from "../../routes/session/layout"
@@ -130,13 +126,6 @@ import { promptState } from "../../routes/session/messages"
 export type { PromptProps, PromptRef } from "./prompt-types"
 
 const log = Log.create({ service: "tui.prompt" })
-const SUPER_LONG_PINK = RGBA.fromHex("#ff4db8")
-/** Work-mode chip backgrounds — fixed green/blue/purple (not theme tokens). */
-const WORK_MODE_CHIP_BG: Record<WorkMode.Id, RGBA> = {
-  agent: RGBA.fromHex(WorkMode.chipColorHex("agent")),
-  council: RGBA.fromHex(WorkMode.chipColorHex("council")),
-  arena: RGBA.fromHex(WorkMode.chipColorHex("arena")),
-}
 // Upper bound for parts kept around after their extmark disappears (undo);
 // enough for any realistic undo depth without letting the map grow unbounded.
 const MAX_ORPHANED_PROMPT_PARTS = 50
@@ -342,42 +331,6 @@ export function Prompt(props: PromptProps) {
       produce((draft) => {
         upsert(draft, session)
       }),
-    )
-  }
-
-  function footerToggleChip(input: {
-    label: string
-    active: boolean
-    activeFg: unknown
-    inactiveFg: unknown
-    background?: unknown
-    onMouseUp: () => void
-  }) {
-    const fg = input.active
-      ? input.background
-        ? selectedForeground(theme, input.background as any)
-        : input.activeFg
-      : input.inactiveFg
-
-    // onMouseUp lives on the wrapping <box>, not the inner <text>: text
-    // elements in OpenTUI primarily handle text selection, and click events
-    // on them are unreliable when nested inside a flex box. The pattern that
-    // actually works is the same one header.tsx / dialog-confirm.tsx use —
-    // a <box> with onMouseUp that contains the <text> for rendering.
-    return (
-      <box flexShrink={0} onMouseUp={input.onMouseUp}>
-        <text>
-          <span
-            style={{
-              fg: fg as any,
-              bg: input.active ? (input.background as any) : undefined,
-              bold: input.active,
-            }}
-          >
-            {footerToggleLabel(input.label, input.active)}
-          </span>
-        </text>
-      </box>
     )
   }
 
@@ -680,11 +633,8 @@ export function Prompt(props: PromptProps) {
     return true
   }
 
-  const footerRunMode = createMemo(() => runMode({ autonomous: sync.data.autonomous, superLong: sync.data.superLong }))
-
-  // Single active mode only (click cycles Agent → Council → Arena), same pattern as run mode.
-  const footerWorkMode = createMemo(() => WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)))
-  const footerWorkModeLabel = createMemo(() => WorkMode.label(footerWorkMode()))
+  // Mode chips (work mode / run mode / sandbox) live in the session sidebar,
+  // so the footer has no toggle row to reserve width for.
   // ctrl+c is overloaded: it clears a non-empty draft and exits when the
   // input is empty — the footer hint mirrors whichever action currently applies.
   const footerClearHint = createMemo(() => {
@@ -697,10 +647,7 @@ export function Prompt(props: PromptProps) {
   const footerLayout = createMemo(() =>
     promptFooterLayout({
       contentWidth: promptContentWidth(),
-      toggleWidth:
-        footerToggleLabel(footerWorkModeLabel(), true).length +
-        footerToggleLabel(runModeLabel(footerRunMode()), footerRunMode() !== "none").length +
-        footerToggleLabel("Sandbox", sync.data.isolation.mode !== "full-access").length,
+      toggleWidth: 0,
       mode: store.mode,
       variantsWidth:
         local.model.variant.list().length > 0 ? footerHintWidth(keybind.print("variant_cycle"), "variants") : 0,
@@ -2398,34 +2345,6 @@ export function Prompt(props: PromptProps) {
                   />
                 </box>
               </Show>
-              <box flexDirection="row" flexShrink={0}>
-                {footerToggleChip({
-                  // One mode at a time; click cycles. Fixed colors (not theme.primary —
-                  // default theme primary is peach, which made Council look wrong).
-                  label: footerWorkModeLabel(),
-                  active: true,
-                  activeFg: theme.text,
-                  inactiveFg: theme.textMuted,
-                  background: WORK_MODE_CHIP_BG[footerWorkMode()],
-                  onMouseUp: () => command.trigger("app.cycle.work_mode"),
-                })}
-                {footerToggleChip({
-                  label: runModeLabel(footerRunMode()),
-                  active: footerRunMode() !== "none",
-                  activeFg: theme.text,
-                  inactiveFg: theme.textMuted,
-                  background: footerRunMode() === "super-long" ? SUPER_LONG_PINK : theme.warning,
-                  onMouseUp: () => command.trigger("app.cycle.run_mode"),
-                })}
-                {footerToggleChip({
-                  label: "Sandbox",
-                  active: sync.data.isolation.mode !== "full-access",
-                  activeFg: theme.text,
-                  inactiveFg: theme.error,
-                  background: theme.success,
-                  onMouseUp: () => command.trigger("app.toggle.sandbox"),
-                })}
-              </box>
               <Show when={footerLayout().showVariants || footerLayout().showShellHint || footerLayout().showClearHint}>
                 <box gap={2} flexDirection="row" flexShrink={0}>
                   <Switch>

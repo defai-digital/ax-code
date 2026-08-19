@@ -371,6 +371,9 @@ describe("tui renderer profile", () => {
     expect(writes).toEqual([TUI_TERMINAL_CRASH_RESET_SEQUENCE])
     // A lingering OSC 9;4 indicator would keep animating on a dead tab.
     expect(TUI_TERMINAL_CRASH_RESET_SEQUENCE).toContain(TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE)
+    // A stale OSC 0 title ("AX-Code | ...", possibly with a frozen spinner
+    // frame) must not outlive a crashed TUI either.
+    expect(TUI_TERMINAL_CRASH_RESET_SEQUENCE).toContain("\x1b]0;\x07")
   })
 
   test("destroyTuiRenderer resets terminal state before resolving", async () => {

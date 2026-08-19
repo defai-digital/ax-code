@@ -100,6 +100,10 @@ describe("distribution support guardrails", () => {
     expect(text).toContain('Caskroom/ax-code"')
     expect(text).toContain("brew link ax-code")
     expect(text).toContain("hash -r")
+    expect(text).toContain("~/.local/bin/ax-code")
+    expect(text).toContain("which -a ax-code")
+    expect(text).toContain("will keep reporting the previous version")
+    expect(text).toContain("shadowed.first")
   })
 
   test("default homebrew update separates release-read and tap-write tokens", async () => {
@@ -279,7 +283,7 @@ describe("distribution support guardrails", () => {
     // GITHUB_REF_NAME is `main` for workflow_dispatch and GitHub does not let
     // jobs override reserved GITHUB_* variables through an env block.
     expect(workflow).toContain('VERSION="${AX_CODE_RELEASE_TAG#v}"')
-    expect(workflow).not.toContain('GITHUB_REF_NAME: ${{ inputs.tag || github.ref_name }}')
+    expect(workflow).not.toContain("GITHUB_REF_NAME: ${{ inputs.tag || github.ref_name }}")
     expect(homebrewScript).toContain('RELEASE_TAG="${AX_CODE_RELEASE_TAG:-${GITHUB_REF_NAME:-}}"')
     expect(homebrewScript.indexOf('RELEASE_TAG="${AX_CODE_RELEASE_TAG')).toBeLessThan(
       homebrewScript.indexOf('VERSION="${RELEASE_TAG#v}"'),

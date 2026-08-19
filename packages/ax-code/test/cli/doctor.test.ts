@@ -5,8 +5,10 @@ import {
   doctorProjectContext,
   getDuplicateProjectIdentityCheck,
   getIsolationPolicyCheck,
+  getPathLauncherCheck,
   getRuntimeCheck,
   getServerExposureCheck,
+  isHomebrewManagedPath,
 } from "../../src/cli/cmd/doctor"
 import { ProjectIdentity } from "../../src/project/project-identity"
 import { ProjectTable } from "../../src/project/project.sql"
@@ -16,6 +18,49 @@ import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
   await resetDatabase()
+})
+
+describe("cli doctor PATH launchers", () => {
+  test("detects Homebrew binaries via their Cellar realpath", () => {
+    expect(
+      isHomebrewManagedPath("/opt/homebrew/bin/ax-code", () => "/opt/homebrew/Cellar/ax-code/7.7.1/bin/ax-code"),
+    ).toBe(true)
+    expect(isHomebrewManagedPath("/Users/dev/.local/bin/ax-code", (p) => p)).toBe(false)
+  })
+
+  test("does not warn when a single launcher is on PATH", async () => {
+    const check = await getPathLauncherCheck({
+      whichAll: () => ["/opt/homebrew/bin/ax-code"],
+      versionOf: async () => "7.7.1",
+      isHomebrew: () => true,
+    })
+    expect(check).toBeUndefined()
+  })
+
+  test("does not warn when every PATH launcher reports the same version and none is Homebrew", async () => {
+    const check = await getPathLauncherCheck({
+      whichAll: () => ["/Users/dev/.local/bin/ax-code", "/Users/dev/bin/ax-code"],
+      versionOf: async () => "7.7.1",
+      isHomebrew: () => false,
+    })
+    expect(check).toBeUndefined()
+  })
+
+  test("warns when a checkout launcher shadows a newer Homebrew install", async () => {
+    const check = await getPathLauncherCheck({
+      whichAll: () => ["/Users/dev/.local/bin/ax-code", "/opt/homebrew/bin/ax-code"],
+      versionOf: async (bin) => (bin.includes("homebrew") ? "7.7.1" : "7.7.0"),
+      isHomebrew: (bin) => bin.includes("homebrew"),
+    })
+    expect(check).toMatchObject({
+      name: "PATH launchers",
+      status: "warn",
+    })
+    expect(check?.detail).toContain("/Users/dev/.local/bin/ax-code (v7.7.0)")
+    expect(check?.detail).toContain("/opt/homebrew/bin/ax-code (v7.7.1) [Homebrew]")
+    expect(check?.detail).toContain("brew upgrade ax-code")
+    expect(check?.detail).toContain("mv /Users/dev/.local/bin/ax-code /Users/dev/.local/bin/ax-code.bak")
+  })
 })
 
 describe("cli doctor runtime check", () => {

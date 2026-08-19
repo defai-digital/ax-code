@@ -5,6 +5,8 @@
 // transform-time Babel dependencies from being bundled into standalone
 // binaries, which is required for Bun Windows ARM builds.
 import { hooks, run } from "./cli/boot"
+import { setAxCodeProcessTitle } from "./util/process-title"
 
+setAxCodeProcessTitle()
 hooks()
 await run()

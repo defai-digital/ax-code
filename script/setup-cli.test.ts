@@ -10,6 +10,7 @@ import {
   isHomebrewManagedBinary,
   preferredBundledTarget,
   setupCli,
+  setupCliPathNotes,
   sourceLauncherScript,
 } from "./setup-cli"
 
@@ -17,7 +18,7 @@ describe("setup-cli helpers", () => {
   test("uses the shared PATH lookup helper", () => {
     const source = readFileSync("script/setup-cli.ts", "utf8")
 
-    expect(source).toContain('import { whichSync } from "./which"')
+    expect(source).toContain('import { whichAllSync, whichSync } from "./which"')
     expect(source).not.toContain("process.env.PATHEXT")
     expect(source).not.toContain("fs.existsSync(candidate)")
   })
@@ -336,6 +337,46 @@ describe("setup-cli helpers", () => {
 
     expect(writes.map(([target]) => target)).toEqual(["/pnpm/home/ax-code"])
     expect(logs.some((line) => line.includes("brew unlink ax-code"))).toBe(true)
+  })
+
+  test("setupCli warns when the new launcher will shadow Homebrew on PATH", () => {
+    const logs: string[] = []
+    const binary = bundledBinaryPath({ root: "/repo", platform: "darwin", arch: "arm64" })
+    const marker = bundledBuildMarkerPath(binary)
+    setupCli({
+      root: "/repo",
+      env: { PNPM_HOME: "/pnpm/home" },
+      platform: "darwin",
+      arch: "arm64",
+      exists: (target) => target === "/pnpm/home" || target === binary || target === marker,
+      mkdirSync: () => undefined,
+      readFileSync: (p) => (p === marker ? "/repo\n" : ""),
+      writeFileSync: () => undefined,
+      spawnSync: () => ({ status: 0, stdout: null, stderr: null, pid: 1, output: null, signal: null }) as any,
+      which: () => "/pnpm/home/ax-code",
+      whichAll: () => ["/pnpm/home/ax-code", "/opt/homebrew/bin/ax-code"],
+      realpathSync: (p) => (p === "/opt/homebrew/bin/ax-code" ? "/opt/homebrew/Cellar/ax-code/7.7.1/bin/ax-code" : p),
+      log: (msg) => logs.push(msg),
+    })
+
+    expect(logs.some((line) => line.includes("earlier on PATH than Homebrew"))).toBe(true)
+    expect(logs.some((line) => line.includes("brew upgrade ax-code"))).toBe(true)
+    expect(logs.some((line) => line.includes("mv /pnpm/home/ax-code /pnpm/home/ax-code.bak"))).toBe(true)
+  })
+
+  test("setupCliPathNotes prefers the Homebrew-is-first warning over the inverse", () => {
+    expect(
+      setupCliPathNotes({
+        binDir: "/pnpm/home",
+        launcherPath: "/pnpm/home/ax-code",
+        onPath: "/opt/homebrew/bin/ax-code",
+        allOnPath: ["/opt/homebrew/bin/ax-code", "/pnpm/home/ax-code"],
+        isHomebrew: (p) => p.includes("homebrew"),
+      }),
+    ).toEqual([
+      'Note: "ax-code" currently resolves to /opt/homebrew/bin/ax-code, which shadows this install.',
+      'It is managed by Homebrew — run "brew unlink ax-code" to use this launcher instead.',
+    ])
   })
 
   test("setupCli turns an EACCES launcher write into an actionable error", () => {

@@ -30,6 +30,8 @@ describe("DeepSeek and Meta Muse Spark provider load", () => {
           expect(deepseek.key).toBe("sk-test-deepseek")
           expect(deepseek.models["deepseek-v4-pro"]).toBeDefined()
           expect(deepseek.models["deepseek-v4-flash"]).toBeDefined()
+          expect(deepseek.models["deepseek-chat"]).toBeUndefined()
+          expect(deepseek.models["deepseek-reasoner"]).toBeUndefined()
           expect(deepseek.models["deepseek-v4-pro"]!.api.npm).toBe("@ai-sdk/openai-compatible")
           expect(deepseek.models["deepseek-v4-pro"]!.api.url).toMatch(/api\.deepseek\.com/)
 

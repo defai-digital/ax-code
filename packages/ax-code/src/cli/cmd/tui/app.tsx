@@ -110,6 +110,12 @@ export function tui(input: TuiInput) {
       const unresize = installResizeInputGuard()
       try {
         const renderProfile = getTuiRenderProfile()
+        // Claim the terminal tab title before the renderer mounts (kimi-code
+        // style: one fire-and-forget OSC 0 write at startup). The route effect
+        // below takes over once the app is up, but without this the tab keeps
+        // showing the launcher's process name ("node") until first mount —
+        // and forever if mount crashes.
+        setTuiTerminalTitle("AX-Code", renderProfile)
         beginTuiStartup({
           continue: !!input.args.continue,
           fork: !!input.args.fork,
@@ -516,20 +522,20 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         : ""
 
     if (route.data.type === "home") {
-      setTuiTerminalTitle(`${spinner}ax-code`, renderProfile)
+      setTuiTerminalTitle(`${spinner}AX-Code`, renderProfile)
       return
     }
 
     if (route.data.type === "session") {
       const session = sync.session.get(route.data.sessionID)
       if (!session || SessionApi.isDefaultTitle(session.title)) {
-        setTuiTerminalTitle(`${spinner}ax-code`, renderProfile)
+        setTuiTerminalTitle(`${spinner}AX-Code`, renderProfile)
         return
       }
 
       // Truncate title to 40 chars max
       const title = session.title.length > 40 ? session.title.slice(0, 37) + "..." : session.title
-      setTuiTerminalTitle(`${spinner}ax-code | ${title}`, renderProfile)
+      setTuiTerminalTitle(`${spinner}AX-Code | ${title}`, renderProfile)
     }
   })
 

@@ -17,7 +17,9 @@ import {
   dialogSelectClampIndex,
   dialogSelectActionOption,
   dialogSelectFlatOptions,
+  dialogSelectGroupStartIndex,
   dialogSelectGroupedOptions,
+  dialogSelectHasCurrentValue,
   dialogSelectMoveIndex,
   dialogSelectRows,
   dialogSelectVisibleHeight,
@@ -95,7 +97,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       (current) => {
         // Null check only: falsy-but-valid values such as "" (DialogEffort's
         // Auto option) must still position the cursor on the current entry.
-        if (current !== undefined && current !== null) {
+        if (dialogSelectHasCurrentValue(current)) {
           const currentIndex = flat().findIndex((opt) => isDeepEqual(opt.value, current))
           if (currentIndex >= 0) {
             setStore("selected", currentIndex)
@@ -136,7 +138,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
         () => {
           if (filter.length > 0) {
             moveTo(0, true)
-          } else if (current) {
+          } else if (dialogSelectHasCurrentValue(current)) {
             const currentIndex = flat().findIndex((opt) => isDeepEqual(opt.value, current))
             if (currentIndex >= 0) {
               moveTo(currentIndex, true)
@@ -277,11 +279,11 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     }
     if (evt.name === "pageup") {
       armConfirm()
-      move(-10)
+      move(-Math.max(1, height() - 1))
     }
     if (evt.name === "pagedown") {
       armConfirm()
-      move(10)
+      move(Math.max(1, height() - 1))
     }
     if (evt.name === "home") {
       armConfirm()
@@ -402,79 +404,79 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           maxHeight={height()}
         >
           <For each={grouped()}>
-            {([category, options], index) => (
-              <>
-                <Show when={category}>
-                  <box paddingTop={index() > 0 ? 1 : 0} paddingLeft={3}>
-                    <text fg={theme.accent} attributes={TextAttributes.BOLD}>
-                      {category}
-                    </text>
-                  </box>
-                </Show>
-                <For each={options}>
-                  {(option) => {
-                    const optionIndex = createMemo(() => flat().findIndex((x) => isDeepEqual(x.value, option.value)))
-                    const active = createMemo(() => isDeepEqual(option.value, selected()?.value))
-                    const current = createMemo(() => isDeepEqual(option.value, props.current))
-                    return (
-                      <box
-                        id={optionIndex() >= 0 ? optionID(optionIndex()) : undefined}
-                        flexDirection="row"
-                        onMouseMove={() => {
-                          armConfirm()
-                          setStore("input", "mouse")
-                        }}
-                        onMouseUp={() => {
-                          if (option.disabled) return
-                          // Route clicks through confirmSelected so the
-                          // confirmInFlight latch also guards the mouse path
-                          // against double-fires.
-                          armConfirm()
-                          const index = flat().findIndex((x) => isDeepEqual(x.value, option.value))
-                          if (index === -1) return
-                          if (index !== store.selected) moveTo(index)
-                          confirmSelected()
-                        }}
-                        onMouseOver={() => {
-                          if (store.input !== "mouse") return
-                          armConfirm()
-                          const index = flat().findIndex((x) => isDeepEqual(x.value, option.value))
-                          if (index === -1) return
-                          moveTo(index)
-                        }}
-                        onMouseDown={() => {
-                          armConfirm()
-                          const index = flat().findIndex((x) => isDeepEqual(x.value, option.value))
-                          if (index === -1) return
-                          moveTo(index)
-                        }}
-                        backgroundColor={
-                          active()
-                            ? option.disabled
-                              ? theme.backgroundElement
-                              : (option.bg ?? theme.primary)
-                            : RGBA.fromInts(0, 0, 0, 0)
-                        }
-                        paddingLeft={current() || option.gutter ? 1 : 3}
-                        paddingRight={3}
-                        gap={1}
-                      >
-                        <Option
-                          title={option.title}
-                          footer={flatten() ? (option.category ?? option.footer) : option.footer}
-                          description={option.description !== category ? option.description : undefined}
-                          descriptionFg={option.descriptionFg}
-                          active={active()}
-                          current={current()}
-                          disabled={option.disabled}
-                          gutter={option.gutter}
-                        />
-                      </box>
-                    )
-                  }}
-                </For>
-              </>
-            )}
+            {([category, options], index) => {
+              const groupStart = createMemo(() => dialogSelectGroupStartIndex(grouped(), index()))
+              return (
+                <>
+                  <Show when={category}>
+                    <box paddingTop={index() > 0 ? 1 : 0} paddingLeft={3}>
+                      <text fg={theme.accent} attributes={TextAttributes.BOLD}>
+                        {category}
+                      </text>
+                    </box>
+                  </Show>
+                  <For each={options}>
+                    {(option, optionOffset) => {
+                      // Index identity so the same model can appear in Recent and
+                      // again under its provider without both rows highlighting.
+                      const optionIndex = createMemo(() => groupStart() + optionOffset())
+                      const active = createMemo(() => optionIndex() === store.selected)
+                      const current = createMemo(() => isDeepEqual(option.value, props.current))
+                      return (
+                        <box
+                          id={optionID(optionIndex())}
+                          flexDirection="row"
+                          onMouseMove={() => {
+                            armConfirm()
+                            setStore("input", "mouse")
+                          }}
+                          onMouseUp={() => {
+                            if (option.disabled) return
+                            // Route clicks through confirmSelected so the
+                            // confirmInFlight latch also guards the mouse path
+                            // against double-fires.
+                            armConfirm()
+                            const row = optionIndex()
+                            if (row !== store.selected) moveTo(row)
+                            confirmSelected()
+                          }}
+                          onMouseOver={() => {
+                            if (store.input !== "mouse") return
+                            armConfirm()
+                            moveTo(optionIndex())
+                          }}
+                          onMouseDown={() => {
+                            armConfirm()
+                            moveTo(optionIndex())
+                          }}
+                          backgroundColor={
+                            active()
+                              ? option.disabled
+                                ? theme.backgroundElement
+                                : (option.bg ?? theme.primary)
+                              : RGBA.fromInts(0, 0, 0, 0)
+                          }
+                          paddingLeft={current() || option.gutter ? 1 : 3}
+                          paddingRight={3}
+                          gap={1}
+                        >
+                          <Option
+                            title={option.title}
+                            footer={flatten() ? (option.category ?? option.footer) : option.footer}
+                            description={option.description !== category ? option.description : undefined}
+                            descriptionFg={option.descriptionFg}
+                            active={active()}
+                            current={current()}
+                            disabled={option.disabled}
+                            gutter={option.gutter}
+                          />
+                        </box>
+                      )
+                    }}
+                  </For>
+                </>
+              )
+            }}
           </For>
         </scrollbox>
       </Show>

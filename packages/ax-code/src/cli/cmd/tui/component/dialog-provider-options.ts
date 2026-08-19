@@ -123,7 +123,7 @@ export function providerDialogTypeOptions(providerIDs: readonly string[]) {
     return {
       title: providerConnectCategoryMeta(id).label,
       value: id,
-      description: providerConnectTypeOptionDescription(id, count),
+      description: providerConnectTypeOptionDescription(count),
       hint: providerConnectCategoryHint(id),
     }
   })
@@ -159,6 +159,88 @@ export function providerDialogOptionsForType<T extends { value: string; category
 
 export function configUpdateParams<T extends Record<string, unknown>>(config: T) {
   return { config }
+}
+
+export type AxEngineSetupAction = "managed" | "attach" | "disable"
+export type AxEngineConnectedAction = "use" | "status" | "stop" | "attach" | "managed" | "endpoint" | "disable"
+
+const AX_ENGINE_DISABLE_OPTION = {
+  title: "Disable",
+  value: "disable" as const,
+  description: "Turn off temporarily — keeps configuration",
+}
+
+export function axEngineSetupDialogActions() {
+  return [
+    {
+      title: "Managed local server",
+      value: "managed" as const,
+      description: "AX Code prepares models and starts ax-engine serve",
+    },
+    {
+      title: "Attach existing server",
+      value: "attach" as const,
+      description: "Use base URL + API key for a server you already run",
+    },
+    AX_ENGINE_DISABLE_OPTION,
+  ]
+}
+
+export function axEngineConnectedDialogActions(input: {
+  connectMode: AxEngineConnectMode
+  attachBaseURL?: string
+  serverRunning?: boolean
+  serverReady?: boolean
+  serverBaseURL?: string
+  statusBlocker?: string
+}): Array<{ title: string; value: AxEngineConnectedAction; description?: string }> {
+  const actions: Array<{ title: string; value: AxEngineConnectedAction; description?: string }> = [
+    {
+      title: "Select a model",
+      value: "use",
+      description:
+        input.connectMode === "attach"
+          ? "Use models advertised by the attached server"
+          : "Choose a local AX Engine model (starts server on demand)",
+    },
+    {
+      title: "View status",
+      value: "status",
+      description:
+        input.connectMode === "attach"
+          ? input.attachBaseURL
+          : input.serverReady
+            ? input.serverBaseURL
+            : input.statusBlocker,
+    },
+  ]
+  if (input.connectMode === "attach") {
+    actions.push({
+      title: "Change endpoint / API key",
+      value: "endpoint",
+      description: input.attachBaseURL,
+    })
+    actions.push({
+      title: "Switch to managed",
+      value: "managed",
+      description: "Let AX Code start and stop ax-engine serve",
+    })
+  } else {
+    actions.push({
+      title: "Attach existing server",
+      value: "attach",
+      description: "Point at URL + API key instead of starting locally",
+    })
+    if (input.serverRunning) {
+      actions.push({
+        title: "Stop local server",
+        value: "stop",
+        description: input.serverBaseURL,
+      })
+    }
+  }
+  actions.push(AX_ENGINE_DISABLE_OPTION)
+  return actions
 }
 
 export function providerDialogConnected(input: {

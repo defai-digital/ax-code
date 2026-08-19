@@ -54,8 +54,8 @@ describe("provider connect category", () => {
     const providers = [{ id: "ollama" }, { id: "openai" }, { id: "nebius" }]
     expect(providersInConnectCategory(providers, "local").map((item) => item.id)).toEqual(["ollama"])
     expect(providersInConnectCategory(providers, "api").map((item) => item.id)).toEqual(["openai"])
-    expect(providerConnectTypeOptionDescription("api", 1)).toBe("1 provider · Hosted API key")
-    expect(providerConnectTypeOptionDescription("cli", 3)).toBe("3 providers · Installed CLI subscription")
+    expect(providerConnectTypeOptionDescription(1)).toBe("1 provider")
+    expect(providerConnectTypeOptionDescription(3)).toBe("3 providers")
   })
 
   test("stays aligned with CLI definitions and private GPU presets", () => {

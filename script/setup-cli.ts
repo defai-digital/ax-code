@@ -14,11 +14,12 @@ import os from "os"
 import path from "path"
 import { candidateBinaryTargets } from "../packages/ax-code/script/binary-targets"
 import { sourceLauncherScript as generateSourceLauncherScript } from "../packages/ax-code/script/source-launcher"
-import { whichSync } from "./which"
+import { whichAllSync, whichSync } from "./which"
 
 export const ROOT = path.resolve(import.meta.dirname, "..")
 
 type WhichFn = (command: string) => string | null | undefined
+type WhichAllFn = (command: string) => string[]
 
 type SetupCliOptions = {
   args?: string[]
@@ -36,6 +37,7 @@ type SetupCliOptions = {
   spawnSync?: typeof childProcess.spawnSync
   log?: (msg: string) => void
   which?: WhichFn
+  whichAll?: WhichAllFn
   realpathSync?: (p: string) => string
 }
 
@@ -135,6 +137,32 @@ export function bundledLauncherScript(input: { binaryPath: string; windows?: boo
     return `@echo off\nset AX_CODE_ORIGINAL_CWD=%CD%\n"${input.binaryPath}" %*\n`
   }
   return `#!/bin/sh\nAX_CODE_ORIGINAL_CWD="\$(pwd)" exec "${input.binaryPath.replace(/\\/g, "/")}" "$@"\n`
+}
+
+export function setupCliPathNotes(input: {
+  binDir: string
+  launcherPath: string
+  onPath: string | null | undefined
+  allOnPath: string[]
+  isHomebrew: (binaryPath: string) => boolean
+}): string[] {
+  const lines: string[] = []
+  if (input.onPath && path.dirname(input.onPath) !== input.binDir) {
+    lines.push(`Note: "ax-code" currently resolves to ${input.onPath}, which shadows this install.`)
+    if (input.isHomebrew(input.onPath)) {
+      lines.push(`It is managed by Homebrew — run "brew unlink ax-code" to use this launcher instead.`)
+    }
+    return lines
+  }
+
+  const brewLater = input.allOnPath.filter((p) => path.dirname(p) !== input.binDir && input.isHomebrew(p))
+  if (brewLater[0]) {
+    lines.push(`Note: this launcher at ${input.launcherPath} is earlier on PATH than Homebrew's ${brewLater[0]}.`)
+    lines.push(`"brew upgrade ax-code" will not change the ax-code command until you move this launcher aside:`)
+    lines.push(`  mv ${input.launcherPath} ${input.launcherPath}.bak`)
+    lines.push(`  hash -r`)
+  }
+  return lines
 }
 
 export function ensureBundledBinary(input: {
@@ -239,6 +267,14 @@ export function setupCli(input: SetupCliOptions = {}) {
   const spawnSync = input.spawnSync ?? childProcess.spawnSync
   const log = input.log ?? console.log
   const which = input.which ?? whichSync
+  const whichAll =
+    input.whichAll ??
+    (input.which
+      ? (command: string) => {
+          const hit = which(command)
+          return hit ? [hit] : []
+        }
+      : whichAllSync)
   const realpathSync = input.realpathSync ?? ((p: string) => fs.realpathSync(p))
   const windows = platform === "win32"
   const binDir = getInstallBinDir(env, which, platform, realpathSync)
@@ -309,15 +345,20 @@ export function setupCli(input: SetupCliOptions = {}) {
     log(`Created: ${shPath}`)
   }
 
-  // Another ax-code earlier in PATH (e.g. a Homebrew install) keeps shadowing
-  // this launcher — say so instead of letting the user run the stale one.
-  const onPath = which("ax-code")
-  if (onPath && path.dirname(onPath) !== binDir) {
+  // PATH can hide this launcher behind Homebrew, or hide Homebrew behind this
+  // launcher. Either way the user types `ax-code` and does not get the binary
+  // they just installed / upgraded.
+  const launcherPath = windows ? path.join(binDir, "ax-code.cmd") : path.join(binDir, "ax-code")
+  const pathNotes = setupCliPathNotes({
+    binDir,
+    launcherPath,
+    onPath: which("ax-code"),
+    allOnPath: whichAll("ax-code"),
+    isHomebrew: (binaryPath) => isHomebrewManagedBinary(binaryPath, realpathSync),
+  })
+  if (pathNotes.length) {
     log("")
-    log(`Note: "ax-code" currently resolves to ${onPath}, which shadows this install.`)
-    if (isHomebrewManagedBinary(onPath, realpathSync)) {
-      log(`It is managed by Homebrew — run "brew unlink ax-code" to use this launcher instead.`)
-    }
+    for (const line of pathNotes) log(line)
   }
 
   log("")

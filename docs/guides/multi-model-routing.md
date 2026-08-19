@@ -1,5 +1,10 @@
 # Multi-Model Routing Best Practices
 
+Status: Active
+Scope: public, current-state
+Last reviewed: 2026-08-19
+Owner: ax-code runtime
+
 This guide captures the recommended way to run ax-code with a premium reasoning model and cheaper same-provider aux models.
 
 ## Core principle

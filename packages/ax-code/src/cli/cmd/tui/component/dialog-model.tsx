@@ -11,11 +11,36 @@ import { useConnected } from "./provider-state"
 import { modelDisplayInfo } from "./model-vision-label"
 import { modelMemoryBlockReason, modelSelectableForProvider } from "@/provider/model-selectability"
 import { useTheme } from "../context/theme"
-import { dialogModelOptionDisabled } from "./dialog-model-options"
+import {
+  dialogModelCatalogDescription,
+  dialogModelInShortcutList,
+  dialogModelOptionDisabled,
+  dialogModelPickerCategory,
+} from "./dialog-model-options"
 import { useSDK } from "../context/sdk"
 import { useToast } from "../ui/toast"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
-import { DialogAxEngineDownload, fetchAxEngineDownloadOffer, fetchAxEngineModelAnnotations } from "./dialog-ax-engine-download"
+import {
+  DialogAxEngineDownload,
+  fetchAxEngineDownloadOffer,
+  fetchAxEngineModelAnnotations,
+} from "./dialog-ax-engine-download"
+import { claudeFamilyId, claudeFamilySortKey } from "@/provider/anthropic-families"
+import { grokFamilyId, grokFamilySortKey } from "@/provider/grok-families"
+import { kimiFamilyId, kimiFamilySortKey } from "@/provider/kimi-families"
+import { codexFamilyId, codexFamilySortKey } from "@/provider/codex-families"
+
+function pickerFamilySortKey(modelID: string) {
+  const claude = claudeFamilyId({ id: modelID })
+  if (claude) return claudeFamilySortKey(claude)
+  const grok = grokFamilyId({ id: modelID })
+  if (grok) return 10 + grokFamilySortKey(grok)
+  const kimi = kimiFamilyId({ id: modelID })
+  if (kimi) return 20 + kimiFamilySortKey(kimi)
+  const codex = codexFamilyId({ id: modelID })
+  if (codex) return 30 + codexFamilySortKey(codex)
+  return 100
+}
 
 export function DialogModel(props: { providerID?: string }) {
   const local = useLocal()
@@ -65,9 +90,7 @@ export function DialogModel(props: { providerID?: string }) {
           apply()
           return
         }
-        dialog.replace(() => (
-          <DialogAxEngineDownload offer={offer} sdk={sdk} toast={toast} onApplySelection={apply} />
-        ))
+        dialog.replace(() => <DialogAxEngineDownload offer={offer} sdk={sdk} toast={toast} onApplySelection={apply} />)
       })
       .catch(() => {
         dialog.clear()
@@ -138,28 +161,27 @@ export function DialogModel(props: { providerID?: string }) {
               value: { providerID: provider.id, modelID: model },
               title: display.label,
               searchText: display.searchText,
-              description:
-                blockReason ??
-                (favorites.some((item) => item.providerID === provider.id && item.modelID === model)
-                  ? "(Favorite)"
-                  : undefined),
+              description: dialogModelCatalogDescription({
+                blockReason,
+                favorite: dialogModelInShortcutList(favorites, { providerID: provider.id, modelID: model }),
+                recent: dialogModelInShortcutList(recents, { providerID: provider.id, modelID: model }),
+              }),
               descriptionFg: blockReason ? theme.warning : undefined,
-              category: connected() ? provider.name : undefined,
+              category: dialogModelPickerCategory({
+                providerName: provider.name,
+                connected: connected(),
+                scopedToProvider: Boolean(props.providerID),
+              }),
               disabled: dialogModelOptionDisabled(provider.id, model, info),
               onSelect() {
                 selectModel({ providerID: provider.id, modelID: model })
               },
             }
           }),
-          filter((x) => {
-            if (!showSections) return true
-            if (favorites.some((item) => item.providerID === x.value.providerID && item.modelID === x.value.modelID))
-              return false
-            if (recents.some((item) => item.providerID === x.value.providerID && item.modelID === x.value.modelID))
-              return false
-            return true
-          }),
-          sortBy((x) => x.title),
+          sortBy(
+            (x) => pickerFamilySortKey(x.value.modelID),
+            (x) => x.title,
+          ),
         ),
       ),
     )

@@ -1,8 +1,12 @@
 import { useSync } from "@tui/context/sync"
 import { createMemo, createEffect, untrack, type Accessor, For, Match, Show, Switch } from "solid-js"
 import { useTerminalDimensions } from "@ax-code/opentui-solid"
+import { RGBA } from "@ax-code/opentui-core"
 import { createStore } from "solid-js/store"
-import { useTheme } from "../../context/theme"
+import { selectedForeground, useTheme } from "../../context/theme"
+import { WorkMode } from "@/mode/work-mode"
+import { runMode, runModeLabel } from "../../component/prompt/run-mode-view-model"
+import { footerToggleLabel } from "../../component/prompt/footer-toggle"
 import { Installation } from "@/installation"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
@@ -59,6 +63,14 @@ const QUEUED_SEND_ICON = "▸"
 const QUEUED_SEND_ICON_WIDTH = 2
 const QUEUED_EDIT_ICON = "✎"
 const QUEUED_EDIT_ICON_WIDTH = 2
+
+const SUPER_LONG_PINK = RGBA.fromHex("#ff4db8")
+/** Work-mode chip backgrounds — fixed green/blue/purple, independent of the active palette. */
+const WORK_MODE_CHIP_BG: Record<WorkMode.Id, RGBA> = {
+  agent: RGBA.fromHex(WorkMode.chipColorHex("agent")),
+  council: RGBA.fromHex(WorkMode.chipColorHex("council")),
+  arena: RGBA.fromHex(WorkMode.chipColorHex("arena")),
+}
 export function activityColor(status: string, theme: ReturnType<typeof useTheme>["theme"]) {
   switch (status) {
     case "running":
@@ -318,6 +330,44 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
 
   const hasProviders = createMemo(() => sync.data.provider.length > 0)
   const gettingStartedDismissed = createMemo(() => kv.get("dismissed_getting_started", false))
+
+  // Mode chips (work mode / run mode / sandbox), relocated from the prompt footer.
+  const sidebarRunMode = createMemo(() => runMode({ autonomous: sync.data.autonomous, superLong: sync.data.superLong }))
+  const sidebarWorkMode = createMemo(() => WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)))
+
+  function modeChip(input: {
+    label: string
+    active: boolean
+    activeFg: unknown
+    inactiveFg: unknown
+    background?: unknown
+    onMouseUp: () => void
+  }) {
+    const fg = input.active
+      ? input.background
+        ? selectedForeground(theme, input.background as RGBA)
+        : input.activeFg
+      : input.inactiveFg
+
+    // onMouseUp lives on the wrapping <box>, not the inner <text>: text
+    // elements in OpenTUI primarily handle text selection, and click events
+    // on them are unreliable when nested inside a flex box.
+    return (
+      <box flexShrink={0} onMouseUp={input.onMouseUp}>
+        <text>
+          <span
+            style={{
+              fg: fg as RGBA,
+              bg: input.active ? (input.background as RGBA) : undefined,
+              bold: input.active,
+            }}
+          >
+            {footerToggleLabel(input.label, input.active)}
+          </span>
+        </text>
+      </box>
+    )
+  }
 
   // Connected providers plus config-disabled ones (the server filters disabled
   // providers out of every provider list, so config is the only place they
@@ -1030,6 +1080,33 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
             <text fg={theme.textMuted}>
               Sidebar <span style={{ fg: theme.text }}>/sidebar on</span>
             </text>
+            <box flexDirection="row" flexShrink={0}>
+              {modeChip({
+                // One mode at a time; click cycles Agent → Council → Arena.
+                label: WorkMode.label(sidebarWorkMode()),
+                active: true,
+                activeFg: theme.text,
+                inactiveFg: theme.textMuted,
+                background: WORK_MODE_CHIP_BG[sidebarWorkMode()],
+                onMouseUp: () => command.trigger("app.cycle.work_mode"),
+              })}
+              {modeChip({
+                label: runModeLabel(sidebarRunMode()),
+                active: sidebarRunMode() !== "none",
+                activeFg: theme.text,
+                inactiveFg: theme.textMuted,
+                background: sidebarRunMode() === "super-long" ? SUPER_LONG_PINK : theme.warning,
+                onMouseUp: () => command.trigger("app.cycle.run_mode"),
+              })}
+              {modeChip({
+                label: "Sandbox",
+                active: sync.data.isolation.mode !== "full-access",
+                activeFg: theme.text,
+                inactiveFg: theme.error,
+                background: theme.success,
+                onMouseUp: () => command.trigger("app.toggle.sandbox"),
+              })}
+            </box>
             <text fg={theme.textMuted}>
               <span style={{ fg: theme.success }}>•</span> <b>AX</b>
               <span style={{ fg: theme.text }}>

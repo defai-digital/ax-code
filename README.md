@@ -138,6 +138,16 @@ brew link ax-code
 hash -r
 ```
 
+If `ax-code --version` still shows an older version after `brew upgrade`, another `ax-code` earlier
+on PATH is shadowing Homebrew (commonly `~/.local/bin/ax-code` from `pnpm run setup:cli` or a
+previous curl install). Check with `which -a ax-code`, then move the extra launcher aside:
+
+```bash
+mv ~/.local/bin/ax-code ~/.local/bin/ax-code.bak
+hash -r
+ax-code --version
+```
+
 **Windows**
 
 ```powershell

@@ -66,9 +66,13 @@ describe("CLI provider loaders", () => {
 
   test("CLI provider discovery publishes resolved external model ids", async () => {
     const src = await readFile(path.join(import.meta.dirname, "../../src/provider/loaders.ts"), "utf-8")
-    expect(src).toContain("return cliModels(opts.providerID, provider, resolved.model)")
+    expect(src).toContain("return cliModels(opts.providerID, current, resolved.model)")
     expect(src).toContain("if (resolved && resolved !== providerID)")
     expect(src).toContain("add(resolved, `${name} (${resolved})`)")
+    expect(src).toContain("claudeCodeFamilyModels(current, resolved.model)")
+    expect(src).toContain("grokBuildFamilyModels(current, resolved.model)")
+    expect(src).toContain("kimiCliFamilyModels(current, resolved.model)")
+    expect(src).toContain("codexCliFamilyModels(current, resolved.model)")
   })
 
   test("claude-code configured provider does not discover runnable variants when binary missing", async () => {
@@ -85,7 +89,7 @@ describe("CLI provider loaders", () => {
       providerID: "codex-cli",
       binary: "codex",
       baseModelID: "codex-cli",
-      discoveredModelIDs: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex", "gpt-5.3-codex-spark"],
+      discoveredModelIDs: ["gpt-5.6", "gpt-5.4-mini", "gpt-5.3-codex-spark"],
     })
   })
 
@@ -112,7 +116,7 @@ describe("CLI provider loaders", () => {
       providerID: "kimi-cli",
       binary: "kimi",
       baseModelID: "kimi-cli",
-      discoveredModelIDs: [],
+      discoveredModelIDs: ["kimi-code/k3", "kimi-code/kimi-for-coding"],
     })
   })
 })

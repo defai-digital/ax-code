@@ -55,6 +55,7 @@ import { FormatError } from "./error"
 import { UI } from "./ui"
 import { Installation } from "../installation"
 import { Log } from "../util/log"
+import { setAxCodeProcessTitle } from "../util/process-title"
 import { DiagnosticLog } from "../debug/diagnostic-log"
 import { isHarmlessInterrupt } from "../util/harmless-interrupt"
 
@@ -237,9 +238,7 @@ export function cli(argv = hideBin(process.argv)) {
 
 export async function run() {
   clearForcedExitTimer()
-  try {
-    process.title = "ax-code"
-  } catch {}
+  setAxCodeProcessTitle()
   // Must happen before any TUI output: the native renderer writes raw UTF-8
   // bytes to the console handle, which mojibake under legacy Windows code
   // pages (#307, #315, #338).

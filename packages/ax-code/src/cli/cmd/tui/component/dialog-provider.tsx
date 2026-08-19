@@ -26,6 +26,8 @@ import {
   OFFLINE_PROVIDERS,
   axEngineAttachBaseURLPreset,
   axEngineConnectModeFromConfig,
+  axEngineConnectedDialogActions,
+  axEngineSetupDialogActions,
   configUpdateParams,
   normalizeAxEngineEndpointBaseURL,
   normalizeConfiguredProvidersPayload,
@@ -37,6 +39,8 @@ import {
   providerDialogProviders,
   providerDialogTypeOptions,
   selectableProviderDefaultModelID,
+  type AxEngineConnectedAction,
+  type AxEngineSetupAction,
 } from "./dialog-provider-options"
 import { providerConnectCategoryMeta } from "@/mode/provider-category"
 import { requireDedicatedPrivateGpuVendor } from "@/provider/private-gpu/presets"
@@ -586,25 +590,14 @@ export function createDialogProviderOptions() {
                   const status = await axEngineRequest<AxEngineTuiStatus>(sdk, "status")
                   const connectMode = axEngineConnectModeFromConfig(sync.data.config)
 
-                  // Not connected → choose Managed (spawn serve) or Attach (URL + key).
+                  // Not connected → choose Managed (spawn serve), Attach (URL + key), or Disable.
                   if (!isConnected) {
-                    const setup = await new Promise<"managed" | "attach" | null>((resolve) => {
+                    const setup = await new Promise<AxEngineSetupAction | null>((resolve) => {
                       dialog.replace(
                         () => (
                           <DialogSelect
                             title="AX Engine"
-                            options={[
-                              {
-                                title: "Managed local server",
-                                value: "managed" as const,
-                                description: "AX Code prepares models and starts ax-engine serve",
-                              },
-                              {
-                                title: "Attach existing server",
-                                value: "attach" as const,
-                                description: "Use base URL + API key for a server you already run",
-                              },
-                            ]}
+                            options={axEngineSetupDialogActions()}
                             onSelect={(option) => resolve(option.value)}
                           />
                         ),
@@ -612,6 +605,18 @@ export function createDialogProviderOptions() {
                       )
                     })
                     if (setup === null) return
+                    if (setup === "disable") {
+                      await setProviderDisabled({
+                        sdk,
+                        sync,
+                        toast,
+                        dialog,
+                        providerID: provider.id,
+                        providerName: provider.name,
+                        disabled: true,
+                      })
+                      return
+                    }
                     if (setup === "attach") {
                       promptAxEngineAttach(provider.name)
                       return
@@ -635,64 +640,19 @@ export function createDialogProviderOptions() {
                   }
 
                   // Connected → model selection plus mode-specific actions.
-                  type AxEngineAction = "use" | "status" | "stop" | "attach" | "managed" | "endpoint"
-                  const actions: Array<{
-                    title: string
-                    value: AxEngineAction
-                    description?: string
-                  }> = [
-                    {
-                      title: "Select a model",
-                      value: "use",
-                      description:
-                        connectMode === "attach"
-                          ? "Use models advertised by the attached server"
-                          : "Choose a local AX Engine model (starts server on demand)",
-                    },
-                    {
-                      title: "View status",
-                      value: "status",
-                      description:
-                        connectMode === "attach"
-                          ? axEngineAttachBaseURLPreset(sync.data.config)
-                          : status.server?.ready
-                            ? status.server.state?.baseURL
-                            : (status.model?.blockers?.[0] ?? status.dependency?.blockers?.[0]),
-                    },
-                  ]
-
-                  if (connectMode === "attach") {
-                    actions.push({
-                      title: "Change endpoint / API key",
-                      value: "endpoint",
-                      description: axEngineAttachBaseURLPreset(sync.data.config),
-                    })
-                    actions.push({
-                      title: "Switch to managed",
-                      value: "managed",
-                      description: "Let AX Code start and stop ax-engine serve",
-                    })
-                  } else {
-                    actions.push({
-                      title: "Attach existing server",
-                      value: "attach",
-                      description: "Point at URL + API key instead of starting locally",
-                    })
-                    if (status.server?.running) {
-                      actions.push({
-                        title: "Stop local server",
-                        value: "stop",
-                        description: status.server.state?.baseURL,
-                      })
-                    }
-                  }
-
-                  const action = await new Promise<AxEngineAction | null>((resolve) => {
+                  const action = await new Promise<AxEngineConnectedAction | null>((resolve) => {
                     dialog.replace(
                       () => (
                         <DialogSelect
                           title={connectMode === "attach" ? "AX Engine — attached" : "AX Engine — managed"}
-                          options={actions}
+                          options={axEngineConnectedDialogActions({
+                            connectMode,
+                            attachBaseURL: axEngineAttachBaseURLPreset(sync.data.config),
+                            serverRunning: status.server?.running,
+                            serverReady: status.server?.ready,
+                            serverBaseURL: status.server?.state?.baseURL,
+                            statusBlocker: status.model?.blockers?.[0] ?? status.dependency?.blockers?.[0],
+                          })}
                           onSelect={(option) => resolve(option.value)}
                         />
                       ),
@@ -700,6 +660,25 @@ export function createDialogProviderOptions() {
                     )
                   })
                   if (action === null) return
+                  if (action === "disable") {
+                    if (connectMode !== "attach" && status.server?.running) {
+                      try {
+                        await axEngineRequest(sdk, "stop")
+                      } catch (error) {
+                        log.warn("failed to stop ax-engine while disabling", { error })
+                      }
+                    }
+                    await setProviderDisabled({
+                      sdk,
+                      sync,
+                      toast,
+                      dialog,
+                      providerID: provider.id,
+                      providerName: provider.name,
+                      disabled: true,
+                    })
+                    return
+                  }
                   if (action === "status") {
                     if (connectMode === "attach") {
                       const connection = await axEngineConnectionRequest(sdk)
@@ -825,7 +804,15 @@ export function createDialogProviderOptions() {
                     if (action === "use") dialog.replace(() => <DialogModel providerID={provider.id} />)
                     else if (action === "endpoint") promptEndpoint()
                     else if (action === "disable")
-                      await setProviderDisabled({ sdk, sync, toast, dialog, providerID: provider.id, providerName: provider.name, disabled: true })
+                      await setProviderDisabled({
+                        sdk,
+                        sync,
+                        toast,
+                        dialog,
+                        providerID: provider.id,
+                        providerName: provider.name,
+                        disabled: true,
+                      })
                   } else {
                     promptEndpoint()
                   }
@@ -891,7 +878,15 @@ export function createDialogProviderOptions() {
                       toast.show({ variant: "success", message: `Using ${provider.name}` })
                       dialog.clear()
                     } else if (action === "disable") {
-                      await setProviderDisabled({ sdk, sync, toast, dialog, providerID: provider.id, providerName: provider.name, disabled: true })
+                      await setProviderDisabled({
+                        sdk,
+                        sync,
+                        toast,
+                        dialog,
+                        providerID: provider.id,
+                        providerName: provider.name,
+                        disabled: true,
+                      })
                     } else if (action === "disconnect") {
                       const removed = await sdk.client.auth.remove({ providerID: provider.id })
                       if (removed.error) {
@@ -963,7 +958,15 @@ export function createDialogProviderOptions() {
                     return
                   }
                   if (action === "disable") {
-                    await setProviderDisabled({ sdk, sync, toast, dialog, providerID: provider.id, providerName: provider.name, disabled: true })
+                    await setProviderDisabled({
+                      sdk,
+                      sync,
+                      toast,
+                      dialog,
+                      providerID: provider.id,
+                      providerName: provider.name,
+                      disabled: true,
+                    })
                     return
                   }
                   if (action === "remove") {
@@ -1096,29 +1099,29 @@ export function DialogProvider() {
     // "Disabled" entry (not a real connect category) can be appended.
     const types: { title: string; value: string; description?: string; hint?: string; onSelect(): void }[] =
       providerDialogTypeOptions(options().map((option) => option.value)).map((type) => ({
-      ...type,
-      onSelect() {
-        // Replace the dialog instead of swapping DialogSelect in place. An
-        // in-place remount kept the residual Enter from this confirm and
-        // immediately activated the first filtered row (previously Change
-        // type), so type select looked like a no-op.
-        dialog.replace(() => (
-          <DialogSelect
-            title={providerConnectCategoryMeta(type.value).label}
-            options={providerDialogOptionsForType(options(), type.value).map((option) =>
-              option.value === PROVIDER_DIALOG_CHANGE_TYPE_VALUE
-                ? {
-                    ...option,
-                    onSelect() {
-                      dialog.replace(() => <DialogProvider />)
-                    },
-                  }
-                : option,
-            )}
-          />
-        ))
-      },
-    }))
+        ...type,
+        onSelect() {
+          // Replace the dialog instead of swapping DialogSelect in place. An
+          // in-place remount kept the residual Enter from this confirm and
+          // immediately activated the first filtered row (previously Change
+          // type), so type select looked like a no-op.
+          dialog.replace(() => (
+            <DialogSelect
+              title={providerConnectCategoryMeta(type.value).label}
+              options={providerDialogOptionsForType(options(), type.value).map((option) =>
+                option.value === PROVIDER_DIALOG_CHANGE_TYPE_VALUE
+                  ? {
+                      ...option,
+                      onSelect() {
+                        dialog.replace(() => <DialogProvider />)
+                      },
+                    }
+                  : option,
+              )}
+            />
+          ))
+        },
+      }))
     if (disabledProviders().length > 0) {
       types.push({
         title: "Disabled",
@@ -1164,11 +1167,27 @@ export function DialogProvider() {
                         )
                       })
                       if (action === "enable") {
-                        await setProviderDisabled({ sdk, sync, toast, dialog, providerID, providerName: providerID, disabled: false })
+                        await setProviderDisabled({
+                          sdk,
+                          sync,
+                          toast,
+                          dialog,
+                          providerID,
+                          providerName: providerID,
+                          disabled: false,
+                        })
                       } else if (action === "disconnect") {
                         // Re-enable first so the provider is not left behind in
                         // disabled_providers with no credentials.
-                        await setProviderDisabled({ sdk, sync, toast, dialog, providerID, providerName: providerID, disabled: false })
+                        await setProviderDisabled({
+                          sdk,
+                          sync,
+                          toast,
+                          dialog,
+                          providerID,
+                          providerName: providerID,
+                          disabled: false,
+                        })
                         const removed = await sdk.client.auth.remove({ providerID })
                         if (removed.error) {
                           toast.show({ variant: "error", message: JSON.stringify(removed.error) })

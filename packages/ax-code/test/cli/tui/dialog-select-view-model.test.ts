@@ -3,7 +3,9 @@ import {
   dialogSelectActionOption,
   dialogSelectClampIndex,
   dialogSelectFlatOptions,
+  dialogSelectGroupStartIndex,
   dialogSelectGroupedOptions,
+  dialogSelectHasCurrentValue,
   dialogSelectMoveIndex,
   dialogSelectRows,
   dialogSelectVisibleHeight,
@@ -25,6 +27,25 @@ describe("tui dialog select view model", () => {
       ["", [options[2]]],
     ])
     expect(dialogSelectFlatOptions(grouped)).toEqual(options)
+  })
+
+  test("indexes rows by group offset so duplicate values stay distinct", () => {
+    const grouped: [string, { value: string }[]][] = [
+      ["Recent", [{ value: "opus" }]],
+      ["Anthropic", [{ value: "opus" }, { value: "sonnet" }]],
+    ]
+    expect(dialogSelectGroupStartIndex(grouped, 0)).toBe(0)
+    expect(dialogSelectGroupStartIndex(grouped, 1)).toBe(1)
+    expect(dialogSelectGroupStartIndex(grouped, 2)).toBe(3)
+    expect(dialogSelectFlatOptions(grouped).map((item) => item.value)).toEqual(["opus", "opus", "sonnet"])
+  })
+
+  test("treats falsy non-nullish options as valid current values", () => {
+    expect(dialogSelectHasCurrentValue("")).toBe(true)
+    expect(dialogSelectHasCurrentValue(0)).toBe(true)
+    expect(dialogSelectHasCurrentValue(false)).toBe(true)
+    expect(dialogSelectHasCurrentValue(null)).toBe(false)
+    expect(dialogSelectHasCurrentValue(undefined)).toBe(false)
   })
 
   test("flattens search results when flat mode is enabled", () => {
@@ -50,13 +71,24 @@ describe("tui dialog select view model", () => {
     const grouped = dialogSelectGroupedOptions({ options, query: "" })
 
     expect(dialogSelectRows(grouped)).toBe(6)
-    expect(dialogSelectVisibleHeight(20, 40)).toBe(14)
+    // 40-line terminal: remaining space after overlay margin + select chrome.
+    expect(dialogSelectVisibleHeight(20, 40)).toBe(20)
+    expect(dialogSelectVisibleHeight(30, 40)).toBe(28)
+    // Tiny terminals still show at least one row instead of collapsing to 0.
     expect(dialogSelectVisibleHeight(20, 8)).toBe(1)
     expect(dialogSelectMoveIndex(0, -1, 2)).toBe(1)
     expect(dialogSelectMoveIndex(1, 1, 2)).toBe(0)
     expect(dialogSelectClampIndex(5, 2)).toBe(1)
     expect(dialogSelectClampIndex(-1, 2)).toBe(0)
     expect(dialogSelectClampIndex(5, 0)).toBe(0)
+  })
+
+  test("gives /connect a usable page of options instead of two rows", () => {
+    // The old `floor(height / 2) - 6` cap left 2 rows in a 16-line split pane
+    // and 6 on a standard 24-line terminal.
+    expect(dialogSelectVisibleHeight(40, 16)).toBe(4)
+    expect(dialogSelectVisibleHeight(40, 24)).toBe(12)
+    expect(dialogSelectVisibleHeight(4, 24)).toBe(4)
   })
 
   test("clamps page jumps at the list edges while single steps keep wrapping", () => {

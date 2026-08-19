@@ -47,6 +47,8 @@ import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
 import { isSupportedHost as isAxEngineSupportedHost } from "./ax-engine/platform"
 import { isRetiredProviderID } from "./retired-providers"
 import { isGenericCliFallbackModel } from "./cli/ids"
+import { latestAnthropicFamilyModels } from "./anthropic-families"
+import { isHiddenDeepseekLegacySku } from "./deepseek-catalog"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -318,6 +320,17 @@ export namespace Provider {
     }
 
     function applyModelFilters(providerID: ProviderID, provider: Info) {
+      if (providerID === "anthropic") {
+        const keep = new Set<string>(latestAnthropicFamilyModels(provider.models).map((model) => model.id))
+        for (const modelID of Object.keys(provider.models)) {
+          if (!keep.has(modelID)) delete provider.models[modelID]
+        }
+      }
+      if (providerID === "deepseek") {
+        for (const [modelID, model] of Object.entries(provider.models)) {
+          if (isHiddenDeepseekLegacySku(modelID, model.name)) delete provider.models[modelID]
+        }
+      }
       const configProvider = config.provider?.[providerID]
       for (const [modelID, model] of Object.entries(provider.models)) {
         const supportModelID = model.api.id ?? model.id ?? modelID
@@ -1205,7 +1218,7 @@ export namespace Provider {
           : ["MiniMax-M2.5", "MiniMax-M2.1", "MiniMax-M2.7"]
       }
       if (providerID.startsWith("alibaba")) {
-        priority = ["qwen3.6-flash", "deepseek-v4-flash", "deepseek-v4-pro", "qwen3.6-plus"]
+        priority = ["qwen3.6-flash", "qwen3.6-plus"]
       }
       if (providerID === "openrouter") {
         priority = ["qwen/qwen3-coder-flash", "google/gemini-3.5-flash", "qwen/qwen3.7-plus"]

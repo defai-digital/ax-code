@@ -40,6 +40,8 @@ configure a workflow, understand a runtime boundary, or integrate AX Code with a
 - [Long-Running Operations](guides/long-running-operations.md) — supervised service examples, recovery semantics, and
   operational checks.
 - [Execution Modes](guides/modes.md) — agent, hybrid, council, and arena behavior.
+- [Multi-Model Routing Best Practices](guides/multi-model-routing.md) — split premium reasoning and lower-cost support
+  work without silently weakening correctness-sensitive tasks.
 - [Auto-Route](guides/auto-route.md) — specialist routing and optional complexity routing.
 - [Model Effort](guides/effort.md) — thinking levels and provider-specific behavior.
 - [Lifecycle Hooks](guides/hooks.md) — hook events and bundled policy packs.

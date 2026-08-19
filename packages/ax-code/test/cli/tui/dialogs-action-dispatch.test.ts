@@ -17,6 +17,7 @@ const TUI_ROOT = path.join(__dirname, "../../../src/cli/cmd/tui")
 const DIALOG_CONFIRM_SRC = path.join(TUI_ROOT, "ui/dialog-confirm.tsx")
 const DIALOG_SELECT_SRC = path.join(TUI_ROOT, "ui/dialog-select.tsx")
 const DIALOG_PROVIDER_SRC = path.join(TUI_ROOT, "component/dialog-provider.tsx")
+const DIALOG_MODEL_SRC = path.join(TUI_ROOT, "component/dialog-model.tsx")
 const APP_SRC = path.join(TUI_ROOT, "app.tsx")
 
 describe("tui dialog action dispatch", () => {
@@ -70,6 +71,27 @@ describe("tui dialog action dispatch", () => {
     expect(dialogProvider).toContain("return Promise.resolve()")
     expect(dialogProvider).toContain("return runProviderDialogAction({")
     expect(dialogProvider).not.toMatch(/void Promise\.resolve\(\)\s*\.then\(input\.run\)/)
+  })
+
+  test("model picker keeps recent models in the provider group", async () => {
+    const dialogModel = await fs.readFile(DIALOG_MODEL_SRC, "utf8")
+    const dialogSelect = await fs.readFile(DIALOG_SELECT_SRC, "utf8")
+
+    expect(dialogModel).toContain("dialogModelCatalogDescription({")
+    expect(dialogModel).not.toMatch(/recents\.some\(\(item\) => item\.providerID === x\.value\.providerID/)
+    expect(dialogSelect).toContain("dialogSelectGroupStartIndex(grouped(), index())")
+    expect(dialogSelect).toContain("optionIndex() === store.selected")
+  })
+
+  test("ax-engine connect menus include disable and run it through setProviderDisabled", async () => {
+    const dialogProvider = await fs.readFile(DIALOG_PROVIDER_SRC, "utf8")
+
+    expect(dialogProvider).toContain("axEngineSetupDialogActions()")
+    expect(dialogProvider).toContain("axEngineConnectedDialogActions({")
+    expect(dialogProvider).toContain('if (setup === "disable")')
+    expect(dialogProvider).toContain('if (action === "disable")')
+    expect(dialogProvider).toContain("setProviderDisabled({")
+    expect(dialogProvider).toContain("failed to stop ax-engine while disabling")
   })
 
   test("provider type select replaces the dialog instead of remounting DialogSelect in place", async () => {

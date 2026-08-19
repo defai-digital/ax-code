@@ -239,6 +239,14 @@ describe("tui OpenTUI stability guardrails", () => {
     // Solid's cleanup tracking — App must stop it on unmount (the error
     // boundary replaces the app without otherwise clearing progress).
     expect(app).toContain("onCleanup(() => setTuiTerminalProgress(false, renderProfile))")
+    // The tab title is claimed at TUI boot (before the renderer mounts,
+    // kimi-code style) so the tab shows "AX-Code" instead of the launcher's
+    // process name ("node") even if mount is slow or crashes; runtime titles
+    // keep the user-facing "AX-Code" casing (lowercase "ax-code" is the
+    // machine process title, see util/process-title.ts).
+    expect(app).toContain('setTuiTerminalTitle("AX-Code", renderProfile)')
+    expect(app).toContain("${spinner}AX-Code")
+    expect(app).toContain("${spinner}AX-Code | ${title}")
     expect(exitContext).toContain("await destroyTuiRenderer(renderer)")
   })
 

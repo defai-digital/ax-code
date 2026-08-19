@@ -148,6 +148,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/d
 curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 ```
 
+`brew upgrade` only updates the Homebrew keg. If `which ax-code` is `~/.local/bin/ax-code`, the shell keeps running that launcher until it is moved aside. `which -a ax-code` lists every match in PATH order.
+
 On Windows this updates the CLI. To remove the CLI install and its user PATH entry:
 
 ```powershell
@@ -160,6 +162,8 @@ Desktop updates through the app auto-updater or by running the latest Windows De
 ## Contributor Launcher Behavior
 
 `pnpm run setup:cli` is intentionally compiled-path by default. It builds or reuses the local bundled binary under `packages/ax-code/dist/...` and installs a global launcher that points at that binary. This keeps local packaged-runtime checks close to what Homebrew and curl-installer users run.
+
+That launcher usually lands in `~/.local/bin` or `PNPM_HOME`, which is typically earlier on PATH than Homebrew. After `setup:cli`, `ax-code --version` reports the checkout binary even if `brew upgrade ax-code` just succeeded. `ax-code doctor` warns about this as `PATH launchers`. To use the Homebrew install again, move the checkout launcher aside (`mv ~/.local/bin/ax-code ~/.local/bin/ax-code.bak && hash -r`).
 
 After source changes that should affect the packaged runtime, refresh the bundled binary before testing the global launcher:
 

@@ -18,7 +18,10 @@ export const TUI_MOUSE_TRACKING_DISABLE_SEQUENCE = "\x1b[?1000l\x1b[?1002l\x1b[?
 // reset can emit it without a terminal-cleanup -> renderer import cycle.
 export const TUI_TERMINAL_PROGRESS_ACTIVE_SEQUENCE = "\x1b]9;4;3\x07"
 export const TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE = "\x1b]9;4;0\x07"
-export const TUI_TERMINAL_CRASH_RESET_SEQUENCE = `${TUI_MOUSE_TRACKING_DISABLE_SEQUENCE}\x1b[?2004l\x1b[?25h\x1b[?1049l${TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE}`
+// OSC 0 with an empty title. A crashed TUI must not leave a stale "AX-Code | ..."
+// tab title (possibly with a frozen spinner frame) on a dead terminal.
+export const TUI_TERMINAL_TITLE_CLEAR_SEQUENCE = "\x1b]0;\x07"
+export const TUI_TERMINAL_CRASH_RESET_SEQUENCE = `${TUI_MOUSE_TRACKING_DISABLE_SEQUENCE}\x1b[?2004l\x1b[?25h\x1b[?1049l${TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE}${TUI_TERMINAL_TITLE_CLEAR_SEQUENCE}`
 
 // Cursor-home + erase-entire-display. In main-screen mode the renderer paints
 // directly on the normal terminal buffer (no alternate screen to restore on

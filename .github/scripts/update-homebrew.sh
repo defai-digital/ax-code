@@ -194,20 +194,53 @@ class AxCode < Formula
   # ax-code command silently vanishes from PATH. The Desktop cask now ships as
   # "ax-code-desktop", but installs of its short-lived "ax-code" token still
   # trigger the skip; give those users the exact recovery commands.
+  #
+  # A checkout or curl launcher in ~/.local/bin is typically earlier on PATH
+  # than Homebrew, so `brew upgrade` succeeds while `ax-code --version` keeps
+  # reporting the shadowed binary.
   def caveats
-    return unless (HOMEBREW_PREFIX/"Caskroom/ax-code").directory?
+    messages = []
 
-    <<~EOS
-      The deprecated "ax-code" Desktop cask is installed, so Homebrew skips
-      linking this formula and the ax-code command may be missing from PATH.
+    if (HOMEBREW_PREFIX/"Caskroom/ax-code").directory?
+      messages << <<~EOS
+        The deprecated "ax-code" Desktop cask is installed, so Homebrew skips
+        linking this formula and the ax-code command may be missing from PATH.
 
-      Restore the CLI with:
-        brew link ax-code
-        hash -r
+        Restore the CLI with:
+          brew link ax-code
+          hash -r
 
-      Then move the Desktop app to its renamed cask:
-        brew upgrade --cask ax-code
-    EOS
+        Then move the Desktop app to its renamed cask:
+          brew upgrade --cask ax-code
+      EOS
+    end
+
+    shadowed = [
+      File.expand_path("~/.local/bin/ax-code"),
+      File.expand_path("~/bin/ax-code"),
+    ].select { |candidate| File.exist?(candidate) }.reject do |candidate|
+      File.realpath(candidate).include?("/Cellar/")
+    rescue StandardError
+      false
+    end
+
+    unless shadowed.empty?
+      messages << <<~EOS
+        Another ax-code launcher is installed outside Homebrew:
+          #{shadowed.join("\n          ")}
+
+        If that path is earlier than #{HOMEBREW_PREFIX}/bin in PATH, `ax-code`
+        will keep reporting the previous version after this upgrade. Check with:
+          which -a ax-code
+          hash -r
+
+        To use this Homebrew install, move the extra launcher aside:
+          mv #{shadowed.first} #{shadowed.first}.bak
+          hash -r
+      EOS
+    end
+
+    messages.join("\n") unless messages.empty?
   end
 
   test do

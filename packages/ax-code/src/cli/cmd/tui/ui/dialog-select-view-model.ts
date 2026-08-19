@@ -1,5 +1,6 @@
 import fuzzysort from "fuzzysort"
 import { entries, flatMap, groupBy, pipe } from "remeda"
+import { DIALOG_SELECT_CHROME_HEIGHT, dialogOverlayVisibleBodyHeight } from "./dialog-overlay"
 
 export type DialogSelectViewOption<T = unknown> = {
   title: string
@@ -52,6 +53,13 @@ export function dialogSelectFlatOptions<T>(groups: [string, T[]][]): T[] {
   )
 }
 
+export function dialogSelectGroupStartIndex(groups: readonly [string, unknown[]][], groupIndex: number) {
+  let start = 0
+  const last = Math.min(Math.max(groupIndex, 0), groups.length)
+  for (let i = 0; i < last; i++) start += groups[i][1].length
+  return start
+}
+
 export function dialogSelectRows(groups: [string, unknown[]][]) {
   const headers = groups.reduce((acc, [category], index) => {
     if (!category) return acc
@@ -61,8 +69,11 @@ export function dialogSelectRows(groups: [string, unknown[]][]) {
 }
 
 export function dialogSelectVisibleHeight(rows: number, terminalHeight: number) {
-  if (rows <= 0) return 0
-  return Math.max(1, Math.min(rows, Math.floor(terminalHeight / 2) - 6))
+  return dialogOverlayVisibleBodyHeight({
+    contentRows: rows,
+    terminalHeight,
+    chromeHeight: DIALOG_SELECT_CHROME_HEIGHT,
+  })
 }
 
 export function dialogSelectMoveIndex(current: number, direction: number, count: number) {
@@ -86,4 +97,8 @@ export function dialogSelectClampIndex(current: number, count: number) {
 export function dialogSelectActionOption<T>(options: readonly T[], selectedIndex: number): T | undefined {
   if (options.length === 0) return undefined
   return options[dialogSelectClampIndex(selectedIndex, options.length)]
+}
+
+export function dialogSelectHasCurrentValue(value: unknown): boolean {
+  return value !== undefined && value !== null
 }

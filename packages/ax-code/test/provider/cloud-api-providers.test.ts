@@ -36,6 +36,8 @@ describe("cloud API providers: DeepSeek + Meta Muse Spark", () => {
     expect(deepseek?.npm).toBe("@ai-sdk/openai-compatible")
     expect(deepseek?.models["deepseek-v4-pro"]).toBeDefined()
     expect(deepseek?.models["deepseek-v4-flash"]).toBeDefined()
+    expect(deepseek?.models["deepseek-chat"]).toBeUndefined()
+    expect(deepseek?.models["deepseek-reasoner"]).toBeUndefined()
     expect(deepseek?.models["deepseek-v4-pro"]?.tool_call).toBe(true)
   })
 

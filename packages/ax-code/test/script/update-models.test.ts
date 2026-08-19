@@ -397,6 +397,116 @@ describe("update-models script", () => {
     expect(data.minimax?.models?.["MiniMax-M2.7"]).toBeDefined()
   })
 
+  test("hides DeepSeek, GLM, MiniMax, and preview SKUs on Alibaba Token Plan only", async () => {
+    await using tmp = await tmpdir()
+    const fixturePath = path.join(tmp.path, "models-fixture.json")
+    const snapshotPath = path.join(tmp.path, "models-snapshot.json")
+    const codingModels = {
+      "qwen3.7-plus": { id: "qwen3.7-plus", name: "Qwen3.7 Plus Preview", family: "qwen" },
+      "qwen3.6-plus": { id: "qwen3.6-plus", name: "Qwen3.6 Plus", family: "qwen" },
+      "glm-5": { id: "glm-5", name: "GLM-5", family: "glm" },
+      "MiniMax-M2.5": { id: "MiniMax-M2.5", name: "MiniMax-M2.5", family: "minimax" },
+    }
+    await writeFile(
+      fixturePath,
+      JSON.stringify({
+        "alibaba-coding-plan": {
+          id: "alibaba-coding-plan",
+          name: "Alibaba Coding Plan",
+          models: codingModels,
+        },
+        "alibaba-coding-plan-cn": {
+          id: "alibaba-coding-plan-cn",
+          name: "Alibaba Coding Plan (China)",
+          models: codingModels,
+        },
+        zhipuai: {
+          id: "zhipuai",
+          name: "Zhipu AI",
+          models: {
+            "glm-5.2": { id: "glm-5.2", name: "GLM-5.2", family: "glm" },
+          },
+        },
+        auriko: {
+          id: "auriko",
+          name: "Auriko",
+          models: {
+            "deepseek-v4-pro": { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", family: "deepseek" },
+            "deepseek-v4-flash": { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", family: "deepseek" },
+          },
+        },
+      }),
+    )
+    await writeFile(snapshotPath, "{}\n")
+
+    const result = runUpdateModels({
+      ...process.env,
+      AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+      AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+    })
+
+    expect(result.status).toBe(0)
+    const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
+    for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn"]) {
+      expect(data[id]?.models?.["MiniMax-M2.5"]).toBeDefined()
+      expect(data[id]?.models?.["glm-5"]).toBeDefined()
+    }
+    for (const id of ["alibaba-token-plan", "alibaba-token-plan-cn"]) {
+      expect(data[id]?.models?.["MiniMax-M2.5"]).toBeUndefined()
+      expect(data[id]?.models?.["glm-5"]).toBeUndefined()
+      expect(data[id]?.models?.["glm-5.2"]).toBeUndefined()
+      expect(data[id]?.models?.["deepseek-v4-pro"]).toBeUndefined()
+      expect(data[id]?.models?.["deepseek-v4-flash"]).toBeUndefined()
+      expect(data[id]?.models?.["qwen3.7-plus"]).toBeUndefined()
+      expect(data[id]?.models?.["qwen3.8-max-preview"]).toBeUndefined()
+      expect(data[id]?.models?.["qwen3.6-plus"]).toBeDefined()
+    }
+  })
+
+  test("hides DeepSeek Chat and Reasoner on the first-party DeepSeek provider only", async () => {
+    await using tmp = await tmpdir()
+    const fixturePath = path.join(tmp.path, "models-fixture.json")
+    const snapshotPath = path.join(tmp.path, "models-snapshot.json")
+    const models = {
+      "deepseek-v4-pro": { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", family: "deepseek-thinking" },
+      "deepseek-v4-flash": { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", family: "deepseek-flash" },
+      "deepseek-chat": { id: "deepseek-chat", name: "DeepSeek Chat", family: "deepseek" },
+      "deepseek-reasoner": { id: "deepseek-reasoner", name: "DeepSeek Reasoner", family: "deepseek-thinking" },
+    }
+    await writeFile(
+      fixturePath,
+      JSON.stringify({
+        deepseek: {
+          id: "deepseek",
+          name: "DeepSeek",
+          models,
+        },
+        openrouter: {
+          id: "openrouter",
+          name: "OpenRouter",
+          models: {
+            "deepseek/deepseek-chat": { id: "deepseek/deepseek-chat", name: "DeepSeek Chat", family: "deepseek" },
+            "openai/gpt-5.2": { id: "openai/gpt-5.2", name: "GPT-5.2", family: "gpt" },
+          },
+        },
+      }),
+    )
+    await writeFile(snapshotPath, "{}\n")
+
+    const result = runUpdateModels({
+      ...process.env,
+      AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+      AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+    })
+
+    expect(result.status).toBe(0)
+    const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
+    expect(data.deepseek?.models?.["deepseek-v4-pro"]).toBeDefined()
+    expect(data.deepseek?.models?.["deepseek-v4-flash"]).toBeDefined()
+    expect(data.deepseek?.models?.["deepseek-chat"]).toBeUndefined()
+    expect(data.deepseek?.models?.["deepseek-reasoner"]).toBeUndefined()
+  })
+
   test("handles network failure gracefully", async () => {
     const result = runUpdateModels({
       ...process.env,

@@ -10,6 +10,7 @@ import { FormatError } from "./error"
 import { UI } from "./ui"
 import { Installation } from "../installation"
 import { Log } from "../util/log"
+import { setAxCodeProcessTitle } from "../util/process-title"
 import { DiagnosticLog } from "../debug/diagnostic-log"
 import { isHarmlessInterrupt } from "../util/harmless-interrupt"
 
@@ -135,9 +136,7 @@ export function cli(argv = hideBin(process.argv)) {
 
 export async function run() {
   clearForcedExitTimer()
-  try {
-    process.title = "ax-code"
-  } catch {}
+  setAxCodeProcessTitle()
   const cmd = cli()
   try {
     await cmd.parse()

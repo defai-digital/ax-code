@@ -141,6 +141,28 @@ test("Z.AI general API exposes GLM-4.7-Flash (Free) and current flagships", asyn
   })
 })
 
+test("Anthropic provider lists the latest model in each Claude family", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("ANTHROPIC_API_KEY", "test-anthropic")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const anthropic = providers[ProviderID.make("anthropic")]
+      expect(Object.keys(anthropic.models).sort()).toEqual([
+        "claude-fable-5",
+        "claude-haiku-4-5",
+        "claude-opus-5",
+        "claude-sonnet-5",
+      ])
+      expect(anthropic.models[ModelID.make("claude-sonnet-4-5")]).toBeUndefined()
+      expect(anthropic.models[ModelID.make("claude-sonnet-4-5-20250929")]).toBeUndefined()
+    },
+  })
+})
+
 test("MiniMax Token Plan providers use the Anthropic endpoint and expose M3", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -1905,7 +1927,7 @@ test("getSmallModel uses a supported Alibaba plan model", async () => {
       const model = await Provider.getSmallModel(ProviderID.make("alibaba-token-plan"))
       expect(model).toBeDefined()
       if (!model) throw new Error("expected Alibaba token-plan small model")
-      expect(["qwen3.6-flash", "deepseek-v4-flash", "deepseek-v4-pro", "qwen3.6-plus"]).toContain(model.id)
+      expect(["qwen3.6-flash", "qwen3.6-plus"]).toContain(model.id)
     },
   })
 })
@@ -2359,7 +2381,8 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
       // Catalogs follow Alibaba's official exact-string allowlists, which
       // differ per plan (verified 2026-08-18, see script/update-models.ts):
       // coding plans carry the qwen3.x-plus/coder SKUs plus glm-5/MiniMax,
-      // token plans carry the max/flagship SKUs, DeepSeek, and image models.
+      // token plans carry Qwen + Kimi + image models (DeepSeek/GLM/MiniMax
+      // and preview SKUs are hidden).
       const expectedCodingPlanModels = [
         "MiniMax-M2.5",
         "glm-5",
@@ -2371,10 +2394,6 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
         "qwen3.7-plus",
       ]
       const expectedTokenPlanModels = [
-        "MiniMax-M2.5",
-        "deepseek-v4-flash",
-        "deepseek-v4-pro",
-        "glm-5.2",
         "kimi-k2.7-code",
         "qwen-image-2.0",
         "qwen-image-2.0-pro",
@@ -2383,7 +2402,6 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
         "qwen3.7-max",
         "qwen3.7-plus",
         "qwen3.8-max",
-        "qwen3.8-max-preview",
         "wan2.7-image",
         "wan2.7-image-pro",
       ]
@@ -2391,10 +2409,9 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
       expect(Object.keys(codingPlanCn.models).sort()).toEqual(expectedCodingPlanModels)
       expect(Object.keys(tokenPlan.models).sort()).toEqual(expectedTokenPlanModels)
       expect(Object.keys(tokenPlanCn.models).sort()).toEqual(expectedTokenPlanModels)
-      for (const modelID of ["qwen3.8-max", "qwen3.8-max-preview"] as const) {
-        expect(tokenPlan.models[modelID].capabilities.input.image).toBe(true)
-        expect(tokenPlan.models[modelID].capabilities.toolcall).toBe(true)
-      }
+      expect(tokenPlan.models["qwen3.8-max"].capabilities.input.image).toBe(true)
+      expect(tokenPlan.models["qwen3.8-max"].capabilities.toolcall).toBe(true)
+      expect(tokenPlan.models["qwen3.8-max-preview"]).toBeUndefined()
       expect(codingPlan.models["qwen3.6-plus"].api.url).toBe("https://coding-intl.dashscope.aliyuncs.com/v1")
       expect(codingPlanCn.models["qwen3.6-plus"].api.url).toBe("https://coding.dashscope.aliyuncs.com/v1")
       expect(tokenPlan.models["qwen3.6-plus"].api.url).toBe(

@@ -9,8 +9,10 @@ import {
   axEngineAttachBaseURLPreset,
   axEngineAttachProviderConfig,
   axEngineConnectModeFromConfig,
+  axEngineConnectedDialogActions,
   axEngineEndpointsMayAlias,
   axEngineManagedProviderConfig,
+  axEngineSetupDialogActions,
   configUpdateParams,
   normalizeAxEngineEndpointBaseURL,
   normalizeConfiguredProvidersPayload,
@@ -194,7 +196,7 @@ describe("provider dialog options", () => {
       {
         title: "API plan",
         value: "api",
-        description: "2 providers · Hosted API key",
+        description: "2 providers",
         hint: "Hosted API key",
       },
     ])
@@ -279,6 +281,29 @@ describe("provider dialog options", () => {
         },
       }),
     ).toBeUndefined()
+  })
+
+  test("offers disable on the ax-engine setup and connected menus", () => {
+    expect(axEngineSetupDialogActions().map((item) => item.value)).toEqual(["managed", "attach", "disable"])
+    expect(
+      axEngineConnectedDialogActions({
+        connectMode: "managed",
+        serverRunning: false,
+      }).map((item) => item.value),
+    ).toEqual(["use", "status", "attach", "disable"])
+    expect(
+      axEngineConnectedDialogActions({
+        connectMode: "managed",
+        serverRunning: true,
+        serverBaseURL: "http://127.0.0.1:31418/v1",
+      }).map((item) => item.value),
+    ).toEqual(["use", "status", "attach", "stop", "disable"])
+    expect(
+      axEngineConnectedDialogActions({
+        connectMode: "attach",
+        attachBaseURL: "http://127.0.0.1:31418/v1",
+      }).map((item) => item.value),
+    ).toEqual(["use", "status", "endpoint", "managed", "disable"])
   })
 
   test("normalizes ax-engine attach endpoints and rejects non-local hosts", () => {
