@@ -17,6 +17,14 @@ import {
   TOOL_ONLY_TURN_FINAL_NUDGE,
   TOOL_ONLY_TURN_NUDGE,
 } from "./prompt-loop-config"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "session.autonomy-budget" })
+
+// Process-once guard for legacy-alias deprecation warnings. A module-level
+// flag (rather than per-call) keeps a single long session from logging the
+// same hint hundreds of times.
+let legacyAliasWarned = false
 
 /** Named workload profiles (ADR-051 follow-up). Omitted fields fall through to defaults. */
 export type AutonomyProfile = "quick" | "standard" | "long" | "goal" | "custom"
@@ -107,13 +115,33 @@ function finiteNonNegative(value: number | undefined, fallback: number): number 
  * profile presets → constants → session.* / experimental.autonomous_caps →
  * autonomy.budget / autonomy.stall (highest precedence).
  */
-export function resolveAutonomyBudget(config: Pick<Config.Info, "session" | "experimental" | "autonomy">): ResolvedAutonomyBudget {
+export function resolveAutonomyBudget(
+  config: Pick<Config.Info, "session" | "experimental" | "autonomy">,
+): ResolvedAutonomyBudget {
   const sources: string[] = []
   const autonomy = config.autonomy
   const budget = autonomy?.budget
   const stall = autonomy?.stall
   const session = config.session
   const caps = config.experimental?.autonomous_caps
+
+  // Deprecation hygiene: warn once per process when a legacy alias key is
+  // present so setups converge on the canonical autonomy.* schema. Presence is
+  // enough — a reviewer should know a legacy key is in play even when its
+  // value happens to equal the default.
+  const hasLegacySession =
+    session !== undefined &&
+    (session.max_steps !== undefined ||
+      session.max_continuations !== undefined ||
+      session.max_total_steps !== undefined ||
+      session.max_todo_retries !== undefined)
+  const hasLegacyCaps = caps !== undefined && Object.keys(caps).length > 0
+  if (!legacyAliasWarned && (hasLegacySession || hasLegacyCaps)) {
+    legacyAliasWarned = true
+    log.warn("legacy autonomy aliases in config", {
+      hint: "migrate session.* and experimental.autonomous_caps.* to autonomy.budget.* / autonomy.stall.*",
+    })
+  }
 
   const rawProfile = autonomy?.profile ?? "standard"
   const profile: AutonomyProfile =
@@ -122,12 +150,10 @@ export function resolveAutonomyBudget(config: Pick<Config.Info, "session" | "exp
       : "standard"
   if (autonomy?.profile) sources.push(`autonomy.profile=${profile}`)
 
-  const preset =
-    profile === "quick" || profile === "long" || profile === "goal" ? PROFILE_PRESETS[profile] : undefined
+  const preset = profile === "quick" || profile === "long" || profile === "goal" ? PROFILE_PRESETS[profile] : undefined
 
   // --- model turns / continuations ---
-  let modelTurnsPerSegment =
-    preset?.modelTurnsPerSegment ?? session?.max_steps ?? GLOBAL_STEP_LIMIT
+  let modelTurnsPerSegment = preset?.modelTurnsPerSegment ?? session?.max_steps ?? GLOBAL_STEP_LIMIT
   if (budget?.model_turns?.per_segment !== undefined) {
     modelTurnsPerSegment = budget.model_turns.per_segment
     sources.push("autonomy.budget.model_turns.per_segment")
@@ -275,7 +301,10 @@ export function resolveAutonomyBudget(config: Pick<Config.Info, "session" | "exp
     profile,
     modelTurnsPerSegment: finitePositive(modelTurnsPerSegment, GLOBAL_STEP_LIMIT),
     modelTurnsTotal: finitePositive(modelTurnsTotal, derivedTotal),
-    modelTurnsTotalSuperLong: finitePositive(modelTurnsTotalSuperLong, modelTurnsPerSegment * SUPER_LONG_TOTAL_STEP_HEADROOM),
+    modelTurnsTotalSuperLong: finitePositive(
+      modelTurnsTotalSuperLong,
+      modelTurnsPerSegment * SUPER_LONG_TOTAL_STEP_HEADROOM,
+    ),
     modelTurnsTotalGoal: finitePositive(modelTurnsTotalGoal, modelTurnsPerSegment * GOAL_TOTAL_STEP_HEADROOM),
     maxContinuations: finiteNonNegative(maxContinuations, 3),
     maxTodoRetries: finiteNonNegative(maxTodoRetries, 10),
@@ -338,9 +367,11 @@ export function formatAutonomyBudgetReport(input: {
     `  files total:          ${b.filesTotal}`,
     `  lines total:          ${b.linesTotal}`,
     `  burst rate:           ${b.toolCallRate.count} calls / ${b.toolCallRate.windowSeconds}s`,
-    `  per-tool:             ${Object.entries(b.perTool)
-      .map(([k, v]) => `${k}=${v}`)
-      .join(", ") || "(none)"}`,
+    `  per-tool:             ${
+      Object.entries(b.perTool)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(", ") || "(none)"
+    }`,
     `  blocked path patterns: ${b.blockedPaths.length}`,
     `  lines-exempt patterns: ${b.linesExemptPaths.length}`,
     "",
@@ -351,7 +382,7 @@ export function formatAutonomyBudgetReport(input: {
     b.sources.length ? b.sources.map((s) => `  - ${s}`).join("\n") : "  (all shipped defaults)",
     "",
     "Override keys",
-    '  autonomy.profile, autonomy.budget.*, autonomy.stall.*',
+    "  autonomy.profile, autonomy.budget.*, autonomy.stall.*",
     "  session.max_steps | max_continuations | max_total_steps | max_todo_retries",
     "  experimental.autonomous_caps.* (legacy blast-radius overrides)",
     "  agent.<name>.steps",
@@ -360,10 +391,7 @@ export function formatAutonomyBudgetReport(input: {
 }
 
 /** Doctor warnings for inconsistent or surprising config. */
-export function autonomyBudgetDiagnostics(input: {
-  budget: ResolvedAutonomyBudget
-  agentSteps?: number
-}): string[] {
+export function autonomyBudgetDiagnostics(input: { budget: ResolvedAutonomyBudget; agentSteps?: number }): string[] {
   const warnings: string[] = []
   const b = input.budget
   if (typeof input.agentSteps === "number" && Number.isFinite(input.agentSteps) && input.agentSteps > 0) {
@@ -384,9 +412,7 @@ export function autonomyBudgetDiagnostics(input: {
     warnings.push(`tool_only_nudge (${b.toolOnly.nudge}) exceeds tool_only_turns (${b.toolOnly.maxTurns}).`)
   }
   if (b.toolOnly.finalNudge > b.toolOnly.maxTurns) {
-    warnings.push(
-      `tool_only_final_nudge (${b.toolOnly.finalNudge}) exceeds tool_only_turns (${b.toolOnly.maxTurns}).`,
-    )
+    warnings.push(`tool_only_final_nudge (${b.toolOnly.finalNudge}) exceeds tool_only_turns (${b.toolOnly.maxTurns}).`)
   }
   if (b.toolCallRate.count < 5) {
     warnings.push(

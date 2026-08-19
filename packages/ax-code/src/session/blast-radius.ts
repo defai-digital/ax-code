@@ -8,6 +8,7 @@ import {
   AUTONOMOUS_MAX_LINES_CHANGED,
   AUTONOMOUS_LINES_EXEMPT_PATHS,
   AUTONOMOUS_BLOCKED_PATHS,
+  AUTONOMOUS_PROTECTED_PATHS,
   AUTONOMOUS_PER_TOOL_MAX_CALLS,
 } from "@/constants/session"
 import { Recorder } from "@/replay/recorder"
@@ -218,6 +219,21 @@ export namespace BlastRadius {
   }
 
   /**
+   * Test whether a path is on the non-overridable protected list (self-config,
+   * .git/config, .git/refs). Unlike `isPathBlocked`, this is NOT subject to
+   * `autonomy.budget.changes.blocked_paths` overrides — a project/user config
+   * cannot drop these guards, closing the autonomous self-privilege-escalation
+   * channel (an agent editing ax-code.json to raise its own caps or loosen its
+   * own deny rules).
+   */
+  export function isPathProtected(filePath: string): { protected: boolean; pattern?: string } {
+    for (const pattern of AUTONOMOUS_PROTECTED_PATHS) {
+      if (Wildcard.match(filePath, pattern)) return { protected: true, pattern }
+    }
+    return { protected: false }
+  }
+
+  /**
    * Check whether the next operation would exceed any cap. Returns a
    * descriptor when the cap is exceeded; null otherwise. Callers should
    * throw `LimitExceededError` (or a tool-shaped Error for blocked paths
@@ -316,6 +332,21 @@ export namespace BlastRadius {
   export function assertWritable(sessionID: SessionID, filePath: string) {
     const isAutonomous = ScopedFlag.autonomous()
     if (!isAutonomous) return
+    const protectedResult = isPathProtected(filePath)
+    if (protectedResult.protected) {
+      const message =
+        `Refusing to write ${filePath}: matches non-overridable protected path "${protectedResult.pattern}". ` +
+        `This path cannot be written by the autonomous agent.`
+      Recorder.emit({
+        type: "autonomous.cap_hit",
+        sessionID,
+        kind: "blocked_path",
+        current: 0,
+        limit: 0,
+        message,
+      })
+      throw new Error(message)
+    }
     const result = isPathBlocked(sessionID, filePath)
     if (result.blocked) {
       const message =

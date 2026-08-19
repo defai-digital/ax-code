@@ -1,6 +1,6 @@
 import z from "zod"
 
-import { AUTONOMOUS_BLOCKED_PATHS } from "../constants/session"
+import { AUTONOMOUS_BLOCKED_PATHS, AUTONOMOUS_PROTECTED_PATHS } from "../constants/session"
 import { classify as classifyPermissionRisk } from "../permission/risk-classes"
 import { AgentControl } from "./agent-control"
 
@@ -46,13 +46,17 @@ export namespace SafetyPolicy {
   }
 
   // Single source of truth: the blast-radius blocked-path list from
-  // constants/session.ts, plus directory-path variants for permission
-  // patterns that name the directory itself rather than a file inside it.
-  // Keeping the two enforcement layers on one list prevents the drift this
-  // duplication previously had (blast-radius blocked infra/terraform/CI
-  // workflows; this policy did not).
+  // constants/session.ts (user-overridable) plus the non-overridable
+  // AUTONOMOUS_PROTECTED_PATHS (policy files, .git control plane), plus
+  // directory-path variants for permission patterns that name the directory
+  // itself rather than a file inside it. Keeping the enforcement layers on
+  // the same lists prevents the drift this duplication previously had
+  // (blast-radius blocked infra/terraform/CI workflows; this policy did not).
+  // The non-overridable list must be present here too so a wildcard allow
+  // cannot approve a write that BlastRadius.assertWritable would then throw on.
   const DEFAULT_PROTECTED_PATHS = [
     ...AUTONOMOUS_BLOCKED_PATHS,
+    ...AUTONOMOUS_PROTECTED_PATHS,
     "secrets",
     "**/secrets",
     ".git/hooks",

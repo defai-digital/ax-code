@@ -115,6 +115,42 @@ export const AUTONOMOUS_BLOCKED_PATHS: readonly string[] = [
   ".github/workflows/**",
 ]
 
+// Non-overridable protected paths (autonomous self-escalation guard).
+//
+// Unlike AUTONOMOUS_BLOCKED_PATHS — which a project/user config may replace
+// wholesale via autonomy.budget.changes.blocked_paths (or the legacy
+// experimental.autonomous_caps.blockedPaths) — this list is enforced
+// independently of user config by BOTH the blast-radius layer
+// (BlastRadius.assertWritable) and the permission deny-first layer
+// (SafetyPolicy.DEFAULT_PROTECTED_PATHS). A config can add more guards but
+// cannot drop these.
+//
+// Threat: an autonomous agent that edits ax-code.json could raise its own
+// autonomy caps or delete its own deny rules; rewriting .git/config can plant
+// core.hooksPath/fsmonitor for code execution. Claude Code protects `.claude`
+// and Codex protects `.codex`/`.agents` for exactly this reason. `.git` and
+// `.ax-code` are already OS-protected by Isolation in non-full-access modes,
+// but full-access disables that layer, so they are repeated here as
+// defense-in-depth for the full-access + autonomous posture.
+//
+// Matched via the same Wildcard.match as AUTONOMOUS_BLOCKED_PATHS (`*` crosses
+// path segments), so each "anywhere" guard is listed anchored + `**/`-prefixed.
+export const AUTONOMOUS_PROTECTED_PATHS: readonly string[] = [
+  // ax-code's own configuration (permission rules, autonomy budgets)
+  "ax-code.json",
+  "**/ax-code.json",
+  "ax-code.jsonc",
+  "**/ax-code.jsonc",
+  ".ax-code/**",
+  "**/.ax-code/**",
+  // Git control plane: .git/config (hook/fsmonitor injection) and .git/refs
+  // (history rewrite). .git/hooks is already covered by the blocked list.
+  ".git/config",
+  "**/.git/config",
+  ".git/refs/**",
+  "**/.git/refs/**",
+]
+
 // Doom-loop cycle detection window (P1-1). The detector inspects up to
 // the last `2 * AUTONOMOUS_MAX_CYCLE_LEN` tool calls.
 export const AUTONOMOUS_MAX_CYCLE_LEN = 4

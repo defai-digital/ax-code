@@ -210,8 +210,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
   const config = await Config.get()
   const shell = Shell.acceptable(config.shell)
   log.info("bash tool using shell", { shell })
-  const description =
-    initCtx?.model?.providerID === AX_ENGINE_PROVIDER_ID ? DESCRIPTION_AX_ENGINE : DESCRIPTION
+  const description = initCtx?.model?.providerID === AX_ENGINE_PROVIDER_ID ? DESCRIPTION_AX_ENGINE : DESCRIPTION
 
   // Named schema so async Tool.define init keeps z.infer<Parameters> (without
   // this, tsgo widens params to unknown under the initCtx callback form).
@@ -362,7 +361,31 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         commandNames.add(name)
         const args = parts.slice(1)
 
-        if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat", "tee", "install"].includes(name)) {
+        // cp/mv/install write to the LAST positional argument; tee writes to
+        // every positional operand. Track those as write targets so the
+        // autonomous blocked/protected-path check applies (`cp x .env`,
+        // `install -m 600 x .git/config`, `tee secrets`), not just the
+        // isolation workspace-boundary check. The remaining commands
+        // (cd/rm/mkdir/touch/chmod/chown/cat) have no such single-dest shape.
+        if (["cp", "mv", "install"].includes(name)) {
+          let destResolved: string | undefined
+          for (const arg of args) {
+            if (arg.startsWith("-")) continue
+            const resolved = await recordResolvedPath(arg)
+            if (resolved) destResolved = resolved // last positional wins
+          }
+          if (destResolved) redirectWritePaths.add(destResolved)
+          return
+        }
+        if (name === "tee") {
+          for (const arg of args) {
+            if (arg.startsWith("-")) continue
+            const resolved = await recordResolvedPath(arg)
+            if (resolved) redirectWritePaths.add(resolved)
+          }
+          return
+        }
+        if (["cd", "rm", "mkdir", "touch", "chmod", "chown", "cat"].includes(name)) {
           for (const arg of args) {
             if (arg.startsWith("-") || (name === "chmod" && arg.startsWith("+"))) continue
             await recordResolvedPath(arg)

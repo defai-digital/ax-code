@@ -198,6 +198,30 @@ export namespace Config {
       if (Object.keys(formatter).length > 0) copy.formatter = formatter
       else delete copy.formatter
     }
+
+    // Untrusted project config must not loosen the safety floor. A committed
+    // ax-code.json could otherwise set isolation.mode = full-access, enable
+    // network, or replace the blocked-path list (blocked_paths: []) with no
+    // agent write at all — a load-time privilege escalation. Project config
+    // may tighten (read-only, network off, additional blocked paths) but never
+    // loosen. Mirrors Codex requirements.toml / Claude managed-settings: the
+    // repo cannot lower the product floor.
+    if (isRecord(copy.isolation)) {
+      const isolation = { ...copy.isolation }
+      if (isolation.mode === "full-access") delete isolation.mode
+      if (isolation.network === true) delete isolation.network
+      copy.isolation = isolation
+    }
+    if (isRecord(copy.autonomy) && isRecord(copy.autonomy.budget) && isRecord(copy.autonomy.budget.changes)) {
+      const changes = { ...copy.autonomy.budget.changes }
+      delete changes.blocked_paths
+      copy.autonomy = { ...copy.autonomy, budget: { ...copy.autonomy.budget, changes } }
+    }
+    if (isRecord(copy.experimental) && isRecord(copy.experimental.autonomous_caps)) {
+      const caps = { ...copy.experimental.autonomous_caps }
+      delete caps.blockedPaths
+      copy.experimental = { ...copy.experimental, autonomous_caps: caps }
+    }
   }
   export const McpSourceKind = z.enum([
     "wellknown",

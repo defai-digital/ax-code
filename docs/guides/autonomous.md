@@ -26,13 +26,13 @@ The setting persists across sessions in `ax-code.json`.
 
 ## What Changes
 
-| Behavior                                  | Autonomous Off                   | Autonomous On                                                             |
-| ----------------------------------------- | -------------------------------- | ------------------------------------------------------------------------- |
-| Tool permissions (read, edit, bash, etc.) | Prompts user for approval        | **Auto-approved**                                                         |
-| Question dialogs                          | Waits for user to pick an option | **Picks the best-practice/default option and records it**                 |
-| Planning                                  | Follows normal agent prompt      | **Uses a lightweight PRD/ADR-style decision frame before implementation** |
-| Session loop on rejection                 | Stops and waits                  | **Continues running**                                                     |
-| `isolation_escalation` prompts            | Always prompts                   | **Always prompts** (never auto-approved)                                  |
+| Behavior                                  | Autonomous Off                   | Autonomous On                                                                                                                          |
+| ----------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Tool permissions (read, edit, bash, etc.) | Prompts user for approval        | **Hybrid: safe (read/grep/list/…) auto-approved; risky (edit/bash/webfetch/…) falls through to the ruleset so deny rules still apply** |
+| Question dialogs                          | Waits for user to pick an option | **Picks the best-practice/default option and records it**                                                                              |
+| Planning                                  | Follows normal agent prompt      | **Uses a lightweight PRD/ADR-style decision frame before implementation**                                                              |
+| Session loop on rejection                 | Stops and waits                  | **Continues running**                                                                                                                  |
+| `isolation_escalation` prompts            | Always prompts                   | **Always prompts** (never auto-approved)                                                                                               |
 
 ## How It Works
 
@@ -52,9 +52,15 @@ Keep safety guarantees here aligned with sandbox documentation; autonomous mode 
 
 ### 1. Permission Auto-Approve (Server-Side)
 
-When a tool calls `ctx.ask()` for permission, the Permission module checks `AX_CODE_AUTONOMOUS`. If enabled, it returns immediately without creating a blocking prompt — the tool proceeds without waiting.
+Autonomous mode uses a **hybrid deny-first policy** (ADR-004 / PRD v4.2.0). When a tool calls `ctx.ask()` for permission, the Permission module classifies the permission:
 
-**Exception:** `isolation_escalation` permissions (sandbox override requests) are never auto-approved. These always require human confirmation, even in autonomous mode.
+- **SAFE** permissions (read, glob, grep, list, lsp, code_intelligence, skill, todoread) auto-approve without creating a blocking prompt.
+- **RISK** permissions (edit, bash, external_directory, task, webfetch, websearch, codesearch, …) **fall through to the ruleset** — the agent's configured allow/deny rules still apply, and user-defined deny rules are always enforced. (In `full-access` sandbox mode, RISK permissions are auto-approved because the user has already opted out of restrictions.)
+- **Unknown** permissions ask by default (`experimental.autonomous_strict_permission: false` preserves the legacy allow behavior).
+
+**Exceptions that are never auto-approved, even in autonomous mode:** `isolation_escalation` (sandbox override requests), `INTERACTIVE_ONLY` permissions, and the `NEVER_AUTONOMOUS_AUTOAPPROVE` set.
+
+**Non-overridable protected paths:** autonomous mode also refuses to write a fixed set of policy/control-plane paths — `ax-code.json`/`ax-code.jsonc`, `.ax-code/**`, `.git/config`, and `.git/refs/**` — so the agent cannot edit its own configuration, raise its own autonomy caps, or plant git hooks. Unlike the configurable blocked-path list, these cannot be removed by project or user config.
 
 ### 2. Question Auto-Answer (Server-Side)
 
@@ -118,31 +124,31 @@ Autonomous mode does **not** mean unlimited execution. Several independent caps 
 
 Prefer the first-class **`autonomy`** object. Legacy `session.*` and `experimental.autonomous_caps.*` keys still work as aliases (lower precedence).
 
-| Cap | Default | Unit | Preferred config | Legacy alias |
-| --- | --- | --- | --- | --- |
-| Per-segment session steps | 500 | Outer loop iterations per continuation segment | `autonomy.budget.model_turns.per_segment` | `session.max_steps` |
-| Auto-continuations | 3 | Segments after a step ceiling (ordinary autonomous) | `autonomy.budget.continuations` | `session.max_continuations` (`0` disables) |
-| Cumulative total steps | 2,000 ordinary · 20,000 goal / Super-Long | Sum across continuations | `autonomy.budget.model_turns.total` | `session.max_total_steps` |
-| Per-agent steps | Unbounded for native agents | Outer iterations for that agent | `agent.<name>.steps` (optional) | — |
-| Todo auto-retries | 10 | Continuations while todos remain pending | `autonomy.budget.todo_retries` | `session.max_todo_retries` |
-| Blast-radius tool calls | 500 / segment | Tool invocations in autonomous mode | `autonomy.budget.tool_calls.per_segment` | `experimental.autonomous_caps.steps` |
-| Blast-radius files / lines | 50 files · 5,000 lines | Change footprint (survives continuations) | `autonomy.budget.changes.files_total` / `.lines_total` | `experimental.autonomous_caps.files` / `.lines` |
-| Lines-exempt paths | Lockfiles + generated snapshots (`*.snap`, `*-snapshot.json`) | Globs that count toward the file cap but not the line cap | `autonomy.budget.changes.lines_exempt_paths` | `experimental.autonomous_caps.linesExemptPaths` |
-| Per-tool flood caps | e.g. bash 50, edit 100 | Calls per model turn | `autonomy.budget.tool_calls.per_tool` | `experimental.autonomous_caps.perTool` |
-| Tool-only streak breaker | Nudge 15 · final ~30 · stop 35 | Consecutive tool-only model finishes | `autonomy.stall.tool_only_*` | — |
-| Tool-call burst limiter | 30 calls / 10s | Rolling window per processor turn | `autonomy.budget.tool_calls.rate` | — |
+| Cap                        | Default                                                       | Unit                                                      | Preferred config                                       | Legacy alias                                    |
+| -------------------------- | ------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------- |
+| Per-segment session steps  | 500                                                           | Outer loop iterations per continuation segment            | `autonomy.budget.model_turns.per_segment`              | `session.max_steps`                             |
+| Auto-continuations         | 3                                                             | Segments after a step ceiling (ordinary autonomous)       | `autonomy.budget.continuations`                        | `session.max_continuations` (`0` disables)      |
+| Cumulative total steps     | 2,000 ordinary · 20,000 goal / Super-Long                     | Sum across continuations                                  | `autonomy.budget.model_turns.total`                    | `session.max_total_steps`                       |
+| Per-agent steps            | Unbounded for native agents                                   | Outer iterations for that agent                           | `agent.<name>.steps` (optional)                        | —                                               |
+| Todo auto-retries          | 10                                                            | Continuations while todos remain pending                  | `autonomy.budget.todo_retries`                         | `session.max_todo_retries`                      |
+| Blast-radius tool calls    | 500 / segment                                                 | Tool invocations in autonomous mode                       | `autonomy.budget.tool_calls.per_segment`               | `experimental.autonomous_caps.steps`            |
+| Blast-radius files / lines | 50 files · 5,000 lines                                        | Change footprint (survives continuations)                 | `autonomy.budget.changes.files_total` / `.lines_total` | `experimental.autonomous_caps.files` / `.lines` |
+| Lines-exempt paths         | Lockfiles + generated snapshots (`*.snap`, `*-snapshot.json`) | Globs that count toward the file cap but not the line cap | `autonomy.budget.changes.lines_exempt_paths`           | `experimental.autonomous_caps.linesExemptPaths` |
+| Per-tool flood caps        | e.g. bash 50, edit 100                                        | Calls per model turn                                      | `autonomy.budget.tool_calls.per_tool`                  | `experimental.autonomous_caps.perTool`          |
+| Tool-only streak breaker   | Nudge 15 · final ~30 · stop 35                                | Consecutive tool-only model finishes                      | `autonomy.stall.tool_only_*`                           | —                                               |
+| Tool-call burst limiter    | 30 calls / 10s                                                | Rolling window per processor turn                         | `autonomy.budget.tool_calls.rate`                      | —                                               |
 
 ### Profiles
 
 Set `autonomy.profile` to seed several fields at once (explicit fields still win):
 
-| Profile | Intent |
-| --- | --- |
-| `standard` | Shipped defaults (500 / 3 continuations / 30·10s burst / tool-only 35) |
-| `quick` | Short fixes: 80 steps/segment, 1 continuation, tighter tool-only and burst |
-| `long` | Multi-file batches: 10 continuations, 10k total, wider tool-only/burst |
-| `goal` | Goal-scale headroom without requiring `/goal` |
-| `custom` | No profile seeds — only explicit keys and constants |
+| Profile    | Intent                                                                     |
+| ---------- | -------------------------------------------------------------------------- |
+| `standard` | Shipped defaults (500 / 3 continuations / 30·10s burst / tool-only 35)     |
+| `quick`    | Short fixes: 80 steps/segment, 1 continuation, tighter tool-only and burst |
+| `long`     | Multi-file batches: 10 continuations, 10k total, wider tool-only/burst     |
+| `goal`     | Goal-scale headroom without requiring `/goal`                              |
+| `custom`   | No profile seeds — only explicit keys and constants                        |
 
 ### Inspect with `/limits`
 
