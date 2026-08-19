@@ -576,6 +576,79 @@ const MODEL_REGISTRY: ModelRegistration[] = [
     pattern: /minimax[\.\-_]?m2/i,
     capabilities: minimaxCapabilities(196_608),
   },
+
+  // Kimi K2.7 Code — gateway fallback (Together / Baseten / DeepInfra / Nebius
+  // serve it alongside the first-party Kimi Cloud Plan). Moonshot documents a
+  // 256K context window plus interleaved reasoning and multi-step tool calls;
+  // without this entry the model collapsed to DEFAULT_CAPABILITIES (32k,
+  // thinking blocked), disabling long-agent optimization on GPU vendors.
+  // Gateway prompt-cache behavior is route-dependent, so keep it experimental.
+  {
+    pattern: /kimi[\.\-_]?k2[\.\-_]?7/i,
+    capabilities: {
+      contextWindow: 262_144,
+      thinking: "supported",
+      preserveThinking: "experimental",
+      promptCache: "experimental",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "standard",
+    },
+  },
+
+  // DeepSeek V4 — gateway fallback (DeepInfra / Together / Baseten / NVIDIA /
+  // Nebius plus the first-party deepseek provider). DeepSeek documents a 1M
+  // context window, hybrid thinking, tool calls, JSON output, and automatic
+  // first-party context caching. Cache behavior on gateways remains experimental.
+  {
+    pattern: /deepseek[\.\-_]?v4/i,
+    capabilities: {
+      contextWindow: 1_000_000,
+      thinking: "supported",
+      preserveThinking: "experimental",
+      promptCache: "experimental",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "standard",
+    },
+  },
+
+  // Nebius also exposes a deliberately constrained 8K fast route. It must win
+  // before the family fallback or long-agent mode would incorrectly allocate a
+  // 128K context pack to it.
+  {
+    pattern: /deepseek[\.\-_]?v3[\.\-_]?2.*fast/i,
+    providerIds: ["nebius"],
+    capabilities: {
+      contextWindow: 8_000,
+      thinking: "supported",
+      preserveThinking: "experimental",
+      promptCache: "experimental",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "standard",
+    },
+  },
+
+  // DeepSeek V3.2 — gateway fallback. The upstream model configuration declares
+  // a 163,840-token window, and DeepSeek documents hybrid thinking with tool
+  // calls. Gateway prompt-cache behavior remains experimental.
+  {
+    pattern: /deepseek[\.\-_]?v3[\.\-_]?2/i,
+    capabilities: {
+      contextWindow: 163_840,
+      thinking: "supported",
+      preserveThinking: "experimental",
+      promptCache: "experimental",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "standard",
+    },
+  },
 ]
 
 /**
