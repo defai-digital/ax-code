@@ -122839,6 +122839,54 @@
           "output": 262144
         }
       },
+      "fish-audio/s1-free": {
+        "id": "fish-audio/s1-free",
+        "name": "S1 (Free)",
+        "description": "Speech generation model for controllable voice, narration, and audio delivery",
+        "family": "o",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "release_date": "2025-10-20",
+        "last_updated": "2025-10-20",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "audio"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
+      "fish-audio/s2-pro-free": {
+        "id": "fish-audio/s2-pro-free",
+        "name": "S2 Pro (Free)",
+        "description": "Speech generation model for controllable voice, narration, and audio delivery",
+        "family": "o",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "release_date": "2026-03-09",
+        "last_updated": "2026-03-09",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "audio"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
       "fish-audio/s1": {
         "id": "fish-audio/s1",
         "name": "S1",
@@ -122887,6 +122935,30 @@
           "output": 0
         }
       },
+      "fish-audio/transcribe-1-free": {
+        "id": "fish-audio/transcribe-1-free",
+        "name": "Transcribe-1 (Free)",
+        "description": "Speech transcription model for accurate audio-to-text and captioning workflows",
+        "family": "o",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "release_date": "2026-03-01",
+        "last_updated": "2026-03-01",
+        "modalities": {
+          "input": [
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
       "fish-audio/s2-pro": {
         "id": "fish-audio/s2-pro",
         "name": "S2 Pro",
@@ -122897,6 +122969,30 @@
         "tool_call": false,
         "release_date": "2026-03-09",
         "last_updated": "2026-03-09",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "audio"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
+      "fish-audio/s2.1-pro-free": {
+        "id": "fish-audio/s2.1-pro-free",
+        "name": "S2.1 Pro (Free)",
+        "description": "Speech generation model for controllable voice, narration, and audio delivery",
+        "family": "o",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "release_date": "2026-07-28",
+        "last_updated": "2026-07-28",
         "modalities": {
           "input": [
             "text"

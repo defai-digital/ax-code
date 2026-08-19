@@ -7,8 +7,10 @@ import {
   type VerificationEnvelope,
 } from "../../quality/verification-envelope"
 import { Session } from "../../session"
+import { SessionShard } from "../../session/shard"
 import { SessionVerifications } from "../../session/verifications"
-import { Database, NotFoundError, eq } from "../../storage/db"
+import { NotFoundError, eq } from "../../storage/db"
+import type { Database } from "../../storage/db"
 import { Log } from "../../util/log"
 import { uniqueItems } from "../../util/string-list"
 import { compactWorkflowArtifact } from "../artifact"
@@ -164,7 +166,7 @@ export function parseWorkflowDetailRows<TRow extends { id: string }, TInfo>(
 // --- Assertions ---
 
 export async function getRun(id: WorkflowRunID): Promise<WorkflowRunState.Info> {
-  const run = Database.use((db) => {
+  const run = SessionShard.storeForProject(Instance.project.id).use((db) => {
     const row = db.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.id, id)).get()
     if (!row) throw new NotFoundError({ message: `Workflow run not found: ${id}` })
     return fromRunRow(row)
@@ -189,7 +191,7 @@ export function assertProjectRun(run: WorkflowRunState.Info) {
 }
 
 export async function getPhase(id: WorkflowPhaseID): Promise<WorkflowPhaseRecord> {
-  const phase = Database.use((db) => {
+  const phase = SessionShard.storeForProject(Instance.project.id).use((db) => {
     const row = db.select().from(WorkflowPhaseTable).where(eq(WorkflowPhaseTable.id, id)).get()
     if (!row) throw new NotFoundError({ message: `Workflow phase not found: ${id}` })
     return fromPhaseRow(row)
@@ -199,7 +201,7 @@ export async function getPhase(id: WorkflowPhaseID): Promise<WorkflowPhaseRecord
 }
 
 export async function getChild(id: WorkflowChildID): Promise<WorkflowChildRecord> {
-  const child = Database.use((db) => {
+  const child = SessionShard.storeForProject(Instance.project.id).use((db) => {
     const row = db.select().from(WorkflowChildTable).where(eq(WorkflowChildTable.id, id)).get()
     if (!row) throw new NotFoundError({ message: `Workflow child not found: ${id}` })
     return fromChildRow(row)

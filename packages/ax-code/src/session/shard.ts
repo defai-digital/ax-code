@@ -1,8 +1,23 @@
 import { Database, eq, inArray, NotFoundError } from "../storage/db"
 import { Shard } from "../storage/shard"
 import { ProjectShardTable, type ShardState } from "../storage/shard.sql"
-import { SessionTable, MessageTable, PartTable, TodoTable, SessionGoalTable } from "./session.sql"
+import {
+  SessionTable,
+  MessageTable,
+  PartTable,
+  TodoTable,
+  SessionGoalTable,
+  TaskQueueTable,
+  ScheduledTaskTable,
+} from "./session.sql"
 import { EventLogTable } from "../replay/event-log.sql"
+import {
+  WorkflowRunTable,
+  WorkflowPhaseTable,
+  WorkflowChildTable,
+  WorkflowArtifactTable,
+  WorkflowBudgetLedgerTable,
+} from "../workflow/workflow.sql"
 import { SessionID } from "./schema"
 import type { ProjectID } from "../project/schema"
 import { Flag } from "../flag/flag"
@@ -18,9 +33,10 @@ export namespace SessionShard {
   // Backfill coverage version. Each slice that moves a table into the shard
   // bumps this so projects backfilled under an earlier slice re-run the
   // (idempotent) copy on next access. 1 = message/part (Slice 1),
-  // 2 = +event_log (Slice 2), 3 = +todo/session_goal (Slice 3). New slices
-  // bump to 4, 5, ...
-  export const BACKFILL_VERSION = 3
+  // 2 = +event_log (Slice 2), 3 = +todo/session_goal (Slice 3),
+  // 4 = +task_queue/scheduled_task/workflow_* (Slice 4). New slices bump to 5,
+  // 6, ...
+  export const BACKFILL_VERSION = 4
 
   // Structurally interchangeable with the registry Database: `Shard.TxOrDb` is
   // kept identical to `Database.TxOrDb` (see shard.ts) so a Shard handle is
@@ -133,6 +149,46 @@ export namespace SessionShard {
             db.select().from(SessionGoalTable).where(inArray(SessionGoalTable.session_id, sessionIDs)).all(),
           )
 
+    // Slice 4 tables are project-keyed (task_queue/scheduled_task/workflow_run
+    // carry project_id); the workflow detail tables are run-keyed, so backfill
+    // them by the project's run IDs. Insert order below is dependency-ordered to
+    // satisfy the intra-shard FKs (scheduled_task -> task_queue; workflow_*
+    // -> workflow_run/phase/child).
+    const queue = Database.use((db) =>
+      db.select().from(TaskQueueTable).where(eq(TaskQueueTable.project_id, projectID)).all(),
+    )
+    const scheduled = Database.use((db) =>
+      db.select().from(ScheduledTaskTable).where(eq(ScheduledTaskTable.project_id, projectID)).all(),
+    )
+    const runs = Database.use((db) =>
+      db.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.project_id, projectID)).all(),
+    )
+    const runIDs = runs.map((row) => row.id)
+    const phases =
+      runIDs.length === 0
+        ? []
+        : Database.use((db) =>
+            db.select().from(WorkflowPhaseTable).where(inArray(WorkflowPhaseTable.run_id, runIDs)).all(),
+          )
+    const children =
+      runIDs.length === 0
+        ? []
+        : Database.use((db) =>
+            db.select().from(WorkflowChildTable).where(inArray(WorkflowChildTable.run_id, runIDs)).all(),
+          )
+    const artifacts =
+      runIDs.length === 0
+        ? []
+        : Database.use((db) =>
+            db.select().from(WorkflowArtifactTable).where(inArray(WorkflowArtifactTable.run_id, runIDs)).all(),
+          )
+    const budgetLedger =
+      runIDs.length === 0
+        ? []
+        : Database.use((db) =>
+            db.select().from(WorkflowBudgetLedgerTable).where(inArray(WorkflowBudgetLedgerTable.run_id, runIDs)).all(),
+          )
+
     Shard.handle(projectID).transaction((db) => {
       for (const message of messages) {
         db.insert(MessageTable).values(message).onConflictDoNothing().run()
@@ -148,6 +204,27 @@ export namespace SessionShard {
       }
       for (const goal of goals) {
         db.insert(SessionGoalTable).values(goal).onConflictDoNothing().run()
+      }
+      for (const row of queue) {
+        db.insert(TaskQueueTable).values(row).onConflictDoNothing().run()
+      }
+      for (const row of scheduled) {
+        db.insert(ScheduledTaskTable).values(row).onConflictDoNothing().run()
+      }
+      for (const row of runs) {
+        db.insert(WorkflowRunTable).values(row).onConflictDoNothing().run()
+      }
+      for (const row of phases) {
+        db.insert(WorkflowPhaseTable).values(row).onConflictDoNothing().run()
+      }
+      for (const row of children) {
+        db.insert(WorkflowChildTable).values(row).onConflictDoNothing().run()
+      }
+      for (const row of artifacts) {
+        db.insert(WorkflowArtifactTable).values(row).onConflictDoNothing().run()
+      }
+      for (const row of budgetLedger) {
+        db.insert(WorkflowBudgetLedgerTable).values(row).onConflictDoNothing().run()
       }
     })
 

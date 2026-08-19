@@ -5,12 +5,13 @@ import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
 import { ProjectID } from "@/project/schema"
-import { Database, NotFoundError, and, asc, desc, eq, lte } from "@/storage/db"
+import { NotFoundError, and, asc, desc, eq, lte } from "@/storage/db"
 import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { JsonBoolean, JsonNumber } from "@/util/schema"
 import { ScheduledTaskID } from "./schema"
 import { ScheduledTaskTable } from "./session.sql"
+import { SessionShard } from "./shard"
 import { TaskQueue } from "./task-queue"
 import { WorkflowRun as WorkflowRunState, type WorkflowRunDetail } from "@/workflow/state"
 
@@ -249,7 +250,7 @@ export namespace ScheduledTask {
     const conditions = [eq(ScheduledTaskTable.project_id, Instance.project.id)]
     if (parsed.status) conditions.push(eq(ScheduledTaskTable.status, parsed.status))
     if (parsed.dueBefore) conditions.push(lte(ScheduledTaskTable.next_run_at, parsed.dueBefore))
-    return Database.use((db) => {
+    return SessionShard.storeForProject(Instance.project.id).use((db) => {
       let query = db
         .select()
         .from(ScheduledTaskTable)
@@ -276,7 +277,7 @@ export namespace ScheduledTask {
     const parsed = CreateInput.parse(input)
     validateSchedule(parsed.schedule)
     const now = Date.now()
-    const task = Database.use((db) => {
+    const task = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db
         .insert(ScheduledTaskTable)
         .values({
@@ -306,7 +307,7 @@ export namespace ScheduledTask {
   }
 
   export async function get(id: ScheduledTaskID): Promise<Info> {
-    const task = Database.use((db) => {
+    const task = SessionShard.storeForProject(Instance.project.id).use((db) => {
       const row = db.select().from(ScheduledTaskTable).where(eq(ScheduledTaskTable.id, id)).get()
       if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
       return fromRow(row)
@@ -340,7 +341,7 @@ export namespace ScheduledTask {
     if (parsed.catchUpPolicy !== undefined) updates.catch_up_policy = parsed.catchUpPolicy
     if (Object.hasOwn(parsed, "maxRunDurationMs")) updates.max_run_duration_ms = parsed.maxRunDurationMs
 
-    const task = Database.use((db) => {
+    const task = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db
         .update(ScheduledTaskTable)
         .set(updates)
@@ -365,7 +366,7 @@ export namespace ScheduledTask {
 
   export async function remove(id: ScheduledTaskID): Promise<boolean> {
     const task = await get(id)
-    Database.use((db) => {
+    SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       db.delete(ScheduledTaskTable).where(eq(ScheduledTaskTable.id, id)).run()
     })
     publishDeleted(task)
@@ -381,7 +382,7 @@ export namespace ScheduledTask {
       if (current.workflowTemplateID) return await runWorkflowNow(current)
       const queued = await TaskQueue.enqueue(scheduledQueueInput(current, Date.now(), "manual"))
       const now = Date.now()
-      const task = Database.use((db) => {
+      const task = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
         const row = db
           .update(ScheduledTaskTable)
           .set({
@@ -421,7 +422,7 @@ export namespace ScheduledTask {
     })
     const workflowRun = await WorkflowScheduler.start(run.id, startOptions)
     const now = Date.now()
-    const task = Database.use((db) => {
+    const task = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db
         .update(ScheduledTaskTable)
         .set({
@@ -442,7 +443,7 @@ export namespace ScheduledTask {
 
   async function recordRunFailure(id: ScheduledTaskID, error: unknown): Promise<Info> {
     const now = Date.now()
-    const task = Database.use((db) => {
+    const task = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db
         .update(ScheduledTaskTable)
         .set({
@@ -496,7 +497,7 @@ export namespace ScheduledTask {
   }
 
   function claimDueTask(task: Info, next: number | undefined, skip: boolean, now: number) {
-    return Database.transaction((db) => {
+    return SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const claimed = db
         .update(ScheduledTaskTable)
         .set({
@@ -560,7 +561,7 @@ export namespace ScheduledTask {
     error?: unknown,
   ): Promise<Info> {
     const now = Date.now()
-    const task = Database.use((db) => {
+    const task = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db
         .update(ScheduledTaskTable)
         .set({
@@ -579,7 +580,7 @@ export namespace ScheduledTask {
 
   export async function recordWorkflowRun(id: ScheduledTaskID, workflowRunID: string): Promise<Info> {
     const now = Date.now()
-    const task = Database.use((db) => {
+    const task = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db
         .update(ScheduledTaskTable)
         .set({ last_workflow_run_id: workflowRunID, time_updated: now })

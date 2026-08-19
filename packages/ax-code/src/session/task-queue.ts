@@ -4,13 +4,15 @@ import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
 import { ProjectID } from "@/project/schema"
-import { Database, NotFoundError, and, asc, desc, eq, inArray, sql } from "@/storage/db"
+import { NotFoundError, and, asc, desc, eq, inArray, sql } from "@/storage/db"
+import type { Database } from "@/storage/db"
 import { Log } from "@/util/log"
 import { JsonNumber } from "@/util/schema"
 import { Session } from "."
 import { SessionMetadata } from "./metadata"
 import { SessionID, TaskQueueID } from "./schema"
 import { TaskQueueTable } from "./session.sql"
+import { SessionShard } from "./shard"
 
 const log = Log.create({ service: "task-queue" })
 
@@ -245,7 +247,7 @@ export namespace TaskQueue {
         .get()
       return Number(row?.value ?? -1) + 1
     }
-    return db ? read(db) : Database.use(read)
+    return db ? read(db) : SessionShard.storeForProject(projectID).use(read)
   }
 
   export function enqueueInTransaction(
@@ -291,7 +293,7 @@ export namespace TaskQueue {
     const conditions = [eq(TaskQueueTable.project_id, Instance.project.id)]
     if (parsed.sessionID) conditions.push(eq(TaskQueueTable.session_id, parsed.sessionID))
     if (parsed.status) conditions.push(eq(TaskQueueTable.status, parsed.status))
-    return Database.use((db) => {
+    return SessionShard.storeForProject(Instance.project.id).use((db) => {
       let query = db
         .select()
         .from(TaskQueueTable)
@@ -311,7 +313,7 @@ export namespace TaskQueue {
   }
 
   export async function listRestartableQueued(): Promise<Info[]> {
-    return Database.use((db) =>
+    return SessionShard.storeForProject(Instance.project.id).use((db) =>
       db
         .select()
         .from(TaskQueueTable)
@@ -336,7 +338,7 @@ export namespace TaskQueue {
 
     const now = Date.now()
     const projectID = Instance.project.id
-    const item = Database.transaction((db) => {
+    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const values: typeof TaskQueueTable.$inferInsert = {
         id: TaskQueueID.ascending(),
         project_id: projectID,
@@ -366,7 +368,7 @@ export namespace TaskQueue {
   }
 
   export async function get(id: TaskQueueID): Promise<Info> {
-    const item = Database.use((db) => {
+    const item = SessionShard.storeForProject(Instance.project.id).use((db) => {
       const row = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
       if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
       return fromRow(row)
@@ -387,7 +389,7 @@ export namespace TaskQueue {
     if (input.status === "completed" || input.status === "cancelled" || input.status === "failed") {
       updates.time_completed = now
     }
-    const item = Database.use((db) => {
+    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db.update(TaskQueueTable).set(updates).where(eq(TaskQueueTable.id, input.id)).returning().get()
       if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
       return fromRow(row)
@@ -421,7 +423,7 @@ export namespace TaskQueue {
     if (input.error !== undefined) payload["deliveryError"] = input.error
     else delete payload["deliveryError"]
     if (input.resultEmpty !== undefined) payload["deliveryEmpty"] = input.resultEmpty
-    const item = Database.use((db) => {
+    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db
         .update(TaskQueueTable)
         .set({ payload, time_updated: now })
@@ -441,7 +443,7 @@ export namespace TaskQueue {
     if (current.status !== "queued" && current.status !== "waiting_for_idle") return undefined
 
     const now = Date.now()
-    const item = Database.use((db) => {
+    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db
         .update(TaskQueueTable)
         .set({
@@ -470,7 +472,7 @@ export namespace TaskQueue {
   export async function attachSession(id: TaskQueueID, sessionID: SessionID): Promise<Info> {
     await assertSessionCompatible(sessionID)
     const now = Date.now()
-    const item = Database.use((db) => {
+    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db
         .update(TaskQueueTable)
         .set({ session_id: sessionID, time_updated: now })
@@ -486,7 +488,7 @@ export namespace TaskQueue {
   }
 
   export function heartbeat(id: TaskQueueID, now = Date.now()): boolean {
-    return Database.use((db) => {
+    return SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const result = db
         .update(TaskQueueTable)
         .set({ time_updated: now })
@@ -568,7 +570,7 @@ export namespace TaskQueue {
     const current = await get(id)
     assertActionStatus(current, "retry", ["failed", "cancelled"])
     const now = Date.now()
-    const item = Database.use((db) => {
+    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db
         .update(TaskQueueTable)
         .set({
@@ -594,7 +596,7 @@ export namespace TaskQueue {
     const now = Date.now()
     const interruptedStatuses = ["running", "blocked_permission", "blocked_question"] as const
     const recoverableStatuses = [...interruptedStatuses, "waiting_for_idle"] as const
-    const changed = Database.transaction((db) => {
+    const changed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const rows = db
         .select()
         .from(TaskQueueTable)
@@ -707,7 +709,7 @@ export namespace TaskQueue {
     if (parsed.payload !== undefined) updates.payload = parsed.payload
     if (parsed.priority !== undefined) updates.priority = parsed.priority
 
-    const item = Database.use((db) => {
+    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db.update(TaskQueueTable).set(updates).where(eq(TaskQueueTable.id, parsed.id)).returning().get()
       if (!row) throw new NotFoundError({ message: `Task queue item not found: ${parsed.id}` })
       return fromRow(row)
@@ -723,7 +725,7 @@ export namespace TaskQueue {
     const parsed = ReorderInput.parse(input)
     const current = await get(parsed.id)
     const now = Date.now()
-    const changed = Database.transaction((db) => {
+    const changed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const rows = db
         .select()
         .from(TaskQueueTable)
@@ -760,7 +762,7 @@ export namespace TaskQueue {
     const current = await get(id)
     assertActionStatus(current, "send now", ["queued", "waiting_for_idle", "paused"])
     const now = Date.now()
-    const changed = Database.transaction((db) => {
+    const changed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const shifted = db
         .update(TaskQueueTable)
         .set({ position: sql`${TaskQueueTable.position} + 1`, time_updated: now })
@@ -785,7 +787,7 @@ export namespace TaskQueue {
 
   export async function remove(id: TaskQueueID): Promise<boolean> {
     const item = await get(id)
-    Database.use((db) => {
+    SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       db.delete(TaskQueueTable).where(eq(TaskQueueTable.id, id)).run()
     })
     publishDeleted(item)

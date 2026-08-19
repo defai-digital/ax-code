@@ -1,6 +1,7 @@
 import { HTTPException } from "hono/http-exception"
 import { Instance } from "../../project/instance"
-import { Database, NotFoundError, and, asc, desc, eq, inArray } from "../../storage/db"
+import { SessionShard } from "../../session/shard"
+import { NotFoundError, and, asc, desc, eq, inArray } from "../../storage/db"
 import { Log } from "../../util/log"
 import { defaultWorkflowArtifactRedaction } from "../artifact"
 import { WorkflowInputValidationError, resolveWorkflowInputValues } from "../spec"
@@ -75,7 +76,7 @@ async function create(input: WorkflowRunState.CreateInput): Promise<WorkflowRunS
   })()
 
   const now = Date.now()
-  const run = Database.transaction((db) => {
+  const run = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
     const id = WorkflowRunID.ascending()
     const phaseIDs = parsed.spec.phases.map(() => WorkflowPhaseID.ascending())
     const currentPhaseID = phaseIDs[0]
@@ -133,7 +134,7 @@ async function list(input: Partial<WorkflowRunState.ListInput> = {}): Promise<Wo
   const conditions = [eq(WorkflowRunTable.project_id, Instance.project.id)]
   if (parsed.status) conditions.push(eq(WorkflowRunTable.status, parsed.status))
   if (parsed.parentSessionID) conditions.push(eq(WorkflowRunTable.parent_session_id, parsed.parentSessionID))
-  return Database.use((db) => {
+  return SessionShard.storeForProject(Instance.project.id).use((db) => {
     let query = db
       .select()
       .from(WorkflowRunTable)
@@ -158,7 +159,7 @@ async function get(id: WorkflowRunID): Promise<WorkflowRunState.Info> {
 
 export async function getDetail(id: WorkflowRunID): Promise<WorkflowRunDetail> {
   const run = await get(id)
-  const detail = Database.use((db) => {
+  const detail = SessionShard.storeForProject(Instance.project.id).use((db) => {
     const phaseRows = db
       .select()
       .from(WorkflowPhaseTable)
@@ -207,7 +208,7 @@ async function setStatus(input: WorkflowRunState.SetStatusInput): Promise<Workfl
   if (status === "running" && current.time.started === undefined) updates.time_started = now
   updates.time_completed = isTerminalRunStatus(status) ? now : null
 
-  const run = Database.use((db) => {
+  const run = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
     const row = db.update(WorkflowRunTable).set(updates).where(eq(WorkflowRunTable.id, parsed.id)).returning().get()
     if (!row) throw new NotFoundError({ message: `Workflow run not found: ${parsed.id}` })
     return fromRunRow(row)
@@ -229,7 +230,7 @@ async function setPhaseStatus(input: WorkflowRunState.SetPhaseStatusInput): Prom
   if (parsed.status === "running" && current.time.started === undefined) updates.time_started = now
   updates.time_completed = isTerminalPhaseStatus(parsed.status) ? now : null
 
-  const phase = Database.transaction((db) => {
+  const phase = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
     const row = db.update(WorkflowPhaseTable).set(updates).where(eq(WorkflowPhaseTable.id, parsed.id)).returning().get()
     if (!row) throw new NotFoundError({ message: `Workflow phase not found: ${parsed.id}` })
     db.update(WorkflowRunTable)
@@ -249,7 +250,7 @@ async function appendChild(input: WorkflowRunState.AppendChildInput): Promise<Wo
   await get(parsed.runID)
   await assertPhaseBelongsToRun(parsed.phaseID, parsed.runID)
   const now = Date.now()
-  const child = Database.transaction((db) => {
+  const child = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
     const row = db
       .insert(WorkflowChildTable)
       .values({
@@ -292,7 +293,7 @@ async function setChildStatus(input: WorkflowRunState.SetChildStatusInput): Prom
   if (parsed.status === "running" && current.time.started === undefined) updates.time_started = now
   updates.time_completed = isTerminalChildStatus(parsed.status) ? now : null
 
-  const child = Database.transaction((db) => {
+  const child = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
     const row = db.update(WorkflowChildTable).set(updates).where(eq(WorkflowChildTable.id, parsed.id)).returning().get()
     if (!row) throw new NotFoundError({ message: `Workflow child not found: ${parsed.id}` })
     touchRun(db, row.run_id, now)
@@ -307,7 +308,7 @@ async function attachChildTaskQueueID(input: WorkflowRunState.AttachChildTaskQue
   const current = await getChild(parsed.id)
   await get(current.runID)
   const now = Date.now()
-  const child = Database.transaction((db) => {
+  const child = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
     const row = db
       .update(WorkflowChildTable)
       .set({
@@ -332,7 +333,7 @@ export async function appendArtifact(input: WorkflowRunState.AppendArtifactInput
   if (parsed.childID) await assertChildBelongsToRun(parsed.childID, parsed.runID)
 
   const now = Date.now()
-  const artifact = Database.transaction((db) => {
+  const artifact = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
     const id = WorkflowArtifactID.ascending()
     const row = db
       .insert(WorkflowArtifactTable)
@@ -382,7 +383,7 @@ async function attachVerificationEnvelopeIDs(
 ): Promise<WorkflowRunState.Info> {
   const parsed = WorkflowRunState.AttachVerificationInput.parse(input)
   const now = Date.now()
-  const changed = Database.transaction((db) => {
+  const changed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
     const existing = db.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.id, parsed.id)).get()
     if (!existing) throw new NotFoundError({ message: `Workflow run not found: ${parsed.id}` })
     const attachedEnvelopeIDs = unique(
@@ -408,7 +409,7 @@ async function attachVerificationEnvelopeIDs(
 async function recoverInterrupted(): Promise<{ failed: WorkflowRunState.Info[]; recovered: WorkflowRunState.Info[] }> {
   const now = Date.now()
   const interruptedRunStatuses = ["running"] as const
-  const changed = Database.transaction((db) => {
+  const changed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
     const rows = db
       .select()
       .from(WorkflowRunTable)
