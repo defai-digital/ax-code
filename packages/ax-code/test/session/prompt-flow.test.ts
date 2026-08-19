@@ -1740,4 +1740,132 @@ describe("session.prompt flow", () => {
       else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
     }
   })
+
+  test("tool-calling backstop fires once at the cap and does not re-fire after the forced summary", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { autonomy: { stall: { tool_only_turns: 3 } } },
+    })
+
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    const toolChoices: unknown[] = []
+    let call = 0
+    streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
+      call += 1
+      toolChoices.push(input.toolChoice)
+      const toolCalling = call <= 3
+      return {
+        fullStream: (async function* () {
+          yield { type: "start" }
+          yield { type: "start-step" }
+          if (!toolCalling) {
+            yield { type: "text-start", id: "text_1" }
+            yield { type: "text-delta", id: "text_1", text: "summary of the work so far" }
+            yield { type: "text-end", id: "text_1" }
+          }
+          yield {
+            type: "finish-step",
+            finishReason: toolCalling ? "tool-calls" : "stop",
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          }
+          yield { type: "finish" }
+        })(),
+      } as any
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Backstop Flow Test" })
+
+        await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          parts: [{ type: "text", text: "work through a long tool-only task" }],
+        })
+
+        // 3 tool-calling turns hit the cap, then exactly one forced
+        // text-only turn — no immediate re-fire after the summary (#390).
+        expect(streamSpy).toHaveBeenCalledTimes(4)
+        expect(toolChoices[3]).toBe("none")
+
+        const messages = await Session.messages({ sessionID: session.id })
+        const checkpoints = messages.filter(
+          (entry) =>
+            entry.info.role === "user" &&
+            entry.parts.some((part) => part.type === "text" && part.text.includes("Agent-loop checkpoint")),
+        )
+        expect(checkpoints).toHaveLength(1)
+        const checkpointText = checkpoints[0]?.parts.find((part) => part.type === "text")?.text
+        // The reported count matches the stated trigger (#390).
+        expect(checkpointText).toContain("your last 3 turns each ended with further tool calls")
+        expect(checkpointText).toContain("After 3 such turns the loop disables tools")
+
+        expect(await SessionStatus.get(session.id)).toEqual({ type: "idle" })
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("tool-calling backstop does not re-fire when the forced wrap-up turn is ignored", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { autonomy: { stall: { tool_only_turns: 3 } } },
+    })
+
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    let call = 0
+    streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
+      call += 1
+      // 3 tool-calling turns hit the cap; the model then ignores the forced
+      // text-only turn and ends it with finish=tool-calls anyway (providers
+      // can still report tool-calls despite toolChoice:"none").
+      const finishReason = call <= 4 ? "tool-calls" : "stop"
+      return {
+        fullStream: (async function* () {
+          yield { type: "start" }
+          yield { type: "start-step" }
+          if (call >= 5) {
+            yield { type: "text-start", id: "text_1" }
+            yield { type: "text-delta", id: "text_1", text: "summary of the work so far" }
+            yield { type: "text-end", id: "text_1" }
+          }
+          yield {
+            type: "finish-step",
+            finishReason,
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          }
+          yield { type: "finish" }
+        })(),
+      } as any
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Backstop Ignored Wrap-Up Test" })
+
+        await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          parts: [{ type: "text", text: "work through a long tool-only task" }],
+        })
+
+        // #390: the wrap-up resets the streak when it fires, so an ignored
+        // forced turn keeps no stale above-cap count to re-fire the checkpoint.
+        const messages = await Session.messages({ sessionID: session.id })
+        const checkpoints = messages.filter(
+          (entry) =>
+            entry.info.role === "user" &&
+            entry.parts.some((part) => part.type === "text" && part.text.includes("Agent-loop checkpoint")),
+        )
+        expect(checkpoints).toHaveLength(1)
+
+        expect(await SessionStatus.get(session.id)).toEqual({ type: "idle" })
+        await Session.remove(session.id)
+      },
+    })
+  })
 })

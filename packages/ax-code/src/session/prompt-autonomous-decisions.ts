@@ -478,7 +478,7 @@ export function toolOnlyTurnDecision(input: {
     const final = input.toolOnlyNudges === thresholds.length - 1
     return { action: "nudge", final, forced: final }
   }
-  if (input.consecutiveToolOnlyTurns > input.maxToolOnlyTurns) {
+  if (input.consecutiveToolOnlyTurns >= input.maxToolOnlyTurns) {
     const wrapUps = input.forcedWrapUps ?? input.finalCheckpointHits
     if (input.recentProgress || wrapUps < 2) {
       return { action: "nudge", final: true, forced: true }
@@ -493,8 +493,31 @@ export function toolCallingBackstopDecision(input: {
   consecutiveToolCallingTurns: number
   maxToolOnlyTurns: number
 }): { action: "ignore" } | { action: "force_wrap" } {
-  if (input.consecutiveToolCallingTurns > input.maxToolOnlyTurns) return { action: "force_wrap" }
+  // Fire exactly AT the cap (not one past it) so the count reported in the
+  // checkpoint message matches the stated trigger ("After N such turns").
+  if (input.consecutiveToolCallingTurns >= input.maxToolOnlyTurns) return { action: "force_wrap" }
   return { action: "ignore" }
+}
+
+/**
+ * State transition when the tool-calling backstop wrap-up fires. The forced
+ * text-only turn acknowledges and interrupts the streak, so the streak counter
+ * resets to 0 — otherwise a forced turn that ends without a clean text finish
+ * (truncated, provider-quirk finish, or ignored toolChoice:"none") keeps the
+ * stale above-cap count and the checkpoint re-fires immediately (#390). The
+ * wrap-up count is NOT reset: it drives the repeat/escalation wording and the
+ * tool-only hard stop (#340).
+ */
+export function toolCallingBackstopWrapUp(input: { finalCheckpointHits: number }): {
+  consecutiveToolCallingTurns: number
+  finalCheckpointHits: number
+  repeat: boolean
+} {
+  return {
+    consecutiveToolCallingTurns: 0,
+    finalCheckpointHits: input.finalCheckpointHits + 1,
+    repeat: input.finalCheckpointHits > 0,
+  }
 }
 
 export function toolOnlyStopMessage(input: {

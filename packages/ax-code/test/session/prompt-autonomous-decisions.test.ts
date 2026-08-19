@@ -18,6 +18,7 @@ import {
   isReadOnlyExplorationTurn,
   modelTurnFinished,
   toolCallingBackstopDecision,
+  toolCallingBackstopWrapUp,
   toolOnlyStopMessage,
   readOnlyExplorationDecision,
   resolveTurnToolChoice,
@@ -895,7 +896,7 @@ describe("tool-only turn decision", () => {
     finalCheckpointHits: 0,
   }
 
-  test("walks a full streak: nudge at 15, forced final at 30, land at 36, stop after second wrap-up", () => {
+  test("walks a full streak: nudge at 15, forced final at 30, land at 35, stop after second wrap-up", () => {
     let toolOnlyNudges = 0
     let finalCheckpointHits = 0
     const events: string[] = []
@@ -918,17 +919,17 @@ describe("tool-only turn decision", () => {
         break
       }
     }
-    expect(events).toEqual(["nudge:15:first", "nudge:30:final:forced", "nudge:36:final:forced", "stop:37"])
+    expect(events).toEqual(["nudge:15:first", "nudge:30:final:forced", "nudge:35:final:forced", "stop:36"])
   })
 
-  test("ignores below thresholds and exactly at the hard limit", () => {
+  test("ignores below thresholds and below the hard limit", () => {
     expect(toolOnlyTurnDecision({ consecutiveToolOnlyTurns: 14, toolOnlyNudges: 0, ...config })).toEqual({
       action: "ignore",
     })
     expect(toolOnlyTurnDecision({ consecutiveToolOnlyTurns: 29, toolOnlyNudges: 1, ...config })).toEqual({
       action: "ignore",
     })
-    expect(toolOnlyTurnDecision({ consecutiveToolOnlyTurns: 35, toolOnlyNudges: 2, ...config })).toEqual({
+    expect(toolOnlyTurnDecision({ consecutiveToolOnlyTurns: 34, toolOnlyNudges: 2, ...config })).toEqual({
       action: "ignore",
     })
   })
@@ -1054,13 +1055,41 @@ describe("progress-aware stall helpers", () => {
     ).toBe(false)
   })
 
-  test("absolute tool-calling backstop forces a wrap-up past the cap", () => {
-    expect(toolCallingBackstopDecision({ consecutiveToolCallingTurns: 35, maxToolOnlyTurns: 35 })).toEqual({
+  test("absolute tool-calling backstop forces a wrap-up exactly at the cap", () => {
+    expect(toolCallingBackstopDecision({ consecutiveToolCallingTurns: 34, maxToolOnlyTurns: 35 })).toEqual({
       action: "ignore",
+    })
+    // #390: fire AT the cap so the count reported in the checkpoint message
+    // matches the stated trigger ("After 35 such turns").
+    expect(toolCallingBackstopDecision({ consecutiveToolCallingTurns: 35, maxToolOnlyTurns: 35 })).toEqual({
+      action: "force_wrap",
     })
     expect(toolCallingBackstopDecision({ consecutiveToolCallingTurns: 36, maxToolOnlyTurns: 35 })).toEqual({
       action: "force_wrap",
     })
+  })
+
+  test("tool-calling backstop wrap-up resets the streak but keeps escalation state", () => {
+    // #390: after the forced wrap-up fires, the streak restarts at 0, so the
+    // checkpoint cannot re-fire immediately even if the forced text-only turn
+    // ends without a clean text finish.
+    const first = toolCallingBackstopWrapUp({ finalCheckpointHits: 0 })
+    expect(first).toEqual({ consecutiveToolCallingTurns: 0, finalCheckpointHits: 1, repeat: false })
+    expect(
+      toolCallingBackstopDecision({
+        consecutiveToolCallingTurns: first.consecutiveToolCallingTurns,
+        maxToolOnlyTurns: 35,
+      }),
+    ).toEqual({ action: "ignore" })
+    // A compliant text summary also ends the streak — one fresh tool-calling
+    // turn must not re-trigger the backstop.
+    expect(toolCallingBackstopDecision({ consecutiveToolCallingTurns: 1, maxToolOnlyTurns: 35 })).toEqual({
+      action: "ignore",
+    })
+    // #340: the wrap-up count persists across streaks so a repeat forced
+    // wrap-up is marked as such instead of looking like a first offense.
+    const second = toolCallingBackstopWrapUp({ finalCheckpointHits: first.finalCheckpointHits })
+    expect(second).toEqual({ consecutiveToolCallingTurns: 0, finalCheckpointHits: 2, repeat: true })
   })
 
   test("stop message does not claim the model produced no text", () => {

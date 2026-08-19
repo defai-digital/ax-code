@@ -73,6 +73,7 @@ import {
   isMutatingProgressTurn,
   isNoProgressToolTurn,
   toolCallingBackstopDecision,
+  toolCallingBackstopWrapUp,
   toolOnlyStopMessage,
   toolOnlyTurnDecision,
   unexecutableToolTextRecoveryDecision,
@@ -376,9 +377,10 @@ export namespace SessionPrompt {
     // every tool signature already appeared earlier this run. Reset on
     // mutations, novel signatures, or a non-tool-calls finish.
     let consecutiveToolOnlyTurns = 0
-    // Absolute tool-calling streak (any finish=tool-calls). Reset only on a
-    // completed text finish. Lands a forced wrap-up at the cap so a long
-    // productive run cannot wander until the step ceiling.
+    // Absolute tool-calling streak (any finish=tool-calls). Reset on a
+    // completed text finish and when the forced wrap-up fires. Lands a forced
+    // wrap-up at the cap so a long productive run cannot wander until the
+    // step ceiling.
     let consecutiveToolCallingTurns = 0
     // Number of nudge continuations injected during the current no-progress
     // streak. Reset alongside consecutiveToolOnlyTurns.
@@ -1641,8 +1643,8 @@ export namespace SessionPrompt {
           maxToolOnlyTurns,
         })
         if (callingBackstop.action === "force_wrap") {
-          const repeatForced = toolOnlyFinalCheckpointHits > 0
-          toolOnlyFinalCheckpointHits += 1
+          const wrapUp = toolCallingBackstopWrapUp({ finalCheckpointHits: toolOnlyFinalCheckpointHits })
+          toolOnlyFinalCheckpointHits = wrapUp.finalCheckpointHits
           armForceTextOnlyTurn("tool_only_breaker")
           log.info("tool-calling backstop wrap-up", {
             command: "session.prompt.loop",
@@ -1657,9 +1659,15 @@ export namespace SessionPrompt {
             text: AutonomousContinuationPrompt.toolCallingBackstopNudge({
               consecutiveToolCallingTurns,
               maxToolOnlyTurns,
-              repeat: repeatForced,
+              repeat: wrapUp.repeat,
             }),
           })
+          // Reset AFTER rendering the checkpoint (which reports the triggering
+          // count): the forced wrap-up interrupts the streak, so it must not
+          // re-fire immediately even if the forced text-only turn ends without
+          // a clean text finish (#390). The wrap-up count above persists for
+          // repeat/escalation wording (#340).
+          consecutiveToolCallingTurns = wrapUp.consecutiveToolCallingTurns
           continue
         }
       }

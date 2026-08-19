@@ -224,11 +224,14 @@ describe("autonomous continuation prompt builders", () => {
   })
 
   test("tool-calling backstop wrap-up does not claim no progress", () => {
+    // #390: the backstop fires exactly at the cap, so the reported count and
+    // the stated trigger must be the same number.
     const text = AutonomousContinuationPrompt.toolCallingBackstopNudge({
-      consecutiveToolCallingTurns: 36,
+      consecutiveToolCallingTurns: 35,
       maxToolOnlyTurns: 35,
     })
-    expect(text).toContain("last 36 turns each ended with further tool calls")
+    expect(text).toContain("last 35 turns each ended with further tool calls")
+    expect(text).toContain("After 35 such turns the loop disables tools")
     expect(text).toContain("not a no-progress stall")
     expect(text).toContain("Tools are disabled")
     expect(text).toContain("Do not paste tool-call XML")
