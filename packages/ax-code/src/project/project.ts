@@ -12,6 +12,7 @@ import { Filesystem } from "../util/filesystem"
 import { Glob } from "../util/glob"
 import { git as runGit } from "../util/git"
 import { ProjectID } from "./schema"
+import { toErrorMessage } from "../util/error-message"
 import path from "path"
 import { createHash } from "node:crypto"
 
@@ -175,10 +176,82 @@ export namespace Project {
       .catch(() => undefined)
   }
 
+  type DiscoveryResult = { id: ProjectID; worktree: string; sandbox: string; vcs: Info["vcs"] }
+
+  function persist(result: Info, data: DiscoveryResult) {
+    Database.use((d) =>
+      d
+        .insert(ProjectTable)
+        .values({
+          id: result.id,
+          worktree: result.worktree,
+          vcs: result.vcs ?? null,
+          name: result.name,
+          icon_url: result.icon?.url,
+          icon_color: result.icon?.color,
+          time_created: result.time.created,
+          time_updated: result.time.updated,
+          time_initialized: result.time.initialized,
+          sandboxes: result.sandboxes,
+          commands: result.commands,
+        })
+        .onConflictDoUpdate({
+          target: ProjectTable.id,
+          set: {
+            worktree: result.worktree,
+            vcs: result.vcs ?? null,
+            name: result.name,
+            icon_url: result.icon?.url,
+            icon_color: result.icon?.color,
+            time_updated: result.time.updated,
+            time_initialized: result.time.initialized,
+            sandboxes: result.sandboxes,
+            commands: result.commands,
+          },
+        })
+        .run(),
+    )
+
+    if (data.id !== ProjectID.global) {
+      Database.use((d) => migrateGlobalSessionsToProject(d, data.id, data.worktree))
+    }
+  }
+
+  const PERSIST_RETRY_DELAY_MS = 5_000
+  const PERSIST_RETRY_ATTEMPTS = 3
+
+  // A concurrent ax-code process can hold the SQLite write lock longer than
+  // busy_timeout (#391). Discovery already holds the project in memory, so
+  // bootstrap must not die on SQLITE_BUSY — retry the write in the background
+  // and let startup continue. Non-busy failures (corruption, read-only) stay
+  // fatal.
+  function deferPersist(result: Info, data: DiscoveryResult) {
+    let remaining = PERSIST_RETRY_ATTEMPTS
+    const attempt = () => {
+      try {
+        persist(result, data)
+        log.info("persisted discovered project after retry", { projectID: result.id })
+      } catch (error) {
+        remaining -= 1
+        if (remaining > 0 && Database.isBusyError(error)) {
+          schedule()
+          return
+        }
+        log.warn("giving up persisting discovered project", {
+          projectID: result.id,
+          error: toErrorMessage(error),
+        })
+      }
+    }
+    const schedule = () => {
+      // unref so a pending retry never keeps a CLI process alive
+      setTimeout(attempt, PERSIST_RETRY_DELAY_MS).unref?.()
+    }
+    schedule()
+  }
+
   async function fromDirectoryPromise(directory: string) {
     log.info("fromDirectory", { directory })
-
-    type DiscoveryResult = { id: ProjectID; worktree: string; sandbox: string; vcs: Info["vcs"] }
 
     const data: DiscoveryResult = await (async () => {
       let dotgit: string | undefined
@@ -296,48 +369,21 @@ export namespace Project {
     ).filter((sandbox): sandbox is string => sandbox !== undefined)
 
     try {
-      Database.use((d) =>
-        d
-          .insert(ProjectTable)
-          .values({
-            id: result.id,
-            worktree: result.worktree,
-            vcs: result.vcs ?? null,
-            name: result.name,
-            icon_url: result.icon?.url,
-            icon_color: result.icon?.color,
-            time_created: result.time.created,
-            time_updated: result.time.updated,
-            time_initialized: result.time.initialized,
-            sandboxes: result.sandboxes,
-            commands: result.commands,
-          })
-          .onConflictDoUpdate({
-            target: ProjectTable.id,
-            set: {
-              worktree: result.worktree,
-              vcs: result.vcs ?? null,
-              name: result.name,
-              icon_url: result.icon?.url,
-              icon_color: result.icon?.color,
-              time_updated: result.time.updated,
-              time_initialized: result.time.initialized,
-              sandboxes: result.sandboxes,
-              commands: result.commands,
-            },
-          })
-          .run(),
-      )
-
-      if (data.id !== ProjectID.global) {
-        Database.use((d) => migrateGlobalSessionsToProject(d, data.id, data.worktree))
-      }
+      persist(result, data)
     } catch (error) {
-      log.warn("failed to persist discovered project", {
-        projectID: result.id,
-        error,
-      })
-      throw error
+      if (Database.isBusyError(error)) {
+        log.warn("failed to persist discovered project — database locked by another process; retrying in background", {
+          projectID: result.id,
+          error: toErrorMessage(error),
+        })
+        deferPersist(result, data)
+      } else {
+        log.warn("failed to persist discovered project", {
+          projectID: result.id,
+          error,
+        })
+        throw error
+      }
     }
 
     emitUpdated(result)

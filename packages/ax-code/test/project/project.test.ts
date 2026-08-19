@@ -163,6 +163,38 @@ describe("Project.fromDirectory", () => {
     }
   })
 
+  test("tolerates SQLITE_BUSY during startup persistence and retries in the background", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const originalUse = Database.use
+    const busy = Object.assign(new Error("database is locked"), { errcode: 5 })
+    let calls = 0
+
+    vi.useFakeTimers()
+    try {
+      // Call 1 is the project-row read; the first write (call 2) fails the way
+      // node:sqlite reports a lock held past busy_timeout by another process.
+      ;(Database as typeof Database & { use: typeof Database.use }).use = ((fn) => {
+        calls += 1
+        if (calls === 2) throw busy
+        return originalUse(fn)
+      }) as typeof Database.use
+
+      // Discovery must still succeed with the in-memory project (#391).
+      const { project } = await Project.fromDirectory(tmp.path)
+      expect(project).toBeDefined()
+      expect(project.worktree).toBe(tmp.path)
+      expect(Project.get(project.id)).toBeUndefined()
+
+      // Once the competing writer releases the lock, the deferred retry persists.
+      ;(Database as typeof Database & { use: typeof Database.use }).use = originalUse
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(Project.get(project.id)?.id).toBe(project.id)
+    } finally {
+      ;(Database as typeof Database & { use: typeof Database.use }).use = originalUse
+      vi.useRealTimers()
+    }
+  })
+
   test("initGit is a no-op inside an existing git subdirectory", async () => {
     await using tmp = await tmpdir({ git: true })
     const subdir = path.join(tmp.path, "packages", "app")

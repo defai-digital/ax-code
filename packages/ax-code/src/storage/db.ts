@@ -189,6 +189,16 @@ export namespace Database {
     NativeStore.close()
   }
 
+  // node:sqlite reports lock contention as errcode 5 (SQLITE_BUSY — extended
+  // result codes keep 5 in the low byte) with the message "database is locked".
+  // Used to distinguish transient cross-process writer contention (retryable)
+  // from real storage failures (corruption, read-only) that must stay fatal.
+  export function isBusyError(error: unknown) {
+    const errcode = (error as { errcode?: unknown } | null | undefined)?.errcode
+    if (typeof errcode === "number") return (errcode & 0xff) === 5
+    return error instanceof Error && error.message.includes("database is locked")
+  }
+
   export type TxOrDb = Transaction | Client
   type SyncTransactionResult<T> =
     T extends Promise<any> ? DrizzleTypeError<"Sync drivers can't use async functions in transactions!"> : T

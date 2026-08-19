@@ -20,6 +20,25 @@ describe("Database.Path", () => {
   })
 })
 
+describe("Database.isBusyError", () => {
+  test("matches node:sqlite SQLITE_BUSY errors by errcode", () => {
+    expect(Database.isBusyError(Object.assign(new Error("database is locked"), { errcode: 5 }))).toBe(true)
+    // Extended result codes keep SQLITE_BUSY in the low byte (e.g. 517 = SQLITE_BUSY_SNAPSHOT).
+    expect(Database.isBusyError(Object.assign(new Error("database is locked"), { errcode: 517 }))).toBe(true)
+  })
+
+  test("matches busy errors by message when errcode is missing", () => {
+    expect(Database.isBusyError(new Error("database is locked"))).toBe(true)
+  })
+
+  test("rejects non-busy errors", () => {
+    expect(Database.isBusyError(new Error("attempt to write a readonly database"))).toBe(false)
+    expect(Database.isBusyError(Object.assign(new Error("disk I/O error"), { errcode: 10 }))).toBe(false)
+    expect(Database.isBusyError(undefined)).toBe(false)
+    expect(Database.isBusyError("database is locked")).toBe(false)
+  })
+})
+
 describe("Database.applyStartupPragmas", () => {
   test("keeps startup alive when wal checkpoint fails", () => {
     const statements: string[] = []
