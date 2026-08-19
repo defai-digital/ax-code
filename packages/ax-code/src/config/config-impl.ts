@@ -1402,6 +1402,41 @@ export namespace Config {
   }
 
   /**
+   * Drop the cached config for every live project without tearing down the
+   * rest of each Instance. Global provider enablement is shared across
+   * projects, so changing it must refresh every merged config snapshot while
+   * preserving active sessions, LSP clients, MCP connections, and tools.
+   */
+  export async function invalidateAll() {
+    let currentDirectory: string | undefined
+    try {
+      currentDirectory = Instance.directory
+    } catch {
+      currentDirectory = undefined
+    }
+
+    // Avoid re-entering Instance.provide for the active directory. A global
+    // update can run inside that directory's request context, and nested
+    // provide during boot would await the same in-flight Instance promise.
+    try {
+      await state.invalidate()
+    } catch {
+      // No active Instance context. The live directories below still need to
+      // be invalidated (Desktop can keep several projects open at once).
+    }
+
+    const peers = Instance.list().filter((directory) => directory !== currentDirectory)
+    await Promise.all(
+      peers.map((directory) =>
+        Instance.provide({
+          directory,
+          fn: () => state.invalidate(),
+        }),
+      ),
+    )
+  }
+
+  /**
    * Invalidate cache then return a freshly loaded config.
    * Ensemble tools (council/arena) call this so mid-session config edits apply.
    */
@@ -1518,6 +1553,26 @@ export namespace Config {
     })
   }
 
+  function isProviderEnablementUpdate(config: Info) {
+    return Object.keys(config).every((key) => key === "disabled_providers" || key === "enabled_providers")
+  }
+
+  async function refreshProviderEnablementCaches() {
+    await invalidateAll().catch((err) => {
+      log.error("failed to invalidate config after provider enablement update", { err })
+    })
+
+    // Provider state captures enabled_providers / disabled_providers when it
+    // initializes. Invalidate that cache separately so the next provider list
+    // or model lookup sees the persisted change. Use a dynamic import to avoid
+    // the Config <-> Provider module cycle during startup.
+    await import("../provider/provider")
+      .then(({ Provider }) => Provider.invalidateAll())
+      .catch((err) => {
+        log.error("failed to invalidate providers after provider enablement update", { err })
+      })
+  }
+
   export async function updateGlobal(config: Info) {
     const filepath = globalConfigFile()
     using _inProcess = await Lock.write(filepath)
@@ -1544,13 +1599,20 @@ export namespace Config {
 
     global.reset()
 
-    // Config is already on disk. Dispose reloads in-memory instance caches so
-    // live processes pick up the change; a stuck dispose (slow LSP/MCP teardown)
-    // must not fail the write that already succeeded — callers such as the
-    // ax-engine connection route would otherwise return 400 after a durable save.
-    await Instance.disposeAll().catch((err) => {
-      log.error("failed to dispose instances during config reload", { err })
-    })
+    if (isProviderEnablementUpdate(config)) {
+      // Enabling or disabling a provider only changes Config and Provider
+      // state. A full Instance disposal aborts every in-flight prompt, even
+      // when the toggled provider is unrelated to the active model.
+      await refreshProviderEnablementCaches()
+    } else {
+      // Config is already on disk. Dispose reloads all in-memory services for
+      // general config changes; a stuck dispose (slow LSP/MCP teardown) must
+      // not fail the write that already succeeded — callers such as the
+      // ax-engine connection route would otherwise return 400 after a durable save.
+      await Instance.disposeAll().catch((err) => {
+        log.error("failed to dispose instances during config reload", { err })
+      })
+    }
 
     GlobalBus.emit("event", {
       directory: "global",

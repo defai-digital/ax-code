@@ -277,8 +277,9 @@ function showAxEngineAttachedStatusDialog(input: {
 
 // Temporarily turn a provider off/on via global config `disabled_providers`.
 // Credentials in auth.json are kept, so this is reversible — unlike
-// Disconnect, which deletes them. The server's global config update already
-// disposes all instances, so a bootstrap reflects the change immediately.
+// Disconnect, which deletes them. Provider-only global config updates refresh
+// Config and Provider caches without disposing active session state; bootstrap
+// refreshes the dialog's provider rows after that scoped invalidation.
 export async function setProviderDisabled(input: {
   sdk: ReturnType<typeof useSDK>
   sync: ReturnType<typeof useSync>
