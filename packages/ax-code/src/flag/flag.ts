@@ -89,6 +89,7 @@ export namespace Flag {
   export declare const AX_CODE_DISABLE_PROJECT_CONFIG: boolean
   export declare const AX_CODE_AUTONOMOUS: boolean
   export declare const AX_CODE_AUTONOMOUS_GUARDIAN: boolean
+  export declare const AX_CODE_AUTONOMOUS_GUARDIAN_MODEL: string | undefined
   export declare const AX_CODE_SMART_LLM: boolean
   export declare const AX_CODE_WORKFLOW_RUNTIME: boolean
   export declare const AX_CODE_TUI_SESSION_FIRST: boolean
@@ -255,6 +256,11 @@ defineBooleanFlag("AX_CODE_AUTONOMOUS", true)
 // approval then adds a model round-trip, so enable only when the latency/cost
 // trade-off is acceptable. A "deny" never overrides an explicit user allow rule.
 defineBooleanFlag("AX_CODE_AUTONOMOUS_GUARDIAN")
+
+// Optional dedicated model for the guardian, e.g. "anthropic/claude-haiku-4-5"
+// or "openai/gpt-5-mini". Falls back to the configured default model when
+// unset. Prefer a cheap/fast model — the guardian runs on every RISK approval.
+defineStringFlag("AX_CODE_AUTONOMOUS_GUARDIAN_MODEL")
 
 // Evaluate each access so toggles and env overrides remain live.
 defineBooleanFlag("AX_CODE_SMART_LLM")

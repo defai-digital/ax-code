@@ -62,7 +62,8 @@ Be conservative: when uncertain, choose ask.`
     const abort = new AbortController()
     try {
       const { Provider } = await import("@/provider/provider")
-      const modelRef = await Provider.defaultModel()
+      const override = Flag.AX_CODE_AUTONOMOUS_GUARDIAN_MODEL
+      const modelRef = override ? Provider.parseModel(override) : await Provider.defaultModel()
       if (!modelRef) return { action: "ask", reason: "no default model configured" }
       const resolved = await Provider.getModel(modelRef.providerID, modelRef.modelID)
       const language = await Provider.getLanguage(resolved)
