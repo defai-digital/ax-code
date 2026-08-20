@@ -396,6 +396,9 @@ describe("update-models script", () => {
         "MiniMax-M3",
       ])
     }
+    // Display names follow the documented convention, not upstream's domains.
+    expect(data["minimax-coding-plan"]?.name).toBe("MiniMax Token Plan")
+    expect(data["minimax-cn-coding-plan"]?.name).toBe("MiniMax Token Plan (China)")
     expect(data.minimax?.models?.["MiniMax-M2"]).toBeDefined()
     expect(data.minimax?.models?.["MiniMax-M2.5"]).toBeDefined()
     expect(data.minimax?.models?.["MiniMax-M2.7"]).toBeDefined()

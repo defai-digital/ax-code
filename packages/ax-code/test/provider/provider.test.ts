@@ -180,7 +180,7 @@ test("MiniMax Token Plan providers use the Anthropic endpoint and expose M3", as
       const intl = providers[ProviderID.make("minimax-coding-plan")]
       const cn = providers[ProviderID.make("minimax-cn-coding-plan")]
 
-      expect(intl?.name).toBe("MiniMax Token Plan (minimax.io)")
+      expect(intl?.name).toBe("MiniMax Token Plan")
       expect(intl?.key).toBe("sk-cp-test-intl")
       expect(intl?.models[ModelID.make("MiniMax-M3")]?.api.url).toBe("https://api.minimax.io/anthropic/v1")
       expect(intl?.models[ModelID.make("MiniMax-M3")]?.api.npm).toBe("@ai-sdk/anthropic")
@@ -191,7 +191,7 @@ test("MiniMax Token Plan providers use the Anthropic endpoint and expose M3", as
       expect(intl?.models[ModelID.make("MiniMax-M2.5")]).toBeUndefined()
       expect(intl?.models[ModelID.make("MiniMax-M2.5-highspeed")]).toBeUndefined()
 
-      expect(cn?.name).toBe("MiniMax Token Plan (minimaxi.com)")
+      expect(cn?.name).toBe("MiniMax Token Plan (China)")
       expect(cn?.key).toBe("sk-cp-test-cn")
       expect(cn?.models[ModelID.make("MiniMax-M3")]?.api.url).toBe("https://api.minimaxi.com/anthropic/v1")
       expect(cn?.models[ModelID.make("MiniMax-M2.7")]).toBeDefined()

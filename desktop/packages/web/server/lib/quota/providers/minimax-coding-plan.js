@@ -3,7 +3,7 @@ import { getAuthEntry, normalizeAuthEntry, buildResult } from "../utils/index.js
 import { transformMinimaxWindows } from "./minimax-shared.js"
 
 export const providerId = "minimax-coding-plan"
-export const providerName = "MiniMax Token Plan (minimax.io)"
+export const providerName = "MiniMax Token Plan"
 export const aliases = ["minimax-coding-plan"]
 
 export const isConfigured = () => {

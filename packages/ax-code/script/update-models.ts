@@ -1361,6 +1361,17 @@ for (const [id, env] of Object.entries(envOverrides)) {
   if (fetched[id]) fetched[id].env = env
 }
 
+// MiniMax Token Plan display names: match the documented convention
+// ("MiniMax Token Plan" / "MiniMax Token Plan (China)", same style as the
+// Alibaba plans) instead of upstream's domain-suffixed names.
+const nameOverrides: Record<string, string> = {
+  "minimax-coding-plan": "MiniMax Token Plan",
+  "minimax-cn-coding-plan": "MiniMax Token Plan (China)",
+}
+for (const [id, name] of Object.entries(nameOverrides)) {
+  if (fetched[id]) fetched[id].name = name
+}
+
 // MiniMax Token Plan (legacy *-coding-plan ids): drop MiniMax-M* SKUs older
 // than M2.7. PAYG minimax / minimax-cn keep the full catalog; Alibaba plans
 // still serve MiniMax-M2.5 through their own allowlists.

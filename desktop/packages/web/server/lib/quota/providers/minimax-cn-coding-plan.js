@@ -1,10 +1,10 @@
-// MiniMax Token Plan Provider (minimaxi.com)
+// MiniMax Token Plan Provider (China, minimaxi.com)
 import { readAuthFile } from "../../ax-code/auth.js"
 import { getAuthEntry, normalizeAuthEntry, buildResult } from "../utils/index.js"
 import { transformMinimaxWindows } from "./minimax-shared.js"
 
 export const providerId = "minimax-cn-coding-plan"
-export const providerName = "MiniMax Token Plan (minimaxi.com)"
+export const providerName = "MiniMax Token Plan (China)"
 export const aliases = ["minimax-cn-coding-plan"]
 
 export const isConfigured = () => {
