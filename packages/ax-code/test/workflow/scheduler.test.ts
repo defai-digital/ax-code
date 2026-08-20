@@ -1636,6 +1636,32 @@ describe("WorkflowScheduler", () => {
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
     }
   })
+
+  test("resume leaves a cancelled workflow run cancelled when nothing was paused", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
+          const cancelled = await WorkflowScheduler.cancel(run.id)
+          expect(cancelled.status).toBe("cancelled")
+
+          const resumed = await WorkflowScheduler.resume(run.id)
+
+          // Resume only re-activates paused children. With nothing paused the
+          // terminal run must not flip back to a zombie "running" state.
+          expect(resumed.status).toBe("cancelled")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
 })
 
 async function waitForValue<T>(label: string, read: () => T | undefined | Promise<T | undefined>): Promise<T> {

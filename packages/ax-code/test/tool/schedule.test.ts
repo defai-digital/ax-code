@@ -36,7 +36,9 @@ describe("schedule tools", () => {
     const tool = await ScheduleTaskTool.init()
     const base = { title: "t", prompt: "p" }
 
-    expect(() => tool.parameters.parse({ ...base, schedule: { type: "once", runAt: Date.now() + 60_000 } })).not.toThrow()
+    expect(() =>
+      tool.parameters.parse({ ...base, schedule: { type: "once", runAt: Date.now() + 60_000 } }),
+    ).not.toThrow()
     expect(() => tool.parameters.parse({ ...base, schedule: { type: "daily", time: "09:00" } })).not.toThrow()
     expect(() =>
       tool.parameters.parse({ ...base, schedule: { type: "weekly", day: 1, time: "09:00", timezone: "Asia/Taipei" } }),
@@ -47,6 +49,47 @@ describe("schedule tools", () => {
 
     expect(() => tool.parameters.parse({ ...base, schedule: { type: "sometime" } })).toThrow()
     expect(() => tool.parameters.parse({ ...base, schedule: { type: "weekly", day: 9, time: "09:00" } })).toThrow()
+  })
+
+  test("schedule passed as a JSON-encoded string is coerced into an object", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const ctx = toolContext("ses_schedule_stringified")
+        const create = await ScheduleTaskTool.init()
+        const list = await ListScheduledTasksTool.init()
+
+        // Some providers/models serialize nested object arguments as JSON
+        // strings; the tool must coerce them back into objects.
+        const runAt = Date.now() + 60 * 60 * 1000
+        const created = await create.execute(
+          {
+            title: "Stringified schedule",
+            prompt: "Check the deployment dashboard and report anything unhealthy.",
+            schedule: JSON.stringify({ type: "once", runAt }),
+          } as never,
+          ctx,
+        )
+        const createdTask = (created.metadata as { task: { id: string; status: string; schedule: unknown } }).task
+        expect(createdTask.status).toBe("active")
+        expect(createdTask.schedule).toEqual({ type: "once", runAt })
+
+        const listed = await list.execute({}, ctx)
+        expect((listed.metadata as { count: number }).count).toBe(1)
+        expect(listed.output).toContain("Stringified schedule")
+      },
+    })
+  })
+
+  test("malformed JSON schedule string fails with a readable error", async () => {
+    const create = await ScheduleTaskTool.init()
+    expect(() => create.parameters.parse({ title: "t", prompt: "p", schedule: '{"type": "once", "runAt":' })).toThrow(
+      /JSON-encoded/,
+    )
+    await expect(
+      create.execute({ title: "t", prompt: "p", schedule: "not json at all" } as never, toolContext("ses_bad_json")),
+    ).rejects.toThrow(/JSON-encoded/)
   })
 
   test("create, list, pause, resume, and delete round-trip through the engine", async () => {

@@ -1,6 +1,7 @@
 import z from "zod"
 import { ScheduledTask } from "@/session/scheduled-task"
 import { ScheduledTaskID } from "@/session/schema"
+import { parseJsonResult } from "@/util/json-value"
 import { Tool } from "./tool"
 
 // Conversational scheduling (PRD-2026-07-25 G1b, Kimi CLI parity): let the
@@ -46,31 +47,46 @@ async function withReadableScheduleErrors<T>(run: () => Promise<T>): Promise<T> 
 }
 
 // Mirrors ScheduledTask.Schedule, restated here so the model sees concrete
-// parameter docs instead of an opaque union reference.
-const ScheduleParameter = z
-  .discriminatedUnion("type", [
-    z.object({
-      type: z.literal("once"),
-      runAt: z.number().int().positive().describe("Epoch milliseconds for a one-time run."),
-    }),
-    z.object({
-      type: z.literal("daily"),
-      time: z.string().describe('Time of day as "HH:MM" (24h).'),
-      timezone: z.string().optional().describe("IANA timezone, e.g. Asia/Taipei. Defaults to the machine timezone."),
-    }),
-    z.object({
-      type: z.literal("weekly"),
-      day: z.number().int().min(0).max(6).describe("Day of week, 0 = Sunday … 6 = Saturday."),
-      time: z.string().describe('Time of day as "HH:MM" (24h).'),
-      timezone: z.string().optional().describe("IANA timezone. Defaults to the machine timezone."),
-    }),
-    z.object({
-      type: z.literal("cron"),
-      expression: z.string().describe("Standard 5-field cron expression (minute hour day-of-month month day-of-week)."),
-      timezone: z.string().optional().describe("IANA timezone. Defaults to the machine timezone."),
-    }),
-  ])
-  .describe("When the task runs. Translate natural-language times into this shape using the user's timezone.")
+// parameter docs instead of an opaque union reference. Some providers/models
+// serialize nested object arguments as JSON-encoded strings, so a string is
+// parsed back into an object before validation; a string that is not valid
+// JSON throws a readable error instead of failing as "expected object,
+// received string". The generated JSON schema is unchanged — z.toJSONSchema
+// reflects the inner union.
+const ScheduleParameter = z.preprocess(
+  (value) => {
+    if (typeof value !== "string") return value
+    const parsed = parseJsonResult(value)
+    if (!parsed.ok) throw new Error("schedule must be an object or a JSON-encoded object string")
+    return parsed.value
+  },
+  z
+    .discriminatedUnion("type", [
+      z.object({
+        type: z.literal("once"),
+        runAt: z.number().int().positive().describe("Epoch milliseconds for a one-time run."),
+      }),
+      z.object({
+        type: z.literal("daily"),
+        time: z.string().describe('Time of day as "HH:MM" (24h).'),
+        timezone: z.string().optional().describe("IANA timezone, e.g. Asia/Taipei. Defaults to the machine timezone."),
+      }),
+      z.object({
+        type: z.literal("weekly"),
+        day: z.number().int().min(0).max(6).describe("Day of week, 0 = Sunday … 6 = Saturday."),
+        time: z.string().describe('Time of day as "HH:MM" (24h).'),
+        timezone: z.string().optional().describe("IANA timezone. Defaults to the machine timezone."),
+      }),
+      z.object({
+        type: z.literal("cron"),
+        expression: z
+          .string()
+          .describe("Standard 5-field cron expression (minute hour day-of-month month day-of-week)."),
+        timezone: z.string().optional().describe("IANA timezone. Defaults to the machine timezone."),
+      }),
+    ])
+    .describe("When the task runs. Translate natural-language times into this shape using the user's timezone."),
+)
 
 export const ScheduleTaskTool = Tool.define("schedule_task", {
   description:
@@ -88,7 +104,11 @@ export const ScheduleTaskTool = Tool.define("schedule_task", {
       .describe("The prompt to run when the task fires. Write it self-contained — it runs without this conversation."),
     schedule: ScheduleParameter,
     agent: z.string().optional().describe("Optional agent to run the prompt with. Defaults to the standard agent."),
-    catchUpPolicy: ScheduledTask.CatchUpPolicy.optional().describe(
+    // Restated locally instead of referencing ScheduledTask.CatchUpPolicy:
+    // tool/registry imports this module, and ScheduledTask's import chain
+    // (task-queue → session → prompt → registry) cycles back, so the
+    // namespace may still be uninitialized when this file is evaluated.
+    catchUpPolicy: z.enum(["skip", "run_once"]).optional().describe(
       'What to do after backend downtime: "run_once" (the default) coalesces missed occurrences into one run; "skip" advances without running.',
     ),
     maxRunDurationMs: z

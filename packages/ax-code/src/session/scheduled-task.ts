@@ -28,8 +28,9 @@ export namespace ScheduledTask {
   export type CatchUpPolicy = z.infer<typeof CatchUpPolicy>
 
   // Thrown when a schedule is syntactically shaped but semantically unusable
-  // (bad time-of-day, unparseable cron, or invalid timezone). Mapped to a 400
-  // by the server error mapper so clients can correct their input.
+  // (bad time-of-day, unparseable cron, invalid timezone, or a one-time run
+  // that is already in the past). Mapped to a 400 by the server error mapper
+  // so clients can correct their input.
   export const InvalidSchedule = NamedError.create(
     "ScheduledTaskInvalidSchedule",
     z.object({ resource: z.string(), message: z.string() }),
@@ -275,8 +276,8 @@ export namespace ScheduledTask {
 
   export async function create(input: CreateInput): Promise<Info> {
     const parsed = CreateInput.parse(input)
-    validateSchedule(parsed.schedule)
     const now = Date.now()
+    validateSchedule(parsed.schedule, now)
     const task = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db
         .insert(ScheduledTaskTable)
@@ -318,10 +319,12 @@ export namespace ScheduledTask {
 
   export async function update(input: UpdateInput): Promise<Info> {
     const parsed = UpdateInput.parse(input)
-    if (parsed.schedule !== undefined) validateSchedule(parsed.schedule)
     const current = await get(parsed.id)
     const now = Date.now()
     const nextSchedule = parsed.schedule ?? current.schedule
+    if (parsed.schedule !== undefined || (parsed.status === "active" && current.status !== "active")) {
+      validateSchedule(nextSchedule, now)
+    }
     const updates: Partial<typeof ScheduledTaskTable.$inferInsert> = {
       time_updated: now,
     }
@@ -503,6 +506,7 @@ export namespace ScheduledTask {
         .set({
           next_run_at: next ?? null,
           time_updated: now,
+          ...(task.schedule.type === "once" ? { status: "disabled" } : {}),
           ...(skip ? {} : { last_run_at: now, error: null }),
         })
         .where(
@@ -641,12 +645,22 @@ export namespace ScheduledTask {
 
   // Reject schedules that parse structurally but can never produce a run, so the
   // API does not create "active" tasks that silently never fire.
-  export function validateSchedule(schedule: Schedule): void {
+  export function validateSchedule(schedule: Schedule, from = Date.now()): void {
     const timezone = "timezone" in schedule ? schedule.timezone : undefined
     if (timezone !== undefined && !isValidTimeZone(timezone)) {
       throw new InvalidSchedule({ resource: "schedule.timezone", message: `Invalid timezone: ${timezone}` })
     }
     switch (schedule.type) {
+      case "once":
+        // nextRunAt() only returns future timestamps, so a past one-time run
+        // would persist as an active task that silently never fires.
+        if (schedule.runAt <= from) {
+          throw new InvalidSchedule({
+            resource: "schedule.runAt",
+            message: `One-time run timestamp is not in the future: ${schedule.runAt}`,
+          })
+        }
+        break
       case "daily":
       case "weekly":
         if (!parseTimeOfDay(schedule.time)) {
@@ -704,10 +718,13 @@ function isValidCronExpression(expression: string): boolean {
 function makeTzFormatter(timezone: string) {
   return new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     weekday: "long",
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false,
+    hourCycle: "h23",
   })
 }
 
@@ -719,10 +736,37 @@ function tzComponents(ms: number, fmt: Intl.DateTimeFormat) {
     return acc
   }, {})
   return {
-    hour: Number(parts.hour) % 24, // hour12:false may emit "24" for midnight
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    hour: Number(parts.hour),
     minute: Number(parts.minute),
     weekday: TZ_WEEKDAYS.indexOf(parts.weekday!),
   }
+}
+
+type TzComponents = ReturnType<typeof tzComponents>
+
+function tzDateKey(value: TzComponents) {
+  return `${value.year}-${value.month}-${value.day}`
+}
+
+// During a DST fall-back, a wall-clock minute can occur twice. Daily and
+// weekly schedules represent calendar occurrences, so once the requested
+// minute has happened on the current local date, ignore its repeated copy.
+function tzOccurrenceAlreadyPassed(
+  from: number,
+  fmt: Intl.DateTimeFormat,
+  match: (value: TzComponents) => boolean,
+) {
+  const currentDate = tzDateKey(tzComponents(from, fmt))
+  let ms = from - (from % 60_000)
+  for (let i = 0; i < 26 * 60; i++, ms -= 60_000) {
+    const value = tzComponents(ms, fmt)
+    if (tzDateKey(value) !== currentDate) return false
+    if (match(value)) return true
+  }
+  return false
 }
 
 function nextDailyRun(time: string, from: number, timezone?: string) {
@@ -736,10 +780,18 @@ function nextDailyRun(time: string, from: number, timezone?: string) {
     return candidate.getTime()
   }
   const fmt = makeTzFormatter(timezone)
+  const currentDate = tzDateKey(tzComponents(from, fmt))
+  const alreadyPassed = tzOccurrenceAlreadyPassed(
+    from,
+    fmt,
+    (value) => value.hour === parts.hour && value.minute === parts.minute,
+  )
   let ms = from - (from % 60_000) + 60_000
   for (let i = 0; i < 2 * 24 * 60; i++, ms += 60_000) {
     const c = tzComponents(ms, fmt)
-    if (c.hour === parts.hour && c.minute === parts.minute) return ms
+    if (c.hour !== parts.hour || c.minute !== parts.minute) continue
+    if (alreadyPassed && tzDateKey(c) === currentDate) continue
+    return ms
   }
   return undefined
 }
@@ -757,10 +809,18 @@ function nextWeeklyRun(day: number, time: string, from: number, timezone?: strin
   const parts = parseTimeOfDay(time)
   if (!parts) return undefined
   const fmt = makeTzFormatter(timezone)
+  const currentDate = tzDateKey(tzComponents(from, fmt))
+  const alreadyPassed = tzOccurrenceAlreadyPassed(
+    from,
+    fmt,
+    (value) => value.weekday === day && value.hour === parts.hour && value.minute === parts.minute,
+  )
   let ms = from - (from % 60_000) + 60_000
   for (let i = 0; i < 8 * 24 * 60; i++, ms += 60_000) {
     const c = tzComponents(ms, fmt)
-    if (c.weekday === day && c.hour === parts.hour && c.minute === parts.minute) return ms
+    if (c.weekday !== day || c.hour !== parts.hour || c.minute !== parts.minute) continue
+    if (alreadyPassed && tzDateKey(c) === currentDate) continue
+    return ms
   }
   return undefined
 }

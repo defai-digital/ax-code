@@ -270,8 +270,10 @@ export namespace WorkflowScheduler {
     const TaskQueue = await loadTaskQueue()
     const detail = await WorkflowRun.getDetail(runID)
     await assertEnabledForSpec(detail.spec.id)
+    let resumedAny = false
     for (const child of detail.children) {
       if (child.status !== "paused") continue
+      resumedAny = true
       if (child.taskQueueID) {
         const item = await TaskQueue.get(child.taskQueueID).catch(() => undefined)
         if (item?.status === "paused") {
@@ -285,7 +287,10 @@ export namespace WorkflowScheduler {
       }
       await WorkflowRun.setChildStatus({ id: child.id, status: "queued" })
     }
-    await refreshRunningRunState(runID)
+    // Only refresh when there was something to resume. Refreshing a terminal
+    // (failed/cancelled) run with no paused children would flip it back to
+    // "running" with no live children — a zombie run that can never settle.
+    if (resumedAny || detail.status === "paused") await refreshRunningRunState(runID)
     return WorkflowRun.getDetail(runID)
   }
 

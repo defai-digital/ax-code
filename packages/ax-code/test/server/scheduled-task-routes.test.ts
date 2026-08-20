@@ -248,6 +248,7 @@ describe("scheduled task routes", () => {
       fn: async () => {
         const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
         const cases: Array<{ schedule: unknown; resource: string }> = [
+          { schedule: { type: "once", runAt: Date.now() - 60_000 }, resource: "schedule.runAt" },
           { schedule: { type: "daily", time: "99:99" }, resource: "schedule.time" },
           { schedule: { type: "weekly", day: 2, time: "24:00" }, resource: "schedule.time" },
           { schedule: { type: "cron", expression: "bad cron" }, resource: "schedule.cron" },
@@ -267,6 +268,29 @@ describe("scheduled task routes", () => {
           expect(body.name).toBe("InvalidRequestError")
           expect(body.details?.resource).toBe(resource)
         }
+
+        // Updates go through the same schedule validation.
+        const validResponse = await app.request(`/scheduled-task?${directoryQuery}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            title: "Valid schedule",
+            prompt: "x",
+            schedule: { type: "once", runAt: Date.now() + 86_400_000 },
+          }),
+        })
+        expect(validResponse.status).toBe(200)
+        const valid = (await validResponse.json()) as { id: string }
+        const updateResponse = await app.request(`/scheduled-task/${valid.id}/update?${directoryQuery}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ schedule: { type: "once", runAt: Date.now() - 60_000 } }),
+        })
+        expect(updateResponse.status).toBe(400)
+        const updateBody = (await updateResponse.json()) as { name: string; details?: { resource?: string } }
+        expect(updateBody.name).toBe("InvalidRequestError")
+        expect(updateBody.details?.resource).toBe("schedule.runAt")
+        await app.request(`/scheduled-task/${valid.id}?${directoryQuery}`, { method: "DELETE" })
 
         // No invalid task should have been persisted.
         const list = (await (await app.request(`/scheduled-task?${directoryQuery}`)).json()) as unknown[]
