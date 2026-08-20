@@ -3,7 +3,7 @@
  * Fans out structured reviews; aggregates via pure Council module.
  */
 
-import { generateObject } from "ai"
+import { generateObject, generateText } from "ai"
 import z from "zod"
 import { Config } from "../config/config"
 import { Budget } from "../mode/budget"
@@ -16,6 +16,7 @@ import { ModeMemory } from "../mode/memory"
 import { ModePolicy } from "../mode/policy"
 import { Provider } from "../provider/provider"
 import { Log } from "../util/log"
+import { parseJsonResult } from "../util/json-value"
 import { FanOut } from "../util/fan-out"
 import { Tool } from "./tool"
 import DESCRIPTION from "./council.txt"
@@ -23,7 +24,14 @@ import DESCRIPTION from "./council.txt"
 const log = Log.create({ service: "tool.council" })
 
 const DEFAULT_MAX_MEMBERS = 3
-const DEFAULT_TIMEOUT_MS = 60_000
+// Reasoning members (deepseek-v4-class, o-series, etc.) routinely need minutes
+// to emit a structured review; 60s made slow-but-healthy members fail. 180s
+// mirrors the generous per-chunk provider timeout used for extended thinking.
+// Exported for tests.
+export const DEFAULT_TIMEOUT_MS = 180_000
+// Reasoning members get this multiple of the configured timeout — thinking
+// before the structured answer is exactly what the base budget underestimates.
+const REASONING_TIMEOUT_SCALE = 2
 const HARD_MAX_MEMBERS = 6
 
 // Length/count caps are enforced by clamping after parse (see clampMemberOutput),
@@ -31,13 +39,16 @@ const HARD_MAX_MEMBERS = 6
 // otherwise fail the whole fan-out with "response did not match schema" just for
 // writing a long sentence. Severity is normalized so common off-enum spellings
 // ("critical", "info") don't reject an otherwise valid review.
-const IssueSeveritySchema = z.preprocess((value) => {
-  if (typeof value !== "string") return value
-  const lower = value.toLowerCase().trim()
-  if (["critical", "blocker", "severe", "major"].includes(lower)) return "high"
-  if (["info", "informational", "minor", "nit", "trivial"].includes(lower)) return "low"
-  return ["high", "medium", "low"].includes(lower) ? lower : "medium"
-}, z.enum(["high", "medium", "low"]))
+const IssueSeveritySchema = z.preprocess(
+  (value) => {
+    if (typeof value !== "string") return value
+    const lower = value.toLowerCase().trim()
+    if (["critical", "blocker", "severe", "major"].includes(lower)) return "high"
+    if (["info", "informational", "minor", "nit", "trivial"].includes(lower)) return "low"
+    return ["high", "medium", "low"].includes(lower) ? lower : "medium"
+  },
+  z.enum(["high", "medium", "low"]),
+)
 
 const IssueSchema = z.object({
   severity: IssueSeveritySchema,
@@ -128,6 +139,52 @@ Return structured issues with severity, category, optional location (file:line),
 Be concrete. Prefer fewer high-signal issues. Do not claim other models' opinions.`)
 }
 
+// Appended to the user message for the generateText fallback so the model
+// knows exactly what shape to emit when structured output failed. Contains the
+// literal word "json" (required by some providers in json mode).
+const JSON_FALLBACK_INSTRUCTION = `Your previous response could not be parsed as structured output.
+Respond with ONLY one json object, no markdown fences or extra text, matching this shape:
+{"overall": string, "issues": [{"severity": "high"|"medium"|"low", "category": string, "location": string (optional), "summary": string, "suggestedFix": string (optional)}]}`
+
+// AI SDK throws NoObjectGeneratedError ("No object generated: could not parse
+// the response." / "No object generated: response did not match schema.") when
+// generateObject output fails schema conformance. Detect by message/name so the
+// check survives error wrapping and test mocks of the "ai" module.
+function isSchemaConformanceError(error: unknown): boolean {
+  const name = (error as { name?: string } | null)?.name
+  if (name === "AI_NoObjectGeneratedError") return true
+  const message = error instanceof Error ? error.message : String(error)
+  return /no object generated/i.test(message) || /response did not match schema/i.test(message)
+}
+
+// The bundled ai major only accepts provider models declaring specificationVersion
+// v2/v3; a runtime-installed provider package that is too new declares v4+ and
+// every call fails with AI_UnsupportedModelVersionError ("Unsupported model
+// version ..."). With the provider SDK compatibility pin this should be rare.
+function isUnsupportedSpecVersionError(error: unknown): boolean {
+  const name = (error as { name?: string } | null)?.name
+  if (name === "AI_UnsupportedModelVersionError") return true
+  const message = error instanceof Error ? error.message : String(error)
+  return /unsupported model version/i.test(message)
+}
+
+// Extract a JSON value from raw model text: accept the bare text, a fenced
+// ```json block, or the outermost {...} span. Returns undefined when nothing
+// parses.
+function parseJsonFromText(text: string): unknown {
+  const candidates: string[] = [text.trim()]
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fenced?.[1]) candidates.push(fenced[1].trim())
+  const start = text.indexOf("{")
+  const end = text.lastIndexOf("}")
+  if (start >= 0 && end > start) candidates.push(text.slice(start, end + 1))
+  for (const candidate of candidates) {
+    const parsed = parseJsonResult(candidate)
+    if (parsed.ok) return parsed.value
+  }
+  return undefined
+}
+
 async function runMember(input: {
   member: EnsembleShared.MemberSpec
   kind: "review" | "design"
@@ -142,12 +199,29 @@ async function runMember(input: {
   const started = Date.now()
   const maxAttempts = retryOnce ? 2 : 1
 
+  // Resolve the model once up front (before the fan-out timer starts) so the
+  // member timeout can scale for reasoning models. Lookup failures become
+  // member errors, same as failures inside execute would.
+  let model: Provider.Model
+  try {
+    model = await Provider.getModel(member.providerID, member.modelID)
+  } catch (error) {
+    return {
+      memberId: member.memberId,
+      providerID: String(member.providerID),
+      modelID: String(member.modelID),
+      issues: [],
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+  const memberTimeoutMs = model.capabilities?.reasoning ? timeoutMs * REASONING_TIMEOUT_SCALE : timeoutMs
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (abort.aborted) break
 
     const [fanOutResult] = await FanOut.run({
       members: [member],
-      timeoutMs,
+      timeoutMs: memberTimeoutMs,
       abort,
       onMemberComplete: (completed, total, m) => {
         log.info("council fan-out member done", {
@@ -158,7 +232,6 @@ async function runMember(input: {
         })
       },
       execute: async (_m, signal) => {
-        const model = await Provider.getModel(member.providerID, member.modelID)
         const language = await Provider.getLanguage(model)
         const userParts = [
           `Kind: ${kind}`,
@@ -168,17 +241,51 @@ async function runMember(input: {
         ]
           .filter(Boolean)
           .join("\n")
+        const system = systemPrompt(kind)
 
-        return generateObject({
-          model: language,
-          schema: MemberOutputSchema,
-          abortSignal: signal,
-          temperature: 0.2,
-          messages: [
-            { role: "system", content: systemPrompt(kind) },
-            { role: "user", content: userParts },
-          ],
-        }).then((r) => r.object)
+        try {
+          const r = await generateObject({
+            model: language,
+            schema: MemberOutputSchema,
+            abortSignal: signal,
+            temperature: 0.2,
+            messages: [
+              { role: "system", content: system },
+              { role: "user", content: userParts },
+            ],
+          })
+          return r.object
+        } catch (error) {
+          if (isUnsupportedSpecVersionError(error)) {
+            const detail = error instanceof Error ? error.message : String(error)
+            throw new Error(
+              `provider package for "${member.providerID}" is incompatible with this ax-code build: ${detail} ` +
+                "The runtime-installed provider SDK declares an AI SDK specification version the bundled AI SDK does not support; a compatible version must be installed for this provider.",
+            )
+          }
+          if (signal.aborted || !isSchemaConformanceError(error)) throw error
+          // generateText fallback: some models return review JSON that
+          // generateObject's strict structured-output path rejects
+          // ("No object generated"). Retry in plain json mode and validate
+          // the parsed text ourselves before declaring the member failed.
+          log.info("council member generateObject failed schema, falling back to generateText", {
+            toolName: "council",
+            memberId: member.memberId,
+            error: error instanceof Error ? error.message : String(error),
+          })
+          const fallback = await generateText({
+            model: language,
+            abortSignal: signal,
+            temperature: 0.2,
+            messages: [
+              { role: "system", content: system },
+              { role: "user", content: `${userParts}\n\n${JSON_FALLBACK_INSTRUCTION}` },
+            ],
+          })
+          const validated = MemberOutputSchema.safeParse(parseJsonFromText(fallback.text ?? ""))
+          if (!validated.success) throw error
+          return validated.data
+        }
       },
     })
 
@@ -233,7 +340,7 @@ async function runMember(input: {
       modelID: String(member.modelID),
       issues: [],
       error: wasTimeout
-        ? `${errMessage} — raise modes.council.timeoutMs in ax-code.json for slow reasoning/CLI members`
+        ? `${errMessage} — this member (often a reasoning model) needs more time than the council timeout allows. Ask the USER to raise modes.council.timeoutMs in ax-code.json; agents cannot edit that protected config file, so do not attempt to change it yourself.`
         : errMessage,
     }
   }

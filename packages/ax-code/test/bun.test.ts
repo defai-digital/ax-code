@@ -4,6 +4,7 @@ import path from "path"
 import { BunProc } from "../src/bun"
 import { Global } from "../src/global"
 import { PackageRegistry } from "../src/bun/registry"
+import { Process } from "../src/util/process"
 import { tmpdir } from "./fixture/fixture"
 
 describe("BunProc registry structural guard", () => {
@@ -126,6 +127,83 @@ describe("BunProc registry behavior", () => {
     } finally {
       run.mockRestore()
       outdated.mockRestore()
+      ;(Global.Path as { cache: string }).cache = originalCache
+    }
+  })
+})
+
+describe("BunProc.install range pins (provider SDK compatibility)", () => {
+  // Installs run through Process.run regardless of package manager (npm on
+  // node runtimes, BunProc.run -> Process.run on bun runtimes), so spying
+  // Process.run covers both without touching the real registry.
+  const mockInstallRun = () =>
+    vi.spyOn(Process, "run").mockResolvedValue({ code: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) } as any)
+
+  test("reinstalls when the cached version is outside the requested range (poisoned cache)", async () => {
+    await using tmp = await tmpdir()
+    const originalCache = Global.Path.cache
+    const pkg = "@ai-sdk/anthropic"
+    const manifest = path.join(tmp.path, "package.json")
+    const modDir = path.join(tmp.path, "node_modules", "@ai-sdk", "anthropic")
+    await fs.mkdir(modDir, { recursive: true })
+    // Poisoned cache state from the incident: installed via "latest", which
+    // resolved to a spec-v4 major the bundled ai major does not accept.
+    await fs.writeFile(manifest, JSON.stringify({ dependencies: { [pkg]: "4.0.39" } }))
+    // Simulate the package manager installing the compatible version.
+    await fs.writeFile(path.join(modDir, "package.json"), JSON.stringify({ name: pkg, version: "3.0.66" }))
+
+    const run = mockInstallRun()
+    try {
+      ;(Global.Path as { cache: string }).cache = tmp.path
+      await expect(BunProc.install(pkg, "^3.0.0")).resolves.toBe(path.join(tmp.path, "node_modules", pkg))
+      expect(run).toHaveBeenCalledTimes(1)
+      const cmd = run.mock.calls[0]![0]
+      expect(cmd[cmd.length - 1]).toBe("@ai-sdk/anthropic@^3.0.0")
+      // The concrete installed version is recorded so subsequent starts
+      // compare against the range instead of reinstalling every time.
+      const updated = JSON.parse(await fs.readFile(manifest, "utf-8"))
+      expect(updated.dependencies[pkg]).toBe("3.0.66")
+    } finally {
+      run.mockRestore()
+      ;(Global.Path as { cache: string }).cache = originalCache
+    }
+  })
+
+  test("reuses the cache when the cached version satisfies the requested range", async () => {
+    await using tmp = await tmpdir()
+    const originalCache = Global.Path.cache
+    const pkg = "@ai-sdk/anthropic"
+    const manifest = path.join(tmp.path, "package.json")
+    const modDir = path.join(tmp.path, "node_modules", "@ai-sdk", "anthropic")
+    await fs.mkdir(modDir, { recursive: true })
+    await fs.writeFile(manifest, JSON.stringify({ dependencies: { [pkg]: "3.0.66" } }))
+
+    const run = mockInstallRun()
+    try {
+      ;(Global.Path as { cache: string }).cache = tmp.path
+      await expect(BunProc.install(pkg, "^3.0.0")).resolves.toBe(path.join(tmp.path, "node_modules", pkg))
+      expect(run).not.toHaveBeenCalled()
+    } finally {
+      run.mockRestore()
+      ;(Global.Path as { cache: string }).cache = originalCache
+    }
+  })
+
+  test("exact pins still short-circuit on string equality", async () => {
+    await using tmp = await tmpdir()
+    const originalCache = Global.Path.cache
+    const pkg = "example-plugin"
+    const manifest = path.join(tmp.path, "package.json")
+    await fs.mkdir(path.join(tmp.path, "node_modules", pkg), { recursive: true })
+    await fs.writeFile(manifest, JSON.stringify({ dependencies: { [pkg]: "1.0.0" } }))
+
+    const run = mockInstallRun()
+    try {
+      ;(Global.Path as { cache: string }).cache = tmp.path
+      await expect(BunProc.install(pkg, "1.0.0")).resolves.toBe(path.join(tmp.path, "node_modules", pkg))
+      expect(run).not.toHaveBeenCalled()
+    } finally {
+      run.mockRestore()
       ;(Global.Path as { cache: string }).cache = originalCache
     }
   })
