@@ -24359,6 +24359,62 @@
           "output": 8192
         }
       },
+      "ornith-ai/ornith-1.5-35b-a3b": {
+        "id": "ornith-ai/ornith-1.5-35b-a3b",
+        "name": "Ornith 1.5 35B",
+        "description": "Ornith 1.5 35B A3B is an open-weight mixture-of-experts model for agentic coding, tool use, image understanding, and long-context work. This variant disables thinking for faster direct responses.",
+        "family": "ornith",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-20",
+        "last_updated": "2026-08-20",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
+        }
+      },
+      "ornith-ai/ornith-1.5-35b-a3b:thinking": {
+        "id": "ornith-ai/ornith-1.5-35b-a3b:thinking",
+        "name": "Ornith 1.5 35B Thinking",
+        "description": "Ornith 1.5 35B A3B is an open-weight mixture-of-experts model for agentic coding, reasoning, tool use, image understanding, and long-context work. This variant enables thinking by default.",
+        "family": "ornith",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-20",
+        "last_updated": "2026-08-20",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
+        }
+      },
       "shisa-ai/shisa-v2.1-llama3.3-70b": {
         "id": "shisa-ai/shisa-v2.1-llama3.3-70b",
         "name": "Shisa V2.1 Llama 3.3 70B",
@@ -133286,42 +133342,6 @@
           "output": 128000
         }
       },
-      "deepinfra/tencent/Hy3": {
-        "id": "deepinfra/tencent/Hy3",
-        "name": "Hy3",
-        "description": "Tencent Hy reasoning model for coding, instruction following, and agent tasks",
-        "family": "Hy",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-07-06",
-        "last_updated": "2026-07-06",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 262144,
-          "output": 64000
-        }
-      },
       "deepinfra/nvidia/Nemotron-3-Nano-30B-A3B": {
         "id": "deepinfra/nvidia/Nemotron-3-Nano-30B-A3B",
         "name": "Nemotron 3 Nano 30B A3B",
@@ -153338,6 +153358,58 @@
           "output": 32768
         }
       },
+      "tencent/hy-mt2-30b-a3b": {
+        "id": "tencent/hy-mt2-30b-a3b",
+        "name": "Tencent: Hy-MT2-30B-A3B",
+        "description": "Hy-MT2-30B-A3B is Tencent's flagship translation model in the Hy-MT2 family. It supports 33 language pairs and five Chinese dialect and minority-language pairs, with workflows for structured, delimiter-based, contextual, glossary-based, and...",
+        "family": "Hy",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-20",
+        "last_updated": "2026-08-20",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 4096
+        }
+      },
+      "tencent/hy-mt2-1.8b": {
+        "id": "tencent/hy-mt2-1.8b",
+        "name": "Tencent: Hy-MT2-1.8B",
+        "description": "Hy-MT2-1.8B is a compact 1.8B-parameter translation model from Tencent. It supports 33 language pairs and five Chinese dialect and minority-language pairs, with workflows for structured, delimiter-based, contextual, glossary-based, and style-guided...",
+        "family": "Hy",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-08-20",
+        "last_updated": "2026-08-20",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 4096
+        }
+      },
       "tencent/hy3-preview": {
         "id": "tencent/hy3-preview",
         "name": "Hy3 preview",
@@ -169760,32 +169832,6 @@
         "limit": {
           "context": 1000000,
           "output": 65536
-        }
-      },
-      "nvidia-nemotron-3-5-lightning-30b-a3b": {
-        "id": "nvidia-nemotron-3-5-lightning-30b-a3b",
-        "name": "NVIDIA Nemotron 3.5 Lightning 30B",
-        "description": "Nemotron model for efficient reasoning, coding, and specialized AI agents",
-        "family": "nemotron",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 1000000,
-          "output": 32768
         }
       },
       "claude-sonnet-4-5": {

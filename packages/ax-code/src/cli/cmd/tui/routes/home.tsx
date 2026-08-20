@@ -10,9 +10,13 @@
 
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import { createEffect, createMemo, For, Match, on, onMount, Show, Switch } from "solid-js"
+import { useTerminalDimensions } from "@ax-code/opentui-solid"
 import { useTheme } from "@tui/context/theme"
 import { Logo } from "../component/logo"
+import { ModeChips, modeChipsRowWidth } from "../component/mode-chips"
+import { runMode } from "../component/prompt/run-mode-view-model"
 import { recentSessions, recentSessionTitle } from "../component/session-picker-view-model"
+import { homeStatusBarLayout, homeStatusBarMcpWidth } from "./home-layout"
 import { Locale } from "@/util/locale"
 import { useSync } from "../context/sync"
 import { Toast, useToast } from "../ui/toast"
@@ -158,6 +162,23 @@ export function Home() {
     ),
   )
   const directory = useDirectory()
+  const dimensions = useTerminalDimensions()
+  // The bottom bar stacks vertically once its segments no longer fit on one
+  // line (promptFooterLayout-style degradation; the math lives in home-layout).
+  const statusBarLayout = createMemo(() =>
+    homeStatusBarLayout({
+      terminalWidth: dimensions().width,
+      segmentWidths: [
+        directory().length,
+        mcp() ? homeStatusBarMcpWidth(connectedMcpCount()) : 0,
+        modeChipsRowWidth({
+          workMode: WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)),
+          runMode: runMode({ autonomous: sync.data.autonomous, superLong: sync.data.superLong }),
+        }),
+        Installation.VERSION.length,
+      ],
+    }),
+  )
 
   return (
     <>
@@ -245,7 +266,16 @@ export function Home() {
         <box flexGrow={1} minHeight={0} />
         <Toast />
       </box>
-      <box paddingTop={1} paddingBottom={1} paddingLeft={2} paddingRight={2} flexDirection="row" flexShrink={0} gap={2}>
+      <box
+        paddingTop={1}
+        paddingBottom={1}
+        paddingLeft={2}
+        paddingRight={2}
+        flexDirection={statusBarLayout().stacked ? "column" : "row"}
+        justifyContent={statusBarLayout().stacked ? "flex-start" : "space-between"}
+        flexShrink={0}
+        gap={statusBarLayout().stacked ? 1 : 2}
+      >
         <text fg={theme.textMuted}>{directory()}</text>
         <box gap={1} flexDirection="row" flexShrink={0}>
           <Show when={mcp()}>
@@ -263,7 +293,10 @@ export function Home() {
             <text fg={theme.textMuted}>/status</text>
           </Show>
         </box>
-        <box flexGrow={1} />
+        <ModeChips />
+        <Show when={!statusBarLayout().stacked}>
+          <box flexGrow={1} />
+        </Show>
         <box flexShrink={0}>
           <text fg={theme.textMuted}>{Installation.VERSION}</text>
         </box>
