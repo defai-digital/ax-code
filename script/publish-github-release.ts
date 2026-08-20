@@ -5,6 +5,7 @@ import os from "os"
 import path from "path"
 import { parseArgs } from "util"
 import { AX_CODE_MINISIGN_PUBLIC_KEY_FILE, expandHome } from "./sign-release-assets"
+import { unapprovedTrackedInternalPaths } from "./repository-policy"
 
 export const ROOT = path.resolve(import.meta.dirname, "..")
 
@@ -111,9 +112,10 @@ export function trackedInternalFiles(root = ROOT) {
 }
 
 export function trackedInternalPrivacyIssue(files: readonly string[]) {
-  if (files.length === 0) return undefined
-  const sample = files.slice(0, 5).join(", ")
-  const suffix = files.length > 5 ? `, and ${files.length - 5} more` : ""
+  const unapproved = unapprovedTrackedInternalPaths(files)
+  if (unapproved.length === 0) return undefined
+  const sample = unapproved.slice(0, 5).join(", ")
+  const suffix = unapproved.length > 5 ? `, and ${unapproved.length - 5} more` : ""
   return `.internal files are tracked: ${sample}${suffix}. Remove them from git index before publishing.`
 }
 

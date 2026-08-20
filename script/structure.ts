@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process"
 import { V4Guardrails } from "../packages/ax-code/script/check-no-effect-solid-in-v4"
 import { exists, readText, scan, writeText } from "../packages/ax-code/script/fs-compat"
 import { extractImportSpecifiers } from "./import-specifiers"
-import { INTERNAL_ONLY_ROOTS } from "./repository-policy"
+import { INTERNAL_ONLY_ROOTS, unapprovedTrackedInternalPaths } from "./repository-policy"
 
 const root = path.resolve(import.meta.dirname, "..")
 
@@ -397,11 +397,12 @@ function trackedInternalFiles() {
     const message = (result.stderr?.toString() ?? "").trim()
     throw new Error(message || "failed to inspect tracked internal-only files")
   }
-  return result.stdout
+  const tracked = result.stdout
     .toString()
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
+  return unapprovedTrackedInternalPaths(tracked)
 }
 
 async function main() {
@@ -466,10 +467,10 @@ async function main() {
   out.push("")
   out.push("## Internal Files")
   if (trackedInternal.length) {
-    out.push("- error: internal-only files are tracked; remove them from git index before publishing")
+    out.push("- error: unapproved internal-only files are tracked; remove them from git index before publishing")
     for (const file of trackedInternal) out.push(`- ${file}`)
   } else {
-    out.push("- ok: no internal-only files are tracked")
+    out.push("- ok: only approved internal architecture documents are tracked")
   }
   out.push("")
   out.push("## V4 Guardrails")

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest"
-import { INTERNAL_ONLY_ROOTS, isInternalOnlyPath } from "./repository-policy"
+import {
+  APPROVED_TRACKED_INTERNAL_FILES,
+  INTERNAL_ONLY_ROOTS,
+  isApprovedTrackedInternalPath,
+  isInternalOnlyPath,
+  unapprovedTrackedInternalPaths,
+} from "./repository-policy"
 
 describe("repository internal-only path policy", () => {
   test("recognizes the canonical internal root only", () => {
@@ -14,5 +20,15 @@ describe("repository internal-only path policy", () => {
 
   test("normalizes Windows separators", () => {
     expect(isInternalOnlyPath(".internal\\reports\\qa\\self-scan.md")).toBe(true)
+  })
+
+  test("allows only the explicitly approved AX Code TUI architecture records", () => {
+    expect(APPROVED_TRACKED_INTERNAL_FILES).toHaveLength(6)
+    expect(isApprovedTrackedInternalPath("./.internal/adr/ADR-058-ax-code-tui.md")).toBe(true)
+    expect(isApprovedTrackedInternalPath(".internal\\prd\\PRD-2026-08-20-ax-code-tui.md")).toBe(true)
+    expect(isApprovedTrackedInternalPath(".internal/reports/qa/self-scan.md")).toBe(false)
+    expect(
+      unapprovedTrackedInternalPaths([...APPROVED_TRACKED_INTERNAL_FILES, ".internal/reports/qa/self-scan.md"]),
+    ).toEqual([".internal/reports/qa/self-scan.md"])
   })
 })

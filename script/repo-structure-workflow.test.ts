@@ -27,7 +27,7 @@ describe("repo-structure workflow policy", () => {
 
   test("guards the canonical internal planning folder", () => {
     expect(workflow).toContain('".internal/**"')
-    expect(workflow).toContain("git ls-files .internal")
+    expect(workflow).toContain("script/check-tracked-internal.ts")
     expect(workflow).not.toContain("ax-internal")
   })
 })

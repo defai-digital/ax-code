@@ -84,6 +84,7 @@ describe("publish-github-release helpers", () => {
 
   test("reports tracked internal files as a release privacy issue", () => {
     expect(trackedInternalPrivacyIssue([])).toBeUndefined()
+    expect(trackedInternalPrivacyIssue([".internal/adr/ADR-058-ax-code-tui.md"])).toBeUndefined()
     expect(
       trackedInternalPrivacyIssue([
         ".internal/prd/private.md",

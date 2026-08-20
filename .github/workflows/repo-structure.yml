@@ -80,15 +80,8 @@ jobs:
           path: .internal/reports/qa/self-scan.md
           if-no-files-found: ignore
 
-      - name: Ensure internal planning files are not tracked
-        run: |
-          tracked_internal="$(git ls-files .internal | tr '\n' ' ')"
-          if [ -n "$tracked_internal" ]; then
-            echo "Error: internal planning files are tracked and must stay local-only."
-            echo "Tracked files:"
-            git ls-files .internal
-            exit 1
-          fi
+      - name: Ensure only approved internal architecture files are tracked
+        run: pnpm exec tsx script/check-tracked-internal.ts
 
       # ax-code intentionally does not track or display monetary cost for
       # LLM calls. This guard prevents schema fields, identifiers, or slash
