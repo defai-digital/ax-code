@@ -9,7 +9,7 @@ import { Log } from "@/util/log"
 import { FeatureFlag } from "@/util/feature-flags"
 import { ScopedFlag, isScopedFlagName } from "@/flag/scoped"
 import { toErrorMessage } from "@/util/error-message"
-import { parseJsonResult } from "@/util/json-value"
+import { changedJsoncPatch, JSONC_UNCHANGED, parseJsoncResult, patchJsonc } from "@/util/jsonc"
 import { isRecord } from "@/util/record"
 import { JsonBoolean } from "./query"
 
@@ -121,7 +121,7 @@ export function decodeProjectConfigValue(value: unknown): Config.Info {
 }
 
 export function parseProjectConfigText(text: string): Config.Info {
-  const parsed = parseJsonResult(text)
+  const parsed = parseJsoncResult(text)
   if (!parsed.ok) {
     log.warn("failed to parse project config JSON", { error: parsed.error })
     return {}
@@ -140,18 +140,20 @@ export async function updateProjectConfig<T>(fn: (config: Config.Info) => T | Pr
   using _inProcess = await Lock.write(file)
   using _crossProcess = await FileLock.acquire(file)
   const text = await readProjectConfigTextForUpdate(file)
-  const parsed = parseJsonResult(text)
+  const parsed = parseJsoncResult(text)
   if (!parsed.ok) {
-    throw new Error(`Failed to parse project config JSON in ${file}: ${toErrorMessage(parsed.error)}`, {
-      cause: parsed.error instanceof Error ? parsed.error : undefined,
-    })
+    throw new Error(`Failed to parse project config JSON in ${file}: ${parsed.error}`)
   }
   if (!isRecord(parsed.value)) {
     throw new Error(`Project config must be a JSON object in ${file}`)
   }
   const config = decodeProjectConfigValue(parsed.value)
+  const before = structuredClone(config)
   const result = await fn(config)
-  await Filesystem.writeJson(file, config)
+  const patch = changedJsoncPatch(before, config)
+  if (patch !== JSONC_UNCHANGED) {
+    await Filesystem.write(file, patchJsonc(text, patch))
+  }
   return result
 }
 

@@ -236,6 +236,72 @@ describe("isolation route", () => {
     })
   })
 
+  test("GET honors JSONC comments in ax-code.json", async () => {
+    await withCleanIsolationEnv(async () => {
+      await using tmp = await tmpdir({ git: true })
+      await writeFile(
+        path.join(tmp.path, "ax-code.json"),
+        `{
+  // Default executor
+  "model": "alibaba-token-plan/qwen3.8-max",
+  "isolation": {
+    "mode": "full-access",
+    "network": true
+  }
+}
+`,
+      )
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const response = await Server.Default().request(`/isolation?directory=${encodeURIComponent(tmp.path)}`)
+          expect(response.status).toBe(200)
+          expect(await response.json()).toEqual({ mode: "full-access", network: true })
+          expect(process.env.AX_CODE_ISOLATION_MODE).toBe("full-access")
+        },
+      })
+    })
+  })
+
+  test("PUT persists isolation into JSONC config without stripping comments", async () => {
+    await withCleanIsolationEnv(async () => {
+      await using tmp = await tmpdir({ git: true })
+      const configPath = path.join(tmp.path, "ax-code.json")
+      await writeFile(
+        configPath,
+        `{
+  // keep this comment
+  "model": "alibaba-token-plan/qwen3.8-max",
+  "isolation": {
+    "mode": "workspace-write",
+    "network": false
+  }
+}
+`,
+      )
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const put = await Server.Default().request(`/isolation?directory=${encodeURIComponent(tmp.path)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: "full-access" }),
+          })
+          expect(put.status).toBe(200)
+          expect(await put.json()).toEqual({ mode: "full-access", network: true })
+
+          const updated = await readFile(configPath, "utf-8")
+          expect(updated).toContain("// keep this comment")
+          expect(updated).toContain('"model": "alibaba-token-plan/qwen3.8-max"')
+          expect(updated).toContain('"mode": "full-access"')
+          expect(updated).toContain('"network": true')
+        },
+      })
+    })
+  })
+
   test("PUT response reports requested mode even when env var has a stale value", async () => {
     await withCleanIsolationEnv(async () => {
       await using tmp = await tmpdir({ git: true })

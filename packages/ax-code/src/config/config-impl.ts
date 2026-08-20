@@ -21,6 +21,7 @@ import {
   parse as parseJsonc,
   printParseErrorCode,
 } from "jsonc-parser"
+import { changedJsoncPatch, JSONC_UNCHANGED, patchJsonc } from "@/util/jsonc"
 import { Instance } from "../project/instance"
 import { BunProc } from "@/bun"
 import { NpmManager, packageManagerKind } from "@/bun/package-manager"
@@ -1498,10 +1499,13 @@ export namespace Config {
     // the raw JSONC avoids materializing {file:} or {env:} references from a
     // repository-controlled file back into that file as literal secrets.
     const before = await readFile(filepath)
+    const text = before?.trim() ? before : "{}"
     const existing = before ? parseConfig(before, filepath) : {}
     const merged = mergeConfigConcatArrays(existing, config)
-    const parsed = parseConfig(JSON.stringify(merged), filepath)
-    await Filesystem.writeJson(filepath, parsed)
+    const patch = changedJsoncPatch(existing, merged)
+    const updated = patch === JSONC_UNCHANGED ? text : patchJsonc(text, patch)
+    parseConfig(updated, filepath)
+    if (updated !== before) await Filesystem.write(filepath, updated)
     await Instance.reload({
       directory: Instance.directory,
     })
@@ -1515,32 +1519,6 @@ export namespace Config {
       if (existsSync(file)) return file
     }
     return candidates[0]
-  }
-
-  function applyUndefinedDeletions(target: unknown, source: unknown): unknown {
-    if (!isRecord(source) || !isRecord(target)) return target
-    const next = { ...target }
-    for (const [key, value] of Object.entries(source)) {
-      if (value === undefined) delete next[key]
-      else if (isRecord(value) && isRecord(next[key])) next[key] = applyUndefinedDeletions(next[key], value)
-    }
-    return next
-  }
-
-  function patchJsonc(input: string, patch: unknown, path: string[] = []): string {
-    if (!isRecord(patch)) {
-      const edits = modify(input, path, patch, {
-        formattingOptions: {
-          insertSpaces: true,
-          tabSize: 2,
-        },
-      })
-      return applyEdits(input, edits)
-    }
-
-    return Object.entries(patch).reduce((result, [key, value]) => {
-      return patchJsonc(result, value, [...path, key])
-    }, input)
   }
 
   function parseConfig(text: string, filepath: string): Info {
@@ -1607,14 +1585,9 @@ export namespace Config {
     })
 
     const next = await (async () => {
-      if (!filepath.endsWith(".jsonc")) {
-        const existing = parseConfig(before, filepath)
-        const merged = applyUndefinedDeletions(mergeDeep(existing, config), config)
-        const parsed = parseConfig(JSON.stringify(merged), filepath)
-        await Filesystem.writeJson(filepath, parsed)
-        return parsed
-      }
-
+      // Patch JSONC in place for both `.json` and `.jsonc`. Project/user
+      // ax-code.json files commonly contain comments; rewriting them with
+      // JSON.stringify made isolation/settings persist fail or strip comments.
       const updated = patchJsonc(before, config)
       const merged = parseConfig(updated, filepath)
       await Filesystem.write(filepath, updated)

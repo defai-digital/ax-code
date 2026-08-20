@@ -967,6 +967,36 @@ test("updates config and writes to file", async () => {
   })
 })
 
+test("update preserves JSONC comments in project config", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const filepath = path.join(tmp.path, "ax-code.json")
+  await Filesystem.write(
+    filepath,
+    `{
+  // keep this comment
+  "username": "commented",
+  "isolation": {
+    "mode": "workspace-write",
+    "network": false
+  }
+}
+`,
+  )
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Config.update({ isolation: { mode: "full-access", network: true } })
+    },
+  })
+
+  const written = await Filesystem.readText(filepath)
+  expect(written).toContain("// keep this comment")
+  expect(written).toContain('"username": "commented"')
+  expect(written).toContain('"mode": "full-access"')
+  expect(written).toContain('"network": true')
+})
+
 test("update preserves unevaluated file references in project config", async () => {
   await using outside = await tmpdir({
     init: async (dir) => {

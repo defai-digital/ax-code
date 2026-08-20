@@ -10285,7 +10285,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -10314,7 +10315,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -10356,7 +10358,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -10384,7 +10387,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -10443,7 +10447,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -10590,7 +10595,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -10632,7 +10638,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -10778,7 +10785,8 @@
           "input": [
             "text",
             "image",
-            "audio"
+            "audio",
+            "pdf"
           ],
           "output": [
             "text"
@@ -10842,7 +10850,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -11097,7 +11106,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -11124,7 +11134,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -11300,7 +11311,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -11562,7 +11574,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -11679,7 +11692,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -11856,7 +11870,8 @@
           "input": [
             "text",
             "image",
-            "audio"
+            "audio",
+            "pdf"
           ],
           "output": [
             "text"
@@ -12126,7 +12141,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -12180,7 +12196,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -12287,7 +12304,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -12356,7 +12374,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -12476,7 +12495,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -12591,7 +12611,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -12646,7 +12667,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -12688,7 +12710,7 @@
         "id": "mixtral-8x7B-instruct-v0.1",
         "name": "Mixtral 8x7B Instruct v0.1",
         "description": "Reasoning model for deliberate analysis, multi-step problem solving, and tool use",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "reasoning_options": [],
         "tool_call": false,
@@ -12699,7 +12721,8 @@
         "last_updated": "2023-12-11",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "pdf"
           ],
           "output": [
             "text"
@@ -12768,7 +12791,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -12891,7 +12915,7 @@
         "id": "mistral-7b-instruct-v0.2",
         "name": "mistral-7b-instruct-v0.2",
         "description": "Mistral 7B Instruct is a compact, 7B parameter model optimized for fast and efficient text and code generation with a 32K token context window.",
-        "attachment": false,
+        "attachment": true,
         "reasoning": false,
         "tool_call": false,
         "structured_output": false,
@@ -12900,7 +12924,8 @@
         "last_updated": "2025-05-26",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "pdf"
           ],
           "output": [
             "text"
@@ -12942,7 +12967,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -12969,7 +12995,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -12985,7 +13012,7 @@
         "id": "mistral-large-2402",
         "name": "mistral-large-2402",
         "description": "Mistral Large (24.02) is Mistral AI’s most advanced language model, built for complex multilingual reasoning, code generation, and deep text understanding.",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "reasoning_options": [],
         "tool_call": true,
@@ -12995,7 +13022,8 @@
         "last_updated": "2025-05-26",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "pdf"
           ],
           "output": [
             "text"
@@ -13114,7 +13142,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -13219,7 +13248,8 @@
           "input": [
             "text",
             "image",
-            "audio"
+            "audio",
+            "pdf"
           ],
           "output": [
             "text"
@@ -13293,7 +13323,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -33865,37 +33896,6 @@
           "output": 65536
         }
       },
-      "kimi-k2.7-code": {
-        "id": "kimi-k2.7-code",
-        "name": "Kimi K2.7 Code",
-        "family": "kimi-k2.7-code",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-06-28",
-        "last_updated": "2026-06-28",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 262144,
-          "output": 262144
-        },
-        "status": "active"
-      },
       "qwen-image-2.0": {
         "id": "qwen-image-2.0",
         "name": "Qwen Image 2.0",
@@ -49528,6 +49528,41 @@
         "open_weights": true,
         "limit": {
           "context": 200000,
+          "output": 131072
+        }
+      },
+      "glm-4.7": {
+        "id": "glm-4.7",
+        "name": "GLM-4.7 (Free)",
+        "description": "Mature GLM model for dependable coding, reasoning, and structured agent tasks",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2025-12-22",
+        "last_updated": "2025-12-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 204800,
           "output": 131072
         }
       }
@@ -93974,6 +94009,41 @@
           "context": 200000,
           "output": 131072
         }
+      },
+      "glm-4.7": {
+        "id": "glm-4.7",
+        "name": "GLM-4.7 (Free)",
+        "description": "Mature GLM model for dependable coding, reasoning, and structured agent tasks",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2025-12-22",
+        "last_updated": "2025-12-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 204800,
+          "output": 131072
+        }
       }
     }
   },
@@ -119131,11 +119201,6 @@
               "high",
               "max"
             ]
-          },
-          {
-            "type": "budget_tokens",
-            "min": 1,
-            "max": 393216
           }
         ],
         "tool_call": true,
@@ -120306,6 +120371,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
+            "type": "toggle"
+          },
+          {
             "type": "effort",
             "values": [
               "none",
@@ -120314,6 +120382,11 @@
               "high",
               "max"
             ]
+          },
+          {
+            "type": "budget_tokens",
+            "min": 128,
+            "max": 32768
           }
         ],
         "tool_call": true,
@@ -120567,11 +120640,6 @@
               "high",
               "max"
             ]
-          },
-          {
-            "type": "budget_tokens",
-            "min": 1,
-            "max": 393216
           }
         ],
         "tool_call": true,
@@ -130454,7 +130522,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -130462,8 +130531,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 262144,
-          "output": 262133
+          "context": 1000000,
+          "output": 131072
         }
       },
       "alibaba/qwen3.6-plus": {
@@ -146765,33 +146834,6 @@
           "output": 8192
         }
       },
-      "claude-3-opus": {
-        "id": "claude-3-opus",
-        "name": "Claude 3 Opus",
-        "description": "Flagship Claude model for deep reasoning, coding, and long-horizon agents",
-        "family": "claude",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2024-03-04",
-        "last_updated": "2024-03-04",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 200000,
-          "output": 4096
-        }
-      },
       "llama-4-maverick-17b-instruct": {
         "id": "llama-4-maverick-17b-instruct",
         "name": "Llama 4 Maverick 17B Instruct",
@@ -150008,37 +150050,6 @@
           "context": 1000000,
           "output": 65536
         }
-      },
-      "kimi-k2.7-code": {
-        "id": "kimi-k2.7-code",
-        "name": "Kimi K2.7 Code",
-        "family": "kimi-k2.7-code",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-06-28",
-        "last_updated": "2026-06-28",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 262144,
-          "output": 262144
-        },
-        "status": "active"
       },
       "qwen-image-2.0": {
         "id": "qwen-image-2.0",
@@ -154249,7 +154260,7 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 1048576,
+          "context": 1048575,
           "output": 384000
         }
       },
@@ -162180,8 +162191,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 262144,
-          "output": 262144
+          "context": 1048576,
+          "output": 1048576
         }
       },
       "inclusionai/ring-2.6-1t": {
@@ -163463,32 +163474,6 @@
         "limit": {
           "context": 123000,
           "output": 16000
-        }
-      },
-      "mancer/weaver": {
-        "id": "mancer/weaver",
-        "name": "Mancer: Weaver (alpha)",
-        "description": "General-purpose chat model for instruction following, writing, and analysis",
-        "family": "alpha",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2023-08-02",
-        "last_updated": "2023-08-02",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 8000,
-          "output": 6000
         }
       },
       "sao10k/l3.1-euryale-70b": {
@@ -171701,7 +171686,7 @@
       "Qwen/Qwen3.8-27B": {
         "id": "Qwen/Qwen3.8-27B",
         "name": "Qwen3.8 27B",
-        "description": "Qwen3.8-27B is a dense multimodal model suited for coding, research, multimodal interaction, and long-running agent tasks.",
+        "description": "Qwen3.8-27B is a dense multimodal model suited for coding, research, vision, and long-running agent tasks.",
         "family": "qwen",
         "attachment": true,
         "reasoning": true,

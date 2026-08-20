@@ -25,6 +25,25 @@ describe("project config route decoding", () => {
     })
   })
 
+  test("parses JSONC comments and trailing commas in project config", () => {
+    expect(
+      parseProjectConfigText(`{
+  // sandbox off
+  "model": "openai/gpt-5",
+  "isolation": {
+    "mode": "full-access",
+    "network": true,
+  },
+}`),
+    ).toEqual({
+      model: "openai/gpt-5",
+      isolation: {
+        mode: "full-access",
+        network: true,
+      },
+    })
+  })
+
   test("strips unknown keys while preserving valid config fields", () => {
     expect(parseProjectConfigText(JSON.stringify({ model: "openai/gpt-5", unknown: true }))).toEqual({
       model: "openai/gpt-5",
@@ -122,5 +141,37 @@ describe("project config route decoding", () => {
     })
 
     expect(JSON.parse(await fs.readFile(file, "utf-8"))).toEqual({ super_long: true })
+  })
+
+  test("updates JSONC project config without stripping comments", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "ax-code.json")
+    await fs.writeFile(
+      file,
+      `{
+  // keep this comment
+  "model": "openai/gpt-5",
+  "isolation": {
+    "mode": "workspace-write",
+    "network": false
+  }
+}
+`,
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await updateProjectConfig((config) => {
+          config.isolation = { ...(config.isolation ?? {}), mode: "full-access", network: true }
+        })
+      },
+    })
+
+    const updated = await fs.readFile(file, "utf-8")
+    expect(updated).toContain("// keep this comment")
+    expect(updated).toContain('"model": "openai/gpt-5"')
+    expect(updated).toContain('"mode": "full-access"')
+    expect(updated).toContain('"network": true')
   })
 })
