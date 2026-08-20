@@ -1,5 +1,10 @@
 import { test, expect, describe, vi } from "vitest"
-import { buildCliCommand, cliEnv, CliLanguageModel, extractJsonPayload } from "../../../src/provider/cli/cli-language-model"
+import {
+  buildCliCommand,
+  cliEnv,
+  CliLanguageModel,
+  extractJsonPayload,
+} from "../../../src/provider/cli/cli-language-model"
 import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
 import { claudeCodeParser, grokBuildCliParser, qoderCliParser } from "../../../src/provider/cli/parser"
 import { usageSource } from "../../../src/provider/usage"
@@ -135,9 +140,7 @@ describe("CliLanguageModel", () => {
     await using tmp = await tmpdir()
     // `grok -p` prints plain multi-line text (no JSONL events). The stdout
     // line split must not eat the newlines that carry markdown structure.
-    const spawn = vi
-      .spyOn(Process, "spawn")
-      .mockImplementation(() => successfulChild("LINE1\nLINE2\n\nLINE3\n"))
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => successfulChild("LINE1\nLINE2\n\nLINE3\n"))
 
     try {
       await Instance.provide({
@@ -244,7 +247,7 @@ describe("CliLanguageModel", () => {
   test("extractJsonPayload handles fences, prose wrapping, and non-JSON", () => {
     expect(extractJsonPayload('{"a":1}')).toBe('{"a":1}')
     expect(extractJsonPayload('```json\n{"a":1}\n```')).toBe('{"a":1}')
-    expect(extractJsonPayload('```\n[1,2]\n```')).toBe("[1,2]")
+    expect(extractJsonPayload("```\n[1,2]\n```")).toBe("[1,2]")
     expect(extractJsonPayload('Here is the review: {"a":{"b":2}} Hope that helps!')).toBe('{"a":{"b":2}}')
     expect(extractJsonPayload("no json here at all")).toBe("no json here at all")
     expect(extractJsonPayload("unbalanced { not json")).toBe("unbalanced { not json")
@@ -1319,7 +1322,7 @@ describe("CliLanguageModel", () => {
       const cmd = buildCliCommand(
         {
           providerID: "kimi-cli",
-          modelID: "kimi-for-coding",
+          modelID: "kimi-code/k3",
           binary: "kimi",
           args: definition?.args ?? [],
           parser: definition!.parser,
@@ -1329,7 +1332,7 @@ describe("CliLanguageModel", () => {
         "ping",
       )
 
-      expect(cmd).toEqual(["kimi", "--output-format", "stream-json", "--model", "kimi-for-coding", "-p", "ping"])
+      expect(cmd).toEqual(["kimi", "--output-format", "stream-json", "--model", "kimi-code/k3", "-p", "ping"])
     } finally {
       restoreAutonomous()
     }

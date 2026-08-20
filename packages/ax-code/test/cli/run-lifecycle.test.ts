@@ -1,7 +1,12 @@
 import { expect, test } from "vitest"
 import path from "path"
 import { readFile } from "node:fs/promises"
-import { findRunModelError, formatRunToolFallbackInput } from "../../src/cli/cmd/run"
+import {
+  findRunModelError,
+  formatRunToolFallbackInput,
+  refreshRunProvidersOnModelMiss,
+  resolveRunAgentDisplayName,
+} from "../../src/cli/cmd/run"
 
 test("run command fallback tool formatter handles non-json-safe input", () => {
   const input: Record<string, unknown> = { count: 1n }
@@ -31,12 +36,85 @@ test("run command model validation flags unknown provider or model (#405)", () =
 
 test("run command validates an explicit model before creating a session", async () => {
   const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const refresh = src.indexOf("await refreshRunProvidersOnModelMiss(")
   const validate = src.indexOf("const modelError = findRunModelError(")
   const create = src.indexOf("await session(sdk)")
 
+  expect(refresh).toBeGreaterThan(-1)
   expect(validate).toBeGreaterThan(-1)
+  expect(validate).toBeGreaterThan(refresh)
   expect(create).toBeGreaterThan(validate)
-  expect(src).toContain("await sdk.provider")
+  expect(src).toContain("const initialProviders = await listProviders()")
+  expect(src).toContain("if (!args.attach) await Provider.ready()")
+  expect(src).toContain("[Provider.DISCOVERY_WAIT_HEADER]")
+})
+
+test("run command waits for discovery only after the requested model misses", async () => {
+  const known = [{ id: "qwen", models: { max: {} } }]
+  let fastPathRefreshes = 0
+  const fastPath = await refreshRunProvidersOnModelMiss({
+    providers: known,
+    providerID: "qwen",
+    modelID: "max",
+    refresh: async () => {
+      fastPathRefreshes++
+      return undefined
+    },
+  })
+  expect(fastPath).toBe(known)
+  expect(fastPathRefreshes).toBe(0)
+
+  let release = () => {}
+  let settled = false
+  const discovery = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  const local = refreshRunProvidersOnModelMiss({
+    providers: known,
+    providerID: "kimi-cli",
+    modelID: "kimi-code/k3",
+    refresh: async () => {
+      await discovery
+      return [{ id: "kimi-cli", models: { "kimi-code/k3": {} } }]
+    },
+  }).then((providers) => {
+    settled = true
+    return providers
+  })
+  await Promise.resolve()
+  expect(settled).toBe(false)
+  release()
+  await expect(local).resolves.toEqual([{ id: "kimi-cli", models: { "kimi-code/k3": {} } }])
+  expect(settled).toBe(true)
+})
+
+test("attached run event rendering does not read local agent state", async () => {
+  let localReads = 0
+  let attachedReads = 0
+  const attached = await resolveRunAgentDisplayName({
+    agentName: "build",
+    attached: true,
+    listLocalAgents: async () => {
+      localReads++
+      return [{ name: "dev", displayName: "Dev" }]
+    },
+    listAttachedAgents: async () => {
+      attachedReads++
+      return [{ name: "build", displayName: "Build" }]
+    },
+  })
+  expect(attached).toBe("Build")
+  expect(localReads).toBe(0)
+  expect(attachedReads).toBe(1)
+
+  const local = await resolveRunAgentDisplayName({
+    agentName: "dev",
+    attached: false,
+    listLocalAgents: async () => [{ name: "dev", displayName: "Dev" }],
+    listAttachedAgents: async () => [],
+  })
+  expect(local).toBe("Dev")
 })
 
 test("run command awaits the event loop before bootstrap cleanup", async () => {

@@ -124,6 +124,29 @@ export function findRunModelError(input: {
   return undefined
 }
 
+type RunProviderList = { id: string; models: Record<string, unknown> }[]
+
+export async function refreshRunProvidersOnModelMiss(input: {
+  providers: RunProviderList
+  providerID: string
+  modelID: string
+  refresh: () => Promise<RunProviderList | undefined>
+}) {
+  if (!findRunModelError(input)) return input.providers
+  return input.refresh()
+}
+
+export async function resolveRunAgentDisplayName(input: {
+  agentName: string
+  attached: boolean
+  listLocalAgents: () => Promise<Array<{ name: string; displayName?: string }>>
+  listAttachedAgents: () => Promise<Array<{ name: string; displayName?: string }>>
+}) {
+  const agents = await (input.attached ? input.listAttachedAgents() : input.listLocalAgents())
+  const entry = agents.find((agent) => agent.name === input.agentName)
+  return entry?.displayName ?? input.agentName
+}
+
 function fallback(part: ToolPart) {
   const state = part.state
   const input = "input" in state ? state.input : undefined
@@ -573,8 +596,17 @@ export const RunCommand = cmd({
             toggles.get("start") !== true
           ) {
             UI.empty()
-            const agentEntry = (await Agent.list()).find((a) => a.name === event.properties.info.agent)
-            UI.println(`> ${agentEntry?.displayName ?? event.properties.info.agent} · ${event.properties.info.modelID}`)
+            const agentName = await resolveRunAgentDisplayName({
+              agentName: event.properties.info.agent,
+              attached: Boolean(args.attach),
+              listLocalAgents: () => Agent.list(),
+              listAttachedAgents: () =>
+                sdk.app
+                  .agents()
+                  .then((result) => result.data ?? [])
+                  .catch(() => []),
+            })
+            UI.println(`> ${agentName} · ${event.properties.info.modelID}`)
             UI.empty()
             toggles.set("start", true)
           }
@@ -737,14 +769,30 @@ export const RunCommand = cmd({
         } catch (error) {
           exitEarly(toErrorMessage(error))
         }
-        const providers = await sdk.provider
-          .list()
-          .then((result) => result.data)
-          .catch(() => undefined)
+        const listProviders = (waitForDiscovery = false) =>
+          sdk.provider
+            .list(undefined, waitForDiscovery ? { headers: { [Provider.DISCOVERY_WAIT_HEADER]: "true" } } : undefined)
+            .then((result) => result.data?.all)
+            .catch(() => undefined)
+        const initialProviders = await listProviders()
+        const providers = initialProviders
+          ? await refreshRunProvidersOnModelMiss({
+              providers: initialProviders,
+              providerID: providerID!,
+              modelID: modelID!,
+              refresh: async () => {
+                // Keep discovery off the fast path for models already present
+                // in the snapshot. Only a miss waits for the complete local or
+                // attached-server list, then validates once more.
+                if (!args.attach) await Provider.ready()
+                return listProviders(Boolean(args.attach))
+              },
+            })
+          : undefined
         if (!providers) {
           warnPrefix(`failed to list providers; skipping validation for model "${args.model}"`)
         } else {
-          const modelError = findRunModelError({ providers: providers.all, providerID: providerID!, modelID: modelID! })
+          const modelError = findRunModelError({ providers, providerID: providerID!, modelID: modelID! })
           if (modelError) exitEarly(modelError)
         }
       }

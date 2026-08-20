@@ -17,6 +17,13 @@ const DEFAULTS: Record<string, string> = {
   "kimi-cli": "kimi-cli",
 }
 
+const KIMI_CODE_LEGACY_MODEL_IDS = new Set(["k3", "k3-256k", "kimi-for-coding", "kimi-for-coding-highspeed"])
+
+export function normalizeKimiCodeModelID(model: string) {
+  const trimmed = model.trim()
+  return KIMI_CODE_LEGACY_MODEL_IDS.has(trimmed) ? `kimi-code/${trimmed}` : trimmed
+}
+
 type JsonLike = CliJsonObject
 
 export function parseCliSettingsJson(text: string): JsonLike | null {
@@ -120,12 +127,12 @@ async function resolveKimiModelFromConfig(configPath: string, source: string): P
   if (!toml) return
   const model = resolveTomlDefaultModel(toml)
   if (!model) return
-  return { model, source }
+  return { model: normalizeKimiCodeModelID(model), source }
 }
 
 async function resolveKimiModel(): Promise<CliModelInfo> {
   const envModel = process.env.KIMI_MODEL?.trim()
-  if (envModel) return { model: envModel, source: "KIMI_MODEL" }
+  if (envModel) return { model: normalizeKimiCodeModelID(envModel), source: "KIMI_MODEL" }
 
   // Official Kimi Code CLI home override (current), then legacy share-dir override.
   const codeHome = process.env.KIMI_CODE_HOME?.trim()

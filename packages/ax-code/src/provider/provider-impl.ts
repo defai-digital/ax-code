@@ -54,6 +54,11 @@ import { ProviderSdkCompat } from "./sdk-compat"
 export namespace Provider {
   const log = Log.create({ service: "provider" })
 
+  // Internal opt-in used by headless attached clients that must validate an
+  // explicit model against the complete discovery result. Ordinary provider
+  // lists remain non-blocking so TUI startup stays responsive.
+  export const DISCOVERY_WAIT_HEADER = "x-ax-code-wait-for-provider-discovery"
+
   function isFileUrlSpecifier(value: string) {
     try {
       return new URL(value).protocol === "file:"

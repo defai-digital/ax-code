@@ -268,6 +268,20 @@ describe("resolveCliModel", () => {
     })
   })
 
+  test("kimi-cli normalizes known legacy KIMI_MODEL aliases", async () => {
+    await withKimiEnv({ model: "k3", codeHome: null, shareDir: null }, async () => {
+      const info = await resolveCliModel("kimi-cli")
+      expect(info).toEqual({ model: "kimi-code/k3", source: "KIMI_MODEL" })
+    })
+  })
+
+  test("kimi-cli preserves custom unqualified model aliases", async () => {
+    await withKimiEnv({ model: "team-model", codeHome: null, shareDir: null }, async () => {
+      const info = await resolveCliModel("kimi-cli")
+      expect(info).toEqual({ model: "team-model", source: "KIMI_MODEL" })
+    })
+  })
+
   test("kimi-cli reads default_model from ~/.kimi-code/config.toml", async () => {
     await using tmp = await tmpdir()
     await withKimiEnv({ home: tmp.path, model: null, codeHome: null, shareDir: null }, async () => {
@@ -310,7 +324,7 @@ describe("resolveCliModel", () => {
 
       const info = await resolveCliModel("kimi-cli")
       expect(info).toEqual({
-        model: "kimi-for-coding",
+        model: "kimi-code/kimi-for-coding",
         source: "~/.kimi/config.toml",
       })
     })
@@ -336,7 +350,7 @@ describe("resolveCliModel", () => {
 
       const info = await resolveCliModel("kimi-cli")
       expect(info).toEqual({
-        model: "kimi-for-coding",
+        model: "kimi-code/kimi-for-coding",
         source: "$KIMI_SHARE_DIR/config.toml",
       })
     })

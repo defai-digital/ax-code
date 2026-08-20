@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { Auth } from "../../src/auth"
@@ -17,6 +17,7 @@ import {
 import { AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID } from "../../src/provider/ax-engine"
 import { AxEnginePaths } from "../../src/provider/ax-engine/paths"
 import { Log } from "../../src/util/log"
+import { Provider } from "../../src/provider/provider"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
@@ -100,6 +101,45 @@ describe("provider routes", () => {
     expect(ids).not.toContain("gemini-cli")
     expect(ids).not.toContain("antigravity-cli")
     expect(ids).toContain("kimi-cli")
+  })
+
+  test("waits for provider discovery when a headless client requests a complete list", async () => {
+    await using tmp = await tmpdir({ git: true })
+    let enteredResolve = () => {}
+    let release = () => {}
+    const entered = new Promise<void>((resolve) => {
+      enteredResolve = resolve
+    })
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const ready = vi.spyOn(Provider, "ready").mockImplementation(async () => {
+      enteredResolve()
+      await gate
+    })
+
+    try {
+      let settled = false
+      const request = Promise.resolve(
+        Server.Default().request(`/provider?directory=${encodeURIComponent(tmp.path)}`, {
+          headers: { [Provider.DISCOVERY_WAIT_HEADER]: "true" },
+        }),
+      ).then((response) => {
+        settled = true
+        return response
+      })
+
+      await entered
+      await Promise.resolve()
+      expect(settled).toBe(false)
+      release()
+      const response = await request
+      expect(response.status).toBe(200)
+      expect(ready).toHaveBeenCalledOnce()
+    } finally {
+      ready.mockRestore()
+      release()
+    }
   })
 
   test("rejects an empty PAI-EAS connection body", async () => {

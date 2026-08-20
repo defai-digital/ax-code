@@ -242,6 +242,7 @@ export const ProviderRoutes = lazy(() =>
         },
       }),
       async (c) => {
+        if (c.req.header(Provider.DISCOVERY_WAIT_HEADER) === "true") await Provider.ready()
         const config = await Config.get()
         const disabled = new Set(config.disabled_providers ?? [])
         const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
