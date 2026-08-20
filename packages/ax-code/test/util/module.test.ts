@@ -83,6 +83,25 @@ describe("util.module", () => {
     expect(Module.resolveEntry(pkg)).toBe(entry)
   })
 
+  test("resolveEntry follows a package export subpath", async () => {
+    await using tmp = await tmpdir()
+    const pkg = path.join(tmp.path, "node_modules/@ai-sdk/google-vertex")
+    const entry = path.join(pkg, "dist/anthropic/index.js")
+    await Filesystem.write(entry, "export function createVertexAnthropic() {}\n")
+    await Filesystem.writeJson(path.join(pkg, "package.json"), {
+      name: "@ai-sdk/google-vertex",
+      type: "module",
+      exports: {
+        ".": { import: "./dist/index.js" },
+        "./anthropic": { import: "./dist/anthropic/index.js" },
+      },
+    })
+
+    expect(Module.resolveEntry(pkg, "anthropic")).toBe(entry)
+    expect(Module.resolveEntry(pkg, "../escape")).toBeUndefined()
+    expect(Module.resolveEntry(pkg, "missing")).toBeUndefined()
+  })
+
   test("resolveEntry falls back to package.json main", async () => {
     await using tmp = await tmpdir()
     const pkg = path.join(tmp.path, "sdk")

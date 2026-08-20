@@ -62,9 +62,9 @@ export namespace Provider {
     }
   }
 
-  function providerImportSpecifier(installedPath: string) {
+  function providerImportSpecifier(installedPath: string, subpath?: string) {
     const fsPath = isFileUrlSpecifier(installedPath) ? fileURLToPath(installedPath) : installedPath
-    const entry = Module.resolveEntry(fsPath)
+    const entry = Module.resolveEntry(fsPath, subpath)
     if (!entry) {
       throw new Error(
         `Could not resolve provider package entry for ${installedPath}. Node cannot import a package directory; the package needs a file entry (exports/module/main).`,
@@ -946,7 +946,10 @@ export namespace Provider {
         }
 
         let installedPath: string
+        let installedSubpath: string | undefined
         if (!isFileUrl) {
+          const runtimePackage = ProviderSdkCompat.runtimePackage(model.api.npm)
+          installedSubpath = runtimePackage.subpath
           const now = Date.now()
           for (const [pkg, failure] of providerInstallFailures) {
             if (now - failure.at >= PROVIDER_INSTALL_NEGATIVE_CACHE_MS) providerInstallFailures.delete(pkg)
@@ -966,7 +969,7 @@ export namespace Provider {
             // bundled ai major; BunProc.install reinstalls when the cached
             // version falls outside the range.
             installedPath = await withTimeout(
-              BunProc.install(model.api.npm, ProviderSdkCompat.installVersion(model.api.npm)),
+              BunProc.install(runtimePackage.name, ProviderSdkCompat.installVersion(runtimePackage.name)),
               PROVIDER_INSTALL_TIMEOUT_MS,
               `installing provider package timed out: ${model.api.npm}`,
             )
@@ -1010,7 +1013,7 @@ export namespace Provider {
         }
 
         const mod = await withTimeout(
-          import(providerImportSpecifier(installedPath)),
+          import(providerImportSpecifier(installedPath, installedSubpath)),
           15_000,
           `loading provider module timed out: ${model.api.npm}`,
         )

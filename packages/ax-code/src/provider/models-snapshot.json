@@ -99889,7 +99889,7 @@
       },
       "muse-spark-1.2-contributor-free": {
         "id": "muse-spark-1.2-contributor-free",
-        "name": "Muse Spark 1.2 Contributor Free",
+        "name": "Muse Spark 1.2 Free",
         "description": "Muse Spark 1.2 is a coding-focused update to Muse Spark 1.1 with improvements in code generation, complex debugging, codebase understanding, and end-to-end developer workflows.",
         "family": "muse-free",
         "attachment": true,
@@ -121522,6 +121522,48 @@
     "name": "SCNet Token Plan",
     "doc": "https://www.scnet.cn/ac/openapi/doc/2.0/moduleapi/plans/token-plan.html",
     "models": {
+      "DeepSeek-V4-Pro": {
+        "id": "DeepSeek-V4-Pro",
+        "name": "DeepSeek V4 Pro",
+        "description": "Open MoE flagship with million-token context for coding and long agent runs",
+        "family": "deepseek-thinking",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-04-24",
+        "last_updated": "2026-04-24",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        }
+      },
       "MiniMax-M2.7": {
         "id": "MiniMax-M2.7",
         "name": "MiniMax-M2.7",
@@ -121548,6 +121590,84 @@
         "open_weights": true,
         "limit": {
           "context": 204800,
+          "output": 131072
+        }
+      },
+      "DeepSeek-V4-Flash-0731": {
+        "id": "DeepSeek-V4-Flash-0731",
+        "name": "DeepSeek V4 Flash 0731",
+        "description": "Official DeepSeek V4 Flash release with enhanced agentic capabilities and integrated DSpark speculative decoding",
+        "family": "deepseek-flash",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-07-31",
+        "last_updated": "2026-07-31",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        }
+      },
+      "Qwen3.8-Max": {
+        "id": "Qwen3.8-Max",
+        "name": "Qwen3.8 Max",
+        "description": "2.4-trillion-parameter MoE flagship for coding, professional work, multimodal understanding, and long-horizon agentic workflows",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "release_date": "2026-08-03",
+        "last_updated": "2026-08-03",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
           "output": 131072
         }
       },
@@ -166210,6 +166330,45 @@
         "limit": {
           "context": 32768,
           "output": 32768
+        }
+      },
+      "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16": {
+        "id": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16",
+        "name": "Nemotron 3.5 Lightning 30B A3B",
+        "description": "Fast NVIDIA Nemotron MoE for reliable agentic tasks across enterprise workloads",
+        "family": "nemotron",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-11",
+        "last_updated": "2026-08-11",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 8192,
+          "output": 4096
         }
       },
       "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16": {

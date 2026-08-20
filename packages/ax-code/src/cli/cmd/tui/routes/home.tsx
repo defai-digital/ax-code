@@ -32,6 +32,7 @@ import { useLocal } from "../context/local"
 import { WorkMode } from "@/mode/work-mode"
 import { recordTuiStartupOnce } from "@tui/util/startup-trace"
 import { isNonEmptyRecord } from "@/util/record"
+import { stringWidth } from "@/bun/node-compat"
 
 // --prompt must fire exactly once per process: Home remounts on every return
 // to the home route (/new, session deletion), so a per-mount flag would
@@ -169,13 +170,13 @@ export function Home() {
     homeStatusBarLayout({
       terminalWidth: dimensions().width,
       segmentWidths: [
-        directory().length,
+        stringWidth(directory()),
         mcp() ? homeStatusBarMcpWidth(connectedMcpCount()) : 0,
         modeChipsRowWidth({
           workMode: WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)),
           runMode: runMode({ autonomous: sync.data.autonomous, superLong: sync.data.superLong }),
         }),
-        Installation.VERSION.length,
+        stringWidth(Installation.VERSION),
       ],
     }),
   )
@@ -294,9 +295,6 @@ export function Home() {
           </Show>
         </box>
         <ModeChips />
-        <Show when={!statusBarLayout().stacked}>
-          <box flexGrow={1} />
-        </Show>
         <box flexShrink={0}>
           <text fg={theme.textMuted}>{Installation.VERSION}</text>
         </box>

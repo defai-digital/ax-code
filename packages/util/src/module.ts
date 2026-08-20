@@ -17,17 +17,26 @@ export namespace Module {
    * package.json has `exports`; Homebrew/compiled ax-code hits this after
    * BunProc.install() returns the package folder.
    */
-  export function resolveEntry(target: string): string | undefined {
+  export function resolveEntry(target: string, subpath?: string): string | undefined {
     const stat = statAt(target)
     if (!stat) return undefined
     if (stat.isFile()) return asFile(target)
     if (!stat.isDirectory()) return undefined
 
     const packageDir = path.resolve(target)
+    if (subpath !== undefined) {
+      if (!isSafeSubpath(subpath)) return undefined
+      return confineToPackage(packageDir, resolveEntryFromManifest(packageDir, subpath))
+    }
     const fromRequire = confineToPackage(packageDir, resolve(".", packageDir))
     if (fromRequire) return fromRequire
     return confineToPackage(packageDir, resolveEntryFromManifest(packageDir))
   }
+}
+
+function isSafeSubpath(value: string) {
+  if (!value || path.isAbsolute(value) || value.includes("\\")) return false
+  return value.split("/").every((part) => part !== "" && part !== "." && part !== "..")
 }
 
 function statAt(target: string) {
@@ -76,7 +85,7 @@ function isInside(parent: string, child: string) {
   return rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)
 }
 
-function resolveEntryFromManifest(packageDir: string): string | undefined {
+function resolveEntryFromManifest(packageDir: string, subpath?: string): string | undefined {
   const manifestPath = path.join(packageDir, "package.json")
   let manifest: Record<string, unknown>
   try {
@@ -85,7 +94,13 @@ function resolveEntryFromManifest(packageDir: string): string | undefined {
     return undefined
   }
   if (!manifest || typeof manifest !== "object") return undefined
-  const fromExports = pickExport(manifest.exports, ESM_EXPORT_CONDITIONS)
+  const exportsValue = (() => {
+    if (subpath === undefined) return manifest.exports
+    if (!manifest.exports || typeof manifest.exports !== "object" || Array.isArray(manifest.exports)) return undefined
+    return (manifest.exports as Record<string, unknown>)[`./${subpath}`]
+  })()
+  const fromExports = pickExport(exportsValue, ESM_EXPORT_CONDITIONS)
+  if (subpath !== undefined) return fromExports ? path.resolve(packageDir, fromExports) : undefined
   const relative = fromExports ?? stringField(manifest.module) ?? stringField(manifest.main)
   return relative ? path.resolve(packageDir, relative) : undefined
 }

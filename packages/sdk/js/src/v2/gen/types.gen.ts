@@ -2628,7 +2628,7 @@ export type Config = {
        */
       maxMembers?: number
       /**
-       * Per-member timeout in ms for council fan-out (default: 60000).
+       * Per-member timeout in ms for council fan-out (default: 180000; reasoning models receive twice this budget).
        */
       timeoutMs?: number
       /**

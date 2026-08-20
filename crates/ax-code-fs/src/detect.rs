@@ -521,6 +521,7 @@ pub struct HardcodeFinding {
 struct HardcodePatterns {
     suppress: Regex,
     const_assignment: Regex,
+    value_assignment: Regex,
     magic: Regex,
     enum_declaration: Regex,
     url: Regex,
@@ -528,6 +529,8 @@ struct HardcodePatterns {
     secret: Regex,
     base64: Regex,
     class_name: Regex,
+    namespaced_runtime_identifier: Regex,
+    protocol_identifier: Regex,
     snake: Regex,
     kebab: Regex,
     hex: Regex,
@@ -540,6 +543,10 @@ static HARDCODE_PATTERNS: LazyLock<HardcodePatterns> = LazyLock::new(|| Hardcode
         r"^\s*(export\s+)?(const|let|var)\s+[A-Z_][A-Z0-9_]*\s*(:[^=]+)?=",
     )
     .unwrap(),
+    value_assignment: Regex::new(
+        r"^\s*(export\s+)?(const|let|var)\s+[A-Z_a-z][A-Z_a-z0-9]*\s*(:[^=]+)?=",
+    )
+    .unwrap(),
     magic: Regex::new(r"-?\d+(?:\.\d+)?").unwrap(),
     enum_declaration: Regex::new(r"^\s*(export\s+)?(enum|type)\s").unwrap(),
     url: Regex::new(r#"https?://[^\s"')<>]+"#).unwrap(),
@@ -548,6 +555,11 @@ static HARDCODE_PATTERNS: LazyLock<HardcodePatterns> = LazyLock::new(|| Hardcode
     secret: Regex::new(r#"(["'`])([A-Za-z0-9_\-+/=]{20,})(["'`])"#).unwrap(),
     base64: Regex::new(r"^[A-Za-z0-9+/]+=*$").unwrap(),
     class_name: Regex::new(r"^[A-Z][a-zA-Z0-9]*([A-Z][a-zA-Z0-9]*){2,}$").unwrap(),
+    namespaced_runtime_identifier: Regex::new(
+        r"^[A-Z][A-Z0-9]*_[A-Z][A-Za-z0-9]*(Error|Exception|Warning|Event|Code|Status|Type)$",
+    )
+    .unwrap(),
+    protocol_identifier: Regex::new(r"^[A-Za-z][A-Za-z0-9_.-]*(/[A-Za-z0-9_.-]+)+$").unwrap(),
     snake: Regex::new(r"^[a-z][a-z0-9]*(_[a-z0-9]+)+$").unwrap(),
     kebab: Regex::new(r"^[a-z][a-z0-9]*(-[a-z0-9]+)+$").unwrap(),
     hex: Regex::new(r"(?i)^[a-f0-9]+$").unwrap(),
@@ -601,39 +613,77 @@ fn has_char_class_diversity(s: &str) -> bool {
     false
 }
 
-fn strip_comments(line: &str, in_block: &mut bool) -> String {
-    let mut out = String::new();
-    let mut remaining = line;
-
-    if *in_block {
-        if let Some(close) = remaining.find("*/") {
-            remaining = &remaining[close + 2..];
-            *in_block = false;
-        } else {
-            return String::new();
-        }
+fn is_alphabet_constant(s: &str) -> bool {
+    if !s.bytes().all(|byte| byte.is_ascii_alphanumeric()) {
+        return false;
     }
+    if s.bytes().collect::<HashSet<_>>().len() != s.len() {
+        return false;
+    }
+    s.contains("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+        || s.contains("abcdefghijklmnopqrstuvwxyz")
+        || s.contains("0123456789")
+}
 
-    loop {
-        if let Some(open) = remaining.find("/*") {
-            out.push_str(&remaining[..open]);
-            if let Some(close) = remaining[open + 2..].find("*/") {
-                remaining = &remaining[open + 2 + close + 2..];
+fn strip_comments(line: &str, in_block: &mut bool) -> String {
+    // Comment delimiters inside string/template literals are data (most
+    // notably the `//` in every http(s) URL). Replace actual comment bytes
+    // with spaces instead of removing them so detector columns still map to
+    // the original source line.
+    let mut out = line.as_bytes().to_vec();
+    let mut quote: Option<u8> = None;
+    let mut escaped = false;
+    let mut i = 0;
+
+    while i < out.len() {
+        if *in_block {
+            if i + 1 < out.len() && out[i] == b'*' && out[i + 1] == b'/' {
+                out[i] = b' ';
+                out[i + 1] = b' ';
+                *in_block = false;
+                i += 2;
             } else {
-                *in_block = true;
-                break;
+                out[i] = b' ';
+                i += 1;
             }
-        } else {
-            out.push_str(remaining);
+            continue;
+        }
+
+        if let Some(delimiter) = quote {
+            let byte = out[i];
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == delimiter {
+                quote = None;
+            }
+            i += 1;
+            continue;
+        }
+
+        if matches!(out[i], b'"' | b'\'' | b'`') {
+            quote = Some(out[i]);
+            i += 1;
+            continue;
+        }
+        if i + 1 < out.len() && out[i] == b'/' && out[i + 1] == b'/' {
+            out[i..].fill(b' ');
             break;
         }
+        if i + 1 < out.len() && out[i] == b'/' && out[i + 1] == b'*' {
+            out[i] = b' ';
+            out[i + 1] = b' ';
+            *in_block = true;
+            i += 2;
+            continue;
+        }
+        i += 1;
     }
 
-    // Strip line comment (naive: doesn't handle // inside strings)
-    if let Some(lc) = out.find("//") {
-        out.truncate(lc);
-    }
-    out
+    // Replacing individual non-ASCII comment bytes with ASCII spaces leaves a
+    // valid UTF-8 string because every byte in the affected span is replaced.
+    String::from_utf8(out).expect("comment stripping preserves UTF-8")
 }
 
 fn is_word_byte(byte: u8) -> bool {
@@ -642,6 +692,10 @@ fn is_word_byte(byte: u8) -> bool {
 
 fn is_const_assignment(line: &str) -> bool {
     HARDCODE_PATTERNS.const_assignment.is_match(line)
+}
+
+fn is_value_assignment(line: &str) -> bool {
+    HARDCODE_PATTERNS.value_assignment.is_match(line)
 }
 
 fn truncate_with_ellipsis(value: &str, max_bytes: usize) -> String {
@@ -684,18 +738,21 @@ fn scan_hardcodes(
         if stripped.trim().is_empty() {
             continue;
         }
-        let trimmed = stripped.trim();
+        // Scan the column-preserving line. Trimming here used to shift every
+        // finding on indented code to the left, so native results disagreed
+        // with the JavaScript fallback's one-based source columns.
+        let scan_line = stripped.as_str();
 
         // Magic numbers
         if enabled.contains("magic_number")
             && !is_const_assignment(line)
             && !patterns.enum_declaration.is_match(line)
         {
-            for mat in patterns.magic.find_iter(trimmed) {
+            for mat in patterns.magic.find_iter(scan_line) {
                 if findings.len() >= max {
                     break;
                 }
-                let bytes = trimmed.as_bytes();
+                let bytes = scan_line.as_bytes();
                 if mat.start() > 0 && is_word_byte(bytes[mat.start() - 1]) {
                     continue;
                 }
@@ -713,11 +770,11 @@ fn scan_hardcodes(
                     }
                 }
                 // Skip array indices like [0]
-                let before = &trimmed[..mat.start()];
+                let before = &scan_line[..mat.start()];
                 let after_idx = mat.end();
                 if before.ends_with('[')
-                    && after_idx < trimmed.len()
-                    && trimmed.as_bytes()[after_idx] == b']'
+                    && after_idx < scan_line.len()
+                    && scan_line.as_bytes()[after_idx] == b']'
                 {
                     continue;
                 }
@@ -740,8 +797,8 @@ fn scan_hardcodes(
         }
 
         // Inline URLs
-        if enabled.contains("inline_url") && !is_const_assignment(line) {
-            for mat in patterns.url.find_iter(trimmed) {
+        if enabled.contains("inline_url") && !is_value_assignment(line) {
+            for mat in patterns.url.find_iter(scan_line) {
                 if findings.len() >= max {
                     break;
                 }
@@ -767,8 +824,8 @@ fn scan_hardcodes(
         }
 
         // Inline paths
-        if enabled.contains("inline_path") {
-            for caps in patterns.path.captures_iter(trimmed) {
+        if enabled.contains("inline_path") && !is_value_assignment(line) {
+            for caps in patterns.path.captures_iter(scan_line) {
                 if findings.len() >= max {
                     break;
                 }
@@ -790,7 +847,7 @@ fn scan_hardcodes(
 
         // Secret shapes
         if enabled.contains("inline_secret_shape") {
-            for caps in patterns.secret.captures_iter(trimmed) {
+            for caps in patterns.secret.captures_iter(scan_line) {
                 if findings.len() >= max {
                     break;
                 }
@@ -805,6 +862,12 @@ fn scan_hardcodes(
                     continue;
                 }
                 if patterns.class_name.is_match(val) {
+                    continue;
+                }
+                if patterns.namespaced_runtime_identifier.is_match(val) {
+                    continue;
+                }
+                if patterns.protocol_identifier.is_match(val) || is_alphabet_constant(val) {
                     continue;
                 }
                 if patterns.snake.is_match(val) {
@@ -1140,12 +1203,67 @@ mod tests {
         hardcoded_path.push('世');
         hardcoded_path.push_str("tail");
 
-        let content = format!("const path = \"{}\";", hardcoded_path);
+        let content = format!("readFile(\"{}\");", hardcoded_path);
         let findings = scan_hardcodes(&content, "src/app.ts", &enabled(&["inline_path"]), 10);
 
         assert_eq!(findings.len(), 1);
         assert!(findings[0].value.ends_with("..."));
         assert!(findings[0].value.is_char_boundary(findings[0].value.len()));
+    }
+
+    #[test]
+    fn hardcode_scan_skips_symbolic_identifiers_and_named_url_or_path_values() {
+        let content = r#"
+const errorName = "AI_UnsupportedModelVersionError"
+const apiUrl = "https://api.example.com/v1"
+const dataDir = "/Users/deploy/data"
+const diagnostic = "textDocument/publishDiagnostics"
+const base62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+const token = "KEY_aB9cD8eF7gH6iJ5kL4mN3oP2qR1sT0uVwXyZ"
+    fetch("https://inline.example.com/data")
+    readFile("/Users/hardcoded/secrets")
+"#;
+        let findings = scan_hardcodes(
+            content,
+            "src/config.ts",
+            &enabled(&["inline_secret_shape", "inline_url", "inline_path"]),
+            10,
+        );
+        let values: Vec<&str> = findings
+            .iter()
+            .map(|finding| finding.value.as_str())
+            .collect();
+
+        assert!(!values.contains(&"AI_UnsupportedModelVersionError"));
+        assert!(!values.iter().any(|value| value.contains("api.example.com")));
+        assert!(!values.iter().any(|value| value.contains("deploy")));
+        assert!(
+            !values
+                .iter()
+                .any(|value| value.contains("publishDiagnostics"))
+        );
+        assert!(
+            !values
+                .iter()
+                .any(|value| value.contains("ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
+        );
+        assert!(values.iter().any(|value| value.starts_with("KEY_aB9cD8")));
+        assert!(
+            values
+                .iter()
+                .any(|value| value.contains("inline.example.com"))
+        );
+        assert!(values.iter().any(|value| value.contains("hardcoded")));
+        let url = findings
+            .iter()
+            .find(|finding| finding.value.contains("inline.example.com"))
+            .unwrap();
+        let path = findings
+            .iter()
+            .find(|finding| finding.value.contains("hardcoded"))
+            .unwrap();
+        assert_eq!(url.column, 12);
+        assert_eq!(path.column, 14);
     }
 
     #[test]

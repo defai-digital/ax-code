@@ -43365,7 +43365,7 @@
                     "maximum": 9007199254740991
                   },
                   "timeoutMs": {
-                    "description": "Per-member timeout in ms for council fan-out (default: 60000).",
+                    "description": "Per-member timeout in ms for council fan-out (default: 180000; reasoning models receive twice this budget).",
                     "type": "integer",
                     "exclusiveMinimum": 0,
                     "maximum": 9007199254740991

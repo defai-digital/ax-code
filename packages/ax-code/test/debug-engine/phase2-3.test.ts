@@ -686,6 +686,27 @@ describe("detectHardcodes — precision overhaul", () => {
     })
   })
 
+  test("does not flag namespaced runtime identifiers as secrets", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "errors.ts"),
+      [
+        'const errorName = "AI_UnsupportedModelVersionError"',
+        'const real = "KEY_aB9cD8eF7gH6iJ5kL4mN3oP2qR1sT0uVwXyZ"',
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectHardcodes(projectID, { patterns: ["inline_secret_shape"] })
+        const values = report.findings.map((f) => f.value)
+        expect(values).not.toContain("AI_UnsupportedModelVersionError")
+        expect(values).toContain("KEY_aB9cD8eF7gH6iJ5kL4mN3oP2qR1sT0uVwXyZ")
+      },
+    })
+  })
+
   test("does not flag snake_case identifiers as secrets", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(

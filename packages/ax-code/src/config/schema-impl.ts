@@ -1056,7 +1056,7 @@ export const Info = z
               "Maximum council members per invocation (default: 3, hard max: 6).",
             ),
             timeoutMs: PositiveInteger.optional().describe(
-              "Per-member timeout in ms for council fan-out (default: 60000).",
+              "Per-member timeout in ms for council fan-out (default: 180000; reasoning models receive twice this budget).",
             ),
             debateRounds: NonNegativeInteger.optional().describe(
               "Optional multi-round anonymous debate rounds (default: 0; Phase 3+).",

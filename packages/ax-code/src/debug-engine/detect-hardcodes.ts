@@ -168,6 +168,11 @@ function looksLikeClassName(s: string): boolean {
 // SVG path data, common long identifiers, snake_case/kebab-case names.
 function isKnownNonSecret(s: string): boolean {
   if (looksLikeClassName(s)) return true
+  // Namespaced runtime identifiers such as
+  // `AI_UnsupportedModelVersionError` are symbolic names, not credentials.
+  // Require a conventional symbolic suffix so token-shaped values such as
+  // `KEY_ab12...` still go through the entropy detector.
+  if (/^[A-Z][A-Z0-9]*_[A-Z][A-Za-z0-9]*(?:Error|Exception|Warning|Event|Code|Status|Type)$/.test(s)) return true
   // Protocol method names and module paths are stable identifiers, not
   // credentials. They can look high-entropy because they mix camelCase
   // segments with `/`, e.g. `textDocument/publishDiagnostics`.
