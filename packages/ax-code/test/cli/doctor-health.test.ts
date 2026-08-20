@@ -42,6 +42,29 @@ describe("doctor running instances", () => {
     })
   })
 
+  test("collapses PID-only TUI process chains into one running instance", async () => {
+    const parents = new Map([
+      [200, 1],
+      [201, 200],
+      [202, 201],
+    ])
+    const check = await getRunningInstancesCheck({
+      currentPid: 100,
+      run: async (command) => {
+        if (command[0] === "pgrep") return "100\n200\n201\n202\n"
+        const pid = Number(command.at(-1))
+        return `${parents.get(pid) ?? 1}\n`
+      },
+    })
+
+    expect(check).toEqual({
+      name: "Running instances",
+      status: "warn",
+      detail:
+        "1 other ax-code process(es) found — this may block startup or cause port conflicts. PIDs: 200. Run: killall ax-code",
+    })
+  })
+
   test("ignores malformed non-decimal pgrep pid fields", async () => {
     const check = await getRunningInstancesCheck({
       currentPid: 100,
@@ -102,6 +125,44 @@ describe("doctor recent logs", () => {
       name: "Recent errors",
       status: "warn",
       detail: "ERROR newest issue",
+    })
+  })
+
+  test("does not treat the packaged TUI entrypoint in an unrelated stack as a TUI error", async () => {
+    const line =
+      'ERROR 2026-08-20T00:06:55 service=llm error={"error":{"name":"AI_APICallError","message":"Usage limit reached","stack":"AI_APICallError: Usage limit reached\\n at file:///opt/ax-code/index-node-tui.js:258299:18"}} stream error'
+
+    const checks = await getRecentLogsChecks({
+      logDir: "/tmp/logs",
+      now: 12_000,
+      readdir: async () => ["packaged.log"],
+      stat: async () => ({ mtimeMs: 10_000 }),
+      readFile: async () => line,
+    })
+
+    expect(checks[1]).toEqual({
+      name: "Recent errors",
+      status: "warn",
+      detail: line.slice(0, 120),
+    })
+  })
+
+  test("still fails for errors emitted by a TUI service", async () => {
+    const line =
+      'ERROR 2026-08-20T00:06:55 service=tui.renderer error=Render failed stack="Error: Render failed\\n at render.js:1:1"'
+
+    const checks = await getRecentLogsChecks({
+      logDir: "/tmp/logs",
+      now: 12_000,
+      readdir: async () => ["tui.log"],
+      stat: async () => ({ mtimeMs: 10_000 }),
+      readFile: async () => line,
+    })
+
+    expect(checks[1]).toEqual({
+      name: "TUI errors in logs",
+      status: "fail",
+      detail: `[tui.log] ${line}`,
     })
   })
 })

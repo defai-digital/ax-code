@@ -1,7 +1,6 @@
 import path from "path"
 import fs from "fs/promises"
 import { Process } from "../../util/process"
-import { text } from "node:stream/consumers"
 
 export type DoctorCheck = {
   name: string
@@ -14,6 +13,7 @@ const READ_ONLY_AX_CODE_PATTERNS = [/(\s|^)doctor(\s|$)/, /(\s|^)--version(\s|$)
 const RECENT_LOG_WINDOW_MS = 24 * 60 * 60 * 1000
 const MAX_RECENT_LOG_FILES = 5
 const DEFAULT_RUN_TIMEOUT_MS = 5_000
+const STACK_FIELD_PATTERN = /(?:\sstack=|"stack"\s*:)/i
 
 function isReadOnlyAxCodeCommand(command: string) {
   return READ_ONLY_AX_CODE_PATTERNS.some((pattern) => pattern.test(command))
@@ -21,6 +21,23 @@ function isReadOnlyAxCodeCommand(command: string) {
 
 function isLogFile(name: string) {
   return name.endsWith(".log")
+}
+
+function isTuiError(line: string) {
+  // Every packaged stack trace points at index-node-tui.js, including provider
+  // and session errors. Only inspect the structured fields and error message so
+  // that the bundle entrypoint does not turn unrelated failures into TUI crashes.
+  const stackField = line.search(STACK_FIELD_PATTERN)
+  const lower = line.slice(0, stackField === -1 ? undefined : stackField).toLowerCase()
+  return (
+    lower.includes("tui") ||
+    lower.includes("renderer") ||
+    lower.includes("worker") ||
+    lower.includes("jsx") ||
+    lower.includes("react") ||
+    lower.includes("unhandled") ||
+    lower.includes("crash")
+  )
 }
 
 function parseDecimalPid(value: string): number | undefined {
@@ -60,7 +77,28 @@ export async function getRunningInstancesCheck(
     .filter((item): item is { pid: number; command: string } => item.pid !== undefined && item.pid !== currentPid)
     .filter((item) => !isReadOnlyAxCodeCommand(item.command))
 
-  if (others.length === 0) {
+  // Linux `pgrep -a` includes argv, but macOS uses `-a` for a different
+  // purpose and returns PIDs only. Once process.title is set to "ax-code", the
+  // TUI backend (and the source-mode launcher) cannot be identified from argv.
+  // Collapse ax-code parent/child chains so one TUI is reported as one running
+  // instance on both platforms.
+  const pids = new Set(others.map((item) => item.pid))
+  const parentPids = await Promise.all(
+    others.map(async (item) => {
+      try {
+        const output = await run(["ps", "-o", "ppid=", "-p", String(item.pid)])
+        return parseDecimalPid(output.trim())
+      } catch {
+        return undefined
+      }
+    }),
+  )
+  const instances = others.filter((_, index) => {
+    const parentPid = parentPids[index]
+    return parentPid === undefined || !pids.has(parentPid)
+  })
+
+  if (instances.length === 0) {
     return { name: "Running instances", status: "ok", detail: "No other ax-code processes" }
   }
 
@@ -68,8 +106,8 @@ export async function getRunningInstancesCheck(
     name: "Running instances",
     status: "warn",
     detail:
-      `${others.length} other ax-code process(es) found — this may block startup or cause port conflicts. ` +
-      `PIDs: ${others.map((item) => item.pid).join(", ")}. Run: killall ax-code`,
+      `${instances.length} other ax-code process(es) found — this may block startup or cause port conflicts. ` +
+      `PIDs: ${instances.map((item) => item.pid).join(", ")}. Run: killall ax-code`,
   }
 }
 
@@ -134,16 +172,7 @@ export async function getRecentLogsChecks(input: {
     }
 
     for (const line of errors) {
-      const lower = line.toLowerCase()
-      if (
-        lower.includes("tui") ||
-        lower.includes("renderer") ||
-        lower.includes("worker") ||
-        lower.includes("jsx") ||
-        lower.includes("react") ||
-        lower.includes("unhandled") ||
-        lower.includes("crash")
-      ) {
+      if (isTuiError(line)) {
         tuiErrors.push(`[${path.basename(entry.target)}] ${line.slice(0, 160)}`)
       }
     }
@@ -181,16 +210,10 @@ export async function getRecentLogsChecks(input: {
 }
 
 async function defaultRun(command: string[]) {
-  const proc = Process.spawn(command, {
-    stdout: "pipe",
-    stderr: "pipe",
+  const result = await Process.text(command, {
     timeout: DEFAULT_RUN_TIMEOUT_MS,
+    nothrow: true,
   })
-  const [code, stdout, stderr] = await Promise.all([
-    proc.exited,
-    proc.stdout ? text(proc.stdout) : Promise.resolve(""),
-    proc.stderr ? text(proc.stderr) : Promise.resolve(""),
-  ])
-  if (code === 124) return `command timed out after ${DEFAULT_RUN_TIMEOUT_MS}ms`
-  return code === 0 ? stdout : stderr
+  if (result.code === 124) return `command timed out after ${DEFAULT_RUN_TIMEOUT_MS}ms`
+  return result.code === 0 ? result.text : result.stderr.toString()
 }
