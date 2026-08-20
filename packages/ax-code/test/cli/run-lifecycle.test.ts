@@ -1,7 +1,7 @@
 import { expect, test } from "vitest"
 import path from "path"
 import { readFile } from "node:fs/promises"
-import { formatRunToolFallbackInput } from "../../src/cli/cmd/run"
+import { findRunModelError, formatRunToolFallbackInput } from "../../src/cli/cmd/run"
 
 test("run command fallback tool formatter handles non-json-safe input", () => {
   const input: Record<string, unknown> = { count: 1n }
@@ -15,6 +15,28 @@ test("run command fallback tool formatter handles non-json-safe input", () => {
       },
     }),
   ).toBe("Unknown")
+})
+
+test("run command model validation flags unknown provider or model (#405)", () => {
+  const providers = [{ id: "anthropic", models: { "claude-sonnet-4": {} } }]
+
+  expect(findRunModelError({ providers, providerID: "anthropic", modelID: "claude-sonnet-4" })).toBeUndefined()
+  expect(findRunModelError({ providers, providerID: "openai", modelID: "gpt-5" })).toContain(
+    'Unknown provider "openai"',
+  )
+  expect(findRunModelError({ providers, providerID: "anthropic", modelID: "nope" })).toContain(
+    'Model "nope" not found for provider "anthropic"',
+  )
+})
+
+test("run command validates an explicit model before creating a session", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const validate = src.indexOf("const modelError = findRunModelError(")
+  const create = src.indexOf("await session(sdk)")
+
+  expect(validate).toBeGreaterThan(-1)
+  expect(create).toBeGreaterThan(validate)
+  expect(src).toContain("await sdk.provider")
 })
 
 test("run command awaits the event loop before bootstrap cleanup", async () => {

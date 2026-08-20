@@ -111,6 +111,19 @@ export function formatRunToolFallbackInput(input: unknown): string {
   }
 }
 
+export function findRunModelError(input: {
+  providers: { id: string; models: Record<string, unknown> }[]
+  providerID: string
+  modelID: string
+}): string | undefined {
+  const provider = input.providers.find((item) => item.id === input.providerID)
+  if (!provider) return `Unknown provider "${input.providerID}" for model "${input.providerID}/${input.modelID}"`
+  if (!provider.models[input.modelID]) {
+    return `Model "${input.modelID}" not found for provider "${input.providerID}"`
+  }
+  return undefined
+}
+
 function fallback(part: ToolPart) {
   const state = part.state
   const input = "input" in state ? state.input : undefined
@@ -710,6 +723,31 @@ export const RunCommand = cmd({
         }
         return args.agent
       })()
+
+      // Validate an explicitly requested model before creating a session so a
+      // typo'd or removed -m/--model fails fast instead of leaving behind a
+      // ghost session that only errors server-side after creation (#405).
+      if (args.model) {
+        let providerID: string
+        let modelID: string
+        try {
+          const parsed = Provider.parseModel(args.model)
+          providerID = parsed.providerID
+          modelID = parsed.modelID
+        } catch (error) {
+          exitEarly(toErrorMessage(error))
+        }
+        const providers = await sdk.provider
+          .list()
+          .then((result) => result.data)
+          .catch(() => undefined)
+        if (!providers) {
+          warnPrefix(`failed to list providers; skipping validation for model "${args.model}"`)
+        } else {
+          const modelError = findRunModelError({ providers: providers.all, providerID: providerID!, modelID: modelID! })
+          if (modelError) exitEarly(modelError)
+        }
+      }
 
       const sessionID = (await session(sdk)) ?? exitEarly("Session not found")
 
