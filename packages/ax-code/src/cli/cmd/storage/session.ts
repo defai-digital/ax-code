@@ -26,6 +26,25 @@ function printSuccess(message: string) {
   UI.println(`${UI.Style.TEXT_SUCCESS_BOLD}${message}${UI.Style.TEXT_NORMAL}`)
 }
 
+async function confirmDestructiveAction(prompt: string) {
+  if (!process.stdin.isTTY) {
+    UI.error("Confirmation required but stdin is not interactive; re-run with --force to proceed")
+    process.exitCode = 1
+    return false
+  }
+  const readline = await import("readline")
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+  const answer = await new Promise<string>((resolve) => {
+    rl.question(`${prompt} (y/N) `, resolve)
+  })
+  rl.close()
+  if (answer.toLowerCase() !== "y") {
+    UI.println("Cancelled.")
+    return false
+  }
+  return true
+}
+
 function pagerCmd(): string[] {
   if (process.platform !== "win32") {
     return ["less", ...lessPagerOptions]
@@ -346,6 +365,11 @@ export const SessionPruneCommand = cmd({
         describe: "delete sessions older than this many days (default: config session.ttl_days or 30)",
         type: "number",
       })
+      .option("force", {
+        describe: "skip confirmation prompt",
+        type: "boolean",
+        default: false,
+      })
       .check(async (argv) => {
         if (argv.days !== undefined) {
           const { Session } = await import("../../../session")
@@ -360,6 +384,9 @@ export const SessionPruneCommand = cmd({
       const { Config } = await import("../../../config/config")
       const cfg = await Config.get()
       const days = Session.validatePruneTtlDays(args.days ?? cfg.session?.ttl_days ?? 30)
+
+      if (!args.force && !(await confirmDestructiveAction(`Prune sessions older than ${days} days?`))) return
+
       const pruned = await Session.pruneExpired(days)
 
       if (pruned === 0) {
@@ -376,11 +403,17 @@ export const SessionDeleteCommand = cmd({
   command: "delete <sessionID>",
   describe: "delete a session",
   builder: (yargs: Argv) => {
-    return yargs.positional("sessionID", {
-      describe: "session ID to delete",
-      type: "string",
-      demandOption: true,
-    })
+    return yargs
+      .positional("sessionID", {
+        describe: "session ID to delete",
+        type: "string",
+        demandOption: true,
+      })
+      .option("force", {
+        describe: "skip confirmation prompt",
+        type: "boolean",
+        default: false,
+      })
   },
   handler: async (args) => {
     const { Session } = await import("../../../session")
@@ -393,6 +426,9 @@ export const SessionDeleteCommand = cmd({
         UI.error(`Session not found: ${args.sessionID}`)
         process.exit(1)
       }
+
+      if (!args.force && !(await confirmDestructiveAction(`Delete session ${args.sessionID}?`))) return
+
       await Session.remove(sessionID)
       printSuccess(`Session ${args.sessionID} deleted`)
     })
