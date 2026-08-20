@@ -1,4 +1,4 @@
-import { normalizePath } from "./paths"
+import { normalizePath } from "./paths.js"
 
 const REGEX_SPECIAL = /[.+^${}()|[\]\\]/g
 

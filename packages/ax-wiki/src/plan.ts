@@ -1,7 +1,7 @@
 import path from "node:path"
-import { matchesGlob } from "./glob"
-import { safeRelativePath } from "./paths"
-import type { AxWikiConfig, WikiPlan, WikiPlanPage, WikiSource } from "./types"
+import { matchesGlob } from "./glob.js"
+import { safeRelativePath } from "./paths.js"
+import type { AxWikiConfig, WikiPlan, WikiPlanPage, WikiSource } from "./types.js"
 
 const RESERVED_DIRS = new Set(["docs", "test", "tests", ".github", "scripts", "script", "tools", "examples"])
 

@@ -1,4 +1,4 @@
-import type { WikiPageGenerationResult, WikiPlanPage, WikiSource } from "./types"
+import type { WikiPageGenerationResult, WikiPlanPage, WikiSource } from "./types.js"
 
 function yamlString(value: string): string {
   return JSON.stringify(value)
