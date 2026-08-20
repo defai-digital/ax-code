@@ -6,9 +6,9 @@ describe("internal URL identity", () => {
     expect(internalBaseUrl()).toBe("http://ax-code.internal")
   })
 
-  test("accepts AX and compatibility hostnames but not the retired TUI hostname", () => {
+  test("accepts AX and legacy compatibility hostnames", () => {
     expect(isInternalHostname("ax-code.internal")).toBe(true)
     expect(isInternalHostname("opencode.internal")).toBe(true)
-    expect(isInternalHostname("opentui.internal")).toBe(false)
+    expect(isInternalHostname("legacy-tui.internal")).toBe(false)
   })
 })

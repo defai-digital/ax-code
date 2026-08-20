@@ -54,11 +54,11 @@ describe("createAxCodeClient", () => {
     expect(() => createAxCodeClientV2({ baseUrl: "https://ax-code.example.com" })).toThrow("local-only")
   })
 
-  test("uses the AX synthetic hostname and rejects the retired TUI hostname", () => {
+  test("uses the AX synthetic hostname", () => {
     expect(() => createAxCodeClient({ baseUrl: "http://ax-code.internal" })).not.toThrow()
     expect(() => createAxCodeClientV2({ baseUrl: "http://ax-code.internal" })).not.toThrow()
-    expect(() => createAxCodeClient({ baseUrl: "http://opentui.internal" })).toThrow("local-only")
-    expect(() => createAxCodeClientV2({ baseUrl: "http://opentui.internal" })).toThrow("local-only")
+    expect(() => createAxCodeClient({ baseUrl: "http://legacy-tui.internal" })).toThrow("local-only")
+    expect(() => createAxCodeClientV2({ baseUrl: "http://legacy-tui.internal" })).toThrow("local-only")
   })
 
   test("allows same-origin relative base URLs in browser clients", () => {
