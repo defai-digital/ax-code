@@ -175,6 +175,7 @@ export namespace SessionProcessor {
           partID: event.partID as PartID,
           field: event.field,
           delta: event.delta,
+          offset: event.offset,
         }),
       onFlushError: (error) => log.warn("delta flush failed", { error }),
     })
@@ -388,10 +389,11 @@ export namespace SessionProcessor {
                 case "reasoning-delta":
                   if (value.id in reasoningMap) {
                     const part = reasoningMap[value.id]
+                    const offset = part.text.length
                     part.text += value.text
                     guardStreamOutput(value.text)
                     if (value.providerMetadata) part.metadata = value.providerMetadata
-                    deltaBatcher.push(part.id, value.text)
+                    deltaBatcher.push(part.id, value.text, offset)
                     // Coalesce SQLite progress snapshots for long reasoning.
                     partWriteBatcher.schedule({ ...part })
                   }
@@ -1122,10 +1124,11 @@ export namespace SessionProcessor {
 
                 case "text-delta":
                   if (currentText) {
+                    const offset = currentText.text.length
                     currentText.text += value.text
                     guardStreamOutput(value.text)
                     if (value.providerMetadata) currentText.metadata = value.providerMetadata
-                    deltaBatcher.push(currentText.id, value.text)
+                    deltaBatcher.push(currentText.id, value.text, offset)
                     // Coalesce progress snapshots so multi-KB streams do not
                     // issue one DB write per provider delta (PERF-05).
                     partWriteBatcher.schedule({ ...currentText })

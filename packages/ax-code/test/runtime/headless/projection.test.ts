@@ -479,4 +479,99 @@ describe("headless projection", () => {
     })
     expect(state.message["ses_1"]?.[0]).toBe(originalMessage)
   })
+
+  test("a delta already contained in an applied snapshot does not duplicate text", () => {
+    const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
+
+    // text-start persists the empty part.
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "prt_1", messageID: "msg_1", type: "text", text: "" } },
+    })
+
+    // The full-snapshot channel (or a bootstrap refetch / replay) lands first
+    // with the complete streamed text...
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "prt_1", messageID: "msg_1", type: "text", text: "Wed 19 Aug 2026, 22:46:03 EDT" } },
+    })
+
+    // ...then the first stream chunk — already contained in that snapshot —
+    // arrives on the delta channel. It must not be appended again ("WedWed").
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.delta",
+      properties: {
+        sessionID: "ses_1",
+        messageID: "msg_1",
+        partID: "prt_1",
+        field: "text",
+        delta: "Wed 19 Aug 2026, 22:46:03 EDT",
+        offset: 0,
+      },
+    })
+    expect(state.part["msg_1"]?.[0]?.text).toBe("Wed 19 Aug 2026, 22:46:03 EDT")
+  })
+
+  test("replay-style full-text delta against an already-populated part does not duplicate text", () => {
+    const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
+
+    // A bootstrap refetch populated the part from the DB...
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "prt_1", messageID: "msg_1", type: "text", text: "full stored answer" } },
+    })
+
+    // ...then replay emits the whole stored part text as a single text-delta
+    // (offset 0). Every character is already applied — nothing may append.
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.delta",
+      properties: {
+        sessionID: "ses_1",
+        messageID: "msg_1",
+        partID: "prt_1",
+        field: "text",
+        delta: "full stored answer",
+        offset: 0,
+      },
+    })
+    expect(state.part["msg_1"]?.[0]?.text).toBe("full stored answer")
+  })
+
+  test("offset deltas append only the missing suffix, ignore gaps, and heal from snapshots", () => {
+    const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
+
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "prt_1", messageID: "msg_1", type: "text", text: "" } },
+    })
+
+    const delta = (text: string, offset: number) =>
+      applyHeadlessProjectionEvent(state, {
+        type: "message.part.delta",
+        properties: { sessionID: "ses_1", messageID: "msg_1", partID: "prt_1", field: "text", delta: text, offset },
+      })
+    const text = () => state.part["msg_1"]?.[0]?.text
+
+    // Normal ordered streaming.
+    delta("hello", 0)
+    expect(text()).toBe("hello")
+
+    // Partially contained delta: only the not-yet-applied suffix appends.
+    delta("lo world", 3)
+    expect(text()).toBe("hello world")
+
+    // Fully contained duplicate delta: no-op.
+    delta("hello world", 0)
+    expect(text()).toBe("hello world")
+
+    // Gap (offset beyond the current text): ignored — the following snapshot
+    // is authoritative and heals the hole.
+    delta("!!!", 99)
+    expect(text()).toBe("hello world")
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "prt_1", messageID: "msg_1", type: "text", text: "hello world!" } },
+    })
+    expect(text()).toBe("hello world!")
+  })
 })

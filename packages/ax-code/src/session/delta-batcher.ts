@@ -12,10 +12,17 @@ export type DeltaPublish = (input: {
   partID: string
   field: "text"
   delta: string
+  /** Accumulated text length before the first chunk of this batch. */
+  offset?: number
 }) => Promise<unknown> | unknown
 
 export type DeltaBatcher = {
-  push(partID: string, delta: string): void
+  /**
+   * Buffer a delta. `offset` is the accumulated text length before this
+   * delta; a flushed batch carries the offset of its first chunk (chunks
+   * within a batch are contiguous by producer order).
+   */
+  push(partID: string, delta: string, offset?: number): void
   /** Flush immediately; returns a promise when work was pending. */
   flush(): Promise<unknown> | undefined
 }
@@ -31,7 +38,7 @@ export function createDeltaBatcher(input: {
   schedule?: (fn: () => void, ms: number) => { clear: () => void }
 }): DeltaBatcher {
   const windowMs = input.windowMs ?? 16
-  const pending = new Map<string, string[]>()
+  const pending = new Map<string, { offset?: number; chunks: string[] }>()
   let timer: { clear: () => void } | undefined
 
   const defaultSchedule = (fn: () => void, ms: number) => {
@@ -47,14 +54,15 @@ export function createDeltaBatcher(input: {
     const entries = [...pending]
     pending.clear()
     return Promise.all(
-      entries.map(([partID, chunks]) =>
+      entries.map(([partID, batch]) =>
         Promise.resolve(
           input.publish({
             sessionID: input.sessionID,
             messageID: input.messageID,
             partID,
             field: "text",
-            delta: chunks.join(""),
+            delta: batch.chunks.join(""),
+            offset: batch.offset,
           }),
         ),
       ),
@@ -62,10 +70,10 @@ export function createDeltaBatcher(input: {
   }
 
   return {
-    push(partID: string, delta: string) {
+    push(partID: string, delta: string, offset?: number) {
       const existing = pending.get(partID)
-      if (existing) existing.push(delta)
-      else pending.set(partID, [delta])
+      if (existing) existing.chunks.push(delta)
+      else pending.set(partID, { offset, chunks: [delta] })
       if (!timer) {
         timer = schedule(() => {
           flush()?.catch((error) => input.onFlushError?.(error))

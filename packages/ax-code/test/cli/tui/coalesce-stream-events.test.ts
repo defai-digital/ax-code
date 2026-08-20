@@ -92,6 +92,60 @@ describe("coalesceStreamEvents", () => {
     ]
     expect(coalesceStreamEvents(events)).toEqual(events)
   })
+
+  test("merges contiguous offset deltas and keeps the first chunk's offset", () => {
+    const merged = coalesceStreamEvents([
+      {
+        type: "message.part.delta",
+        properties: { messageID: "m1", partID: "p1", field: "text", delta: "Hel", offset: 0 },
+      },
+      {
+        type: "message.part.delta",
+        properties: { messageID: "m1", partID: "p1", field: "text", delta: "lo", offset: 3 },
+      },
+    ])
+
+    expect(merged).toEqual([
+      {
+        type: "message.part.delta",
+        properties: { messageID: "m1", partID: "p1", field: "text", delta: "Hello", offset: 0 },
+      },
+    ])
+  })
+
+  test("trims the overlap when merging offset deltas instead of duplicating it", () => {
+    const merged = coalesceStreamEvents([
+      {
+        type: "message.part.delta",
+        properties: { messageID: "m1", partID: "p1", field: "text", delta: "hello", offset: 0 },
+      },
+      {
+        type: "message.part.delta",
+        properties: { messageID: "m1", partID: "p1", field: "text", delta: "lo world", offset: 3 },
+      },
+    ])
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0]?.properties?.delta).toBe("hello world")
+    expect(merged[0]?.properties?.offset).toBe(0)
+  })
+
+  test("keeps non-contiguous offset deltas separate so the gap stays visible", () => {
+    const merged = coalesceStreamEvents([
+      {
+        type: "message.part.delta",
+        properties: { messageID: "m1", partID: "p1", field: "text", delta: "ab", offset: 0 },
+      },
+      {
+        type: "message.part.delta",
+        properties: { messageID: "m1", partID: "p1", field: "text", delta: "cd", offset: 5 },
+      },
+    ])
+
+    expect(merged).toHaveLength(2)
+    expect(merged[0]?.properties?.delta).toBe("ab")
+    expect(merged[1]?.properties?.delta).toBe("cd")
+  })
 })
 
 describe("createStreamDeltaCoalescer", () => {

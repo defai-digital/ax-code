@@ -11,7 +11,14 @@ export type HeadlessMessageEvent<
   | { type: "message.part.updated"; properties: { part: TPart } }
   | {
       type: "message.part.delta"
-      properties: { sessionID: string; messageID: string; partID: string; field: string; delta: string }
+      properties: {
+        sessionID: string
+        messageID: string
+        partID: string
+        field: string
+        delta: string
+        offset?: number
+      }
     }
   | { type: "message.part.removed"; properties: { sessionID: string; messageID: string; partID: string } }
 

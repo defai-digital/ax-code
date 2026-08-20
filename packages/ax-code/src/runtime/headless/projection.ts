@@ -198,7 +198,13 @@ export function applyHeadlessProjectionEvent<
 
     case "message.part.delta":
       if (event.properties.field === "text") {
-        appendPartTextDelta(state.part, event.properties.messageID, event.properties.partID, event.properties.delta)
+        appendPartTextDelta(
+          state.part,
+          event.properties.messageID,
+          event.properties.partID,
+          event.properties.delta,
+          event.properties.offset,
+        )
       }
       return { handled: true, effects }
 
@@ -432,13 +438,27 @@ function appendPartTextDelta<TPart extends { id: string; messageID: string }>(
   messageID: string,
   partID: string,
   delta: string,
+  offset?: number,
 ) {
   const list = parts[messageID] ?? []
   const result = Binary.search(list, partID, (entry) => entry.id)
   if (!result.found) return
   const part = list[result.index] as TPart & { type?: string; text?: string }
   if (part.type !== "text" && part.type !== "reasoning") return
-  part.text = (part.text ?? "") + delta
+  const current = part.text ?? ""
+  // Offset = accumulated text length before this delta. The same text also
+  // arrives via full `message.part.updated` snapshots, and the two channels
+  // are not ordered against each other (independent 16ms coalescing windows,
+  // bootstrap refetches, replay). Reconcile instead of blindly appending:
+  // append only the suffix not yet applied; a delta ahead of the accumulated
+  // text (gap) is skipped — the next snapshot is authoritative and heals it.
+  if (typeof offset === "number") {
+    if (offset > current.length) return
+    part.text = current + delta.slice(current.length - offset)
+    return
+  }
+  // Legacy producers without an offset: append-only, as before.
+  part.text = current + delta
 }
 
 function removePart<TPart extends { id: string; messageID: string }>(

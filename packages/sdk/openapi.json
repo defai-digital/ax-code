@@ -36989,6 +36989,9 @@
               },
               "delta": {
                 "type": "string"
+              },
+              "offset": {
+                "type": "number"
               }
             },
             "required": [

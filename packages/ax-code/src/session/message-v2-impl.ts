@@ -490,6 +490,11 @@ export namespace MessageV2 {
         partID: PartID.zod,
         field: z.string(),
         delta: z.string(),
+        // Accumulated text length BEFORE this delta. Lets consumers reconcile
+        // the append-only delta channel against full `message.part.updated`
+        // snapshots when the two arrive out of order. Optional for backward
+        // compatibility with older producers.
+        offset: z.number().optional(),
       }),
     ),
     PartRemoved: BusEvent.define(

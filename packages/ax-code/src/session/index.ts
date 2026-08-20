@@ -1096,6 +1096,9 @@ export namespace Session {
       partID: PartID.zod,
       field: z.string(),
       delta: z.string().max(100_000),
+      // Accumulated text length before this delta; lets consumers reconcile
+      // against full part snapshots. Optional for backward compatibility.
+      offset: z.number().optional(),
     }),
     async (input) => {
       const store = SessionShard.storeFor(input.sessionID)

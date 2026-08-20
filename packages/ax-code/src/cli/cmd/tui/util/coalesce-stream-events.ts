@@ -32,14 +32,40 @@ function deltaKey(event: StreamEventLike): string {
   return `${sessionID}\0${props.messageID}\0${props.partID}\0${props.field}`
 }
 
-function mergeDelta(into: StreamEventLike, from: StreamEventLike): StreamEventLike {
+/**
+ * Merge `from` into `into`. With offsets (accumulated text length before the
+ * delta), the merged event keeps the first chunk's offset and only appends
+ * the part of `from` not already covered by `into` — blindly concatenating
+ * overlapping chunks would duplicate text downstream. Returns undefined when
+ * the deltas are not contiguous (a gap the projection must see so it can
+ * wait for the healing snapshot).
+ */
+function mergeDelta(into: StreamEventLike, from: StreamEventLike): StreamEventLike | undefined {
   const intoProps = into.properties!
   const fromProps = from.properties!
+  const intoDelta = String(intoProps.delta ?? "")
+  const fromDelta = String(fromProps.delta ?? "")
+  const intoOffset = typeof intoProps.offset === "number" ? intoProps.offset : undefined
+  const fromOffset = typeof fromProps.offset === "number" ? fromProps.offset : undefined
+  if (intoOffset === undefined || fromOffset === undefined) {
+    // Legacy producers without offsets: concatenate as before.
+    return {
+      ...into,
+      properties: {
+        ...intoProps,
+        delta: intoDelta + fromDelta,
+      },
+    }
+  }
+  const intoEnd = intoOffset + intoDelta.length
+  if (fromOffset > intoEnd) return undefined
+  const overlap = intoEnd - fromOffset
+  const appended = overlap >= fromDelta.length ? "" : fromDelta.slice(overlap)
   return {
     ...into,
     properties: {
       ...intoProps,
-      delta: String(intoProps.delta ?? "") + String(fromProps.delta ?? ""),
+      delta: intoDelta + appended,
     },
   }
 }
@@ -74,7 +100,14 @@ export function coalesceStreamEvents<T extends StreamEventLike>(events: readonly
       out.push(event)
       continue
     }
-    out[existingIndex] = mergeDelta(out[existingIndex]!, event) as T
+    const merged = mergeDelta(out[existingIndex]!, event)
+    if (merged === undefined) {
+      // Non-contiguous offsets: keep both so the gap stays visible.
+      open.set(key, out.length)
+      out.push(event)
+      continue
+    }
+    out[existingIndex] = merged as T
   }
 
   return out

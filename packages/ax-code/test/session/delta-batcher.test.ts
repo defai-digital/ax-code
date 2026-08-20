@@ -74,4 +74,33 @@ describe("createDeltaBatcher", () => {
     expect(onFlushError).toHaveBeenCalled()
     expect(String(onFlushError.mock.calls[0]![0])).toContain("publish failed")
   })
+
+  test("each flushed batch carries the offset of its first chunk", async () => {
+    const publishes: Array<{ partID: string; delta: string; offset?: number }> = []
+    let scheduled: (() => void) | undefined
+    const batcher = createDeltaBatcher({
+      sessionID: "ses_1",
+      messageID: "msg_1",
+      publish: (event) => {
+        publishes.push({ partID: event.partID, delta: event.delta, offset: event.offset })
+      },
+      schedule: (fn) => {
+        scheduled = fn
+        return { clear: () => undefined }
+      },
+    })
+
+    batcher.push("part_a", "hel", 0)
+    batcher.push("part_a", "lo", 3)
+    scheduled!()
+    await Promise.resolve()
+    expect(publishes).toEqual([{ partID: "part_a", delta: "hello", offset: 0 }])
+
+    // After a flush, the next batch carries the offset of its own first
+    // chunk — the client reconciles against already-published text.
+    batcher.push("part_a", " world", 5)
+    scheduled!()
+    await Promise.resolve()
+    expect(publishes[1]).toEqual({ partID: "part_a", delta: " world", offset: 5 })
+  })
 })
