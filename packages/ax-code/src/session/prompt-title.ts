@@ -96,9 +96,7 @@ export function fallbackTitleFromUserText(text: string): string | undefined {
   if (!line) return undefined
   const collapsed = line.replace(/\s+/g, " ").trim()
   if (!collapsed) return undefined
-  return collapsed.length > FALLBACK_TITLE_MAX_LEN
-    ? collapsed.slice(0, FALLBACK_TITLE_MAX_LEN - 3) + "..."
-    : collapsed
+  return collapsed.length > FALLBACK_TITLE_MAX_LEN ? collapsed.slice(0, FALLBACK_TITLE_MAX_LEN - 3) + "..." : collapsed
 }
 
 function firstUserText(contextMessages: MessageV2.WithParts[]): string {
@@ -162,9 +160,13 @@ export async function ensureTitle(input: {
     } else {
       const model = await iife(async () => {
         if (agent.model) return await Provider.getModel(agent.model.providerID, agent.model.modelID)
-        return (
-          (await Provider.getSmallModel(input.providerID)) ?? (await Provider.getModel(input.providerID, input.modelID))
-        )
+        const small = await Provider.getSmallModel(input.providerID)
+        if (small) return small
+        log.info("no small model for provider; title uses the session model", {
+          sessionID: input.session.id,
+          providerID: input.providerID,
+        })
+        return await Provider.getModel(input.providerID, input.modelID)
       })
       // Dedicated timeout — do not share the prompt-loop abort controller.
       const titleAbort = AbortSignal.timeout(TITLE_TIMEOUT_MS)

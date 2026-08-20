@@ -33896,6 +33896,51 @@
           "output": 65536
         }
       },
+      "kimi-k2.7-code": {
+        "id": "kimi-k2.7-code",
+        "name": "Kimi K2.7 Code",
+        "family": "kimi-k2",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": false,
+        "release_date": "2026-06-12",
+        "last_updated": "2026-06-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        },
+        "status": "active",
+        "description": "Coding-focused Kimi model, stronger on long-horizon repo work with less overthinking",
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "knowledge": "2025-01"
+      },
       "qwen-image-2.0": {
         "id": "qwen-image-2.0",
         "name": "Qwen Image 2.0",
@@ -49533,7 +49578,7 @@
       },
       "glm-4.7": {
         "id": "glm-4.7",
-        "name": "GLM-4.7 (Free)",
+        "name": "GLM-4.7",
         "description": "Mature GLM model for dependable coding, reasoning, and structured agent tasks",
         "family": "glm",
         "attachment": false,
@@ -63115,6 +63160,41 @@
         "open_weights": true,
         "limit": {
           "context": 1000000,
+          "output": 131072
+        }
+      },
+      "glm-4.7": {
+        "id": "glm-4.7",
+        "name": "GLM-4.7",
+        "description": "Plan-included GLM lane for balanced coding help and everyday automation",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2025-12-22",
+        "last_updated": "2025-12-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 204800,
           "output": 131072
         }
       }
@@ -78593,6 +78673,41 @@
           "context": 1000000,
           "output": 131072
         }
+      },
+      "glm-4.7": {
+        "id": "glm-4.7",
+        "name": "GLM-4.7",
+        "description": "Plan-included GLM lane for balanced coding help and everyday automation",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2025-12-22",
+        "last_updated": "2025-12-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 204800,
+          "output": 131072
+        }
       }
     }
   },
@@ -94012,7 +94127,7 @@
       },
       "glm-4.7": {
         "id": "glm-4.7",
-        "name": "GLM-4.7 (Free)",
+        "name": "GLM-4.7",
         "description": "Mature GLM model for dependable coding, reasoning, and structured agent tasks",
         "family": "glm",
         "attachment": false,
@@ -143872,6 +143987,33 @@
           "output": 1000000
         }
       },
+      "glm-5.2-fast": {
+        "id": "glm-5.2-fast",
+        "name": "GLM-5.2",
+        "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
       "deepseek-v3.2": {
         "id": "deepseek-v3.2",
         "name": "DeepSeek V3.2",
@@ -150050,6 +150192,51 @@
           "context": 1000000,
           "output": 65536
         }
+      },
+      "kimi-k2.7-code": {
+        "id": "kimi-k2.7-code",
+        "name": "Kimi K2.7 Code",
+        "family": "kimi-k2",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": false,
+        "release_date": "2026-06-12",
+        "last_updated": "2026-06-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        },
+        "status": "active",
+        "description": "Coding-focused Kimi model, stronger on long-horizon repo work with less overthinking",
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "knowledge": "2025-01"
       },
       "qwen-image-2.0": {
         "id": "qwen-image-2.0",

@@ -13,11 +13,11 @@ Use the expensive model for reasoning-dense work, and cheap models for mechanica
 
 ## Recommended layer split
 
-| Layer | Model class | Typical agents / tasks |
-| --- | --- | --- |
-| Worker / executor | Strong general flagship (e.g. Qwen3.8 Max) | `build`, `general`, `scout`, `test`, `devops`, `perf` |
-| Advisor / reasoning | Reasoning model (e.g. DeepSeek V4 Pro, Claude Opus) | `plan`, `architect`, `security`, `debug` |
-| Cheap / read-only aux | Same-provider flash/mini (e.g. DeepSeek V4 Flash) | `explore`, `compaction`, titles, recaps, low-complexity classification |
+| Layer                 | Model class                                         | Typical agents / tasks                                                 |
+| --------------------- | --------------------------------------------------- | ---------------------------------------------------------------------- |
+| Worker / executor     | Strong general flagship (e.g. Qwen3.8 Max)          | `build`, `general`, `scout`, `test`, `devops`, `perf`                  |
+| Advisor / reasoning   | Reasoning model (e.g. DeepSeek V4 Pro, Claude Opus) | `plan`, `architect`, `security`, `debug`                               |
+| Cheap / read-only aux | Same-provider flash/mini (e.g. DeepSeek V4 Flash)   | `explore`, `compaction`, titles, recaps, low-complexity classification |
 
 ## Config template
 
@@ -52,18 +52,14 @@ The last group should stay on the session model unless the user explicitly pins 
 
 ## Known ax-code limitations
 
-- `Provider.getSmallModel()` currently returns `undefined` for some providers (e.g. DeepSeek) because the hardcoded priority lists do not match their catalogs.
-- `compaction` bypasses `small_model` and falls back to the session model unless `agent.compaction.model` is pinned.
-- Complexity-based routing (`routing.llm`) is documented as default-on but is gated by `AX_CODE_SMART_LLM`, which defaults off.
+- `Provider.getSmallModel()` returns `undefined` for providers whose catalog neither tags a tier-bearing `family` nor matches the hardcoded priority lists; aux calls then fall back to the session model (logged as "no small model for provider").
 - There is no mid-run escalation from a stuck worker to a stronger model.
 
 ## Future code improvements
 
 These are the minimal, low-risk changes that would make the above config automatic:
 
-1. Derive the small model from catalog `family` metadata instead of hardcoded substring lists, with `tool_call` and context-limit guards.
-2. Add `routing.auto_small_model` (default `false`) to opt into same-provider cheap-model routing for unpinned read-only lanes.
-3. Make `compaction` respect `small_model`.
-4. Surface every automatic model swap via the existing `Recorder.emit({type: "agent.route"})` + toast path.
+1. Add `routing.auto_small_model` (default `false`) to opt into same-provider cheap-model routing for unpinned read-only lanes.
+2. Surface every automatic model swap via the existing `Recorder.emit({type: "agent.route"})` + toast path.
 
-Until those land, use explicit `small_model` and per-agent `model` pins as shown in `ax-code.json.example`.
+Landed already: small-model derivation from catalog `family` metadata, `compaction` falling back to `getSmallModel()` before the session model, and the runtime honoring the persisted `routing.llm` toggle. Explicit `small_model` and per-agent `model` pins (as shown in `ax-code.json.example`) still take precedence everywhere.

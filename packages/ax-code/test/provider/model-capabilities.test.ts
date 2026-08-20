@@ -159,6 +159,18 @@ describe("Model Capability Registry", () => {
       }
     })
 
+    it("returns GLM-4.7 capabilities on Z.AI / Zhipu PAYG and coding-plan APIs", () => {
+      for (const providerID of ["zai", "zai-coding-plan", "zhipuai", "zhipuai-coding-plan"]) {
+        const caps = getModelCapabilities("glm-4.7", providerID)
+        expect(caps.contextWindow).toBe(204_800)
+        expect(caps.thinking).toBe("supported")
+        expect(caps.toolCalling).toBe("supported")
+        expect(caps.structuredOutput).toBe("supported")
+      }
+      expect(getModelCapabilities("glm-4.70", "zai").contextWindow).not.toBe(204_800)
+      expect(getModelCapabilities("glm-4.7x", "zai").contextWindow).not.toBe(204_800)
+    })
+
     it("returns explicit Ornith 35B capabilities for AX Engine ids", () => {
       for (const id of ["ornith-35b-axq-6bit", "AX-Ornith-1.0-35B-MLX-AXQ-6bit"]) {
         const caps = getModelCapabilities(id, "ax-engine")

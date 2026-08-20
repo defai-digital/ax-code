@@ -355,9 +355,13 @@ export namespace SessionCompaction {
 
     const agent = await Agent.get("compaction")
     if (!agent) throw new Error("Compaction agent is not configured or has been disabled")
+    // Compaction is an aux call: explicit agent pin first, then the
+    // provider's small tier, and only bill the session's main model as the
+    // fallback (providers without a small-model mapping).
     const model = agent?.model
       ? await Provider.getModel(agent.model.providerID, agent.model.modelID)
-      : await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)
+      : ((await Provider.getSmallModel(userMessage.model.providerID)) ??
+        (await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)))
     const msg = (await Session.updateMessage({
       id: MessageID.ascending(),
       role: "assistant",

@@ -240,7 +240,7 @@ describe("update-models script", () => {
     expect(data.chutes?.models?.["zai-org/glm-5.2-tee"]).toBeDefined()
   })
 
-  test("keeps Z.AI and injects GLM-4.7-Flash (Free) on the general APIs only", async () => {
+  test("injects documented GLM-4.7 models on the appropriate Z.AI APIs", async () => {
     await using tmp = await tmpdir()
     const fixturePath = path.join(tmp.path, "models-fixture.json")
     const snapshotPath = path.join(tmp.path, "models-snapshot.json")
@@ -315,8 +315,12 @@ describe("update-models script", () => {
     expect(data.zai?.models?.["glm-4.7-flash"]?.name).toBe("GLM-4.7-Flash (Free)")
     expect(data.zai?.models?.["glm-4.5-flash"]).toBeUndefined()
     expect(data.zai?.models?.["glm-5.2"]).toBeDefined()
+    expect(data.zai?.models?.["glm-4.7"]?.name).toBe("GLM-4.7")
     expect(data.zhipuai?.models?.["glm-4.7-flash"]?.name).toBe("GLM-4.7-Flash (Free)")
-    // Coding plan is subscription-only; the free PAYG SKU stays off that endpoint.
+    // GLM-4.7 is included in every coding-plan tier (docs.z.ai/devpack/overview),
+    // so it is re-injected there without the "(Free)" tag; the free flash SKU
+    // stays PAYG-only.
+    expect(data["zai-coding-plan"]?.models?.["glm-4.7"]?.name).toBe("GLM-4.7")
     expect(data["zai-coding-plan"]?.models?.["glm-4.7-flash"]).toBeUndefined()
   })
 

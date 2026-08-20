@@ -916,7 +916,7 @@ export const Info = z
           .boolean()
           .optional()
           .describe(
-            "Enable LLM-based message-complexity classification so simple queries use a small/fast model. Default: true.",
+            "Enable LLM-based message-complexity classification so simple queries use a small/fast model. Default: false unless the AX_CODE_SMART_LLM flag is set.",
           ),
       })
       .optional()

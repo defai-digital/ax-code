@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, test } from "vitest"
 import path from "path"
+import fs from "fs/promises"
 import { readFile } from "fs/promises"
 import { route, classifyComplexity, formatComplexityFailureError } from "../../src/agent/router"
+import { Instance } from "../../src/project/instance"
+import { tmpdir } from "../fixture/fixture"
 
 describe("v2-style keyword route", () => {
   test("schema descriptions do not claim specialist auto-routing is removed", async () => {
@@ -151,5 +154,46 @@ describe("classifyComplexity activation gating", () => {
     }
 
     expect(formatComplexityFailureError(failure)).toBe("Unknown error")
+  })
+})
+
+describe("classifyComplexity routing.llm config gating", () => {
+  const origEnv = process.env["AX_CODE_SMART_LLM"]
+
+  afterEach(() => {
+    if (origEnv === undefined) delete process.env["AX_CODE_SMART_LLM"]
+    else process.env["AX_CODE_SMART_LLM"] = origEnv
+  })
+
+  async function withRoutingConfig(llm: boolean, fn: () => Promise<void>) {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            routing: { llm },
+          }),
+        )
+      },
+    })
+    await Instance.provide({ directory: tmp.path, fn })
+  }
+
+  test("persisted routing.llm=false disables classification even when the flag is set", async () => {
+    process.env["AX_CODE_SMART_LLM"] = "true"
+    await withRoutingConfig(false, async () => {
+      // Short message would classify as "low" without an LLM call if enabled.
+      const result = await classifyComplexity("what is 2+2?")
+      expect(result.complexity).toBeNull()
+    })
+  })
+
+  test("persisted routing.llm=true enables classification without the flag", async () => {
+    delete process.env["AX_CODE_SMART_LLM"]
+    await withRoutingConfig(true, async () => {
+      const result = await classifyComplexity("what is 2+2?")
+      expect(result.complexity).toBe("low")
+    })
   })
 })

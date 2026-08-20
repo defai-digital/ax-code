@@ -1190,6 +1190,39 @@ export namespace Provider {
     }
   }
 
+  // Small-tier family suffixes, longest first. Adding a new tier here is the
+  // only change needed to teach pickSmallFromFamily() about it for any provider
+  // whose catalog uses the family metadata convention. The hardcoded priority
+  // lists inside getSmallModel() remain as a safety net for providers whose
+  // family values don't follow the tier-suffix convention (e.g. CLI providers
+  // whose small tier is named differently than the catalog convention).
+  const FAMILY_TIER_SUFFIXES = ["flash-lite", "flash", "mini", "nano", "haiku", "lite", "free"] as const
+
+  // Derive the small model from the provider's family metadata. A model is a
+  // candidate when its family string equals a known tier suffix or ends with
+  // "-<suffix>" (e.g. "deepseek-flash", "gemini-flash-lite", "claude-haiku",
+  // "gpt-mini"). Only models usable by the agent loop are eligible. Among
+  // candidates, the earliest-listed suffix wins, with shortest id breaking
+  // ties — so "flash-lite" always beats "flash" when both exist in the same
+  // provider's catalog. Sync because getSmallModel() has already awaited
+  // discovery and the provider object is in hand.
+  function pickSmallFromFamily(provider: Info): Model | undefined {
+    const candidates: Array<{ id: string; family: string; tierRank: number }> = []
+    for (const [id, m] of Object.entries(provider.models)) {
+      if (!modelSelectableForProvider(provider.id, m)) continue
+      const family = m.family ?? id
+      const tierRank = FAMILY_TIER_SUFFIXES.findIndex((s) => family === s || family.endsWith("-" + s))
+      if (tierRank >= 0) candidates.push({ id, family, tierRank })
+    }
+    if (candidates.length === 0) return undefined
+    candidates.sort((a, b) => {
+      if (a.tierRank !== b.tierRank) return a.tierRank - b.tierRank
+      return a.id.length - b.id.length || a.id.localeCompare(b.id)
+    })
+    const winner = candidates[0]
+    return provider.models[ModelID.make(winner.id)] as Model | undefined
+  }
+
   export async function getSmallModel(providerID: ProviderID) {
     const cfg = await Config.get()
 
@@ -1206,9 +1239,22 @@ export namespace Provider {
     await s.discovery
     const provider = s.providers[providerID]
     if (provider) {
+      // Family-metadata first: covers any provider whose catalog tags models
+      // with a tier-bearing family string (deepseek-flash, gemini-flash,
+      // gpt-mini, claude-haiku, etc.). The hardcoded priority lists below
+      // remain as a safety net for providers whose families don't follow
+      // that convention.
+      const familyPick = pickSmallFromFamily(provider)
+      if (familyPick) return familyPick
       let priority = ["gemini-3-flash", "gemini-flash", "llama-3.1-8b", "llama3-8b"]
-      if (providerID.startsWith("zai")) {
-        priority = ["glm-4.7-flash", "glm-5.2", "glm-5"]
+      if (providerID.startsWith("zai") || providerID.startsWith("zhipuai")) {
+        // Coding-plan catalogs have no glm-4.7-flash; the base glm-4.7 is
+        // included in every plan tier and is their cheapest aux lane. zhipuai
+        // (bigmodel.cn) shares the GLM catalog but does not start with "zai" —
+        // without this, zhipuai-coding-plan (glm-4.7 only, family "glm", no
+        // tier suffix) fell through to the gemini/llama default list and
+        // returned undefined.
+        priority = ["glm-4.7-flash", "glm-4.7", "glm-5.2", "glm-5"]
       }
       if (providerID.startsWith("minimax")) {
         // Token Plan catalogs start at M2.7; prefer the highspeed SKU for aux

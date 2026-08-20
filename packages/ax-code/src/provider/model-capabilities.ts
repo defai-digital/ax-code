@@ -368,6 +368,24 @@ const MODEL_REGISTRY: ModelRegistration[] = [
     },
   },
 
+  // GLM-4.7 — Z.AI / Zhipu PAYG and coding-plan SKU (204.8k context,
+  // toggleable thinking).
+  // Must stay after the glm-4.7-flash entry so the flash pattern matches first.
+  {
+    pattern: /glm[\.\-_]?4[\.\-_]?7(?!-?flash)(?:$|[^a-z0-9])/i,
+    providerIds: ["zai", "zai-coding-plan", "zhipuai", "zhipuai-coding-plan"],
+    capabilities: {
+      contextWindow: 204_800,
+      thinking: "supported",
+      preserveThinking: "experimental",
+      promptCache: "experimental",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "standard",
+    },
+  },
+
   // GLM 5.x — Z.AI / Zhipu (official routes)
   // models-snapshot.json declares GLM-5.2 as a 1M-context reasoning model
   // (reasoning + effort high/xhigh, tool_call, structured_output). Without

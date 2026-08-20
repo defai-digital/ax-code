@@ -272,9 +272,10 @@ for (const id of [
 //   - Grok: only grok-4.5 (plus official aliases grok-4.5-latest / grok-build-latest).
 //     All other Grok variants (4.3, Build 0.1, code-fast, 4.2/4.1, betas) drop.
 //   - GLM (Z.AI): only non-vision selected v5+ SKUs (glm-5.1, glm-5.1[1m],
-//     glm-5-turbo, glm-5v, and every glm-4.x / glm-3.x drop), except the
-//     documented free PAYG SKU glm-4.7-flash which is re-injected on the
-//     zai / zhipuai general APIs after this filter.
+//     glm-5-turbo, glm-5v, and every glm-4.x / glm-3.x drop), except glm-4.7
+//     and glm-4.7-flash, which are re-injected after this filter — both on the
+//     zai / zhipuai general APIs, and the base model on the coding-plan
+//     endpoints.
 //   - Gemini: only v3+ (Gemini 1.x/2.x drops from ax-code's model picker).
 //   - GPT-5.5: hidden from API/provider model pickers; use Codex CLI default instead.
 //
@@ -349,14 +350,22 @@ function isUnsupportedModel(m: RawModel): boolean {
   if (probes.some((p) => p.includes("gpt-5.5") || p.includes("gpt-5-5") || p.includes("gpt55"))) return true
   return false
 }
-// GLM-4.7-Flash is the documented free PAYG text SKU on the Z.AI / Zhipu
-// general APIs. The global GLM-4.x filter drops it; stash the upstream
-// metadata so we can re-inject it onto those two providers only.
+// GLM-4.7-Flash (free) and GLM-4.7 (paid) are documented PAYG text SKUs on the
+// Z.AI / Zhipu general APIs; GLM-4.7 is also served on the coding-plan
+// endpoints (https://docs.z.ai/devpack/overview: "All plans support ...
+// GLM-4.7"). The global GLM-4.x filter drops them; stash the upstream metadata
+// so we can re-inject flash on the PAYG providers only and the base model on
+// both.
 const GLM_PAYG_PROVIDER_IDS = ["zai", "zhipuai"] as const
 const glm47FlashSources: Record<string, RawModel> = {}
+const glm47Sources: Record<string, RawModel> = {}
 for (const providerID of GLM_PAYG_PROVIDER_IDS) {
-  const model = fetched[providerID]?.models?.["glm-4.7-flash"] as RawModel | undefined
-  if (model) glm47FlashSources[providerID] = cloneJsonValue(model)
+  const flash = fetched[providerID]?.models?.["glm-4.7-flash"] as RawModel | undefined
+  if (flash) glm47FlashSources[providerID] = cloneJsonValue(flash)
+}
+for (const providerID of [...GLM_PAYG_PROVIDER_IDS, "zai-coding-plan", "zhipuai-coding-plan"]) {
+  const base = fetched[providerID]?.models?.["glm-4.7"] as RawModel | undefined
+  if (base) glm47Sources[providerID] = cloneJsonValue(base)
 }
 for (const [, provider] of Object.entries(fetched) as Array<[string, { models?: Record<string, RawModel> }]>) {
   if (!provider.models) continue
@@ -797,7 +806,8 @@ cloneProvider("alibaba-coding-plan-cn", "alibaba-token-plan-cn", {
 //   Token Plan (Team Edition):
 //     https://www.alibabacloud.com/help/en/model-studio/token-plan-overview
 //     qwen3.7-max, qwen3.7-plus, qwen3.6-plus, qwen3.6-flash, deepseek-v4-*,
-//     kimi-k2.7-code/2.6/2.5, glm-5.2/5.1/5, MiniMax-M2.5, qwen-image/wan images.
+//     kimi-k2.7-code/2.6/2.5, glm-5.2/5.1/5, MiniMax-M2.5,
+//     qwen-image/wan images.
 // Superseded SKUs (kimi-k2.5/k2.6, glm-4.7, glm-5.1, deepseek-v3.2) stay
 // excluded per the global supersession filters. Token Plan also hides
 // DeepSeek / GLM / MiniMax in ax-code so those vendors are reached via
@@ -827,8 +837,8 @@ const alibabaTokenPlanModels = [
   "qwen3.7-plus",
   "qwen3.6-plus",
   "qwen3.6-flash",
-  // Other vendors aggregated under the Token Plan (DeepSeek/GLM/MiniMax
-  // stay off this picker — use the first-party providers instead)
+  // Other vendors aggregated under the Token Plan (DeepSeek/GLM/MiniMax stay
+  // off this picker — use the first-party providers instead)
   "kimi-k2.7-code",
   // Qwen image generation
   "qwen-image-2.0",
@@ -1142,10 +1152,33 @@ for (const providerID of GLM_PAYG_PROVIDER_IDS) {
   provider.models = merged
 }
 
-// GLM-4.7-Flash is Z.AI's documented free PAYG text model (200k / 128k,
-// https://docs.z.ai/guides/overview/pricing). Re-inject it on the general
-// APIs only — it is not on the coding-plan endpoints. Prefer stashed
-// upstream metadata; fall back to the docs-backed template.
+// GLM-4.7-Flash (free) and GLM-4.7 (paid) are Z.AI's documented PAYG text
+// models (200k / 128k, https://docs.z.ai/guides/overview/pricing). GLM-4.7 is
+// also included in every coding-plan tier (https://docs.z.ai/devpack/overview),
+// so the base model is re-injected on the coding-plan providers too; the flash
+// SKU stays PAYG-only. Prefer stashed upstream metadata; fall back to the
+// docs-backed template.
+function glm47Model(): RawModel {
+  return {
+    id: "glm-4.7",
+    name: "GLM-4.7",
+    description: "General-purpose GLM lane for balanced coding help and everyday automation",
+    family: "glm",
+    attachment: false,
+    reasoning: true,
+    reasoning_options: [{ type: "toggle" }],
+    tool_call: true,
+    interleaved: { field: "reasoning_content" },
+    structured_output: true,
+    temperature: true,
+    knowledge: "2025-04",
+    release_date: "2025-12-22",
+    last_updated: "2025-12-22",
+    modalities: { input: ["text"], output: ["text"] },
+    open_weights: true,
+    limit: { context: 200000, output: 131072 },
+  } as RawModel
+}
 function glm47FlashFreeModel(): RawModel {
   return {
     id: "glm-4.7-flash",
@@ -1177,6 +1210,33 @@ for (const providerID of GLM_PAYG_PROVIDER_IDS) {
     ...(upstream ?? {}),
     id: "glm-4.7-flash",
     name: "GLM-4.7-Flash (Free)",
+    tool_call: true,
+    structured_output: true,
+  } as RawModel
+  const glm47Upstream = glm47Sources[providerID] ?? models["glm-4.7"]
+  models["glm-4.7"] = {
+    ...glm47Model(),
+    ...(glm47Upstream ?? {}),
+    id: "glm-4.7",
+    name: "GLM-4.7",
+    tool_call: true,
+    structured_output: true,
+  } as RawModel
+  provider.models = models
+}
+// Coding-plan endpoints include GLM-4.7 in every tier (flash stays PAYG-only),
+// and it is a subscription model there — no "(Free)" tag.
+for (const providerID of GLM_CODING_PROVIDER_IDS) {
+  const provider = fetched[providerID]
+  if (!provider) continue
+  const models = (provider.models ?? {}) as Record<string, RawModel>
+  const glm47Upstream = glm47Sources[providerID] ?? models["glm-4.7"]
+  models["glm-4.7"] = {
+    ...glm47Model(),
+    ...(glm47Upstream ?? {}),
+    id: "glm-4.7",
+    name: "GLM-4.7",
+    description: "Plan-included GLM lane for balanced coding help and everyday automation",
     tool_call: true,
     structured_output: true,
   } as RawModel

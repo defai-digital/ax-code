@@ -107,10 +107,12 @@ test("Zhipu general API exposes current GLM flagships and hides legacy SKUs", as
       expect(zhipuai?.models[ModelID.make("glm-5.3")]?.api.url).toBe("https://open.bigmodel.cn/api/paas/v4")
       expect(zhipuai?.models[ModelID.make("glm-5.3")]?.limit).toEqual({ context: 1_000_000, output: 131_072 })
       expect(zhipuai?.models[ModelID.make("glm-5.2")]?.limit).toEqual({ context: 1_000_000, output: 131_072 })
-      // glm-5.1 is hidden by the global GLM filters; paid 4.x drops.
+      // glm-5.1 is hidden by the global GLM filters; other 4.x SKUs drop.
       expect(zhipuai?.models[ModelID.make("glm-5.1")]).toBeUndefined()
-      expect(zhipuai?.models[ModelID.make("glm-4.7")]).toBeUndefined()
-      // Free PAYG SKU is the documented GLM-4 exception on the general API.
+      // These PAYG SKUs are the documented GLM-4 exceptions on the general API;
+      // only the Flash variant is free.
+      expect(zhipuai?.models[ModelID.make("glm-4.7")]?.name).toBe("GLM-4.7")
+      expect(zhipuai?.models[ModelID.make("glm-4.7")]?.limit).toEqual({ context: 204_800, output: 131_072 })
       expect(zhipuai?.models[ModelID.make("glm-4.7-flash")]?.name).toBe("GLM-4.7-Flash (Free)")
       expect(zhipuai?.models[ModelID.make("glm-4.7-flash")]?.limit).toEqual({ context: 200_000, output: 131_072 })
       // [1m] variants stay scoped to the coding endpoints.
@@ -119,7 +121,7 @@ test("Zhipu general API exposes current GLM flagships and hides legacy SKUs", as
   })
 })
 
-test("Z.AI general API exposes GLM-4.7-Flash (Free) and current flagships", async () => {
+test("Z.AI general API exposes the GLM-4.7 series and current flagships", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -135,7 +137,9 @@ test("Z.AI general API exposes GLM-4.7-Flash (Free) and current flagships", asyn
       expect(zai?.models[ModelID.make("glm-4.7-flash")]?.api.url).toBe("https://api.z.ai/api/paas/v4")
       expect(zai?.models[ModelID.make("glm-4.7-flash")]?.limit).toEqual({ context: 200_000, output: 131_072 })
       expect(zai?.models[ModelID.make("glm-5.3")]?.api.url).toBe("https://api.z.ai/api/paas/v4")
-      expect(zai?.models[ModelID.make("glm-4.7")]).toBeUndefined()
+      expect(zai?.models[ModelID.make("glm-4.7")]?.name).toBe("GLM-4.7")
+      expect(zai?.models[ModelID.make("glm-4.7")]?.api.url).toBe("https://api.z.ai/api/paas/v4")
+      expect(zai?.models[ModelID.make("glm-4.7")]?.limit).toEqual({ context: 204_800, output: 131_072 })
       expect(zai?.models[ModelID.make("glm-4.5-flash")]).toBeUndefined()
     },
   })
@@ -1982,6 +1986,135 @@ test("getSmallModel respects config small_model override", async () => {
   })
 })
 
+test("getSmallModel derives from family metadata when no hardcoded list matches", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          enabled_providers: ["deepseek"],
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("DEEPSEEK_API_KEY", "test-deepseek-key")
+    },
+    fn: async () => {
+      const model = await Provider.getSmallModel(ProviderID.make("deepseek"))
+      expect(model).toBeDefined()
+      expect(String(model?.id)).toBe("deepseek-v4-flash")
+    },
+  })
+})
+
+test('getSmallModel prefers "flash-lite" over "flash" when both exist', async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          enabled_providers: ["venice"],
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("VENICE_API_KEY", "test-venice-key")
+    },
+    fn: async () => {
+      const model = await Provider.getSmallModel(ProviderID.make("venice"))
+      expect(model).toBeDefined()
+      expect(String(model?.id)).toBe("gemini-3-5-flash-lite")
+    },
+  })
+})
+
+test("getSmallModel excludes family matches that cannot drive the agent loop", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          enabled_providers: ["helicone"],
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("HELICONE_API_KEY", "test-helicone-key")
+    },
+    fn: async () => {
+      const model = await Provider.getSmallModel(ProviderID.make("helicone"))
+      expect(model).toBeDefined()
+      expect(String(model?.id)).not.toBe("o1-mini")
+      expect(model?.capabilities.toolcall).toBe(true)
+      expect(model?.capabilities.output.text).toBe(true)
+    },
+  })
+})
+
+test("getSmallModel picks the free glm-4.7-flash for zai", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          enabled_providers: ["zai"],
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("ZHIPU_API_KEY", "test-zhipu-key")
+    },
+    fn: async () => {
+      const model = await Provider.getSmallModel(ProviderID.make("zai"))
+      expect(model).toBeDefined()
+      expect(String(model?.id)).toBe("glm-4.7-flash")
+    },
+  })
+})
+
+test("getSmallModel picks the plan-included glm-4.7 for zhipuai-coding-plan", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          enabled_providers: ["zhipuai-coding-plan"],
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("ZHIPU_API_KEY", "test-zhipu-key")
+    },
+    fn: async () => {
+      // No tier-suffixed family in this catalog, so the hardcoded zhipuai
+      // priority list must match — "zhipuai" does not start with "zai".
+      const model = await Provider.getSmallModel(ProviderID.make("zhipuai-coding-plan"))
+      expect(model).toBeDefined()
+      expect(String(model?.id)).toBe("glm-4.7")
+    },
+  })
+})
+
 test("config-defined Z.AI Coding Plan models filter unsupported GLM variants", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -2055,13 +2188,14 @@ test("bundled Z.AI coding plan providers expose GLM flagship and long-context va
     },
     fn: async () => {
       const providers = await Provider.list()
-      const expected = ["glm-5.2", "glm-5.2[1m]"]
+      const expected = ["glm-5.2", "glm-5.2[1m]", "glm-4.7"]
       // The "[1m]" suffix is a client-side context-window selector; the z.ai API
       // only accepts the bare model name, so api.id must drop the suffix while
-      // the lookup id keeps it.
+      // the lookup id keeps it. glm-4.7 is plan-included on every coding tier.
       const expectedApiID: Record<string, string> = {
         "glm-5.2": "glm-5.2",
         "glm-5.2[1m]": "glm-5.2",
+        "glm-4.7": "glm-4.7",
       }
 
       for (const providerID of ["zai-coding-plan", "zhipuai-coding-plan"]) {

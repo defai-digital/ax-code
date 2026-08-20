@@ -16,6 +16,8 @@
 import { generateObject } from "ai"
 import { Log } from "../util/log"
 import { Provider } from "../provider/provider"
+import type { ProviderID } from "../provider/schema"
+import { Config } from "../config/config"
 import { Flag } from "../flag/flag"
 import { toErrorMessage } from "../util/error-message"
 import z from "zod"
@@ -300,13 +302,19 @@ export interface MessageAnalysis {
   complexity: "low" | "medium" | "high" | null
 }
 
-export async function classifyComplexity(message: string): Promise<MessageAnalysis> {
-  if (!Flag.AX_CODE_SMART_LLM) return { complexity: null }
+export async function classifyComplexity(message: string, providerID?: ProviderID): Promise<MessageAnalysis> {
+  // routing.llm (persisted via the smart-llm server route) takes precedence
+  // over the flag, matching what the route's GET reports. Without Instance
+  // context Config.get() rejects and the flag alone decides.
+  const cfg = await Config.get().catch(() => undefined)
+  if (!(cfg?.routing?.llm ?? Flag.AX_CODE_SMART_LLM)) return { complexity: null }
   if (message.length < 30) return { complexity: "low" }
 
-  const defaultModel = await Provider.defaultModel().catch(() => undefined)
-  if (!defaultModel) return { complexity: null }
-  const small = await Provider.getSmallModel(defaultModel.providerID)
+  // Anchor on the session's provider when given so classification stays on
+  // the same provider as the turn; fresh sessions fall back to the default.
+  const anchor = providerID ?? (await Provider.defaultModel().catch(() => undefined))?.providerID
+  if (!anchor) return { complexity: null }
+  const small = await Provider.getSmallModel(anchor)
   if (!small) {
     log.info("complexity-skipped", { reason: "no-small-model" })
     return { complexity: null }

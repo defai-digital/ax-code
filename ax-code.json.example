@@ -6,10 +6,10 @@
   // the single global model rather than duplicating it under agent.build.
   "model": "alibaba-token-plan/qwen3.8-max",
 
-  // Aux lane: DeepSeek V4 Flash is used for session titles, recaps, and the
-  // low-complexity classifier. Pinned explicitly because getSmallModel("deepseek")
-  // currently returns undefined and the Alibaba fallback would pick an older
-  // flash model.
+  // Aux lane: DeepSeek V4 Flash is used for session titles, recaps,
+  // compaction, and the low-complexity classifier. getSmallModel() would also
+  // derive this from family metadata; the explicit pin keeps it stable across
+  // catalog updates.
   "small_model": "deepseek/deepseek-v4-flash",
 
   "agent": {

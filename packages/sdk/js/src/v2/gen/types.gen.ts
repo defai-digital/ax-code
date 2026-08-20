@@ -2479,7 +2479,7 @@ export type Config = {
      */
     auto_switch?: boolean
     /**
-     * Enable LLM-based message-complexity classification so simple queries use a small/fast model. Default: true.
+     * Enable LLM-based message-complexity classification so simple queries use a small/fast model. Default: false unless the AX_CODE_SMART_LLM flag is set.
      */
     llm?: boolean
   }

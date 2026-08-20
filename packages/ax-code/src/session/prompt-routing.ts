@@ -13,6 +13,7 @@ import { Recorder } from "../replay/recorder"
 import { Log } from "../util/log"
 import { MessageID, SessionID } from "./schema"
 import { agentInfo } from "./prompt-agent-model-info"
+import { lastModel } from "./prompt-command-selection"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -76,34 +77,39 @@ export async function resolveUserMessageRouting(input: {
     }
   }
 
-  const messageComplexity = input.messageText ? (await classifyComplexity(input.messageText)).complexity : null
   const agent = await agentInfo({ sessionID: input.sessionID, name: agentName })
+  // Anchor on the model the turn would actually use (same resolution order as
+  // createUserMessage: requested → agent pin → session's last model → default),
+  // so classification and the complexity-route small model stay on the
+  // session's provider instead of crossing to the default provider.
+  const anchor =
+    !input.requestedModel && !agent.model ? await lastModel(input.sessionID).catch(() => undefined) : undefined
+  const messageComplexity = input.messageText
+    ? (await classifyComplexity(input.messageText, anchor?.providerID)).complexity
+    : null
   let complexityModel: PromptRouteModel | undefined
   let hybridModel: PromptRouteModel | undefined
 
-  if (messageComplexity === "low" && !input.requestedModel && !agent.model) {
-    const defaultM = await Provider.defaultModel().catch(() => undefined)
-    if (defaultM) {
-      const small = await Provider.getSmallModel(defaultM.providerID)
-      if (small) {
-        complexityModel = { providerID: small.providerID, modelID: small.id }
-        log.info("complexity-route", {
-          command: "session.prompt.complexity",
-          status: "ok",
-          sessionID: input.sessionID,
-          model: small.id,
-        })
-        Recorder.emit({
-          type: "agent.route",
-          sessionID: input.sessionID,
-          messageID: input.messageID,
-          fromAgent: agentName,
-          toAgent: agentName,
-          confidence: 0,
-          routeMode: "complexity",
-          complexity: messageComplexity,
-        })
-      }
+  if (messageComplexity === "low" && anchor) {
+    const small = await Provider.getSmallModel(anchor.providerID)
+    if (small) {
+      complexityModel = { providerID: small.providerID, modelID: small.id }
+      log.info("complexity-route", {
+        command: "session.prompt.complexity",
+        status: "ok",
+        sessionID: input.sessionID,
+        model: small.id,
+      })
+      Recorder.emit({
+        type: "agent.route",
+        sessionID: input.sessionID,
+        messageID: input.messageID,
+        fromAgent: agentName,
+        toAgent: agentName,
+        confidence: 0,
+        routeMode: "complexity",
+        complexity: messageComplexity,
+      })
     }
   }
 
