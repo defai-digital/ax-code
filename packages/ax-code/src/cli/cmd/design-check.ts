@@ -39,9 +39,18 @@ export const DesignCheckCommand = cmd({
     const spinner = prompts.spinner()
     spinner.start("Scanning files...")
 
-    const result = await runDesignCheck(paths, {
-      rules: ruleOverrides,
-    })
+    let result
+    try {
+      result = await runDesignCheck(paths, {
+        rules: ruleOverrides,
+      })
+    } catch (error) {
+      spinner.stop("Scan failed")
+      prompts.log.error(error instanceof Error ? error.message : String(error))
+      prompts.outro("Design check failed")
+      process.exitCode = 1
+      return
+    }
 
     spinner.stop("Scan complete")
 

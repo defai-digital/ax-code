@@ -147992,46 +147992,6 @@
           "output": 65536
         }
       },
-      "seed-2-1-turbo": {
-        "id": "seed-2-1-turbo",
-        "name": "Seed 2.1 Turbo",
-        "description": "Efficient model for low-latency assistance, extraction, and routine automation",
-        "family": "seed",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "minimal",
-              "low",
-              "medium",
-              "high",
-              "xhigh",
-              "max"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2026-08-10",
-        "last_updated": "2026-08-10",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 262144,
-          "output": 262144
-        }
-      },
       "gpt-5.1": {
         "id": "gpt-5.1",
         "name": "GPT-5.1",
@@ -154576,8 +154536,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 163840,
-          "output": 163840
+          "context": 131072,
+          "output": 32768
         }
       },
       "deepseek/deepseek-r1": {

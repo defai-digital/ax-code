@@ -37,4 +37,14 @@ describe("design check", () => {
     await using tmp = await tmpdir()
     await expect(runDesignCheck([path.join(tmp.path, "missing")])).rejects.toMatchObject({ code: "ENOENT" })
   })
+
+  test("scans vue and svelte files with default include patterns", async () => {
+    await using tmp = await tmpdir()
+    await fs.writeFile(path.join(tmp.path, "component.vue"), "<template><img src='x' /></template>")
+    await fs.writeFile(path.join(tmp.path, "component.svelte"), "<img src='x' />")
+
+    const result = await runDesignCheck([tmp.path])
+
+    expect(result.summary.filesScanned).toBe(2)
+  })
 })

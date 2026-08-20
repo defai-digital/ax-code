@@ -22,7 +22,7 @@ const DEFAULT_CONFIG: DesignCheckConfig = {
     "missing-alt-text": "error",
     "missing-form-labels": "error",
   },
-  include: ["**/*.tsx", "**/*.jsx", "**/*.css", "**/*.html"],
+  include: ["**/*.tsx", "**/*.jsx", "**/*.css", "**/*.html", "**/*.vue", "**/*.svelte"],
   ignore: ["node_modules", "dist", "build", ".next", "coverage"],
 }
 
