@@ -17,7 +17,13 @@ const log = Log.create({ service: "session.prompt" })
 
 type PromptLoopErrorResult =
   | { action: "continue"; consecutiveErrors: number }
-  | { action: "fallback"; fallbackModel: MessageV2.User["model"]; consecutiveErrors: number }
+  | {
+      action: "fallback"
+      fallbackModel: MessageV2.User["model"]
+      /** User-facing explanation of the provider switch, persisted by the caller as a synthetic text part. */
+      notice: string
+      consecutiveErrors: number
+    }
   | { action: "stop"; reason: "error"; consecutiveErrors: number }
 
 type PromptLoopErrorTransition =
@@ -31,6 +37,7 @@ type PromptLoopErrorTransition =
       action: "retry"
       consecutiveErrors: number
       fallbackModelOverride: MessageV2.User["model"]
+      fallbackNotice: string
       resetCachedModel: true
     }
   | {
@@ -226,10 +233,15 @@ export async function handlePromptLoopError(
         })
         // The request is continuing automatically. Publishing a session.error
         // here makes every client show a terminal failure even when the
-        // fallback returns a successful response in the same turn.
+        // fallback returns a successful response in the same turn. The switch
+        // is still surfaced: the caller persists `notice` as a synthetic text
+        // part on the fallback turn's assistant message (same mechanism as
+        // publishPromptFailure), so both the TUI transcript and `ax-code run`
+        // show which model actually answered without any terminal semantics.
         return {
           action: "fallback",
           fallbackModel: fallback,
+          notice: fallbackSwitch.message,
           consecutiveErrors: fallbackSwitch.nextConsecutiveErrors,
         }
       }
@@ -348,6 +360,7 @@ export async function resolvePromptLoopErrorTransition(
       action: "retry",
       consecutiveErrors: errorResult.consecutiveErrors,
       fallbackModelOverride: errorResult.fallbackModel,
+      fallbackNotice: errorResult.notice,
       resetCachedModel: true,
     }
   }

@@ -51,6 +51,7 @@ describe("prompt loop error transitions", () => {
     expect(result).toEqual({
       action: "fallback",
       fallbackModel,
+      notice: "Provider primary failed: rate limited. Switching to fallback/fallback-model.",
       consecutiveErrors: 1,
     })
     expect(warnings).toEqual([
@@ -101,8 +102,50 @@ describe("prompt loop error transitions", () => {
     expect(result).toEqual({
       action: "fallback",
       fallbackModel,
+      notice:
+        "Provider primary failed: Your token-plan quota has been exhausted. Switching to fallback/fallback-model.",
       consecutiveErrors: 0,
     })
+    expect(published).toEqual([])
+  })
+
+  // Issue #394: an expired/invalid credential must not silently fall back to
+  // another provider — the switch comes back with a user-facing notice the
+  // caller persists on the fallback turn's assistant message.
+  test("surfaces a user-facing notice when auth failure switches provider", async () => {
+    const sessionID = SessionID.descending()
+    const published: { sessionID: SessionID; message: string }[] = []
+
+    const result = await handlePromptLoopError(
+      {
+        sessionID,
+        currentModel: primaryModel,
+        error: {
+          name: "APIError",
+          data: { statusCode: 401, message: "unauthorized" },
+        },
+        consecutiveErrors: 1,
+        step: 1,
+      },
+      {
+        async findFallback() {
+          return fallbackModel
+        },
+        warn() {},
+        publishError(input) {
+          published.push(input)
+        },
+      },
+    )
+
+    expect(result).toEqual({
+      action: "fallback",
+      fallbackModel,
+      notice: "Provider primary failed: unauthorized. Switching to fallback/fallback-model.",
+      consecutiveErrors: 0,
+    })
+    // The notice is NOT a terminal error: nothing is published to
+    // session.error, so clients never render it as a failed turn.
     expect(published).toEqual([])
   })
 
@@ -521,7 +564,12 @@ describe("prompt loop error transitions", () => {
       },
       {
         async handleError() {
-          return { action: "fallback", fallbackModel, consecutiveErrors: 1 }
+          return {
+            action: "fallback",
+            fallbackModel,
+            notice: "Provider primary failed: rate limited. Switching to fallback/fallback-model.",
+            consecutiveErrors: 1,
+          }
         },
       },
     )
@@ -530,6 +578,7 @@ describe("prompt loop error transitions", () => {
       action: "retry",
       consecutiveErrors: 1,
       fallbackModelOverride: fallbackModel,
+      fallbackNotice: "Provider primary failed: rate limited. Switching to fallback/fallback-model.",
       resetCachedModel: true,
     })
   })
@@ -670,6 +719,7 @@ describe("local provider fallback privacy guard", () => {
     expect(result).toEqual({
       action: "fallback",
       fallbackModel,
+      notice: "Provider primary failed: rate limited. Switching to fallback/fallback-model.",
       consecutiveErrors: 1,
     })
   })

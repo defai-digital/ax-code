@@ -53,6 +53,7 @@ import { publishPromptFailure, createSyntheticFailureAssistant } from "./prompt-
 import { executeSubtask } from "./prompt-subtask"
 import { resolveTools, shouldBypassAgentCheck } from "./prompt-tools"
 import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt-processor"
+import { textPart } from "./prompt-message-builders"
 import { addPromptGoalUsage } from "./prompt-goal-usage"
 import {
   effectiveContinuationCap,
@@ -433,6 +434,11 @@ export namespace SessionPrompt {
     let cachedAgent: PromptCacheEntry<Agent.Info>
     let cachedModel: PromptCacheEntry<Provider.Model>
     let fallbackModelOverride: MessageV2.User["model"] | undefined
+    // Pending user-facing notice for an automatic provider fallback (#394).
+    // Persisted as a synthetic text part on the next assistant message so the
+    // TUI transcript and `ax-code run` both show which provider actually
+    // answered; unlike a session.error it carries no terminal-failure meaning.
+    let pendingFallbackNotice: string | undefined
     const failedFallbackProviderIDs = new Set<ProviderID>()
     // Cache session history — only load from DB on first step, refresh on subsequent steps
     let cachedMsgs: MessageV2.WithParts[] | undefined
@@ -479,6 +485,7 @@ export namespace SessionPrompt {
       pendingMaxOutputTokens = undefined
       activeTurnProfile = undefined
       fallbackModelOverride = undefined
+      pendingFallbackNotice = undefined
       failedFallbackProviderIDs.clear()
       cachedMsgs = undefined
       cachedAgent = undefined
@@ -989,6 +996,23 @@ export namespace SessionPrompt {
         messages: msgs,
       })
       lastProducedAssistantID = processor.message.id
+      if (pendingFallbackNotice) {
+        // Surface the automatic provider switch on the fallback turn's own
+        // assistant message (created above with the fallback model). A
+        // completed synthetic text part renders in the TUI transcript and is
+        // printed by `ax-code run`, without any terminal-error semantics.
+        const now = Date.now()
+        await Session.updatePart(
+          textPart({
+            messageID: processor.message.id,
+            sessionID,
+            text: pendingFallbackNotice,
+            synthetic: true,
+            time: { start: now, end: now },
+          }),
+        )
+        pendingFallbackNotice = undefined
+      }
       using _ = defer(() => clearPromptProcessorInstructions(processor))
 
       const structuredOutput = createStructuredOutputTurn(request.format)
@@ -1688,6 +1712,11 @@ export namespace SessionPrompt {
       }
       if (errorTransition.action === "retry") {
         failedFallbackProviderIDs.add(lastUser.model.providerID)
+        // Multi-hop fallback (A -> B -> C) keeps each hop's notice so the
+        // transcript records the full chain, not just the last switch.
+        pendingFallbackNotice = pendingFallbackNotice
+          ? `${pendingFallbackNotice}\n${errorTransition.fallbackNotice}`
+          : errorTransition.fallbackNotice
         continue
       }
       if (errorTransition.action === "stop") {
