@@ -45,6 +45,13 @@ describe("script.workspace-metadata", () => {
     expect(tsconfig.compilerOptions?.jsxImportSource).toBe("@ax-code/tui/solid")
   })
 
+  test("Turbo caches the merged spinner build output", async () => {
+    const repoRoot = path.resolve(import.meta.dirname, "../../../../")
+    const turbo = JSON.parse(await readFile(path.join(repoRoot, "turbo.json"), "utf8"))
+
+    expect(turbo.tasks?.["@ax-code/tui#build"]?.outputs).toContain("spinner/dist/**")
+  })
+
   test("AX Code TUI JSX runtime resolves through the workspace package", async () => {
     await expect(import("@ax-code/tui/solid/jsx-runtime")).resolves.toMatchObject({
       jsx: expect.any(Function),

@@ -45,11 +45,25 @@ describe("script.tui-dist", () => {
   })
 
   test("rewrites the copied manifest without dangling build and type exports", () => {
-    const files = new Set(["index.js", "solid/index.js", "solid/scripts/preload.node.js", "spinner/dist/index.js"])
+    const files = new Set([
+      "index.js",
+      "solid/index.js",
+      "solid/scripts/preload.js",
+      "solid/scripts/preload.node.js",
+      "spinner/dist/index.js",
+    ])
+    const catalog: Record<string, string> = {
+      "solid-js": "1.9.12",
+      "strip-ansi": "7.1.2",
+    }
     const manifest = toTuiDistPackageJson(
       {
+        main: "index.js",
+        module: "index.js",
+        types: "index.d.ts",
         scripts: { build: "tsc" },
-        dependencies: { "@babel/core": "7.29.6", entities: "7.0.1" },
+        dependencies: { "@babel/core": "7.29.6", entities: "7.0.1", "strip-ansi": "catalog:" },
+        peerDependencies: { "solid-js": "catalog:" },
         devDependencies: { typescript: "5.9.3" },
         exports: {
           ".": { types: "./index.d.ts", import: "./index.js" },
@@ -60,10 +74,14 @@ describe("script.tui-dist", () => {
         },
       },
       (file) => files.has(file),
+      (name) => catalog[name],
     )
 
     expect(manifest).toMatchObject({
-      dependencies: { entities: "7.0.1" },
+      main: "index.js",
+      module: "index.js",
+      dependencies: { entities: "7.0.1", "strip-ansi": "7.1.2" },
+      peerDependencies: { "solid-js": "1.9.12" },
       exports: {
         ".": { import: "./index.js" },
         "./solid": { import: "./solid/index.js" },
@@ -73,6 +91,20 @@ describe("script.tui-dist", () => {
     })
     expect(manifest).not.toHaveProperty("scripts")
     expect(manifest).not.toHaveProperty("devDependencies")
+    expect(manifest).not.toHaveProperty("types")
     expect(manifest.exports).not.toHaveProperty("./solid/transform")
+    expect(JSON.stringify(manifest)).not.toContain('"bun"')
+    expect(JSON.stringify(manifest)).not.toContain("catalog:")
+  })
+
+  test("does not invent empty dependency fields", () => {
+    const manifest = toTuiDistPackageJson(
+      { exports: {} },
+      () => false,
+      () => "1.0.0",
+    )
+
+    expect(manifest).not.toHaveProperty("dependencies")
+    expect(manifest).not.toHaveProperty("peerDependencies")
   })
 })

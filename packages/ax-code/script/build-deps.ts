@@ -10,18 +10,37 @@ export interface PackageRuntimeManifest {
   peerDependencies?: Record<string, string>
 }
 
-function isInstallableRuntimeDependency(name: string, version: string) {
-  if (name.startsWith("@ax-code/")) return false
-  return !/^(workspace|catalog|link|file):/.test(version)
+export type CatalogDependencyVersionResolver = (name: string) => string
+
+function installableRuntimeDependencyVersion(
+  name: string,
+  version: string,
+  resolveCatalogVersion?: CatalogDependencyVersionResolver,
+) {
+  if (name.startsWith("@ax-code/")) return
+  if (version.startsWith("catalog:")) {
+    if (!resolveCatalogVersion) return
+    const resolved = resolveCatalogVersion(name)
+    if (!resolved || /^(workspace|catalog|link|file):/.test(resolved)) {
+      throw new Error(`Catalog dependency ${name} did not resolve to an installable version: ${resolved || "<empty>"}`)
+    }
+    return resolved
+  }
+  if (/^(workspace|link|file):/.test(version)) return
+  return version
 }
 
-export function collectPackageRuntimeDependencies(manifests: PackageRuntimeManifest[]) {
+export function collectPackageRuntimeDependencies(
+  manifests: PackageRuntimeManifest[],
+  resolveCatalogVersion?: CatalogDependencyVersionResolver,
+) {
   const runtimeDependencies = new Map<string, string>()
   for (const manifest of manifests) {
     for (const dependencySet of [manifest.dependencies, manifest.peerDependencies]) {
       for (const [name, version] of Object.entries(dependencySet ?? {})) {
-        if (!isInstallableRuntimeDependency(name, version)) continue
-        if (!runtimeDependencies.has(name)) runtimeDependencies.set(name, version)
+        const installableVersion = installableRuntimeDependencyVersion(name, version, resolveCatalogVersion)
+        if (!installableVersion) continue
+        if (!runtimeDependencies.has(name)) runtimeDependencies.set(name, installableVersion)
       }
     }
   }

@@ -154767,42 +154767,6 @@
           "output": 16000
         }
       },
-      "deepseek/deepseek-v4-pro:discounted": {
-        "id": "deepseek/deepseek-v4-pro:discounted",
-        "name": "DeepSeek: DeepSeek V4 Pro 0813 (lowest price)",
-        "description": "This DeepSeek V4 Pro endpoint provides the lowest cost for multi-turn conversations for this model. This is accomplished with an exceptionally low cache read price. By using this endpoint you agree prompts and completions may be retained by DeepSeek and used to train future models.",
-        "family": "deepseek",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "high",
-              "xhigh"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2025-08-26",
-        "last_updated": "2025-08-26",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1048576,
-          "output": 384000
-        }
-      },
       "deepseek/deepseek-chat-v3-0324": {
         "id": "deepseek/deepseek-chat-v3-0324",
         "name": "DeepSeek: DeepSeek V3 0324",
@@ -154897,42 +154861,6 @@
         "limit": {
           "context": 163840,
           "output": 65536
-        }
-      },
-      "deepseek/deepseek-v4-flash:discounted": {
-        "id": "deepseek/deepseek-v4-flash:discounted",
-        "name": "DeepSeek: DeepSeek V4 Flash 0731 (lowest price)",
-        "description": "This DeepSeek V4 Flash endpoint provides the lowest cost for multi-turn conversations for this model. This is accomplished with an exceptionally low cache read price. By using this endpoint you agree prompts and completions may be retained by DeepSeek and used to train future models.",
-        "family": "deepseek",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "high",
-              "xhigh"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2025-08-26",
-        "last_updated": "2025-08-26",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1048576,
-          "output": 384000
         }
       },
       "deepseek/deepseek-v4-flash-0731": {
@@ -162220,6 +162148,44 @@
         "limit": {
           "context": 1000000,
           "output": 128000
+        }
+      },
+      "stealth/ox-alpha": {
+        "id": "stealth/ox-alpha",
+        "name": "Ox Alpha",
+        "description": "Ox Alpha is a reasoning model designed for coding, sustained agentic work, and production workloads. It is suited for long-horizon software engineering, complex reasoning, and workflows that combine text with...",
+        "family": "alpha",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-08-20",
+        "last_updated": "2026-08-20",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "output": 131072
         }
       },
       "stealth/claude-sonnet-4.6": {

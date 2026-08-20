@@ -8,6 +8,9 @@
       "dependsOn": [],
       "outputs": ["dist/**"]
     },
+    "@ax-code/tui#build": {
+      "outputs": ["spinner/dist/**"]
+    },
     "ax-code-desktop#build": {
       "dependsOn": ["@ax-code/sdk#build", "@openchamber/ui#build"],
       "inputs": ["$TURBO_DEFAULT$", "../ui/src/**", "../../../packages/sdk/js/**"],

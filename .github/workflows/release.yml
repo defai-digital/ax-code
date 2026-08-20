@@ -264,9 +264,17 @@ jobs:
             echo "FAIL: ax-code smoke target not found: $BIN"
             exit 1
           fi
-          VERSION_OUTPUT="$("$BIN" --version)"
+          DIST_DIR="$(cd "$(dirname "$BIN")/.." && pwd)"
+          SMOKE_PARENT="$RUNNER_TEMP"
+          if command -v cygpath >/dev/null 2>&1; then
+            SMOKE_PARENT="$(cygpath -u "$SMOKE_PARENT")"
+          fi
+          SMOKE_ROOT="$(mktemp -d "$SMOKE_PARENT/ax-code-release-smoke.XXXXXX")"
+          cp -R "$DIST_DIR/." "$SMOKE_ROOT/"
+          SMOKE_BIN="$SMOKE_ROOT/bin/$(basename "$BIN")"
+          VERSION_OUTPUT="$("$SMOKE_BIN" --version)"
           echo "$VERSION_OUTPUT"
-          DOCTOR_OUTPUT="$("$BIN" doctor)"
+          DOCTOR_OUTPUT="$("$SMOKE_BIN" doctor)"
           echo "$DOCTOR_OUTPUT"
           if ! echo "$DOCTOR_OUTPUT" | grep -E "Runtime: .* \(${{ matrix.smoke-runtime }}\)" >/dev/null; then
             echo "FAIL: release runtime did not report ${{ matrix.smoke-runtime }}"

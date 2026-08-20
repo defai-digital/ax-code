@@ -73,6 +73,7 @@ describe("AX Code TUI package integrity", () => {
         default: "./spinner/dist/solid.js",
       },
     })
+    expect(tuiPackage.exports["./solid/components"].require).toBeUndefined()
 
     await Promise.all([
       expectFileExists("packages/ax-code-tui/solid/scripts/solid-transform.js"),
@@ -103,5 +104,20 @@ describe("AX Code TUI package integrity", () => {
       const result = spawnSync(process.execPath, ["--check", path.join(repoRoot, file)], { encoding: "utf8" })
       expect(result.status, `${file} must parse in Node.js:\n${result.stderr}`).toBe(0)
     }
+  })
+
+  test("the parser worker remains require-compatible", () => {
+    const source = [
+      'const { createRequire } = require("node:module")',
+      'const { resolve } = require("node:path")',
+      'const requireFromCore = createRequire(resolve("package.json"))',
+      'requireFromCore("@ax-code/tui/parser.worker")',
+    ].join(";")
+    const result = spawnSync(process.execPath, ["-e", source], {
+      cwd: path.join(repoRoot, "packages/ax-code"),
+      encoding: "utf8",
+    })
+
+    expect(result.status, result.stderr).toBe(0)
   })
 })

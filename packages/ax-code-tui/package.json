@@ -86,8 +86,7 @@
     },
     "./solid/components": {
       "types": "./solid/components.d.ts",
-      "import": "./solid/components.js",
-      "require": "./solid/components.js"
+      "import": "./solid/components.js"
     },
     "./solid/jsx-runtime": {
       "types": "./solid/jsx-runtime.d.ts",

@@ -36,4 +36,25 @@ describe("script.build-deps", () => {
       "solid-js": "1.9.12",
     })
   })
+
+  test("materializes catalog dependencies for standalone distributions", () => {
+    const versions: Record<string, string> = {
+      "solid-js": "1.9.12",
+      "strip-ansi": "7.1.2",
+    }
+    expect(
+      collectPackageRuntimeDependencies(
+        [
+          {
+            dependencies: { "strip-ansi": "catalog:" },
+            peerDependencies: { "solid-js": "catalog:" },
+          },
+        ],
+        (name) => versions[name],
+      ),
+    ).toEqual({
+      "solid-js": "1.9.12",
+      "strip-ansi": "7.1.2",
+    })
+  })
 })

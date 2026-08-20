@@ -6,7 +6,7 @@ import { fileURLToPath } from "url"
 import { spawnSync } from "node:child_process"
 import esbuild from "esbuild"
 import { SkillLint } from "./check-skills"
-import { collectPackageRuntimeDependencies } from "./build-deps"
+import { collectPackageRuntimeDependencies, resolveInstalledPackagePath } from "./build-deps"
 import { solidEsbuildPlugin } from "./esbuild-solid-plugin"
 import { readText, writeText } from "./fs-compat"
 import { resolveLegacyNodeGypPython } from "./node-gyp-python"
@@ -320,17 +320,33 @@ await writeText(
 // in node_modules beside the bundle so the dist runs anywhere `node` is present.
 const deps = pkg.dependencies as Record<string, string>
 // Read the AX Code TUI package to collect its runtime dependencies.
-const tuiPkg = JSON.parse(fs.readFileSync(path.join(dir, "..", "ax-code-tui", "package.json"), "utf8")) as {
+const tuiSourceDir = path.join(dir, "..", "ax-code-tui")
+const tuiPkg = JSON.parse(fs.readFileSync(path.join(tuiSourceDir, "package.json"), "utf8")) as {
   dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
 }
+const resolveTuiCatalogVersion = (name: string) => {
+  const manifestPath = path.join(
+    resolveInstalledPackagePath(path.join(tuiSourceDir, "node_modules"), name),
+    "package.json",
+  )
+  if (!fs.existsSync(manifestPath)) {
+    throw new Error(`Cannot resolve catalog dependency ${name} from ${tuiSourceDir}; run pnpm install`)
+  }
+  const installed = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as { version?: string }
+  if (!installed.version) throw new Error(`Installed catalog dependency ${name} has no package version`)
+  return installed.version
+}
 const distDeps: Record<string, string> = {
-  ...collectPackageRuntimeDependencies([
-    {
-      dependencies: withoutTuiTransformDependencies(tuiPkg.dependencies),
-      peerDependencies: tuiPkg.peerDependencies,
-    },
-  ]),
+  ...collectPackageRuntimeDependencies(
+    [
+      {
+        dependencies: withoutTuiTransformDependencies(tuiPkg.dependencies),
+        peerDependencies: tuiPkg.peerDependencies,
+      },
+    ],
+    resolveTuiCatalogVersion,
+  ),
   "node-pty-prebuilt-multiarch": deps["node-pty-prebuilt-multiarch"],
   // .wasm files are kept external (esbuild) and resolved at runtime via
   // createRequire — ship the tree-sitter packages beside the bundle so the bash
@@ -344,7 +360,7 @@ const distDeps: Record<string, string> = {
 }
 // @ax-code/tui is a private workspace package; copy it directly into the
 // distribution instead of asking npm to install it.
-const vendoredTuiPackage: [string, string] = ["@ax-code/tui", path.join(dir, "..", "ax-code-tui")]
+const vendoredTuiPackage: [string, string] = ["@ax-code/tui", tuiSourceDir]
 await writeText(
   path.join(outRoot, "package.json"),
   JSON.stringify({ name: "ax-code-dist", private: true, type: "module", dependencies: distDeps }, null, 2) + "\n",
@@ -396,20 +412,21 @@ for (const [spec, patchRel] of Object.entries(rootPkg.pnpm?.patchedDependencies 
 // so npm cannot install it while assembling the release tree.
 const distAxScope = path.join(outRoot, "node_modules", "@ax-code")
 fs.mkdirSync(distAxScope, { recursive: true })
-const [tuiPackageName, tuiSourceDir] = vendoredTuiPackage
+const [tuiPackageName, tuiCopySourceDir] = vendoredTuiPackage
 const tuiDistDir = path.join(distAxScope, "tui")
-if (!fs.existsSync(tuiSourceDir)) {
-  throw new Error(`AX Code TUI package missing: ${tuiSourceDir}`)
+if (!fs.existsSync(tuiCopySourceDir)) {
+  throw new Error(`AX Code TUI package missing: ${tuiCopySourceDir}`)
 }
-fs.cpSync(tuiSourceDir, tuiDistDir, {
+fs.cpSync(tuiCopySourceDir, tuiDistDir, {
   recursive: true,
   dereference: true,
-  filter: (src) => shouldCopyTuiDistPath(src, tuiSourceDir),
+  filter: (src) => shouldCopyTuiDistPath(src, tuiCopySourceDir),
 })
 const tuiDistManifestPath = path.join(tuiDistDir, "package.json")
 const tuiDistManifest = toTuiDistPackageJson(
   JSON.parse(await readText(tuiDistManifestPath)) as Record<string, unknown>,
   (relativePath) => fs.existsSync(path.join(tuiDistDir, relativePath)),
+  resolveTuiCatalogVersion,
 )
 await writeText(tuiDistManifestPath, JSON.stringify(tuiDistManifest, null, 2) + "\n")
 console.log(`Copied ${tuiPackageName} into the distribution`)

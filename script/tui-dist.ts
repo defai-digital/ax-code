@@ -44,9 +44,22 @@ function pruneMissingExportTargets(value: unknown, exists: (relativePath: string
   if (!value || typeof value !== "object" || Array.isArray(value)) return value
 
   const entries = Object.entries(value as JsonObject)
+    .filter(([condition]) => condition !== "bun")
     .map(([condition, target]) => [condition, pruneMissingExportTargets(target, exists)] as const)
     .filter((entry) => entry[1] !== undefined)
   return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
+function materializeDependencyVersions(
+  dependencies: Record<string, string> | undefined,
+  resolveCatalogVersion: (name: string) => string,
+) {
+  return Object.fromEntries(
+    Object.entries(dependencies ?? {}).map(([name, version]) => [
+      name,
+      version.startsWith("catalog:") ? resolveCatalogVersion(name) : version,
+    ]),
+  )
 }
 
 /**
@@ -56,11 +69,31 @@ function pruneMissingExportTargets(value: unknown, exists: (relativePath: string
  * their exports or dependencies behind creates a package with dangling public
  * paths and a misleading install contract.
  */
-export function toTuiDistPackageJson(input: JsonObject, exists: (relativePath: string) => boolean) {
+export function toTuiDistPackageJson(
+  input: JsonObject,
+  exists: (relativePath: string) => boolean,
+  resolveCatalogVersion: (name: string) => string,
+) {
   const output = structuredClone(input)
-  output.dependencies = withoutTuiTransformDependencies(output.dependencies as Record<string, string> | undefined)
+  if (output.dependencies) {
+    output.dependencies = materializeDependencyVersions(
+      withoutTuiTransformDependencies(output.dependencies as Record<string, string>),
+      resolveCatalogVersion,
+    )
+  }
+  if (output.peerDependencies) {
+    output.peerDependencies = materializeDependencyVersions(
+      output.peerDependencies as Record<string, string>,
+      resolveCatalogVersion,
+    )
+  }
   delete output.devDependencies
   delete output.scripts
+
+  for (const field of ["main", "module", "types"] as const) {
+    const target = output[field]
+    if (typeof target === "string" && !exists(target.replace(/^\.\//, ""))) delete output[field]
+  }
 
   const exports = output.exports as JsonObject | undefined
   if (exports) {
