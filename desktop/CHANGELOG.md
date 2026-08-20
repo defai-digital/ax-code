@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.7.3] - 2026-08-19
+
+### Fixed
+
+- Correct small-model routing and catalogs.
+- Prevent doctor health false positives.
+- Persist isolation and settings through JSONC comments.
+- Simplify stale tool footer status.
+
 ## [7.7.2] - 2026-08-19
 
 ### Added
