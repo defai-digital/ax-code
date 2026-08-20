@@ -1,5 +1,5 @@
 // Pure formatting helpers for the primitives layer (ADR-031). Covered by
-// the TUI layering guard — keep free of solid/opentui imports.
+// the TUI layering guard — keep free of Solid and renderer imports.
 
 // Block gauge segments. A non-zero ratio always shows at least one filled
 // segment so low-but-real usage doesn't read as empty.

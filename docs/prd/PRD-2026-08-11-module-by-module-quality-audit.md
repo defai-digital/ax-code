@@ -1,12 +1,12 @@
 # PRD: Module-by-Module Quality Audit
 
-| Field | Value |
-|-------|-------|
-| Status | Active |
-| Owner | AX Code CLI & Desktop maintainers |
-| Created | 2026-08-11 |
-| Related | 2026-07-19 code-quality review; AX Code architecture; Desktop project boundaries; runtime and TUI stability programs |
-| Location | `docs/prd/PRD-2026-08-11-module-by-module-quality-audit.md` |
+| Field    | Value                                                                                                                |
+| -------- | -------------------------------------------------------------------------------------------------------------------- |
+| Status   | Active                                                                                                               |
+| Owner    | AX Code CLI & Desktop maintainers                                                                                    |
+| Created  | 2026-08-11                                                                                                           |
+| Related  | 2026-07-19 code-quality review; AX Code architecture; Desktop project boundaries; runtime and TUI stability programs |
+| Location | `docs/prd/PRD-2026-08-11-module-by-module-quality-audit.md`                                                          |
 
 ---
 
@@ -198,8 +198,8 @@ and these separately signed-off logical `cli/cmd` units:
 
 - `packages/sdk/js`, `packages/plugin`, `packages/util`, `packages/script`, and
   `packages/ax-wiki`.
-- The `packages/opentui-*` family as separate units: `packages/opentui-core`,
-  `packages/opentui-solid`, and `packages/opentui-spinner`.
+- The consolidated `packages/ax-code-tui` package as root renderer, Solid adapter,
+  and spinner submodule audit units.
 - The `packages/ax-code-*-native` wrapper family and companions as separate units:
   `packages/ax-code-index-core`, `packages/ax-code-fs-native`,
   `packages/ax-code-diff-native`, `packages/ax-code-parser-native`,
@@ -366,13 +366,13 @@ new current-state verification or materially new impact.
 SLA clocks start when a finding is `accepted`; a documented release freeze or
 external dependency may pause the clock, but not erase it.
 
-| Severity | Standard | Target response and fix SLA | Deferral policy |
-|----------|----------|-----------------------------|-----------------|
+| Severity     | Standard                                                                                                                                                                                                                               | Target response and fix SLA                                                                                                          | Deferral policy                                                                                                                  |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
 | **Critical** | Credible remote/local privilege expansion, secret compromise, arbitrary code execution across a trust boundary, unrecoverable or broad data loss, release-compromise path, or reliable process-wide failure on a normal/reachable path | Triage immediately; contain within 24 hours; verified fix as soon as safely possible and before the affected release/path is enabled | Not ordinarily deferrable. Temporary mitigation requires named owner, expiry, blocked exposure, and security/maintainer approval |
-| **High** | Major correctness/security/stability defect affecting common or high-value paths, recoverable data corruption/loss, persistent outage, or serious boundary failure | Triage within 1 business day; verified fix within 3 business days or before the next release, whichever is sooner | Only time-bounded with mitigation, owner, rationale, expiry, and explicit lead approval |
-| **Medium** | Material bug, degradation, leak, race, performance regression, design fault, or test gap with limited reach or workaround | Plan in the current wave; target fix within 10 business days | May defer with owner, rationale, trigger/review date, and tracked residual risk |
-| **Low** | Localized quality/reliability issue, low-frequency edge case, bounded inefficiency, or maintainability debt with demonstrated cost | Fix in the wave when cheap; otherwise schedule within 30 days/backlog review | May defer with concise rationale and owner; group related cleanup |
-| **Nit** | Cosmetic consistency or clarity issue with no material behavior/risk | Opportunistic; no dedicated SLA | Freely batch or decline; must not block sign-off unless it obscures safety/correctness |
+| **High**     | Major correctness/security/stability defect affecting common or high-value paths, recoverable data corruption/loss, persistent outage, or serious boundary failure                                                                     | Triage within 1 business day; verified fix within 3 business days or before the next release, whichever is sooner                    | Only time-bounded with mitigation, owner, rationale, expiry, and explicit lead approval                                          |
+| **Medium**   | Material bug, degradation, leak, race, performance regression, design fault, or test gap with limited reach or workaround                                                                                                              | Plan in the current wave; target fix within 10 business days                                                                         | May defer with owner, rationale, trigger/review date, and tracked residual risk                                                  |
+| **Low**      | Localized quality/reliability issue, low-frequency edge case, bounded inefficiency, or maintainability debt with demonstrated cost                                                                                                     | Fix in the wave when cheap; otherwise schedule within 30 days/backlog review                                                         | May defer with concise rationale and owner; group related cleanup                                                                |
+| **Nit**      | Cosmetic consistency or clarity issue with no material behavior/risk                                                                                                                                                                   | Opportunistic; no dedicated SLA                                                                                                      | Freely batch or decline; must not block sign-off unless it obscures safety/correctness                                           |
 
 Severity is based on impact and reachability, not estimated fix size. A `test-gap`
 inherits the severity of the unprotected invariant; it is not automatically Low.
@@ -416,12 +416,12 @@ directory. Status changes include date, owner, and evidence link.
 
 Effort is review/report effort before fixes:
 
-| Band | Expected effort | Rule |
-|------|-----------------|------|
-| **S** | 0.5–1 reviewer-day | Narrow surface with few boundaries |
-| **M** | 1–2 reviewer-days | Several callers or one important lifecycle/boundary |
-| **L** | 3–5 reviewer-days | Broad subsystem, concurrency, persistence, or multiple integrations |
-| **XL** | More than 5 reviewer-days | Must split into named child reports before review starts |
+| Band   | Expected effort           | Rule                                                                |
+| ------ | ------------------------- | ------------------------------------------------------------------- |
+| **S**  | 0.5–1 reviewer-day        | Narrow surface with few boundaries                                  |
+| **M**  | 1–2 reviewer-days         | Several callers or one important lifecycle/boundary                 |
+| **L**  | 3–5 reviewer-days         | Broad subsystem, concurrency, persistence, or multiple integrations |
+| **XL** | More than 5 reviewer-days | Must split into named child reports before review starts            |
 
 Estimates are planning ranges, not finding quotas. Detailed checklists and live
 completion are in [`PHASES.md`](../module-quality-audit/PHASES.md).
@@ -664,9 +664,9 @@ and no server/Electron ownership leakage.
 2. `packages/plugin` (M)
 3. `packages/util` (M)
 4. `packages/script` (L)
-5. `packages/opentui-core` (L)
-6. `packages/opentui-solid` (L)
-7. `packages/opentui-spinner` (S)
+5. `packages/ax-code-tui` (L)
+6. `packages/ax-code-tui/solid` (L)
+7. `packages/ax-code-tui/spinner` (S)
 8. `packages/ax-wiki` (L)
 9. `packages/ax-code-index-core` (M)
 10. `packages/ax-code-fs-native` (M)
@@ -777,13 +777,13 @@ performance- or platform-sensitive.
 Program records live under
 [`../module-quality-audit/`](../module-quality-audit/):
 
-| Deliverable | Purpose |
-|-------------|---------|
-| [README.md](../module-quality-audit/README.md) | Program workflow, record layout, and contributor entrypoint |
-| [PHASES.md](../module-quality-audit/PHASES.md) | Ordered execution checklist and wave gates |
-| [STATUS.md](../module-quality-audit/STATUS.md) | Live metrics, owners, module states, and report links |
+| Deliverable                                                                    | Purpose                                                           |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| [README.md](../module-quality-audit/README.md)                                 | Program workflow, record layout, and contributor entrypoint       |
+| [PHASES.md](../module-quality-audit/PHASES.md)                                 | Ordered execution checklist and wave gates                        |
+| [STATUS.md](../module-quality-audit/STATUS.md)                                 | Live metrics, owners, module states, and report links             |
 | [templates/MODULE-AUDIT.md](../module-quality-audit/templates/MODULE-AUDIT.md) | Required per-module map, review, findings, and sign-off structure |
-| [templates/FINDING.md](../module-quality-audit/templates/FINDING.md) | Required evidence, impact, fix, verification, and deferral record |
+| [templates/FINDING.md](../module-quality-audit/templates/FINDING.md)           | Required evidence, impact, fix, verification, and deferral record |
 
 Expected runtime layout created as audits begin:
 
@@ -803,18 +803,18 @@ without copying source or test output wholesale.
 Wave 0 records baselines and the final denominator. `STATUS.md` reports these at
 least weekly and at every wave gate:
 
-| Metric | Definition | Target |
-|--------|------------|--------|
-| Modules audited | Units that completed protocol steps 1–8 / frozen units | 100% |
-| Modules signed off | Units meeting step 9 / frozen units | 100% at program exit |
-| Critical/High open vs closed | Accepted findings by severity and state, including SLA age | 0 Critical open at gates; no overdue High at exit |
-| Silent-catch reduction | Triaged empty/broad silent catches remaining versus frozen baseline; legitimate best-effort catches require comment/logging rationale | Material reduction; 100% of remaining hits classified |
-| Unhandled-rejection reduction | Confirmed detached/unobserved rejection paths remaining versus baseline | 0 accepted Critical/High; downward trend overall |
-| High-risk test coverage delta | Branch/behavior coverage or enumerated invariant-path coverage for Wave 1–5 and accepted high-risk findings | Positive delta for every repaired high-risk gap; no unexplained regression |
-| Performance baselines | Before/after latency, throughput, CPU, memory/listener growth, IO count, or binary/startup measure for relevant modules | No accepted regression; each performance fix meets its finding threshold |
-| Boundary health | `check:desktop-boundaries`, affected typechecks, and generated-drift checks | 100% green; no new boundary exceptions without rationale |
-| Finding quality | Accepted findings with complete source, proof, impact, fix, and verification | 100% |
-| Deferral health | Deferred findings with owner, rationale, mitigation, and review/expiry date | 100%; 0 expired unreviewed Critical/High exceptions |
+| Metric                        | Definition                                                                                                                            | Target                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Modules audited               | Units that completed protocol steps 1–8 / frozen units                                                                                | 100%                                                                       |
+| Modules signed off            | Units meeting step 9 / frozen units                                                                                                   | 100% at program exit                                                       |
+| Critical/High open vs closed  | Accepted findings by severity and state, including SLA age                                                                            | 0 Critical open at gates; no overdue High at exit                          |
+| Silent-catch reduction        | Triaged empty/broad silent catches remaining versus frozen baseline; legitimate best-effort catches require comment/logging rationale | Material reduction; 100% of remaining hits classified                      |
+| Unhandled-rejection reduction | Confirmed detached/unobserved rejection paths remaining versus baseline                                                               | 0 accepted Critical/High; downward trend overall                           |
+| High-risk test coverage delta | Branch/behavior coverage or enumerated invariant-path coverage for Wave 1–5 and accepted high-risk findings                           | Positive delta for every repaired high-risk gap; no unexplained regression |
+| Performance baselines         | Before/after latency, throughput, CPU, memory/listener growth, IO count, or binary/startup measure for relevant modules               | No accepted regression; each performance fix meets its finding threshold   |
+| Boundary health               | `check:desktop-boundaries`, affected typechecks, and generated-drift checks                                                           | 100% green; no new boundary exceptions without rationale                   |
+| Finding quality               | Accepted findings with complete source, proof, impact, fix, and verification                                                          | 100%                                                                       |
+| Deferral health               | Deferred findings with owner, rationale, mitigation, and review/expiry date                                                           | 100%; 0 expired unreviewed Critical/High exceptions                        |
 
 Coverage percentage is not compared across unlike languages or test runners without
 context. For modules where line coverage is misleading, enumerate risk-path tests
@@ -850,18 +850,18 @@ and explain the proxy in the report.
 
 ## 15. Risks and mitigations
 
-| Risk | Mitigation |
-|------|------------|
-| Review breadth produces shallow checkbox audits | Required map, failure model, evidence record, test map, and sign-off; XL units must split |
-| Finding-count incentives create noise | No quotas; candidates do not count; impact and proof required |
-| Parallel review duplicates or misses ownership | Frozen slugs, explicit assignments, one owning module, linked impacted modules |
-| Review and fixes drift across a long program | Pin baseline SHA per report; refresh changed modules before sign-off; reopen on overlapping changes |
-| Critical fixes create new risk under urgency | Human review, negative regression test, independent second pass, containment before redesign |
-| Large refactors consume the program | Minimal-fix policy; evidence and ADR gate for decision-level changes |
-| Static scans misclassify dynamic registrations/dead code | Trace build/runtime registration and platform paths; searches create candidates only |
-| Full gates are slow or flaky | Narrow tests per fix, package gates per wave, quarantine/flake status recorded rather than hidden by reruns |
-| Performance work optimizes synthetic cases | Representative workload, environment disclosure, repetitions/variance, before/after comparison |
-| Planning records become stale | Status update is part of module exit and wave gate; weekly metrics cadence |
+| Risk                                                     | Mitigation                                                                                                  |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Review breadth produces shallow checkbox audits          | Required map, failure model, evidence record, test map, and sign-off; XL units must split                   |
+| Finding-count incentives create noise                    | No quotas; candidates do not count; impact and proof required                                               |
+| Parallel review duplicates or misses ownership           | Frozen slugs, explicit assignments, one owning module, linked impacted modules                              |
+| Review and fixes drift across a long program             | Pin baseline SHA per report; refresh changed modules before sign-off; reopen on overlapping changes         |
+| Critical fixes create new risk under urgency             | Human review, negative regression test, independent second pass, containment before redesign                |
+| Large refactors consume the program                      | Minimal-fix policy; evidence and ADR gate for decision-level changes                                        |
+| Static scans misclassify dynamic registrations/dead code | Trace build/runtime registration and platform paths; searches create candidates only                        |
+| Full gates are slow or flaky                             | Narrow tests per fix, package gates per wave, quarantine/flake status recorded rather than hidden by reruns |
+| Performance work optimizes synthetic cases               | Representative workload, environment disclosure, repetitions/variance, before/after comparison              |
+| Planning records become stale                            | Status update is part of module exit and wave gate; weekly metrics cadence                                  |
 
 ---
 

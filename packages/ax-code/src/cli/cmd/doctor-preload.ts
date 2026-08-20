@@ -1,4 +1,3 @@
-import path from "path"
 import { createRequire } from "module"
 import { Installation } from "../../installation"
 import { runtimeMode, type RuntimeMode } from "../../installation/runtime-mode"
@@ -18,7 +17,7 @@ type TuiPreloadCheckInput = {
   ffiAvailable?: boolean
 }
 
-// OpenTUI's Node renderer uses the experimental node:ffi module (Node 26+),
+// AX Code TUI's Node renderer uses the experimental node:ffi module (Node 26+),
 // gated behind the --experimental-ffi flag. The launcher passes it; detect
 // whether it is actually active so doctor reports the TUI state accurately.
 function nodeFfiAvailable(): boolean {
@@ -37,7 +36,7 @@ export function getTuiPreloadCheck(input: TuiPreloadCheckInput = {}): DoctorChec
       return {
         name: "TUI preload",
         status: "ok",
-        detail: "Node runtime — OpenTUI renders via node:ffi; JSX transformed at build time",
+        detail: "Node runtime — AX Code TUI renders via node:ffi; JSX transformed at build time",
       }
     }
     return {
@@ -53,26 +52,23 @@ export function getTuiPreloadCheck(input: TuiPreloadCheckInput = {}): DoctorChec
     return {
       name: "TUI preload",
       status: "ok",
-      detail: "Bundled runtime — OpenTUI JSX is transformed at build time",
+      detail: "Bundled runtime — AX Code TUI JSX is transformed at build time",
     }
   }
 
   try {
     const resolveFn = input.resolveSync ?? resolveSync
-    const preloadPath = resolveFn(
-      "@ax-code/opentui-solid/preload",
-      input.importMetaDir ?? import.meta.dirname,
-    )
+    resolveFn("@ax-code/tui/solid/preload", input.importMetaDir ?? import.meta.dirname)
     return {
       name: "TUI preload",
       status: "ok",
-      detail: `@ax-code/opentui-solid/preload resolved (${path.basename(path.dirname(preloadPath))})`,
+      detail: "@ax-code/tui/solid/preload resolved",
     }
   } catch {
     return {
       name: "TUI preload",
       status: "fail",
-      detail: "@ax-code/opentui-solid/preload not found — source/dev TUI may fail to start. Run: pnpm install",
+      detail: "@ax-code/tui/solid/preload not found — source/dev TUI may fail to start. Run: pnpm install",
     }
   }
 }

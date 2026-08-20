@@ -6,9 +6,7 @@ function extractWorkspaceGlobs(pnpmWorkspaceYaml: string) {
   // Only the `packages:` list is workspace globs. Other list settings
   // (onlyBuiltDependencies, etc.) also use `  - item` lines and must be ignored.
   const packagesBlock = pnpmWorkspaceYaml.match(/^packages:\r?\n((?:[ \t]+- .+\r?\n?)*)/m)?.[1] ?? ""
-  return [...packagesBlock.matchAll(/^[ \t]+- (.+)$/gm)].map((match) =>
-    match[1].replace(/^(["'])(.*)\1$/, "$2"),
-  )
+  return [...packagesBlock.matchAll(/^[ \t]+- (.+)$/gm)].map((match) => match[1].replace(/^(["'])(.*)\1$/, "$2"))
 }
 
 describe("script.workspace-metadata", () => {
@@ -20,53 +18,52 @@ describe("script.workspace-metadata", () => {
     expect(packageJson.workspaces).toEqual(extractWorkspaceGlobs(pnpmWorkspaceYaml))
   })
 
-  test("OpenTUI peer exceptions stay scoped to opentui-spinner", async () => {
+  test("legacy renderer package peer exceptions are absent", async () => {
     const repoRoot = path.resolve(import.meta.dirname, "../../../../")
     const packageJson = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"))
     const allowedVersions = packageJson.pnpm?.peerDependencyRules?.allowedVersions ?? {}
-    const opentuiRules = Object.fromEntries(
+    const legacyRules = Object.fromEntries(
       Object.entries(allowedVersions).filter(([selector]) => selector.includes("@ax-code/opentui")),
     )
 
-    expect(opentuiRules).toEqual({})
+    expect(legacyRules).toEqual({})
   })
 
-  test("OpenTUI dependencies stay on the validated renderer set", async () => {
+  test("TUI dependencies use one validated workspace package", async () => {
     const repoRoot = path.resolve(import.meta.dirname, "../../../../")
     const packageJson = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/package.json"), "utf8"))
     const tsconfig = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/tsconfig.json"), "utf8"))
     const dependencies = packageJson.dependencies ?? {}
     const devDependencies = packageJson.devDependencies ?? {}
 
-    expect(dependencies["@ax-code/opentui-core"]).toBe("workspace:*")
-    expect(dependencies["@ax-code/opentui-solid"]).toBe("workspace:*")
+    expect(dependencies["@ax-code/tui"]).toBe("workspace:*")
+    expect(dependencies["@ax-code/tui/solid"]).toBeUndefined()
     expect(dependencies["@ax-code/opentui-keymap"]).toBeUndefined()
-    expect(dependencies["@ax-code/opentui-spinner"]).toBe("workspace:*")
+    expect(dependencies["@ax-code/tui/spinner"]).toBeUndefined()
     expect(dependencies["@ax-code/render"]).toBeUndefined()
     expect(devDependencies["@ax-code/render"]).toBeUndefined()
-    expect(tsconfig.compilerOptions?.jsxImportSource).toBe("@ax-code/opentui-solid")
+    expect(tsconfig.compilerOptions?.jsxImportSource).toBe("@ax-code/tui/solid")
   })
 
-  test("vendored OpenTUI JSX runtime resolves through the scoped workspace package", async () => {
-    await expect(import("@ax-code/opentui-solid/jsx-runtime")).resolves.toMatchObject({
+  test("AX Code TUI JSX runtime resolves through the workspace package", async () => {
+    await expect(import("@ax-code/tui/solid/jsx-runtime")).resolves.toMatchObject({
       jsx: expect.any(Function),
     })
   })
 
-  test("vendored OpenTUI transform is a stable exported build API", async () => {
+  test("AX Code TUI transform is a stable exported build API", async () => {
     const repoRoot = path.resolve(import.meta.dirname, "../../../../")
-    const solidPackage = JSON.parse(await readFile(path.join(repoRoot, "packages/opentui-solid/package.json"), "utf8"))
-    const corePackage = JSON.parse(await readFile(path.join(repoRoot, "packages/opentui-core/package.json"), "utf8"))
+    const tuiPackage = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code-tui/package.json"), "utf8"))
 
-    expect(solidPackage.exports["./transform"]).toMatchObject({
-      types: "./scripts/solid-transform.d.ts",
-      import: "./scripts/solid-transform.js",
+    expect(tuiPackage.exports["./solid/transform"]).toMatchObject({
+      types: "./solid/scripts/solid-transform.d.ts",
+      import: "./solid/scripts/solid-transform.js",
     })
-    // The native Zig libraries are vendored in-repo (packages/opentui-core/vendor/),
+    // The native Zig libraries are vendored in-repo (packages/ax-code-tui/vendor/),
     // not resolved from upstream @opentui/core-<platform> optional dependencies.
-    expect(corePackage.optionalDependencies ?? {}).toEqual({})
+    expect(tuiPackage.optionalDependencies ?? {}).toEqual({})
     const vendorManifest = JSON.parse(
-      await readFile(path.join(repoRoot, "packages/opentui-core/vendor/manifest.json"), "utf8"),
+      await readFile(path.join(repoRoot, "packages/ax-code-tui/vendor/manifest.json"), "utf8"),
     )
     expect(Object.keys(vendorManifest.targets ?? {}).sort()).toEqual([
       "darwin-arm64",
@@ -79,13 +76,13 @@ describe("script.workspace-metadata", () => {
       "win32-x64",
     ])
 
-    const { transformSolidSource } = await import("@ax-code/opentui-solid/transform")
+    const { transformSolidSource } = await import("@ax-code/tui/solid/transform")
     const output = await transformSolidSource("export const View = () => <text>Hello</text>", {
-      filename: "/tmp/opentui-view.tsx",
-      moduleName: "@ax-code/opentui-solid",
+      filename: "/tmp/ax-code-tui-view.tsx",
+      moduleName: "@ax-code/tui/solid",
     })
 
-    expect(output).toContain('from "@ax-code/opentui-solid"')
+    expect(output).toContain('from "@ax-code/tui/solid"')
     expect(output).toContain('createElement("text")')
     expect(output).not.toContain("<text>")
   })

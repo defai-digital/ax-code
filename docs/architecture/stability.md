@@ -23,11 +23,11 @@ How AX Code stays reliable for long interactive sessions and headless runs.
 The supported runtime stack is:
 
 - Runtime: Node bundled
-- UI: **OpenTUI + Solid** (primary default)
+- UI: **AX Code TUI + Solid** (primary default)
 - Render: Zig (production); the native libraries are fully vendored in-repo
-  (`packages/opentui-core/vendor/`, hash-pinned by `vendor/manifest.json`) —
+  (`packages/ax-code-tui/vendor/`, hash-pinned by `vendor/manifest.json`) —
   no upstream `@opentui/*` npm packages are involved at install or runtime
-- Yoga is not a selectable mode; Zig/OpenTUI remains the default
+- Yoga is not a selectable mode; AX Code TUI's native renderer remains the default
 
 ## Cancellations vs crashes
 

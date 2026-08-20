@@ -14,7 +14,7 @@ afterEach(async () => {
 })
 
 describe("script.esbuild-solid-plugin", () => {
-  test("transforms OpenTUI Solid TSX through the stable package transform export", async () => {
+  test("transforms AX Code TUI Solid TSX through the stable package transform export", async () => {
     tempDir = await mkdtemp(path.join(tmpdir(), "ax-code-esbuild-solid-plugin."))
     const entry = path.join(tempDir, "view.tsx")
     const outfile = path.join(tempDir, "view.js")
@@ -28,12 +28,12 @@ describe("script.esbuild-solid-plugin", () => {
       format: "esm",
       platform: "node",
       plugins: [solidEsbuildPlugin()],
-      external: ["@ax-code/opentui-solid"],
+      external: ["@ax-code/tui/solid"],
       logLevel: "silent",
     })
 
     const output = await readFile(outfile, "utf8")
-    expect(output).toContain('from "@ax-code/opentui-solid"')
+    expect(output).toContain('from "@ax-code/tui/solid"')
     expect(output).toContain('createElement("text")')
     expect(output).not.toContain("<text>")
   })

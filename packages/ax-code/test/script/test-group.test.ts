@@ -10,21 +10,21 @@ describe("test group classification", () => {
     const pkg = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/package.json"), "utf8"))
 
     expect(pkg.scripts["test:unit"]).toBe("tsx script/test-groups.ts unit")
-    expect(pkg.scripts["test:opentui"]).toBe("tsx script/test-groups.ts opentui")
+    expect(pkg.scripts["test:tui-renderer"]).toBe("tsx script/test-groups.ts tui-renderer")
   })
 
-  test("provides an exact OpenTUI package regression group", () => {
+  test("provides an exact AX Code TUI package regression group", () => {
     const files = [
-      "test/cli/tui/opentui-spinner-renderable.test.ts",
-      "test/cli/tui/opentui-spinner.test.ts",
-      "test/script/opentui-package-integrity.test.ts",
+      "test/cli/tui/tui-spinner-renderable.test.ts",
+      "test/cli/tui/tui-spinner.test.ts",
+      "test/script/tui-package-integrity.test.ts",
       "test/session/session.test.ts",
     ]
 
-    expect(pick(files, "opentui")).toEqual([
-      "test/cli/tui/opentui-spinner-renderable.test.ts",
-      "test/cli/tui/opentui-spinner.test.ts",
-      "test/script/opentui-package-integrity.test.ts",
+    expect(pick(files, "tui-renderer")).toEqual([
+      "test/cli/tui/tui-spinner-renderable.test.ts",
+      "test/cli/tui/tui-spinner.test.ts",
+      "test/script/tui-package-integrity.test.ts",
     ])
   })
 

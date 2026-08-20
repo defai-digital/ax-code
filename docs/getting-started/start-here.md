@@ -111,5 +111,5 @@ Grok runs exclusively through `Grok Build CLI`. Select `grok-build-cli` in `/con
 | Routing and model tier   | [Auto-Route](../guides/auto-route.md)                                 |
 | SDK embedding            | [`@ax-code/sdk`](../../packages/sdk/js/README.md)                     |
 | HTTP/OpenAPI clients     | [HTTP and OpenAPI Compatibility](../sdk/http-openapi.md)              |
-| VS Code integration      | [VS Code integration](../../packages/integration-vscode/README.md)    |
+| VS Code integration      | [VS Code integration](../../packages/integration-vscode/README.md) · [Marketplace](https://marketplace.visualstudio.com/items?itemName=AutomatosX.ax-code-vscode) |
 | Architecture             | [Semantic Layer](../architecture/semantic-layer.md)                   |

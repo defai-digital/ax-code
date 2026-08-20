@@ -2557,7 +2557,7 @@
     },
     {
       "id": "W9-05",
-      "slug": "pkg-opentui-core",
+      "slug": "pkg-ax-code-tui-core",
       "wave": 9,
       "status": "SIGNED OFF",
       "files": 132,
@@ -2568,7 +2568,7 @@
     },
     {
       "id": "W9-06",
-      "slug": "pkg-opentui-solid",
+      "slug": "pkg-ax-code-tui-solid",
       "wave": 9,
       "status": "SIGNED OFF",
       "files": 37,
@@ -2579,7 +2579,7 @@
     },
     {
       "id": "W9-07",
-      "slug": "pkg-opentui-spinner",
+      "slug": "pkg-ax-code-tui-spinner",
       "wave": 9,
       "status": "SIGNED OFF",
       "files": 4,

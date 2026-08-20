@@ -1,7 +1,7 @@
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/opentui-solid"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/tui/solid"
 import { batch, createContext, onCleanup, Show, useContext, type JSX, type ParentProps } from "solid-js"
 import { useTheme } from "@tui/context/theme"
-import { MouseButton, Renderable, RGBA, type MouseEvent } from "@ax-code/opentui-core"
+import { MouseButton, Renderable, RGBA, type MouseEvent } from "@ax-code/tui"
 import { createStore } from "solid-js/store"
 import { useToast } from "./toast"
 import { RoundedBorder } from "./primitives/card"
@@ -23,7 +23,7 @@ export function Dialog(
 
   // Only arm dismissal when a press actually begins on the backdrop and no
   // selection is in progress. A drag that starts inside the dialog never
-  // delivers a mousedown to the backdrop, so opentui routing the terminating
+  // delivers a mousedown to the backdrop, so AX Code TUI routing the terminating
   // mouseup here (to whatever is under the cursor at release) won't dismiss it.
   let armed = false
 

@@ -1,7 +1,7 @@
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/opentui-solid"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/tui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
-import { MouseButton, TextAttributes, type MouseEvent } from "@ax-code/opentui-core"
+import { MouseButton, TextAttributes, type MouseEvent } from "@ax-code/tui"
 import { RouteProvider, useRoute } from "@tui/context/route"
 import {
   type Component,
@@ -115,7 +115,7 @@ export function tui(input: TuiInput) {
         // below takes over once the app is up, but without this the tab keeps
         // showing the launcher's process name ("node") until first mount —
         // and forever if mount crashes.
-        setTuiTerminalTitle("AX-Code", renderProfile)
+        setTuiTerminalTitle("AX Code", renderProfile)
         beginTuiStartup({
           continue: !!input.args.continue,
           fork: !!input.args.fork,
@@ -452,7 +452,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     renderer.clearSelection()
   })
 
-  // Wire up console copy-to-clipboard via opentui's onCopySelection callback
+  // Wire up console copy-to-clipboard via AX Code TUI's onCopySelection callback
   renderer.console.onCopySelection = async (text: string) => {
     if (!text || text.length === 0) return
 
@@ -522,20 +522,20 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         : ""
 
     if (route.data.type === "home") {
-      setTuiTerminalTitle(`${spinner}AX-Code`, renderProfile)
+      setTuiTerminalTitle(`${spinner}AX Code`, renderProfile)
       return
     }
 
     if (route.data.type === "session") {
       const session = sync.session.get(route.data.sessionID)
       if (!session || SessionApi.isDefaultTitle(session.title)) {
-        setTuiTerminalTitle(`${spinner}AX-Code`, renderProfile)
+        setTuiTerminalTitle(`${spinner}AX Code`, renderProfile)
         return
       }
 
       // Truncate title to 40 chars max
       const title = session.title.length > 40 ? session.title.slice(0, 37) + "..." : session.title
-      setTuiTerminalTitle(`${spinner}AX-Code | ${title}`, renderProfile)
+      setTuiTerminalTitle(`${spinner}AX Code | ${title}`, renderProfile)
     }
   })
 
@@ -1725,7 +1725,7 @@ function ErrorComponent(props: {
   }
 
   if (props.error.message) {
-    issueURL.searchParams.set("title", `opentui: fatal: ${props.error.message}`)
+    issueURL.searchParams.set("title", `ax-code-tui: fatal: ${props.error.message}`)
   }
 
   if (props.error.stack) {

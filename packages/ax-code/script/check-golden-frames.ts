@@ -1,13 +1,13 @@
-// Golden-frame parity gate (ADR-046 Phase 0).
+// AX Code TUI golden-frame parity gate.
 //
-// Renders representative scenes through the REAL OpenTUI native pipeline
+// Renders representative scenes through the real AX Code TUI native pipeline
 // (node:ffi -> bundled Zig render core) with the headless test renderer, then
 // byte-compares serialized frames (character grid + styled spans + cursor)
 // against committed goldens. Today this guards Node runtime bumps and
 // upstream @opentui/core-<platform> bumps.
 //
 // Scenes deliberately concentrate on the parity risk areas called out in
-// ADR-046: yoga flex layout, styled text attributes, CJK/emoji width and
+// the renderer contract: Yoga flex layout, styled text attributes, CJK/emoji width and
 // wrapping, border charsets, the edit-buffer path (input/textarea), select
 // lists, and scrollbox overflow.
 //
@@ -32,8 +32,8 @@ import {
   t,
   type RGBA,
   type CapturedFrame,
-} from "@ax-code/opentui-core"
-import { createTestRenderer, type TestRendererSetup } from "@ax-code/opentui-core/testing"
+} from "@ax-code/tui"
+import { createTestRenderer, type TestRendererSetup } from "@ax-code/tui/testing"
 import { readText, writeText } from "./fs-compat"
 
 const SNAPSHOT_DIR = path.resolve(import.meta.dirname, "../test/cli/tui/__snapshots__/golden-frames")

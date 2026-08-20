@@ -1,15 +1,15 @@
 import { Show } from "solid-js"
 import { useTheme } from "../context/theme"
 import { useKV } from "../context/kv"
-import type { JSX } from "@ax-code/opentui-solid"
-import type { RGBA } from "@ax-code/opentui-core"
-import type { ColorGenerator } from "@ax-code/opentui-spinner"
-import "@ax-code/opentui-spinner/solid"
+import type { JSX } from "@ax-code/tui/solid"
+import type { RGBA } from "@ax-code/tui"
+import type { ColorGenerator } from "@ax-code/tui/spinner"
+import "@ax-code/tui/spinner/solid"
 import { shouldUseTuiAnimations } from "./spinner-profile"
 
 const frames = ["|", "/", "-", "\\"]
 
-export function OpenTuiSpinner(props: { frames: string[]; interval: number; color: RGBA | ColorGenerator }) {
+export function AxTuiSpinner(props: { frames: string[]; interval: number; color: RGBA | ColorGenerator }) {
   return <spinner frames={props.frames} interval={props.interval} color={props.color} />
 }
 
@@ -23,7 +23,7 @@ export function Spinner(props: { children?: JSX.Element; color?: RGBA }) {
       fallback={<text fg={color()}>... {props.children}</text>}
     >
       <box flexDirection="row" gap={1}>
-        <OpenTuiSpinner frames={frames} interval={80} color={color()} />
+        <AxTuiSpinner frames={frames} interval={80} color={color()} />
         <Show when={props.children}>
           <text fg={color()}>{props.children}</text>
         </Show>

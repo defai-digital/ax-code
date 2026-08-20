@@ -1,0 +1,127 @@
+# MODULE-AUDIT: pkg-ax-code-tui-core
+
+| Field                | Value                                      |
+| -------------------- | ------------------------------------------ |
+| Unit slug            | `pkg-ax-code-tui-core`                     |
+| Scope                | `packages/ax-code-tui`                     |
+| Resolved root        | `packages/ax-code-tui`                     |
+| XL filter            | no                                         |
+| Wave / effort        | Wave 9 / L                                 |
+| Risk tags            | ui                                         |
+| Status               | SIGNED OFF                                 |
+| Reviewer             | ax-code-glm                                |
+| Independent verifier | codex-sol                                  |
+| Baseline commit      | `994f9287e497666e104644eccea299595a35b39a` |
+| Analysis fingerprint | `6d8ade5e21fdfb54`                         |
+| Protocol marker      | agent-protocol.json complete               |
+| Source files / LOC   | 132 / 49786                                |
+| Inventory ID         | W9-05                                      |
+
+## 1. Scope and map
+
+### Source inventory
+
+| File                                                |   LOC | Exports | Empty catches | TODOs |
+| --------------------------------------------------- | ----: | ------: | ------------: | ----: |
+| `packages/ax-code-tui/NativeSpanFeed.d.ts`          |    53 |       1 |             0 |     0 |
+| `packages/ax-code-tui/Renderable.d.ts`              |   352 |       5 |             0 |     0 |
+| `packages/ax-code-tui/animation/Timeline.d.ts`      |   127 |       4 |             0 |     0 |
+| `packages/ax-code-tui/ansi.d.ts`                    |    18 |       0 |             0 |     0 |
+| `packages/ax-code-tui/audio.d.ts`                   |    90 |      10 |             0 |     0 |
+| `packages/ax-code-tui/buffer.d.ts`                  |   114 |       0 |             0 |     0 |
+| `packages/ax-code-tui/console.d.ts`                 |   147 |       3 |             0 |     0 |
+| `packages/ax-code-tui/edit-buffer.d.ts`             |    98 |       0 |             0 |     0 |
+| `packages/ax-code-tui/editor-view.d.ts`             |    73 |       1 |             0 |     0 |
+| `packages/ax-code-tui/index-07zpr2dg.js`            | 10097 |       0 |             2 |     0 |
+| `packages/ax-code-tui/index-pcvh9d34.js`            | 16052 |       0 |             2 |     0 |
+| `packages/ax-code-tui/index.d.ts`                   |    25 |       0 |             0 |     0 |
+| `packages/ax-code-tui/index.js`                     | 11680 |       0 |             0 |     0 |
+| `packages/ax-code-tui/lib/KeyHandler.d.ts`          |    62 |       1 |             0 |     0 |
+| `packages/ax-code-tui/lib/RGBA.d.ts`                |    43 |       4 |             0 |     0 |
+| `packages/ax-code-tui/lib/ascii.font.d.ts`          |   509 |       1 |             0 |     0 |
+| `packages/ax-code-tui/lib/border.d.ts`              |    52 |       6 |             0 |     0 |
+| `packages/ax-code-tui/lib/bunfs.d.ts`               |     8 |       0 |             0 |     0 |
+| `packages/ax-code-tui/lib/clipboard.d.ts`           |    17 |       0 |             0 |     0 |
+| `packages/ax-code-tui/lib/clock.d.ts`               |    16 |       2 |             0 |     0 |
+| `packages/ax-code-tui/lib/data-paths.d.ts`          |    27 |       2 |             0 |     0 |
+| `packages/ax-code-tui/lib/debounce.d.ts`            |    43 |       0 |             0 |     0 |
+| `packages/ax-code-tui/lib/detect-links.d.ts`        |     7 |       0 |             0 |     0 |
+| `packages/ax-code-tui/lib/env.d.ts`                 |    43 |       1 |             0 |     0 |
+| `packages/ax-code-tui/lib/extmarks-history.d.ts`    |    18 |       1 |             0 |     0 |
+| `packages/ax-code-tui/lib/extmarks.d.ts`            |    91 |       2 |             0 |     0 |
+| `packages/ax-code-tui/lib/hast-styled-text.d.ts`    |    18 |       3 |             0 |     0 |
+| `packages/ax-code-tui/lib/index.d.ts`               |    22 |       0 |             0 |     0 |
+| `packages/ax-code-tui/lib/keybinding.internal.d.ts` |    34 |       4 |             0 |     0 |
+| `packages/ax-code-tui/lib/objects-in-viewport.d.ts` |    25 |       0 |             0 |     0 |
+
+### Exports (sample)
+
+- `DataHandler@packages/ax-code-tui/NativeSpanFeed.d.ts:4`
+- `Position@packages/ax-code-tui/Renderable.d.ts:22`
+- `BaseRenderableOptions@packages/ax-code-tui/Renderable.d.ts:28`
+- `LayoutOptions@packages/ax-code-tui/Renderable.d.ts:31`
+- `RenderableOptions@packages/ax-code-tui/Renderable.d.ts:66`
+- `RenderCommand@packages/ax-code-tui/Renderable.d.ts:337`
+- `TimelineOptions@packages/ax-code-tui/animation/Timeline.d.ts:2`
+- `AnimationOptions@packages/ax-code-tui/animation/Timeline.d.ts:9`
+- `JSAnimation@packages/ax-code-tui/animation/Timeline.d.ts:22`
+- `EasingFunctions@packages/ax-code-tui/animation/Timeline.d.ts:61`
+- `AudioSetupOptions@packages/ax-code-tui/audio.d.ts:3`
+- `AudioStartOptions@packages/ax-code-tui/audio.d.ts:9`
+- `AudioPlayOptions@packages/ax-code-tui/audio.d.ts:26`
+- `AudioGroup@packages/ax-code-tui/audio.d.ts:32`
+- `AudioVoice@packages/ax-code-tui/audio.d.ts:33`
+- `AudioSound@packages/ax-code-tui/audio.d.ts:34`
+- `AudioPlaybackDevice@packages/ax-code-tui/audio.d.ts:35`
+- `AudioAction@packages/ax-code-tui/audio.d.ts:40`
+- `AudioErrorContext@packages/ax-code-tui/audio.d.ts:41`
+- `AudioEvents@packages/ax-code-tui/audio.d.ts:45`
+
+### Tests
+
+- `packages/ax-code/test/cli/tui/tui-ffi-coordinate-guard.test.ts`
+- `packages/ax-code/test/cli/tui/tui-ffi-pointer-pin.test.ts`
+- `packages/ax-code/test/cli/tui/tui-spinner.test.ts`
+- `packages/ax-code/test/script/tui-package-integrity.test.ts`
+- `packages/ax-code/test/session/semantic-core.test.ts`
+
+## 2. Threat and failure model
+
+| Asset              | Boundary             | Notes                            |
+| ------------------ | -------------------- | -------------------------------- |
+| Module contract    | public exports (334) | static map                       |
+| Silent failure     | empty catch (6)      | per-site disposition in findings |
+| Secrets/process/IO | risk tags ui         | hotspot scan                     |
+
+## 3–7. Protocol steps 3–7
+
+Completed by dual-agent; see agent-protocol.json
+
+## 8. Finding register
+
+| Finding                                | Category     | Severity | Origin | Status   |
+| -------------------------------------- | ------------ | -------- | ------ | -------- |
+| AUDIT-pkg-ax-code-tui-core-empty-catch | silent-error | Low      | new    | deferred |
+
+## 9. Verification and exit
+
+| Item                        | Result                   |
+| --------------------------- | ------------------------ |
+| Static extract              | ok fp `6d8ade5e21fdfb54` |
+| Dual-agent protocol         | complete                 |
+| Critical independent verify | codex-sol                |
+
+### Exit checklist
+
+- [x] Full 9-step protocol by dual-agent/implementer
+- [x] Map with unit-scoped files (XL filters applied when configured)
+- [x] Findings ledger consistent with findings/ files
+- [x] Sign-off roles complete
+
+### Sign-off
+
+| Role                 | Name                | Date       | Evidence     |
+| -------------------- | ------------------- | ---------- | ------------ |
+| Reviewer             | ax-code-glm         | 2026-08-11 | filesRead=24 |
+| Independent verifier | codex-sol           | 2026-08-11 | dual-agent   |
+| Module owner         | AX Code maintainers | 2026-08-11 | SIGNED OFF   |

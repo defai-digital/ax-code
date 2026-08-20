@@ -12,7 +12,13 @@ function imports(text: string) {
 
 function rule(spec: string): TuiLayeringGuardrails.Rule | undefined {
   if (spec === "solid-js" || spec.startsWith("solid-js/") || spec.startsWith("@solid-primitives/")) return "solid"
-  if (spec.startsWith("@opentui/") || spec.startsWith("@ax-code/opentui-")) return "renderer"
+  if (
+    spec === "@ax-code/tui" ||
+    spec.startsWith("@ax-code/tui/") ||
+    spec.startsWith("@opentui/") ||
+    spec.startsWith("@ax-code/opentui-")
+  )
+    return "renderer"
 }
 
 function skip(file: string) {

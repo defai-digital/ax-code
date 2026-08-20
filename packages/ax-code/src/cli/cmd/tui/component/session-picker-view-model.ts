@@ -1,5 +1,5 @@
 // Renderer-free view-model helpers for session picker and session-first launch (ADR-035).
-// Covered by the TUI layering guard — keep free of solid/opentui imports.
+// Covered by the TUI layering guard — keep free of Solid and renderer imports.
 
 export interface RecentSessionLike {
   id: string

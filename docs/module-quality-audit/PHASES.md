@@ -354,7 +354,7 @@ Wave 0 sizing finds they are L/XL.
 - boundary validation, domain delegation, human/JSON output, correct exit/status,
   signal/process teardown, source/bundled parity, destructive-command consent;
 - TUI lifecycle, subscriptions, session/workspace scoping, long-session retention,
-  accessibility/readability of failures, and OpenTUI/native integration.
+  accessibility/readability of failures, and AX Code TUI/native integration.
 
 ### Gate
 
@@ -457,9 +457,9 @@ Wave 1 already owns Electron security policy, IPC, preload, web `security`, and
 2. [ ] `packages/plugin` — M
 3. [ ] `packages/util` — M
 4. [ ] `packages/script` — L
-5. [ ] `packages/opentui-core` — L
-6. [ ] `packages/opentui-solid` — L
-7. [ ] `packages/opentui-spinner` — S
+5. [ ] `packages/ax-code-tui` — L
+6. [ ] `packages/ax-code-tui/solid` — L
+7. [ ] `packages/ax-code-tui/spinner` — S
 8. [ ] `packages/ax-wiki` — L
 9. [ ] `packages/ax-code-index-core` — M
 10. [ ] `packages/ax-code-fs-native` — M
@@ -479,7 +479,7 @@ Wave 1 already owns Electron security policy, IPC, preload, web `security`, and
 ### Required focus
 
 - package exports/contracts, dependency ownership, build/release scripts, generated
-  provenance/drift, OpenTUI lifecycle, documentation/build accuracy;
+  provenance/drift, AX Code TUI lifecycle, documentation/build accuracy;
 - N-API/FFI validation, panics/unsafe, blocking work, locks/processes, bounded inputs,
   ABI/platform packaging, native/fallback error and result equivalence.
 

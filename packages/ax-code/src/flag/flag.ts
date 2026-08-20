@@ -62,7 +62,7 @@ export namespace Flag {
   // Disables both the terminal tab title (OSC 0) and the tab progress
   // indicator (OSC 9;4) the TUI writes while a session is working.
   export const AX_CODE_DISABLE_TERMINAL_TITLE = truthy("AX_CODE_DISABLE_TERMINAL_TITLE")
-  // OpenTUI's full terminal setup enables alternate-screen, capability
+  // AX Code TUI's full terminal setup enables alternate-screen, capability
   // probes, and a native render thread. Keep that profile opt-in until it
   // is stable across direct-TTY environments.
   export const AX_CODE_TUI_ADVANCED_TERMINAL = truthy("AX_CODE_TUI_ADVANCED_TERMINAL")

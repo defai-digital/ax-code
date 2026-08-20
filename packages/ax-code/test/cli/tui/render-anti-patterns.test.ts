@@ -83,15 +83,15 @@ const TUI_STARTUP_SMOKE_SRC = path.join(PACKAGE_ROOT, "script/tui-startup-smoke.
 const SOURCE_SOLID_LOADER_SRC = path.join(REPO_ROOT, "script/solid-loader.mjs")
 const NODE_PTY_PATCH_SRC = path.join(REPO_ROOT, "patches/node-pty-prebuilt-multiarch@0.10.1-pre.5.patch")
 
-describe("tui OpenTUI stability guardrails", () => {
-  test("keeps OpenTUI wired as the default renderer path", async () => {
+describe("AX Code TUI stability guardrails", () => {
+  test("keeps AX Code TUI wired as the default renderer path", async () => {
     const app = await fs.readFile(APP_SRC, "utf8")
     const renderer = await fs.readFile(RENDERER_SRC, "utf8")
 
     expect(app).toContain('from "./renderer"')
     expect(app).toContain("getTuiRenderProfile")
     expect(app).not.toMatch(/runNativeTuiSlice|AX_CODE_TUI_NATIVE/i)
-    expect(renderer).toContain('from "@ax-code/opentui-solid"')
+    expect(renderer).toContain('from "@ax-code/tui/solid"')
     expect(renderer).toContain("render(root, createTuiRenderOptions(options))")
   })
 
@@ -117,11 +117,11 @@ describe("tui OpenTUI stability guardrails", () => {
   test("keeps release dependency install from running optional native lifecycle scripts", async () => {
     const build = await fs.readFile(BUILD_NODE_TUI_SRC, "utf8")
 
-    expect(build).toContain("shouldCopyOpentuiDistPath")
-    // opentui-solid's public transform owns its Babel dependencies, while the
+    expect(build).toContain("shouldCopyTuiDistPath")
+    // AX Code TUI's public Solid transform owns its Babel dependencies, while the
     // precompiled CLI excludes that unshipped entry and its dependency set.
     expect(build).toContain("collectPackageRuntimeDependencies")
-    expect(build).toContain("withoutOpentuiTransformDependencies")
+    expect(build).toContain("withoutTuiTransformDependencies")
     expect(build).toContain('spawnSync("npm", args')
     expect(build).toContain('shell: process.platform === "win32"')
     expect(build).not.toContain('"npm.cmd"')
@@ -227,7 +227,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(renderer).toContain("setTuiTerminalTitle")
     expect(renderer).toContain("clearTuiTerminalTitle")
     // Title/progress are written directly to stdout (kimi-code style), not
-    // routed through OpenTUI's flaky native setTerminalTitle.
+    // routed through the renderer's flaky native setTerminalTitle.
     expect(renderer).not.toContain("renderer.setTerminalTitle")
     expect(renderer).toContain("supportsTuiTerminalProgress")
     expect(renderer).toContain("setTuiTerminalProgress")
@@ -243,13 +243,13 @@ describe("tui OpenTUI stability guardrails", () => {
     // boundary replaces the app without otherwise clearing progress).
     expect(app).toContain("onCleanup(() => setTuiTerminalProgress(false, renderProfile))")
     // The tab title is claimed at TUI boot (before the renderer mounts,
-    // kimi-code style) so the tab shows "AX-Code" instead of the launcher's
+    // kimi-code style) so the tab shows "AX Code" instead of the launcher's
     // process name ("node") even if mount is slow or crashes; runtime titles
-    // keep the user-facing "AX-Code" casing (lowercase "ax-code" is the
+    // keep the user-facing "AX Code" casing (lowercase "ax-code" is the
     // machine process title, see util/process-title.ts).
-    expect(app).toContain('setTuiTerminalTitle("AX-Code", renderProfile)')
-    expect(app).toContain("${spinner}AX-Code")
-    expect(app).toContain("${spinner}AX-Code | ${title}")
+    expect(app).toContain('setTuiTerminalTitle("AX Code", renderProfile)')
+    expect(app).toContain("${spinner}AX Code")
+    expect(app).toContain("${spinner}AX Code | ${title}")
     expect(exitContext).toContain("await destroyTuiRenderer(renderer)")
   })
 
@@ -899,7 +899,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(worker).not.toContain('process.on("unhandledRejection"')
   })
 
-  test("keeps OpenTUI renderable operations behind named safety helpers", async () => {
+  test("keeps AX Code TUI renderable operations behind named safety helpers", async () => {
     const safety = await fs.readFile(RENDERABLE_SAFETY_SRC, "utf8")
     const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
@@ -1404,13 +1404,13 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).not.toContain("navigationTimer = setTimeout")
   })
 
-  test("keeps doctor checking the OpenTUI preload dependency with bundled-runtime awareness", async () => {
+  test("keeps doctor checking the AX Code TUI preload dependency with bundled-runtime awareness", async () => {
     const doctor = await fs.readFile(DOCTOR_PRELOAD_SRC, "utf8")
 
     // resolveSync is now imported from ../../bun/node-compat (Bun→Node
     // migration) instead of the Bun global.
     expect(doctor).toContain("resolveFn(")
-    expect(doctor).toContain('"@ax-code/opentui-solid/preload"')
+    expect(doctor).toContain('"@ax-code/tui/solid/preload"')
     expect(doctor).toContain("Bundled runtime")
     expect(doctor).toContain("source/dev TUI may fail to start")
   })
@@ -1458,7 +1458,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(session).toContain('recordTuiStartupOnce("tui.startup.sessionMounted"')
   })
 
-  test("keeps the OpenTUI worker startup bounded with a readiness handshake", async () => {
+  test("keeps AX Code TUI worker startup bounded with a readiness handshake", async () => {
     const thread = await fs.readFile(THREAD_SRC, "utf8")
     const worker = await fs.readFile(WORKER_SRC, "utf8")
 
@@ -1521,7 +1521,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(thread).toContain('new URL("./worker.ts", import.meta.url)')
   })
 
-  test("keeps the OpenTUI app import diagnostic-only before renderer startup", async () => {
+  test("keeps the AX Code TUI app import diagnostic-only before renderer startup", async () => {
     const thread = await fs.readFile(THREAD_SRC, "utf8")
     const explain = await fs.readFile(DEBUG_EXPLAIN_SRC, "utf8")
 

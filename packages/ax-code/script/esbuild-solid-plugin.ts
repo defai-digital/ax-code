@@ -1,4 +1,4 @@
-// esbuild plugin that applies OpenTUI's Solid JSX transform under Node. It uses
+// esbuild plugin that applies AX Code TUI's Solid JSX transform under Node. It uses
 // the vendored package's stable transform export instead of reaching into
 // package internals, keeping the Node bundle path aligned with source TUI runs.
 import { promises as fs } from "node:fs"
@@ -12,7 +12,7 @@ type TransformSolidSource = (
 let cachedTransform: TransformSolidSource | undefined
 async function getTransform() {
   if (cachedTransform) return cachedTransform
-  const mod = await import("@ax-code/opentui-solid/transform")
+  const mod = await import("@ax-code/tui/solid/transform")
   cachedTransform = mod.transformSolidSource
   return cachedTransform!
 }
@@ -21,9 +21,9 @@ async function getTransform() {
 const fileCache = new Map<string, { mtime: number; contents: string }>()
 
 export function solidEsbuildPlugin(options: { moduleName?: string } = {}): Plugin {
-  const moduleName = options.moduleName ?? "@ax-code/opentui-solid"
+  const moduleName = options.moduleName ?? "@ax-code/tui/solid"
   return {
-    name: "opentui-solid",
+    name: "ax-code-tui-solid",
     setup(build) {
       // Only .tsx carries JSX; plain .ts is left to esbuild's default loader.
       build.onLoad({ filter: /\.tsx$/ }, async (args) => {

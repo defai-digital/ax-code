@@ -1,6 +1,6 @@
 // Renderer-neutral launch policy for session-first TUI (ADR-035).
 // Decides the initial route from CLI args and available sessions.
-// Keep free of solid/opentui imports.
+// Keep free of Solid and renderer imports.
 
 export type TuiLaunchInput = {
   explicitSessionID?: string

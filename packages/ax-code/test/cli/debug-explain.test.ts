@@ -498,7 +498,7 @@ describe("debug explain replay hang analysis", () => {
     expect(issue?.rootCause).not.toMatch(/1m 60s/)
   })
 
-  test("classifies opentui render loops", () => {
+  test("classifies AX Code TUI render loops", () => {
     const lines = [
       JSON.stringify({
         kind: "process.event",

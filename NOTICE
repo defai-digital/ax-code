@@ -27,10 +27,10 @@ OpenChamber (https://github.com/btriapitsyn/openchamber), Copyright (c) 2025
 Bohdan Triapitsyn, originally licensed under the MIT License. See desktop/NOTICE
 and desktop/LICENSE-MIT for the detailed Desktop provenance and attribution.
 
-The vendored OpenTUI packages (packages/opentui-core, packages/opentui-solid,
-packages/opentui-spinner) are forks of OpenTUI
-(https://github.com/anomalyco/opentui), Copyright (c) opentui, and remain
-licensed in full under the MIT License. See each package's own LICENSE file.
+The AX Code TUI package (`packages/ax-code-tui`) contains portions derived from
+OpenTUI (https://github.com/anomalyco/opentui), Copyright (c) opentui, available
+under the MIT License. Upstream license text and provenance are retained in the
+package directory and native manifest.
 
 ========================================================================
 Third-party dependencies

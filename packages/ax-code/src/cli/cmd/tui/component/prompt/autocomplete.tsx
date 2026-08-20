@@ -1,4 +1,4 @@
-import type { BoxRenderable, TextareaRenderable, KeyEvent, ScrollBoxRenderable } from "@ax-code/opentui-core"
+import type { BoxRenderable, TextareaRenderable, KeyEvent, ScrollBoxRenderable } from "@ax-code/tui"
 import { pathToFileURL } from "url"
 import fuzzysort from "fuzzysort"
 import { firstBy } from "remeda"
@@ -11,7 +11,7 @@ import { SplitBorder } from "@tui/component/border"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { findRenderableChild, isRenderableAlive } from "@tui/util/renderable-safety"
-import { useTerminalDimensions } from "@ax-code/opentui-solid"
+import { useTerminalDimensions } from "@ax-code/tui/solid"
 import { Agent } from "@/agent/agent"
 import { Locale } from "@/util/locale"
 import type { PromptInfo } from "./history"
@@ -500,15 +500,7 @@ export function Autocomplete(props: {
     // Builtin server-side prompt commands that should appear in "/" autocomplete.
     // Keep in sync with Command.Default in packages/ax-code/src/command/index.ts.
     // Client-only slashes (e.g. /model, /sessions) are registered separately via command.slashes().
-    const defaultCommandSlashAllowlist = new Set([
-      "init",
-      "review",
-      "plan",
-      "debug",
-      "goal",
-      "council",
-      "verified-fix",
-    ])
+    const defaultCommandSlashAllowlist = new Set(["init", "review", "plan", "debug", "goal", "council", "verified-fix"])
 
     // Collect slash names already registered client-side so we skip duplicates
     // from the server list. A duplicate would show two identical suggestions

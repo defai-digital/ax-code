@@ -2,7 +2,7 @@
  * Source-launcher script generation.
  *
  * The developer-facing `pnpm setup:cli -- --source` command produces a shell
- * shim that re-execs ax-code from the source tree on Node (tsx + the OpenTUI
+ * shim that re-execs ax-code from the source tree on Node (tsx + the AX Code TUI
  * Solid loader + node:ffi), matching `pnpm dev`. It cd's into the package so
  * bare module specifiers resolve, preserving the caller's directory in
  * AX_CODE_ORIGINAL_CWD for project detection.

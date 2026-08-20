@@ -5,12 +5,11 @@
 // navigation/launch-policy.ts). Dashboard/workflow supervision ownership moves
 // to AX Code Desktop.
 //
-// TODO(ADR-035): The Rust/Ratatui TUI was removed (2026-07); OpenTUI is the
-// only CLI engine. Re-evaluate whether this route is still needed.
+// TODO(ADR-035): Re-evaluate whether this backward-compatibility route is still needed.
 
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import { createEffect, createMemo, For, Match, on, onMount, Show, Switch } from "solid-js"
-import { useTerminalDimensions } from "@ax-code/opentui-solid"
+import { useTerminalDimensions } from "@ax-code/tui/solid"
 import { useTheme } from "@tui/context/theme"
 import { Logo } from "../component/logo"
 import { ModeChips } from "../component/mode-chips"

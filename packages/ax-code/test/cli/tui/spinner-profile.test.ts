@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import { shouldUseTuiAnimations } from "../../../src/cli/cmd/tui/component/spinner-profile"
 
 describe("TUI spinner profile", () => {
-  test("disables animated OpenTUI spinners in compiled runtime", () => {
+  test("disables animated AX Code TUI spinners in compiled runtime", () => {
     expect(shouldUseTuiAnimations({ userEnabled: true, runtime: "compiled" })).toBe(false)
   })
 

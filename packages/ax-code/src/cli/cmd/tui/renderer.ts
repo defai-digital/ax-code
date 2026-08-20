@@ -1,5 +1,5 @@
-import { render, type JSX } from "@ax-code/opentui-solid"
-import type { CliRendererConfig } from "@ax-code/opentui-core"
+import { render, type JSX } from "@ax-code/tui/solid"
+import type { CliRendererConfig } from "@ax-code/tui"
 import { Clipboard } from "@tui/util/clipboard"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
@@ -41,7 +41,7 @@ export function resolveTuiRenderProfile(input: {
     profile: advancedTerminal ? "advanced" : "compatible",
     // Keep Ctrl+C routed through ax-code's keybind layer. The app already
     // overloads Ctrl+C for input-clear, selection-copy, and exit flows.
-    // Letting OpenTUI destroy the renderer directly bypasses that routing.
+    // Letting AX Code TUI destroy the renderer directly bypasses that routing.
     exitOnCtrlC: false,
     useThread: advancedTerminal,
     // Mouse support is safe in compatible mode — unlike the advanced
@@ -80,7 +80,7 @@ export function createTuiRenderOptionsFromProfile(
   return {
     targetFps: 60,
     gatherStats: false,
-    // Keep the default profile compatibility-first. The full OpenTUI
+    // Keep the default profile compatibility-first. The full AX Code TUI
     // terminal setup performs startup capability probes and advanced
     // protocol negotiation on the real TTY, which has been a source of
     // install-time hangs on some terminals. Users who need the old
@@ -142,7 +142,7 @@ function sanitizeTuiTerminalTitle(title: string) {
 }
 
 // The title is written directly to stdout as an OSC 0 escape instead of
-// routing through OpenTUI's native setTerminalTitle — the native write proved
+// routing through AX Code TUI's native setTerminalTitle — the native write proved
 // flaky in the compatible profile (same approach as kimi-code).
 export function setTuiTerminalTitle(
   title: string,

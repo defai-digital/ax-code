@@ -9,8 +9,8 @@ describe("script.embedded-path", () => {
   })
 
   test("preserves already-compiled JavaScript asset paths", () => {
-    expect(compiledBunfsModulePath("/$bunfs/root/", "../../node_modules/@opentui/core/parser.worker.js")).toBe(
-      "/$bunfs/root/../../node_modules/@opentui/core/parser.worker.js",
+    expect(compiledBunfsModulePath("/$bunfs/root/", "../../node_modules/@ax-code/tui/parser.worker.js")).toBe(
+      "/$bunfs/root/../../node_modules/@ax-code/tui/parser.worker.js",
     )
   })
 })

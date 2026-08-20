@@ -21,7 +21,7 @@
   ],
   "stepNotes": {
     "1": "Single 272-line file exporting HeadlessRunCommand (yargs CommandModule at line 33); private assertInternalUrl/createInternalFetch back the trust boundary and are not public surface. Inventory reconciles with MODULE-AUDIT (1 export, 0 TODOs, 0 empty catches).",
-    "2": "All egress routes through createInternalFetch (line 20) which asserts protocol + internal hostname per call (line 23); attach mode is double-gated by assertLoopbackHttpUrl (line 254) and assertInternalUrl (line 256). Verified isInternalHostname allow-list in internal-url.ts:21 is loopback + synthetic opentui/opencode.internal only.",
+    "2": "All egress routes through createInternalFetch (line 20) which asserts protocol + internal hostname per call (line 23); attach mode is double-gated by assertLoopbackHttpUrl (line 254) and assertInternalUrl (line 256). Verified isInternalHostname allow-list in internal-url.ts:21 is loopback + synthetic ax-code/opencode.internal only.",
     "3": "runWithBackend selects exactly one command shape (session.abort / session.command / session.prompt) and a single stopWhen predicate; cross-checked isHeadlessSessionIdleEvent (event.ts:189) requires matching sessionID + idle status, so foreign sessions cannot stop the run.",
     "4": "Idle timer re-arms per event, unref'd (line 200), cleared before the timedOut check (lines 235-239) matching run-lifecycle.test.ts:97. SIGINT/SIGTERM use process.on and are removed in finally (lines 214-215, 248-249) matching run-lifecycle.test.ts:109.",
     "5": "Exit codes are mutually exclusive: 124 on inactivity timeout, 1 on captured session error, unset on clean idle. interpolated idleTimeoutMs is a validated finite number (line 183), no injection surface.",

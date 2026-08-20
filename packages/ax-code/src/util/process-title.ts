@@ -10,7 +10,7 @@
  *
  * Keep this the lowercase machine name: the Linux comm field truncates to 15
  * characters, pgrep/pm2-style tooling matches lowercase, and on Windows
- * process.title also drives SetConsoleTitle. The user-facing "AX-Code"
+ * process.title also drives SetConsoleTitle. The user-facing "AX Code"
  * casing belongs to the TUI's OSC terminal titles (cmd/tui/renderer.ts), and
  * the OS-level executable name is branded by the node-bundled launcher
  * (script/build-node-tui.ts hardlinks node as "ax-code").

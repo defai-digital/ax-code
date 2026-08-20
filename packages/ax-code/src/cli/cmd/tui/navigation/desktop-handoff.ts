@@ -1,6 +1,6 @@
 // Desktop handoff logic for TUI (ADR-035).
 // Guides users toward AX Code Desktop for rich dashboard and workflow
-// supervision features. Keep free of solid/opentui imports.
+// supervision features. Keep free of Solid and renderer imports.
 
 export type DesktopHandoffResult =
   | { type: "message"; message: string }

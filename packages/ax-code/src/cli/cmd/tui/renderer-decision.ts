@@ -1,6 +1,6 @@
 export type TuiRendererDecision =
   | {
-      action: "retain-opentui"
+      action: "retain-ax-tui"
       reason: string
     }
   | {
@@ -8,13 +8,8 @@ export type TuiRendererDecision =
       reason: string
     }
   | {
-      action: "upstream-or-fork-opentui"
+      action: "improve-ax-tui"
       reason: string
-    }
-  | {
-      action: "propose-rust-native-core"
-      reason: string
-      requiresAdr: true
     }
 
 export type TuiRendererIssueLayer = "product-layer" | "integration-layer" | "renderer-specific"
@@ -31,7 +26,7 @@ export function decideTuiRenderer(input: {
 
   if (input.criteriaFailures.length === 0) {
     return {
-      action: "retain-opentui",
+      action: "retain-ax-tui",
       reason: "No reproducible performance or product-direction failure is present.",
     }
   }
@@ -43,22 +38,10 @@ export function decideTuiRenderer(input: {
     }
   }
 
-  if (
-    !input.blocksProductDirection ||
-    !input.installOrBuildRiskAccepted ||
-    input.offlinePackagingDeterministic !== true
-  ) {
-    return {
-      action: "upstream-or-fork-opentui",
-      reason:
-        "The issue is renderer-specific, but a native core is not justified without product blockage, accepted delivery risk, and deterministic offline packaging.",
-    }
-  }
-
   return {
-    action: "propose-rust-native-core",
-    reason:
-      "The renderer-specific failure blocks product direction, delivery risk is accepted, and offline packaging is deterministic.",
-    requiresAdr: true,
+    action: "improve-ax-tui",
+    reason: input.blocksProductDirection
+      ? "The renderer-specific failure blocks product direction and belongs in AX Code TUI."
+      : "The renderer-specific failure belongs in AX Code TUI without changing renderer ownership.",
   }
 }

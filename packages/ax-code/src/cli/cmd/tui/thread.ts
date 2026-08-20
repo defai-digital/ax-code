@@ -30,11 +30,7 @@ import { parseIntegerEnv } from "./util/env"
 import { formatWorkerLoadError } from "./util/log-error"
 import { parseTuiJsonPayload } from "./util/json"
 import { hasExplicitNetworkBindFlag } from "./util/network-flags"
-import {
-  createTuiRejectionHandler,
-  registerTuiCrashHandlers,
-  registerTuiProcessHandler,
-} from "./util/lifecycle"
+import { createTuiRejectionHandler, registerTuiCrashHandlers, registerTuiProcessHandler } from "./util/lifecycle"
 import { readOptionalJsonState } from "./util/optional-json-state"
 import { toErrorMessage } from "@/util/error-message"
 import { Shell } from "@/shell/shell"
@@ -706,17 +702,17 @@ export const TuiThreadCommand = cmd({
       // Shell env fills missing keys only. Await it before touching process.env
       // so the retired-overlay scrub below cannot be reverted by a shell profile.
       await ensureShellEnv()
-      // The retired ADR-046 Rust renderer/yoga overlay must stay disabled. Keep
+      // The retired renderer overlay must stay disabled. Keep
       // the legacy variables present with disabled values so shell environment
       // hydration cannot re-add a stale `AX_CODE_NATIVE_RENDER=1` or yoga scope.
-      // Must run before the OpenTUI renderer is resolved and before any child
+      // Must run before the AX Code TUI renderer is resolved and before any child
       // inherits the environment.
       process.env.AX_CODE_NATIVE_RENDER = "0"
       process.env.AX_CODE_NATIVE_RENDER_SCOPE = ""
 
       DiagnosticLog.recordProcess("tui.threadStarted", {
         args: process.argv.slice(2),
-        engine: "opentui",
+        engine: "ax-code-tui",
       })
 
       // Resolve relative --project paths from the caller's original cwd, then
@@ -842,7 +838,7 @@ export const TuiThreadCommand = cmd({
         UI.error(
           [
             "TUI backend did not become ready.",
-            "This usually points to backend transport startup, OpenTUI preload, or runtime packaging.",
+            "This usually points to backend transport startup, AX Code TUI preload, or runtime packaging.",
             "Run with --debug --print-logs and inspect process.jsonl around tui.backendHandshakeFailed.",
           ].join("\n"),
         )
@@ -922,13 +918,10 @@ export const TuiThreadCommand = cmd({
       })
 
       const network = await resolveNetworkOptions(args)
-      // OpenTUI keeps the internal worker-fetch bridge unless network flags
+      // AX Code TUI keeps the internal worker-fetch bridge unless network flags
       // force a real HTTP loopback (--port, hostname, mDNS).
       const external =
-        hasExplicitNetworkBindFlag() ||
-        network.mdns ||
-        network.port !== 0 ||
-        network.hostname !== "127.0.0.1"
+        hasExplicitNetworkBindFlag() || network.mdns || network.port !== 0 || network.hostname !== "127.0.0.1"
 
       const transport = external
         ? {
@@ -944,7 +937,7 @@ export const TuiThreadCommand = cmd({
       DiagnosticLog.recordProcess("tui.threadTransportSelected", {
         mode: external ? "external" : "internal",
         url: transport.url,
-        engine: "opentui",
+        engine: "ax-code-tui",
       })
 
       const upgradeDelayMs = tuiUpgradeCheckDelayMs()
@@ -986,7 +979,7 @@ export const TuiThreadCommand = cmd({
           UI.error(
             [
               "TUI app failed to load.",
-              "This usually points to OpenTUI/Solid module startup or bundled-runtime packaging.",
+              "This usually points to AX Code TUI/Solid module startup or bundled-runtime packaging.",
               "Run with --debug --print-logs and inspect process.jsonl around tui.appImportFailed.",
             ].join("\n"),
           )

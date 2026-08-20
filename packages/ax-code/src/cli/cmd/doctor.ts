@@ -580,18 +580,18 @@ export const DoctorCommand: CommandModule = {
       // Best-effort
     }
 
-    // 13. TUI engine (Zig/OpenTUI is the only supported engine)
+    // 13. TUI engine
     {
       checks.push({
         name: "TUI engine",
         status: "ok",
-        detail: "zig/OpenTUI (supported)",
+        detail: "AX Code TUI (native Zig renderer)",
       })
       if (process.env.AX_CODE_NATIVE_RENDER === "1" || process.env.AX_CODE_NATIVE_RENDER_SCOPE) {
         checks.push({
           name: "Legacy native renderer flags",
           status: "warn",
-          detail: "AX_CODE_NATIVE_RENDER* is retired and ignored; Zig/OpenTUI always uses its bundled Zig library.",
+          detail: "AX_CODE_NATIVE_RENDER* is retired and ignored; AX Code TUI always uses its bundled native library.",
         })
       }
     }

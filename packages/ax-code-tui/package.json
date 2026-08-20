@@ -1,0 +1,139 @@
+{
+  "name": "@ax-code/tui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AX Code's SolidJS terminal UI framework and native renderer",
+  "license": "MIT",
+  "type": "module",
+  "module": "index.js",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./index.js",
+      "types": "./index.d.ts"
+    },
+    "./testing": {
+      "import": "./testing.js",
+      "types": "./testing.d.ts"
+    },
+    "./runtime-plugin": {
+      "types": "./runtime-plugin.d.ts",
+      "bun": "./runtime-plugin.js",
+      "node": "./runtime-plugin.node.js",
+      "default": "./runtime-plugin.node.js"
+    },
+    "./runtime-plugin-support": {
+      "types": "./runtime-plugin-support.d.ts",
+      "bun": "./runtime-plugin-support.js",
+      "node": "./runtime-plugin-support.node.js",
+      "default": "./runtime-plugin-support.node.js"
+    },
+    "./runtime-plugin-support/configure": {
+      "types": "./runtime-plugin-support-configure.d.ts",
+      "bun": "./runtime-plugin-support-configure.js",
+      "node": "./runtime-plugin-support-configure.node.js",
+      "default": "./runtime-plugin-support-configure.node.js"
+    },
+    "./yoga": {
+      "types": "./yoga.d.ts",
+      "import": "./yoga.js"
+    },
+    "./tree-sitter/update-assets": {
+      "types": "./lib/tree-sitter/update-assets.d.ts",
+      "bun": "./lib/tree-sitter/update-assets.js",
+      "import": "./lib/tree-sitter/update-assets.js"
+    },
+    "./parser.worker": {
+      "import": "./parser.worker.js",
+      "require": "./parser.worker.js",
+      "types": "./lib/tree-sitter/parser.worker.d.ts"
+    },
+    "./solid": {
+      "types": "./solid/index.d.ts",
+      "bun": "./solid/index.bun.js",
+      "node": "./solid/index.js",
+      "import": "./solid/index.js",
+      "default": "./solid/index.js"
+    },
+    "./solid/preload": {
+      "bun": "./solid/scripts/preload.js",
+      "node": "./solid/scripts/preload.node.js",
+      "default": "./solid/scripts/preload.node.js"
+    },
+    "./solid/bun-plugin": {
+      "types": "./solid/scripts/solid-plugin.d.ts",
+      "bun": "./solid/scripts/solid-plugin.js",
+      "node": "./solid/scripts/solid-plugin.node.js",
+      "default": "./solid/scripts/solid-plugin.node.js"
+    },
+    "./solid/transform": {
+      "types": "./solid/scripts/solid-transform.d.ts",
+      "import": "./solid/scripts/solid-transform.js",
+      "default": "./solid/scripts/solid-transform.js"
+    },
+    "./solid/runtime-plugin-support": {
+      "types": "./solid/scripts/runtime-plugin-support.d.ts",
+      "bun": "./solid/scripts/runtime-plugin-support.js",
+      "node": "./solid/scripts/runtime-plugin-support.node.js",
+      "default": "./solid/scripts/runtime-plugin-support.node.js"
+    },
+    "./solid/runtime-plugin-support/configure": {
+      "types": "./solid/scripts/runtime-plugin-support-configure.d.ts",
+      "bun": "./solid/scripts/runtime-plugin-support-configure.js",
+      "node": "./solid/scripts/runtime-plugin-support-configure.node.js",
+      "default": "./solid/scripts/runtime-plugin-support-configure.node.js"
+    },
+    "./solid/components": {
+      "types": "./solid/components.d.ts",
+      "import": "./solid/components.js",
+      "require": "./solid/components.js"
+    },
+    "./solid/jsx-runtime": {
+      "types": "./solid/jsx-runtime.d.ts",
+      "import": "./solid/jsx-runtime.js",
+      "default": "./solid/jsx-runtime.js"
+    },
+    "./solid/jsx-dev-runtime": {
+      "types": "./solid/jsx-dev-runtime.d.ts",
+      "import": "./solid/jsx-dev-runtime.js",
+      "default": "./solid/jsx-dev-runtime.js"
+    },
+    "./spinner": {
+      "import": {
+        "types": "./spinner/dist/index.d.ts",
+        "default": "./spinner/dist/index.js"
+      }
+    },
+    "./spinner/solid": {
+      "import": {
+        "types": "./spinner/dist/solid.d.ts",
+        "default": "./spinner/dist/solid.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('spinner/dist', { recursive: true, force: true })\" && tsc -p spinner/tsconfig.build.json",
+    "typecheck": "tsc -p spinner/tsconfig.json"
+  },
+  "dependencies": {
+    "@babel/core": "7.29.6",
+    "@babel/preset-typescript": "7.27.1",
+    "babel-plugin-module-resolver": "5.0.2",
+    "babel-preset-solid": "1.9.12",
+    "bun-ffi-structs": "0.2.3",
+    "diff": "9.0.0",
+    "entities": "7.0.1",
+    "marked": "17.0.1",
+    "string-width": "7.2.0",
+    "strip-ansi": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "solid-js": "catalog:",
+    "web-tree-sitter": "0.25.10"
+  }
+}

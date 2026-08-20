@@ -1,5 +1,5 @@
 import { createMemo } from "solid-js"
-import type { KeyBinding } from "@ax-code/opentui-core"
+import type { KeyBinding } from "@ax-code/tui"
 import { useKeybind } from "../context/keybind"
 import { Keybind } from "@/util/keybind"
 
@@ -73,7 +73,7 @@ function mapTextareaKeybindings(
   return (
     bindings
       // Leader-prefixed bindings can't reach a focused textarea (activating the
-      // leader blurs it), and opentui KeyBindings match name+modifiers only — so a
+      // leader blurs it), and AX Code TUI KeyBindings match name+modifiers only — so a
       // leader combo would collapse to its bare key and fire the action
       // destructively while typing. Drop them here.
       .filter((binding) => !binding.leader)
@@ -129,7 +129,7 @@ export function textareaKeybindingsForConfig(
           // "linefeed" is deliberately NOT an Enter alias: it is the legacy
           // encoding of Ctrl+J, which the default input_newline config binds
           // to newline. Mapping it to submit made Ctrl+J submit the prompt.
-          // Keypad Enter: intercept it as "submit" too, otherwise OpenTUI's
+          // Keypad Enter: intercept it as "submit" too, otherwise AX Code TUI's
           // default `kpenter` -> "newline" binding inserts a blank line.
           { name: "kpenter", action: "submit" },
         ] as const)

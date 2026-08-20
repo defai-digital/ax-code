@@ -1,4 +1,4 @@
-import { TextareaRenderable, TextAttributes } from "@ax-code/opentui-core"
+import { TextareaRenderable, TextAttributes } from "@ax-code/tui"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { onCleanup, onMount, Show, type JSX } from "solid-js"
@@ -74,7 +74,7 @@ export function DialogPrompt(props: DialogPromptProps) {
         </text>
       </box>
       <box gap={1}>
-        {/* OpenTUI 0.4.x tightened JSX child types to `string | Element`, so the
+        {/* The renderer tightened JSX child types to `string | Element`, so the
             optional `() => JSX.Element` description thunk must be invoked (and
             its `undefined` case guarded) rather than passed as a raw child. */}
         <Show when={props.description}>{(description) => description()()}</Show>

@@ -3,7 +3,7 @@ description: Shared Node.js + pnpm toolchain bootstrap for workflows
 
 inputs:
   node-version:
-    # 26 provides node:ffi (--experimental-ffi), required by the OpenTUI Node
+    # 26 provides node:ffi (--experimental-ffi), required by the AX Code TUI Node
     # backend that the node-bundled build/smoke exercises.
     description: Node.js version
     required: false

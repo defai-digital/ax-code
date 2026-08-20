@@ -9,10 +9,7 @@
       "scope": "packages/ax-code/src/auth",
       "wave": 1,
       "size": "L",
-      "risk": [
-        "security",
-        "credentials"
-      ],
+      "risk": ["security", "credentials"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -21,10 +18,7 @@
       "scope": "packages/ax-code/src/account",
       "wave": 1,
       "size": "M",
-      "risk": [
-        "security",
-        "persistence"
-      ],
+      "risk": ["security", "persistence"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -33,10 +27,7 @@
       "scope": "packages/ax-code/src/config",
       "wave": 1,
       "size": "L",
-      "risk": [
-        "security",
-        "config"
-      ],
+      "risk": ["security", "config"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -45,10 +36,7 @@
       "scope": "packages/ax-code/src/hooks",
       "wave": 1,
       "size": "M",
-      "risk": [
-        "security",
-        "trust"
-      ],
+      "risk": ["security", "trust"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -57,10 +45,7 @@
       "scope": "packages/ax-code/src/env",
       "wave": 1,
       "size": "S",
-      "risk": [
-        "security",
-        "secrets"
-      ],
+      "risk": ["security", "secrets"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -69,10 +54,7 @@
       "scope": "packages/ax-code/src/plugin",
       "wave": 1,
       "size": "L",
-      "risk": [
-        "security",
-        "extensibility"
-      ],
+      "risk": ["security", "extensibility"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -81,10 +63,7 @@
       "scope": "packages/ax-code/src/audit",
       "wave": 1,
       "size": "M",
-      "risk": [
-        "security",
-        "persistence"
-      ],
+      "risk": ["security", "persistence"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -93,9 +72,7 @@
       "scope": "packages/ax-code/src/risk",
       "wave": 1,
       "size": "M",
-      "risk": [
-        "security"
-      ],
+      "risk": ["security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -104,10 +81,7 @@
       "scope": "packages/ax-code/src/control-plane",
       "wave": 1,
       "size": "L",
-      "risk": [
-        "security",
-        "concurrency"
-      ],
+      "risk": ["security", "concurrency"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -116,10 +90,7 @@
       "scope": "packages/ax-code/src/installation",
       "wave": 1,
       "size": "M",
-      "risk": [
-        "security",
-        "release"
-      ],
+      "risk": ["security", "release"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -128,9 +99,7 @@
       "scope": "packages/ax-code/src/desktop",
       "wave": 1,
       "size": "S",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -139,10 +108,7 @@
       "scope": "desktop/packages/electron/src (security policies)",
       "wave": 1,
       "size": "L",
-      "risk": [
-        "security",
-        "desktop"
-      ],
+      "risk": ["security", "desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -151,10 +117,7 @@
       "scope": "desktop/packages/electron/src (IPC policy/handlers)",
       "wave": 1,
       "size": "L",
-      "risk": [
-        "security",
-        "desktop"
-      ],
+      "risk": ["security", "desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -163,10 +126,7 @@
       "scope": "desktop/packages/electron/src/preload.js",
       "wave": 1,
       "size": "M",
-      "risk": [
-        "security",
-        "desktop"
-      ],
+      "risk": ["security", "desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -175,10 +135,7 @@
       "scope": "desktop/packages/web/server/lib/security",
       "wave": 1,
       "size": "M",
-      "risk": [
-        "security",
-        "desktop"
-      ],
+      "risk": ["security", "desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -187,10 +144,7 @@
       "scope": "desktop/packages/web/server/lib/ui-auth",
       "wave": 1,
       "size": "M",
-      "risk": [
-        "security",
-        "desktop"
-      ],
+      "risk": ["security", "desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -199,10 +153,7 @@
       "scope": "packages/ax-code/src/session (prompt/processor)",
       "wave": 2,
       "size": "L",
-      "risk": [
-        "hot-path",
-        "correctness"
-      ],
+      "risk": ["hot-path", "correctness"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -211,10 +162,7 @@
       "scope": "packages/ax-code/src/session (messages/parts)",
       "wave": 2,
       "size": "L",
-      "risk": [
-        "hot-path",
-        "persistence"
-      ],
+      "risk": ["hot-path", "persistence"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -223,10 +171,7 @@
       "scope": "packages/ax-code/src/session (compaction)",
       "wave": 2,
       "size": "M",
-      "risk": [
-        "hot-path",
-        "correctness"
-      ],
+      "risk": ["hot-path", "correctness"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -235,10 +180,7 @@
       "scope": "packages/ax-code/src/session (lifecycle/queue)",
       "wave": 2,
       "size": "L",
-      "risk": [
-        "concurrency",
-        "hot-path"
-      ],
+      "risk": ["concurrency", "hot-path"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -247,10 +189,7 @@
       "scope": "packages/ax-code/src/session (fork/revert/rollback)",
       "wave": 2,
       "size": "M",
-      "risk": [
-        "correctness",
-        "persistence"
-      ],
+      "risk": ["correctness", "persistence"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -259,9 +198,7 @@
       "scope": "packages/ax-code/src/runtime",
       "wave": 2,
       "size": "L",
-      "risk": [
-        "hot-path"
-      ],
+      "risk": ["hot-path"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -270,9 +207,7 @@
       "scope": "packages/ax-code/src/runtime/headless",
       "wave": 2,
       "size": "M",
-      "risk": [
-        "hot-path"
-      ],
+      "risk": ["hot-path"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -281,10 +216,7 @@
       "scope": "packages/ax-code/src/agent",
       "wave": 2,
       "size": "L",
-      "risk": [
-        "hot-path",
-        "security"
-      ],
+      "risk": ["hot-path", "security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -293,9 +225,7 @@
       "scope": "packages/ax-code/src/planner",
       "wave": 2,
       "size": "M",
-      "risk": [
-        "correctness"
-      ],
+      "risk": ["correctness"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -304,9 +234,7 @@
       "scope": "packages/ax-code/src/dispatch",
       "wave": 2,
       "size": "M",
-      "risk": [
-        "concurrency"
-      ],
+      "risk": ["concurrency"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -315,10 +243,7 @@
       "scope": "packages/ax-code/src/workflow",
       "wave": 2,
       "size": "L",
-      "risk": [
-        "concurrency",
-        "persistence"
-      ],
+      "risk": ["concurrency", "persistence"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -327,9 +252,7 @@
       "scope": "packages/ax-code/src/context",
       "wave": 2,
       "size": "M",
-      "risk": [
-        "performance"
-      ],
+      "risk": ["performance"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -338,9 +261,7 @@
       "scope": "packages/ax-code/src/prompt-history",
       "wave": 2,
       "size": "S",
-      "risk": [
-        "persistence"
-      ],
+      "risk": ["persistence"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -349,9 +270,7 @@
       "scope": "packages/ax-code/src/memory",
       "wave": 2,
       "size": "M",
-      "risk": [
-        "correctness"
-      ],
+      "risk": ["correctness"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -360,10 +279,7 @@
       "scope": "packages/ax-code/src/replay",
       "wave": 2,
       "size": "M",
-      "risk": [
-        "persistence",
-        "correctness"
-      ],
+      "risk": ["persistence", "correctness"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -372,9 +288,7 @@
       "scope": "packages/ax-code/src/snapshot",
       "wave": 2,
       "size": "M",
-      "risk": [
-        "persistence"
-      ],
+      "risk": ["persistence"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -383,9 +297,7 @@
       "scope": "packages/ax-code/src/bus",
       "wave": 2,
       "size": "M",
-      "risk": [
-        "concurrency"
-      ],
+      "risk": ["concurrency"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -394,10 +306,7 @@
       "scope": "packages/ax-code/src/permission",
       "wave": 3,
       "size": "L",
-      "risk": [
-        "security",
-        "trust"
-      ],
+      "risk": ["security", "trust"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -406,10 +315,7 @@
       "scope": "packages/ax-code/src/isolation",
       "wave": 3,
       "size": "L",
-      "risk": [
-        "security",
-        "sandbox"
-      ],
+      "risk": ["security", "sandbox"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -418,10 +324,7 @@
       "scope": "packages/ax-code/src/tool (edit/write/apply_patch/mutation)",
       "wave": 3,
       "size": "L",
-      "risk": [
-        "security",
-        "correctness"
-      ],
+      "risk": ["security", "correctness"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -430,10 +333,7 @@
       "scope": "packages/ax-code/src/tool (bash/shell execution)",
       "wave": 3,
       "size": "L",
-      "risk": [
-        "security",
-        "hot-path"
-      ],
+      "risk": ["security", "hot-path"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -442,10 +342,7 @@
       "scope": "packages/ax-code/src/tool (webfetch/browser/network)",
       "wave": 3,
       "size": "M",
-      "risk": [
-        "security",
-        "network"
-      ],
+      "risk": ["security", "network"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -454,9 +351,7 @@
       "scope": "packages/ax-code/src/tool (task/arena/council/orchestration)",
       "wave": 3,
       "size": "L",
-      "risk": [
-        "concurrency"
-      ],
+      "risk": ["concurrency"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -465,9 +360,7 @@
       "scope": "packages/ax-code/src/tool (read/grep/glob/ls)",
       "wave": 3,
       "size": "M",
-      "risk": [
-        "correctness"
-      ],
+      "risk": ["correctness"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -476,9 +369,7 @@
       "scope": "packages/ax-code/src/shell",
       "wave": 3,
       "size": "L",
-      "risk": [
-        "security"
-      ],
+      "risk": ["security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -487,10 +378,7 @@
       "scope": "packages/ax-code/src/pty",
       "wave": 3,
       "size": "L",
-      "risk": [
-        "security",
-        "resource"
-      ],
+      "risk": ["security", "resource"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -499,10 +387,7 @@
       "scope": "packages/ax-code/src/file",
       "wave": 3,
       "size": "L",
-      "risk": [
-        "security",
-        "performance"
-      ],
+      "risk": ["security", "performance"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -511,9 +396,7 @@
       "scope": "packages/ax-code/src/patch",
       "wave": 3,
       "size": "M",
-      "risk": [
-        "correctness"
-      ],
+      "risk": ["correctness"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -522,9 +405,7 @@
       "scope": "packages/ax-code/src/worktree",
       "wave": 3,
       "size": "M",
-      "risk": [
-        "correctness"
-      ],
+      "risk": ["correctness"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -533,9 +414,7 @@
       "scope": "packages/ax-code/src/command",
       "wave": 3,
       "size": "M",
-      "risk": [
-        "security"
-      ],
+      "risk": ["security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -544,9 +423,7 @@
       "scope": "packages/ax-code/src/question",
       "wave": 3,
       "size": "M",
-      "risk": [
-        "correctness"
-      ],
+      "risk": ["correctness"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -555,9 +432,7 @@
       "scope": "packages/ax-code/src/bun",
       "wave": 3,
       "size": "S",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -566,10 +441,7 @@
       "scope": "packages/ax-code/src/native",
       "wave": 3,
       "size": "M",
-      "risk": [
-        "native",
-        "stability"
-      ],
+      "risk": ["native", "stability"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -578,9 +450,7 @@
       "scope": "packages/ax-code/src/image",
       "wave": 3,
       "size": "M",
-      "risk": [
-        "security"
-      ],
+      "risk": ["security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -589,9 +459,7 @@
       "scope": "packages/ax-code/src/import",
       "wave": 3,
       "size": "M",
-      "risk": [
-        "correctness"
-      ],
+      "risk": ["correctness"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -600,10 +468,7 @@
       "scope": "packages/ax-code/src/storage",
       "wave": 4,
       "size": "L",
-      "risk": [
-        "persistence",
-        "stability"
-      ],
+      "risk": ["persistence", "stability"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -612,10 +477,7 @@
       "scope": "packages/ax-code/src/server",
       "wave": 4,
       "size": "L",
-      "risk": [
-        "security",
-        "network"
-      ],
+      "risk": ["security", "network"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -624,10 +486,7 @@
       "scope": "packages/ax-code/src/server/routes/app-context-checks.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -636,10 +495,7 @@
       "scope": "packages/ax-code/src/server/routes/app-context-schema.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -648,10 +504,7 @@
       "scope": "packages/ax-code/src/server/routes/app-context-templates.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -660,10 +513,7 @@
       "scope": "packages/ax-code/src/server/routes/app-context.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -672,10 +522,7 @@
       "scope": "packages/ax-code/src/server/routes/app.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -684,10 +531,7 @@
       "scope": "packages/ax-code/src/server/routes/audit.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -696,10 +540,7 @@
       "scope": "packages/ax-code/src/server/routes/autonomous.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -708,10 +549,7 @@
       "scope": "packages/ax-code/src/server/routes/config.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -720,10 +558,7 @@
       "scope": "packages/ax-code/src/server/routes/dre-graph.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -732,10 +567,7 @@
       "scope": "packages/ax-code/src/server/routes/event.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -744,10 +576,7 @@
       "scope": "packages/ax-code/src/server/routes/experimental.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -756,10 +585,7 @@
       "scope": "packages/ax-code/src/server/routes/file.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -768,10 +594,7 @@
       "scope": "packages/ax-code/src/server/routes/global.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -780,10 +603,7 @@
       "scope": "packages/ax-code/src/server/routes/graph.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -792,10 +612,7 @@
       "scope": "packages/ax-code/src/server/routes/isolation.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -804,10 +621,7 @@
       "scope": "packages/ax-code/src/server/routes/mcp.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -816,10 +630,7 @@
       "scope": "packages/ax-code/src/server/routes/permission.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -828,10 +639,7 @@
       "scope": "packages/ax-code/src/server/routes/project-config.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -840,10 +648,7 @@
       "scope": "packages/ax-code/src/server/routes/project.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -852,10 +657,7 @@
       "scope": "packages/ax-code/src/server/routes/prompt-history.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -864,10 +666,7 @@
       "scope": "packages/ax-code/src/server/routes/provider.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -876,10 +675,7 @@
       "scope": "packages/ax-code/src/server/routes/pty.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -888,10 +684,7 @@
       "scope": "packages/ax-code/src/server/routes/query.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -900,10 +693,7 @@
       "scope": "packages/ax-code/src/server/routes/question.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -912,10 +702,7 @@
       "scope": "packages/ax-code/src/server/routes/route-params.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -924,10 +711,7 @@
       "scope": "packages/ax-code/src/server/routes/runtime-status.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -936,10 +720,7 @@
       "scope": "packages/ax-code/src/server/routes/scheduled-task.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -948,10 +729,7 @@
       "scope": "packages/ax-code/src/server/routes/session-impl.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -960,10 +738,7 @@
       "scope": "packages/ax-code/src/server/routes/session-lookup.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -972,10 +747,7 @@
       "scope": "packages/ax-code/src/server/routes/session.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -984,10 +756,7 @@
       "scope": "packages/ax-code/src/server/routes/skill.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -996,10 +765,7 @@
       "scope": "packages/ax-code/src/server/routes/smart-llm.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1008,10 +774,7 @@
       "scope": "packages/ax-code/src/server/routes/super-long.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1020,10 +783,7 @@
       "scope": "packages/ax-code/src/server/routes/task-queue.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1032,10 +792,7 @@
       "scope": "packages/ax-code/src/server/routes/tui.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1044,10 +801,7 @@
       "scope": "packages/ax-code/src/server/routes/workflow.ts",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "network",
-        "api"
-      ],
+      "risk": ["network", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1056,9 +810,7 @@
       "scope": "packages/ax-code/src/project",
       "wave": 4,
       "size": "M",
-      "risk": [
-        "persistence"
-      ],
+      "risk": ["persistence"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1067,9 +819,7 @@
       "scope": "packages/ax-code/src/id",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "correctness"
-      ],
+      "risk": ["correctness"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1078,9 +828,7 @@
       "scope": "packages/ax-code/src/global",
       "wave": 4,
       "size": "S",
-      "risk": [
-        "config"
-      ],
+      "risk": ["config"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1089,9 +837,7 @@
       "scope": "packages/ax-code/src/share",
       "wave": 4,
       "size": "M",
-      "risk": [
-        "security"
-      ],
+      "risk": ["security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1100,9 +846,7 @@
       "scope": "packages/ax-code/src/stats",
       "wave": 4,
       "size": "M",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1111,9 +855,7 @@
       "scope": "packages/ax-code/src/telemetry",
       "wave": 4,
       "size": "M",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1122,9 +864,7 @@
       "scope": "packages/ax-code/src/notification",
       "wave": 4,
       "size": "M",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1133,9 +873,7 @@
       "scope": "packages/ax-code/src/sdk",
       "wave": 4,
       "size": "M",
-      "risk": [
-        "api"
-      ],
+      "risk": ["api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1144,10 +882,7 @@
       "scope": "packages/ax-code/src/provider (registry/routing)",
       "wave": 5,
       "size": "L",
-      "risk": [
-        "hot-path",
-        "correctness"
-      ],
+      "risk": ["hot-path", "correctness"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1156,10 +891,7 @@
       "scope": "packages/ax-code/src/provider (stream transforms)",
       "wave": 5,
       "size": "L",
-      "risk": [
-        "hot-path",
-        "stability"
-      ],
+      "risk": ["hot-path", "stability"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1168,9 +900,7 @@
       "scope": "packages/ax-code/src/provider (auth/capabilities)",
       "wave": 5,
       "size": "M",
-      "risk": [
-        "security"
-      ],
+      "risk": ["security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1179,9 +909,7 @@
       "scope": "packages/ax-code/src/provider (retry/error translation)",
       "wave": 5,
       "size": "M",
-      "risk": [
-        "stability"
-      ],
+      "risk": ["stability"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1190,9 +918,7 @@
       "scope": "packages/ax-code/src/provider (models-snapshot/model data)",
       "wave": 5,
       "size": "M",
-      "risk": [
-        "correctness"
-      ],
+      "risk": ["correctness"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1201,9 +927,7 @@
       "scope": "packages/ax-code/src/provider/ax-engine",
       "wave": 5,
       "size": "L",
-      "risk": [
-        "hot-path"
-      ],
+      "risk": ["hot-path"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1212,10 +936,7 @@
       "scope": "packages/ax-code/src/provider/cli",
       "wave": 5,
       "size": "L",
-      "risk": [
-        "stability",
-        "process"
-      ],
+      "risk": ["stability", "process"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1224,9 +945,7 @@
       "scope": "packages/ax-code/src/provider/xai",
       "wave": 5,
       "size": "M",
-      "risk": [
-        "security"
-      ],
+      "risk": ["security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1235,10 +954,7 @@
       "scope": "packages/ax-code/src/mcp (lifecycle/transport)",
       "wave": 5,
       "size": "L",
-      "risk": [
-        "security",
-        "process"
-      ],
+      "risk": ["security", "process"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1247,9 +963,7 @@
       "scope": "packages/ax-code/src/mcp (OAuth/trust)",
       "wave": 5,
       "size": "L",
-      "risk": [
-        "security"
-      ],
+      "risk": ["security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1258,9 +972,7 @@
       "scope": "packages/ax-code/src/mcp (tool conversion)",
       "wave": 5,
       "size": "M",
-      "risk": [
-        "security"
-      ],
+      "risk": ["security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1269,9 +981,7 @@
       "scope": "packages/ax-code/src/mcp (discovery/config/disposal)",
       "wave": 5,
       "size": "M",
-      "risk": [
-        "security"
-      ],
+      "risk": ["security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1280,10 +990,7 @@
       "scope": "packages/ax-code/src/lsp",
       "wave": 5,
       "size": "L",
-      "risk": [
-        "performance",
-        "process"
-      ],
+      "risk": ["performance", "process"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1292,10 +999,7 @@
       "scope": "packages/ax-code/src/code-intelligence",
       "wave": 5,
       "size": "L",
-      "risk": [
-        "performance",
-        "persistence"
-      ],
+      "risk": ["performance", "persistence"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1304,9 +1008,7 @@
       "scope": "packages/ax-code/src/graph",
       "wave": 5,
       "size": "L",
-      "risk": [
-        "performance"
-      ],
+      "risk": ["performance"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1315,9 +1017,7 @@
       "scope": "packages/ax-code/src/capability",
       "wave": 5,
       "size": "M",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1326,9 +1026,7 @@
       "scope": "packages/ax-code/src/acp",
       "wave": 5,
       "size": "M",
-      "risk": [
-        "api"
-      ],
+      "risk": ["api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1337,9 +1035,7 @@
       "scope": "packages/ax-code/src/ide",
       "wave": 5,
       "size": "M",
-      "risk": [
-        "api"
-      ],
+      "risk": ["api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1348,9 +1044,7 @@
       "scope": "packages/ax-code/src/skill",
       "wave": 5,
       "size": "L",
-      "risk": [
-        "security"
-      ],
+      "risk": ["security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1359,9 +1053,7 @@
       "scope": "packages/ax-code/src/mode",
       "wave": 5,
       "size": "M",
-      "risk": [
-        "correctness"
-      ],
+      "risk": ["correctness"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1370,9 +1062,7 @@
       "scope": "packages/ax-code/src/quality",
       "wave": 5,
       "size": "M",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1381,9 +1071,7 @@
       "scope": "packages/ax-code/src/design-check",
       "wave": 5,
       "size": "M",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1392,9 +1080,7 @@
       "scope": "packages/ax-code/src/debug-engine",
       "wave": 5,
       "size": "M",
-      "risk": [
-        "correctness"
-      ],
+      "risk": ["correctness"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1403,9 +1089,7 @@
       "scope": "packages/ax-code/src/debug",
       "wave": 5,
       "size": "S",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1414,9 +1098,7 @@
       "scope": "packages/ax-code/src/perf",
       "wave": 5,
       "size": "M",
-      "risk": [
-        "performance"
-      ],
+      "risk": ["performance"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1425,9 +1107,7 @@
       "scope": "packages/ax-code/src/wiki",
       "wave": 5,
       "size": "M",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1436,9 +1116,7 @@
       "scope": "packages/ax-code/src/cli",
       "wave": 6,
       "size": "L",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1447,9 +1125,7 @@
       "scope": "packages/ax-code/src/cli/cmd registry/shims",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1458,9 +1134,7 @@
       "scope": "packages/ax-code/src/cli/cmd/session",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1469,9 +1143,7 @@
       "scope": "packages/ax-code/src/cli/cmd/run",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1480,9 +1152,7 @@
       "scope": "packages/ax-code/src/cli/cmd/headless-run",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1491,9 +1161,7 @@
       "scope": "packages/ax-code/src/cli/cmd/serve",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1502,9 +1170,7 @@
       "scope": "packages/ax-code/src/cli/cmd/workspace-serve",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1513,9 +1179,7 @@
       "scope": "packages/ax-code/src/cli/cmd/runtime",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1524,9 +1188,7 @@
       "scope": "packages/ax-code/src/cli/cmd/tui boot/worker",
       "wave": 6,
       "size": "L",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1535,9 +1197,7 @@
       "scope": "packages/ax-code/src/cli/cmd/tui routes/session",
       "wave": 6,
       "size": "L",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1546,9 +1206,7 @@
       "scope": "packages/ax-code/src/cli/cmd/tui tool-renderers",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1557,9 +1215,7 @@
       "scope": "packages/ax-code/src/cli/cmd/mcp",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1568,9 +1224,7 @@
       "scope": "packages/ax-code/src/cli/cmd/providers",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1579,9 +1233,7 @@
       "scope": "packages/ax-code/src/cli/cmd/models",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1590,9 +1242,7 @@
       "scope": "packages/ax-code/src/cli/cmd/skill",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1601,9 +1251,7 @@
       "scope": "packages/ax-code/src/cli/cmd/workflow",
       "wave": 6,
       "size": "L",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1612,9 +1260,7 @@
       "scope": "packages/ax-code/src/cli/cmd/doctor",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1623,9 +1269,7 @@
       "scope": "packages/ax-code/src/cli/cmd/github-agent",
       "wave": 6,
       "size": "L",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1634,9 +1278,7 @@
       "scope": "packages/ax-code/src/cli/cmd/storage",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1645,9 +1287,7 @@
       "scope": "packages/ax-code/src/cli/cmd/debug",
       "wave": 6,
       "size": "L",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1656,9 +1296,7 @@
       "scope": "packages/ax-code/src/cli/cmd/release",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1667,9 +1305,7 @@
       "scope": "packages/ax-code/src/cli/cmd/webui",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1678,9 +1314,7 @@
       "scope": "packages/ax-code/src/cli/cmd/wiki",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1689,9 +1323,7 @@
       "scope": "packages/ax-code/src/cli/cmd/pr",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1700,9 +1332,7 @@
       "scope": "packages/ax-code/src/cli/cmd/export",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1711,9 +1341,7 @@
       "scope": "packages/ax-code/src/cli/cmd/import",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1722,9 +1350,7 @@
       "scope": "packages/ax-code/src/cli/cmd/upgrade",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1733,9 +1359,7 @@
       "scope": "packages/ax-code/src/cli/cmd/account",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1744,9 +1368,7 @@
       "scope": "packages/ax-code/src/cli/cmd/acp",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1755,9 +1377,7 @@
       "scope": "packages/ax-code/src/cli/cmd/agent",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1766,9 +1386,7 @@
       "scope": "packages/ax-code/src/cli/cmd/audit",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1777,9 +1395,7 @@
       "scope": "packages/ax-code/src/cli/cmd/branch",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1788,9 +1404,7 @@
       "scope": "packages/ax-code/src/cli/cmd/capability",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1799,9 +1413,7 @@
       "scope": "packages/ax-code/src/cli/cmd/compare",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1810,9 +1422,7 @@
       "scope": "packages/ax-code/src/cli/cmd/context",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1821,9 +1431,7 @@
       "scope": "packages/ax-code/src/cli/cmd/db",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1832,9 +1440,7 @@
       "scope": "packages/ax-code/src/cli/cmd/design-check",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1843,9 +1449,7 @@
       "scope": "packages/ax-code/src/cli/cmd/dre-graph",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1854,9 +1458,7 @@
       "scope": "packages/ax-code/src/cli/cmd/generate",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1865,9 +1467,7 @@
       "scope": "packages/ax-code/src/cli/cmd/github",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1876,9 +1476,7 @@
       "scope": "packages/ax-code/src/cli/cmd/graph",
       "wave": 6,
       "size": "M",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1887,9 +1485,7 @@
       "scope": "packages/ax-code/src/cli/cmd/index-graph",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1898,9 +1494,7 @@
       "scope": "packages/ax-code/src/cli/cmd/init",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1909,9 +1503,7 @@
       "scope": "packages/ax-code/src/cli/cmd/memory",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1920,9 +1512,7 @@
       "scope": "packages/ax-code/src/cli/cmd/replay",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1931,9 +1521,7 @@
       "scope": "packages/ax-code/src/cli/cmd/restart",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1942,9 +1530,7 @@
       "scope": "packages/ax-code/src/cli/cmd/risk",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1953,9 +1539,7 @@
       "scope": "packages/ax-code/src/cli/cmd/rollback",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1964,9 +1548,7 @@
       "scope": "packages/ax-code/src/cli/cmd/stats",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1975,9 +1557,7 @@
       "scope": "packages/ax-code/src/cli/cmd/trace",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1986,9 +1566,7 @@
       "scope": "packages/ax-code/src/cli/cmd/uninstall",
       "wave": 6,
       "size": "S",
-      "risk": [
-        "cli"
-      ],
+      "risk": ["cli"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -1997,9 +1575,7 @@
       "scope": "desktop/packages/electron/src (shell/window)",
       "wave": 7,
       "size": "L",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2008,10 +1584,7 @@
       "scope": "desktop/packages/electron/src/server-process.js",
       "wave": 7,
       "size": "L",
-      "risk": [
-        "desktop",
-        "stability"
-      ],
+      "risk": ["desktop", "stability"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2020,9 +1593,7 @@
       "scope": "desktop/packages/electron/src/tray.mjs",
       "wave": 7,
       "size": "S",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2031,10 +1602,7 @@
       "scope": "desktop/packages/electron/src (update)",
       "wave": 7,
       "size": "M",
-      "risk": [
-        "desktop",
-        "security"
-      ],
+      "risk": ["desktop", "security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2043,10 +1611,7 @@
       "scope": "desktop/packages/web/server",
       "wave": 7,
       "size": "L",
-      "risk": [
-        "desktop",
-        "network"
-      ],
+      "risk": ["desktop", "network"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2055,9 +1620,7 @@
       "scope": "desktop/packages/web/server/lib/ax-code",
       "wave": 7,
       "size": "L",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2066,9 +1629,7 @@
       "scope": "desktop/packages/web/server/lib/desktop",
       "wave": 7,
       "size": "M",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2077,10 +1638,7 @@
       "scope": "desktop/packages/web/server/lib/event-stream",
       "wave": 7,
       "size": "L",
-      "risk": [
-        "desktop",
-        "performance"
-      ],
+      "risk": ["desktop", "performance"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2089,10 +1647,7 @@
       "scope": "desktop/packages/web/server/lib/fs",
       "wave": 7,
       "size": "M",
-      "risk": [
-        "desktop",
-        "security"
-      ],
+      "risk": ["desktop", "security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2101,9 +1656,7 @@
       "scope": "desktop/packages/web/server/lib/git",
       "wave": 7,
       "size": "L",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2112,10 +1665,7 @@
       "scope": "desktop/packages/web/server/lib/github",
       "wave": 7,
       "size": "L",
-      "risk": [
-        "desktop",
-        "security"
-      ],
+      "risk": ["desktop", "security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2124,9 +1674,7 @@
       "scope": "desktop/packages/web/server/lib/magic-prompts",
       "wave": 7,
       "size": "S",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2135,9 +1683,7 @@
       "scope": "desktop/packages/web/server/lib/notifications",
       "wave": 7,
       "size": "M",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2146,10 +1692,7 @@
       "scope": "desktop/packages/web/server/lib/preview",
       "wave": 7,
       "size": "M",
-      "risk": [
-        "desktop",
-        "security"
-      ],
+      "risk": ["desktop", "security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2158,9 +1701,7 @@
       "scope": "desktop/packages/web/server/lib/projects",
       "wave": 7,
       "size": "L",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2169,9 +1710,7 @@
       "scope": "desktop/packages/web/server/lib/quota",
       "wave": 7,
       "size": "L",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2180,9 +1719,7 @@
       "scope": "desktop/packages/web/server/lib/scheduled-tasks",
       "wave": 7,
       "size": "L",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2191,9 +1728,7 @@
       "scope": "desktop/packages/web/server/lib/session-folders",
       "wave": 7,
       "size": "M",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2202,9 +1737,7 @@
       "scope": "desktop/packages/web/server/lib/skills-catalog",
       "wave": 7,
       "size": "M",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2213,10 +1746,7 @@
       "scope": "desktop/packages/web/server/lib/terminal",
       "wave": 7,
       "size": "L",
-      "risk": [
-        "desktop",
-        "security"
-      ],
+      "risk": ["desktop", "security"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2225,9 +1755,7 @@
       "scope": "desktop/packages/web/server/lib/text",
       "wave": 7,
       "size": "S",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2236,9 +1764,7 @@
       "scope": "desktop/packages/web/src",
       "wave": 7,
       "size": "M",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2247,10 +1773,7 @@
       "scope": "desktop/packages/ui/src/api",
       "wave": 8,
       "size": "L",
-      "risk": [
-        "desktop",
-        "api"
-      ],
+      "risk": ["desktop", "api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2259,9 +1782,7 @@
       "scope": "desktop/packages/ui/src/apps",
       "wave": 8,
       "size": "M",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2270,10 +1791,7 @@
       "scope": "desktop/packages/ui/src/components/auth",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2282,10 +1800,7 @@
       "scope": "desktop/packages/ui/src/components/chat",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2294,10 +1809,7 @@
       "scope": "desktop/packages/ui/src/components/comments",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2306,10 +1818,7 @@
       "scope": "desktop/packages/ui/src/components/dashboard",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2318,10 +1827,7 @@
       "scope": "desktop/packages/ui/src/components/desktop",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2330,10 +1836,7 @@
       "scope": "desktop/packages/ui/src/components/files",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2342,10 +1845,7 @@
       "scope": "desktop/packages/ui/src/components/icon",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2354,10 +1854,7 @@
       "scope": "desktop/packages/ui/src/components/icons",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2366,10 +1863,7 @@
       "scope": "desktop/packages/ui/src/components/layout",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2378,10 +1872,7 @@
       "scope": "desktop/packages/ui/src/components/mcp",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2390,10 +1881,7 @@
       "scope": "desktop/packages/ui/src/components/mini-chat",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2402,10 +1890,7 @@
       "scope": "desktop/packages/ui/src/components/model-picker",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2414,10 +1899,7 @@
       "scope": "desktop/packages/ui/src/components/multirun",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2426,10 +1908,7 @@
       "scope": "desktop/packages/ui/src/components/notifications",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2438,10 +1917,7 @@
       "scope": "desktop/packages/ui/src/components/onboarding",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2450,10 +1926,7 @@
       "scope": "desktop/packages/ui/src/components/projects",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2462,10 +1935,7 @@
       "scope": "desktop/packages/ui/src/components/providers",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2474,10 +1944,7 @@
       "scope": "desktop/packages/ui/src/components/sections",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2486,10 +1953,7 @@
       "scope": "desktop/packages/ui/src/components/session",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2498,10 +1962,7 @@
       "scope": "desktop/packages/ui/src/components/terminal",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2510,10 +1971,7 @@
       "scope": "desktop/packages/ui/src/components/ui",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2522,10 +1980,7 @@
       "scope": "desktop/packages/ui/src/components/update",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2534,10 +1989,7 @@
       "scope": "desktop/packages/ui/src/components/views",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2546,10 +1998,7 @@
       "scope": "desktop/packages/ui/src/components/work",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop",
-        "ui"
-      ],
+      "risk": ["desktop", "ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2558,9 +2007,7 @@
       "scope": "desktop/packages/ui/src/contexts",
       "wave": 8,
       "size": "M",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2569,9 +2016,7 @@
       "scope": "desktop/packages/ui/src/hooks",
       "wave": 8,
       "size": "L",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2580,9 +2025,7 @@
       "scope": "desktop/packages/ui/src/lib",
       "wave": 8,
       "size": "L",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2591,9 +2034,7 @@
       "scope": "desktop/packages/ui/src/stores",
       "wave": 8,
       "size": "L",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2602,9 +2043,7 @@
       "scope": "desktop/packages/ui/src/sync",
       "wave": 8,
       "size": "L",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2613,9 +2052,7 @@
       "scope": "desktop/packages/ui/src/types",
       "wave": 8,
       "size": "S",
-      "risk": [
-        "desktop"
-      ],
+      "risk": ["desktop"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2624,9 +2061,7 @@
       "scope": "packages/sdk/js",
       "wave": 9,
       "size": "L",
-      "risk": [
-        "api"
-      ],
+      "risk": ["api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2635,9 +2070,7 @@
       "scope": "packages/plugin",
       "wave": 9,
       "size": "M",
-      "risk": [
-        "api"
-      ],
+      "risk": ["api"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2646,9 +2079,7 @@
       "scope": "packages/util",
       "wave": 9,
       "size": "M",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2657,42 +2088,34 @@
       "scope": "packages/script",
       "wave": 9,
       "size": "L",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
       "id": "W9-05",
-      "slug": "pkg-opentui-core",
-      "scope": "packages/opentui-core",
+      "slug": "pkg-ax-code-tui-core",
+      "scope": "packages/ax-code-tui",
       "wave": 9,
       "size": "L",
-      "risk": [
-        "ui"
-      ],
+      "risk": ["ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
       "id": "W9-06",
-      "slug": "pkg-opentui-solid",
-      "scope": "packages/opentui-solid",
+      "slug": "pkg-ax-code-tui-solid",
+      "scope": "packages/ax-code-tui/solid",
       "wave": 9,
       "size": "L",
-      "risk": [
-        "ui"
-      ],
+      "risk": ["ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
       "id": "W9-07",
-      "slug": "pkg-opentui-spinner",
-      "scope": "packages/opentui-spinner",
+      "slug": "pkg-ax-code-tui-spinner",
+      "scope": "packages/ax-code-tui/spinner",
       "wave": 9,
       "size": "S",
-      "risk": [
-        "ui"
-      ],
+      "risk": ["ui"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2701,9 +2124,7 @@
       "scope": "packages/ax-wiki",
       "wave": 9,
       "size": "L",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2712,9 +2133,7 @@
       "scope": "packages/ax-code-index-core",
       "wave": 9,
       "size": "M",
-      "risk": [
-        "native"
-      ],
+      "risk": ["native"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2723,9 +2142,7 @@
       "scope": "packages/ax-code-fs-native",
       "wave": 9,
       "size": "M",
-      "risk": [
-        "native"
-      ],
+      "risk": ["native"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2734,9 +2151,7 @@
       "scope": "packages/ax-code-diff-native",
       "wave": 9,
       "size": "M",
-      "risk": [
-        "native"
-      ],
+      "risk": ["native"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2745,9 +2160,7 @@
       "scope": "packages/ax-code-parser-native",
       "wave": 9,
       "size": "M",
-      "risk": [
-        "native"
-      ],
+      "risk": ["native"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2756,9 +2169,7 @@
       "scope": "packages/ax-code-terminal-native",
       "wave": 9,
       "size": "M",
-      "risk": [
-        "native"
-      ],
+      "risk": ["native"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2767,9 +2178,7 @@
       "scope": "packages/ax-code-daemon",
       "wave": 9,
       "size": "M",
-      "risk": [
-        "native"
-      ],
+      "risk": ["native"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2778,10 +2187,7 @@
       "scope": "crates/ax-code-index",
       "wave": 9,
       "size": "L",
-      "risk": [
-        "native",
-        "performance"
-      ],
+      "risk": ["native", "performance"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2790,10 +2196,7 @@
       "scope": "crates/ax-code-fs",
       "wave": 9,
       "size": "L",
-      "risk": [
-        "native",
-        "performance"
-      ],
+      "risk": ["native", "performance"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2802,9 +2205,7 @@
       "scope": "crates/ax-code-diff",
       "wave": 9,
       "size": "L",
-      "risk": [
-        "native"
-      ],
+      "risk": ["native"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2813,9 +2214,7 @@
       "scope": "crates/ax-code-parser",
       "wave": 9,
       "size": "L",
-      "risk": [
-        "native"
-      ],
+      "risk": ["native"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2824,10 +2223,7 @@
       "scope": "crates/ax-code-terminal",
       "wave": 9,
       "size": "L",
-      "risk": [
-        "native",
-        "stability"
-      ],
+      "risk": ["native", "stability"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2836,9 +2232,7 @@
       "scope": "crates/ax-code-daemon",
       "wave": 9,
       "size": "L",
-      "risk": [
-        "native"
-      ],
+      "risk": ["native"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2847,9 +2241,7 @@
       "scope": "crates/ax-code-bench",
       "wave": 9,
       "size": "S",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2858,9 +2250,7 @@
       "scope": "desktop/packages/docs",
       "wave": 9,
       "size": "S",
-      "risk": [
-        "docs"
-      ],
+      "risk": ["docs"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2869,9 +2259,7 @@
       "scope": "packages/ax-code/src/constants",
       "wave": 10,
       "size": "S",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2880,9 +2268,7 @@
       "scope": "packages/ax-code/src/flag",
       "wave": 10,
       "size": "S",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2891,9 +2277,7 @@
       "scope": "packages/ax-code/src/format",
       "wave": 10,
       "size": "S",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2902,9 +2286,7 @@
       "scope": "packages/ax-code/src/util",
       "wave": 10,
       "size": "L",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     },
     {
@@ -2913,9 +2295,7 @@
       "scope": "packages/ax-code/src/visual",
       "wave": 10,
       "size": "M",
-      "risk": [
-        "quality"
-      ],
+      "risk": ["quality"],
       "owner": "codex-sol+ax-code-glm"
     }
   ]

@@ -34,7 +34,7 @@ export function assertLocalAxCodeBaseUrl(raw: string) {
     hostname === "localhost" ||
     hostname === "::1" ||
     hostname === "opencode.internal" ||
-    hostname === "opentui.internal" ||
+    hostname === "ax-code.internal" ||
     isIpv4Loopback(hostname)
   if ((url.protocol !== "http:" && url.protocol !== "https:") || !localHostname) {
     throw new Error("AX Code client baseUrl must be local; remote AX Code access is disabled by the local-only policy")

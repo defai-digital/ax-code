@@ -9,7 +9,7 @@ import path from "path"
 // their success `.then` on those failures — splicing the request out of the
 // sync store (removeRequestLocally) and unmounting the prompt while the
 // server-side ask stayed pending, wedging the agent with no toast. These are
-// source-text guards (the prompts require the opentui native FFI to render, so
+// source-text guards (the prompts require AX Code TUI native FFI to render, so
 // they cannot be imported into a unit test) locking in the routing: inspect
 // the resolved result.error and throw so the existing `.catch` (reset guard,
 // log, toast, keep the prompt mounted for retry) handles the failure.

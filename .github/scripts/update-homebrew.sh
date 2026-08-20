@@ -145,7 +145,7 @@ cat > /tmp/ax-code.rb << HEADER
 # distribution (bin + lib + node_modules), not a single compiled binary, so the
 # whole tree installs into libexec and bin/ax-code is a wrapper that runs the
 # bundle with the Homebrew node (the launcher needs --experimental-ffi for
-# OpenTUI's node:ffi backend and suppresses Node's experimental FFI notice).
+# AX Code TUI's node:ffi backend and suppresses Node's experimental FFI notice).
 class AxCode < Formula
   desc "Sovereign AI coding agent — provider-agnostic, LSP-first"
   homepage "https://github.com/defai-digital/ax-code"
@@ -159,7 +159,7 @@ class AxCode < Formula
   depends_on "node"
   depends_on "ripgrep"
 
-  # The vendored OpenTUI native library is a prebuilt Mach-O with an @rpath
+  # The AX Code TUI native library is a prebuilt Mach-O with an @rpath
   # install id and zero Mach-O header padding. Homebrew's post-install
   # fix_dynamic_linkage tries to rewrite its dylib id to the long Cellar/opt path
   # and fails ("Updated load commands do not fit in the header"), making the
@@ -167,7 +167,7 @@ class AxCode < Formula
   # library by absolute path at runtime, so its install id is irrelevant. Gzip it
   # during install so the Mach-O linkage scan skips it, then restore it in
   # post_install, which runs after fix_dynamic_linkage.
-  OPENTUI_DYLIB = "node_modules/@ax-code/opentui-core/vendor/darwin-arm64/libopentui.dylib"
+  AX_TUI_DYLIB = "node_modules/@ax-code/tui/vendor/darwin-arm64/libopentui.dylib"
 
   def install
     libexec.install Dir["*"]
@@ -177,12 +177,12 @@ class AxCode < Formula
     SH
     chmod 0755, bin/"ax-code"
 
-    dylib = libexec/OPENTUI_DYLIB
+    dylib = libexec/AX_TUI_DYLIB
     system "gzip", "-n", "--", dylib if dylib.exist?
   end
 
   def post_install
-    gz = libexec/"#{OPENTUI_DYLIB}.gz"
+    gz = libexec/"#{AX_TUI_DYLIB}.gz"
     return unless gz.exist?
 
     chmod 0755, gz.dirname

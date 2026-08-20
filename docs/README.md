@@ -59,7 +59,7 @@ configure a workflow, understand a runtime boundary, or integrate AX Code with a
 - [MCP Integrations](integrations/mcp.md) — trust, permissions, resources, and server security.
 - [ACP](integrations/acp.md) — the Agent Client Protocol happy path for IDE hosts.
 - [AX Wiki](integrations/wiki.md) — source-backed repository knowledge and CI workflow.
-- [VS Code Integration](../packages/integration-vscode/README.md) — editor commands, settings, and workflows.
+- [VS Code Integration](../packages/integration-vscode/README.md) — editor commands, settings, and workflows. Install from the [marketplace listing](https://marketplace.visualstudio.com/items?itemName=AutomatosX.ax-code-vscode).
 
 ## SDK and service boundaries
 

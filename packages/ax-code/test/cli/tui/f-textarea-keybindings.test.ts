@@ -17,7 +17,7 @@ function key(
 }
 
 // Section 23: a `<leader>x` override of an input_* action must not turn the bare
-// key destructive while typing. opentui KeyBindings match name+modifiers only,
+// key destructive while typing. AX Code TUI KeyBindings match name+modifiers only,
 // so leader combos are dropped before mapping (they can't reach a textarea
 // anyway — activating the leader blurs it).
 test("leader-prefixed input_* bindings are not mapped into textarea keybindings", () => {

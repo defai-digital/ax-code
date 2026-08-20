@@ -7,7 +7,7 @@
 // app-wide, so the row is safe to render on every route.
 
 import { createMemo } from "solid-js"
-import { RGBA } from "@ax-code/opentui-core"
+import { RGBA } from "@ax-code/tui"
 import { WorkMode } from "@/mode/work-mode"
 import { selectedForeground, useTheme } from "@tui/context/theme"
 import { useSync } from "@tui/context/sync"
@@ -64,7 +64,7 @@ export function ModeChips() {
       : input.inactiveFg
 
     // onMouseUp lives on the wrapping <box>, not the inner <text>: text
-    // elements in OpenTUI primarily handle text selection, and click events
+    // elements in AX Code TUI primarily handle text selection, and click events
     // on them are unreliable when nested inside a flex box.
     return (
       <box flexShrink={0} onMouseUp={input.onMouseUp}>

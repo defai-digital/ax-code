@@ -6,7 +6,7 @@ import {
   KeyEvent,
   MouseButton,
   decodePasteBytes,
-} from "@ax-code/opentui-core"
+} from "@ax-code/tui"
 import {
   createEffect,
   createMemo,
@@ -49,7 +49,7 @@ import { assign } from "./part"
 import { usePromptStash } from "./stash"
 import { type AutocompleteRef, Autocomplete } from "./autocomplete"
 import { useCommandDialog } from "../dialog-command"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/opentui-solid"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/tui/solid"
 import { Editor } from "@tui/util/editor"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { blurRenderable, focusRenderable, isRenderableAlive } from "@tui/util/renderable-safety"
@@ -84,7 +84,7 @@ import {
   sanitizePromptInput,
   windowsClipboardTextPaste,
 } from "./view-model"
-import { OpenTuiSpinner } from "../spinner"
+import { AxTuiSpinner } from "../spinner"
 import { upsert } from "../../context/sync-util"
 import { summarizedPasteViews } from "./paste-view-model"
 import { withTimeout } from "@/util/timeout"
@@ -471,7 +471,7 @@ export function Prompt(props: PromptProps) {
     return isUnmodifiedPromptSubmitKey(event)
   }
 
-  // submit() must never reject unhandled — opentui dispatches keyboard handlers
+  // submit() must never reject unhandled — AX Code TUI dispatches keyboard handlers
   // fire-and-forget, so a dropped rejection lands on the process-level
   // unhandledRejection path. Surface submission failures as a toast instead.
   function submitSafely() {
@@ -1941,7 +1941,7 @@ export function Prompt(props: PromptProps) {
                       return
                     }
                   } catch (error) {
-                    // This handler is async and opentui invokes it fire-and-forget —
+                    // This handler is async and AX Code TUI invokes it fire-and-forget —
                     // a clipboard failure must not become an unhandled rejection.
                     log.warn("tui.prompt.onKeyDown: clipboard paste failed", { error })
                     toast.show({ variant: "error", message: "Failed to read clipboard" })
@@ -2247,7 +2247,7 @@ export function Prompt(props: PromptProps) {
                       </text>
                     }
                   >
-                    <OpenTuiSpinner color={spinnerDef().color} frames={spinnerDef().frames} interval={160} />
+                    <AxTuiSpinner color={spinnerDef().color} frames={spinnerDef().frames} interval={160} />
                   </Show>
                   <Show when={status().type === "busy" && busyStatus()?.stale}>
                     <text fg={theme.warning}>!</text>

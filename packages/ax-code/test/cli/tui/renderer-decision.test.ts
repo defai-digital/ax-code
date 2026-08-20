@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import { decideTuiRenderer } from "../../../src/cli/cmd/tui/renderer-decision"
 
 describe("tui renderer decision gate", () => {
-  test("retains OpenTUI without reproducible failures", () => {
+  test("retains AX Code TUI without reproducible failures", () => {
     expect(
       decideTuiRenderer({
         criteriaFailures: [],
@@ -10,7 +10,7 @@ describe("tui renderer decision gate", () => {
         blocksProductDirection: false,
         installOrBuildRiskAccepted: false,
       }).action,
-    ).toBe("retain-opentui")
+    ).toBe("retain-ax-tui")
   })
 
   test("does not propose native work for product-layer failures", () => {
@@ -24,7 +24,7 @@ describe("tui renderer decision gate", () => {
     ).toBe("fix-product-layer")
   })
 
-  test("requires product blockage and accepted delivery risk before Rust/native core", () => {
+  test("keeps renderer-specific product blockers in AX Code TUI", () => {
     expect(
       decideTuiRenderer({
         criteriaFailures: ["startup.first-frame"],
@@ -33,10 +33,10 @@ describe("tui renderer decision gate", () => {
         installOrBuildRiskAccepted: true,
         offlinePackagingDeterministic: true,
       }),
-    ).toMatchObject({ action: "propose-rust-native-core", requiresAdr: true })
+    ).toMatchObject({ action: "improve-ax-tui" })
   })
 
-  test("requires deterministic offline packaging before native work", () => {
+  test("keeps non-blocking renderer fixes in AX Code TUI", () => {
     expect(
       decideTuiRenderer({
         criteriaFailures: ["terminal.resize-stability"],
@@ -45,6 +45,6 @@ describe("tui renderer decision gate", () => {
         installOrBuildRiskAccepted: true,
         offlinePackagingDeterministic: false,
       }).action,
-    ).toBe("upstream-or-fork-opentui")
+    ).toBe("improve-ax-tui")
   })
 })

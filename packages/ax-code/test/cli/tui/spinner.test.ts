@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { RGBA } from "@ax-code/opentui-core"
+import { RGBA } from "@ax-code/tui"
 import { createColors } from "../../../src/cli/cmd/tui/ui/spinner"
 
 describe("tui spinner", () => {

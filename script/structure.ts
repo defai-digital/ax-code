@@ -476,7 +476,7 @@ async function main() {
   if (v4.length) {
     for (const row of v4) out.push(`- ${V4Guardrails.format(row)}`)
   } else {
-    out.push("- ok: no Effect, Solid, or OpenTUI imports found in v4 guarded directories")
+    out.push("- ok: no Effect, Solid, or AX Code TUI imports found in v4 guarded directories")
   }
   out.push("")
   out.push("## Hotspots")

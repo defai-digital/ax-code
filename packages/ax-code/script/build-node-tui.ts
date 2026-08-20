@@ -11,14 +11,14 @@ import { solidEsbuildPlugin } from "./esbuild-solid-plugin"
 import { readText, writeText } from "./fs-compat"
 import { resolveLegacyNodeGypPython } from "./node-gyp-python"
 import { WINDOWS_UTF8_WARNING } from "./source-launcher"
-import { shouldCopyOpentuiDistPath, withoutOpentuiTransformDependencies } from "../../../script/opentui-dist"
+import { shouldCopyTuiDistPath, toTuiDistPackageJson, withoutTuiTransformDependencies } from "../../../script/tui-dist"
 import pkg from "../package.json"
 
 // Full Node distribution build INCLUDING the interactive TUI. Bundles
-// src/index-node-tui.ts (boot.ts) with esbuild + the OpenTUI Solid JSX plugin.
-// OpenTUI core/solid + node-pty stay external (native FFI / .node addons loaded
+// src/index-node-tui.ts (boot.ts) with esbuild + the AX Code TUI Solid JSX plugin.
+// AX Code TUI + node-pty stay external (native FFI / .node addons loaded
 // at runtime from node_modules shipped beside the bundle); the launcher runs
-// node with --experimental-ffi so OpenTUI's node:ffi backend is available.
+// node with --experimental-ffi so AX Code TUI's node:ffi backend is available.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const dir = path.resolve(__dirname, "..")
@@ -188,20 +188,20 @@ const result = await esbuild.build({
   outfile: path.join(outLib, "index-node-tui.js"),
   conditions: ["node"],
   // Native / Bun-only ids kept external, loaded at runtime from node_modules
-  // shipped beside the bundle (OpenTUI FFI lib, node-pty .node, bun:* are
-  // never hit on Node). Do not inline @ax-code/opentui-core: the native
+  // shipped beside the bundle (TUI FFI lib, node-pty .node, bun:* are
+  // never hit on Node). Do not inline @ax-code/tui: the native
   // library and tree-sitter assets resolve via import.meta.url on the
   // hashed vendor chunks. Bundling a narrow source entry is a follow-up
-  // (see packages/opentui-core/MAINTENANCE.md).
-  external: ["bun:ffi", "bun:sqlite", "node-pty-prebuilt-multiarch", "@ax-code/opentui-core", "@ax-code/opentui-solid"],
+  // (see packages/ax-code-tui/MAINTENANCE.md).
+  external: ["bun:ffi", "bun:sqlite", "node-pty-prebuilt-multiarch", "@ax-code/tui", "@ax-code/tui/*"],
   plugins: [
     {
       name: "ax-node-overrides",
       setup(build) {
         build.onResolve({ filter: /^#db$/ }, () => ({ path: path.join(dir, "src/storage/db.node.ts") }))
-        // OpenTUI imports solid-js/dist/solid.js directly. Keep the app's bare
+        // AX Code TUI imports solid-js/dist/solid.js directly. Keep the app's bare
         // solid-js imports on that exact external module instance; inlining a
-        // second Solid runtime breaks OpenTUI context propagation.
+        // second Solid runtime breaks TUI context propagation.
         build.onResolve({ filter: /^solid-js$/ }, () => ({ path: "solid-js/dist/solid.js", external: true }))
         build.onResolve({ filter: /^solid-js\/store$/ }, () => ({ path: solidStoreClientEntry }))
         build.onResolve({ filter: /^solid-js\/web$/ }, () => ({ path: solidWebClientEntry }))
@@ -316,32 +316,20 @@ await writeText(
 )
 
 // --- Make the distribution self-contained (Bun-free) -----------------------
-// The bundle externalizes the native FFI/.node packages and OpenTUI; ship them
+// The bundle externalizes the native FFI/.node packages and AX Code TUI; ship them
 // in node_modules beside the bundle so the dist runs anywhere `node` is present.
 const deps = pkg.dependencies as Record<string, string>
-// Read the vendored opentui packages to collect their runtime dependencies.
-const opentuiCorePkg = JSON.parse(fs.readFileSync(path.join(dir, "..", "opentui-core", "package.json"), "utf8")) as {
-  dependencies?: Record<string, string>
-  peerDependencies?: Record<string, string>
-}
-const opentuiSolidPkg = JSON.parse(fs.readFileSync(path.join(dir, "..", "opentui-solid", "package.json"), "utf8")) as {
-  dependencies?: Record<string, string>
-  peerDependencies?: Record<string, string>
-}
-const opentuiSpinnerPkg = JSON.parse(
-  fs.readFileSync(path.join(dir, "..", "opentui-spinner", "package.json"), "utf8"),
-) as {
+// Read the AX Code TUI package to collect its runtime dependencies.
+const tuiPkg = JSON.parse(fs.readFileSync(path.join(dir, "..", "ax-code-tui", "package.json"), "utf8")) as {
   dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
 }
 const distDeps: Record<string, string> = {
   ...collectPackageRuntimeDependencies([
-    opentuiCorePkg,
     {
-      dependencies: withoutOpentuiTransformDependencies(opentuiSolidPkg.dependencies),
-      peerDependencies: opentuiSolidPkg.peerDependencies,
+      dependencies: withoutTuiTransformDependencies(tuiPkg.dependencies),
+      peerDependencies: tuiPkg.peerDependencies,
     },
-    opentuiSpinnerPkg,
   ]),
   "node-pty-prebuilt-multiarch": deps["node-pty-prebuilt-multiarch"],
   // .wasm files are kept external (esbuild) and resolved at runtime via
@@ -354,13 +342,9 @@ const distDeps: Record<string, string> = {
   "tree-sitter-javascript": deps["tree-sitter-javascript"],
   "tree-sitter-typescript": deps["tree-sitter-typescript"],
 }
-// @ax-code/opentui-* are workspace packages (not on npm); copy them directly
-// into the distribution instead of npm install.
-const vendoredOpentuiPackages: Array<[string, string]> = [
-  ["@ax-code/opentui-core", path.join(dir, "..", "opentui-core")],
-  ["@ax-code/opentui-solid", path.join(dir, "..", "opentui-solid")],
-  ["@ax-code/opentui-spinner", path.join(dir, "..", "opentui-spinner")],
-]
+// @ax-code/tui is a private workspace package; copy it directly into the
+// distribution instead of asking npm to install it.
+const vendoredTuiPackage: [string, string] = ["@ax-code/tui", path.join(dir, "..", "ax-code-tui")]
 await writeText(
   path.join(outRoot, "package.json"),
   JSON.stringify({ name: "ax-code-dist", private: true, type: "module", dependencies: distDeps }, null, 2) + "\n",
@@ -408,30 +392,34 @@ for (const [spec, patchRel] of Object.entries(rootPkg.pnpm?.patchedDependencies 
   console.log(`Re-applied pnpm patch for ${name} (${files.length} file(s)) into the distribution`)
 }
 
-// Copy vendored @ax-code/opentui-* workspace packages into the distribution.
-// These are not on npm, so they cannot be installed via npm install.
+// Copy @ax-code/tui into the distribution. It is not published independently,
+// so npm cannot install it while assembling the release tree.
 const distAxScope = path.join(outRoot, "node_modules", "@ax-code")
 fs.mkdirSync(distAxScope, { recursive: true })
-for (const [pkgName, srcDir] of vendoredOpentuiPackages) {
-  const destDir = path.join(distAxScope, pkgName.replace("@ax-code/", ""))
-  if (!fs.existsSync(srcDir)) {
-    console.warn(`Vendored package missing: ${srcDir} — ${pkgName} will be unavailable in the distribution`)
-    continue
-  }
-  fs.cpSync(srcDir, destDir, {
-    recursive: true,
-    dereference: true,
-    filter: (src) => shouldCopyOpentuiDistPath(src, srcDir),
-  })
-  console.log(`Copied vendored ${pkgName} into the distribution`)
+const [tuiPackageName, tuiSourceDir] = vendoredTuiPackage
+const tuiDistDir = path.join(distAxScope, "tui")
+if (!fs.existsSync(tuiSourceDir)) {
+  throw new Error(`AX Code TUI package missing: ${tuiSourceDir}`)
 }
+fs.cpSync(tuiSourceDir, tuiDistDir, {
+  recursive: true,
+  dereference: true,
+  filter: (src) => shouldCopyTuiDistPath(src, tuiSourceDir),
+})
+const tuiDistManifestPath = path.join(tuiDistDir, "package.json")
+const tuiDistManifest = toTuiDistPackageJson(
+  JSON.parse(await readText(tuiDistManifestPath)) as Record<string, unknown>,
+  (relativePath) => fs.existsSync(path.join(tuiDistDir, relativePath)),
+)
+await writeText(tuiDistManifestPath, JSON.stringify(tuiDistManifest, null, 2) + "\n")
+console.log(`Copied ${tuiPackageName} into the distribution`)
 
-// The vendored @ax-code/opentui-core carries all 8 upstream native targets
+// The vendored @ax-code/tui carries all 8 upstream native targets
 // under vendor/<target>/. Stage only the build target's library into the
 // distribution (every archive must not ship all ~30 MB of binaries) and
 // verify it against the committed manifest BEFORE codesigning — signing
 // rewrites the dylib bytes, so hash checks must happen pre-sign.
-const vendorDistDir = path.join(distAxScope, "opentui-core", "vendor")
+const vendorDistDir = path.join(tuiDistDir, "vendor")
 const buildTargetKey = `${process.platform}-${arch}`
 const vendorManifest = JSON.parse(await readText(path.join(vendorDistDir, "manifest.json"))) as {
   targets?: Record<string, { lib: { file: string; sha256: string } }>
@@ -443,15 +431,15 @@ for (const entry of fs.readdirSync(vendorDistDir)) {
 const stagedTarget = vendorManifest.targets?.[buildTargetKey]
 const stagedLib = stagedTarget ? path.join(vendorDistDir, buildTargetKey, stagedTarget.lib.file) : undefined
 if (!stagedTarget || !stagedLib || !fs.existsSync(stagedLib)) {
-  console.error(`Vendored OpenTUI native library for ${buildTargetKey} is missing from the distribution`)
+  console.error(`AX Code TUI native library for ${buildTargetKey} is missing from the distribution`)
   process.exit(1)
 }
 const stagedHash = createHash("sha256").update(fs.readFileSync(stagedLib)).digest("hex")
 if (stagedHash !== stagedTarget.lib.sha256) {
-  console.error(`Vendored OpenTUI native library for ${buildTargetKey} does not match vendor/manifest.json`)
+  console.error(`AX Code TUI native library for ${buildTargetKey} does not match vendor/manifest.json`)
   process.exit(1)
 }
-console.log(`Staged vendored OpenTUI native library for ${buildTargetKey} (hash verified)`)
+console.log(`Staged AX Code TUI native library for ${buildTargetKey} (hash verified)`)
 // node-pty ships a node-gyp addon; build it for this platform (no abi prebuild
 // for newer Node yet). Cross-platform builds run this on each target in CI.
 const ptyDir = path.join(outRoot, "node_modules", "node-pty-prebuilt-multiarch")
@@ -508,7 +496,7 @@ for (const [name, src] of nativePkgs) {
 
 // macOS Gatekeeper rejects unsigned native code. Unlike the single Bun-SEA
 // binary, a node-bundled dist carries many native libraries (.node addons and
-// OpenTUI's .dylib). Release CI passes AX_CODE_APPLE_CODESIGN_IDENTITY after
+// AX Code TUI's .dylib). Release CI passes AX_CODE_APPLE_CODESIGN_IDENTITY after
 // importing the Developer ID certificate; local and fork builds fall back to
 // ad-hoc signatures so the bundle remains runnable without Apple secrets. The
 // bundled Node runtime under node/ is deliberately NOT re-signed: official Node

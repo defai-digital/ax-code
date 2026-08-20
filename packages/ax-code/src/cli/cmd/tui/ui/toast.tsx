@@ -1,9 +1,9 @@
 import { createContext, onCleanup, useContext, type ParentProps, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useTheme } from "@tui/context/theme"
-import { useTerminalDimensions } from "@ax-code/opentui-solid"
+import { useTerminalDimensions } from "@ax-code/tui/solid"
 import { RoundedBorder } from "./primitives/card"
-import { TextAttributes } from "@ax-code/opentui-core"
+import { TextAttributes } from "@ax-code/tui"
 import z from "zod"
 import { NotificationEvent } from "@/notification/events"
 import { scheduleTuiTimeout } from "@tui/util/timer"
@@ -113,7 +113,8 @@ export function createToastStore() {
         ? parsed.data
         : {
             variant: "error",
-            message: typeof (options as { message?: unknown })?.message === "string" ? options.message : "Unknown error",
+            message:
+              typeof (options as { message?: unknown })?.message === "string" ? options.message : "Unknown error",
           }
       if (store.currentToast && sameToast(store.currentToast, parsedOptions)) {
         setStore("currentRepeat", (repeat) => repeat + 1)

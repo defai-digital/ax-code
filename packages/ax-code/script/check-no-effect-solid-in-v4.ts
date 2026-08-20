@@ -19,14 +19,19 @@ function isSolid(spec: string) {
   return spec === "solid-js" || spec.startsWith("solid-js/") || spec.startsWith("@solid-primitives/")
 }
 
-function isOpenTui(spec: string) {
-  return spec.startsWith("@opentui/") || spec.startsWith("@ax-code/opentui-")
+function isTui(spec: string) {
+  return (
+    spec === "@ax-code/tui" ||
+    spec.startsWith("@ax-code/tui/") ||
+    spec.startsWith("@opentui/") ||
+    spec.startsWith("@ax-code/opentui-")
+  )
 }
 
 function v4Rule(spec: string): V4Guardrails.Rule | undefined {
   if (isEffect(spec)) return "effect"
   if (isSolid(spec)) return "solid"
-  if (isOpenTui(spec)) return "opentui"
+  if (isTui(spec)) return "tui"
 }
 
 async function exists(dir: string) {
@@ -43,7 +48,7 @@ function skip(file: string) {
 }
 
 // V4Guardrails keeps the original v4-directory-scoped rules for
-// solid-js and @opentui/*. Those directories are intentionally
+// solid-js and AX Code TUI. Those directories are intentionally
 // renderer-free; effect is checked globally by EffectGuard below.
 export namespace V4Guardrails {
   export const Directories = [
@@ -53,7 +58,7 @@ export namespace V4Guardrails {
     "src/cli/cmd/tui/input",
     "src/cli/cmd/tui/native",
   ] as const
-  export type Rule = "effect" | "solid" | "opentui"
+  export type Rule = "effect" | "solid" | "tui"
 
   export interface Violation {
     file: string
@@ -179,7 +184,7 @@ if (import.meta.main) {
   let failed = false
   if (v4Violations.length > 0) {
     failed = true
-    console.log("# V4 Guardrail Violations (solid-js / @opentui in renderer-free dirs)")
+    console.log("# V4 Guardrail Violations (Solid / AX Code TUI in renderer-free dirs)")
     for (const item of v4Violations) console.log(`- ${V4Guardrails.format(item)}`)
   }
   if (effectViolations.length > 0) {

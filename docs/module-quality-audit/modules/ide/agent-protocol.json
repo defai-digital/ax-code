@@ -18,7 +18,7 @@
     "4": "install() runs cmd from the static SUPPORTED_IDES list in array form with nothrow, so no shell-injection surface; no network, no secrets, log.info at line 61 emits CLI stdout/stderr which is non-sensitive for this command.",
     "5": "All three exports are trivial: two are sync env-string comparisons and one spawns a single short-lived child process; no hot path, no allocation concerns.",
     "6": "Coupling is bounded to six first-party deps plus zod; Ide.Event.Installed is registered into the BusEvent union (bus-event.ts:9-16) but no producer anywhere emits ide.installed — the contract reserves a slot nobody publishes.",
-    "7": "Dominant issue: install(), InstallFailedError, AlreadyInstalledError and Event.Installed are all unreachable from production; literal 'sst-dev.ax-code' at line 55 is a hardcoded extension id that would belong in constants if revived.",
+    "7": "Dominant issue: install(), InstallFailedError, AlreadyInstalledError and Event.Installed are all unreachable from production; literal 'AutomatosX.ax-code-vscode' at line 55 is a hardcoded extension id that would belong in constants if revived.",
     "8": "ide.test.ts (82 LOC, 11 cases) covers ide() and alreadyInstalled() branches cleanly with process.env snapshot/restore, but install() has zero coverage and neither named error is ever constructed or asserted.",
     "9": "No Critical findings — reverify.md not required; MEDIUM items are orphaned install path and never-emitted event; LOW items are substring fragility, missing Windows cmd parity vs desktop main.js, and absent install() tests; disposition deferred to module owner."
   },

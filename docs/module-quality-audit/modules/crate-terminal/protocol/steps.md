@@ -16,7 +16,7 @@ Input decoding checks bracketed paste, SGR mouse, CSI keys, then SS3 before scal
 
 ## Step 5 Design and Ownership
 
-Pure parsing, width, buffer, and lifecycle logic is testable without N-API, while the thin boundary wrappers are grouped at `crates/ax-code-terminal/src/lib.rs:587-615`; `crates/ax-code-terminal/build.rs:1-5` contains only build integration. The single 937-line file is large but remains organized by terminal-domain concepts, so size alone does not prove a design fault. Ownership is currently dormant/legacy: the central native adapter names fs, diff, index, and parser but not terminal at `packages/ax-code/src/native/addon.ts:1-30` and `:67-86`, while `packages/ax-code/src/cli/cmd/doctor.ts:502-514` says the old Rust-renderer flags are retired in favor of Zig/OpenTUI. Retention is nevertheless explicit in the package manifest and native build list, so removal requires a separate ownership decision.
+Pure parsing, width, buffer, and lifecycle logic is testable without N-API, while the thin boundary wrappers are grouped at `crates/ax-code-terminal/src/lib.rs:587-615`; `crates/ax-code-terminal/build.rs:1-5` contains only build integration. The single 937-line file is large but remains organized by terminal-domain concepts, so size alone does not prove a design fault. Ownership is currently dormant/legacy: the central native adapter names fs, diff, index, and parser but not terminal at `packages/ax-code/src/native/addon.ts:1-30` and `:67-86`, while the interactive terminal renderer is owned by `packages/ax-code-tui`. Retention is nevertheless explicit in the package manifest and native build list, so removal requires a separate ownership decision.
 
 ## Step 6 Dead Code and Hygiene
 

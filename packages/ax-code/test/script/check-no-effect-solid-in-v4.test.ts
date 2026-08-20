@@ -23,7 +23,7 @@ describe("script.check-no-effect-solid-in-v4", () => {
     expect(await V4Guardrails.check(tmp.path)).toEqual([])
   })
 
-  test("reports effect, solid, and opentui imports in guarded directories", async () => {
+  test("reports effect, Solid, and TUI imports in guarded directories", async () => {
     await using tmp = await tmpdir()
     await mkdir(path.join(tmp.path, "src/cli/cmd/tui/input"), { recursive: true })
     await mkdir(path.join(tmp.path, "src/cli/cmd/tui/native"), { recursive: true })
@@ -31,13 +31,13 @@ describe("script.check-no-effect-solid-in-v4", () => {
     await writeFile(path.join(tmp.path, "src/runtime/effect.ts"), `import { Effect } from "effect"\n`)
     await writeFile(path.join(tmp.path, "src/cli/cmd/tui/input/solid.ts"), `import { batch } from "solid-js"\n`)
     await writeFile(
-      path.join(tmp.path, "src/cli/cmd/tui/native/opentui.ts"),
-      `import { render } from "@opentui/core"\n`,
+      path.join(tmp.path, "src/cli/cmd/tui/native/renderer.ts"),
+      `import { render } from "@ax-code/tui"\n`,
     )
 
     expect((await V4Guardrails.check(tmp.path)).map((item) => V4Guardrails.format(item))).toEqual([
       "src/cli/cmd/tui/input/solid.ts imports solid-js (solid)",
-      "src/cli/cmd/tui/native/opentui.ts imports @opentui/core (opentui)",
+      "src/cli/cmd/tui/native/renderer.ts imports @ax-code/tui (tui)",
       "src/runtime/effect.ts imports effect (effect)",
     ])
   })

@@ -10,7 +10,7 @@ import type { Keybind } from "../../../src/util/keybind"
 // newline; the real submission then runs from the prompt's global key handler
 // (`isPromptSubmitKey`). Before the fix, only `return`/`linefeed` were covered,
 // so the numeric-keypad Enter (`kpenter`, reported as a distinct key under the
-// kitty keyboard protocol) fell through to OpenTUI's default `kpenter -> newline`
+// kitty keyboard protocol) fell through to AX Code TUI's default `kpenter -> newline`
 // binding: pressing it inserted a blank line and never submitted.
 
 function key(name: string, modifiers: { ctrl?: boolean; meta?: boolean; shift?: boolean } = {}): Keybind.Info {

@@ -17,7 +17,7 @@ type KeyEventLike = {
 // default `input_newline` — actually match. Without this, Ctrl+J fell
 // through to the Enter-alias handling and submitted the prompt. (Mirrored in
 // component/textarea-keybindings.ts, which emits linefeed/"\n" aliases for
-// ctrl+j bindings on the opentui textarea path.)
+// ctrl+j bindings on the AX Code TUI textarea path.)
 export function normalizeKeyEventForKeybind<T extends KeyEventLike>(evt: T): T {
   // Ctrl+- on non-kitty terminals: raw mode emits 0x1F, which the parser
   // reports as name "_" with ctrl. Normalize it back to "-" so `ctrl+-`

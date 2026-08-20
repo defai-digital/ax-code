@@ -1,6 +1,6 @@
 import type { JSX } from "solid-js"
-import type { MouseEvent, RGBA } from "@ax-code/opentui-core"
-import { useRenderer } from "@ax-code/opentui-solid"
+import type { MouseEvent, RGBA } from "@ax-code/tui"
+import { useRenderer } from "@ax-code/tui/solid"
 import open from "open"
 import { useToast } from "./toast"
 import { Log } from "@/util/log"
@@ -21,7 +21,7 @@ export function Link(props: LinkProps) {
   const renderer = useRenderer()
 
   // Track where the press began so that finishing a text-selection drag over
-  // the link doesn't open the URL. opentui delivers the terminating mouseup to
+  // the link doesn't open the URL. AX Code TUI delivers the terminating mouseup to
   // whatever is under the cursor at release, so a plain click and a drag-end
   // both land here.
   let downX: number | undefined

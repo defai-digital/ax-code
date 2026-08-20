@@ -1,6 +1,6 @@
 import { createMemo, createSignal, For, Show } from "solid-js"
-import type { MouseEvent } from "@ax-code/opentui-core"
-import { useRenderer } from "@ax-code/opentui-solid"
+import type { MouseEvent } from "@ax-code/tui"
+import { useRenderer } from "@ax-code/tui/solid"
 import { Spinner } from "@tui/component/spinner"
 import { useTheme } from "@tui/context/theme"
 import { Locale } from "@/util/locale"
@@ -52,13 +52,7 @@ export function SubagentStatusPanel(props: {
 
   return (
     <Show when={active().length > 0}>
-      <box
-        flexShrink={0}
-        backgroundColor={theme.backgroundPanel}
-        paddingLeft={1}
-        paddingRight={1}
-        gap={0}
-      >
+      <box flexShrink={0} backgroundColor={theme.backgroundPanel} paddingLeft={1} paddingRight={1} gap={0}>
         <box
           height={1}
           flexDirection="row"

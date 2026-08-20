@@ -1,6 +1,6 @@
-import { TextareaRenderable, TextAttributes } from "@ax-code/opentui-core"
+import { TextareaRenderable, TextAttributes } from "@ax-code/tui"
 import { createSignal, onCleanup, onMount } from "solid-js"
-import { useKeyboard } from "@ax-code/opentui-solid"
+import { useKeyboard } from "@ax-code/tui/solid"
 import { useTheme } from "@tui/context/theme"
 import { useDialog } from "@tui/ui/dialog"
 import { useToast } from "@tui/ui/toast"

@@ -685,11 +685,11 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
       severity: "critical",
       category: "TUI",
       title: "TUI renderer is misconfigured in testing mode",
-      rootCause: `Renderer profile \`${rendererProfile.profile ?? "unknown"}\` recorded \`testing: true\` with screen mode \`${rendererProfile.screenMode ?? "unknown"}\`. OpenTUI testing mode is not a production compatibility setting and can suppress real terminal output entirely.`,
+      rootCause: `Renderer profile \`${rendererProfile.profile ?? "unknown"}\` recorded \`testing: true\` with screen mode \`${rendererProfile.screenMode ?? "unknown"}\`. AX Code TUI testing mode is not a production compatibility setting and can suppress real terminal output entirely.`,
       impact:
         "The process can finish startup work normally while the user sees a blank or apparently hung terminal because no real frame is painted.",
       suggestedFix:
-        "Disable OpenTUI testing mode in production renderer options. Keep compatibility changes scoped to screen mode, input features, or threading instead of using the test harness.",
+        "Disable AX Code TUI testing mode in production renderer options. Keep compatibility changes scoped to screen mode, input features, or threading instead of using the test harness.",
       riskLevel: "high",
       occurrences: 1,
     })
@@ -839,7 +839,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
         title: "TUI never reached renderer dispatch",
         rootCause: `Startup began, but no matching \`tui.startup.renderDispatched\` event arrived within ${formatDuration(TUI_STARTUP_STALL_THRESHOLD_MS)}.`,
         impact:
-          "The process likely stalled before the Solid/OpenTUI render tree was handed to the renderer, often in backend startup, config resolution, or renderer setup.",
+          "The process likely stalled before the Solid/AX Code TUI render tree was handed to the renderer, often in backend startup, config resolution, or renderer setup.",
         suggestedFix:
           "Inspect the gap between `tui.backendSpawned`, `tui.startup.begin`, and `tui.startup.renderDispatched`. The first missing transition marks the failing startup boundary.",
         riskLevel: "medium",
@@ -955,7 +955,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
       severity: "critical",
       category: "TUI",
       title: "TUI renderer is repainting in a tight loop",
-      rootCause: `opentui's renderer.requestRender() was called ${renders} times in ${windowMs}ms (recorded ${renderLoops.length} time${renderLoops.length === 1 ? "" : "s"}). A render rate that high implies a callback above the renderer is requesting paints synchronously without yielding — likely a SolidJS render-side effect that mutates a signal it depends on, or a hot loop inside opentui's own event pipeline.${stackBlock}`,
+      rootCause: `AX Code TUI's renderer.requestRender() was called ${renders} times in ${windowMs}ms (recorded ${renderLoops.length} time${renderLoops.length === 1 ? "" : "s"}). A render rate that high implies a callback above the renderer is requesting paints synchronously without yielding — likely a SolidJS render-side effect that mutates a signal it depends on, or a hot loop inside the renderer event pipeline.${stackBlock}`,
       impact:
         "The main thread spins inside the render→paint→render path. Solid effects, store dispatches, and IPC are all starved.",
       suggestedFix:
@@ -978,7 +978,7 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
       rootCause: `The worker thread's liveness check missed ${workerStalls.length} main-thread ping${workerStalls.length === 1 ? "" : "s"}; the latest gap was ${formatDuration(gap)}${lastPing ? ` since the last ping at ${lastPing}` : ""}. Worker timers kept firing, so the main thread event loop is the one blocked.`,
       impact: "The TUI renderer cannot process input, paint frames, or consume backend events. User sees a frozen UI.",
       suggestedFix:
-        "Correlate the first `tui.worker.mainStalled` record with the preceding `tui.state.heartbeat` ring buffer and any `tui.effect.loopDetected` entries to name the stuck path. If no effect label triggered, the loop is outside the Solid reactive system (likely opentui's render layer).",
+        "Correlate the first `tui.worker.mainStalled` record with the preceding `tui.state.heartbeat` ring buffer and any `tui.effect.loopDetected` entries to name the stuck path. If no effect label triggered, the loop is outside the Solid reactive system (likely AX Code TUI's render layer).",
       riskLevel: "high",
       occurrences: workerStalls.length,
     })

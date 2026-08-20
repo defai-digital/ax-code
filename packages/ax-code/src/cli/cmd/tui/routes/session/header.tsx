@@ -8,7 +8,7 @@ import { useCommandDialog } from "@tui/component/dialog-command"
 import { useKeybind } from "../../context/keybind"
 import { useKV } from "../../context/kv"
 import { Flag } from "@/flag/flag"
-import { useTerminalDimensions } from "@ax-code/opentui-solid"
+import { useTerminalDimensions } from "@ax-code/tui/solid"
 import { collapseSessionBreadcrumbs, sessionBreadcrumbs } from "./header-view-model"
 import { computeSidebarWidth } from "./layout"
 import { autonomousActiveView } from "./autonomous-active"
@@ -221,9 +221,7 @@ export function Header() {
               <Show when={autonomous().active}>
                 <box flexDirection="row" gap={1} paddingLeft={1} paddingRight={1} flexShrink={0}>
                   <Spinner color={chipColor()}>
-                    <span style={{ fg: chipColor(), bold: true }}>
-                      {sync.data.autonomous ? "◆ AUTO" : "◆ WORKING"}
-                    </span>
+                    <span style={{ fg: chipColor(), bold: true }}>{sync.data.autonomous ? "◆ AUTO" : "◆ WORKING"}</span>
                     <span style={{ fg: theme.textMuted }}>
                       {" "}
                       · step {autonomous().step}/{autonomous().maxSteps}

@@ -8,11 +8,13 @@ import { resolveDesktopHandoff } from "../../../src/cli/cmd/tui/navigation/deskt
 
 const SRC_ROOT = path.resolve(import.meta.dirname, "../../../src")
 const TUI_SRC = path.join(SRC_ROOT, "cli/cmd/tui")
-const OPENTUI_RE = /(?:from\s+["'](?:@opentui\/|opentui-spinner)|import\s+["'](?:@opentui\/|opentui-spinner))/
-const SPINNER_SOLID_RE = /(?:from\s+["'](?:@ax-code\/)?opentui-spinner\/solid["']|import\s+["'](?:@ax-code\/)?opentui-spinner\/solid["'])/
-const OPENTUI_ALLOWED_OUTSIDE_TUI = new Set([
-  path.join(SRC_ROOT, "cli/cmd/doctor.ts"),
-  // Entry point must register the OpenTUI Solid transform plugin before
+const TUI_RENDERER_RE =
+  /(?:from\s+["'](?:@ax-code\/tui(?:\/|["'])|@opentui\/|opentui-spinner)|import\s+["'](?:@ax-code\/tui(?:\/|["'])|@opentui\/|opentui-spinner))/
+const SPINNER_SOLID_RE =
+  /(?:from\s+["']@ax-code\/tui\/spinner\/solid["']|import\s+["']@ax-code\/tui\/spinner\/solid["'])/
+const TUI_ALLOWED_OUTSIDE_TUI = new Set([
+  path.join(SRC_ROOT, "cli/cmd/doctor-preload.ts"),
+  // Entry point must register the AX Code TUI Solid transform plugin before
   // boot for the source-bundle distribution (ADR-002), where bunfig.toml
   // preloads aren't in scope. See comment in src/index.ts.
   path.join(SRC_ROOT, "index.ts"),
@@ -51,8 +53,8 @@ async function files(dir: string): Promise<string[]> {
   return result
 }
 
-describe("tui renderer replacement contract", () => {
-  test("covers every required renderer area before replacement work", () => {
+describe("AX Code TUI renderer contract", () => {
+  test("covers every required renderer area", () => {
     const areas = new Set(TUI_RENDERER_CONTRACT.map((item) => item.area))
 
     for (const area of TUI_RENDERER_CONTRACT_REQUIRED_AREAS) {
@@ -60,13 +62,13 @@ describe("tui renderer replacement contract", () => {
     }
   })
 
-  test("keeps direct OpenTUI imports inside the TUI surface", async () => {
+  test("keeps direct renderer imports inside the TUI surface", async () => {
     const offenders: string[] = []
 
     for (const file of await files(SRC_ROOT)) {
       const text = await fs.readFile(file, "utf8")
-      if (!OPENTUI_RE.test(text)) continue
-      if (!file.startsWith(TUI_SRC + path.sep) && !OPENTUI_ALLOWED_OUTSIDE_TUI.has(file)) {
+      if (!TUI_RENDERER_RE.test(text)) continue
+      if (!file.startsWith(TUI_SRC + path.sep) && !TUI_ALLOWED_OUTSIDE_TUI.has(file)) {
         offenders.push(path.relative(SRC_ROOT, file))
       }
     }
@@ -74,7 +76,7 @@ describe("tui renderer replacement contract", () => {
     expect(offenders).toEqual([])
   })
 
-  test("keeps the opentui-spinner solid adapter isolated", async () => {
+  test("keeps the spinner Solid adapter isolated", async () => {
     const offenders: string[] = []
     const adapter = path.join(TUI_SRC, "component/spinner.tsx")
 
@@ -86,28 +88,23 @@ describe("tui renderer replacement contract", () => {
     expect(offenders).toEqual([])
   })
 
-  test("detects every opentui-spinner solid import form", () => {
-    // Bare specifier (legacy / upstream)
-    expect(SPINNER_SOLID_RE.test('import "opentui-spinner/solid"')).toBe(true)
-    expect(SPINNER_SOLID_RE.test('import spinner from "opentui-spinner/solid"')).toBe(true)
-    expect(SPINNER_SOLID_RE.test('import { spinner } from "opentui-spinner/solid"')).toBe(true)
-    // Scoped vendored specifier (actual form used in ax-code)
-    expect(SPINNER_SOLID_RE.test('import "@ax-code/opentui-spinner/solid"')).toBe(true)
-    expect(SPINNER_SOLID_RE.test("import '@ax-code/opentui-spinner/solid'")).toBe(true)
+  test("detects every supported spinner Solid import form", () => {
+    expect(SPINNER_SOLID_RE.test('import "@ax-code/tui/spinner/solid"')).toBe(true)
+    expect(SPINNER_SOLID_RE.test("import '@ax-code/tui/spinner/solid'")).toBe(true)
   })
 
-  test("keeps renderer-neutral planning helpers independent of OpenTUI", async () => {
+  test("keeps renderer-neutral planning helpers independent of AX Code TUI", async () => {
     const offenders: string[] = []
 
     for (const file of PURE_TUI_FILES) {
       const text = await fs.readFile(file, "utf8")
-      if (OPENTUI_RE.test(text)) offenders.push(path.relative(TUI_SRC, file))
+      if (TUI_RENDERER_RE.test(text)) offenders.push(path.relative(TUI_SRC, file))
     }
 
     expect(offenders).toEqual([])
   })
 
-  test("tracks long-term replacement criteria for phase 2 workloads", () => {
+  test("tracks long-term improvement criteria for phase 2 workloads", () => {
     expect(TUI_PERFORMANCE_CRITERIA.map((item) => item.id)).toEqual(
       expect.arrayContaining([
         "input.paste-echo",

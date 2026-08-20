@@ -10,8 +10,8 @@ import pkg from "../package.json"
 
 // Windows node-bundled distribution build. Uses esbuild (not Bun.build) so the
 // build toolchain runs under plain Node/tsx — no Bun. The node entry
-// (index-node.ts → boot-node) is the headless/diagnostic runtime; the full
-// OpenTUI TUI still ships via the Bun compiled binary until it runs under Node.
+// (index-node.ts → boot-node) is the headless/diagnostic runtime. The full
+// interactive AX Code TUI ships through build-node-tui.ts.
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)

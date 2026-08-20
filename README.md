@@ -194,7 +194,7 @@ AX Code is designed for agent work that touches real files, shells, sessions, an
 | One-shot automation          | `ax-code run "review the auth flow"` runs a bounded headless task                                            |
 | Local service / integrations | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                               |
 | TypeScript embedding         | `@ax-code/sdk` provides `createAgent()`, streaming events, sessions, custom tools, and tests                 |
-| VS Code                      | The VS Code integration uses the installed CLI/server while staying editor-native                            |
+| VS Code                      | The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=AutomatosX.ax-code-vscode) uses the installed CLI/server while staying editor-native                 |
 
 ## Current Capabilities
 
@@ -295,12 +295,13 @@ AX Code is maintained by [DEFAI Private Limited](https://github.com/defai-digita
 
 - [OpenCode](https://github.com/anomalyco/opencode): the AX Code CLI, runtime, session, provider, and tool foundations began as a DEFAI-maintained product built on the OpenCode codebase. See [NOTICE](NOTICE) for the root runtime attribution.
 - [OpenChamber](https://github.com/btriapitsyn/openchamber): AX Code Desktop includes code derived from OpenChamber, adapted for the AX Code Desktop product, packaging, settings, and runtime model. See [desktop/NOTICE](desktop/NOTICE) for the Desktop attribution.
+- [OpenTUI](https://github.com/anomalyco/opentui): the renderer snapshot underlying AX Code TUI began from OpenTUI's MIT-licensed work. AX Code owns the `@ax-code/tui` package, integration, patches, and release process.
 - [ax-cli](https://github.com/defai-digital/ax-cli): selected AX/CLI capabilities were ported from DEFAI's earlier ax-cli project. See [NOTICE](NOTICE) for the root attribution.
 
-These notices preserve license provenance and upstream credit. They do not mean the upstream OpenCode, OpenChamber, or ax-cli projects maintain AX Code, AX Code Desktop, or current DEFAI modifications.
+These notices preserve license provenance and upstream credit. They do not mean the upstream OpenCode, OpenChamber, OpenTUI, or ax-cli projects maintain AX Code, AX Code Desktop, or current DEFAI modifications.
 
 ## License
 
 AX Code is licensed under the [Apache License, Version 2.0](LICENSE) — Copyright (c) 2025 [DEFAI Private Limited](https://github.com/defai-digital).
 
-Portions derived from MIT-licensed projects (notably OpenCode) remain under the [MIT License](LICENSE-MIT), and the vendored OpenTUI packages under `packages/opentui-*` remain MIT-licensed under their own LICENSE files. See [NOTICE](NOTICE), [LICENSE-MIT](LICENSE-MIT), [desktop/NOTICE](desktop/NOTICE), and the provenance section above for upstream attribution.
+Portions derived from MIT-licensed projects (notably OpenCode) remain under the [MIT License](LICENSE-MIT). The AX Code TUI package at `packages/ax-code-tui` retains the MIT license and attribution of its upstream renderer lineage. See [NOTICE](NOTICE), [LICENSE-MIT](LICENSE-MIT), [desktop/NOTICE](desktop/NOTICE), and the provenance section above.
