@@ -43,6 +43,7 @@ export declare class SpinnerRenderable extends Renderable {
     private _encodeFrames;
     private _freeFrames;
     private _computeWidth;
+    private _replaceFrames;
     get interval(): number;
     set interval(value: number);
     get name(): SpinnerName | undefined;

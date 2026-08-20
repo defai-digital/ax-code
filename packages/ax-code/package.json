@@ -14,6 +14,7 @@
     "test:e2e": "tsx script/test-groups.ts e2e",
     "test:deterministic": "tsx script/test-groups.ts deterministic",
     "test:live": "tsx script/test-groups.ts live",
+    "test:opentui": "tsx script/test-groups.ts opentui",
     "test:ci": "tsx script/test-ci.ts",
     "test:risk": "tsx script/test-risk.ts",
     "check:skills": "tsx script/check-skills.ts",

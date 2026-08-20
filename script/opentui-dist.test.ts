@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { join } from "node:path"
-import { shouldCopyOpentuiDistPath } from "./opentui-dist"
+import { shouldCopyOpentuiDistPath, withoutOpentuiTransformDependencies } from "./opentui-dist"
 
 const root = "/tmp/opentui-core"
 
@@ -24,5 +24,25 @@ describe("script.opentui-dist", () => {
     expect(shouldCopyOpentuiDistPath(join(root, "index.bun.js"), root)).toBe(false)
     expect(shouldCopyOpentuiDistPath(join(root, "node_modules/solid-js/package.json"), root)).toBe(false)
     expect(shouldCopyOpentuiDistPath(join(root, "scripts/solid-transform.js"), root)).toBe(false)
+  })
+
+  test("drops only the public transform's dependencies from the precompiled CLI", () => {
+    expect(
+      withoutOpentuiTransformDependencies({
+        "@ax-code/opentui-core": "workspace:*",
+        "@babel/core": "7.29.6",
+        "@babel/preset-typescript": "7.27.1",
+        "babel-plugin-module-resolver": "5.0.2",
+        "babel-preset-solid": "1.9.12",
+        "babel-runtime-helper": "1.0.0",
+        entities: "7.0.1",
+        "s-js": "^0.4.9",
+      }),
+    ).toEqual({
+      "@ax-code/opentui-core": "workspace:*",
+      "babel-runtime-helper": "1.0.0",
+      entities: "7.0.1",
+      "s-js": "^0.4.9",
+    })
   })
 })

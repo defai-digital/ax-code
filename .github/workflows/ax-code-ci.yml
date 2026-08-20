@@ -10,6 +10,8 @@ on:
       - "turbo.json"
       - "packages/ax-code/**"
       - "packages/opentui-core/**"
+      - "packages/opentui-solid/**"
+      - "packages/opentui-spinner/**"
       - "crates/**"
       - "packages/sdk/**"
       - "packages/util/**"
@@ -29,6 +31,8 @@ on:
       - "turbo.json"
       - "packages/ax-code/**"
       - "packages/opentui-core/**"
+      - "packages/opentui-solid/**"
+      - "packages/opentui-spinner/**"
       - "crates/**"
       - "packages/sdk/**"
       - "packages/util/**"
@@ -109,6 +113,9 @@ jobs:
 
       - name: Test repository scripts
         run: pnpm run test:scripts
+
+      - name: Check OpenTUI packages
+        run: pnpm run check:opentui-packages
 
       - name: Build Plugin
         run: pnpm --dir packages/plugin run build

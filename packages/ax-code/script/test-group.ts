@@ -68,6 +68,23 @@ const recovery = new Set([
   "test/session/session-recovery.test.ts",
 ])
 
+// Focused, Node 24-safe coverage for the vendored OpenTUI package boundary.
+// Native source-mode rendering remains in `check:tui-snapshot` under Node 26.
+const opentui = new Set([
+  "test/cli/tui/opentui-ffi-coordinate-guard.test.ts",
+  "test/cli/tui/opentui-ffi-pointer-pin.test.ts",
+  "test/cli/tui/opentui-spinner-renderable.test.ts",
+  "test/cli/tui/opentui-spinner.test.ts",
+  "test/cli/tui/opentui-vendored-native-resolver.test.ts",
+  "test/cli/tui/render-anti-patterns.test.ts",
+  "test/script/build-deps.test.ts",
+  "test/script/check-tui-layering.test.ts",
+  "test/script/esbuild-solid-plugin.test.ts",
+  "test/script/opentui-package-integrity.test.ts",
+  "test/script/tui-startup-smoke.test.ts",
+  "test/script/workspace-metadata.test.ts",
+])
+
 // Heavy or timing-sensitive integration files that are intentionally excluded
 // from the default and deterministic groups. They are not part of the recovery
 // group either; run them directly when working on their subsystem.
@@ -97,6 +114,7 @@ export function pick(all: string[], name: string) {
   if (name === "live") return all.filter((file) => live.has(file))
   if (name === "e2e") return all.filter((file) => e2e.has(file))
   if (name === "recovery") return all.filter((file) => recovery.has(file))
+  if (name === "opentui") return all.filter((file) => opentui.has(file))
   if (name === "deterministic") return all.filter((file) => !live.has(file) && !e2e.has(file) && !quarantined.has(file))
   if (name === "unit")
     return all.filter((file) => !live.has(file) && !e2e.has(file) && !recovery.has(file) && !quarantined.has(file))
@@ -104,7 +122,7 @@ export function pick(all: string[], name: string) {
 }
 
 export function check(all: string[]) {
-  const known = defaultExcludedTests
+  const known = [...new Set([...defaultExcludedTests, ...opentui])]
   const miss = known.filter((file) => !all.includes(file))
   if (miss.length) throw new Error(`Missing grouped tests:\n${miss.join("\n")}`)
 }

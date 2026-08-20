@@ -10,6 +10,23 @@ import { relative } from "node:path"
 
 const DENY_PREFIXES = ["tests", "src", "scripts", "patches", "assets/zig", "lib/tree-sitter/assets"] as const
 
+const OPENTUI_TRANSFORM_DEPENDENCIES = new Set([
+  "@babel/core",
+  "@babel/preset-typescript",
+  "babel-plugin-module-resolver",
+  "babel-preset-solid",
+])
+
+/**
+ * Drop dependencies used exclusively by the public `opentui-solid/transform`
+ * entry from the precompiled CLI distribution. The package manifest keeps
+ * these as production dependencies so the exported transform remains usable
+ * when opentui-solid is consumed outside this workspace.
+ */
+export function withoutOpentuiTransformDependencies(deps?: Record<string, string>) {
+  return Object.fromEntries(Object.entries(deps ?? {}).filter(([name]) => !OPENTUI_TRANSFORM_DEPENDENCIES.has(name)))
+}
+
 const DENY_BASENAMES = new Set([
   "MAINTENANCE.md",
   "README.md",

@@ -72,10 +72,9 @@ describe("maxFrameDisplayWidth", () => {
   })
 
   test("uses the measurer, not UTF-16 code-unit length (wide glyphs)", () => {
-    // A wide glyph (e.g. emoji) has code-unit length 2 but display width 2;
-    // a measurer that returns 2 for it should win over a length-based metric.
-    const measure = (s: string) => (s === "😀" ? 2 : s.length)
-    expect(maxFrameDisplayWidth(["😀", "xx"], measure)).toBe(2)
+    // CJK `界` has one UTF-16 code unit but occupies two terminal columns.
+    const measure = (s: string) => (s === "界" ? 2 : s.length)
+    expect(maxFrameDisplayWidth(["界", "x"], measure)).toBe(2)
   })
 
   test("falls back to 0 when the measurer returns non-positive widths", () => {

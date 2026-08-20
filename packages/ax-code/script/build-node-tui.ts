@@ -11,7 +11,7 @@ import { solidEsbuildPlugin } from "./esbuild-solid-plugin"
 import { readText, writeText } from "./fs-compat"
 import { resolveLegacyNodeGypPython } from "./node-gyp-python"
 import { WINDOWS_UTF8_WARNING } from "./source-launcher"
-import { shouldCopyOpentuiDistPath } from "../../../script/opentui-dist"
+import { shouldCopyOpentuiDistPath, withoutOpentuiTransformDependencies } from "../../../script/opentui-dist"
 import pkg from "../package.json"
 
 // Full Node distribution build INCLUDING the interactive TUI. Bundles
@@ -335,7 +335,14 @@ const opentuiSpinnerPkg = JSON.parse(
   peerDependencies?: Record<string, string>
 }
 const distDeps: Record<string, string> = {
-  ...collectPackageRuntimeDependencies([opentuiCorePkg, opentuiSolidPkg, opentuiSpinnerPkg]),
+  ...collectPackageRuntimeDependencies([
+    opentuiCorePkg,
+    {
+      dependencies: withoutOpentuiTransformDependencies(opentuiSolidPkg.dependencies),
+      peerDependencies: opentuiSolidPkg.peerDependencies,
+    },
+    opentuiSpinnerPkg,
+  ]),
   "node-pty-prebuilt-multiarch": deps["node-pty-prebuilt-multiarch"],
   // .wasm files are kept external (esbuild) and resolved at runtime via
   // createRequire — ship the tree-sitter packages beside the bundle so the bash

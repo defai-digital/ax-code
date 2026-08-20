@@ -46,7 +46,7 @@ export class SpinnerRenderable extends Renderable {
   private _backgroundColor: ColorInput
   private _color: ColorInput | ColorGenerator
   private _currentFrameIndex = 0
-  private _encodedFrames: Record<string, EncodedHandle | null> = {}
+  private _encodedFrames = new Map<string, EncodedHandle>()
   private _lib = resolveRenderLib()
   private _intervalId: ReturnType<typeof setInterval> | null = null
 
@@ -96,30 +96,35 @@ export class SpinnerRenderable extends Renderable {
       // Dedupe repeated frame strings (e.g. the `flip` preset) — otherwise each
       // iteration allocates a fresh native handle that overwrites the previous
       // one without freeUnicode, leaking native memory.
-      if (this._encodedFrames[frame]) continue
+      if (this._encodedFrames.has(frame)) continue
       const encoded = this._lib.encodeUnicode(frame, this.ctx.widthMethod)
       if (encoded) {
-        this._encodedFrames[frame] = encoded
+        this._encodedFrames.set(frame, encoded)
       }
     }
   }
 
   private _freeFrames(): void {
-    for (const frame in this._encodedFrames) {
-      const encoded = this._encodedFrames[frame]
-      if (encoded) this._lib.freeUnicode(encoded)
-    }
-    this._encodedFrames = {}
+    for (const encoded of this._encodedFrames.values()) this._lib.freeUnicode(encoded)
+    this._encodedFrames.clear()
   }
 
   private _computeWidth(): number {
     return maxFrameDisplayWidth(this._frames, (frame) => {
-      const encoded = this._encodedFrames[frame]
+      const encoded = this._encodedFrames.get(frame)
       if (!encoded) return 0
       let width = 0
       for (const glyph of encoded.data) width += glyph.width
       return width
     })
+  }
+
+  private _replaceFrames(frames: readonly string[]): void {
+    this._freeFrames()
+    this._frames = [...frames]
+    this._currentFrameIndex = 0
+    this._encodeFrames()
+    this.width = this._computeWidth()
   }
 
   // --- Public API ---
@@ -144,18 +149,22 @@ export class SpinnerRenderable extends Renderable {
     if (value !== undefined) {
       const preset = getSpinnerPreset(value)
       if (!preset) return
-      this._freeFrames()
+      const wasRunning = this.running
+      if (wasRunning) this.stop()
       this._name = value
-      this._frames = [...preset.frames]
       this._interval = preset.interval
-    } else {
-      this._freeFrames()
-      this._name = undefined
-      this._frames = [...DEFAULT_FRAMES]
-      this._interval = DEFAULT_INTERVAL
+      this._replaceFrames(preset.frames)
+      if (wasRunning) this.start()
+      this.requestRender()
+      return
     }
-    this._encodeFrames()
-    this.width = this._computeWidth()
+
+    const wasRunning = this.running
+    if (wasRunning) this.stop()
+    this._name = undefined
+    this._interval = DEFAULT_INTERVAL
+    this._replaceFrames(DEFAULT_FRAMES)
+    if (wasRunning) this.start()
     this.requestRender()
   }
 
@@ -164,10 +173,8 @@ export class SpinnerRenderable extends Renderable {
   }
 
   set frames(value: string[]) {
-    this._freeFrames()
-    this._frames = value.length === 0 ? [...DEFAULT_FRAMES] : [...value]
-    this._encodeFrames()
-    this.width = this._computeWidth()
+    this._name = undefined
+    this._replaceFrames(value.length === 0 ? DEFAULT_FRAMES : value)
     this.requestRender()
   }
 
@@ -222,13 +229,13 @@ export class SpinnerRenderable extends Renderable {
 
   // --- Rendering ---
 
-  protected renderSelf(buffer: OptimizedBuffer): void {
+  protected override renderSelf(buffer: OptimizedBuffer): void {
     if (!this.visible) return
 
     const frame = this._frames[this._currentFrameIndex]
     if (!frame) return
 
-    const encoded = this._encodedFrames[frame]
+    const encoded = this._encodedFrames.get(frame)
     if (!encoded) return
 
     let x = this.x
@@ -243,7 +250,7 @@ export class SpinnerRenderable extends Renderable {
     }
   }
 
-  protected destroySelf(): void {
+  protected override destroySelf(): void {
     this.stop()
     this._freeFrames()
     super.destroySelf()

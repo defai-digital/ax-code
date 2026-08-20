@@ -1222,16 +1222,6 @@ importers:
       '@ax-code/opentui-core':
         specifier: workspace:*
         version: link:../opentui-core
-      entities:
-        specifier: 7.0.1
-        version: 7.0.1
-      s-js:
-        specifier: ^0.4.9
-        version: 0.4.9
-      solid-js:
-        specifier: 1.9.12
-        version: 1.9.12
-    devDependencies:
       '@babel/core':
         specifier: 7.29.6
         version: 7.29.6
@@ -1244,6 +1234,15 @@ importers:
       babel-preset-solid:
         specifier: 1.9.12
         version: 1.9.12(@babel/core@7.29.6)(solid-js@1.9.12)
+      entities:
+        specifier: 7.0.1
+        version: 7.0.1
+      s-js:
+        specifier: ^0.4.9
+        version: 0.4.9
+      solid-js:
+        specifier: 1.9.12
+        version: 1.9.12
 
   packages/opentui-spinner:
     dependencies:

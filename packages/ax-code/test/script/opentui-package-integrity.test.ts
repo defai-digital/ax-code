@@ -15,7 +15,7 @@ async function expectFileExists(file: string) {
 }
 
 describe("vendored OpenTUI package integrity", () => {
-  test("ax-code does not own Babel transform dependencies directly", async () => {
+  test("the public Solid transform owns its production dependency closure", async () => {
     const axCodePackage = await readJson("packages/ax-code/package.json")
     const solidPackage = await readJson("packages/opentui-solid/package.json")
 
@@ -23,13 +23,17 @@ describe("vendored OpenTUI package integrity", () => {
     expect(axCodePackage.devDependencies?.["@babel/core"]).toBeUndefined()
     expect(axCodePackage.devDependencies?.["@types/babel__core"]).toBeUndefined()
 
-    // Babel is build-time only for opentui-solid (used solely by
-    // scripts/solid-transform.js). It must live in devDependencies — never in
-    // the runtime dependency set — so release installs don't pull it.
+    const transformEntry = solidPackage.exports["./transform"].import as string
+    const transformSource = await readFile(path.join(repoRoot, "packages/opentui-solid", transformEntry), "utf8")
+
+    // `./transform` is a public package subpath. Its direct imports must remain
+    // installable for production consumers even though the precompiled AX Code
+    // distribution excludes this entry and strips these dependencies itself.
     const babelDeps = ["@babel/core", "@babel/preset-typescript", "babel-plugin-module-resolver", "babel-preset-solid"]
     for (const dep of babelDeps) {
-      expect(solidPackage.devDependencies?.[dep], `${dep} should be a devDependency`).toBeTypeOf("string")
-      expect(solidPackage.dependencies?.[dep], `${dep} should not be a runtime dependency`).toBeUndefined()
+      expect(transformSource, `transform entry should import ${dep}`).toContain(`from "${dep}"`)
+      expect(solidPackage.dependencies?.[dep], `${dep} should be a production dependency`).toBeTypeOf("string")
+      expect(solidPackage.devDependencies?.[dep], `${dep} should not be dev-only`).toBeUndefined()
       expect(solidPackage.peerDependencies?.[dep], `${dep} should not be a peer dependency`).toBeUndefined()
     }
 
