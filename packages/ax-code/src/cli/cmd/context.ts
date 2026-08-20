@@ -30,20 +30,44 @@ export const ContextCommand = cmd({
       }
 
       // Find target session
-      const targetID = args.sessionID ?? sessions[0]?.id
-      const session = sessions.find((s) => s.id === targetID)
+      let session: Session.Info | undefined
+      let messages: Awaited<ReturnType<typeof Session.messages>>
 
-      if (!session) {
-        prompts.log.error(`Session "${targetID}" not found`)
-        prompts.outro("Done")
-        return
+      if (args.sessionID) {
+        session = sessions.find((s) => s.id === args.sessionID)
+        if (!session) {
+          prompts.log.error(`Session "${args.sessionID}" not found`)
+          prompts.outro("Done")
+          return
+        }
+        messages = await Session.messages({ sessionID: session.id })
+      } else {
+        // Skip sessions that never produced a usable assistant response (e.g.
+        // failed or aborted runs) so the breakdown reflects a real model
+        // context instead of "unknown" (#402).
+        messages = []
+        for (const candidate of sessions) {
+          const candidateMessages = await Session.messages({ sessionID: candidate.id })
+          const usable = candidateMessages.some((msg) => {
+            if (msg.info.role !== "assistant") return false
+            const info = msg.info as MessageV2.Assistant
+            return Boolean(info.providerID && info.modelID)
+          })
+          if (usable) {
+            session = candidate
+            messages = candidateMessages
+            break
+          }
+        }
+        if (!session) {
+          prompts.log.warn("No session with model context found. Run a conversation first.")
+          prompts.outro("Done")
+          return
+        }
       }
 
       prompts.log.info(`Session: ${session.id}`)
       prompts.log.info(`Title: ${session.title || "untitled"}`)
-
-      // Get messages for this session
-      const messages = await Session.messages({ sessionID: session.id })
 
       let inputTokens = 0
       let outputTokens = 0
@@ -117,9 +141,9 @@ export const ContextCommand = cmd({
       console.log(`  Cached:     ${cachedTokens.toLocaleString()}`)
       console.log()
 
-      if (sessions.length > 1) {
+      if (sessions.length > 1 && !args.sessionID) {
         console.log(
-          `\n${dim}${sessions.length} total sessions. Showing latest. Use: ax-code context <sessionID>${reset}`,
+          `\n${dim}${sessions.length} total sessions. Showing most recent with model context. Use: ax-code context <sessionID>${reset}`,
         )
       }
 
