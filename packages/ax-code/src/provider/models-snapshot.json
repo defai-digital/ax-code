@@ -98775,8 +98775,7 @@
         "limit": {
           "context": 200000,
           "output": 128000
-        },
-        "status": "deprecated"
+        }
       },
       "minimax-m3-free": {
         "id": "minimax-m3-free",

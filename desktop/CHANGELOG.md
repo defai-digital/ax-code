@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.7.4] - 2026-08-20
+
+### Fixed
+
+- Harden release-critical edge cases.
+- Harden scheduled tasks against stringified params and edge cases.
+- Reconcile streamed text deltas against snapshots.
+- Surface provider fallback as a transcript notice (#394).
+- Survive canary failure and guard non-TTY login (#392, #393).
+- Scan project root when no source dir is detected (#404).
+- Validate run model before creating the session (#405).
+- Skip sessions without model context in ax-code context (#402).
+- Require confirmation or --force for session delete/prune (#403).
+- Annotate doctor native flags when addon is missing (#401).
+- Readable errors and non-zero exits for command failures (#398, #399, #400).
+
 ## [7.7.3] - 2026-08-19
 
 ### Fixed
