@@ -1222,6 +1222,16 @@ importers:
       '@ax-code/opentui-core':
         specifier: workspace:*
         version: link:../opentui-core
+      entities:
+        specifier: 7.0.1
+        version: 7.0.1
+      s-js:
+        specifier: ^0.4.9
+        version: 0.4.9
+      solid-js:
+        specifier: 1.9.12
+        version: 1.9.12
+    devDependencies:
       '@babel/core':
         specifier: 7.29.6
         version: 7.29.6
@@ -1234,15 +1244,6 @@ importers:
       babel-preset-solid:
         specifier: 1.9.12
         version: 1.9.12(@babel/core@7.29.6)(solid-js@1.9.12)
-      entities:
-        specifier: 7.0.1
-        version: 7.0.1
-      s-js:
-        specifier: ^0.4.9
-        version: 0.4.9
-      solid-js:
-        specifier: 1.9.12
-        version: 1.9.12
 
   packages/opentui-spinner:
     dependencies:
@@ -1252,6 +1253,13 @@ importers:
       '@ax-code/opentui-solid':
         specifier: workspace:*
         version: link:../opentui-solid
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
 
   packages/plugin:
     dependencies:
@@ -9828,6 +9836,7 @@ snapshots:
       '@ai-sdk/provider': 3.0.8
       '@ai-sdk/provider-utils': 4.0.22(zod@4.3.6)
       zod: 4.3.6
+    optional: true
 
   '@alloc/quick-lru@5.2.0': {}
 

@@ -19,14 +19,29 @@ describe("vendored OpenTUI package integrity", () => {
     const axCodePackage = await readJson("packages/ax-code/package.json")
     const solidPackage = await readJson("packages/opentui-solid/package.json")
 
+    // ax-code itself must not declare the Solid transform's Babel toolchain.
     expect(axCodePackage.devDependencies?.["@babel/core"]).toBeUndefined()
     expect(axCodePackage.devDependencies?.["@types/babel__core"]).toBeUndefined()
-    expect(solidPackage.dependencies).toMatchObject({
-      "@babel/core": expect.any(String),
-      "@babel/preset-typescript": expect.any(String),
-      "babel-plugin-module-resolver": expect.any(String),
-      "babel-preset-solid": expect.any(String),
-    })
+
+    // Babel is build-time only for opentui-solid (used solely by
+    // scripts/solid-transform.js). It must live in devDependencies — never in
+    // the runtime dependency set — so release installs don't pull it.
+    const babelDeps = ["@babel/core", "@babel/preset-typescript", "babel-plugin-module-resolver", "babel-preset-solid"]
+    for (const dep of babelDeps) {
+      expect(solidPackage.devDependencies?.[dep], `${dep} should be a devDependency`).toBeTypeOf("string")
+      expect(solidPackage.dependencies?.[dep], `${dep} should not be a runtime dependency`).toBeUndefined()
+      expect(solidPackage.peerDependencies?.[dep], `${dep} should not be a peer dependency`).toBeUndefined()
+    }
+
+    // Runtime entry points must stay free of Babel imports — the transform is
+    // the only build-time consumer.
+    const runtimeEntries = ["index.js", "index.bun.js", "components.js", "jsx-runtime.js"]
+    for (const entry of runtimeEntries) {
+      const text = await readFile(path.join(repoRoot, "packages/opentui-solid", entry), "utf8")
+      expect(text, `${entry} must not import Babel`).not.toMatch(
+        /@babel\/|babel-preset-solid|babel-plugin-module-resolver/,
+      )
+    }
   })
 
   test("OpenTUI package exports point at files shipped in the workspace", async () => {
