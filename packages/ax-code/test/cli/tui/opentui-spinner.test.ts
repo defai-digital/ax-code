@@ -1,15 +1,12 @@
 import { describe, expect, test } from "vitest"
-import {
-  getSpinnerPreset,
-  getSpinnerNames,
-  randomSpinner,
-} from "../../../../opentui-spinner/src/presets"
+import { getSpinnerPreset, getSpinnerNames, randomSpinner } from "../../../../opentui-spinner/src/presets"
 import presets from "../../../../opentui-spinner/src/presets"
 import {
   createStatic,
   createPulse,
   createWave,
   createRainbow,
+  maxFrameDisplayWidth,
 } from "../../../../opentui-spinner/src/utils"
 
 // ---------------------------------------------------------------------------
@@ -41,7 +38,7 @@ describe("opentui-spinner presets", () => {
   })
 
   test("getSpinnerPreset returns undefined for unknown names", () => {
-    expect(getSpinnerPreset("nonexistent" as any)).toBeUndefined()
+    expect(getSpinnerPreset("nonexistent")).toBeUndefined()
   })
 
   test("randomSpinner returns a valid preset", () => {
@@ -58,6 +55,31 @@ describe("opentui-spinner presets", () => {
     for (const expected of ["dots", "line", "arc", "bouncingBar", "aesthetic"]) {
       expect(names).toContain(expected)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Display-width measurement
+// ---------------------------------------------------------------------------
+
+describe("maxFrameDisplayWidth", () => {
+  test("returns 0 for an empty frame list", () => {
+    expect(maxFrameDisplayWidth([], (s) => s.length)).toBe(0)
+  })
+
+  test("returns the maximum measured width across frames", () => {
+    expect(maxFrameDisplayWidth(["a", "abc", "ab"], (s) => s.length)).toBe(3)
+  })
+
+  test("uses the measurer, not UTF-16 code-unit length (wide glyphs)", () => {
+    // A wide glyph (e.g. emoji) has code-unit length 2 but display width 2;
+    // a measurer that returns 2 for it should win over a length-based metric.
+    const measure = (s: string) => (s === "😀" ? 2 : s.length)
+    expect(maxFrameDisplayWidth(["😀", "xx"], measure)).toBe(2)
+  })
+
+  test("falls back to 0 when the measurer returns non-positive widths", () => {
+    expect(maxFrameDisplayWidth(["", "x"], () => 0)).toBe(0)
   })
 })
 

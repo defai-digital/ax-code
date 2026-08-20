@@ -1,10 +1,16 @@
 import { Renderable, parseColor, resolveRenderLib } from "@ax-code/opentui-core"
-import type { ColorInput, LayoutOptions, OptimizedBuffer, RenderContext, RenderableOptions } from "@ax-code/opentui-core"
+import type {
+  ColorInput,
+  LayoutOptions,
+  OptimizedBuffer,
+  RenderContext,
+  RenderableOptions,
+} from "@ax-code/opentui-core"
 import presets, { type SpinnerName, getSpinnerPreset } from "./presets.js"
-import type { ColorGenerator } from "./utils.js"
+import { maxFrameDisplayWidth, type ColorGenerator } from "./utils.js"
 
 export type { ColorGenerator } from "./utils.js"
-export { createPulse, createWave, createStatic, createRainbow } from "./utils.js"
+export { createPulse, createWave, createStatic, createRainbow, maxFrameDisplayWidth } from "./utils.js"
 export { type SpinnerName, type SpinnerPreset, getSpinnerPreset, getSpinnerNames, randomSpinner } from "./presets.js"
 
 // Re-export preset map for advanced use (e.g. custom iteration)
@@ -77,9 +83,9 @@ export class SpinnerRenderable extends Renderable {
     this._autoplay = options.autoplay ?? true
     this._backgroundColor = options.backgroundColor ?? "transparent"
     this._color = options.color ?? "white"
+    this._encodeFrames()
     this.width = this._computeWidth()
     this.height = 1
-    this._encodeFrames()
     if (this._autoplay) this.start()
   }
 
@@ -103,11 +109,13 @@ export class SpinnerRenderable extends Renderable {
   }
 
   private _computeWidth(): number {
-    let max = 0
-    for (const frame of this._frames) {
-      if (frame.length > max) max = frame.length
-    }
-    return max
+    return maxFrameDisplayWidth(this._frames, (frame) => {
+      const encoded = this._encodedFrames[frame]
+      if (!encoded) return 0
+      let width = 0
+      for (const glyph of encoded.data) width += glyph.width
+      return width
+    })
   }
 
   // --- Public API ---

@@ -18,6 +18,23 @@ export type ColorGenerator = (
 ) => ColorInput
 
 /**
+ * Maximum display width across a set of frames, using a per-frame measurer.
+ *
+ * The renderer measures glyph display width through the native
+ * `encodeUnicode` path; summing `frame.length` (UTF-16 code units) would
+ * under-count wide/emoji glyphs. Keep this computation in a pure helper so it
+ * is unit-testable without loading the native render library.
+ */
+export function maxFrameDisplayWidth(frames: readonly string[], measure: (frame: string) => number): number {
+  let max = 0
+  for (const frame of frames) {
+    const width = measure(frame)
+    if (width > max) max = width
+  }
+  return max
+}
+
+/**
  * Creates a static color generator that always returns the same color.
  */
 export function createStatic(color: ColorInput): ColorGenerator {

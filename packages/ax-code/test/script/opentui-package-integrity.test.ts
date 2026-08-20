@@ -52,8 +52,8 @@ describe("vendored OpenTUI package integrity", () => {
     })
     expect(spinnerPackage.exports["./solid"]).toMatchObject({
       import: {
-        types: "./dist/solid.d.mts",
-        default: "./dist/solid.mjs",
+        types: "./dist/solid.d.ts",
+        default: "./dist/solid.js",
       },
     })
 
@@ -66,9 +66,10 @@ describe("vendored OpenTUI package integrity", () => {
       expectFileExists("packages/opentui-core/runtime-plugin.node.js"),
       expectFileExists("packages/opentui-core/runtime-plugin-support-configure.js"),
       expectFileExists("packages/opentui-core/runtime-plugin-support-configure.node.js"),
-      expectFileExists("packages/opentui-spinner/dist/index.mjs"),
-      expectFileExists("packages/opentui-spinner/dist/solid.mjs"),
-      expectFileExists("packages/opentui-spinner/dist/solid.d.mts"),
+      expectFileExists("packages/opentui-spinner/dist/index.js"),
+      expectFileExists("packages/opentui-spinner/dist/index.d.ts"),
+      expectFileExists("packages/opentui-spinner/dist/solid.js"),
+      expectFileExists("packages/opentui-spinner/dist/solid.d.ts"),
     ])
   })
 

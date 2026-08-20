@@ -1,4 +1,3 @@
-import { SpinnerRenderable } from "./index.mjs";
+import { SpinnerRenderable } from "./index.js";
 import { extend } from "@ax-code/opentui-solid";
-
 extend({ spinner: SpinnerRenderable });

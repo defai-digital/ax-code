@@ -59446,6 +59446,127 @@
       }
     }
   },
+  "llmgateway-providers": {
+    "id": "llmgateway-providers",
+    "env": [
+      "LLMGATEWAY_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "https://api.llmgateway.io/v1",
+    "name": "LLM Gateway",
+    "doc": "https://llmgateway.io/docs",
+    "models": {
+      "anthropic/claude-opus-4-8": {
+        "id": "anthropic/claude-opus-4-8",
+        "name": "Claude Opus 4.8 (Anthropic)",
+        "description": "Top Claude Opus tier for the hardest reasoning, coding, and long-horizon agents",
+        "family": "claude-opus",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-01",
+        "release_date": "2026-05-28",
+        "last_updated": "2026-05-28",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
+      },
+      "anthropic/claude-sonnet-5": {
+        "id": "anthropic/claude-sonnet-5",
+        "name": "Claude Sonnet 5 (Anthropic)",
+        "description": "Everyday Claude agent model for coding, planning, browsing, and general work",
+        "family": "claude-sonnet",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-06-30",
+        "last_updated": "2026-06-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
+      },
+      "perplexity/sonar-pro": {
+        "id": "perplexity/sonar-pro",
+        "name": "Sonar Pro (Perplexity)",
+        "description": "Deeper Sonar search model with broader retrieval and stronger synthesis",
+        "family": "sonar-pro",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-09-01",
+        "release_date": "2024-01-01",
+        "last_updated": "2025-09-01",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 200000,
+          "output": 8192
+        }
+      }
+    }
+  },
   "vivgrid": {
     "id": "vivgrid",
     "env": [
@@ -99822,6 +99943,46 @@
         },
         "provider": {
           "npm": "@ai-sdk/openai"
+        }
+      },
+      "x-preview-f-free": {
+        "id": "x-preview-f-free",
+        "name": "Ox Alpha Free",
+        "description": "Stealth reasoning model for coding, agentic tasks, and tool use",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-21",
+        "last_updated": "2026-08-21",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
         }
       },
       "gpt-5.2": {
@@ -142624,7 +142785,7 @@
     ],
     "npm": "@ai-sdk/openai-compatible",
     "api": "https://api.llmgateway.io/v1",
-    "name": "LLM Gateway",
+    "name": "DevPass (LLM Gateway)",
     "doc": "https://llmgateway.io/docs",
     "models": {
       "claude-opus-4-7": {
@@ -162816,6 +162977,32 @@
         "limit": {
           "context": 262144,
           "output": 262144
+        }
+      },
+      "mistralai/ministral-8b": {
+        "id": "mistralai/ministral-8b",
+        "name": "Mistral: Ministral 8B",
+        "description": "Ministral 8B is an 8B parameter model featuring a unique interleaved sliding-window attention pattern for faster, memory-efficient inference. Designed for edge use cases, it supports up to 128k context length...",
+        "family": "ministral",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2024-10-17",
+        "last_updated": "2024-10-17",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 128000,
+          "output": 128000
         }
       },
       "mistralai/mistral-small-2603": {

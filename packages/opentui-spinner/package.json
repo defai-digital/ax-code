@@ -4,20 +4,20 @@
   "description": "Vendored fork of @opentui/spinner — animated spinner renderable for terminal UIs. Independently maintained in the ax-code workspace.",
   "license": "MIT",
   "type": "module",
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": {
-        "types": "./dist/index.d.mts",
-        "default": "./dist/index.mjs"
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
       }
     },
     "./solid": {
       "import": {
-        "types": "./dist/solid.d.mts",
-        "default": "./dist/solid.mjs"
+        "types": "./dist/solid.d.ts",
+        "default": "./dist/solid.js"
       }
     }
   },
@@ -25,8 +25,16 @@
     "dist",
     "src"
   ],
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json"
+  },
   "dependencies": {
     "@ax-code/opentui-core": "workspace:*",
     "@ax-code/opentui-solid": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
   }
 }

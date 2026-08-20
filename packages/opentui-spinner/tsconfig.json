@@ -2,18 +2,15 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "moduleDetection": "auto",
-    "declaration": true,
-    "declarationDir": "./dist",
-    "outDir": "./dist",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "moduleDetection": "force",
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
-    "types": []
+    "types": ["node"]
   },
   "include": ["src"]
 }

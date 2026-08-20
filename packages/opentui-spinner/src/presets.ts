@@ -23,9 +23,7 @@ const presets = {
   },
   dots5: {
     interval: 80,
-    frames: [
-      "⠋", "⠙", "⠚", "⠒", "⠂", "⠂", "⠒", "⠲", "⠴", "⠦", "⠖", "⠒", "⠐", "⠐", "⠒", "⠓", "⠋",
-    ],
+    frames: ["⠋", "⠙", "⠚", "⠒", "⠂", "⠂", "⠒", "⠲", "⠴", "⠦", "⠖", "⠒", "⠐", "⠐", "⠒", "⠓", "⠋"],
   },
   dots9: { interval: 80, frames: ["⢹", "⢺", "⢼", "⣸", "⣇", "⡧", "⡗", "⡏"] },
   dots10: { interval: 80, frames: ["⢄", "⢂", "⢁", "⡁", "⡈", "⡐", "⡠"] },
@@ -103,16 +101,7 @@ const presets = {
   },
   aesthetic: {
     interval: 80,
-    frames: [
-      "▰▱▱▱▱▱▱",
-      "▰▰▱▱▱▱▱",
-      "▰▰▰▱▱▱▱",
-      "▰▰▰▰▱▱▱",
-      "▰▰▰▰▰▱▱",
-      "▰▰▰▰▰▰▱",
-      "▰▰▰▰▰▰▰",
-      "▰▱▱▱▱▱▱",
-    ],
+    frames: ["▰▱▱▱▱▱▱", "▰▰▱▱▱▱▱", "▰▰▰▱▱▱▱", "▰▰▰▰▱▱▱", "▰▰▰▰▰▱▱", "▰▰▰▰▰▰▱", "▰▰▰▰▰▰▰", "▰▱▱▱▱▱▱"],
   },
 } as const satisfies Record<string, SpinnerPreset>
 
@@ -120,9 +109,13 @@ export type SpinnerName = keyof typeof presets
 
 /**
  * Returns the preset for the given spinner name, or `undefined` if not found.
+ *
+ * The parameter is a plain `string` (not `SpinnerName`) so callers can probe
+ * arbitrary names at runtime and receive `undefined` for unknown values,
+ * matching the constructor's validation path.
  */
-export function getSpinnerPreset(name: SpinnerName): SpinnerPreset | undefined {
-  return presets[name]
+export function getSpinnerPreset(name: string): SpinnerPreset | undefined {
+  return presets[name as SpinnerName]
 }
 
 /**
