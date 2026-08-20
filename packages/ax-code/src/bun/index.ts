@@ -1,4 +1,5 @@
 import z from "zod"
+import semver from "semver"
 import { Global } from "../global"
 import { Log } from "../util/log"
 import { Env } from "../util/env"
@@ -169,6 +170,15 @@ export namespace BunProc {
       // continue to install
     } else if (version !== "latest" && cachedVersion === version) {
       return mod
+    } else if (version !== "latest" && semver.valid(cachedVersion) && semver.validRange(version)) {
+      // Range pin (e.g. the provider SDK compatibility ranges in
+      // provider/sdk-compat.ts): reuse the cached install only when the
+      // concrete cached version satisfies the requested range. A cached
+      // version outside the range — typically installed via "latest" before
+      // the range existed — is incompatible with the bundled ai major and
+      // must be reinstalled (poisoned-cache recovery).
+      if (semver.satisfies(cachedVersion, version)) return mod
+      log.info("cached version outside allowed range, reinstalling", { pkg, cachedVersion, range: version })
     } else if (version === "latest") {
       // Only hit the npm registry (PackageRegistry.isOutdated → `bun info`, a
       // network round-trip serialized behind this install lock) once per TTL
@@ -221,10 +231,12 @@ export namespace BunProc {
       }).catch(onInstallFailed)
     }
 
-    // Resolve actual version from installed package when using "latest"
-    // This ensures subsequent starts use the cached version until explicitly updated
+    // Resolve the actual version from the installed package for non-exact
+    // specifiers ("latest" or a range like "^3.0.0"). This ensures subsequent
+    // starts compare the concrete cached version against the requested
+    // pin/range until explicitly updated.
     let resolvedVersion = version
-    if (version === "latest") {
+    if (version === "latest" || !semver.valid(version)) {
       const installedPkg = await Filesystem.readJson<{ version?: string }>(path.join(mod, "package.json")).catch(
         () => null,
       )

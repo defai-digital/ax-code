@@ -49,6 +49,7 @@ import { isRetiredProviderID } from "./retired-providers"
 import { isGenericCliFallbackModel } from "./cli/ids"
 import { latestAnthropicFamilyModels } from "./anthropic-families"
 import { isHiddenDeepseekLegacySku } from "./deepseek-catalog"
+import { ProviderSdkCompat } from "./sdk-compat"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -960,8 +961,12 @@ export namespace Provider {
             // Wrap install in a hard timeout; without it, a hung npm
             // registry stalls the session indefinitely. The surrounding
             // withTimeout below only wraps the post-install `import()`.
+            // Install with a compatibility range (not "latest") so an
+            // upstream major bump cannot poison the cached SDK for this
+            // bundled ai major; BunProc.install reinstalls when the cached
+            // version falls outside the range.
             installedPath = await withTimeout(
-              BunProc.install(model.api.npm, "latest"),
+              BunProc.install(model.api.npm, ProviderSdkCompat.installVersion(model.api.npm)),
               PROVIDER_INSTALL_TIMEOUT_MS,
               `installing provider package timed out: ${model.api.npm}`,
             )
