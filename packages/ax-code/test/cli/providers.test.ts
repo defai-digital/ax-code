@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import * as prompts from "@clack/prompts"
 import fs from "fs/promises"
 import path from "path"
@@ -23,8 +23,17 @@ import { AX_ENGINE_QUANTIZATION_IDS } from "../../src/provider/ax-engine"
 const originalCwd = process.cwd()
 const authFile = path.join(Global.Path.data, "auth.json")
 const authLockFile = `${authFile}.lock`
+const stdin = process.stdin as typeof process.stdin & { isTTY?: boolean }
+const originalIsTTY = stdin.isTTY
+
+beforeEach(() => {
+  // The login handler refuses to run without a TTY (#393); prompt-mocking
+  // tests simulate an interactive session instead.
+  stdin.isTTY = true
+})
 
 afterEach(async () => {
+  stdin.isTTY = originalIsTTY
   process.chdir(originalCwd)
   await fs.writeFile(authFile, "{}")
   await fs.unlink(authLockFile).catch(() => undefined)
@@ -117,6 +126,47 @@ describe("providers command", () => {
     }
   })
 
+  test("providers list warns about credentials that fail to decrypt", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const infoSpy = vi.spyOn(prompts.log, "info").mockImplementation(() => {})
+    const warnSpy = vi.spyOn(prompts.log, "warn").mockImplementation(() => {})
+
+    try {
+      await Auth.set("google", { type: "api", key: "sk-test" })
+      // A well-formed EncryptedValue whose ciphertext cannot decrypt with any
+      // derivable key. The entry stays in auth.json but is dropped from
+      // Auth.all() — list must surface it instead of hiding it (#392).
+      const data = JSON.parse(await fs.readFile(authFile, "utf-8"))
+      data["stale-provider"] = {
+        type: "api",
+        key: {
+          encrypted: Buffer.alloc(24).toString("base64"),
+          iv: Buffer.alloc(16).toString("base64"),
+          salt: Buffer.alloc(32).toString("base64"),
+          tag: Buffer.alloc(16).toString("base64"),
+          version: 2,
+        },
+      }
+      await fs.writeFile(authFile, JSON.stringify(data))
+
+      await ProvidersListCommand.handler({} as any)
+
+      expect(
+        warnSpy.mock.calls.some(([message]) => {
+          const text = String(message)
+          return text.includes("stale-provider") && text.includes("undecryptable")
+        }),
+      ).toBe(true)
+      expect(outroSpy).toHaveBeenCalledWith("1 credentials")
+    } finally {
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      infoSpy.mockRestore()
+      warnSpy.mockRestore()
+    }
+  })
+
   test("providers list labels CLI credentials as cli", async () => {
     const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
     const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
@@ -202,6 +252,33 @@ describe("providers command", () => {
       outroSpy.mockRestore()
       selectSpy.mockRestore()
       invalidateSpy.mockRestore()
+    }
+  })
+
+  test("providers login fails fast in non-interactive mode", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
+    const passwordSpy = vi.spyOn(prompts, "password")
+    const autocompleteSpy = vi.spyOn(prompts, "autocomplete")
+
+    try {
+      // Piped stdin: prompts would never settle and the process would die
+      // with "unsettled top-level await" (#393) — the handler must bail out
+      // before reaching any prompt, even when --provider skips the pickers.
+      stdin.isTTY = false
+      await ProvidersLoginCommand.handler({ provider: "google" } as any)
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Login requires an interactive terminal; cannot prompt for credentials in non-interactive mode.",
+      )
+      expect(passwordSpy).not.toHaveBeenCalled()
+      expect(autocompleteSpy).not.toHaveBeenCalled()
+      expect(await Auth.get("google")).toBeUndefined()
+    } finally {
+      introSpy.mockRestore()
+      errorSpy.mockRestore()
+      passwordSpy.mockRestore()
+      autocompleteSpy.mockRestore()
     }
   })
 

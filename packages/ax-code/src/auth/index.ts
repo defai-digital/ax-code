@@ -310,24 +310,25 @@ export namespace Auth {
       throw authError("Failed to read auth data", cause)
     }
 
-    // Fast-path: if a canary exists and fails verification, the crypto
-    // runtime changed (e.g. compiled binary ↔ bun source upgrade).
-    // All encrypted keys are unrecoverable — skip per-key decryption
-    // attempts and tell the user which providers need re-entry.
-    if (data.__canary && !verifyCanary(data.__canary)) {
-      const stale = Object.keys(data).filter((k) => k !== "__canary")
-      lastDecryptionFailures = stale
-      if (stale.length) {
+    // A canary that fails verification usually means the crypto runtime
+    // changed (e.g. compiled binary ↔ bun source upgrade) — but a corrupt or
+    // partially-written canary fails the same check, and treating that as a
+    // runtime change would mask every stored credential (#392). Fall through
+    // to per-entry decryption: entries that genuinely fail are dropped and
+    // recorded below; intact entries stay usable. The invalid canary is
+    // rewritten during migration so later reads can trust it again.
+    const canaryValid = data.__canary ? verifyCanary(data.__canary) : false
+    if (data.__canary && !canaryValid) {
+      const atRisk = Object.keys(data).filter((k) => k !== "__canary")
+      if (atRisk.length) {
         log.warn(
-          `encryption runtime changed — ${stale.length} provider key(s) need re-entry: ${stale.join(", ")}. ` +
-            `Run "ax-code providers" to reconnect.`,
+          `encryption canary failed verification — attempting per-key decryption for ${atRisk.length} provider key(s): ${atRisk.join(", ")}. ` +
+            `Run "ax-code providers" to re-enter any that fail.`,
         )
       }
-      return {}
     }
 
     let migrate = false
-    const canaryMissing = !data.__canary
     const { __canary: _, ...providerData } = data
     const entries: Record<string, Info> = {}
     const decryptedByKey = new Map<string, unknown>()
@@ -366,9 +367,9 @@ export namespace Auth {
       )
     }
 
-    if (migrate || canaryMissing) {
+    if (migrate || !canaryValid) {
       // Re-encrypt legacy entries with proper 32-byte salt,
-      // and write a canary so future upgrades can detect
+      // and (re)write a canary so future upgrades can detect
       // crypto runtime changes without attempting decryption.
       //
       // Preserve the original on-disk values first so providers that

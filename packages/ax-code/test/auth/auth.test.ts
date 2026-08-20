@@ -2,6 +2,7 @@ import path from "path"
 import { afterEach, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import { Auth } from "../../src/auth"
+import { verifyCanary } from "../../src/auth/encryption"
 import { Global } from "../../src/global"
 import { currentLockHost } from "../../src/util/process-lock"
 import { Filesystem } from "../../src/util/filesystem"
@@ -144,6 +145,57 @@ test("canary migration preserves entries that fail to decode instead of erasing 
   expect(onDisk.__canary).toBeDefined()
   expect(onDisk.anthropic).toBeDefined()
   expect(onDisk.broken).toBeDefined()
+})
+
+test("canary verification failure falls through to per-key decryption", async () => {
+  await Auth.set("anthropic", { type: "api", key: "sk-test" })
+  await Auth.set("openai", { type: "api", key: "sk-other" })
+
+  // Corrupt the canary on disk (e.g. a partial write during an upgrade)
+  // without touching the credentials themselves. A poisoned canary must not
+  // mask entries that still decrypt fine (#392).
+  const data = JSON.parse(await fs.readFile(file, "utf-8"))
+  data.__canary = "corrupt"
+  await fs.writeFile(file, JSON.stringify(data))
+
+  const result = await Auth.all()
+  expect(result["anthropic"]).toMatchObject({ type: "api", key: "sk-test" })
+  expect(result["openai"]).toMatchObject({ type: "api", key: "sk-other" })
+  expect(await Auth.decryptionFailures()).toEqual([])
+
+  // The invalid canary is rewritten during migration so later reads trust it.
+  const onDisk = JSON.parse(await fs.readFile(file, "utf-8"))
+  expect(onDisk.__canary).not.toBe("corrupt")
+  expect(verifyCanary(onDisk.__canary)).toBe(true)
+})
+
+test("canary failure still records entries that genuinely fail decryption", async () => {
+  await Auth.set("anthropic", { type: "api", key: "sk-test" })
+
+  const data = JSON.parse(await fs.readFile(file, "utf-8"))
+  data.__canary = "corrupt"
+  // A well-formed EncryptedValue whose ciphertext cannot decrypt with any
+  // derivable key — the shape a real crypto-runtime change would produce.
+  data["stale"] = {
+    type: "api",
+    key: {
+      encrypted: Buffer.alloc(24).toString("base64"),
+      iv: Buffer.alloc(16).toString("base64"),
+      salt: Buffer.alloc(32).toString("base64"),
+      tag: Buffer.alloc(16).toString("base64"),
+      version: 2,
+    },
+  }
+  await fs.writeFile(file, JSON.stringify(data))
+
+  const result = await Auth.all()
+  expect(result["anthropic"]).toMatchObject({ type: "api", key: "sk-test" })
+  expect(result["stale"]).toBeUndefined()
+  expect(await Auth.decryptionFailures()).toEqual(["stale"])
+
+  // The undecryptable entry is preserved on disk for potential recovery.
+  const onDisk = JSON.parse(await fs.readFile(file, "utf-8"))
+  expect(onDisk["stale"]).toBeDefined()
 })
 
 test("set steals an abandoned auth lock owned by a dead process", async () => {

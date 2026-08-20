@@ -458,6 +458,14 @@ export const ProvidersListCommand = cmd({
       prompts.log.info(`${name} ${UI.Style.TEXT_DIM}${type}${disabled}`)
     }
 
+    // Auth.all() drops entries whose keys no longer decrypt; surface them so a
+    // bare "0 credentials" doesn't hide credentials that need re-entry (#392).
+    const undecryptable = (await Auth.decryptionFailures()).filter((id) => !results.some(([key]) => key === id))
+    for (const providerID of undecryptable) {
+      const name = database[providerID]?.name || providerID
+      prompts.log.warn(`${name} ${UI.Style.TEXT_DIM}(undecryptable — \`providers login ${providerID}\` to re-enter)`)
+    }
+
     prompts.outro(`${results.length} credentials`)
 
     const activeEnvVars: Array<{ provider: string; envVar: string }> = []
@@ -513,6 +521,18 @@ export const ProvidersLoginCommand = cmd({
     const { map, pipe, sortBy, values } = await import("remeda")
     UI.empty()
     prompts.intro("Add credential")
+
+    // Every path below ends in an interactive prompt (provider/method picker
+    // or API key entry) — even with --provider/--method the key prompt still
+    // needs a real TTY. With piped stdin the prompt never settles and the
+    // process dies with "unsettled top-level await" (#393), so fail fast like
+    // the sibling logout/disable/enable commands.
+    if (!process.stdin.isTTY) {
+      prompts.log.error(
+        "Login requires an interactive terminal; cannot prompt for credentials in non-interactive mode.",
+      )
+      return
+    }
 
     // Fast path: positional arg used as provider name (not a URL)
     const directProvider = args.url && !isHttpProviderUrl(args.url) ? args.url : undefined
