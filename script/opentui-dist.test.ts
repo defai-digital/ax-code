@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { join } from "node:path"
-import { shouldCopyOpentuiDistPath, withoutOpentuiBuildOnlyDependencies } from "./opentui-dist"
+import { shouldCopyOpentuiDistPath } from "./opentui-dist"
 
 const root = "/tmp/opentui-core"
 
@@ -24,21 +24,5 @@ describe("script.opentui-dist", () => {
     expect(shouldCopyOpentuiDistPath(join(root, "index.bun.js"), root)).toBe(false)
     expect(shouldCopyOpentuiDistPath(join(root, "node_modules/solid-js/package.json"), root)).toBe(false)
     expect(shouldCopyOpentuiDistPath(join(root, "scripts/solid-transform.js"), root)).toBe(false)
-  })
-
-  test("strips Babel transform packages from the shipping dependency set", () => {
-    expect(
-      withoutOpentuiBuildOnlyDependencies({
-        "@ax-code/opentui-core": "workspace:*",
-        "@babel/core": "7.29.6",
-        "babel-preset-solid": "1.9.12",
-        entities: "7.0.1",
-        "s-js": "^0.4.9",
-      }),
-    ).toEqual({
-      "@ax-code/opentui-core": "workspace:*",
-      entities: "7.0.1",
-      "s-js": "^0.4.9",
-    })
   })
 })

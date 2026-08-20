@@ -118,7 +118,11 @@ describe("tui OpenTUI stability guardrails", () => {
     const build = await fs.readFile(BUILD_NODE_TUI_SRC, "utf8")
 
     expect(build).toContain("shouldCopyOpentuiDistPath")
-    expect(build).toContain("withoutOpentuiBuildOnlyDependencies")
+    // Babel transform deps now live in opentui-solid devDependencies, so the
+    // release build must collect runtime deps centrally (dependencies +
+    // peerDependencies only) with no Babel special-case stripping.
+    expect(build).toContain("collectPackageRuntimeDependencies")
+    expect(build).not.toContain("withoutOpentuiBuildOnlyDependencies")
     expect(build).toContain('spawnSync("npm", args')
     expect(build).toContain('shell: process.platform === "win32"')
     expect(build).not.toContain('"npm.cmd"')

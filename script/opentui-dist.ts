@@ -10,18 +10,6 @@ import { relative } from "node:path"
 
 const DENY_PREFIXES = ["tests", "src", "scripts", "patches", "assets/zig", "lib/tree-sitter/assets"] as const
 
-const BUILD_ONLY_DEP_PREFIXES = ["@babel/", "babel-"] as const
-
-/** Drop Babel / Solid transform deps that only the source TUI build needs. */
-export function withoutOpentuiBuildOnlyDependencies(deps?: Record<string, string>) {
-  const out: Record<string, string> = {}
-  for (const [name, version] of Object.entries(deps ?? {})) {
-    if (BUILD_ONLY_DEP_PREFIXES.some((prefix) => name.startsWith(prefix))) continue
-    out[name] = version
-  }
-  return out
-}
-
 const DENY_BASENAMES = new Set([
   "MAINTENANCE.md",
   "README.md",
