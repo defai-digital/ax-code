@@ -255,12 +255,10 @@ export function footerSessionStatusView(input: {
 
   if (!inactive) return { label: text, stale, tone: stale ? "warning" : "working" }
 
-  const staleHint =
-    status.waitState === "tool"
-      ? `no tool update · ${inactive}`
-      : status.waitState === "llm"
-        ? undefined
-        : `Inactive ${inactive}`
+  // Tool waits do not emit periodic progress heartbeats, so presenting
+  // `inactive` as a second timer mostly duplicates the elapsed duration.
+  // The warning marker and "Still..." copy already surface the stale state.
+  const staleHint = status.waitState ? undefined : `Inactive ${inactive}`
   const waitingText =
     status.waitState === "tool"
       ? `Still ${lowerFirst(label)}`

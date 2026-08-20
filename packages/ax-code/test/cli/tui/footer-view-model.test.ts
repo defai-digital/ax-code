@@ -42,7 +42,7 @@ describe("footerSessionStatusView", () => {
     expect(view.label).not.toContain("stalled")
   })
 
-  test("gives tools a longer inactivity budget before warning", () => {
+  test("gives tools a longer inactivity budget without duplicating the elapsed time", () => {
     const now = 3_000_000
     const recentTool = footerSessionStatusView({
       now,
@@ -68,8 +68,8 @@ describe("footerSessionStatusView", () => {
     expect(recentTool.stale).toBe(false)
     expect(recentTool.label).toContain("Running command")
     expect(staleTool.stale).toBe(true)
-    expect(staleTool.label).toContain("Still running command")
-    expect(staleTool.label).toContain("no tool update")
+    expect(staleTool.label).toBe("Still running command · 2m")
+    expect(staleTool.label).not.toContain("no tool update")
     expect(staleTool.label).not.toContain("stalled")
   })
 
