@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import z from "zod"
 // Load the session module graph before the tool module: tool/schedule →
 // session/scheduled-task → task-queue participates in an import cycle with
 // server routes that only resolves when the session side loads first (the
@@ -49,6 +50,15 @@ describe("schedule tools", () => {
 
     expect(() => tool.parameters.parse({ ...base, schedule: { type: "sometime" } })).toThrow()
     expect(() => tool.parameters.parse({ ...base, schedule: { type: "weekly", day: 9, time: "09:00" } })).toThrow()
+  })
+
+  test("schedule coercion preserves the provider-facing object schema", async () => {
+    const tool = await ScheduleTaskTool.init()
+    const schema = z.toJSONSchema(tool.parameters) as {
+      properties?: { schedule?: { oneOf?: Array<{ type?: string }> } }
+    }
+    expect(schema.properties?.schedule?.oneOf).toHaveLength(4)
+    expect(schema.properties?.schedule?.oneOf?.every((item) => item.type === "object")).toBe(true)
   })
 
   test("schedule passed as a JSON-encoded string is coerced into an object", async () => {

@@ -433,6 +433,13 @@ export namespace Patch {
 
     // Sort replacements by index to apply in order
     replacements.sort((a, b) => a[0] - b[0])
+    for (let index = 1; index < replacements.length; index++) {
+      const [previousStart, previousLength] = replacements[index - 1]
+      const [currentStart] = replacements[index]
+      if (currentStart < previousStart + previousLength) {
+        throw new Error(`Overlapping patch chunks in ${filePath}`)
+      }
+    }
 
     return replacements
   }
@@ -503,11 +510,12 @@ export namespace Patch {
     const native = NativeAddon.diff()
     if (native) {
       try {
-        return NativePerf.run(
+        const found = NativePerf.run(
           "diff.seekSequence",
           { lines: lines.length, pattern: pattern.length, startIndex, eof },
           () => native.seekSequence(lines, pattern, startIndex, eof),
         )
+        if (found !== -1) return found
       } catch (e) {
         log.warn("native diff seekSequence failed, using JS fallback", { error: e })
       }

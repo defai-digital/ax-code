@@ -5,6 +5,8 @@ import { Session } from "../../src/session"
 import { MessageV2 } from "../../src/session/message-v2"
 import { MessageID, PartID, type SessionID } from "../../src/session/schema"
 import { Log } from "../../src/util/log"
+import { Database, eq } from "../../src/storage/db"
+import { PartTable } from "../../src/session/session.sql"
 
 const root = path.join(__dirname, "../..")
 Log.init({ print: false })
@@ -36,6 +38,60 @@ async function fill(sessionID: SessionID, count: number, time = (i: number) => D
 }
 
 describe("session message pagination", () => {
+  test("orders legacy rollover IDs by stored chronology", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        const older = MessageID.make(`msg_${"f".repeat(12)}${"A".repeat(14)}`)
+        const newer = MessageID.make(`msg_${"0".repeat(12)}${"B".repeat(14)}`)
+        for (const [id, created] of [
+          [older, 1_000],
+          [newer, 2_000],
+        ] as const) {
+          await Session.updateMessage({
+            id,
+            sessionID: session.id,
+            role: "user",
+            time: { created },
+            agent: "test",
+            model: { providerID: "test", modelID: "test" },
+            tools: {},
+            mode: "",
+          } as unknown as MessageV2.Info)
+        }
+
+        expect((await MessageV2.after(session.id, older)).map((item) => item.info.id)).toEqual([newer])
+
+        const highPart = PartID.make(`prt_${"f".repeat(12)}${"C".repeat(14)}`)
+        const lowPart = PartID.make(`prt_${"0".repeat(12)}${"D".repeat(14)}`)
+        await Session.updatePart({
+          id: highPart,
+          sessionID: session.id,
+          messageID: newer,
+          type: "text",
+          text: "older part",
+        })
+        await Session.updatePart({
+          id: lowPart,
+          sessionID: session.id,
+          messageID: newer,
+          type: "text",
+          text: "newer part",
+        })
+        Database.use((db) => {
+          db.update(PartTable).set({ time_created: 1_000 }).where(eq(PartTable.id, highPart)).run()
+          db.update(PartTable).set({ time_created: 2_000 }).where(eq(PartTable.id, lowPart)).run()
+        })
+
+        expect((await MessageV2.get({ sessionID: session.id, messageID: newer })).parts.map((part) => part.id)).toEqual(
+          [highPart, lowPart],
+        )
+        await Session.remove(session.id)
+      },
+    })
+  })
+
   test("pages backward with opaque cursors", async () => {
     await Instance.provide({
       directory: root,

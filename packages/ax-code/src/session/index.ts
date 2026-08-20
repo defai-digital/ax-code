@@ -317,7 +317,9 @@ export namespace Session {
       const idMap = new Map<string, MessageID>()
 
       // Pre-compute all new IDs
-      const filtered = msgs.filter((msg) => !(input.messageID && msg.info.id >= input.messageID))
+      const cutoff = input.messageID ? msgs.findIndex((msg) => msg.info.id === input.messageID) : msgs.length
+      if (cutoff === -1) throw new NotFoundError({ message: `Message not found: ${input.messageID}` })
+      const filtered = msgs.slice(0, cutoff)
       for (const msg of filtered) {
         idMap.set(msg.info.id, MessageID.ascending())
       }

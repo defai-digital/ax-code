@@ -120,4 +120,28 @@ describe("ACP agent prompt", () => {
       },
     })
   })
+
+  test("submits an unknown slash-prefixed prompt as ordinary text", async () => {
+    await using tmp = await tmpdir()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, promptCalls, stop } = createPromptAgent()
+
+        try {
+          const { sessionId } = await agent.newSession({ cwd: tmp.path, mcpServers: [] } as any)
+          await agent.prompt({
+            sessionId,
+            prompt: [{ type: "text", text: "/not-a-command keep this text" }],
+          } as any)
+
+          expect(promptCalls).toHaveLength(1)
+          expect(promptCalls[0].parts).toEqual([{ type: "text", text: "/not-a-command keep this text" }])
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
 })

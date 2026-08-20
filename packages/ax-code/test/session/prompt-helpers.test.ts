@@ -894,6 +894,24 @@ describe("session.prompt helpers", () => {
     expect((msgs[1].parts[0] as MessageV2.TextPart).text).toBe("Ship it")
   })
 
+  test("uses transcript order when queued messages cross ID encoding generations", () => {
+    const msgs = [
+      {
+        info: { id: `msg_${"f".repeat(12)}${"A".repeat(14)}`, role: "assistant", finish: "stop" },
+        parts: [],
+      },
+      {
+        info: { id: `msg_${"0".repeat(12)}${"B".repeat(14)}`, role: "user" },
+        parts: [{ type: "text", text: "Queued after rollover" }],
+      },
+    ] as any as MessageV2.WithParts[]
+
+    const next = remindQueuedMessages(msgs, msgs[0].info as MessageV2.Assistant)
+
+    expect((next[1].parts[0] as MessageV2.TextPart).text).toContain("Queued after rollover")
+    expect((next[1].parts[0] as MessageV2.TextPart).text).toContain("<system-reminder>")
+  })
+
   test("does not mutate the original text part object when wrapping reminders", () => {
     const part = { type: "text", text: "Ship it" } as any
     const msgs = [

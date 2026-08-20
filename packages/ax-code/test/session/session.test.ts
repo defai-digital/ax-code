@@ -228,6 +228,40 @@ describe("session.messages", () => {
 })
 
 describe("session.fork", () => {
+  test("uses transcript order at the legacy ID rollover boundary", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const session = await Session.create({})
+        const older = MessageID.make(`msg_${"f".repeat(12)}${"A".repeat(14)}`)
+        const cutoff = MessageID.make(`msg_${"0".repeat(12)}${"B".repeat(14)}`)
+        for (const [id, created] of [
+          [older, 1_000],
+          [cutoff, 2_000],
+        ] as const) {
+          await Session.updateMessage({
+            id,
+            sessionID: session.id,
+            role: "user",
+            time: { created },
+            agent: "test",
+            model: { providerID: "test", modelID: "test" },
+            tools: {},
+            mode: "",
+          } as unknown as MessageV2.Info)
+        }
+
+        const fork = await Session.fork({ sessionID: session.id, messageID: cutoff })
+        expect((await Session.messages({ sessionID: fork.id })).map((message) => message.info.time.created)).toEqual([
+          1_000,
+        ])
+
+        await Session.remove(session.id)
+        await Session.remove(fork.id)
+      },
+    })
+  })
+
   test("does not render unsafe fork suffixes as Infinity", async () => {
     await Instance.provide({
       directory: projectRoot,

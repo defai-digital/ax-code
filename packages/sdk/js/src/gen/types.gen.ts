@@ -12311,7 +12311,7 @@ export type AuditExportData = {
 
 export type AuditExportResponses = {
   /**
-   * JSON Lines audit export
+   * JSON audit export envelope
    */
   200: unknown
 }
@@ -12337,7 +12337,7 @@ export type AuditExportAllData = {
 
 export type AuditExportAllResponses = {
   /**
-   * JSON Lines audit export
+   * JSON audit export envelope
    */
   200: unknown
 }

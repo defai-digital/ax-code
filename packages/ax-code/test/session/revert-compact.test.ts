@@ -277,4 +277,39 @@ describe("revert + compact workflow", () => {
       },
     })
   })
+
+  test("cleans up by transcript order across the legacy ID rollover", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const ids = [
+          MessageID.make(`msg_${"f".repeat(12)}${"A".repeat(14)}`),
+          MessageID.make(`msg_${"0".repeat(12)}${"B".repeat(14)}`),
+          MessageID.make(`msg_${"1".repeat(12)}${"C".repeat(14)}`),
+        ]
+        for (const [index, id] of ids.entries()) {
+          await Session.updateMessage({
+            id,
+            sessionID: session.id,
+            role: "user",
+            agent: "default",
+            model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test") },
+            time: { created: index + 1 },
+          } as MessageV2.User)
+        }
+        await Session.setRevert({
+          sessionID: session.id,
+          revert: { messageID: ids[1] },
+          summary: undefined,
+        })
+
+        await SessionRevert.cleanup(await Session.get(session.id))
+
+        expect((await Session.messages({ sessionID: session.id })).map((message) => message.info.id)).toEqual([ids[0]])
+        await Session.remove(session.id)
+      },
+    })
+  })
 })

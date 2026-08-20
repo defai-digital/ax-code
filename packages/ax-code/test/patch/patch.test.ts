@@ -1,5 +1,6 @@
-import { describe, test, expect, beforeEach, afterEach } from "vitest"
+import { describe, test, expect, beforeEach, afterEach, vi } from "vitest"
 import { Patch } from "../../src/patch"
+import { NativeAddon } from "../../src/native/addon"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { tmpdir } from "os"
@@ -12,6 +13,7 @@ describe("Patch namespace", () => {
   })
 
   afterEach(async () => {
+    vi.restoreAllMocks()
     // Clean up temp directory
     await fs.rm(tempDir, { recursive: true, force: true })
   })
@@ -258,6 +260,26 @@ PATCH`
 
       const content = await fs.readFile(filePath, "utf-8")
       expect(content).toBe("alpha\nbeta\ninserted\ngamma\n")
+    })
+
+    test("falls back to normalized JS matching when native search returns not found", async () => {
+      vi.spyOn(NativeAddon, "diff").mockReturnValue({
+        seekSequence: () => -1,
+        unifiedDiff: () => "",
+      } as any)
+      const filePath = path.join(tempDir, "unicode.txt")
+      await fs.writeFile(filePath, "const message = “hello”—world\n")
+
+      const patchText = `*** Begin Patch
+*** Update File: ${filePath}
+@@
+-const message = "hello"-world
++const message = "updated"-world
+*** End Patch`
+
+      await Patch.applyPatch(patchText)
+
+      expect(await fs.readFile(filePath, "utf8")).toBe('const message = "updated"-world\n')
     })
 
     test("treats a blank context line emitted without a leading space as context", async () => {

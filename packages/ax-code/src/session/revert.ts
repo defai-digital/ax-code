@@ -73,7 +73,9 @@ export namespace SessionRevert {
       // reassigned `revert` between the if-check and the filter call.
       // See BUG-82.
       const narrowed = revert
-      const rangeMessages = all.filter((msg) => msg.info.id >= narrowed.messageID)
+      const rangeStart = all.findIndex((msg) => msg.info.id === narrowed.messageID)
+      if (rangeStart === -1) throw new Error(`Session revert boundary ${narrowed.messageID} disappeared`)
+      const rangeMessages = all.slice(rangeStart)
       const diffs = await SessionSummary.computeDiff({ messages: rangeMessages })
       await Storage.write(["session_diff", input.sessionID], diffs)
       await Bus.publish(Session.Event.Diff, {
@@ -111,21 +113,18 @@ export namespace SessionRevert {
     const remove = [] as MessageV2.WithParts[]
     const removedParts = [] as MessageV2.Part[]
     let target: MessageV2.WithParts | undefined
-    for (const msg of msgs) {
-      if (msg.info.id < messageID) {
-        preserve.push(msg)
-        continue
-      }
-      if (msg.info.id > messageID) {
-        remove.push(msg)
-        continue
-      }
-      if (session.revert.partID) {
-        preserve.push(msg)
-        target = msg
-        continue
-      }
-      remove.push(msg)
+    const targetIndex = msgs.findIndex((msg) => msg.info.id === messageID)
+    if (targetIndex === -1) {
+      log.warn("revert boundary message is missing during cleanup", { sessionID, messageID })
+      return
+    }
+    preserve.push(...msgs.slice(0, targetIndex))
+    if (session.revert.partID) {
+      target = msgs[targetIndex]
+      preserve.push(target)
+      remove.push(...msgs.slice(targetIndex + 1))
+    } else {
+      remove.push(...msgs.slice(targetIndex))
     }
     if (session.revert.partID && target) {
       const partID = session.revert.partID

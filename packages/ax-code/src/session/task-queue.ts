@@ -8,13 +8,16 @@ import { NotFoundError, and, asc, desc, eq, inArray, sql } from "@/storage/db"
 import type { Database } from "@/storage/db"
 import { Log } from "@/util/log"
 import { JsonNumber } from "@/util/schema"
-import { Session } from "."
 import { SessionMetadata } from "./metadata"
 import { SessionID, TaskQueueID } from "./schema"
 import { TaskQueueTable } from "./session.sql"
 import { SessionShard } from "./shard"
 
 const log = Log.create({ service: "task-queue" })
+
+async function loadSession() {
+  return (await import(".")).Session
+}
 
 export namespace TaskQueue {
   export const Kind = z.enum(["prompt", "command", "shell", "followup", "subagent", "review", "automation"])
@@ -177,6 +180,7 @@ export namespace TaskQueue {
   }
 
   async function assertSessionCompatible(sessionID: SessionID) {
+    const Session = await loadSession()
     const session = await Session.get(sessionID)
     if (Session.isCompatibleWithCurrentProject(session)) return session
     throw new HTTPException(409, {
@@ -193,6 +197,7 @@ export namespace TaskQueue {
   async function syncSessionQueueMetadata(item: Info) {
     if (!item.sessionID) return
     try {
+      const Session = await loadSession()
       await Session.setProductMetadata({
         sessionID: item.sessionID,
         namespace: "queue",
@@ -214,6 +219,7 @@ export namespace TaskQueue {
   async function clearSessionQueueMetadataIfCurrent(item: Info) {
     if (!item.sessionID) return
     try {
+      const Session = await loadSession()
       const session = await Session.get(item.sessionID)
       const queue = SessionMetadata.product(session.metadata ?? {}).queue
       if (queue?.queueItemId !== item.id) return

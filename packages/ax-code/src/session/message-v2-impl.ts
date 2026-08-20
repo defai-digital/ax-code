@@ -599,7 +599,7 @@ export namespace MessageV2 {
           .select()
           .from(PartTable)
           .where(inArray(PartTable.message_id, ids))
-          .orderBy(PartTable.message_id, PartTable.id)
+          .orderBy(PartTable.message_id, PartTable.time_created, PartTable.id)
           .all(),
       )
       for (const row of partRows) {
@@ -1004,7 +1004,12 @@ export namespace MessageV2 {
 
   async function partsInStore(message_id: MessageID, store: SessionShard.Store) {
     const rows = store.use((db) =>
-      db.select().from(PartTable).where(eq(PartTable.message_id, message_id)).orderBy(PartTable.id).all(),
+      db
+        .select()
+        .from(PartTable)
+        .where(eq(PartTable.message_id, message_id))
+        .orderBy(PartTable.time_created, PartTable.id)
+        .all(),
     )
     return rows.flatMap((row) => {
       const next = part(row)
@@ -1045,14 +1050,28 @@ export namespace MessageV2 {
   /** Fetch messages created after the given message ID, ordered oldest first */
   export async function after(sessionID: SessionID, afterID: MessageID): Promise<WithParts[]> {
     const store = SessionShard.storeFor(sessionID)
-    const rows = store.use((db) =>
-      db
+    const rows = store.use((db) => {
+      const pivot = db
+        .select({ timeCreated: MessageTable.time_created })
+        .from(MessageTable)
+        .where(and(eq(MessageTable.session_id, sessionID), eq(MessageTable.id, afterID)))
+        .get()
+      if (!pivot) throw new NotFoundError({ message: `Message not found: ${afterID}` })
+      return db
         .select()
         .from(MessageTable)
-        .where(and(eq(MessageTable.session_id, sessionID), gt(MessageTable.id, afterID)))
-        .orderBy(MessageTable.id)
-        .all(),
-    )
+        .where(
+          and(
+            eq(MessageTable.session_id, sessionID),
+            or(
+              gt(MessageTable.time_created, pivot.timeCreated),
+              and(eq(MessageTable.time_created, pivot.timeCreated), gt(MessageTable.id, afterID)),
+            ),
+          ),
+        )
+        .orderBy(MessageTable.time_created, MessageTable.id)
+        .all()
+    })
     return hydrate(rows, store)
   }
 

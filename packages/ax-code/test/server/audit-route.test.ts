@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest"
-import { collectAuditExportRecords, parseAuditJsonLine } from "../../src/server/routes/audit"
+import {
+  auditSessionIDsForDirectory,
+  collectAuditExportRecords,
+  parseAuditJsonLine,
+} from "../../src/server/routes/audit"
+import { Instance } from "../../src/project/instance"
+import { Session } from "../../src/session"
+import { tmpdir } from "../fixture/fixture"
 
 describe("audit route JSONL decoding", () => {
   test("parses valid audit JSON lines", () => {
@@ -56,5 +63,22 @@ describe("audit route JSONL decoding", () => {
     expect(records).toHaveLength(2)
     expect(records.map((record) => record.session_id)).toEqual(["ses_allowed", "ses_allowed"])
     expect(records.map((record) => record.event_type)).toEqual(["agent.route", "tool.call"])
+  })
+
+  test("includes project sessions beyond the default 100-row session page", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const ids: string[] = []
+        for (let index = 0; index < 101; index++) {
+          ids.push((await Session.create({ title: `Audit session ${index}` })).id)
+        }
+
+        const allowed = auditSessionIDsForDirectory(tmp.path)
+        expect(allowed.size).toBe(101)
+        expect(ids.every((id) => allowed.has(id))).toBe(true)
+      },
+    })
   })
 })

@@ -1,14 +1,17 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { ACP } from "../../src/acp/agent"
 import type { AgentSideConnection } from "@agentclientprotocol/sdk"
 import type { Event, EventMessagePartUpdated, ToolStatePending, ToolStateRunning } from "@ax-code/sdk/v2"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { pathToFileURL } from "url"
+import fs from "fs/promises"
+import path from "path"
 
 type SessionUpdateParams = Parameters<AgentSideConnection["sessionUpdate"]>[0]
 type RequestPermissionParams = Parameters<AgentSideConnection["requestPermission"]>[0]
 type RequestPermissionResult = Awaited<ReturnType<AgentSideConnection["requestPermission"]>>
+type WriteTextFileParams = Parameters<AgentSideConnection["writeTextFile"]>[0]
 
 type GlobalEventEnvelope = {
   directory?: string
@@ -118,11 +121,12 @@ function createEventStream() {
   return { controller: { push, close } satisfies EventController, stream }
 }
 
-function createFakeAgent() {
+function createFakeAgent(options: { eventFailures?: number; emptyEventStreams?: number } = {}) {
   const connectionAbort = new AbortController()
   const updates = new Map<string, string[]>()
   const chunks = new Map<string, string>()
   const sessionUpdates: SessionUpdateParams[] = []
+  const fileWrites: WriteTextFileParams[] = []
   const record = (sessionId: string, type: string) => {
     const list = updates.get(sessionId) ?? []
     list.push(type)
@@ -145,6 +149,9 @@ function createFakeAgent() {
     async requestPermission(_params: RequestPermissionParams): Promise<RequestPermissionResult> {
       return { outcome: { outcome: "selected", optionId: "once" } } as RequestPermissionResult
     },
+    async writeTextFile(params: WriteTextFileParams) {
+      fileWrites.push(params)
+    },
     signal: connectionAbort.signal,
   } as unknown as AgentSideConnection
 
@@ -158,6 +165,14 @@ function createFakeAgent() {
     global: {
       event: async (opts?: { signal?: AbortSignal }) => {
         calls.eventSubscribe++
+        if (calls.eventSubscribe <= (options.eventFailures ?? 0)) {
+          throw new Error("transient event failure")
+        }
+        if (calls.eventSubscribe <= (options.eventFailures ?? 0) + (options.emptyEventStreams ?? 0)) {
+          return {
+            stream: (async function* () {})(),
+          }
+        }
         return { stream: stream(opts?.signal) }
       },
     },
@@ -257,7 +272,19 @@ function createFakeAgent() {
     ;(agent as any).eventAbort.abort()
   }
 
-  return { agent, controller, calls, updates, chunks, sessionUpdates, stop, sdk, connection, connectionAbort }
+  return {
+    agent,
+    controller,
+    calls,
+    updates,
+    chunks,
+    sessionUpdates,
+    fileWrites,
+    stop,
+    sdk,
+    connection,
+    connectionAbort,
+  }
 }
 
 describe("acp.agent event subscription", () => {
@@ -370,6 +397,24 @@ describe("acp.agent event subscription", () => {
     })
   })
 
+  test("reconnects after a transient event subscription failure", async () => {
+    const { calls, stop } = createFakeAgent({ eventFailures: 1 })
+    try {
+      await vi.waitFor(() => expect(calls.eventSubscribe).toBe(2), { timeout: 1_500 })
+    } finally {
+      stop()
+    }
+  })
+
+  test("reconnects with backoff after an event stream ends", async () => {
+    const { calls, stop } = createFakeAgent({ emptyEventStreams: 1 })
+    try {
+      await vi.waitFor(() => expect(calls.eventSubscribe).toBe(2), { timeout: 1_500 })
+    } finally {
+      stop()
+    }
+  })
+
   test("disposes when the ACP connection aborts", async () => {
     const { agent, connectionAbort } = createFakeAgent()
 
@@ -422,6 +467,45 @@ describe("acp.agent event subscription", () => {
         expect(permissionReplies).toContain("perm_1")
 
         stop()
+      },
+    })
+  })
+
+  test("writes an approved edit whose result is an empty file", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, controller, fileWrites, stop, sdk } = createFakeAgent()
+        sdk.permission.reply = async () => ({ data: true })
+        const filepath = path.join(tmp.path, "empty-me.txt")
+        await fs.writeFile(filepath, "hello\n")
+        const sessionId = await agent.newSession({ cwd: tmp.path, mcpServers: [] } as any).then((x) => x.sessionId)
+
+        try {
+          controller.push({
+            directory: tmp.path,
+            payload: {
+              type: "permission.asked",
+              properties: {
+                id: "perm_empty_edit",
+                sessionID: sessionId,
+                permission: "edit",
+                patterns: [filepath],
+                metadata: {
+                  filepath,
+                  diff: "--- a/empty-me.txt\n+++ b/empty-me.txt\n@@ -1 +0,0 @@\n-hello\n",
+                },
+                always: [],
+              },
+            },
+          } as any)
+
+          await vi.waitFor(() => expect(fileWrites).toHaveLength(1))
+          expect(fileWrites[0]).toMatchObject({ sessionId, path: filepath, content: "" })
+        } finally {
+          stop()
+        }
       },
     })
   })

@@ -35,10 +35,17 @@ export namespace Identifier {
   export type Prefix = keyof typeof prefixes
 
   export function schema(prefix: Prefix) {
-    return z.string().startsWith(prefixes[prefix])
+    return z.string().startsWith(prefixes[prefix] + "_")
   }
 
   const LENGTH = 26
+  const TIME_BYTES = 7
+  const TIME_HEX_LENGTH = TIME_BYTES * 2
+  const LEGACY_TIME_HEX_LENGTH = 12
+  const COUNTER_MODULO = 0x1000
+  const MAX_TIMESTAMP = 2 ** 44 - 1
+  const ASCENDING_VERSION_MARKER = "z"
+  const DESCENDING_VERSION_MARKER = "-"
 
   // State for monotonic ID generation
   let lastTimestamp = 0
@@ -57,8 +64,8 @@ export namespace Identifier {
       return create(prefix, descending)
     }
 
-    if (!given.startsWith(prefixes[prefix])) {
-      throw new Error(`ID ${given} does not start with ${prefixes[prefix]}`)
+    if (!given.startsWith(prefixes[prefix] + "_")) {
+      throw new Error(`ID ${given} does not start with ${prefixes[prefix]}_`)
     }
     return given
   }
@@ -82,38 +89,58 @@ export namespace Identifier {
   }
 
   export function create(prefix: Prefix, descending: boolean, timestamp?: number): string {
-    const currentTimestamp = timestamp ?? Date.now()
+    let currentTimestamp = timestamp ?? Date.now()
+    if (!Number.isSafeInteger(currentTimestamp) || currentTimestamp < 0 || currentTimestamp > MAX_TIMESTAMP) {
+      throw new RangeError(`Invalid identifier timestamp: ${currentTimestamp}`)
+    }
+    if (currentTimestamp < lastTimestamp) currentTimestamp = lastTimestamp
 
     if (currentTimestamp !== lastTimestamp) {
       lastTimestamp = currentTimestamp
       counter = 0
+    } else if (counter === COUNTER_MODULO - 1) {
+      if (lastTimestamp === MAX_TIMESTAMP) throw new RangeError("Identifier timestamp capacity exhausted")
+      lastTimestamp += 1
+      currentTimestamp = lastTimestamp
+      counter = 0
     }
-    counter++
+    counter = (counter + 1) & (COUNTER_MODULO - 1)
 
     let now = BigInt(currentTimestamp) * BigInt(0x1000) + BigInt(counter)
 
     now = descending ? ~now : now
 
-    const timeBytes = Buffer.alloc(6)
-    for (let i = 0; i < 6; i++) {
-      timeBytes[i] = Number((now >> BigInt(40 - 8 * i)) & BigInt(0xff))
+    const timeBytes = Buffer.alloc(TIME_BYTES)
+    for (let i = 0; i < TIME_BYTES; i++) {
+      timeBytes[i] = Number((now >> BigInt((TIME_BYTES - 1 - i) * 8)) & BigInt(0xff))
     }
 
-    return prefixes[prefix] + "_" + timeBytes.toString("hex") + randomBase62(LENGTH - 12)
+    // Keep new IDs ordered correctly against every legacy payload: ascending
+    // IDs start with `z` (after legacy hex), while descending IDs start with
+    // `-` (before legacy hex). The marker also versions the widened key
+    // without changing total ID length.
+    const marker = descending ? DESCENDING_VERSION_MARKER : ASCENDING_VERSION_MARKER
+    return prefixes[prefix] + "_" + marker + timeBytes.toString("hex") + randomBase62(LENGTH - TIME_HEX_LENGTH - 1)
   }
 
   /** Extract timestamp from an ascending ID. Does not work with descending IDs. */
   export function timestamp(id: string): number {
-    const prefix = id.split("_")[0]
-    const hex = id.slice(prefix.length + 1, prefix.length + 13)
+    const separator = id.indexOf("_")
+    if (separator <= 0) throw new Error(`Invalid identifier: ${id}`)
+    const payload = id.slice(separator + 1)
+    const widened =
+      payload.startsWith(ASCENDING_VERSION_MARKER) &&
+      new RegExp(`^[0-9a-f]{${TIME_HEX_LENGTH}}`, "i").test(payload.slice(1))
+    const hexLength = widened ? TIME_HEX_LENGTH : LEGACY_TIME_HEX_LENGTH
+    const hex = payload.slice(widened ? 1 : 0, hexLength + (widened ? 1 : 0))
+    if (!new RegExp(`^[0-9a-f]{${hexLength}}$`, "i").test(hex)) throw new Error(`Invalid identifier: ${id}`)
     const encoded = BigInt("0x" + hex)
-    // Use explicit right shift by 12 bits — the encoding packs a 36-bit
-    // millisecond timestamp in the high bits and a 12-bit counter in the
-    // low bits (see `create` above where we compute
+    // Use explicit right shift by 12 bits — both encodings pack a millisecond
+    // timestamp in the high bits and a 12-bit counter in the low bits (see
+    // `create` above where we compute
     // `BigInt(ts) * BigInt(0x1000) + BigInt(counter)`). Right shift matches
-    // that construction exactly; the previous `/ BigInt(0x1000)` happened
-    // to be numerically equivalent for positive values but obscured intent
-    // and would silently break if the counter width ever changed.
+    // that construction exactly. Legacy timestamps remain truncated to their
+    // original 36 bits; widened IDs preserve 44 timestamp bits.
     return Number(encoded >> BigInt(12))
   }
 }

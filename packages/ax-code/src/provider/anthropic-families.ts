@@ -33,14 +33,14 @@ export function claudeDisplayName(name: string | undefined, fallback: string): s
 }
 
 export function latestAnthropicFamilyModels<T extends AnthropicFamilySource>(models: Record<string, T>): T[] {
-  const best = new Map<string, T>()
+  const best: Record<string, T | undefined> = {}
   for (const [id, model] of Object.entries(models)) {
     const family = claudeFamilyId({ id: model.id ?? id, family: model.family })
     if (!family) continue
-    const current = best.get(family)
-    if (!current || compareAnthropicFamilyModels(model, current, id) > 0) best.set(family, model)
+    const current = best[family]
+    if (!current || compareAnthropicFamilyModels(model, current, id) > 0) best[family] = model
   }
-  return FAMILY_ORDER.map((family) => best.get(family)).filter((model): model is T => model !== undefined)
+  return FAMILY_ORDER.map((family) => best[family]).filter((model): model is T => model !== undefined)
 }
 
 function compareAnthropicFamilyModels(a: AnthropicFamilySource, b: AnthropicFamilySource, aKey: string): number {

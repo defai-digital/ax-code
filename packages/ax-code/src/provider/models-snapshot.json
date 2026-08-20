@@ -98483,7 +98483,8 @@
         "limit": {
           "context": 256000,
           "output": 32000
-        }
+        },
+        "status": "deprecated"
       },
       "nemotron-3.5-lightning-free": {
         "id": "nemotron-3.5-lightning-free",
@@ -98774,7 +98775,8 @@
         "limit": {
           "context": 200000,
           "output": 128000
-        }
+        },
+        "status": "deprecated"
       },
       "minimax-m3-free": {
         "id": "minimax-m3-free",
@@ -99825,6 +99827,51 @@
           "context": 128000,
           "input": 128000,
           "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai"
+        }
+      },
+      "muse-spark-1.2-contributor-free": {
+        "id": "muse-spark-1.2-contributor-free",
+        "name": "Muse Spark 1.2 Contributor Free",
+        "description": "Muse Spark 1.2 is a coding-focused update to Muse Spark 1.1 with improvements in code generation, complex debugging, codebase understanding, and end-to-end developer workflows.",
+        "family": "muse-free",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-05",
+        "last_updated": "2026-08-05",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "output": 131072
         },
         "provider": {
           "npm": "@ai-sdk/openai"

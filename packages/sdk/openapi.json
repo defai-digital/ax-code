@@ -1088,7 +1088,7 @@
             "name": "ptyID",
             "schema": {
               "type": "string",
-              "pattern": "^pty.*"
+              "pattern": "^pty_.*"
             },
             "required": true
           }
@@ -1139,7 +1139,7 @@
             "name": "ptyID",
             "schema": {
               "type": "string",
-              "pattern": "^pty.*"
+              "pattern": "^pty_.*"
             },
             "required": true
           }
@@ -1223,7 +1223,7 @@
             "name": "ptyID",
             "schema": {
               "type": "string",
-              "pattern": "^pty.*"
+              "pattern": "^pty_.*"
             },
             "required": true
           }
@@ -1276,7 +1276,7 @@
             "name": "ptyID",
             "schema": {
               "type": "string",
-              "pattern": "^pty.*"
+              "pattern": "^pty_.*"
             },
             "required": true
           }
@@ -1826,7 +1826,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             }
           }
         ],
@@ -2101,7 +2101,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             }
           },
           {
@@ -2146,7 +2146,7 @@
                     "properties": {
                       "id": {
                         "type": "string",
-                        "pattern": "^tsk.*"
+                        "pattern": "^tsk_.*"
                       },
                       "projectID": {
                         "type": "string"
@@ -2159,7 +2159,7 @@
                       },
                       "sessionID": {
                         "type": "string",
-                        "pattern": "^ses.*"
+                        "pattern": "^ses_.*"
                       },
                       "kind": {
                         "type": "string",
@@ -2314,7 +2314,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^tsk.*"
+                      "pattern": "^tsk_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -2327,7 +2327,7 @@
                     },
                     "sessionID": {
                       "type": "string",
-                      "pattern": "^ses.*"
+                      "pattern": "^ses_.*"
                     },
                     "kind": {
                       "type": "string",
@@ -2459,7 +2459,7 @@
                 "properties": {
                   "sessionID": {
                     "type": "string",
-                    "pattern": "^ses.*"
+                    "pattern": "^ses_.*"
                   },
                   "kind": {
                     "type": "string",
@@ -2544,7 +2544,7 @@
             "name": "taskID",
             "schema": {
               "type": "string",
-              "pattern": "^tsk.*"
+              "pattern": "^tsk_.*"
             },
             "required": true
           }
@@ -2561,7 +2561,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^tsk.*"
+                      "pattern": "^tsk_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -2574,7 +2574,7 @@
                     },
                     "sessionID": {
                       "type": "string",
-                      "pattern": "^ses.*"
+                      "pattern": "^ses_.*"
                     },
                     "kind": {
                       "type": "string",
@@ -2720,7 +2720,7 @@
             "name": "taskID",
             "schema": {
               "type": "string",
-              "pattern": "^tsk.*"
+              "pattern": "^tsk_.*"
             },
             "required": true
           }
@@ -2783,7 +2783,7 @@
             "name": "taskID",
             "schema": {
               "type": "string",
-              "pattern": "^tsk.*"
+              "pattern": "^tsk_.*"
             },
             "required": true
           },
@@ -2809,7 +2809,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^tsk.*"
+                      "pattern": "^tsk_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -2822,7 +2822,7 @@
                     },
                     "sessionID": {
                       "type": "string",
-                      "pattern": "^ses.*"
+                      "pattern": "^ses_.*"
                     },
                     "kind": {
                       "type": "string",
@@ -3001,7 +3001,7 @@
             "name": "taskID",
             "schema": {
               "type": "string",
-              "pattern": "^tsk.*"
+              "pattern": "^tsk_.*"
             },
             "required": true
           }
@@ -3018,7 +3018,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^tsk.*"
+                      "pattern": "^tsk_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -3031,7 +3031,7 @@
                     },
                     "sessionID": {
                       "type": "string",
-                      "pattern": "^ses.*"
+                      "pattern": "^ses_.*"
                     },
                     "kind": {
                       "type": "string",
@@ -3241,7 +3241,7 @@
             "name": "taskID",
             "schema": {
               "type": "string",
-              "pattern": "^tsk.*"
+              "pattern": "^tsk_.*"
             },
             "required": true
           }
@@ -3258,7 +3258,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^tsk.*"
+                      "pattern": "^tsk_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -3271,7 +3271,7 @@
                     },
                     "sessionID": {
                       "type": "string",
-                      "pattern": "^ses.*"
+                      "pattern": "^ses_.*"
                     },
                     "kind": {
                       "type": "string",
@@ -3419,7 +3419,7 @@
             "name": "taskID",
             "schema": {
               "type": "string",
-              "pattern": "^tsk.*"
+              "pattern": "^tsk_.*"
             },
             "required": true
           }
@@ -3436,7 +3436,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^tsk.*"
+                      "pattern": "^tsk_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -3449,7 +3449,7 @@
                     },
                     "sessionID": {
                       "type": "string",
-                      "pattern": "^ses.*"
+                      "pattern": "^ses_.*"
                     },
                     "kind": {
                       "type": "string",
@@ -3597,7 +3597,7 @@
             "name": "taskID",
             "schema": {
               "type": "string",
-              "pattern": "^tsk.*"
+              "pattern": "^tsk_.*"
             },
             "required": true
           }
@@ -3614,7 +3614,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^tsk.*"
+                      "pattern": "^tsk_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -3627,7 +3627,7 @@
                     },
                     "sessionID": {
                       "type": "string",
-                      "pattern": "^ses.*"
+                      "pattern": "^ses_.*"
                     },
                     "kind": {
                       "type": "string",
@@ -3775,7 +3775,7 @@
             "name": "taskID",
             "schema": {
               "type": "string",
-              "pattern": "^tsk.*"
+              "pattern": "^tsk_.*"
             },
             "required": true
           }
@@ -3792,7 +3792,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^tsk.*"
+                      "pattern": "^tsk_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -3805,7 +3805,7 @@
                     },
                     "sessionID": {
                       "type": "string",
-                      "pattern": "^ses.*"
+                      "pattern": "^ses_.*"
                     },
                     "kind": {
                       "type": "string",
@@ -3953,7 +3953,7 @@
             "name": "taskID",
             "schema": {
               "type": "string",
-              "pattern": "^tsk.*"
+              "pattern": "^tsk_.*"
             },
             "required": true
           }
@@ -3970,7 +3970,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^tsk.*"
+                      "pattern": "^tsk_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -3983,7 +3983,7 @@
                     },
                     "sessionID": {
                       "type": "string",
-                      "pattern": "^ses.*"
+                      "pattern": "^ses_.*"
                     },
                     "kind": {
                       "type": "string",
@@ -4131,7 +4131,7 @@
             "name": "taskID",
             "schema": {
               "type": "string",
-              "pattern": "^tsk.*"
+              "pattern": "^tsk_.*"
             },
             "required": true
           }
@@ -4148,7 +4148,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^tsk.*"
+                      "pattern": "^tsk_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -4161,7 +4161,7 @@
                     },
                     "sessionID": {
                       "type": "string",
-                      "pattern": "^ses.*"
+                      "pattern": "^ses_.*"
                     },
                     "kind": {
                       "type": "string",
@@ -4368,7 +4368,7 @@
                     "properties": {
                       "id": {
                         "type": "string",
-                        "pattern": "^sch.*"
+                        "pattern": "^sch_.*"
                       },
                       "projectID": {
                         "type": "string"
@@ -4615,7 +4615,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^sch.*"
+                      "pattern": "^sch_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -5010,7 +5010,7 @@
             "name": "scheduledTaskID",
             "schema": {
               "type": "string",
-              "pattern": "^sch.*"
+              "pattern": "^sch_.*"
             },
             "required": true
           }
@@ -5027,7 +5027,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^sch.*"
+                      "pattern": "^sch_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -5265,7 +5265,7 @@
             "name": "scheduledTaskID",
             "schema": {
               "type": "string",
-              "pattern": "^sch.*"
+              "pattern": "^sch_.*"
             },
             "required": true
           }
@@ -5328,7 +5328,7 @@
             "name": "scheduledTaskID",
             "schema": {
               "type": "string",
-              "pattern": "^sch.*"
+              "pattern": "^sch_.*"
             },
             "required": true
           }
@@ -5345,7 +5345,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^sch.*"
+                      "pattern": "^sch_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -5749,7 +5749,7 @@
             "name": "scheduledTaskID",
             "schema": {
               "type": "string",
-              "pattern": "^sch.*"
+              "pattern": "^sch_.*"
             },
             "required": true
           }
@@ -5766,7 +5766,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^sch.*"
+                      "pattern": "^sch_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -6006,7 +6006,7 @@
             "name": "scheduledTaskID",
             "schema": {
               "type": "string",
-              "pattern": "^sch.*"
+              "pattern": "^sch_.*"
             },
             "required": true
           }
@@ -6023,7 +6023,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^sch.*"
+                      "pattern": "^sch_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -6263,7 +6263,7 @@
             "name": "scheduledTaskID",
             "schema": {
               "type": "string",
-              "pattern": "^sch.*"
+              "pattern": "^sch_.*"
             },
             "required": true
           }
@@ -6283,7 +6283,7 @@
                       "properties": {
                         "id": {
                           "type": "string",
-                          "pattern": "^sch.*"
+                          "pattern": "^sch_.*"
                         },
                         "projectID": {
                           "type": "string"
@@ -6480,7 +6480,7 @@
                       "properties": {
                         "id": {
                           "type": "string",
-                          "pattern": "^tsk.*"
+                          "pattern": "^tsk_.*"
                         },
                         "projectID": {
                           "type": "string"
@@ -6493,7 +6493,7 @@
                         },
                         "sessionID": {
                           "type": "string",
-                          "pattern": "^ses.*"
+                          "pattern": "^ses_.*"
                         },
                         "kind": {
                           "type": "string",
@@ -6700,7 +6700,7 @@
                         "properties": {
                           "id": {
                             "type": "string",
-                            "pattern": "^sch.*"
+                            "pattern": "^sch_.*"
                           },
                           "projectID": {
                             "type": "string"
@@ -6897,7 +6897,7 @@
                         "properties": {
                           "id": {
                             "type": "string",
-                            "pattern": "^tsk.*"
+                            "pattern": "^tsk_.*"
                           },
                           "projectID": {
                             "type": "string"
@@ -6910,7 +6910,7 @@
                           },
                           "sessionID": {
                             "type": "string",
-                            "pattern": "^ses.*"
+                            "pattern": "^ses_.*"
                           },
                           "kind": {
                             "type": "string",
@@ -7096,7 +7096,7 @@
             "name": "parentSessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             }
           },
           {
@@ -7222,7 +7222,7 @@
                 "properties": {
                   "parentSessionID": {
                     "type": "string",
-                    "pattern": "^ses.*"
+                    "pattern": "^ses_.*"
                   },
                   "sourceTemplateID": {
                     "type": "string",
@@ -8210,7 +8210,7 @@
             "name": "parentSessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             }
           },
           {
@@ -9177,7 +9177,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "pattern": "^wfr.*"
+              "pattern": "^wfr_.*"
             },
             "required": true
           }
@@ -10257,7 +10257,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "pattern": "^wfr.*"
+              "pattern": "^wfr_.*"
             },
             "required": true
           },
@@ -10266,7 +10266,7 @@
             "name": "artifactID",
             "schema": {
               "type": "string",
-              "pattern": "^wfa.*"
+              "pattern": "^wfa_.*"
             }
           },
           {
@@ -10274,7 +10274,7 @@
             "name": "phaseID",
             "schema": {
               "type": "string",
-              "pattern": "^wfp.*"
+              "pattern": "^wfp_.*"
             }
           },
           {
@@ -10282,7 +10282,7 @@
             "name": "childID",
             "schema": {
               "type": "string",
-              "pattern": "^wfc.*"
+              "pattern": "^wfc_.*"
             }
           },
           {
@@ -10369,7 +10369,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "pattern": "^wfr.*"
+              "pattern": "^wfr_.*"
             },
             "required": true
           }
@@ -10803,7 +10803,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "pattern": "^wfr.*"
+              "pattern": "^wfr_.*"
             },
             "required": true
           }
@@ -11315,7 +11315,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "pattern": "^wfr.*"
+              "pattern": "^wfr_.*"
             },
             "required": true
           }
@@ -12321,7 +12321,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "pattern": "^wfr.*"
+              "pattern": "^wfr_.*"
             },
             "required": true
           }
@@ -13437,7 +13437,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "pattern": "^wfr.*"
+              "pattern": "^wfr_.*"
             },
             "required": true
           }
@@ -14527,7 +14527,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "pattern": "^wfr.*"
+              "pattern": "^wfr_.*"
             },
             "required": true
           }
@@ -15617,7 +15617,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "pattern": "^wfr.*"
+              "pattern": "^wfr_.*"
             },
             "required": true
           }
@@ -16707,7 +16707,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "pattern": "^wfr.*"
+              "pattern": "^wfr_.*"
             },
             "required": true
           },
@@ -16716,7 +16716,7 @@
             "name": "phaseID",
             "schema": {
               "type": "string",
-              "pattern": "^wfp.*"
+              "pattern": "^wfp_.*"
             }
           }
         ],
@@ -25098,7 +25098,7 @@
                   },
                   "parentSessionID": {
                     "type": "string",
-                    "pattern": "^ses.*"
+                    "pattern": "^ses_.*"
                   },
                   "modelPolicy": {
                     "type": "object",
@@ -25770,11 +25770,11 @@
                 "properties": {
                   "id": {
                     "type": "string",
-                    "pattern": "^ses.*"
+                    "pattern": "^ses_.*"
                   },
                   "parentID": {
                     "type": "string",
-                    "pattern": "^ses.*"
+                    "pattern": "^ses_.*"
                   },
                   "title": {
                     "type": "string"
@@ -25861,7 +25861,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -25925,7 +25925,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -25986,7 +25986,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -26083,7 +26083,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -26105,7 +26105,7 @@
                       "properties": {
                         "sessionID": {
                           "type": "string",
-                          "pattern": "^ses.*"
+                          "pattern": "^ses_.*"
                         },
                         "objective": {
                           "type": "string"
@@ -26217,7 +26217,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -26286,7 +26286,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -26360,7 +26360,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -26426,7 +26426,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -26492,7 +26492,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -26606,7 +26606,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -26679,7 +26679,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -26688,7 +26688,7 @@
             "name": "otherSessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -26762,7 +26762,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -26837,7 +26837,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -26922,7 +26922,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -27016,7 +27016,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -27110,7 +27110,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -27195,7 +27195,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -27261,7 +27261,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -27314,7 +27314,7 @@
                   },
                   "messageID": {
                     "type": "string",
-                    "pattern": "^msg.*"
+                    "pattern": "^msg_.*"
                   }
                 },
                 "required": [
@@ -27350,7 +27350,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -27377,7 +27377,7 @@
                 "properties": {
                   "messageID": {
                     "type": "string",
-                    "pattern": "^msg.*"
+                    "pattern": "^msg_.*"
                   }
                 }
               }
@@ -27408,7 +27408,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -27471,7 +27471,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -27480,7 +27480,7 @@
             "name": "messageID",
             "schema": {
               "type": "string",
-              "pattern": "^msg.*"
+              "pattern": "^msg_.*"
             }
           }
         ],
@@ -27525,7 +27525,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -27612,7 +27612,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -27690,7 +27690,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -27787,7 +27787,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -27849,7 +27849,7 @@
                 "properties": {
                   "messageID": {
                     "type": "string",
-                    "pattern": "^msg.*"
+                    "pattern": "^msg_.*"
                   },
                   "model": {
                     "type": "object",
@@ -27987,7 +27987,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -27996,7 +27996,7 @@
             "name": "messageID",
             "schema": {
               "type": "string",
-              "pattern": "^msg.*"
+              "pattern": "^msg_.*"
             },
             "required": true
           }
@@ -28072,7 +28072,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -28081,7 +28081,7 @@
             "name": "messageID",
             "schema": {
               "type": "string",
-              "pattern": "^msg.*"
+              "pattern": "^msg_.*"
             },
             "required": true
           }
@@ -28144,7 +28144,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -28153,7 +28153,7 @@
             "name": "messageID",
             "schema": {
               "type": "string",
-              "pattern": "^msg.*"
+              "pattern": "^msg_.*"
             },
             "required": true
           }
@@ -28244,7 +28244,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -28253,7 +28253,7 @@
             "name": "messageID",
             "schema": {
               "type": "string",
-              "pattern": "^msg.*"
+              "pattern": "^msg_.*"
             },
             "required": true
           },
@@ -28262,7 +28262,7 @@
             "name": "partID",
             "schema": {
               "type": "string",
-              "pattern": "^prt.*"
+              "pattern": "^prt_.*"
             },
             "required": true
           }
@@ -28322,7 +28322,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -28331,7 +28331,7 @@
             "name": "messageID",
             "schema": {
               "type": "string",
-              "pattern": "^msg.*"
+              "pattern": "^msg_.*"
             },
             "required": true
           },
@@ -28340,7 +28340,7 @@
             "name": "partID",
             "schema": {
               "type": "string",
-              "pattern": "^prt.*"
+              "pattern": "^prt_.*"
             },
             "required": true
           }
@@ -28411,7 +28411,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -28453,7 +28453,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^tsk.*"
+                      "pattern": "^tsk_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -28466,7 +28466,7 @@
                     },
                     "sessionID": {
                       "type": "string",
-                      "pattern": "^ses.*"
+                      "pattern": "^ses_.*"
                     },
                     "kind": {
                       "type": "string",
@@ -28598,7 +28598,7 @@
                 "properties": {
                   "messageID": {
                     "type": "string",
-                    "pattern": "^msg.*"
+                    "pattern": "^msg_.*"
                   },
                   "model": {
                     "type": "object",
@@ -28736,7 +28736,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -28778,7 +28778,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^tsk.*"
+                      "pattern": "^tsk_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -28791,7 +28791,7 @@
                     },
                     "sessionID": {
                       "type": "string",
-                      "pattern": "^ses.*"
+                      "pattern": "^ses_.*"
                     },
                     "kind": {
                       "type": "string",
@@ -28923,7 +28923,7 @@
                 "properties": {
                   "messageID": {
                     "type": "string",
-                    "pattern": "^msg.*"
+                    "pattern": "^msg_.*"
                   },
                   "agent": {
                     "type": "string"
@@ -28979,7 +28979,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -29041,7 +29041,7 @@
                 "properties": {
                   "messageID": {
                     "type": "string",
-                    "pattern": "^msg.*"
+                    "pattern": "^msg_.*"
                   },
                   "agent": {
                     "type": "string"
@@ -29097,7 +29097,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -29139,7 +29139,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^tsk.*"
+                      "pattern": "^tsk_.*"
                     },
                     "projectID": {
                       "type": "string"
@@ -29152,7 +29152,7 @@
                     },
                     "sessionID": {
                       "type": "string",
-                      "pattern": "^ses.*"
+                      "pattern": "^ses_.*"
                     },
                     "kind": {
                       "type": "string",
@@ -29336,7 +29336,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -29435,7 +29435,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -29482,11 +29482,11 @@
                 "properties": {
                   "messageID": {
                     "type": "string",
-                    "pattern": "^msg.*"
+                    "pattern": "^msg_.*"
                   },
                   "partID": {
                     "type": "string",
-                    "pattern": "^prt.*"
+                    "pattern": "^prt_.*"
                   }
                 },
                 "required": [
@@ -29520,7 +29520,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -29583,7 +29583,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -29592,7 +29592,7 @@
             "name": "permissionID",
             "schema": {
               "type": "string",
-              "pattern": "^per.*"
+              "pattern": "^per_.*"
             },
             "required": true
           }
@@ -29678,7 +29678,7 @@
             "name": "requestID",
             "schema": {
               "type": "string",
-              "pattern": "^per.*"
+              "pattern": "^per_.*"
             },
             "required": true
           }
@@ -29803,7 +29803,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -29821,7 +29821,7 @@
         "description": "Export all audit events for a session as JSON Lines.",
         "responses": {
           "200": {
-            "description": "JSON Lines audit export"
+            "description": "JSON audit export envelope"
           }
         },
         "x-codeSamples": [
@@ -29888,7 +29888,7 @@
         "description": "Export all audit events for the current project, optionally filtered by date.",
         "responses": {
           "200": {
-            "description": "JSON Lines audit export"
+            "description": "JSON audit export envelope"
           }
         },
         "x-codeSamples": [
@@ -29915,7 +29915,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -29960,7 +29960,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           }
@@ -30023,7 +30023,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -30109,7 +30109,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -30148,7 +30148,7 @@
             "name": "sessionID",
             "schema": {
               "type": "string",
-              "pattern": "^ses.*"
+              "pattern": "^ses_.*"
             },
             "required": true
           },
@@ -30224,7 +30224,7 @@
             "name": "requestID",
             "schema": {
               "type": "string",
-              "pattern": "^que.*"
+              "pattern": "^que_.*"
             },
             "required": true
           }
@@ -30308,7 +30308,7 @@
             "name": "requestID",
             "schema": {
               "type": "string",
-              "pattern": "^que.*"
+              "pattern": "^que_.*"
             },
             "required": true
           }
@@ -33232,7 +33232,7 @@
                   "sessionID": {
                     "description": "Session ID to navigate to",
                     "type": "string",
-                    "pattern": "^ses.*"
+                    "pattern": "^ses_.*"
                   }
                 },
                 "required": [
@@ -35126,7 +35126,7 @@
             "properties": {
               "sessionID": {
                 "type": "string",
-                "pattern": "^ses.*"
+                "pattern": "^ses_.*"
               },
               "goal": {
                 "anyOf": [
@@ -35135,7 +35135,7 @@
                     "properties": {
                       "sessionID": {
                         "type": "string",
-                        "pattern": "^ses.*"
+                        "pattern": "^ses_.*"
                       },
                       "objective": {
                         "type": "string"
@@ -35388,11 +35388,11 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^msg.*"
+            "pattern": "^msg_.*"
           },
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "role": {
             "type": "string",
@@ -35773,11 +35773,11 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^msg.*"
+            "pattern": "^msg_.*"
           },
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "role": {
             "type": "string",
@@ -35830,7 +35830,7 @@
           },
           "parentID": {
             "type": "string",
-            "pattern": "^msg.*"
+            "pattern": "^msg_.*"
           },
           "modelID": {
             "type": "string"
@@ -35975,11 +35975,11 @@
             "properties": {
               "sessionID": {
                 "type": "string",
-                "pattern": "^ses.*"
+                "pattern": "^ses_.*"
               },
               "messageID": {
                 "type": "string",
-                "pattern": "^msg.*"
+                "pattern": "^msg_.*"
               }
             },
             "required": [
@@ -35998,15 +35998,15 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "messageID": {
             "type": "string",
-            "pattern": "^msg.*"
+            "pattern": "^msg_.*"
           },
           "type": {
             "type": "string",
@@ -36056,15 +36056,15 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "messageID": {
             "type": "string",
-            "pattern": "^msg.*"
+            "pattern": "^msg_.*"
           },
           "type": {
             "type": "string",
@@ -36113,15 +36113,15 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "messageID": {
             "type": "string",
-            "pattern": "^msg.*"
+            "pattern": "^msg_.*"
           },
           "type": {
             "type": "string",
@@ -36319,15 +36319,15 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "messageID": {
             "type": "string",
-            "pattern": "^msg.*"
+            "pattern": "^msg_.*"
           },
           "type": {
             "type": "string",
@@ -36550,15 +36550,15 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "messageID": {
             "type": "string",
-            "pattern": "^msg.*"
+            "pattern": "^msg_.*"
           },
           "type": {
             "type": "string",
@@ -36596,15 +36596,15 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "messageID": {
             "type": "string",
-            "pattern": "^msg.*"
+            "pattern": "^msg_.*"
           },
           "type": {
             "type": "string",
@@ -36626,15 +36626,15 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "messageID": {
             "type": "string",
-            "pattern": "^msg.*"
+            "pattern": "^msg_.*"
           },
           "type": {
             "type": "string",
@@ -36699,15 +36699,15 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "messageID": {
             "type": "string",
-            "pattern": "^msg.*"
+            "pattern": "^msg_.*"
           },
           "type": {
             "type": "string",
@@ -36730,15 +36730,15 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "messageID": {
             "type": "string",
-            "pattern": "^msg.*"
+            "pattern": "^msg_.*"
           },
           "type": {
             "type": "string",
@@ -36768,15 +36768,15 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "messageID": {
             "type": "string",
-            "pattern": "^msg.*"
+            "pattern": "^msg_.*"
           },
           "type": {
             "type": "string",
@@ -36822,15 +36822,15 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "messageID": {
             "type": "string",
-            "pattern": "^msg.*"
+            "pattern": "^msg_.*"
           },
           "type": {
             "type": "string",
@@ -36869,15 +36869,15 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "messageID": {
             "type": "string",
-            "pattern": "^msg.*"
+            "pattern": "^msg_.*"
           },
           "type": {
             "type": "string",
@@ -36974,15 +36974,15 @@
             "properties": {
               "sessionID": {
                 "type": "string",
-                "pattern": "^ses.*"
+                "pattern": "^ses_.*"
               },
               "messageID": {
                 "type": "string",
-                "pattern": "^msg.*"
+                "pattern": "^msg_.*"
               },
               "partID": {
                 "type": "string",
-                "pattern": "^prt.*"
+                "pattern": "^prt_.*"
               },
               "field": {
                 "type": "string"
@@ -37020,15 +37020,15 @@
             "properties": {
               "sessionID": {
                 "type": "string",
-                "pattern": "^ses.*"
+                "pattern": "^ses_.*"
               },
               "messageID": {
                 "type": "string",
-                "pattern": "^msg.*"
+                "pattern": "^msg_.*"
               },
               "partID": {
                 "type": "string",
-                "pattern": "^prt.*"
+                "pattern": "^prt_.*"
               }
             },
             "required": [
@@ -37048,11 +37048,11 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^per.*"
+            "pattern": "^per_.*"
           },
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "permission": {
             "type": "string"
@@ -37081,7 +37081,7 @@
             "properties": {
               "messageID": {
                 "type": "string",
-                "pattern": "^msg.*"
+                "pattern": "^msg_.*"
               },
               "callID": {
                 "type": "string"
@@ -37130,11 +37130,11 @@
             "properties": {
               "sessionID": {
                 "type": "string",
-                "pattern": "^ses.*"
+                "pattern": "^ses_.*"
               },
               "requestID": {
                 "type": "string",
-                "pattern": "^per.*"
+                "pattern": "^per_.*"
               },
               "reply": {
                 "type": "string",
@@ -37246,7 +37246,7 @@
             "properties": {
               "sessionID": {
                 "type": "string",
-                "pattern": "^ses.*"
+                "pattern": "^ses_.*"
               },
               "status": {
                 "$ref": "#/components/schemas/SessionStatus"
@@ -37275,7 +37275,7 @@
             "properties": {
               "sessionID": {
                 "type": "string",
-                "pattern": "^ses.*"
+                "pattern": "^ses_.*"
               }
             },
             "required": [
@@ -37343,11 +37343,11 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^que.*"
+            "pattern": "^que_.*"
           },
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "questions": {
             "type": "array",
@@ -37361,7 +37361,7 @@
             "properties": {
               "messageID": {
                 "type": "string",
-                "pattern": "^msg.*"
+                "pattern": "^msg_.*"
               },
               "callID": {
                 "type": "string"
@@ -37413,11 +37413,11 @@
             "properties": {
               "sessionID": {
                 "type": "string",
-                "pattern": "^ses.*"
+                "pattern": "^ses_.*"
               },
               "requestID": {
                 "type": "string",
-                "pattern": "^que.*"
+                "pattern": "^que_.*"
               },
               "answers": {
                 "type": "array",
@@ -37450,11 +37450,11 @@
             "properties": {
               "sessionID": {
                 "type": "string",
-                "pattern": "^ses.*"
+                "pattern": "^ses_.*"
               },
               "requestID": {
                 "type": "string",
-                "pattern": "^que.*"
+                "pattern": "^que_.*"
               }
             },
             "required": [
@@ -37480,7 +37480,7 @@
             "properties": {
               "sessionID": {
                 "type": "string",
-                "pattern": "^ses.*"
+                "pattern": "^ses_.*"
               }
             },
             "required": [
@@ -37536,7 +37536,7 @@
             "properties": {
               "sessionID": {
                 "type": "string",
-                "pattern": "^ses.*"
+                "pattern": "^ses_.*"
               },
               "todos": {
                 "type": "array",
@@ -37900,14 +37900,14 @@
               },
               "sessionID": {
                 "type": "string",
-                "pattern": "^ses.*"
+                "pattern": "^ses_.*"
               },
               "arguments": {
                 "type": "string"
               },
               "messageID": {
                 "type": "string",
-                "pattern": "^msg.*"
+                "pattern": "^msg_.*"
               },
               "source": {
                 "type": "string",
@@ -37983,7 +37983,7 @@
                 "properties": {
                   "id": {
                     "type": "string",
-                    "pattern": "^tsk.*"
+                    "pattern": "^tsk_.*"
                   },
                   "projectID": {
                     "type": "string"
@@ -37996,7 +37996,7 @@
                   },
                   "sessionID": {
                     "type": "string",
-                    "pattern": "^ses.*"
+                    "pattern": "^ses_.*"
                   },
                   "kind": {
                     "type": "string",
@@ -38122,7 +38122,7 @@
                 "properties": {
                   "id": {
                     "type": "string",
-                    "pattern": "^tsk.*"
+                    "pattern": "^tsk_.*"
                   },
                   "projectID": {
                     "type": "string"
@@ -38135,7 +38135,7 @@
                   },
                   "sessionID": {
                     "type": "string",
-                    "pattern": "^ses.*"
+                    "pattern": "^ses_.*"
                   },
                   "kind": {
                     "type": "string",
@@ -38258,14 +38258,14 @@
             "properties": {
               "id": {
                 "type": "string",
-                "pattern": "^tsk.*"
+                "pattern": "^tsk_.*"
               },
               "projectID": {
                 "type": "string"
               },
               "sessionID": {
                 "type": "string",
-                "pattern": "^ses.*"
+                "pattern": "^ses_.*"
               }
             },
             "required": [
@@ -40317,7 +40317,7 @@
                 "properties": {
                   "id": {
                     "type": "string",
-                    "pattern": "^sch.*"
+                    "pattern": "^sch_.*"
                   },
                   "projectID": {
                     "type": "string"
@@ -40535,7 +40535,7 @@
                 "properties": {
                   "id": {
                     "type": "string",
-                    "pattern": "^sch.*"
+                    "pattern": "^sch_.*"
                   },
                   "projectID": {
                     "type": "string"
@@ -40750,7 +40750,7 @@
             "properties": {
               "id": {
                 "type": "string",
-                "pattern": "^sch.*"
+                "pattern": "^sch_.*"
               },
               "projectID": {
                 "type": "string"
@@ -40933,7 +40933,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "slug": {
             "type": "string"
@@ -40946,7 +40946,7 @@
           },
           "parentID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "summary": {
             "type": "object",
@@ -41021,11 +41021,11 @@
             "properties": {
               "messageID": {
                 "type": "string",
-                "pattern": "^msg.*"
+                "pattern": "^msg_.*"
               },
               "partID": {
                 "type": "string",
-                "pattern": "^prt.*"
+                "pattern": "^prt_.*"
               },
               "snapshot": {
                 "type": "string"
@@ -41140,7 +41140,7 @@
             "properties": {
               "sessionID": {
                 "type": "string",
-                "pattern": "^ses.*"
+                "pattern": "^ses_.*"
               },
               "diff": {
                 "type": "array",
@@ -41172,7 +41172,7 @@
             "properties": {
               "sessionID": {
                 "type": "string",
-                "pattern": "^ses.*"
+                "pattern": "^ses_.*"
               },
               "error": {
                 "oneOf": [
@@ -41356,7 +41356,7 @@
               "sessionID": {
                 "description": "Session ID to navigate to",
                 "type": "string",
-                "pattern": "^ses.*"
+                "pattern": "^ses_.*"
               }
             },
             "required": [
@@ -41374,7 +41374,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^pty.*"
+            "pattern": "^pty_.*"
           },
           "title": {
             "type": "string"
@@ -41472,7 +41472,7 @@
             "properties": {
               "id": {
                 "type": "string",
-                "pattern": "^pty.*"
+                "pattern": "^pty_.*"
               },
               "exitCode": {
                 "type": "number"
@@ -41501,7 +41501,7 @@
             "properties": {
               "id": {
                 "type": "string",
-                "pattern": "^pty.*"
+                "pattern": "^pty_.*"
               }
             },
             "required": [
@@ -44291,7 +44291,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "slug": {
             "type": "string"
@@ -44304,7 +44304,7 @@
           },
           "parentID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "summary": {
             "type": "object",
@@ -44379,11 +44379,11 @@
             "properties": {
               "messageID": {
                 "type": "string",
-                "pattern": "^msg.*"
+                "pattern": "^msg_.*"
               },
               "partID": {
                 "type": "string",
-                "pattern": "^prt.*"
+                "pattern": "^prt_.*"
               },
               "snapshot": {
                 "type": "string"
@@ -47613,11 +47613,11 @@
           },
           "messageID": {
             "type": "string",
-            "pattern": "^msg.*"
+            "pattern": "^msg_.*"
           },
           "partID": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "duration": {
             "type": "number"
@@ -47663,7 +47663,7 @@
         "properties": {
           "sessionID": {
             "type": "string",
-            "pattern": "^ses.*"
+            "pattern": "^ses_.*"
           },
           "valid": {
             "type": "boolean"
@@ -47845,7 +47845,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "type": {
             "type": "string",
@@ -47892,7 +47892,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "type": {
             "type": "string",
@@ -47922,7 +47922,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "type": {
             "type": "string",
@@ -47965,7 +47965,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^prt.*"
+            "pattern": "^prt_.*"
           },
           "type": {
             "type": "string",

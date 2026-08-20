@@ -11,9 +11,8 @@ export class ACPSessionManager {
   // Backstop cap to bound long-running ACP servers. The ACP protocol has
   // no `session.close` notification today, so without this the map grows
   // monotonically as the client creates / loads / forks / resumes
-  // sessions across the agent's lifetime. Eviction is insertion-order
-  // LRU on `create` / `load` / `track` (the same paths that grow the
-  // map), so the oldest unused state is dropped first. 1024 is well
+  // sessions across the agent's lifetime. Reads and writes refresh Map
+  // insertion order so the oldest unused state is dropped first. 1024 is well
   // above any realistic concurrent-session count for a single ACP
   // connection while keeping memory bounded.
   private static readonly MAX_SESSIONS = 1024
@@ -39,6 +38,14 @@ export class ACPSessionManager {
     }
   }
 
+  private touch(sessionId: string) {
+    const state = this.sessions.get(sessionId)
+    if (!state) return
+    this.sessions.delete(sessionId)
+    this.sessions.set(sessionId, state)
+    return state
+  }
+
   /**
    * Drop a session's state. Call when the ACP client signals end of a
    * session, or from connection-teardown paths so we don't leak state
@@ -54,7 +61,7 @@ export class ACPSessionManager {
   }
 
   tryGet(sessionId: string): ACPSessionState | undefined {
-    return this.sessions.get(sessionId)
+    return this.touch(sessionId)
   }
 
   async create(cwd: string, mcpServers: McpServer[], model?: ACPSessionState["model"]): Promise<ACPSessionState> {
@@ -80,7 +87,12 @@ export class ACPSessionManager {
       createdAt: new Date(),
       model: resolvedModel,
     }
-    log.info("creating_session", { state })
+    log.info("creating_session", {
+      sessionId,
+      cwd,
+      mcpServerCount: mcpServers.length,
+      hasModel: resolvedModel !== undefined,
+    })
 
     this.track(sessionId, state)
     return state
@@ -114,14 +126,19 @@ export class ACPSessionManager {
       createdAt: new Date(session.time.created),
       model: resolvedModel,
     }
-    log.info("loading_session", { state })
+    log.info("loading_session", {
+      sessionId,
+      cwd,
+      mcpServerCount: mcpServers.length,
+      hasModel: resolvedModel !== undefined,
+    })
 
     this.track(sessionId, state)
     return state
   }
 
   get(sessionId: string): ACPSessionState {
-    const session = this.sessions.get(sessionId)
+    const session = this.touch(sessionId)
     if (!session) {
       log.error("session not found", { sessionId })
       throw RequestError.invalidParams(JSON.stringify({ error: `Session not found: ${sessionId}` }))
@@ -137,7 +154,6 @@ export class ACPSessionManager {
   setModel(sessionId: string, model: ACPSessionState["model"]) {
     const session = this.get(sessionId)
     session.model = model
-    this.sessions.set(sessionId, session)
     return session
   }
 
@@ -149,14 +165,12 @@ export class ACPSessionManager {
   setVariant(sessionId: string, variant?: string) {
     const session = this.get(sessionId)
     session.variant = variant
-    this.sessions.set(sessionId, session)
     return session
   }
 
   setMode(sessionId: string, modeId: string) {
     const session = this.get(sessionId)
     session.modeId = modeId
-    this.sessions.set(sessionId, session)
     return session
   }
 }

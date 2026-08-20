@@ -109,6 +109,8 @@ export namespace ACP {
     private replaying = new Set<string>()
     private replayQueue = new Map<string, Event[]>()
     private static readonly REPLAY_QUEUE_MAX = 500
+    private static readonly EVENT_RETRY_BASE_MS = 250
+    private static readonly EVENT_RETRY_MAX_MS = 5_000
     private pendingSessionUpdates = new Set<ReturnType<typeof setTimeout>>()
     private permissionOptions: PermissionOption[] = [
       { optionId: "once", kind: "allow_once", name: "Allow once" },
@@ -135,18 +137,48 @@ export namespace ACP {
     }
 
     private async runEventSubscription() {
-      while (true) {
+      let retryAttempt = 0
+      while (!this.eventAbort.signal.aborted) {
         if (this.eventAbort.signal.aborted) return
-        const events = await this.sdk.global.event({ signal: this.eventAbort.signal })
-        for await (const event of events.stream) {
+        try {
+          const events = await this.sdk.global.event({ signal: this.eventAbort.signal })
+          for await (const event of events.stream) {
+            if (this.eventAbort.signal.aborted) return
+            retryAttempt = 0
+            const payload = (event as any)?.payload
+            if (!payload) continue
+            await this.handleEvent(payload as Event).catch((error) => {
+              log.error("failed to handle event", { error, type: payload.type })
+            })
+          }
           if (this.eventAbort.signal.aborted) return
-          const payload = (event as any)?.payload
-          if (!payload) continue
-          await this.handleEvent(payload as Event).catch((error) => {
-            log.error("failed to handle event", { error, type: payload.type })
-          })
+          log.warn("event subscription ended; reconnecting")
+        } catch (error) {
+          if (this.eventAbort.signal.aborted) return
+          log.warn("event subscription interrupted; reconnecting", { error })
         }
+        retryAttempt++
+        const delay = Math.min(
+          Agent.EVENT_RETRY_BASE_MS * 2 ** Math.min(retryAttempt - 1, 10),
+          Agent.EVENT_RETRY_MAX_MS,
+        )
+        if (!(await this.waitForEventRetry(delay))) return
       }
+    }
+
+    private waitForEventRetry(delay: number) {
+      const signal = this.eventAbort.signal
+      if (signal.aborted) return Promise.resolve(false)
+      return new Promise<boolean>((resolve) => {
+        const timer = setTimeout(() => finish(true), delay)
+        const onAbort = () => finish(false)
+        const finish = (retry: boolean) => {
+          clearTimeout(timer)
+          signal.removeEventListener("abort", onAbort)
+          resolve(retry)
+        }
+        signal.addEventListener("abort", onAbort, { once: true })
+      })
     }
 
     dispose() {
@@ -529,7 +561,7 @@ export namespace ACP {
           await FileTime.withLock(filepath, async () => {
             const content = (await Filesystem.exists(filepath)) ? await Filesystem.readText(filepath) : ""
             const newContent = getNewContent(content, diff)
-            if (newContent) {
+            if (newContent !== undefined) {
               await this.connection.writeTextFile({ sessionId: session.id, path: filepath, content: newContent })
             }
           }).catch((error) => {
@@ -715,7 +747,7 @@ export namespace ACP {
         .filter((p): p is { type: "text"; text: string } => p.type === "text")
         .map((p) => p.text).join("").trim()
       const cmd = parseSlashCommand(textContent)
-      if (!cmd) {
+      const runPrompt = async () => {
         const response = await this.sdk.session.prompt({
           sessionID,
           model: { providerID: model.providerID, modelID: model.modelID },
@@ -726,6 +758,7 @@ export namespace ACP {
         await sendUsageUpdate(this.connection, this.sdk, sessionID, directory)
         return { stopReason: "end_turn" as const, usage: msg ? buildUsage(msg) : undefined, _meta: {} }
       }
+      if (!cmd) return runPrompt()
       const commandResp = await this.config.sdk.command.list({ directory }, { throwOnError: true })
       if (!commandResp.data) throw new Error(`ACP command.list: empty response for ${directory}`)
       const command = commandResp.data.find((c) => c.name === cmd.name)
@@ -744,6 +777,8 @@ export namespace ACP {
             sessionID, directory, providerID: model.providerID, modelID: model.modelID,
           }, { throwOnError: true })
           break
+        default:
+          return runPrompt()
       }
       await sendUsageUpdate(this.connection, this.sdk, sessionID, directory)
       return { stopReason: "end_turn" as const, _meta: {} }

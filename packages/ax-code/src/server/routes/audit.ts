@@ -5,7 +5,7 @@ import z from "zod"
 import { AuditExport } from "../../audit/export"
 import { parseAuditJsonLineResult } from "../../audit/json"
 import { Replay } from "../../replay/replay"
-import type { SessionID } from "../../session/schema"
+import { SessionID } from "../../session/schema"
 import { Session } from "../../session"
 import { lazy } from "../../util/lazy"
 import { Log } from "../../util/log"
@@ -73,7 +73,7 @@ export async function collectAuditExportRecords(
     if (RiskEngine && minLevel !== undefined) {
       let level = sessionRisks.get(record.session_id)
       if (level === undefined) {
-        const assessment = RiskEngine.fromSession(record.session_id as SessionID)
+        const assessment = RiskEngine.fromSession(SessionID.make(record.session_id))
         level = riskOrder[assessment.level]
         sessionRisks.set(record.session_id, level)
       }
@@ -86,6 +86,13 @@ export async function collectAuditExportRecords(
   return records
 }
 
+export function auditSessionIDsForDirectory(directory: string): Set<string> {
+  // Session.list defaults to 100 rows, but project-wide audit export promises
+  // all sessions. SQLite accepts LIMIT 2^53-1, which keeps this query bounded
+  // by the actual table while avoiding a second, inconsistent pagination loop.
+  return new Set(Session.list({ directory, limit: Number.MAX_SAFE_INTEGER }).map((session) => session.id))
+}
+
 export const AuditRoutes = lazy(() =>
   new Hono()
     .get(
@@ -95,7 +102,7 @@ export const AuditRoutes = lazy(() =>
         description: "Export all audit events for a session as JSON Lines.",
         operationId: "audit.export",
         responses: {
-          200: { description: "JSON Lines audit export" },
+          200: { description: "JSON audit export envelope" },
         },
       }),
       validator("param", SESSION_ID_PARAM),
@@ -114,7 +121,7 @@ export const AuditRoutes = lazy(() =>
         description: "Export all audit events for the current project, optionally filtered by date.",
         operationId: "audit.exportAll",
         responses: {
-          200: { description: "JSON Lines audit export" },
+          200: { description: "JSON audit export envelope" },
         },
       }),
       validator("query", AuditExportAllQuery),
@@ -126,7 +133,7 @@ export const AuditRoutes = lazy(() =>
         // directory, so we resolve the set of session IDs that belong to the
         // current project and only keep records for those sessions.
         const directory = Instance.directory
-        const allowedSessions = new Set(Session.list({ directory }).map((s) => s.id))
+        const allowedSessions = auditSessionIDsForDirectory(directory)
         const records = await collectAuditExportRecords(AuditExport.streamAll({ since }), {
           limit,
           risk,

@@ -412,6 +412,11 @@ const SOURCE_FILE_EXTENSIONS = new Set([
   "hpp",
 ])
 
+function containsPath(parent: string, child: string): boolean {
+  const relative = path.relative(path.resolve(parent), path.resolve(child))
+  return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
+}
+
 // Recursive source-file walker. Unlike the Glob shim it prunes ignored
 // directories (node_modules, .git, dist, ...) instead of descending into
 // them, which keeps the project-root fallback scan safe.
@@ -423,7 +428,9 @@ async function* scanSourceFiles(cwd: string): AsyncGenerator<string> {
     const entries = await fs.promises.readdir(current, { withFileTypes: true }).catch(() => [])
     for (const entry of entries) {
       if (entry.name.startsWith(".")) continue
+      if (entry.isSymbolicLink()) continue
       const full = path.join(current, entry.name)
+      if (!containsPath(cwd, full)) continue
       const relative = path.relative(cwd, full).split(path.sep).join("/")
       if (entry.isDirectory()) {
         if (!FileIgnore.match(relative)) stack.push(full)
@@ -449,6 +456,7 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
   // back to scanning the project root itself so flat or scripts-only
   // projects are still measured.
   const scanDir = info.directories.source ? path.join(root, info.directories.source) : root
+  if (!containsPath(root, scanDir)) throw new Error(`Complexity scan directory escapes project root: ${scanDir}`)
   try {
     const batch: string[] = []
     for await (const file of scanSourceFiles(scanDir)) {
@@ -456,7 +464,11 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
       if (batch.length >= 50 || fileCount + batch.length >= 5000) {
         const batchToRead = batch.splice(0, Math.max(0, 5000 - fileCount))
         const results = await Promise.all(
-          batchToRead.map((f) => readFile(path.join(scanDir, f), "utf-8").catch(() => "")),
+          batchToRead.map((f) => {
+            const sourceFile = path.join(scanDir, f)
+            if (!containsPath(scanDir, sourceFile)) return ""
+            return readFile(sourceFile, "utf-8").catch(() => "")
+          }),
         )
         for (const content of results) {
           fileCount++
@@ -468,7 +480,13 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
     }
     if (batch.length > 0 && fileCount < 5000) {
       const batchToRead = batch.slice(0, 5000 - fileCount)
-      const results = await Promise.all(batchToRead.map((f) => readFile(path.join(scanDir, f), "utf-8").catch(() => "")))
+      const results = await Promise.all(
+        batchToRead.map((f) => {
+          const sourceFile = path.join(scanDir, f)
+          if (!containsPath(scanDir, sourceFile)) return ""
+          return readFile(sourceFile, "utf-8").catch(() => "")
+        }),
+      )
       for (const content of results) {
         fileCount++
         loc += countLines(content)

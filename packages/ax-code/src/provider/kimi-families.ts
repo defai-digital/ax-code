@@ -33,14 +33,14 @@ export function kimiDisplayName(name: string | undefined, fallback: string): str
 }
 
 export function latestKimiFamilyModels<T extends KimiFamilySource>(models: Record<string, T>): T[] {
-  const best = new Map<string, T>()
+  const best: Record<string, T | undefined> = {}
   for (const [id, model] of Object.entries(models)) {
     const family = kimiFamilyId({ id: model.id ?? id, family: model.family })
     if (!family) continue
-    const current = best.get(family)
-    if (!current || compareKimiFamilyModels(model, current, id) > 0) best.set(family, model)
+    const current = best[family]
+    if (!current || compareKimiFamilyModels(model, current, id) > 0) best[family] = model
   }
-  return FAMILY_ORDER.map((family) => best.get(family)).filter((model): model is T => model !== undefined)
+  return FAMILY_ORDER.map((family) => best[family]).filter((model): model is T => model !== undefined)
 }
 
 export function kimiFallbackModels(): Array<

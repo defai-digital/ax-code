@@ -1,5 +1,6 @@
 import { readAuthFile } from "../../ax-code/auth.js"
-import { getAuthEntry, normalizeAuthEntry, buildResult, toUsageWindow, toNumber, toTimestamp } from "../utils/index.js"
+import { getAuthEntry, normalizeAuthEntry, buildResult } from "../utils/index.js"
+import { transformMinimaxWindows } from "./minimax-shared.js"
 
 export const providerId = "minimax-coding-plan"
 export const providerName = "MiniMax Token Plan (minimax.io)"
@@ -69,45 +70,7 @@ export const fetchQuota = async () => {
       })
     }
 
-    const intervalTotal = toNumber(firstModel.current_interval_total_count)
-    const intervalUsage = toNumber(firstModel.current_interval_usage_count)
-    const intervalStartAt = toTimestamp(firstModel.start_time)
-    const intervalResetAt = toTimestamp(firstModel.end_time)
-    const weeklyTotal = toNumber(firstModel.current_weekly_total_count)
-    const weeklyUsage = toNumber(firstModel.current_weekly_usage_count)
-    const weeklyStartAt = toTimestamp(firstModel.weekly_start_time)
-    const weeklyResetAt = toTimestamp(firstModel.weekly_end_time)
-
-    const intervalUsed = intervalUsage
-    const weeklyUsed = weeklyUsage
-
-    const intervalUsedPercent =
-      intervalTotal > 0 && intervalUsed !== null
-        ? Math.max(0, Math.min(100, (intervalUsed / intervalTotal) * 100))
-        : null
-    const intervalWindowSeconds =
-      intervalStartAt && intervalResetAt && intervalResetAt > intervalStartAt
-        ? Math.floor((intervalResetAt - intervalStartAt) / 1000)
-        : null
-    const weeklyUsedPercent =
-      weeklyTotal > 0 && weeklyUsed !== null ? Math.max(0, Math.min(100, (weeklyUsed / weeklyTotal) * 100)) : null
-    const weeklyWindowSeconds =
-      weeklyStartAt && weeklyResetAt && weeklyResetAt > weeklyStartAt
-        ? Math.floor((weeklyResetAt - weeklyStartAt) / 1000)
-        : null
-
-    const windows = {
-      "5h": toUsageWindow({
-        usedPercent: intervalUsedPercent,
-        windowSeconds: intervalWindowSeconds,
-        resetAt: intervalResetAt,
-      }),
-      weekly: toUsageWindow({
-        usedPercent: weeklyUsedPercent,
-        windowSeconds: weeklyWindowSeconds,
-        resetAt: weeklyResetAt,
-      }),
-    }
+    const windows = transformMinimaxWindows(firstModel)
 
     return buildResult({
       providerId,

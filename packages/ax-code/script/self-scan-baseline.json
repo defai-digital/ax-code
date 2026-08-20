@@ -26,8 +26,8 @@
         {
           "fingerprint": "49cf239d908d2e0b51d0366e5950eba42705206cb278f7c16cb0e1a0e34d141c",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 521,
-          "endLine": 528,
+          "line": 536,
+          "endLine": 543,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -35,8 +35,8 @@
         {
           "fingerprint": "4b523692403734c9088c2974f46d92f93ada7826f437a958629fd483bb46e54c",
           "file": "src/provider/loaders.ts",
-          "line": 336,
-          "endLine": 364,
+          "line": 350,
+          "endLine": 378,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -44,8 +44,8 @@
         {
           "fingerprint": "9006ba2cc657da9d057d776ba1689d1af78e015984d4b2fc15816fc1aaeaafd1",
           "file": "src/provider/provider-impl.ts",
-          "line": 1096,
-          "endLine": 1115,
+          "line": 1122,
+          "endLine": 1141,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -53,8 +53,8 @@
         {
           "fingerprint": "9006ba2cc657da9d057d776ba1689d1af78e015984d4b2fc15816fc1aaeaafd1",
           "file": "src/provider/provider-impl.ts",
-          "line": 1096,
-          "endLine": 1125,
+          "line": 1122,
+          "endLine": 1151,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -62,8 +62,8 @@
         {
           "fingerprint": "ebdb937221c5606fbb186bfe077c4934aef737b8aff521521808bb557fd2ba3a",
           "file": "src/provider/provider-impl.ts",
-          "line": 1101,
-          "endLine": 1139,
+          "line": 1127,
+          "endLine": 1165,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -71,8 +71,8 @@
         {
           "fingerprint": "ebdb937221c5606fbb186bfe077c4934aef737b8aff521521808bb557fd2ba3a",
           "file": "src/provider/provider-impl.ts",
-          "line": 1101,
-          "endLine": 1147,
+          "line": 1127,
+          "endLine": 1173,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -80,8 +80,8 @@
         {
           "fingerprint": "a27e555075eb8610002f1ec13df092835b9067110dd1059f873638597dff6c61",
           "file": "src/server/routes/provider.ts",
-          "line": 381,
-          "endLine": 426,
+          "line": 379,
+          "endLine": 424,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -393,7 +393,7 @@
         {
           "fingerprint": "616e9a85a1ac74bf4aa42b2a1c21026a7b60731d4a70f92544fded017a54af78",
           "file": "src/tool/bash-impl.ts",
-          "line": 794,
+          "line": 902,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -401,7 +401,7 @@
         {
           "fingerprint": "7ac7861499fb5659192755521a995cb986131131d27df7ee50928f79b8ce6e9e",
           "file": "src/tool/bash-impl.ts",
-          "line": 795,
+          "line": 903,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -409,7 +409,7 @@
         {
           "fingerprint": "b6ccd991efa86426087f6ba13ff4e83712d6ca771983e62f3a71feaca628587b",
           "file": "src/tool/bash-impl.ts",
-          "line": 948,
+          "line": 1056,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -417,7 +417,7 @@
         {
           "fingerprint": "6fa902c9ef2e19fef4950c3cb389c828b2c25d063b008fac5c59728669fed0c9",
           "file": "src/tool/bash-impl.ts",
-          "line": 971,
+          "line": 1079,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -425,7 +425,7 @@
         {
           "fingerprint": "c07b490b40e828a68cca6bdcd2c78f4c0541794987facbafdaaa5823e50176eb",
           "file": "src/tool/bash-impl.ts",
-          "line": 985,
+          "line": 1093,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -433,7 +433,7 @@
         {
           "fingerprint": "d06989df56dc6957119f0a631d5c65722afbd4be54f36afbf614bd98c7ef6fc9",
           "file": "src/tool/bash-impl.ts",
-          "line": 990,
+          "line": 1098,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -457,7 +457,7 @@
       ]
     },
     "lifecycle_scan": {
-      "count": 180,
+      "count": 179,
       "findings": [
         {
           "fingerprint": "988fc40c0ae29463c01aa66d00474a79033c16bb47b846775fe9a251acb59cbf",
@@ -470,7 +470,7 @@
         {
           "fingerprint": "d77017c3464f0519403bc9f98c3a2b34ba8213297cb1acf78a37babfdd4aa763",
           "file": "src/cli/boot-node.ts",
-          "line": 36,
+          "line": 37,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -478,7 +478,7 @@
         {
           "fingerprint": "139bd6e0419ca024fda87bda08a45547a58ebed712c7259c6c808b84eaf05b37",
           "file": "src/cli/boot-node.ts",
-          "line": 57,
+          "line": 58,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -486,7 +486,7 @@
         {
           "fingerprint": "4694eee925be7e402f9109831225e040e8826425f838f82e2dc5293ea1097d3f",
           "file": "src/cli/boot.ts",
-          "line": 130,
+          "line": 131,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -494,7 +494,7 @@
         {
           "fingerprint": "011375d5ca98bbf6180580718ed14802b80ec9f114d05d92d0285698610de733",
           "file": "src/cli/boot.ts",
-          "line": 144,
+          "line": 145,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -506,14 +506,6 @@
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
-        },
-        {
-          "fingerprint": "69495a037fae23f4d5d15aa9ae0644c33d77463b69800a67ba8fb2ab5be984d8",
-          "file": "src/cli/cmd/doctor-health.ts",
-          "line": 184,
-          "severity": "high",
-          "kind": "child_process:no_cleanup",
-          "summary": "child_process:no_cleanup"
         },
         {
           "fingerprint": "77c4fc0655ac2616ef28efe8c6a09ce54c73fe8ba2a61491bf3aff374e69d3ec",
@@ -550,7 +542,7 @@
         {
           "fingerprint": "0d32bc72f5c452849db4e17e0f3c37f7227795f8d35d5c21703c56b1245b6339",
           "file": "src/cli/cmd/storage/session.ts",
-          "line": 439,
+          "line": 475,
           "severity": "high",
           "kind": "child_process:no_cleanup",
           "summary": "child_process:no_cleanup"
@@ -558,7 +550,7 @@
         {
           "fingerprint": "44b61f10a2521187003a63055086e8e8d97444de7f45362d37f855573db0421f",
           "file": "src/cli/cmd/tui/terminal-cleanup.ts",
-          "line": 102,
+          "line": 105,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -662,7 +654,7 @@
         {
           "fingerprint": "eb9262e63234254c65022b56f40eb4bd20816c31faaa928f64564ec930cc65a0",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 244,
+          "line": 258,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -670,7 +662,7 @@
         {
           "fingerprint": "d59deefdfb2a0775af8aa7e7fbc8e74e490a80b77680ad2a113b24afbffbf8a7",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 409,
+          "line": 423,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -678,7 +670,7 @@
         {
           "fingerprint": "205ae80d3cc4e55b0beadb36e9dcbe9cf42c44a6063964169019dfc79874e990",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 637,
+          "line": 695,
           "severity": "high",
           "kind": "child_process:no_cleanup",
           "summary": "child_process:no_cleanup"
@@ -766,7 +758,7 @@
         {
           "fingerprint": "099ffe1ff6961959a830125a5c0a43a27658be53506ea848d32e441fb8300b63",
           "file": "src/tool/bash-impl.ts",
-          "line": 167,
+          "line": 232,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -790,7 +782,7 @@
         {
           "fingerprint": "84b63d6224694e78aeb25890ef4119d3d9f96516fc1419a17094e2f5b2f09b74",
           "file": "src/cli/boot-node.ts",
-          "line": 42,
+          "line": 43,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -798,7 +790,7 @@
         {
           "fingerprint": "49c267b408e4dc27b0a1852b07d601962ec206092fd63010b5d3b095dd097ccb",
           "file": "src/cli/boot-node.ts",
-          "line": 43,
+          "line": 44,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -806,7 +798,7 @@
         {
           "fingerprint": "62ca379c82fd5629e0de7f047bf23fa615df75c4859feab358d265cdd8e40f0e",
           "file": "src/cli/boot.ts",
-          "line": 155,
+          "line": 156,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -814,7 +806,7 @@
         {
           "fingerprint": "a0e2e992829edc3444e341ba4deb0b823fb5d1db89c202da74451bc1137ba3fb",
           "file": "src/cli/boot.ts",
-          "line": 156,
+          "line": 157,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -958,7 +950,7 @@
         {
           "fingerprint": "87c7b21f04ac03f6e4b102a847e4dbe099691fc23802528c5c0fbf57cff65be5",
           "file": "src/cli/cmd/providers-impl.ts",
-          "line": 30,
+          "line": 31,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -966,7 +958,7 @@
         {
           "fingerprint": "1adbc1adf1d0b356cb6104d40110bb15086d4afd656fa18c6b74a2111fb168b7",
           "file": "src/cli/cmd/run.ts",
-          "line": 539,
+          "line": 552,
           "severity": "medium",
           "kind": "subscription:no_cleanup",
           "summary": "subscription:no_cleanup"
@@ -974,7 +966,7 @@
         {
           "fingerprint": "aeb732a3e004738dcf5dceb3c1b29b0e98191cd2c2425912729796cc339015d5",
           "file": "src/cli/cmd/run.ts",
-          "line": 566,
+          "line": 579,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1014,7 +1006,7 @@
         {
           "fingerprint": "b97b9f29e6d33df6fd0e3d7a43cd436a57cf23f8943829889c47971ebe233e53",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 288,
+          "line": 324,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1022,7 +1014,7 @@
         {
           "fingerprint": "667fad48cc4105ec032b7cda3fb201a7fbcec719103d829340198565b18106c1",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 465,
+          "line": 501,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1030,7 +1022,7 @@
         {
           "fingerprint": "b8a37765a5b970d69b4ed20bcb8f2dd37aa52e0d70b5dcab07390c9c9bb310cc",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 862,
+          "line": 903,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1046,7 +1038,7 @@
         {
           "fingerprint": "97eeeb757f34ce4d55118a56b69bd51d17ad55095c5db4eae7cfaff503359414",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 334,
+          "line": 329,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1054,7 +1046,7 @@
         {
           "fingerprint": "93865fa82182c5a60f029005c05bf66a6e319edf80870fc41d95f437b073858d",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 773,
+          "line": 726,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1062,7 +1054,7 @@
         {
           "fingerprint": "a7a5f8f67ea5f92e06d4a03b240dffd6f11a8a1d9a43c93e8bc3363a62c0fb52",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 774,
+          "line": 727,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1070,7 +1062,7 @@
         {
           "fingerprint": "1ca2bcc2a2fdffc4c21b41943edc93f7e4e0c59ce06f588cc884532ed0d28dfa",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 775,
+          "line": 728,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1078,7 +1070,7 @@
         {
           "fingerprint": "94835321fd4764acd5d2c20ae85163b425d19914a8b36ddbabfa6a2871e22f98",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 1018,
+          "line": 971,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1086,7 +1078,7 @@
         {
           "fingerprint": "2f4fc5cf64d2ce458bf6389bbafeb79f101cc1e5f045b945f5d745710aa36c83",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 1592,
+          "line": 1545,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1198,7 +1190,7 @@
         {
           "fingerprint": "4189d786f9c93b6e5ab528e83ed0841ff79aa250c87aa999212317337c01cc19",
           "file": "src/cli/cmd/tui/ui/dialog-help-view-model.ts",
-          "line": 76,
+          "line": 72,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1230,7 +1222,7 @@
         {
           "fingerprint": "bc413e0a638ab1e3240945d97d83b129eb765db589aa5e128461b1fb51886404",
           "file": "src/code-intelligence/graph-context.ts",
-          "line": 416,
+          "line": 417,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1246,7 +1238,7 @@
         {
           "fingerprint": "21c7815124b253eae3d9f6fb081fd940d852cdddc29d817ede941d5d8497bc60",
           "file": "src/config/config-impl.ts",
-          "line": 366,
+          "line": 391,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1254,7 +1246,7 @@
         {
           "fingerprint": "cde1eefbcd3c7f0ac1de1dce7012e2fe5881be34add077da2fa8cf312a95e613",
           "file": "src/config/config-impl.ts",
-          "line": 622,
+          "line": 647,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1470,7 +1462,7 @@
         {
           "fingerprint": "b262e087dfcc2b8b79d08e2fe761b37f6cfe0615c4ed69a85c5cb7b40921b4e2",
           "file": "src/project/bootstrap.ts",
-          "line": 176,
+          "line": 188,
           "severity": "medium",
           "kind": "subscription:no_cleanup",
           "summary": "subscription:no_cleanup"
@@ -1486,7 +1478,7 @@
         {
           "fingerprint": "18bd52525aeee67ce476a8823018f783c5f85cbaebc7cb383290c834024810e7",
           "file": "src/provider/ax-engine/provider-loader.ts",
-          "line": 180,
+          "line": 182,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1494,7 +1486,7 @@
         {
           "fingerprint": "db39b64c07a2e452b6401b50891ab5f75a5cad589180e0efa1b9e2e2b90c1f7c",
           "file": "src/provider/ax-engine/provider-loader.ts",
-          "line": 294,
+          "line": 296,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1502,7 +1494,7 @@
         {
           "fingerprint": "4c29ce91f7286aafd67c68bb387b6bbc2bd074bdc25fe9550f9c396396aaaa2f",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 410,
+          "line": 424,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -1510,7 +1502,7 @@
         {
           "fingerprint": "7ada331ee17778c0dab3645d5874ede6160825e83f85f9fca4689093097c4f48",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 414,
+          "line": 428,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -1518,7 +1510,7 @@
         {
           "fingerprint": "c55c1157f2035311ffa452b6a22cd25297aed2f60dd5f2884f0520dcc9fe4cbe",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 417,
+          "line": 431,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -1526,7 +1518,7 @@
         {
           "fingerprint": "0fdee5ba04281f754f9a5aba5bef77480ffbfb272069899a65be65ab919d59cb",
           "file": "src/provider/loaders.ts",
-          "line": 364,
+          "line": 378,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1686,7 +1678,7 @@
         {
           "fingerprint": "426387ff8eb924d99c133861f004cafb1b41ce02410942021c493a65f6711baa",
           "file": "src/server/routes/provider.ts",
-          "line": 215,
+          "line": 213,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1902,12 +1894,12 @@
       ]
     },
     "security_scan": {
-      "count": 457,
+      "count": 453,
       "findings": [
         {
           "fingerprint": "5408e4d4e3ebb995a544fa9cf884f57c72d8f2ce3470fe51fc3889c2ad26d767",
           "file": "src/agent/agent.ts",
-          "line": 85,
+          "line": 86,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -1915,7 +1907,7 @@
         {
           "fingerprint": "bf687514168e9e8554765ef2333df1251b2176219fa810c11131da3ccea04337",
           "file": "src/agent/agent.ts",
-          "line": 156,
+          "line": 158,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -1923,7 +1915,7 @@
         {
           "fingerprint": "f085470f92d72b72647c71b0b7242b1ffe11f99ee348662b3a4ecc2dd6a0fc10",
           "file": "src/agent/agent.ts",
-          "line": 183,
+          "line": 185,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2123,7 +2115,7 @@
         {
           "fingerprint": "225df3dace7c7d535b0cfbef00259a5b91cd138ef07963bafe460a20926284e1",
           "file": "src/cli/cmd/doctor-health.ts",
-          "line": 90,
+          "line": 128,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2147,7 +2139,7 @@
         {
           "fingerprint": "0e14ce7ea38fe85be3fcfc04759ef7a550ac0bb1bcb77320e9e759bd27e0f9a1",
           "file": "src/cli/cmd/doctor.ts",
-          "line": 167,
+          "line": 244,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2155,7 +2147,7 @@
         {
           "fingerprint": "b31a047cef9da3b20b1a673111822cd5ac54f34c1fd0efe8824963eb01165079",
           "file": "src/cli/cmd/doctor.ts",
-          "line": 216,
+          "line": 293,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2163,7 +2155,7 @@
         {
           "fingerprint": "ef008f3e60995b2a6b21d856a7e9ae4536b541c147070be49c7467ab870212e1",
           "file": "src/cli/cmd/doctor.ts",
-          "line": 218,
+          "line": 295,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2171,7 +2163,7 @@
         {
           "fingerprint": "3cff82c78bf2abdc178e5b5bdda41e631ad4abd6e5fa3e81d5996bebd91c397c",
           "file": "src/cli/cmd/doctor.ts",
-          "line": 222,
+          "line": 299,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2179,7 +2171,7 @@
         {
           "fingerprint": "81665038bceb64b8202c9c465695c93d4614cf2048fef06efa08a21dbcf3afd1",
           "file": "src/cli/cmd/doctor.ts",
-          "line": 354,
+          "line": 434,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2187,7 +2179,7 @@
         {
           "fingerprint": "286ff3a6171aedeee53d053e7aad686404a1f797803f3791a220323ca13cbf57",
           "file": "src/cli/cmd/doctor.ts",
-          "line": 489,
+          "line": 570,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2387,7 +2379,7 @@
         {
           "fingerprint": "786818011076354b7288add6e57f278c94648d9e37d3d720215870c5d686d001",
           "file": "src/cli/cmd/run.ts",
-          "line": 180,
+          "line": 193,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf user-controlled"
@@ -2395,7 +2387,7 @@
         {
           "fingerprint": "442ee2312509ba0fe70e7ee5038e3d4ff105e2f0affe0c18516ba081097e1e67",
           "file": "src/cli/cmd/run.ts",
-          "line": 389,
+          "line": 402,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2403,7 +2395,7 @@
         {
           "fingerprint": "fb903ea4341eb9ed37008087d84a22583a407faf3d79608a906d19815142fa07",
           "file": "src/cli/cmd/run.ts",
-          "line": 396,
+          "line": 409,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2411,7 +2403,7 @@
         {
           "fingerprint": "34468be575e7453aab6bc2c76d99a7fcae2984bb575c7d2576e4eadd934ba870",
           "file": "src/cli/cmd/run.ts",
-          "line": 513,
+          "line": 526,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf user-controlled"
@@ -2419,7 +2411,7 @@
         {
           "fingerprint": "c8611293792601567cc9a61b5199a2a79ac88e15bafec36dd1dc6c2d66f47602",
           "file": "src/cli/cmd/run.ts",
-          "line": 829,
+          "line": 867,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf user-controlled"
@@ -2443,7 +2435,7 @@
         {
           "fingerprint": "338775051e63d6c6b2b2127d766326b108fe95b4e19259843f45edabaf2819b0",
           "file": "src/cli/cmd/storage/session.ts",
-          "line": 40,
+          "line": 59,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2451,7 +2443,7 @@
         {
           "fingerprint": "5073adf77248bf9272591b2e634fbe367a5ca61ca1f5a928a2895056d2eff3c3",
           "file": "src/cli/cmd/storage/session.ts",
-          "line": 46,
+          "line": 65,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2459,7 +2451,7 @@
         {
           "fingerprint": "e0b5cea4bac97d818e7ab87b303ab2b7b885ee0d26d38cae95bc4b9441bc2fd4",
           "file": "src/cli/cmd/storage/session.ts",
-          "line": 139,
+          "line": 158,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2467,7 +2459,7 @@
         {
           "fingerprint": "d5d3e85874a0ec0a1abc81bf72769563679e412553a2d6a34397e9038420a6ea",
           "file": "src/cli/cmd/storage/session.ts",
-          "line": 140,
+          "line": 159,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2739,7 +2731,7 @@
         {
           "fingerprint": "98007978cd7d569be7b82b03b5c3c30c6639635855ef0e4e8e8b7d7c85c32ec6",
           "file": "src/code-intelligence/graph-context.ts",
-          "line": 193,
+          "line": 194,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2787,7 +2779,7 @@
         {
           "fingerprint": "24fd85a130c9f67e87d5e82be8daf898cd0f38be4a3f2ef35e5e74e9b1fe2a40",
           "file": "src/config/config-impl.ts",
-          "line": 280,
+          "line": 305,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2795,7 +2787,7 @@
         {
           "fingerprint": "3a93a85fb1a36f9e22f290ead0b5d904289d6933da8261c8691499d762c560be",
           "file": "src/config/config-impl.ts",
-          "line": 525,
+          "line": 550,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2803,7 +2795,7 @@
         {
           "fingerprint": "22917246aef08236ae3888c743b1fe2254cf65cb40aec05d4274032b0610d60b",
           "file": "src/config/config-impl.ts",
-          "line": 526,
+          "line": 551,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2811,7 +2803,7 @@
         {
           "fingerprint": "141dc0b269075bd172b73a3e52a72bcd96579c1e6c81fb887f1d2a4e8a2f186f",
           "file": "src/config/config-impl.ts",
-          "line": 666,
+          "line": 691,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2819,7 +2811,7 @@
         {
           "fingerprint": "1ff4837c5634b01d70b4733e9c97d20bb492c493049a710b60fa7863984eaac5",
           "file": "src/config/config-impl.ts",
-          "line": 763,
+          "line": 788,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2827,7 +2819,7 @@
         {
           "fingerprint": "c5b56c1a238cf08ff3a58f7e4d0f8fa09324ae0f0d210fcf8d8b333994b43346",
           "file": "src/config/config-impl.ts",
-          "line": 764,
+          "line": 789,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2835,7 +2827,7 @@
         {
           "fingerprint": "277b403b957b2c92a6919da07004c66f657e9d7cd3386685f93c76d74a40e6b0",
           "file": "src/config/config-impl.ts",
-          "line": 802,
+          "line": 827,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2843,7 +2835,7 @@
         {
           "fingerprint": "b668a4fe77a4474522dc01b99141beb6e1b2fdbb4454062411175e6e8434fde7",
           "file": "src/config/config-impl.ts",
-          "line": 888,
+          "line": 913,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2851,7 +2843,7 @@
         {
           "fingerprint": "2440cbe37b3873f7d584769971e7b118d1e6ce7aabb7ed044841239989a7eeb7",
           "file": "src/config/config-impl.ts",
-          "line": 890,
+          "line": 915,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2859,7 +2851,7 @@
         {
           "fingerprint": "90223446a5dbc9576cb9ea5db23da18eb6aa019c2df36c9c39be1e9b17d7a2aa",
           "file": "src/config/config-impl.ts",
-          "line": 893,
+          "line": 918,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2867,7 +2859,7 @@
         {
           "fingerprint": "966c9343fe7d0e955f1b7470fb905df74f6c838d1b7b0ee1a067825911b6fe22",
           "file": "src/config/config-impl.ts",
-          "line": 1072,
+          "line": 1097,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2875,7 +2867,7 @@
         {
           "fingerprint": "8b832f096377dc8bd28171df20be3d92ee49fdc643cebe3e020e2da018a3629a",
           "file": "src/config/config-impl.ts",
-          "line": 1233,
+          "line": 1258,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2883,7 +2875,7 @@
         {
           "fingerprint": "7e745ad8fab42df26795b1e7e26bc0bf3409f7150cf25700e38adf74ce34b8e9",
           "file": "src/config/config-impl.ts",
-          "line": 1234,
+          "line": 1259,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2891,7 +2883,7 @@
         {
           "fingerprint": "1d6b0110f81f38d8fa0388aed4c4c2c787a954390580fe622aeffed96e9bf0ad",
           "file": "src/config/config-impl.ts",
-          "line": 1235,
+          "line": 1260,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2899,7 +2891,7 @@
         {
           "fingerprint": "c8879f2b11ca1d9744aeb382abd29eed1d4c337771d855a689ae954187299e8b",
           "file": "src/config/config-impl.ts",
-          "line": 1238,
+          "line": 1263,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2907,7 +2899,7 @@
         {
           "fingerprint": "b425d379a2ff16dbc3497514716484312fe3d883e07e3563c40382341782192c",
           "file": "src/config/config-impl.ts",
-          "line": 1250,
+          "line": 1275,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2915,7 +2907,7 @@
         {
           "fingerprint": "a0a8c47e15cda2bb8e51b8267b8b8c3c2cec4d42b2b7a8a46115c2502338132a",
           "file": "src/config/config-impl.ts",
-          "line": 1435,
+          "line": 1495,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2923,7 +2915,7 @@
         {
           "fingerprint": "79aad6baffef594fbc313ba85cf3f098c14c1d1e3178b6c196cbe05556d3441e",
           "file": "src/config/config-impl.ts",
-          "line": 1453,
+          "line": 1516,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2993,33 +2985,9 @@
           "summary": "path_traversal user-controlled"
         },
         {
-          "fingerprint": "75e3b096c2ad8806a35658e8bee4bafd3ee91193b5274eb10e5e6c144c1a3b53",
-          "file": "src/context/analyzer.ts",
-          "line": 410,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "6c9d5340e0496623ffdef213db29e966a02e8ff3e4a7ef423917e930221bfbaa",
-          "file": "src/context/analyzer.ts",
-          "line": 416,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "6aaf72fd5cbe64aef5acb6470e8c712cf31295f6aa0e22bf1926b3b656ba5785",
-          "file": "src/context/analyzer.ts",
-          "line": 428,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
           "fingerprint": "89895ae79be976a5e7046bd9bd9e1f76c85e4485b84fbfc913d90fa7f2294a6c",
           "file": "src/context/analyzer.ts",
-          "line": 443,
+          "line": 503,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -3196,14 +3164,6 @@
           "fingerprint": "641c2eca870b8b1dd2be9521c7fb1951ed31c6412f52376db6a9efcd14fa6b36",
           "file": "src/debug/diagnostic-log.ts",
           "line": 120,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal user-controlled"
-        },
-        {
-          "fingerprint": "6b2fa23c511bc311da3913384e65eae75a07fec9c44e0f46131805773201cf21",
-          "file": "src/design-check/index.ts",
-          "line": 40,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -3619,7 +3579,7 @@
         {
           "fingerprint": "3354fff1b1a195df498d32ca4f82bc374ab6f02f3cf33d92ff7e5301187e9ab0",
           "file": "src/installation/index.ts",
-          "line": 185,
+          "line": 193,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf user-controlled"
@@ -3627,7 +3587,7 @@
         {
           "fingerprint": "d802bb65f1328344e5fdd1ae37661ad8a53f4332796428b3f64c62ce3cdfeacb",
           "file": "src/installation/index.ts",
-          "line": 234,
+          "line": 241,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf user-controlled"
@@ -3715,7 +3675,7 @@
         {
           "fingerprint": "1e7b89d763c8df39ac3d8d5468e0ecfa4843d628d69a4bf4ae4972758e04092a",
           "file": "src/lsp/index-impl.ts",
-          "line": 728,
+          "line": 741,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4099,7 +4059,7 @@
         {
           "fingerprint": "468cbe1ee8fd1a6c095a0cda629458aa6c37da843da088ed0e3a07062d83a5db",
           "file": "src/permission/index.ts",
-          "line": 628,
+          "line": 675,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4139,7 +4099,7 @@
         {
           "fingerprint": "a5a94b5953f187721da941710d807b66c4547fb77154ef3b757652f3ff8e5be1",
           "file": "src/project/project.ts",
-          "line": 121,
+          "line": 125,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4147,7 +4107,7 @@
         {
           "fingerprint": "d33707f969b9adc4995cff2aeee065f77d94706317ef4c99081335c10a8ded29",
           "file": "src/project/project.ts",
-          "line": 126,
+          "line": 130,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4155,7 +4115,7 @@
         {
           "fingerprint": "e9ab5364ace91a50c5dd9aa914925ae6c1657f8a5610b46821299a7c367a9e67",
           "file": "src/project/project.ts",
-          "line": 166,
+          "line": 170,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4163,7 +4123,7 @@
         {
           "fingerprint": "2a2def5921ff135d5b8719c1c68c3870a9424291e39c6df55dbf333feefa8752",
           "file": "src/project/project.ts",
-          "line": 170,
+          "line": 174,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4171,7 +4131,7 @@
         {
           "fingerprint": "39ff69a3d0f1a4baf4892b80ebbf3696317806488d531652f6b795d75eb906f9",
           "file": "src/project/project.ts",
-          "line": 228,
+          "line": 302,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4179,7 +4139,7 @@
         {
           "fingerprint": "4e0cdfd58b2c7279fc714f545a757c865ba213d9e6297d5a10fcf01c49320dce",
           "file": "src/project/project.ts",
-          "line": 242,
+          "line": 316,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4371,7 +4331,7 @@
         {
           "fingerprint": "a9e914206cb3f620108625c68109366670168de993db74c0694b289eb933fa88",
           "file": "src/provider/ax-engine/provider-loader.ts",
-          "line": 299,
+          "line": 301,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf user-controlled"
@@ -4395,7 +4355,7 @@
         {
           "fingerprint": "4646941ac5100a540f5fdd578bc92b0d8cf26a35cc265024687dec9829713255",
           "file": "src/provider/provider-impl.ts",
-          "line": 1260,
+          "line": 1345,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4403,7 +4363,7 @@
         {
           "fingerprint": "cf7e1966dbc473a0f30ce2145a655276c01ac63562c5c3a5a5fd973b2f0116aa",
           "file": "src/pty/index.ts",
-          "line": 186,
+          "line": 199,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4411,7 +4371,7 @@
         {
           "fingerprint": "b6fa6b16113ee14ed3b9e6af21f1bdb0f99ff49c527d331d9ed69521e024d1d0",
           "file": "src/pty/index.ts",
-          "line": 189,
+          "line": 202,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4419,7 +4379,7 @@
         {
           "fingerprint": "66b15a8b6ec77beb2aef6f26099c0ace9a7adb58ba4446bec70a44a131caf48e",
           "file": "src/pty/index.ts",
-          "line": 381,
+          "line": 394,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4643,7 +4603,7 @@
         {
           "fingerprint": "62e6beb61be55923d30b252530053bee23676ce65982ae9f9302578e5810eb1f",
           "file": "src/session/index.ts",
-          "line": 456,
+          "line": 490,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4875,7 +4835,7 @@
         {
           "fingerprint": "a61026d2650c7f05460dc6a1ec92b03ad0171f1b0e99cf55d50b871502cb0711",
           "file": "src/skill/index.ts",
-          "line": 229,
+          "line": 245,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4883,7 +4843,7 @@
         {
           "fingerprint": "fbb1825953d3eaf2a63a1e9ba64c63fbcf0c561dd846e30651d62dc0ebfcdc52",
           "file": "src/skill/index.ts",
-          "line": 272,
+          "line": 288,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4899,7 +4859,7 @@
         {
           "fingerprint": "51e5e73bbbb70f230671f1e6a0f49ddeb9627b47838f4d5748852d5a636fa747",
           "file": "src/snapshot/index.ts",
-          "line": 176,
+          "line": 202,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4907,7 +4867,7 @@
         {
           "fingerprint": "daf971ff7c54b63913a4d57464b14ab11c7f71096eddf66319e727e8640f5b0a",
           "file": "src/snapshot/index.ts",
-          "line": 225,
+          "line": 251,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4915,7 +4875,7 @@
         {
           "fingerprint": "658406f7998e80fab39f11130218db2ba52d3830a634bdba68768fdd0a9515ba",
           "file": "src/snapshot/index.ts",
-          "line": 226,
+          "line": 252,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4923,7 +4883,7 @@
         {
           "fingerprint": "e5119a6a30ba9c6889cfdcda3a8fa397a53045249560a5963d023c426986523b",
           "file": "src/snapshot/index.ts",
-          "line": 393,
+          "line": 432,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4931,7 +4891,7 @@
         {
           "fingerprint": "d866aaef995033fc832c4fec78b3821105bcba194b42b9cdda65d34ac3b6ede5",
           "file": "src/storage/db.ts",
-          "line": 39,
+          "line": 41,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4939,7 +4899,7 @@
         {
           "fingerprint": "bee87b6a7ab8c069b8affe371b3d7109e46b271ad6d994c498acd24d34189df5",
           "file": "src/storage/db.ts",
-          "line": 43,
+          "line": 45,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4947,7 +4907,7 @@
         {
           "fingerprint": "abe41f513a3d9886b40cb0aed43ad32d37f285b5906e48ee96c940e0665a566a",
           "file": "src/storage/db.ts",
-          "line": 45,
+          "line": 47,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4955,7 +4915,7 @@
         {
           "fingerprint": "6c49eefc6f0a257483537e586c13992527209c686d6b05becd1a6cf8187ab19b",
           "file": "src/storage/db.ts",
-          "line": 74,
+          "line": 76,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -4963,7 +4923,7 @@
         {
           "fingerprint": "db1c554a6b56640223e593cb087e896945b8299e237930ad836daa1095513c28",
           "file": "src/storage/db.ts",
-          "line": 130,
+          "line": 132,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5163,7 +5123,7 @@
         {
           "fingerprint": "6921e365670991ff5cceebcabac5470d167b806f4b54b7ad34258b15e3435a76",
           "file": "src/tool/bash-impl.ts",
-          "line": 595,
+          "line": 703,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5171,7 +5131,7 @@
         {
           "fingerprint": "e4e092c4a26d5f39ba19c54146367be8beb44617092c2ff9e9ab363dd3a4308f",
           "file": "src/tool/bash-impl.ts",
-          "line": 634,
+          "line": 742,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -5608,7 +5568,7 @@
         {
           "fingerprint": "d82b0606d7f119dcdf2141ee24f640700a03fd573b69e538d6843a6c5346193d",
           "file": "src/graph/format.ts",
-          "line": 484,
+          "line": 485,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -5616,7 +5576,7 @@
         {
           "fingerprint": "b9c26ea4f12eebb2d2a5615644a1cf5f3659cc3185152df875e73d16ec86ef41",
           "file": "src/graph/format.ts",
-          "line": 514,
+          "line": 515,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -5776,7 +5736,7 @@
         {
           "fingerprint": "4b26d5a4c8feb35b90725e40f0f2fbff5265b4f1638c1b9fed4a29a5049c70ec",
           "file": "src/provider/loaders.ts",
-          "line": 461,
+          "line": 719,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -5784,7 +5744,7 @@
         {
           "fingerprint": "a88295f54dbb62b570e88e93dff372aec5ad95d95a868ba4949813298df23904",
           "file": "src/provider/loaders.ts",
-          "line": 478,
+          "line": 736,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -5984,7 +5944,7 @@
         {
           "fingerprint": "55545e1db1319289400cfccebb76e265f1284f4100753c3fcc307fdd97985d4d",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 45,
+          "line": 50,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -5992,7 +5952,7 @@
         {
           "fingerprint": "c6cd457032177da8bc60b58a53d7e200580a96ef745c2dc2c373f35182ccca44",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 46,
+          "line": 51,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6000,7 +5960,7 @@
         {
           "fingerprint": "219c4942259907e3b73838c128fe05371eb3e6888e5fec648ea2a8b86878583f",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 332,
+          "line": 368,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6008,7 +5968,7 @@
         {
           "fingerprint": "c5bdaee3490d4731b799f797c3e1130fafd2a82656ae7dc482a32a2aac498735",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 744,
+          "line": 755,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6016,7 +5976,7 @@
         {
           "fingerprint": "3592e6ec9410825af0200371e65ff921f21bad09f54715b644e58b606aafe4ae",
           "file": "src/provider/loaders.ts",
-          "line": 481,
+          "line": 739,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6024,7 +5984,7 @@
         {
           "fingerprint": "d64fae5af46a4572823fc276e159e6c40592bfc84c9086c1719cc92ed0d166f5",
           "file": "src/provider/loaders.ts",
-          "line": 482,
+          "line": 740,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"

@@ -11,6 +11,7 @@
 import fs from "fs/promises"
 import path from "path"
 import { ALL_RULES } from "./rules"
+import { Glob } from "../util/glob"
 import type { DesignCheckConfig, CheckResult, FileResult, Violation } from "./types"
 
 const DEFAULT_CONFIG: DesignCheckConfig = {
@@ -30,23 +31,42 @@ const SCANNABLE_EXTENSIONS = new Set([".tsx", ".jsx", ".css", ".html", ".vue", "
 /**
  * Recursively find files matching extensions
  */
-async function findFiles(dir: string, ignore: Set<string>): Promise<string[]> {
+function ignored(relative: string, parts: string[], patterns: string[]): boolean {
+  return patterns.some((pattern) => parts.includes(pattern) || Glob.match(pattern, relative))
+}
+
+function included(relative: string, patterns: string[]): boolean {
+  return patterns.some((pattern) => Glob.match(pattern, relative))
+}
+
+function containsPath(parent: string, child: string): boolean {
+  const relative = path.relative(path.resolve(parent), path.resolve(child))
+  return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
+}
+
+async function findFiles(dir: string, ignore: string[], include: string[]): Promise<string[]> {
   const results: string[] = []
+  const root = path.resolve(dir)
 
   async function walk(current: string) {
-    const entries = await fs.readdir(current, { withFileTypes: true }).catch(() => [])
+    if (!containsPath(root, current)) throw new Error(`Design-check path escapes scan root: ${current}`)
+    const entries = await fs.readdir(current, { withFileTypes: true })
     for (const entry of entries) {
-      if (ignore.has(entry.name)) continue
-      const fullPath = path.join(current, entry.name)
+      if (entry.isSymbolicLink()) continue
+      const fullPath = path.resolve(current, entry.name)
+      if (!containsPath(root, fullPath)) continue
+      const relative = path.relative(root, fullPath).split(path.sep).join("/")
+      const parts = relative.split("/")
+      if (ignored(relative, parts, ignore)) continue
       if (entry.isDirectory()) {
         await walk(fullPath)
-      } else if (SCANNABLE_EXTENSIONS.has(path.extname(entry.name))) {
+      } else if (SCANNABLE_EXTENSIONS.has(path.extname(entry.name)) && included(relative, include)) {
         results.push(fullPath)
       }
     }
   }
 
-  await walk(dir)
+  await walk(root)
   return results
 }
 
@@ -54,18 +74,29 @@ async function findFiles(dir: string, ignore: Set<string>): Promise<string[]> {
  * Run design check on specified paths
  */
 export async function runDesignCheck(paths: string[], config?: Partial<DesignCheckConfig>): Promise<CheckResult> {
-  const cfg = { ...DEFAULT_CONFIG, ...config, rules: { ...DEFAULT_CONFIG.rules, ...config?.rules } }
-  const ignoreSet = new Set(cfg.ignore)
+  const cfg: DesignCheckConfig = {
+    ...DEFAULT_CONFIG,
+    ...config,
+    rules: { ...DEFAULT_CONFIG.rules, ...config?.rules },
+    include: config?.include ?? DEFAULT_CONFIG.include,
+    ignore: config?.ignore ?? DEFAULT_CONFIG.ignore,
+  }
+  const knownRules = new Set(ALL_RULES.map((rule) => rule.name))
+  for (const [name, severity] of Object.entries(cfg.rules)) {
+    if (!knownRules.has(name)) throw new Error(`Unknown design-check rule: ${name}`)
+    if (severity !== "error" && severity !== "warn" && severity !== "off") {
+      throw new Error(`Invalid severity for ${name}: ${severity}`)
+    }
+  }
 
   // Find all files
-  const allFiles: string[] = []
+  const allFiles = new Set<string>()
   for (const p of paths) {
-    const stat = await fs.stat(p).catch(() => null)
-    if (!stat) continue
+    const stat = await fs.stat(p)
     if (stat.isDirectory()) {
-      allFiles.push(...(await findFiles(p, ignoreSet)))
-    } else if (SCANNABLE_EXTENSIONS.has(path.extname(p))) {
-      allFiles.push(p)
+      for (const file of await findFiles(p, cfg.ignore, cfg.include)) allFiles.add(file)
+    } else if (SCANNABLE_EXTENSIONS.has(path.extname(p)) && included(path.basename(p), cfg.include)) {
+      allFiles.add(p)
     }
   }
 
@@ -75,7 +106,7 @@ export async function runDesignCheck(paths: string[], config?: Partial<DesignChe
   let totalWarnings = 0
 
   for (const file of allFiles) {
-    const content = await fs.readFile(file, "utf-8").catch(() => "")
+    const content = await fs.readFile(file, "utf-8")
     if (!content) continue
 
     const violations: Violation[] = []
@@ -103,7 +134,7 @@ export async function runDesignCheck(paths: string[], config?: Partial<DesignChe
   return {
     files: fileResults,
     summary: {
-      filesScanned: allFiles.length,
+      filesScanned: allFiles.size,
       totalErrors,
       totalWarnings,
     },

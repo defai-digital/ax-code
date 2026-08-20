@@ -58,7 +58,13 @@ export namespace Shard {
   // contain characters (or be path-unsafe for non-git directory-derived IDs),
   // so it is base64url-encoded rather than used verbatim as a filename.
   export function pathFor(projectID: ProjectID): string {
-    return path.join(Global.Path.data, "shards", encodeProjectID(projectID) + ".db")
+    const directory = path.join(Global.Path.data, "shards")
+    const file = path.join(directory, encodeProjectID(projectID) + ".db")
+    const relative = path.relative(directory, file)
+    if (path.isAbsolute(relative) || relative === ".." || relative.startsWith(`..${path.sep}`)) {
+      throw new Error(`Invalid shard path for project ${projectID}`)
+    }
+    return file
   }
 
   // Mirrors Database.applyStartupPragmas (db.ts) but self-contained to avoid a

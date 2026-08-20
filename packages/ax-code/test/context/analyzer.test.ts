@@ -86,6 +86,23 @@ describe("context analyzer complexity scan", () => {
     expect(info.complexity?.linesOfCode).toBe(1)
   })
 
+  test.runIf(process.platform !== "win32")(
+    "root fallback does not follow source symlinks outside the project",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      await using outside = await tmpdir()
+      const outsideFile = path.join(outside.path, "outside.ts")
+      await fs.writeFile(outsideFile, "const secret = 1\nconst hidden = 2\n")
+      await fs.symlink(outsideFile, path.join(tmp.path, "linked.ts"))
+      await fs.writeFile(path.join(tmp.path, "inside.ts"), "const visible = 1\n")
+
+      const info = await analyze(tmp.path)
+
+      expect(info.complexity?.fileCount).toBe(1)
+      expect(info.complexity?.linesOfCode).toBe(1)
+    },
+  )
+
   test("still scans only the detected source directory when one exists", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.mkdir(path.join(tmp.path, "src"))

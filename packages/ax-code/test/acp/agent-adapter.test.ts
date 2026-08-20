@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
 import { pathToFileURL } from "url"
-import { defaultModel, parseUri } from "../../src/acp/agent-adapter"
+import { defaultModel, parseModelSelection, parseUri } from "../../src/acp/agent-adapter"
 
 function configWithProviders(providers: Array<{ id: string; models: Record<string, unknown> }>) {
   return {
@@ -67,5 +67,36 @@ describe("ACP agent adapter", () => {
 
   test("fails clearly instead of inventing a stale fallback when no provider is connected", async () => {
     await expect(defaultModel(configWithProviders([]))).rejects.toThrow("No connected provider has an available model")
+  })
+
+  test("parses advertised models and variants", () => {
+    const providers = [
+      {
+        id: "openai",
+        models: {
+          "gpt-5": { variants: { fast: {} } },
+        },
+      },
+    ]
+
+    expect(parseModelSelection("openai/gpt-5", providers as any)).toEqual({
+      model: { providerID: "openai", modelID: "gpt-5" },
+      variant: undefined,
+    })
+    expect(parseModelSelection("openai/gpt-5/fast", providers as any)).toEqual({
+      model: { providerID: "openai", modelID: "gpt-5" },
+      variant: "fast",
+    })
+  })
+
+  test("rejects providers and models that were not advertised", () => {
+    const providers = [{ id: "openai", models: { "gpt-5": {} } }]
+
+    expect(() => parseModelSelection("missing/model", providers as any)).toThrow(
+      "Unknown provider in ACP model selection: missing",
+    )
+    expect(() => parseModelSelection("openai/missing", providers as any)).toThrow(
+      "Unknown model in ACP model selection: openai/missing",
+    )
   })
 })

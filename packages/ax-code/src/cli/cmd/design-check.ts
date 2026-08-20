@@ -1,6 +1,7 @@
 import { cmd } from "./cmd"
 import { UI } from "../ui"
 import { runDesignCheck, formatResult } from "../../design-check"
+import type { Severity } from "../../design-check"
 import * as prompts from "@clack/prompts"
 
 export const DesignCheckCommand = cmd({
@@ -25,17 +26,21 @@ export const DesignCheckCommand = cmd({
     const paths = args.paths?.length ? args.paths : ["src/"]
 
     // Parse rule overrides
-    const ruleOverrides: Record<string, string> = {}
+    const ruleOverrides: Record<string, Severity> = {}
     for (const rule of args.rule ?? []) {
       const [name, severity] = rule.split("=")
-      if (name && severity) ruleOverrides[name] = severity
+      if (!name || !severity) throw new Error(`Invalid rule override: ${rule}`)
+      if (severity !== "error" && severity !== "warn" && severity !== "off") {
+        throw new Error(`Invalid design-check severity: ${severity}`)
+      }
+      ruleOverrides[name] = severity
     }
 
     const spinner = prompts.spinner()
     spinner.start("Scanning files...")
 
     const result = await runDesignCheck(paths, {
-      rules: ruleOverrides as any,
+      rules: ruleOverrides,
     })
 
     spinner.stop("Scan complete")

@@ -38,13 +38,14 @@ export function scanLoopMessages(msgs: MessageV2.WithParts[]) {
 
 export function remindQueuedMessages(msgs: MessageV2.WithParts[], lastFinished?: MessageV2.Assistant) {
   if (!lastFinished) return msgs
+  const lastFinishedIndex = msgs.findIndex((msg) => msg.info.id === lastFinished.id)
+  if (lastFinishedIndex === -1) return msgs
   // Fast path: no user messages after the last finished assistant → nothing
   // to wrap. Avoids allocating a new array and walking every part on every
   // step of long sessions.
   let hasQueuedUser = false
-  for (let i = msgs.length - 1; i >= 0; i--) {
+  for (let i = msgs.length - 1; i > lastFinishedIndex; i--) {
     const msg = msgs[i]
-    if (msg.info.id <= lastFinished.id) break
     if (msg.info.role === "user") {
       hasQueuedUser = true
       break
@@ -54,9 +55,9 @@ export function remindQueuedMessages(msgs: MessageV2.WithParts[], lastFinished?:
 
   const REMINDER_PREFIX = "<system-reminder>\nThe user sent the following message:"
   let result = msgs
-  for (let i = 0; i < msgs.length; i++) {
+  for (let i = lastFinishedIndex + 1; i < msgs.length; i++) {
     const msg = msgs[i]
-    if (msg.info.role !== "user" || msg.info.id <= lastFinished.id) continue
+    if (msg.info.role !== "user") continue
     const parts = [...msg.parts]
     let changed = false
     for (let j = 0; j < parts.length; j++) {

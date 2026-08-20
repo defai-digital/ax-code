@@ -16,10 +16,6 @@ export interface DesignCheckConfig {
   rules: Partial<RuleConfig>
   include: string[]
   ignore: string[]
-  tokens?: {
-    spacing?: string[]
-    colors?: Record<string, string>
-  }
 }
 
 export interface Violation {

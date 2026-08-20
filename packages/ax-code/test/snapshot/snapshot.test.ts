@@ -154,6 +154,68 @@ test("revert in subdirectory", async () => {
   })
 })
 
+test("revert rejects worktree escapes and the worktree root", async () => {
+  await using tmp = await bootstrap()
+  await using outside = await tmpdir()
+  const outsideFile = path.join(outside.path, "keep.txt")
+  await Filesystem.write(outsideFile, "keep")
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      for (const file of [outsideFile, path.join(tmp.path, "..", path.basename(outside.path), "keep.txt"), tmp.path]) {
+        await expect(Snapshot.revert([{ hash: before!, files: [file] }])).rejects.toThrow(
+          "Snapshot revert path escapes the worktree",
+        )
+      }
+      expect(await fs.readFile(outsideFile, "utf8")).toBe("keep")
+    },
+  })
+})
+
+test.skipIf(process.platform === "win32")(
+  "revert rejects a path whose parent symlink escapes the worktree",
+  async () => {
+    await using tmp = await bootstrap()
+    await using outside = await tmpdir()
+    const outsideFile = path.join(outside.path, "keep.txt")
+    await Filesystem.write(outsideFile, "keep")
+    await fs.symlink(outside.path, path.join(tmp.path, "linked"))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const before = await Snapshot.track()
+        expect(before).toBeTruthy()
+        await expect(
+          Snapshot.revert([{ hash: before!, files: [path.join(tmp.path, "linked", "keep.txt")] }]),
+        ).rejects.toThrow("escapes the worktree through a symlink")
+        expect(await fs.readFile(outsideFile, "utf8")).toBe("keep")
+      },
+    })
+  },
+)
+
+test("revert refuses to recursively delete a directory that replaced a new file", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+      const replaced = path.join(tmp.path, "new.txt")
+      await fs.mkdir(replaced)
+      await Filesystem.write(path.join(replaced, "child.txt"), "keep")
+
+      await expect(Snapshot.revert([{ hash: before!, files: [replaced] }])).rejects.toThrow()
+      expect(await fs.readFile(path.join(replaced, "child.txt"), "utf8")).toBe("keep")
+    },
+  })
+})
+
 test("multiple file operations", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
@@ -431,6 +493,39 @@ test("track surfaces unreadable git exclude files", async () => {
   } finally {
     await fs.chmod(exclude, 0o644)
   }
+})
+
+test("patch surfaces git add failures", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+      const index = path.join(Global.Path.data, "snapshot", Instance.project.id, "index")
+      await fs.rm(index, { force: true })
+      await fs.mkdir(index)
+
+      await expect(Snapshot.patch(before!)).rejects.toThrow("Snapshot staging failed")
+    },
+  })
+})
+
+test("track surfaces update-ref failures instead of returning a stale hash", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+      await Filesystem.write(path.join(tmp.path, "a.txt"), "changed")
+      const snapshots = path.join(Global.Path.data, "snapshot", Instance.project.id, "refs", "snapshots")
+      await fs.rm(snapshots, { recursive: true, force: true })
+      await Filesystem.write(snapshots, "blocks child refs")
+
+      await expect(Snapshot.track()).rejects.toThrow("Snapshot tracking failed: update-ref")
+    },
+  })
 })
 
 test("cleanup deletes expired snapshot refs before pruning", async () => {
@@ -1154,6 +1249,18 @@ test("diffFull holds the snapshot operation lock across its two diff phases", as
   expect(body.indexOf("return withOperationLock")).toBeLessThan(
     body.indexOf('["diff", "--no-ext-diff", "--no-renames", "--numstat"'),
   )
+})
+
+test("diffFull surfaces missing snapshot objects", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const existing = await Snapshot.track()
+      expect(existing).toBeTruthy()
+      await expect(Snapshot.diffFull(existing!, "0".repeat(40))).rejects.toThrow("Snapshot diff failed: name-status")
+    },
+  })
 })
 
 test("diffFull with new file additions", async () => {

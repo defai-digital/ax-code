@@ -241,7 +241,7 @@ export function parseModelSelection(
   const parsed = Provider.parseModel(modelId)
   const provider = providers.find((p) => p.id === parsed.providerID)
   if (!provider) {
-    return { model: parsed, variant: undefined }
+    throw new Error(`Unknown provider in ACP model selection: ${parsed.providerID}`)
   }
 
   if (provider.models[parsed.modelID]) {
@@ -261,5 +261,5 @@ export function parseModelSelection(
     }
   }
 
-  return { model: parsed, variant: undefined }
+  throw new Error(`Unknown model in ACP model selection: ${providerModelKey(parsed)}`)
 }

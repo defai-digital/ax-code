@@ -20,6 +20,16 @@ describe("Shard.pathFor", () => {
     expect(Shard.pathFor(pid("project/1"))).toBe(path.join(Global.Path.data, "shards", `${encoded}.db`))
   })
 
+  test("keeps traversal-shaped project IDs inside the shard directory", () => {
+    const shardDirectory = path.join(Global.Path.data, "shards")
+    const file = Shard.pathFor(pid("../../outside/../project"))
+    const relative = path.relative(shardDirectory, file)
+
+    expect(path.isAbsolute(relative)).toBe(false)
+    expect(relative).not.toBe("..")
+    expect(relative.startsWith(`..${path.sep}`)).toBe(false)
+  })
+
   test("Global.Path.data is isolated into the per-file test tmpdir", () => {
     // test/preload.ts sets XDG_DATA_HOME under os.tmpdir()/opencode-test-data-*.
     expect(Global.Path.data).toContain(os.tmpdir())

@@ -145,7 +145,33 @@ export namespace Snapshot {
   }
 
   async function remove(file: string) {
-    await fs.rm(file, { recursive: true, force: true }).catch(() => undefined)
+    await fs.rm(file, { force: true })
+  }
+
+  async function revertPath(current: State, file: string) {
+    const worktree = path.resolve(current.worktree)
+    const resolved = path.resolve(worktree, file)
+    if (resolved === worktree || !Filesystem.contains(worktree, resolved)) {
+      throw new Error(`Snapshot revert path escapes the worktree: ${file}`)
+    }
+
+    const realWorktree = await fs.realpath(worktree)
+    let parent = path.dirname(resolved)
+    while (Filesystem.contains(worktree, parent)) {
+      const realParent = await fs.realpath(parent).catch((error) => {
+        if (Filesystem.isMissingPathError(error)) return undefined
+        throw error
+      })
+      if (realParent) {
+        if (!Filesystem.contains(realWorktree, realParent)) {
+          throw new Error(`Snapshot revert path escapes the worktree through a symlink: ${file}`)
+        }
+        break
+      }
+      if (parent === worktree) break
+      parent = path.dirname(parent)
+    }
+    return resolved
   }
 
   async function writeSnapshotMeta(current: State, hash: string, timestamp = Date.now()) {
@@ -233,7 +259,14 @@ export namespace Snapshot {
 
   async function add(current: State) {
     await syncExclude(current)
-    await runGit([...cfg, ...args(current, ["add", "."])], { cwd: current.directory })
+    const result = await runGit([...cfg, ...args(current, ["add", "."])], { cwd: current.directory })
+    if (result.code === 0) return
+    log.error("failed to stage snapshot files", {
+      cwd: current.directory,
+      exitCode: result.code,
+      stderr: result.stderr,
+    })
+    throw new Error(`Snapshot staging failed: git add exited with code ${result.code}`)
   }
 
   async function checkoutIndex(current: State) {
@@ -325,6 +358,14 @@ export namespace Snapshot {
 
       if (current.prevHash) {
         const status = await runGit([...cfg, ...args(current, ["status", "--porcelain"])], { cwd: current.directory })
+        if (status.code !== 0) {
+          log.error("failed to inspect snapshot status", {
+            cwd: current.directory,
+            exitCode: status.code,
+            stderr: status.stderr,
+          })
+          throw new Error(`Snapshot status failed: git status exited with code ${status.code}`)
+        }
         if (status.text.trim() === "") {
           log.info("tracking (unchanged)", { hash: current.prevHash })
           return current.prevHash
@@ -339,12 +380,12 @@ export namespace Snapshot {
           exitCode: result.code,
           stderr: result.stderr,
         })
-        return current.prevHash
+        throw new Error(`Snapshot tracking failed: write-tree exited with code ${result.code}`)
       }
       const hash = result.text.trim()
       if (!valid(hash)) {
         log.error("failed to validate snapshot tree hash", { hash })
-        return current.prevHash
+        throw new Error("Snapshot tracking failed: write-tree returned an invalid hash")
       }
       const updateRef = await runGit([...core, ...args(current, ["update-ref", snapshotRef(hash), hash])], {
         cwd: current.directory,
@@ -356,7 +397,7 @@ export namespace Snapshot {
           exitCode: updateRef.code,
           stderr: updateRef.stderr,
         })
-        return current.prevHash
+        throw new Error(`Snapshot tracking failed: update-ref exited with code ${updateRef.code}`)
       }
       await writeSnapshotMeta(current, hash)
       current.prevHash = hash
@@ -374,7 +415,7 @@ export namespace Snapshot {
       }
       await add(current)
       const result = await runGit(
-        [...quote, ...args(current, ["diff", "--no-ext-diff", "--name-only", hash, "--", "."])],
+        [...quote, ...args(current, ["diff", "--no-ext-diff", "--name-only", "-z", hash, "--", "."])],
         {
           cwd: current.directory,
         },
@@ -386,9 +427,7 @@ export namespace Snapshot {
       return {
         hash,
         files: result.text
-          .trim()
-          .split("\n")
-          .map((item) => item.trim())
+          .split("\0")
           .filter(Boolean)
           .map((item) => path.join(current.worktree, item).replaceAll("\\", "/")),
       }
@@ -464,7 +503,8 @@ export namespace Snapshot {
       const seen = new Set<string>()
       for (const item of patches) {
         if (!valid(item.hash)) continue
-        for (const file of item.files) {
+        for (const requestedFile of item.files) {
+          const file = await revertPath(current, requestedFile)
           if (seen.has(file)) continue
           seen.add(file)
           log.info("reverting", { file, hash: item.hash })
@@ -532,6 +572,15 @@ export namespace Snapshot {
         [...quote, ...args(current, ["diff", "--no-ext-diff", "--name-status", "--no-renames", from, to, "--", "."])],
         { cwd: current.directory },
       )
+      if (statuses.code !== 0) {
+        log.error("failed to get snapshot name-status diff", {
+          from,
+          to,
+          exitCode: statuses.code,
+          stderr: statuses.stderr,
+        })
+        throw new Error(`Snapshot diff failed: name-status exited with code ${statuses.code}`)
+      }
 
       for (const line of statuses.text.trim().split("\n")) {
         if (!line) continue
@@ -545,6 +594,15 @@ export namespace Snapshot {
         [...quote, ...args(current, ["diff", "--no-ext-diff", "--no-renames", "--numstat", from, to, "--", "."])],
         { cwd: current.directory },
       )
+      if (numstat.code !== 0) {
+        log.error("failed to get snapshot numstat diff", {
+          from,
+          to,
+          exitCode: numstat.code,
+          stderr: numstat.stderr,
+        })
+        throw new Error(`Snapshot diff failed: numstat exited with code ${numstat.code}`)
+      }
 
       for (const line of numstat.text.trim().split("\n")) {
         if (!line) continue

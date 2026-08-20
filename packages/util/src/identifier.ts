@@ -4,7 +4,12 @@ export const BASE62_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl
 
 export namespace Identifier {
   const LENGTH = 26
+  const TIME_BYTES = 7
+  const TIME_HEX_LENGTH = TIME_BYTES * 2
   const COUNTER_MODULO = 0x1000
+  const MAX_TIMESTAMP = 2 ** 44 - 1
+  const ASCENDING_VERSION_MARKER = "z"
+  const DESCENDING_VERSION_MARKER = "-"
 
   // State for monotonic ID generation
   let lastTimestamp = 0
@@ -39,6 +44,9 @@ export namespace Identifier {
 
   export function create(descending: boolean, timestamp?: number): string {
     let currentTimestamp = timestamp ?? Date.now()
+    if (!Number.isSafeInteger(currentTimestamp) || currentTimestamp < 0 || currentTimestamp > MAX_TIMESTAMP) {
+      throw new RangeError(`Invalid identifier timestamp: ${currentTimestamp}`)
+    }
     if (currentTimestamp < lastTimestamp) currentTimestamp = lastTimestamp
 
     if (currentTimestamp !== lastTimestamp) {
@@ -47,6 +55,7 @@ export namespace Identifier {
     } else if (counter === COUNTER_MODULO - 1) {
       // Preserve sort order when the 12-bit counter wraps by
       // bumping the timestamp into the next millisecond slot.
+      if (lastTimestamp === MAX_TIMESTAMP) throw new RangeError("Identifier timestamp capacity exhausted")
       lastTimestamp += 1
       counter = 0
       currentTimestamp = lastTimestamp
@@ -57,11 +66,12 @@ export namespace Identifier {
 
     now = descending ? ~now : now
 
-    const timeBytes = Buffer.alloc(6)
-    for (let i = 0; i < 6; i++) {
-      timeBytes[i] = Number((now >> BigInt(40 - 8 * i)) & BigInt(0xff))
+    const timeBytes = Buffer.alloc(TIME_BYTES)
+    for (let i = 0; i < TIME_BYTES; i++) {
+      timeBytes[i] = Number((now >> BigInt((TIME_BYTES - 1 - i) * 8)) & BigInt(0xff))
     }
 
-    return timeBytes.toString("hex") + randomBase62(LENGTH - 12)
+    const marker = descending ? DESCENDING_VERSION_MARKER : ASCENDING_VERSION_MARKER
+    return marker + timeBytes.toString("hex") + randomBase62(LENGTH - TIME_HEX_LENGTH - 1)
   }
 }

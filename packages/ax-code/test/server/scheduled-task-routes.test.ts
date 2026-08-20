@@ -129,6 +129,7 @@ describe("scheduled task routes", () => {
           const refreshed = await ScheduledTask.get(task.id)
           expect(refreshed.lastRunAt).toBeGreaterThan(0)
           expect(refreshed.nextRunAt).toBeUndefined()
+          expect(refreshed.status).toBe("disabled")
         } finally {
           start.mockRestore()
         }
@@ -320,6 +321,33 @@ describe("scheduled task routes", () => {
         expect(response.status).toBe(400)
         const list = (await (await app.request(`/scheduled-task?${directoryQuery}`)).json()) as unknown[]
         expect(list).toHaveLength(0)
+      },
+    })
+  })
+
+  test("does not resume an expired one-time task as active", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runAt = Date.now() + 60_000
+        const task = await ScheduledTask.create({
+          title: "Expiring reminder",
+          prompt: "Do not become a zombie task.",
+          schedule: { type: "once", runAt },
+        })
+        await ScheduledTask.pause(task.id)
+
+        const now = vi.spyOn(Date, "now").mockReturnValue(runAt)
+        try {
+          await expect(ScheduledTask.resume(task.id)).rejects.toMatchObject({
+            data: { resource: "schedule.runAt" },
+          })
+          expect((await ScheduledTask.get(task.id)).status).toBe("paused")
+        } finally {
+          now.mockRestore()
+        }
       },
     })
   })
