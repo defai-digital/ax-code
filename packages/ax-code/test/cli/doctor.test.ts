@@ -3,6 +3,7 @@ import { mkdir, writeFile, readFile } from "fs/promises"
 import path from "path"
 import {
   doctorProjectContext,
+  formatNativeFlag,
   getDuplicateProjectIdentityCheck,
   getIsolationPolicyCheck,
   getPathLauncherCheck,
@@ -60,6 +61,13 @@ describe("cli doctor PATH launchers", () => {
     expect(check?.detail).toContain("/opt/homebrew/bin/ax-code (v7.7.1) [Homebrew]")
     expect(check?.detail).toContain("brew upgrade ax-code")
     expect(check?.detail).toContain("mv /Users/dev/.local/bin/ax-code /Users/dev/.local/bin/ax-code.bak")
+  })
+})
+
+describe("cli doctor native flag formatting", () => {
+  test("annotates enabled flags whose native addon failed to load", () => {
+    expect(formatNativeFlag("NATIVE_FS", true)).toBe("NATIVE_FS=on")
+    expect(formatNativeFlag("NATIVE_FS", false)).toBe("NATIVE_FS=on (addon missing — using TS fallback)")
   })
 })
 

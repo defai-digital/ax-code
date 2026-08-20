@@ -158,6 +158,13 @@ export function getIsolationPolicyCheck(input: {
   }
 }
 
+// NATIVE_* feature flags mean "use the native addon if available". When the
+// flag is on but the addon failed to load, annotate the flag so the
+// "Feature flags" line stays consistent with the "Native addons" check.
+export function formatNativeFlag(name: string, addonLoaded: boolean): string {
+  return addonLoaded ? `${name}=on` : `${name}=on (addon missing — using TS fallback)`
+}
+
 export function getAxEngineDoctorCheck(status: Awaited<ReturnType<typeof getAxEngineStatus>>): DoctorCheck {
   const configuredOrPrepared = status.model.present || status.server.running || status.dependency.available
   const relevant = isPlausiblySupportedHost() || configuredOrPrepared
@@ -478,7 +485,8 @@ export const DoctorCommand: CommandModule = {
       { name: "diff", load: () => NativeAddon.diff() },
       { name: "parser", load: () => NativeAddon.parser() },
     ]
-    const installed = addons.filter((a) => !!a.load()).map((a) => a.name)
+    const addonLoaded = new Map(addons.map((a) => [a.name, !!a.load()]))
+    const installed = addons.filter((a) => addonLoaded.get(a.name)).map((a) => a.name)
     checks.push({
       name: "Native addons",
       status: installed.length > 0 ? "ok" : "warn",
@@ -591,10 +599,10 @@ export const DoctorCommand: CommandModule = {
     // 14. Feature flags
     const flags: string[] = []
     if (Flag.AX_CODE_DISABLE_MODELS_FETCH) flags.push("DISABLE_MODELS_FETCH")
-    if (Flag.AX_CODE_NATIVE_INDEX) flags.push("NATIVE_INDEX=on")
-    if (Flag.AX_CODE_NATIVE_FS) flags.push("NATIVE_FS=on")
-    if (Flag.AX_CODE_NATIVE_DIFF) flags.push("NATIVE_DIFF=on")
-    if (Flag.AX_CODE_NATIVE_PARSER) flags.push("NATIVE_PARSER=on")
+    if (Flag.AX_CODE_NATIVE_INDEX) flags.push(formatNativeFlag("NATIVE_INDEX", addonLoaded.get("index-core") ?? false))
+    if (Flag.AX_CODE_NATIVE_FS) flags.push(formatNativeFlag("NATIVE_FS", addonLoaded.get("fs") ?? false))
+    if (Flag.AX_CODE_NATIVE_DIFF) flags.push(formatNativeFlag("NATIVE_DIFF", addonLoaded.get("diff") ?? false))
+    if (Flag.AX_CODE_NATIVE_PARSER) flags.push(formatNativeFlag("NATIVE_PARSER", addonLoaded.get("parser") ?? false))
     if (Flag.AX_CODE_DEBUG_ENGINE_NATIVE_SCAN) flags.push("DEBUG_ENGINE_NATIVE_SCAN=on")
     if (flags.length > 0) {
       checks.push({ name: "Feature flags", status: "ok", detail: flags.join(", ") })
