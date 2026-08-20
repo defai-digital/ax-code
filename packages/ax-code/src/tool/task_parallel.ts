@@ -114,7 +114,12 @@ async function runOneTask(input: {
   error?: string
 }> {
   const { params, ctx, model, config, agent } = input
-  const hasTaskPermission = agent.permission.some((rule) => rule.permission === "task")
+  // Same fan-out gate as tool/task.ts (ADR-005 deny-by-default; ADR-057 D2):
+  // the LAST rule naming `task` decides, regardless of pattern — a scoped
+  // allow like `task: { general: "allow" }` counts, wildcard `*` rules are
+  // just rules like any other, and no task rule means deny-by-default.
+  const taskRules = agent.permission.filter((rule) => rule.permission === "task")
+  const canFanOut = taskRules.findLast(() => true)?.action === "allow"
 
   const session = await Session.create({
     parentID: ctx.sessionID,
@@ -135,7 +140,7 @@ async function runOneTask(input: {
         pattern: "*",
         action: "deny",
       },
-      ...(hasTaskPermission
+      ...(canFanOut
         ? []
         : [
             {
@@ -153,7 +158,9 @@ async function runOneTask(input: {
   })
 
   const cancel = () => {
-    void SessionPrompt.cancel(session.id).catch((error) => {
+    // Abort propagation IS an interruption of the child turn (same as
+    // tool/task.ts cancelSubagent), so the Interrupt hook fires for it.
+    void SessionPrompt.cancel(session.id, { interrupt: true }).catch((error) => {
       log.warn("failed to cancel parallel subagent", { sessionID: session.id, error })
     })
   }
@@ -165,6 +172,8 @@ async function runOneTask(input: {
     todoread: false,
     task: false,
     task_parallel: false,
+    // No fan-out means no background tasks to wait on — hide waitfor too.
+    waitfor: false,
     ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
   }
 
@@ -370,9 +379,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       const lines = settled.map((result, index) => {
         const header = `### ${index + 1}. ${result.description} (@${result.subagent_type})`
         const status = result.ok ? "ok" : "failed"
-        const body = result.ok
-          ? result.text
-          : [result.error, result.text].filter(Boolean).join("\n") || "No output"
+        const body = result.ok ? result.text : [result.error, result.text].filter(Boolean).join("\n") || "No output"
         return [
           header,
           `status: ${status}`,

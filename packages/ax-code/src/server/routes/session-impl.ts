@@ -940,7 +940,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator("param", SESSION_ID_PARAM),
       async (c) => {
-        await SessionPrompt.cancel(await parseCurrentProjectSessionID(c))
+        await SessionPrompt.cancel(await parseCurrentProjectSessionID(c), { interrupt: true })
         return c.json(true)
       },
     )

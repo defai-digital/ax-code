@@ -7,6 +7,15 @@
  * - built-in packs under packages/ax-code/hooks/packs
  * - project `.ax-code/hooks.json`
  * - config `hooks` field
+ *
+ * Observation-only events (ADR-057): SessionStart, SessionEnd, PostCompact,
+ * Interrupt. They are NOT in BLOCKABLE_EVENTS, so a non-zero exit can never
+ * veto anything — `runHooks` logs the failure and continues.
+ *
+ * Security note: hook child processes receive the FULL `process.env`
+ * (see the env spread in `runHookProcess` below). Hook commands must be
+ * treated as trusted code — they can read every secret in the environment.
+ * Scoping the env passed to hooks is future hardening (ADR-057 D4).
  */
 
 import { spawn } from "child_process"
@@ -51,6 +60,10 @@ export namespace LifecycleHooks {
     "UserPromptSubmit",
     "PreCompact",
     "SubagentStop",
+    "SessionStart",
+    "SessionEnd",
+    "PostCompact",
+    "Interrupt",
   ])
   const HookCommandSchema = z.object({
     event: EventNameSchema,

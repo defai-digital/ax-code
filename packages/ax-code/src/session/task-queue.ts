@@ -546,7 +546,7 @@ export namespace TaskQueue {
       (current.status === "running" || current.status === "blocked_permission" || current.status === "blocked_question")
     ) {
       const { SessionPrompt } = await import("./prompt")
-      await SessionPrompt.cancel(current.sessionID)
+      await SessionPrompt.cancel(current.sessionID, { interrupt: true })
       const after = await get(id)
       if (after.status === "cancelled") return after
     }

@@ -458,7 +458,9 @@ export async function runImplementContestant(input: {
         const parts = await resolvePromptParts(prompt)
         const messageID = MessageID.ascending()
         const cancel = () => SessionPrompt.cancel(session.id)
-        const onAbort = () => void cancel().catch(() => undefined)
+        // Abort propagation IS an interruption of the contestant turn; the
+        // error-cleanup path below (timeout etc.) is not a user interrupt.
+        const onAbort = () => void SessionPrompt.cancel(session.id, { interrupt: true }).catch(() => undefined)
         input.abort.addEventListener("abort", onAbort, { once: true })
         try {
           throwIfAborted(input.abort)
@@ -474,6 +476,7 @@ export async function runImplementContestant(input: {
               tools: {
                 task: false,
                 task_parallel: false,
+                waitfor: false,
                 arena: false,
                 council: false,
                 todowrite: false,

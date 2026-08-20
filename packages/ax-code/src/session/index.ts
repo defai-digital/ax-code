@@ -289,15 +289,39 @@ export namespace Session {
       })
       .optional(),
     async (input) => {
-      return createNext({
+      const session = await createNext({
         id: input?.id,
         parentID: input?.parentID,
         directory: Instance.directory,
         title: input?.title,
         permission: input?.permission,
       })
+      // User lifecycle hooks (SessionStart) — top-level sessions only;
+      // subagent sessions already surface via SubagentStop. Observation-only
+      // and fire-and-forget: hook failures must never break session creation.
+      if (!input?.parentID) {
+        fireLifecycleHook("SessionStart", session.id, {
+          sessionID: session.id,
+          title: session.title,
+          time: session.time.created,
+        })
+      }
+      return session
     },
   )
+
+  // User lifecycle hooks (SessionStart / SessionEnd) — observation-only.
+  // Fire-and-forget: the returned promise is deliberately not awaited so hook
+  // latency can never block the session lifecycle path; failures are logged.
+  function fireLifecycleHook(
+    event: "SessionStart" | "SessionEnd",
+    sessionID: SessionID,
+    args: Record<string, unknown>,
+  ) {
+    void import("@/hooks/lifecycle")
+      .then(({ LifecycleHooks }) => LifecycleHooks.runForWorkspace({ event, sessionID, args }))
+      .catch((error) => log.warn(`${event} lifecycle hooks failed`, { sessionID, error }))
+  }
 
   export const fork = fn(
     z.object({
@@ -538,7 +562,15 @@ export namespace Session {
 
   export const setArchived = fn(
     z.object({ sessionID: SessionID.zod, time: z.number().int().min(0).nullable().optional() }),
-    async (input) => updateAndPublish(input.sessionID, { time_archived: input.time, time_updated: Date.now() }),
+    async (input) => {
+      const info = updateAndPublish(input.sessionID, { time_archived: input.time, time_updated: Date.now() })
+      // User lifecycle hooks (SessionEnd, reason "archive") — fires only when
+      // archiving (time set), not when unarchiving (time null/undefined).
+      if (input.time != null) {
+        fireLifecycleHook("SessionEnd", input.sessionID, { sessionID: input.sessionID, reason: "archive" })
+      }
+      return info
+    },
   )
 
   export const setMetadata = fn(
@@ -881,6 +913,9 @@ export namespace Session {
       Bus.publishDetached(Event.Deleted, { info: desc })
     }
     Bus.publishDetached(Event.Deleted, { info: session })
+    // User lifecycle hooks (SessionEnd, reason "remove") — observation-only,
+    // fire-and-forget; fired once for the removed session after deletion.
+    fireLifecycleHook("SessionEnd", sessionID, { sessionID, reason: "remove" })
   })
 
   /**

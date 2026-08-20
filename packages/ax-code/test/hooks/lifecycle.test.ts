@@ -1,5 +1,9 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi, afterEach } from "vitest"
 import { LifecycleHooks } from "../../src/hooks/lifecycle"
+import { Instance } from "../../src/project/instance"
+import { Session } from "../../src/session"
+import { SessionPrompt } from "../../src/session/prompt"
+import { tmpdir } from "../fixture/fixture"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
@@ -108,11 +112,20 @@ describe("LifecycleHooks matcher and run", () => {
   })
 
   test("non-blockable events never block even with blockOnFailure", async () => {
-    for (const event of ["PreCompact", "SubagentStop", "PostToolUse", "Stop"] as const) {
-      const result = await LifecycleHooks.runHooks(
-        [{ event, blockOnFailure: true, command: "exit 2" }],
-        { event, cwd: process.cwd() },
-      )
+    for (const event of [
+      "PreCompact",
+      "SubagentStop",
+      "PostToolUse",
+      "Stop",
+      "SessionStart",
+      "SessionEnd",
+      "PostCompact",
+      "Interrupt",
+    ] as const) {
+      const result = await LifecycleHooks.runHooks([{ event, blockOnFailure: true, command: "exit 2" }], {
+        event,
+        cwd: process.cwd(),
+      })
       expect(result.blocked).toBe(false)
     }
   })
@@ -127,12 +140,24 @@ describe("LifecycleHooks matcher and run", () => {
           { event: "UserPromptSubmit", command: "true" },
           { event: "PreCompact", command: "true" },
           { event: "SubagentStop", command: "true" },
+          { event: "SessionStart", command: "true" },
+          { event: "SessionEnd", command: "true" },
+          { event: "PostCompact", command: "true" },
+          { event: "Interrupt", command: "true" },
         ],
       }),
       "utf8",
     )
     const hooks = await LifecycleHooks.loadProjectHooks(dir, true)
-    expect(hooks.map((h) => h.event)).toEqual(["UserPromptSubmit", "PreCompact", "SubagentStop"])
+    expect(hooks.map((h) => h.event)).toEqual([
+      "UserPromptSubmit",
+      "PreCompact",
+      "SubagentStop",
+      "SessionStart",
+      "SessionEnd",
+      "PostCompact",
+      "Interrupt",
+    ])
   })
 
   test("rejects malformed project hook entries instead of trusting parsed JSON", async () => {
@@ -145,5 +170,164 @@ describe("LifecycleHooks matcher and run", () => {
     )
 
     await expect(LifecycleHooks.loadProjectHooks(dir, true)).resolves.toEqual([])
+  })
+})
+
+describe("LifecycleHooks session lifecycle firing sites", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  function spyOnRun() {
+    return vi.spyOn(LifecycleHooks, "runForWorkspace").mockResolvedValue({ ok: true, blocked: false, outputs: [] })
+  }
+
+  // Firing sites are fire-and-forget, so poll until the fire-and-forget
+  // promise chain reaches the spy with the expected event.
+  async function waitForEvent(spy: ReturnType<typeof spyOnRun>, event: string) {
+    const deadline = Date.now() + 5_000
+    while (Date.now() < deadline) {
+      const call = spy.mock.calls.map((c) => c[0]).find((c) => c.event === event)
+      if (call) return call
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    return undefined
+  }
+
+  test("Session.create fires SessionStart with id/title/time only for top-level sessions", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const spy = spyOnRun()
+        const session = await Session.create({ title: "Hook Test" })
+        const call = await waitForEvent(spy, "SessionStart")
+
+        expect(call).toBeDefined()
+        expect(call?.sessionID).toBe(session.id)
+        // Payload carries ids/title/timestamp only — no conversation text.
+        expect(call?.args).toEqual({
+          sessionID: session.id,
+          title: "Hook Test",
+          time: session.time.created,
+        })
+
+        // Subagent (child) sessions do not fire SessionStart — they surface
+        // via SubagentStop instead.
+        spy.mockClear()
+        await Session.create({ parentID: session.id, title: "Child" })
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        expect(spy).not.toHaveBeenCalled()
+      },
+    })
+  })
+
+  test("Session.setArchived fires SessionEnd with reason archive", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const spy = spyOnRun()
+        const session = await Session.create({})
+        // Flush the pending fire-and-forget SessionStart from create().
+        await waitForEvent(spy, "SessionStart")
+        spy.mockClear()
+
+        await Session.setArchived({ sessionID: session.id, time: Date.now() })
+        const call = await waitForEvent(spy, "SessionEnd")
+
+        expect(call).toBeDefined()
+        expect(call?.sessionID).toBe(session.id)
+        expect(call?.args).toEqual({ sessionID: session.id, reason: "archive" })
+
+        // Unarchiving (time null) is not a session end.
+        spy.mockClear()
+        await Session.setArchived({ sessionID: session.id, time: null })
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        expect(spy).not.toHaveBeenCalled()
+      },
+    })
+  })
+
+  test("Session.remove fires SessionEnd with reason remove", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const spy = spyOnRun()
+        const session = await Session.create({})
+        // Flush the pending fire-and-forget SessionStart from create().
+        await waitForEvent(spy, "SessionStart")
+        spy.mockClear()
+
+        await Session.remove(session.id)
+        const call = await waitForEvent(spy, "SessionEnd")
+
+        expect(call).toBeDefined()
+        expect(call?.sessionID).toBe(session.id)
+        expect(call?.args).toEqual({ sessionID: session.id, reason: "remove" })
+      },
+    })
+  })
+
+  test("SessionPrompt.cancel without the interrupt flag does not fire Interrupt", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const spy = spyOnRun()
+        const session = await Session.create({})
+        await waitForEvent(spy, "SessionStart")
+        spy.mockClear()
+
+        // Internal/cleanup callers (prompt-loop drain, Session.remove
+        // cascade, error teardown) call cancel() without the flag — a normal
+        // turn end must not surface as a user Interrupt.
+        await SessionPrompt.cancel(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        expect(spy.mock.calls.map((c) => c[0].event)).not.toContain("Interrupt")
+      },
+    })
+  })
+
+  test("SessionPrompt.cancel with { interrupt: true } fires Interrupt exactly once", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const spy = spyOnRun()
+        const session = await Session.create({})
+        await waitForEvent(spy, "SessionStart")
+        spy.mockClear()
+
+        await SessionPrompt.cancel(session.id, { interrupt: true })
+        const call = await waitForEvent(spy, "Interrupt")
+
+        expect(call).toBeDefined()
+        expect(call?.sessionID).toBe(session.id)
+        expect(call?.args).toEqual({ sessionID: session.id })
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        expect(spy.mock.calls.filter((c) => c[0].event === "Interrupt")).toHaveLength(1)
+      },
+    })
+  })
+
+  test("Session.remove does not fire Interrupt for the removed session or its descendants", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const spy = spyOnRun()
+        const parent = await Session.create({})
+        await Session.create({ parentID: parent.id })
+        await waitForEvent(spy, "SessionStart")
+        spy.mockClear()
+
+        await Session.remove(parent.id)
+        await waitForEvent(spy, "SessionEnd")
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        expect(spy.mock.calls.map((c) => c[0].event)).not.toContain("Interrupt")
+      },
+    })
   })
 })

@@ -284,7 +284,9 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
 
       function cancelSubagent() {
         if (!subagentSessionID) return
-        void SessionPrompt.cancel(subagentSessionID).catch((error) => {
+        // Abort propagation IS an interruption of the child turn, so the
+        // Interrupt hook fires for the child session as well.
+        void SessionPrompt.cancel(subagentSessionID, { interrupt: true }).catch((error) => {
           log.warn("failed to cancel aborted subagent session", {
             sessionID: subagentSessionID,
             error,
@@ -336,7 +338,15 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
         await assertBackgroundCapacity(ctx.sessionID, TaskQueue)
       }
 
-      const hasTaskPermission = agent.permission.some((rule) => rule.permission === "task")
+      // Fan-out requires an EXPLICIT allow for the `task` permission
+      // (ADR-005 deny-by-default; ADR-057 D2). The LAST rule naming `task`
+      // decides, regardless of pattern: a scoped allow like
+      // `task: { general: "allow" }` counts (matching the last task rule
+      // keeps this gate consistent with Permission.evaluate's last-match
+      // semantics), wildcard `*` rules in either direction are just rules
+      // like any other, and no task rule at all means deny-by-default.
+      const taskRules = agent.permission.filter((rule) => rule.permission === "task")
+      const canFanOut = taskRules.findLast(() => true)?.action === "allow"
 
       const session = await iife(async () => {
         if (params.task_id) {
@@ -348,6 +358,13 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
           if (found) throw new Error("Cannot resume a session that is not a child of the current session")
         }
 
+        // Project-approved "always allow" rules already apply to this child
+        // session: Permission.ask evaluates the caller's ruleset plus the
+        // project-scoped `approved` list (src/permission/index.ts:320-337).
+        // Do NOT copy allow rules into this durable session ruleset — a
+        // persisted copy is stale by construction, widens blast radius in
+        // unattended sessions, and corrupts the surfaces that render the
+        // session's own ruleset (ADR-057 D1).
         return await Session.create({
           parentID: ctx.sessionID,
           title: params.description + ` (@${agent.name} subagent)`,
@@ -362,7 +379,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
               pattern: "*",
               action: "deny",
             },
-            ...(hasTaskPermission
+            ...(canFanOut
               ? []
               : [
                   {
@@ -393,7 +410,9 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
       const taskTools = {
         todowrite: false,
         todoread: false,
-        ...(hasTaskPermission ? {} : { task: false }),
+        // Agents that cannot fan out cannot start background tasks either, so
+        // they have nothing to wait on — hide waitfor alongside task.
+        ...(canFanOut ? {} : { task: false, waitfor: false }),
         ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
       }
       let result: Awaited<ReturnType<typeof SessionPrompt.prompt>>

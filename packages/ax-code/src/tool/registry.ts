@@ -14,6 +14,7 @@ import { BatchTool } from "./batch"
 import { ReadTool } from "./read"
 import { TaskTool } from "./task"
 import { TaskParallelTool } from "./task_parallel"
+import { WaitForTool } from "./waitfor"
 import { CouncilTool } from "./council"
 import { ArenaTool } from "./arena"
 import { TodoWriteTool } from "./todo"
@@ -244,6 +245,7 @@ export namespace ToolRegistry {
       NotebookEditTool,
       TaskTool,
       TaskParallelTool,
+      WaitForTool,
       CouncilTool,
       ArenaTool,
       WebFetchTool,

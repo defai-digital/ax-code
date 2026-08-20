@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import { writeFile } from "node:fs/promises"
 import { SessionCompaction } from "../../src/session/compaction"
@@ -10,7 +10,7 @@ import { Session } from "../../src/session"
 import { MessageV2 } from "../../src/session/message-v2"
 import { markEstimatedUsage } from "../../src/provider/usage"
 import { ModelID, ProviderID } from "../../src/provider/schema"
-import type { Provider } from "../../src/provider/provider"
+import { Provider } from "../../src/provider/provider"
 import {
   AX_ENGINE_MODEL_DEFINITIONS,
   AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
@@ -786,6 +786,56 @@ describe("session.compaction.process busy semantics", () => {
         // Second call ran (errored, but not "busy"). If the gate had
         // leaked, we'd see "busy" here.
         expect(second).not.toBe("busy")
+      },
+    })
+  })
+})
+
+describe("session.compaction PostCompact hook", () => {
+  test("does not fire PostCompact when compaction bails on the context-overflow path", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { LifecycleHooks } = await import("../../src/hooks/lifecycle")
+        const hookSpy = vi
+          .spyOn(LifecycleHooks, "runForWorkspace")
+          .mockResolvedValue({ ok: true, blocked: false, outputs: [] })
+        // A tiny-window compaction model makes the compaction instructions
+        // alone exceed the usable budget, so processInner bails via
+        // stopForContextOverflow and returns "stop" without compacting.
+        const modelSpy = vi
+          .spyOn(Provider, "getSmallModel")
+          .mockResolvedValue(createModel({ context: 500, output: 50 }))
+        try {
+          const session = await Session.create({})
+          const user = await Session.updateMessage({
+            id: MessageID.ascending(),
+            sessionID: session.id,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "build",
+            model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test-model") },
+            tools: {},
+            mode: "build",
+          } as MessageV2.User)
+
+          const result = await SessionCompaction.process({
+            parentID: user.id,
+            messages: await Session.messages({ sessionID: session.id }),
+            sessionID: session.id,
+            abort: new AbortController().signal,
+            auto: true,
+          })
+
+          expect(result).toBe("stop")
+          const events = hookSpy.mock.calls.map((call) => call[0].event)
+          expect(events).toContain("PreCompact")
+          expect(events).not.toContain("PostCompact")
+        } finally {
+          modelSpy.mockRestore()
+          hookSpy.mockRestore()
+        }
       },
     })
   })

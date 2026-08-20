@@ -323,7 +323,26 @@ export namespace SessionCompaction {
       } catch (error) {
         log.warn("PreCompact lifecycle hooks failed", { sessionID: input.sessionID, error })
       }
-      return await processInner(input)
+      const result = await processInner(input)
+      // User lifecycle hooks (PostCompact) — observational only, fired after
+      // compaction completes. A "stop" result means compaction BAILED (e.g.
+      // the context-overflow paths in processInner) — nothing was compacted,
+      // so the hook must not fire. Fire-and-forget: hook latency/failures
+      // must never affect the compaction result. Reason only, never summary
+      // text.
+      if (result !== "stop") {
+        try {
+          const { LifecycleHooks } = await import("@/hooks/lifecycle")
+          void LifecycleHooks.runForWorkspace({
+            event: "PostCompact",
+            sessionID: input.sessionID,
+            args: { sessionID: input.sessionID, reason: input.auto ? "auto" : "manual" },
+          }).catch((error) => log.warn("PostCompact lifecycle hooks failed", { sessionID: input.sessionID, error }))
+        } catch (error) {
+          log.warn("PostCompact lifecycle hooks failed", { sessionID: input.sessionID, error })
+        }
+      }
+      return result
     } finally {
       inFlight.delete(input.sessionID)
     }

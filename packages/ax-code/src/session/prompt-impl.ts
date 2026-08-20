@@ -236,10 +236,24 @@ export namespace SessionPrompt {
     return runState.resume(sessionID)
   }
 
-  export async function cancel(sessionID: SessionID) {
+  // `opts.interrupt` marks a GENUINE user/operator interrupt of a running
+  // turn (server abort route, operator task stop, abort propagation into a
+  // subagent). Only those call sites pass the flag; internal/cleanup callers
+  // (prompt-loop drain, Session.remove cascade, error/timeout teardown) call
+  // cancel() without it so the Interrupt hook does not fire on normal turn
+  // completion or background cleanup.
+  export async function cancel(sessionID: SessionID, opts?: { interrupt?: boolean }) {
     log.info("cancel", { command: "session.prompt.cancel", status: "started", sessionID })
     await runState.cancel(sessionID)
     await cancelDescendantSessions(sessionID)
+    if (opts?.interrupt !== true) return
+    // User lifecycle hooks (Interrupt) — observational only, fire-and-forget:
+    // hook latency/failures must never delay or break cancellation.
+    void import("@/hooks/lifecycle")
+      .then(({ LifecycleHooks }) =>
+        LifecycleHooks.runForWorkspace({ event: "Interrupt", sessionID, args: { sessionID } }),
+      )
+      .catch((error) => log.warn("Interrupt lifecycle hooks failed", { sessionID, error }))
   }
 
   async function cancelDescendantSessions(sessionID: SessionID) {
