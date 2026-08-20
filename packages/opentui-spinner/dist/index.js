@@ -57,6 +57,11 @@ export class SpinnerRenderable extends Renderable {
     // --- Frame encoding (native unicode width calculation) ---
     _encodeFrames() {
         for (const frame of this._frames) {
+            // Dedupe repeated frame strings (e.g. the `flip` preset) — otherwise each
+            // iteration allocates a fresh native handle that overwrites the previous
+            // one without freeUnicode, leaking native memory.
+            if (this._encodedFrames[frame])
+                continue;
             const encoded = this._lib.encodeUnicode(frame, this.ctx.widthMethod);
             if (encoded) {
                 this._encodedFrames[frame] = encoded;
@@ -114,8 +119,8 @@ export class SpinnerRenderable extends Renderable {
             this._frames = [...DEFAULT_FRAMES];
             this._interval = DEFAULT_INTERVAL;
         }
-        this.width = this._computeWidth();
         this._encodeFrames();
+        this.width = this._computeWidth();
         this.requestRender();
     }
     get frames() {
