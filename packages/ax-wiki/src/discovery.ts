@@ -2,10 +2,10 @@ import { execFile } from "node:child_process"
 import { lstat, readFile, readdir, realpath } from "node:fs/promises"
 import path from "node:path"
 import { promisify } from "node:util"
-import { matchesAny } from "./glob"
-import { sha256 } from "./hash"
-import { AX_WIKI_CONFIG, AX_WIKI_INSTRUCTIONS, normalizePath, resolveInside } from "./paths"
-import type { AxWikiConfig, WikiSource } from "./types"
+import { matchesAny } from "./glob.js"
+import { sha256 } from "./hash.js"
+import { AX_WIKI_CONFIG, AX_WIKI_INSTRUCTIONS, normalizePath, resolveInside } from "./paths.js"
+import type { AxWikiConfig, WikiSource } from "./types.js"
 
 const execFileAsync = promisify(execFile)
 const SKIP_DIRS = new Set([".git", "node_modules", "dist", "build", "target", ".cache", ".turbo", "coverage"])

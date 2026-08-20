@@ -1,6 +1,6 @@
 import { lstat } from "node:fs/promises"
 import path from "node:path"
-import { sanitizeWikiDir } from "./paths"
+import { sanitizeWikiDir } from "./paths.js"
 
 function isMissing(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT")

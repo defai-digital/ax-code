@@ -1,5 +1,5 @@
-import { sha256 } from "./hash"
-import { AX_WIKI_PROTECTED_END, AX_WIKI_PROTECTED_START } from "./paths"
+import { sha256 } from "./hash.js"
+import { AX_WIKI_PROTECTED_END, AX_WIKI_PROTECTED_START } from "./paths.js"
 
 export type ProtectedSection = { id: string; raw: string }
 

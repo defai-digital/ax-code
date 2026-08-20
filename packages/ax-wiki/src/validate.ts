@@ -1,8 +1,8 @@
 import path from "node:path"
-import { parseFrontmatter } from "./frontmatter"
-import { extractProtectedSections, managedContentHash, protectedSectionsBalanced } from "./protected"
-import { AX_WIKI_GENERATOR } from "./types"
-import type { WikiManifest, WikiPlan, WikiSource, WikiValidationIssue, WikiValidationReport } from "./types"
+import { parseFrontmatter } from "./frontmatter.js"
+import { extractProtectedSections, managedContentHash, protectedSectionsBalanced } from "./protected.js"
+import { AX_WIKI_GENERATOR } from "./types.js"
+import type { WikiManifest, WikiPlan, WikiSource, WikiValidationIssue, WikiValidationReport } from "./types.js"
 
 const MARKDOWN_LINK = /\[[^\]]*\]\(([^)]+)\)/g
 

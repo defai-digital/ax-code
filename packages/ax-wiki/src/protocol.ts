@@ -1,5 +1,5 @@
-import { getWikiStatus } from "./artifacts"
-import { AX_WIKI_DIR_DEFAULT, sanitizeWikiDir } from "./paths"
+import { getWikiStatus } from "./artifacts.js"
+import { AX_WIKI_DIR_DEFAULT, sanitizeWikiDir } from "./paths.js"
 
 export function renderAxWikiProtocol(input: {
   wikiDir?: string

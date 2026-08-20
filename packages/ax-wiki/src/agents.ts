@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { lstat, readFile, rename, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
-import { AX_WIKI_DIR_DEFAULT, AX_WIKI_END, AX_WIKI_START, sanitizeWikiDir } from "./paths"
+import { AX_WIKI_DIR_DEFAULT, AX_WIKI_END, AX_WIKI_START, sanitizeWikiDir } from "./paths.js"
 
 export function hasAxWikiBlock(content: string): boolean {
   return content.includes(AX_WIKI_START) && content.includes(AX_WIKI_END)

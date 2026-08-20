@@ -1,14 +1,14 @@
 import { access, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
-import { discoverSources } from "./discovery"
-import { parseFrontmatter } from "./frontmatter"
-import { sha256 } from "./hash"
-import { AX_WIKI_DIR_DEFAULT, INDEX_CANDIDATES, normalizePath, resolveInside, sanitizeWikiDir } from "./paths"
-import { createWikiPlan } from "./plan"
-import { validateWikiCandidate } from "./validate"
-import { loadAxWikiConfig, loadWikiManifest } from "./build"
-import { assertWikiDirectorySafe } from "./safety"
-import type { AxWikiConfig, WikiCard, WikiManifest, WikiPage, WikiValidationReport } from "./types"
+import { discoverSources } from "./discovery.js"
+import { parseFrontmatter } from "./frontmatter.js"
+import { sha256 } from "./hash.js"
+import { AX_WIKI_DIR_DEFAULT, INDEX_CANDIDATES, normalizePath, resolveInside, sanitizeWikiDir } from "./paths.js"
+import { createWikiPlan } from "./plan.js"
+import { validateWikiCandidate } from "./validate.js"
+import { loadAxWikiConfig, loadWikiManifest } from "./build.js"
+import { assertWikiDirectorySafe } from "./safety.js"
+import type { AxWikiConfig, WikiCard, WikiManifest, WikiPage, WikiValidationReport } from "./types.js"
 
 async function exists(file: string): Promise<boolean> {
   return access(file)
