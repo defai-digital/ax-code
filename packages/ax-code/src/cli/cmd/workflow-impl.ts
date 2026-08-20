@@ -1,6 +1,7 @@
 import { EOL } from "os"
 import type { Argv } from "yargs"
 import { bootstrap } from "../bootstrap"
+import { UI } from "../ui"
 import { cmd } from "./cmd"
 import { truncate } from "../../util/format"
 import { compactWorkflowArtifact } from "../../workflow/artifact"
@@ -1022,17 +1023,16 @@ function controlCommand(
 }
 
 async function withWorkflowRuntime(fn: () => Promise<void> | void) {
-  assertWorkflowRuntimeEnabled()
+  if (!isWorkflowRuntimeEnabled()) {
+    UI.error(
+      'Workflow runtime is disabled. Run "ax-code workflow runtime" for status and enable instructions, or set AX_CODE_WORKFLOW_RUNTIME=1.',
+    )
+    process.exitCode = 1
+    return
+  }
   await bootstrap(process.cwd(), async () => {
     await fn()
   })
-}
-
-function assertWorkflowRuntimeEnabled() {
-  if (isWorkflowRuntimeEnabled()) return
-  throw new Error(
-    'Workflow runtime is disabled. Run "ax-code workflow runtime" for status and enable instructions, or set AX_CODE_WORKFLOW_RUNTIME=1.',
-  )
 }
 
 function jsonOption() {

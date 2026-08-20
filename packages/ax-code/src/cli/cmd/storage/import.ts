@@ -1,6 +1,7 @@
 import type { Argv } from "yargs"
 import { cmd } from "../cmd"
 import { bootstrap } from "../../bootstrap"
+import { UI } from "../../ui"
 import { EOL } from "os"
 import { Filesystem } from "../../../util/filesystem"
 import { toErrorMessage } from "../../../util/error-message"
@@ -81,16 +82,14 @@ export const ImportCommand = cmd({
     await bootstrap(process.cwd(), async () => {
       const result = await readSessionTransferFile(args.file)
       if (result.error) {
-        process.stdout.write(result.error)
-        process.stdout.write(EOL)
-        return
+        UI.error(result.error)
+        process.exit(1)
       }
 
       const exportData = result.data
       if (!exportData) {
-        process.stdout.write(`Failed to read session data`)
-        process.stdout.write(EOL)
-        return
+        UI.error(`Failed to read session data`)
+        process.exit(1)
       }
 
       writeTransfer(exportData)

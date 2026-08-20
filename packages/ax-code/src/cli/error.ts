@@ -4,8 +4,10 @@ import { MCP } from "../mcp"
 import { Provider } from "../provider/provider"
 import { UI } from "./ui"
 import { isRecord } from "@/util/record"
+import z from "zod"
 
 export function FormatError(input: unknown) {
+  if (input instanceof z.ZodError) return z.prettifyError(input)
   if (MCP.Failed.isInstance(input))
     return `MCP server "${input.data.name}" failed. Note, ax-code does not support MCP authentication yet.`
   if (Provider.ModelNotFoundError.isInstance(input)) {
