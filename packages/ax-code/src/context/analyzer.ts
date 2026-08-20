@@ -13,7 +13,7 @@ import { Log } from "../util/log"
 import { isNonEmptyRecord } from "../util/record"
 import { decodePackageJsonObject, packageJsonStringMap, parsePackageJsonObject } from "../util/package-json"
 import { uniqueStrings } from "../util/string-list"
-import { Glob } from "@/bun/node-compat"
+import { FileIgnore } from "../file/ignore"
 
 export type ComplexityLevel = "small" | "medium" | "large" | "enterprise"
 export type DepthLevel = "basic" | "standard" | "full" | "security"
@@ -393,6 +393,49 @@ function detectSuggestedMcp(root: string, projectType: string, pkg: PackageJson 
   return ["@playwright/mcp — browser screenshot and automation (run: npx @playwright/mcp@latest)"]
 }
 
+const SOURCE_FILE_EXTENSIONS = new Set([
+  "ts",
+  "tsx",
+  "js",
+  "jsx",
+  "mjs",
+  "cjs",
+  "py",
+  "go",
+  "rs",
+  "java",
+  "rb",
+  "c",
+  "cc",
+  "cpp",
+  "h",
+  "hpp",
+])
+
+// Recursive source-file walker. Unlike the Glob shim it prunes ignored
+// directories (node_modules, .git, dist, ...) instead of descending into
+// them, which keeps the project-root fallback scan safe.
+async function* scanSourceFiles(cwd: string): AsyncGenerator<string> {
+  const stack = [cwd]
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current) continue
+    const entries = await fs.promises.readdir(current, { withFileTypes: true }).catch(() => [])
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue
+      const full = path.join(current, entry.name)
+      const relative = path.relative(cwd, full).split(path.sep).join("/")
+      if (entry.isDirectory()) {
+        if (!FileIgnore.match(relative)) stack.push(full)
+        continue
+      }
+      if (!SOURCE_FILE_EXTENSIONS.has(path.extname(entry.name).slice(1))) continue
+      if (FileIgnore.match(relative)) continue
+      yield relative
+    }
+  }
+}
+
 async function calculateComplexity(root: string, info: ProjectInfo): Promise<ComplexityScore> {
   let fileCount = 0
   let loc = 0
@@ -402,42 +445,41 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
     return content.endsWith("\n") ? lines.length - 1 : lines.length
   }
 
-  const sourceDir = info.directories.source
-  if (sourceDir) {
-    try {
-      const glob = new Glob("**/*.{ts,tsx,js,jsx,py,go,rs}")
-      const batch: string[] = []
-      const cwd = path.join(root, sourceDir)
-      for await (const file of glob.scan({ cwd, onlyFiles: true })) {
-        batch.push(file)
-        if (batch.length >= 50 || fileCount + batch.length >= 5000) {
-          const batchToRead = batch.splice(0, Math.max(0, 5000 - fileCount))
-          const results = await Promise.all(
-            batchToRead.map((f) => readFile(path.join(cwd, f), "utf-8").catch(() => "")),
-          )
-          for (const content of results) {
-            fileCount++
-            loc += countLines(content)
-          }
-          batch.length = 0
-          if (fileCount >= 5000) break
-        }
-      }
-      if (batch.length > 0 && fileCount < 5000) {
-        const batchToRead = batch.slice(0, 5000 - fileCount)
-        const results = await Promise.all(batchToRead.map((f) => readFile(path.join(cwd, f), "utf-8").catch(() => "")))
+  // When no conventional source directory (src/lib/app) is detected, fall
+  // back to scanning the project root itself so flat or scripts-only
+  // projects are still measured.
+  const scanDir = info.directories.source ? path.join(root, info.directories.source) : root
+  try {
+    const batch: string[] = []
+    for await (const file of scanSourceFiles(scanDir)) {
+      batch.push(file)
+      if (batch.length >= 50 || fileCount + batch.length >= 5000) {
+        const batchToRead = batch.splice(0, Math.max(0, 5000 - fileCount))
+        const results = await Promise.all(
+          batchToRead.map((f) => readFile(path.join(scanDir, f), "utf-8").catch(() => "")),
+        )
         for (const content of results) {
           fileCount++
           loc += countLines(content)
         }
+        batch.length = 0
+        if (fileCount >= 5000) break
       }
-    } catch (error) {
-      Log.Default.warn("complexity scan failed, using fallback", {
-        root,
-        sourceDir,
-        error: toErrorMessage(error),
-      })
     }
+    if (batch.length > 0 && fileCount < 5000) {
+      const batchToRead = batch.slice(0, 5000 - fileCount)
+      const results = await Promise.all(batchToRead.map((f) => readFile(path.join(scanDir, f), "utf-8").catch(() => "")))
+      for (const content of results) {
+        fileCount++
+        loc += countLines(content)
+      }
+    }
+  } catch (error) {
+    Log.Default.warn("complexity scan failed, using fallback", {
+      root,
+      scanDir,
+      error: toErrorMessage(error),
+    })
   }
 
   const pkg = await readPackageJson(path.join(root, "package.json"))
