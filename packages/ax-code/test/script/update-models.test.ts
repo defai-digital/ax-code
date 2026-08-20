@@ -404,7 +404,7 @@ describe("update-models script", () => {
     expect(data.minimax?.models?.["MiniMax-M2.7"]).toBeDefined()
   })
 
-  test("hides DeepSeek, GLM, MiniMax, and preview SKUs on Alibaba Token Plan only", async () => {
+  test("hides DeepSeek, GLM, MiniMax, Kimi, and preview SKUs on Alibaba Token Plan only", async () => {
     await using tmp = await tmpdir()
     const fixturePath = path.join(tmp.path, "models-fixture.json")
     const snapshotPath = path.join(tmp.path, "models-snapshot.json")
@@ -466,7 +466,9 @@ describe("update-models script", () => {
       expect(data[id]?.models?.["deepseek-v4-flash"]).toBeUndefined()
       expect(data[id]?.models?.["qwen3.7-plus"]).toBeUndefined()
       expect(data[id]?.models?.["qwen3.8-max-preview"]).toBeUndefined()
-      expect(data[id]?.models?.["qwen3.6-plus"]).toBeDefined()
+      expect(data[id]?.models?.["qwen3.6-plus"]).toBeUndefined()
+      expect(data[id]?.models?.["kimi-k2.7-code"]).toBeUndefined()
+      expect(data[id]?.models?.["qwen3.7-max"]).toBeUndefined()
     }
   })
 

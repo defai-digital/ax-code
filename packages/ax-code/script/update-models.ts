@@ -810,8 +810,10 @@ cloneProvider("alibaba-coding-plan-cn", "alibaba-token-plan-cn", {
 //     qwen-image/wan images.
 // Superseded SKUs (kimi-k2.5/k2.6, glm-4.7, glm-5.1, deepseek-v3.2) stay
 // excluded per the global supersession filters. Token Plan also hides
-// DeepSeek / GLM / MiniMax in ax-code so those vendors are reached via
-// their first-party providers (deepseek, zai/zhipuai, minimax), and
+// DeepSeek / GLM / MiniMax / Kimi in ax-code so those vendors are reached
+// via their first-party providers (deepseek, zai/zhipuai, minimax,
+// moonshot), keeps only qwen3.7-plus/qwen3.6-flash of the shared Qwen chat
+// SKUs (qwen3.6-plus and qwen3.7-max are filtered out of the picker), and
 // drops any SKU whose id or name contains "preview". Entries
 // that models.dev hasn't published yet are silently skipped — the
 // whitelists are forward-looking so they appear automatically once
@@ -833,13 +835,8 @@ const alibabaCodingPlanModels = [
 ]
 const alibabaTokenPlanModels = [
   // Qwen text / reasoning
-  "qwen3.7-max",
   "qwen3.7-plus",
-  "qwen3.6-plus",
   "qwen3.6-flash",
-  // Other vendors aggregated under the Token Plan (DeepSeek/GLM/MiniMax stay
-  // off this picker — use the first-party providers instead)
-  "kimi-k2.7-code",
   // Qwen image generation
   "qwen-image-2.0",
   "qwen-image-2.0-pro",
@@ -858,13 +855,11 @@ const alibabaModelFallbackProviders: Record<string, string[]> = {
   "qwen3.6-flash": ["aihubmix"],
   "deepseek-v4-pro": ["auriko", "cortecs", "302ai", "llmgateway"],
   "deepseek-v4-flash": ["cortecs", "auriko", "302ai", "llmgateway"],
-  "kimi-k2.7-code": ["moonshot", "moonshot-cn", "302ai", "llmgateway"],
   "glm-5": ["zhipuai"],
   "MiniMax-M2.5": ["minimax", "minimax-cn"],
   "glm-5.2": ["zhipuai"],
 }
 const alibabaModelFallbackDefaults: Record<string, RawModel> = {
-  "kimi-k2.7-code": kimiCodingModel("kimi-k2.7-code", "Kimi K2.7 Code"),
   "qwen-image-2.0": alibabaImageModel("qwen-image-2.0", "Qwen Image 2.0", "qwen-image"),
   "qwen-image-2.0-pro": alibabaImageModel("qwen-image-2.0-pro", "Qwen Image 2.0 Pro", "qwen-image"),
   "wan2.7-image": alibabaImageModel("wan2.7-image", "Wan 2.7 Image", "wan"),

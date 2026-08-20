@@ -2515,8 +2515,8 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
       // Catalogs follow Alibaba's official exact-string allowlists, which
       // differ per plan (verified 2026-08-18, see script/update-models.ts):
       // coding plans carry the qwen3.x-plus/coder SKUs plus glm-5/MiniMax,
-      // token plans carry Qwen + Kimi + image models (DeepSeek/GLM/MiniMax
-      // and preview SKUs are hidden).
+      // token plans carry curated Qwen + image models (DeepSeek/GLM/MiniMax/
+      // Kimi, qwen3.6-plus/qwen3.7-max, and preview SKUs are hidden).
       const expectedCodingPlanModels = [
         "MiniMax-M2.5",
         "glm-5",
@@ -2528,12 +2528,9 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
         "qwen3.7-plus",
       ]
       const expectedTokenPlanModels = [
-        "kimi-k2.7-code",
         "qwen-image-2.0",
         "qwen-image-2.0-pro",
         "qwen3.6-flash",
-        "qwen3.6-plus",
-        "qwen3.7-max",
         "qwen3.7-plus",
         "qwen3.8-max",
         "wan2.7-image",
@@ -2548,10 +2545,10 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
       expect(tokenPlan.models["qwen3.8-max-preview"]).toBeUndefined()
       expect(codingPlan.models["qwen3.6-plus"].api.url).toBe("https://coding-intl.dashscope.aliyuncs.com/v1")
       expect(codingPlanCn.models["qwen3.6-plus"].api.url).toBe("https://coding.dashscope.aliyuncs.com/v1")
-      expect(tokenPlan.models["qwen3.6-plus"].api.url).toBe(
+      expect(tokenPlan.models["qwen3.7-plus"].api.url).toBe(
         "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
       )
-      expect(tokenPlanCn.models["qwen3.6-plus"].api.url).toBe(
+      expect(tokenPlanCn.models["qwen3.7-plus"].api.url).toBe(
         "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
       )
       const snapshot = bundledSnapshot as Record<string, { doc?: string }>

@@ -380,6 +380,9 @@ describe("session.llm.stream", () => {
                   apiKey: "test-key",
                   baseURL: `${state.server.url.origin}/v1`,
                 },
+                // qwen3.6-plus is filtered from the Token Plan catalog; inject it
+                // as a custom model so Provider.getModel can resolve it.
+                models: { [modelID]: fixture.model },
               },
             },
           }),
@@ -1255,8 +1258,8 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 
   test("Qwen3.7-Max with Super-Long enabled emits preserve_thinking in request body", async () => {
     process.env.AX_CODE_SUPER_LONG = "1"
-    // qwen3.7-max is a Token Plan SKU (the coding plan allowlist carries only
-    // the plus/coder tiers) — see script/update-models.ts.
+    // qwen3.7-max is filtered out of the Token Plan picker (see
+    // script/update-models.ts); the models fixture carries the catalog entry.
     const providerID = "alibaba-token-plan"
     const modelID = "qwen3.7-max"
     const fixture = await loadFixture(providerID, modelID)
@@ -1280,6 +1283,9 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
             provider: {
               [providerID]: {
                 options: { apiKey: "test-key", baseURL: `${state.server.url.origin}/v1` },
+                // qwen3.7-max is filtered from the Token Plan catalog; inject it
+                // as a custom model so Provider.getModel can resolve it.
+                models: { [modelID]: fixture.model },
               },
             },
           }),
@@ -1330,8 +1336,8 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
   test("Qwen3.7-Max defaults Super-Long on without env bootstrap", async () => {
     delete process.env.AX_CODE_SUPER_LONG
     delete process.env.AX_CODE_SUPER_LONG_SESSION_OVERRIDE
-    // qwen3.7-max is a Token Plan SKU (the coding plan allowlist carries only
-    // the plus/coder tiers) — see script/update-models.ts.
+    // qwen3.7-max is filtered out of the Token Plan picker (see
+    // script/update-models.ts); the models fixture carries the catalog entry.
     const providerID = "alibaba-token-plan"
     const modelID = "qwen3.7-max"
     const fixture = await loadFixture(providerID, modelID)
@@ -1355,6 +1361,9 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
             provider: {
               [providerID]: {
                 options: { apiKey: "test-key", baseURL: `${state.server.url.origin}/v1` },
+                // qwen3.7-max is filtered from the Token Plan catalog; inject it
+                // as a custom model so Provider.getModel can resolve it.
+                models: { [modelID]: fixture.model },
               },
             },
           }),
@@ -1411,8 +1420,8 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
     delete process.env.AX_CODE_SUPER_LONG
     delete process.env.AX_CODE_SUPER_LONG_SESSION_OVERRIDE
     process.env.AX_CODE_AUTONOMOUS = "false"
-    // qwen3.7-max is a Token Plan SKU (the coding plan allowlist carries only
-    // the plus/coder tiers) — see script/update-models.ts.
+    // qwen3.7-max is filtered out of the Token Plan picker (see
+    // script/update-models.ts); the models fixture carries the catalog entry.
     const providerID = "alibaba-token-plan"
     const modelID = "qwen3.7-max"
     const fixture = await loadFixture(providerID, modelID)
@@ -1436,6 +1445,9 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
             provider: {
               [providerID]: {
                 options: { apiKey: "test-key", baseURL: `${state.server.url.origin}/v1` },
+                // qwen3.7-max is filtered from the Token Plan catalog; inject it
+                // as a custom model so Provider.getModel can resolve it.
+                models: { [modelID]: fixture.model },
               },
             },
           }),
@@ -1566,8 +1578,8 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 
   test("Qwen3.7-Max with Super-Long enabled injects verification reminder in system messages", async () => {
     process.env.AX_CODE_SUPER_LONG = "1"
-    // qwen3.7-max is a Token Plan SKU (the coding plan allowlist carries only
-    // the plus/coder tiers) — see script/update-models.ts.
+    // qwen3.7-max is filtered out of the Token Plan picker (see
+    // script/update-models.ts); the models fixture carries the catalog entry.
     const providerID = "alibaba-token-plan"
     const modelID = "qwen3.7-max"
     const fixture = await loadFixture(providerID, modelID)
@@ -1591,6 +1603,9 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
             provider: {
               [providerID]: {
                 options: { apiKey: "test-key", baseURL: `${state.server.url.origin}/v1` },
+                // qwen3.7-max is filtered from the Token Plan catalog; inject it
+                // as a custom model so Provider.getModel can resolve it.
+                models: { [modelID]: fixture.model },
               },
             },
           }),
@@ -1725,8 +1740,8 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 
   test("Qwen3.7-Max with Super-Long enabled sends promptCacheKey in request body (Phase 3)", async () => {
     process.env.AX_CODE_SUPER_LONG = "1"
-    // qwen3.7-max is a Token Plan SKU (the coding plan allowlist carries only
-    // the plus/coder tiers) — see script/update-models.ts.
+    // qwen3.7-max is filtered out of the Token Plan picker (see
+    // script/update-models.ts); the models fixture carries the catalog entry.
     const providerID = "alibaba-token-plan"
     const modelID = "qwen3.7-max"
     const fixture = await loadFixture(providerID, modelID)
@@ -1750,6 +1765,9 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
             provider: {
               [providerID]: {
                 options: { apiKey: "test-key", baseURL: `${state.server.url.origin}/v1` },
+                // qwen3.7-max is filtered from the Token Plan catalog; inject it
+                // as a custom model so Provider.getModel can resolve it.
+                models: { [modelID]: fixture.model },
               },
             },
           }),
@@ -1804,8 +1822,8 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 
   test("Qwen3.7-Max with Super-Long enabled injects long-agent context pack into system messages", async () => {
     process.env.AX_CODE_SUPER_LONG = "1"
-    // qwen3.7-max is a Token Plan SKU (the coding plan allowlist carries only
-    // the plus/coder tiers) — see script/update-models.ts.
+    // qwen3.7-max is filtered out of the Token Plan picker (see
+    // script/update-models.ts); the models fixture carries the catalog entry.
     const providerID = "alibaba-token-plan"
     const modelID = "qwen3.7-max"
     const fixture = await loadFixture(providerID, modelID)
@@ -1829,6 +1847,9 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
             provider: {
               [providerID]: {
                 options: { apiKey: "test-key", baseURL: `${state.server.url.origin}/v1` },
+                // qwen3.7-max is filtered from the Token Plan catalog; inject it
+                // as a custom model so Provider.getModel can resolve it.
+                models: { [modelID]: fixture.model },
               },
             },
           }),
