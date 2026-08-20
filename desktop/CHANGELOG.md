@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.7.5] - 2026-08-20
+
+### Added
+
+- Show mode chips on the start screen.
+
+### Fixed
+
+- Harden provider loading and native scans.
+- Pin runtime SDK installs and harden council fan-out.
+
 ## [7.7.4] - 2026-08-20
 
 ### Fixed
