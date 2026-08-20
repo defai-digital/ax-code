@@ -13,8 +13,7 @@ import { createEffect, createMemo, For, Match, on, onMount, Show, Switch } from 
 import { useTerminalDimensions } from "@ax-code/opentui-solid"
 import { useTheme } from "@tui/context/theme"
 import { Logo } from "../component/logo"
-import { ModeChips, modeChipsRowWidth } from "../component/mode-chips"
-import { runMode } from "../component/prompt/run-mode-view-model"
+import { ModeChips } from "../component/mode-chips"
 import { recentSessions, recentSessionTitle } from "../component/session-picker-view-model"
 import { homeStatusBarLayout, homeStatusBarMcpWidth } from "./home-layout"
 import { Locale } from "@/util/locale"
@@ -172,10 +171,6 @@ export function Home() {
       segmentWidths: [
         stringWidth(directory()),
         mcp() ? homeStatusBarMcpWidth(connectedMcpCount()) : 0,
-        modeChipsRowWidth({
-          workMode: WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)),
-          runMode: runMode({ autonomous: sync.data.autonomous, superLong: sync.data.superLong }),
-        }),
         stringWidth(Installation.VERSION),
       ],
     }),
@@ -204,6 +199,7 @@ export function Home() {
               promptRef.set(r)
             }}
             hint={Hint}
+            footerRight={<ModeChips />}
             workspaceID={route.workspaceID}
           />
         </box>
@@ -294,7 +290,6 @@ export function Home() {
             <text fg={theme.textMuted}>/status</text>
           </Show>
         </box>
-        <ModeChips />
         <box flexShrink={0}>
           <text fg={theme.textMuted}>{Installation.VERSION}</text>
         </box>

@@ -1,4 +1,6 @@
-// Home bottom status bar layout math (directory · MCP/status · mode chips · version).
+// Home bottom status bar layout math (directory · MCP/status · version).
+// The mode chips used to be a segment here; they now live in the prompt
+// footer (see ModeChips / Prompt `footerRight`).
 // Keep this isolated from component modules so width calculations stay testable
 // and low-dependency, mirroring prompt/footer-layout.ts.
 

@@ -1,6 +1,7 @@
 // Shared mode chip row (work mode / run mode / sandbox).
 //
-// Rendered in the session sidebar footer and the Home bottom status bar.
+// Rendered in the session sidebar footer and, on Home, in the prompt footer
+// (right-aligned, just before the ctrl+c hint, via the Prompt `footerRight` prop).
 // All three states are app-global or directory-scoped and fully populated
 // before any session exists, and the cycle/toggle commands are registered
 // app-wide, so the row is safe to render on every route.

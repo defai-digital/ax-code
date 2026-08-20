@@ -9,6 +9,7 @@ export type PromptProps = {
   onSubmit?: () => void
   ref?: (ref: PromptRef) => void
   hint?: JSX.Element
+  footerRight?: JSX.Element
   showPlaceholder?: boolean
   sidebarVisible?: Accessor<boolean>
   statusTick?: Accessor<number>

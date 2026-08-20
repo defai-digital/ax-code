@@ -633,8 +633,10 @@ export function Prompt(props: PromptProps) {
     return true
   }
 
-  // Mode chips (work mode / run mode / sandbox) live in the session sidebar,
-  // so the footer has no toggle row to reserve width for.
+  // Mode chips (work mode / run mode / sandbox) live in the session sidebar
+  // and, on Home, at the front of this footer's right-side hint row via
+  // `props.footerRight` (right-aligned, just before the ctrl+c hint) — no
+  // toggle width is reserved for them here.
   // ctrl+c is overloaded: it clears a non-empty draft and exits when the
   // input is empty — the footer hint mirrors whichever action currently applies.
   const footerClearHint = createMemo(() => {
@@ -2345,8 +2347,16 @@ export function Prompt(props: PromptProps) {
                   />
                 </box>
               </Show>
-              <Show when={footerLayout().showVariants || footerLayout().showShellHint || footerLayout().showClearHint}>
+              <Show
+                when={
+                  props.footerRight ||
+                  footerLayout().showVariants ||
+                  footerLayout().showShellHint ||
+                  footerLayout().showClearHint
+                }
+              >
                 <box gap={2} flexDirection="row" flexShrink={0}>
+                  {props.footerRight}
                   <Switch>
                     <Match when={store.mode === "normal"}>
                       <Show when={footerLayout().showClearHint}>
