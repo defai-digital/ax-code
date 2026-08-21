@@ -6,7 +6,8 @@
   "license": "Apache-2.0",
   "scripts": {
     "typecheck": "tsgo --noEmit",
-    "build": "tsc"
+    "build": "tsc",
+    "test": "vitest run"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -41,6 +42,7 @@
     "@tsconfig/node24": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
-    "@typescript/native-preview": "catalog:"
+    "@typescript/native-preview": "catalog:",
+    "vitest": "^4.1.9"
   }
 }

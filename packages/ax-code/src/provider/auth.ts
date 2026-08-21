@@ -1,4 +1,4 @@
-import type { AuthOuathResult, Hooks } from "@ax-code/plugin"
+import type { AuthOAuthResult, Hooks } from "@ax-code/plugin"
 import { NamedError } from "@ax-code/util/error"
 import { Auth } from "@/auth"
 import { Instance } from "@/project/instance"
@@ -94,7 +94,7 @@ export namespace ProviderAuth {
 
   interface State {
     hooks: Record<ProviderID, Hook>
-    pending: Map<ProviderID, AuthOuathResult>
+    pending: Map<ProviderID, AuthOAuthResult>
   }
 
   const state = Instance.state(async (): Promise<State> => {
@@ -105,7 +105,7 @@ export namespace ProviderAuth {
           .filter((plugin) => plugin.auth?.provider !== undefined)
           .map((plugin) => [ProviderID.make(plugin.auth!.provider), plugin.auth!] as const),
       ) as Record<ProviderID, Hook>,
-      pending: new Map<ProviderID, AuthOuathResult>(),
+      pending: new Map<ProviderID, AuthOAuthResult>(),
     }
   })
 

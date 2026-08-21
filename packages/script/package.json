@@ -1,14 +1,16 @@
 {
   "$schema": "https://json.schemastore.org/package",
   "name": "@ax-code/script",
+  "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "dependencies": {
-    "semver": "catalog:"
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "@types/semver": "catalog:"
+    "vitest": "^4.1.9"
   },
   "exports": {
     ".": "./src/index.ts"
