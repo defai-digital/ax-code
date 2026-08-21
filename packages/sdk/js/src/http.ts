@@ -36,5 +36,3 @@ export async function createAxCode(options?: ServerOptions) {
     server,
   }
 }
-
-export const createOpencode = createAxCode

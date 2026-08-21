@@ -66,8 +66,6 @@ export async function createAxCodeServer(options?: ServerOptions) {
   }
 }
 
-export const createOpencodeServer = createAxCodeServer
-
 export function createAxCodeTui(options?: TuiOptions) {
   const args: string[] = []
 
@@ -101,5 +99,3 @@ export function createAxCodeTui(options?: TuiOptions) {
     },
   }
 }
-
-export const createOpencodeTui = createAxCodeTui

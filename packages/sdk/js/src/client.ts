@@ -26,5 +26,3 @@ export function createAxCodeClient(input?: Config & { directory?: string }) {
   const client = createClient(config)
   return new OpencodeClient({ client })
 }
-
-export const createOpencodeClient = createAxCodeClient
