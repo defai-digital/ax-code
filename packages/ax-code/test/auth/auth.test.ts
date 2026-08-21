@@ -314,10 +314,16 @@ test("stale auth lock stealing claims and revalidates the stale snapshot before 
   expect(body.indexOf("current !== snapshot.text")).toBeLessThan(body.indexOf("cleanupAuthLockFile()"))
 })
 
-test("set unreferences lock polling timers while waiting for an active holder", async () => {
+// Mirrors test/util/filelock.test.ts. Polling timers must stay ref'd: the
+// auth lock poll is awaited by Auth.set, so if its timer is the only pending
+// work an unref lets Node drain the event loop and exit with the caller's
+// promise unsettled. Termination is guaranteed by the bounded deadline in the
+// poll loop, not by the unref. See the sleep() note in src/util/timeout.ts.
+test("set keeps lock polling timers referenced while waiting for an active holder", async () => {
   const originalSetTimeout = globalThis.setTimeout
   const host = currentLockHost()
   let unrefCalls = 0
+  let pollTimers = 0
   let nowCalls = 0
 
   await fs.writeFile(
@@ -337,6 +343,7 @@ test("set unreferences lock polling timers while waiting for an active holder", 
   })
 
   globalThis.setTimeout = ((fn: (...args: any[]) => void, _ms?: number, ...args: any[]) => {
+    pollTimers += 1
     originalSetTimeout(() => fn(...args), 0)
     return {
       unref() {
@@ -353,7 +360,10 @@ test("set unreferences lock polling timers while waiting for an active holder", 
         key: "sk-test",
       }),
     ).rejects.toBeDefined()
-    expect(unrefCalls).toBeGreaterThan(0)
+    // The loop did poll...
+    expect(pollTimers).toBeGreaterThan(0)
+    // ...and never unref'd, so an awaited Auth.set cannot be silently dropped.
+    expect(unrefCalls).toBe(0)
   } finally {
     globalThis.setTimeout = originalSetTimeout
     killSpy.mockRestore()
