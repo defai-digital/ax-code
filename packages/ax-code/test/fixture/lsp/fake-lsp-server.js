@@ -86,8 +86,23 @@ function send(msg) {
 
 function sendRequest(method, params) {
   const id = nextId++
+  pendingServerRequests.add(id)
   send({ jsonrpc: "2.0", id, method, params })
   return id
+}
+
+// Deterministic handshake signal for tests: emitted once the server has both
+// answered `initialize` and received the client's `initialized` notification.
+// Additive — clients that never subscribe to it are unaffected.
+const pendingServerRequests = new Set()
+let initializeResponded = false
+let initializedReceived = false
+let readySent = false
+
+function maybeSendReady() {
+  if (readySent || !initializeResponded || !initializedReceived) return
+  readySent = true
+  send({ jsonrpc: "2.0", method: "test/ready" })
 }
 
 function handle(raw) {
@@ -98,7 +113,11 @@ function handle(raw) {
     return
   }
   if (data.method === "initialize") {
-    const respond = () => send({ jsonrpc: "2.0", id: data.id, result: { capabilities: initializeCapabilities } })
+    const respond = () => {
+      send({ jsonrpc: "2.0", id: data.id, result: { capabilities: initializeCapabilities } })
+      initializeResponded = true
+      maybeSendReady()
+    }
     if (initializeDelayMs > 0) {
       setTimeout(respond, initializeDelayMs)
     } else {
@@ -107,6 +126,8 @@ function handle(raw) {
     return
   }
   if (data.method === "initialized") {
+    initializedReceived = true
+    maybeSendReady()
     return
   }
   if (data.method === "workspace/didChangeConfiguration") {
@@ -115,6 +136,16 @@ function handle(raw) {
   if (data.method === "test/trigger") {
     const method = data.params && data.params.method
     if (method) sendRequest(method, {})
+    return
+  }
+  if (typeof data.method === "undefined" && typeof data.id !== "undefined") {
+    // Response to a server-initiated request (e.g. from test/trigger). Ack it
+    // with a notification so tests can await the round trip deterministically
+    // instead of sleeping.
+    if (pendingServerRequests.has(data.id)) {
+      pendingServerRequests.delete(data.id)
+      send({ jsonrpc: "2.0", method: "test/roundtrip", params: { id: data.id } })
+    }
     return
   }
   if (typeof data.id !== "undefined") {

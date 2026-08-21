@@ -16,11 +16,6 @@ const e2e = new Set([
   // macOS. Kept in e2e so they run locally but don't block release CI.
   "test/tool/bash.test.ts",
   "test/tool/bash-background.test.ts",
-  // LSP client interop spawns a real child process and is flaky on CI —
-  // 30s timeouts when the handshake JSON-RPC message misses its window.
-  // The other LSP test files (incremental, launch, orchestrator, server-helpers)
-  // stay in deterministic; they don't spawn subprocesses.
-  "test/lsp/client.test.ts",
   // Needs process isolation: mock.module leaks across files in one Bun process.
   "test/code-intelligence/query-native-dispatch.test.ts",
   "test/mcp/headers.test.ts",
@@ -64,7 +59,6 @@ const recovery = new Set([
   "test/session/diff-recovery.test.ts",
   "test/session/message-recovery.test.ts",
   "test/session/prompt-flow.test.ts",
-  "test/session/prompt-resume.test.ts",
   "test/session/session-recovery.test.ts",
 ])
 

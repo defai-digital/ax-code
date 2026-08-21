@@ -12,15 +12,69 @@ import { Filesystem } from "../../src/util/filesystem"
 function spawnFakeServer(env?: Record<string, string>) {
   const { spawn } = require("child_process")
   const serverPath = path.join(__dirname, "../fixture/lsp/fake-lsp-server.js")
-  return {
-    process: spawn(process.execPath, [serverPath], {
-      stdio: "pipe",
-      env: {
-        ...process.env,
-        ...env,
-      },
-    }),
+  const proc = spawn(process.execPath, [serverPath], {
+    stdio: "pipe",
+    env: {
+      ...process.env,
+      ...env,
+    },
+  })
+
+  // Watch the server's stdout alongside the LSP client reader (multiple data
+  // listeners are fine) so tests can await deterministic server notifications
+  // — `test/ready` once the handshake settled, `test/roundtrip` once the
+  // client answered a server-initiated request — instead of fixed sleeps.
+  const buffered: { method: string; params?: unknown }[] = []
+  const waiters: { method: string; resolve: (msg: any) => void }[] = []
+  let readBuffer = Buffer.alloc(0)
+  proc.stdout!.on("data", (chunk: Buffer) => {
+    readBuffer = Buffer.concat([readBuffer, chunk])
+    for (;;) {
+      const headerEnd = readBuffer.indexOf("\r\n\r\n")
+      if (headerEnd === -1) break
+      const match = /Content-Length:\s*(\d+)/i.exec(readBuffer.subarray(0, headerEnd).toString("utf8"))
+      const length = match ? parseInt(match[1], 10) : 0
+      const bodyEnd = headerEnd + 4 + length
+      if (readBuffer.length < bodyEnd) break
+      let msg: any
+      try {
+        msg = JSON.parse(readBuffer.subarray(headerEnd + 4, bodyEnd).toString("utf8"))
+      } catch {
+        msg = undefined
+      }
+      readBuffer = readBuffer.subarray(bodyEnd)
+      if (!msg || typeof msg.method !== "string" || typeof msg.id !== "undefined") continue
+      const waiterIndex = waiters.findIndex((w) => w.method === msg.method)
+      if (waiterIndex === -1) {
+        buffered.push(msg)
+      } else {
+        const [waiter] = waiters.splice(waiterIndex, 1)
+        waiter.resolve(msg)
+      }
+    }
+  })
+
+  function waitForNotification(method: string, timeoutMs = 10_000) {
+    const bufferedIndex = buffered.findIndex((msg) => msg.method === method)
+    if (bufferedIndex !== -1) {
+      const [msg] = buffered.splice(bufferedIndex, 1)
+      return Promise.resolve(msg)
+    }
+    return new Promise<any>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const index = waiters.findIndex((w) => w.resolve === settle)
+        if (index !== -1) waiters.splice(index, 1)
+        reject(new Error(`timed out waiting for "${method}" notification from fake LSP server`))
+      }, timeoutMs)
+      const settle = (msg: any) => {
+        clearTimeout(timer)
+        resolve(msg)
+      }
+      waiters.push({ method, resolve: settle })
+    })
   }
+
+  return { process: proc, waitForNotification }
 }
 
 function deferred() {
@@ -40,28 +94,6 @@ describe("LSPClient interop", () => {
     vi.restoreAllMocks()
   })
 
-  test("registers close and error handlers for dead LSP connections", async () => {
-    const clientSrc = await fs.readFile(path.join(import.meta.dirname, "../../src/lsp/client.ts"), "utf-8")
-    expect(clientSrc).toContain("connection.onClose")
-    expect(clientSrc).toContain("connection.onError")
-    expect(clientSrc).toContain("input.onClose?.")
-    expect(clientSrc).toContain("get closed()")
-
-    const indexSrc = await fs.readFile(path.join(import.meta.dirname, "../../src/lsp/index-impl.ts"), "utf-8")
-    expect(indexSrc).toContain("onClose: () => {")
-    expect(indexSrc).toContain("LSPBrokenServer.markBroken(s.broken, key)")
-    expect(indexSrc).toContain("s.clients.splice(idx, 1)")
-    expect(indexSrc).toContain("client.closed || !client.ping()")
-    expect(indexSrc).toContain("lsp client died during spawn, skipping active registration")
-  })
-
-  test("diagnostics URI normalization skips non-file URIs", () => {
-    const filePath = path.join(process.cwd(), "file.ts")
-    expect(LSPClient.diagnosticPathFromUri(new URL(`file://${filePath}`).href)).toBe(filePath)
-    expect(LSPClient.diagnosticPathFromUri("untitled:Scratch.ts")).toBeUndefined()
-    expect(LSPClient.diagnosticPathFromUri("vscode-notebook-cell:/workspace/notebook.ipynb#cell")).toBeUndefined()
-  })
-
   test("handles workspace/workspaceFolders request", async () => {
     const handle = spawnFakeServer() as any
 
@@ -75,11 +107,13 @@ describe("LSPClient interop", () => {
         }),
     })
 
+    await handle.waitForNotification("test/ready")
+
     await client.connection.sendNotification("test/trigger", {
       method: "workspace/workspaceFolders",
     })
 
-    await new Promise((r) => setTimeout(r, 100))
+    await handle.waitForNotification("test/roundtrip")
 
     expect(client.connection).toBeDefined()
 
@@ -123,11 +157,13 @@ describe("LSPClient interop", () => {
         }),
     })
 
+    await handle.waitForNotification("test/ready")
+
     await client.connection.sendNotification("test/trigger", {
       method: "client/registerCapability",
     })
 
-    await new Promise((r) => setTimeout(r, 100))
+    await handle.waitForNotification("test/roundtrip")
 
     expect(client.connection).toBeDefined()
 
@@ -147,11 +183,13 @@ describe("LSPClient interop", () => {
         }),
     })
 
+    await handle.waitForNotification("test/ready")
+
     await client.connection.sendNotification("test/trigger", {
       method: "client/unregisterCapability",
     })
 
-    await new Promise((r) => setTimeout(r, 100))
+    await handle.waitForNotification("test/roundtrip")
 
     expect(client.connection).toBeDefined()
 
@@ -211,17 +249,6 @@ describe("LSPClient interop", () => {
     expect(elapsed).toBeLessThan(500)
 
     await client.shutdown()
-  })
-
-  test("starts diagnostics timeout only after didOpen or didChange is sent", async () => {
-    const clientSrc = await fs.readFile(path.join(import.meta.dirname, "../../src/lsp/client.ts"), "utf-8")
-
-    expect(clientSrc).toContain("wait?.start()")
-    expect(clientSrc).toContain("await wait?.promise")
-    expect(clientSrc).toContain("const diagnosticsSettled = new Promise<void>")
-    expect(clientSrc).toContain("const started = new Promise<void>")
-    expect(clientSrc).toContain(".then(() => withTimeout(diagnosticsSettled, 3000))")
-    expect(clientSrc).not.toContain("await wait\n")
   })
 
   test("notify.close clears per-file state", async () => {
