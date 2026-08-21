@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import z from "zod"
-import { FindingSource } from "../quality/finding"
+import { FindingSource } from "./quality/finding"
 
 // Phase 3 P3.1/P3.2: contract for the runtime debug workflow. Four artifact
 // shapes anchor every later phase 3 slice:

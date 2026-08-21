@@ -1,7 +1,7 @@
 import { createHash } from "crypto"
-import { CodeIntelligence } from "../code-intelligence"
-import type { CodeNodeKind } from "../code-intelligence/schema.sql"
-import type { ProjectID } from "../project/schema"
+import { codeReasonHost, type Graph } from "./host"
+
+import type { ProjectID } from "./id"
 import { DebugEngine } from "./index"
 import { isTestFile, type ScannerScopeControls } from "./scanner-utils"
 
@@ -24,7 +24,7 @@ import { isTestFile, type ScannerScopeControls } from "./scanner-utils"
 // embedding step.
 
 export type DetectDuplicatesInput = ScannerScopeControls & {
-  kinds?: CodeNodeKind[]
+  kinds?: Graph.NodeKind[]
   minSignatureLength?: number
   similarityThreshold?: number
   // Hard cap on the candidate set to keep scan time bounded. Nodes
@@ -33,14 +33,14 @@ export type DetectDuplicatesInput = ScannerScopeControls & {
   maxCandidates?: number
 }
 
-const DEFAULT_KINDS: CodeNodeKind[] = ["function", "method"]
+const DEFAULT_KINDS: Graph.NodeKind[] = ["function", "method"]
 const DEFAULT_MIN_SIG_LEN = 20
 const DEFAULT_SIMILARITY = 0.85
 const DEFAULT_MAX_CANDIDATES = 2000
 
 type DuplicateCandidatePool = {
-  pool: CodeIntelligence.Symbol[]
-  ciExplains: CodeIntelligence.Explain[]
+  pool: Graph.Symbol[]
+  ciExplains: Graph.Explain[]
   truncated: boolean
 }
 
@@ -107,7 +107,7 @@ function commonDirectory(files: string[]): string {
   return common.join("/")
 }
 
-function computeSharedLines(members: CodeIntelligence.Symbol[]): number {
+function computeSharedLines(members: Graph.Symbol[]): number {
   // Sum of line spans. For a cluster of N members each spanning L
   // lines, the "shared" count we report is (N - 1) * L — how many
   // lines could be eliminated by extracting a single shared version.
@@ -122,18 +122,18 @@ function collectDuplicateCandidatePool(
   projectID: ProjectID,
   input: {
     scope: "worktree" | "none"
-    kinds: CodeNodeKind[]
+    kinds: Graph.NodeKind[]
     maxCandidates: number
     excludeTests: boolean
     minSigLen: number
   },
 ): DuplicateCandidatePool {
-  const pool: CodeIntelligence.Symbol[] = []
-  const ciExplains: CodeIntelligence.Explain[] = []
+  const pool: Graph.Symbol[] = []
+  const ciExplains: Graph.Explain[] = []
   let truncated = false
 
   for (const kind of input.kinds) {
-    const hits = CodeIntelligence.findSymbolByPrefix(projectID, "", {
+    const hits = codeReasonHost().graph.findSymbolByPrefix(projectID, "", {
       kind,
       limit: input.maxCandidates,
       scope: input.scope,
@@ -166,7 +166,7 @@ export async function detectDuplicatesImpl(
   const maxCandidates = input.maxCandidates ?? DEFAULT_MAX_CANDIDATES
   const heuristics: string[] = [`kinds=${kinds.join(",")}`, `threshold=${threshold.toFixed(2)}`]
   if (excludeTests) heuristics.push("exclude-tests")
-  const ciExplains: CodeIntelligence.Explain[] = []
+  const ciExplains: Graph.Explain[] = []
 
   // Gather candidate symbols across the requested kinds. We call
   // findSymbolByPrefix with an empty prefix per kind — this returns
@@ -193,7 +193,7 @@ export async function detectDuplicatesImpl(
   // is a structural duplicate cluster. Exact byte-for-byte matches (same
   // signature string) also fall into the same bucket since
   // normalization is idempotent.
-  const buckets = new Map<string, { norm: string; members: CodeIntelligence.Symbol[] }>()
+  const buckets = new Map<string, { norm: string; members: Graph.Symbol[] }>()
   for (const sym of pool) {
     // Skip symbols without a signature (incomplete LSP indexing,
     // minified code). Feeding undefined into normalizeSignature
@@ -208,7 +208,7 @@ export async function detectDuplicatesImpl(
   }
 
   const clusters: DebugEngine.DuplicateCluster[] = []
-  const singletons: Array<{ sym: CodeIntelligence.Symbol; norm: string; tokens: Set<string> }> = []
+  const singletons: Array<{ sym: Graph.Symbol; norm: string; tokens: Set<string> }> = []
 
   for (const { norm, members } of buckets.values()) {
     if (members.length >= 2) {

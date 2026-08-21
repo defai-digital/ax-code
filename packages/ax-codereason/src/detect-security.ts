@@ -1,6 +1,7 @@
+import { codeReasonHost } from "./host"
 import fs from "fs/promises"
 import path from "path"
-import { Instance } from "../project/instance"
+
 import { DebugEngine } from "./index"
 import { nativeDetectSecurity } from "./native-scan"
 import {
@@ -318,7 +319,7 @@ export async function detectSecurityImpl(input: DetectSecurityInput): Promise<De
     "ssrf",
   ]
   const enabledPatterns = new Set(patterns)
-  const cwd = Instance.directory
+  const cwd = codeReasonHost().projectRoot()
 
   // Native fast-path: run entire detection in Rust (walk + read + regex in parallel)
   if (!scannerUsesIncrementalFiles(input)) {

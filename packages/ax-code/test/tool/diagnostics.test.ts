@@ -3,7 +3,7 @@ import { setTimeout as sleep } from "node:timers/promises"
 import { collectDiagnostics } from "../../src/tool/diagnostics"
 import { LSP } from "@ax-code/ax-codeintel"
 import { Log } from "../../src/util/log"
-import { DebugEngine } from "../../src/debug-engine"
+import { DebugEngine } from "@ax-code/ax-codereason"
 
 Log.init({ print: false })
 

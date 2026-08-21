@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest"
 describe("debug-engine native scan", () => {
   test("decodes native scan output with explicit schemas", async () => {
     const { parseNativeDetectResult, parseNativeReadFilesBatchResult, parseNativeScanResult } = await import(
-      "../../src/debug-engine/native-scan"
+      "@ax-code/ax-codereason/native-scan"
     )
 
     expect(
@@ -66,7 +66,7 @@ describe("debug-engine native scan", () => {
 
   test("rejects malformed native scan output", async () => {
     const { parseNativeDetectResult, parseNativeReadFilesBatchResult, parseNativeScanResult } = await import(
-      "../../src/debug-engine/native-scan"
+      "@ax-code/ax-codereason/native-scan"
     )
 
     expect(() => parseNativeScanResult("{not json")).toThrow(SyntaxError)
@@ -83,7 +83,7 @@ describe("debug-engine native scan", () => {
     if (process.env.AX_CODE_DEBUG_ENGINE_NATIVE_SCAN) return
 
     const { Flag } = await import("../../src/flag/flag")
-    const { nativeReadFilesBatch, nativeDetectLifecycle } = await import("../../src/debug-engine/native-scan")
+    const { nativeReadFilesBatch, nativeDetectLifecycle } = await import("@ax-code/ax-codereason/native-scan")
 
     expect(Flag.AX_CODE_DEBUG_ENGINE_NATIVE_SCAN).toBe(false)
     expect(nativeReadFilesBatch(["/tmp/ax-code-native-scan-disabled.ts"])).toBeUndefined()

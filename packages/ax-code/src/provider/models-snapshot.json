@@ -44966,6 +44966,48 @@
           "output": 384000
         }
       },
+      "deepseek/deepseek-v4-flash-vision-exp": {
+        "id": "deepseek/deepseek-v4-flash-vision-exp",
+        "name": "DeepSeek V4 Flash Vision Exp",
+        "description": "Experimental multimodal DeepSeek V4 Flash model for image understanding, coding, and agentic work",
+        "family": "deepseek-flash",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-21",
+        "last_updated": "2026-08-21",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        }
+      },
       "x-ai/grok-4.6": {
         "id": "x-ai/grok-4.6",
         "name": "Grok 4.6",
@@ -84923,7 +84965,7 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 262144,
+          "context": 1000000,
           "output": 262144
         }
       },
@@ -172421,7 +172463,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 65536
+          "output": 262144
         }
       },
       "qwen/qwen3-coder-plus": {
@@ -172628,8 +172670,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1000000,
-          "output": 262144
+          "context": 1048576,
+          "output": 131072
         }
       },
       "liquid/lfm-2.5-2.6b:free": {

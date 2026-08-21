@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { DebugEngine } from "../../src/debug-engine"
+import { DebugEngine } from "@ax-code/ax-codereason"
 import { Instance } from "../../src/project/instance"
 import { FindingSchema } from "../../src/quality/finding"
 import { QualityShadow } from "../../src/quality/shadow-runtime"

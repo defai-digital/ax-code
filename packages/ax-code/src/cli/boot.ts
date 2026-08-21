@@ -1,4 +1,5 @@
 import "../lsp-glue"
+import "../dre-glue"
 import { NamedError } from "@ax-code/util/error"
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"

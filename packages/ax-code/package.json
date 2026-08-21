@@ -86,6 +86,7 @@
     "@ai-sdk/provider-utils": "4.0.22",
     "@ax-code/ax-wiki": "workspace:*",
     "@ax-code/ax-codeintel": "workspace:*",
+    "@ax-code/ax-codereason": "workspace:*",
     "@ax-code/diff": "workspace:*",
     "@ax-code/fs": "workspace:*",
     "@ax-code/index-core": "workspace:*",

@@ -6,7 +6,7 @@ import {
   DebugEvidenceKind,
   DebugEvidenceSchema,
   DEBUG_ID_PATTERN,
-} from "../debug-engine/runtime-debug"
+} from "@ax-code/ax-codereason/runtime-debug"
 import { Installation } from "../installation"
 import { SessionDebug } from "../session/debug"
 import type { SessionID } from "../session/schema"

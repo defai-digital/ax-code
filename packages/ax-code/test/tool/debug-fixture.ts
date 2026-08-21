@@ -1,4 +1,4 @@
-import { computeDebugCaseId } from "../../src/debug-engine/runtime-debug"
+import { computeDebugCaseId } from "@ax-code/ax-codereason/runtime-debug"
 import { Installation } from "../../src/installation"
 import { Recorder } from "../../src/replay/recorder"
 import type { SessionID } from "../../src/session/schema"

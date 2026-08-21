@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
-import { DebugEngineQuery } from "../../src/debug-engine/query"
-import { RefactorPlanID } from "../../src/debug-engine/id"
+import { DebugEngineQuery } from "@ax-code/ax-codereason/query"
+import { RefactorPlanID } from "@ax-code/ax-codereason/id"
 import { Instance } from "../../src/project/instance"
 import type { ProjectID } from "../../src/project/schema"
 import { tmpdir } from "../fixture/fixture"

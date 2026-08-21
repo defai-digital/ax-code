@@ -1,4 +1,4 @@
-import { computeEnvelopeId, type VerificationEnvelope } from "../quality/verification-envelope"
+import { computeEnvelopeId, type VerificationEnvelope } from "./quality/verification-envelope"
 import type { DebugCase, DebugHypothesis } from "./runtime-debug"
 
 // Phase 3 P3.4: pure helpers that wire a verification result into a debug

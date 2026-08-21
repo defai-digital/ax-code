@@ -1,17 +1,17 @@
 import fs from "fs/promises"
 import path from "path"
-import { git } from "../util/git"
-import { Instance } from "../project/instance"
-import { Log } from "../util/log"
-import { CodeIntelligence } from "../code-intelligence"
-import type { ProjectID } from "../project/schema"
+import { git } from "./internal/git"
+
+import { Log } from "./internal/log"
+import { codeReasonHost, type Graph } from "./host"
+import type { ProjectID } from "./id"
 import {
   resolveCommands,
   runCheck,
   runTests,
   type TimedCheckResult,
   type TimedTestResult,
-} from "../planner/verification/runner"
+} from "./verification-runner"
 import { DebugEngine } from "./index"
 import { DebugEngineQuery } from "./query"
 import { ShadowWorktree } from "./shadow-worktree"
@@ -151,7 +151,7 @@ export async function applySafeRefactorImpl(
   heuristics.push(`plan-kind=${row.kind}`)
 
   // Step 2: freshness check.
-  const status = CodeIntelligence.status(projectID)
+  const status = codeReasonHost().graph.status(projectID)
   if (row.graph_cursor_at_creation !== null && status.lastCommitSha === null) {
     heuristics.push("cursor-missing-current")
   }
@@ -162,7 +162,7 @@ export async function applySafeRefactorImpl(
   }
 
   // Step 3: preconditions + shadow worktree.
-  if (Instance.project.vcs !== "git") {
+  if (codeReasonHost().projectVcs() !== "git") {
     return abort("not-a-git-worktree")
   }
 
@@ -189,7 +189,7 @@ export async function applySafeRefactorImpl(
     // Step 3.5: symlink node_modules from the real worktree into the
     // shadow so typecheck/lint/test commands can resolve dependencies.
     // .gitignore'd directories aren't present in git worktrees.
-    const realNodeModules = path.join(Instance.worktree, "node_modules")
+    const realNodeModules = path.join(codeReasonHost().worktreeRoot(), "node_modules")
     const shadowNodeModules = path.join(shadowHandle.path, "node_modules")
     const hasNodeModules = await fs
       .stat(realNodeModules)
@@ -301,12 +301,12 @@ export async function applySafeRefactorImpl(
     // the finally block. The git() util helper passes `stdin: "ignore"`,
     // so we can't use `git apply -`; write the patch to a temp file
     // and apply from there.
-    const tmpPatch = path.join(Instance.worktree, ".dre-apply.patch")
+    const tmpPatch = path.join(codeReasonHost().worktreeRoot(), ".dre-apply.patch")
     await fs.writeFile(tmpPatch, input.patch, "utf8")
     let realResult: Awaited<ReturnType<typeof git>>
     try {
       realResult = await git(["apply", "--whitespace=fix", tmpPatch], {
-        cwd: Instance.worktree,
+        cwd: codeReasonHost().worktreeRoot(),
       })
     } finally {
       await fs.rm(tmpPatch, { force: true }).catch(() => undefined)

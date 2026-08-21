@@ -6,6 +6,7 @@
   "type": "module",
   "license": "Apache-2.0",
   "exports": {
+    ".": "./src/index.ts",
     "./*": "./src/*.ts"
   },
   "scripts": {
@@ -15,10 +16,14 @@
   "dependencies": {
     "@ax-code/ax-codeintel": "workspace:*",
     "@ax-code/util": "workspace:*",
+    "cross-spawn": "^7.0.6",
     "drizzle-orm": "catalog:",
+    "fast-glob": "catalog:",
+    "minimatch": "10.2.3",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@types/cross-spawn": "6.0.6",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
     "typescript": "catalog:",

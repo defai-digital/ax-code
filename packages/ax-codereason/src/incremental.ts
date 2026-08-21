@@ -1,7 +1,8 @@
+import { codeReasonHost } from "./host"
 import path from "path"
-import { Instance } from "../project/instance"
-import { Process } from "../util/process"
-import { uniqueStrings } from "../util/string-list"
+
+import { Process } from "./internal/process"
+import { uniqueStrings } from "./internal/string-list"
 
 // incremental — Git-diff-aware file selection for scanner incremental mode.
 //
@@ -26,7 +27,7 @@ export namespace Incremental {
     ref: string,
     opts?: { include?: string[]; maxFiles?: number },
   ): Promise<ChangedFilesResult> {
-    const cwd = Instance.directory
+    const cwd = codeReasonHost().projectRoot()
     const maxFiles = opts?.maxFiles ?? 500
     const includeGlobs = opts?.include ?? ["*.ts", "*.tsx", "*.js", "*.jsx", "*.mjs", "*.cjs"]
 
@@ -44,7 +45,7 @@ export namespace Incremental {
       .split("\n")
       .filter((l) => l.length > 0)
 
-    const files = relPaths.map((rel) => path.resolve(cwd, rel)).filter((f) => Instance.containsPath(f))
+    const files = relPaths.map((rel) => path.resolve(cwd, rel)).filter((f) => codeReasonHost().containsPath(f))
     const truncated = files.length > maxFiles
 
     return {
@@ -60,7 +61,7 @@ export namespace Incremental {
     seconds: number,
     opts?: { include?: string[]; maxFiles?: number },
   ): Promise<ChangedFilesResult> {
-    const cwd = Instance.directory
+    const cwd = codeReasonHost().projectRoot()
     const maxFiles = opts?.maxFiles ?? 500
     const includeGlobs = opts?.include ?? ["*.ts", "*.tsx", "*.js", "*.jsx", "*.mjs", "*.cjs"]
 
@@ -92,7 +93,7 @@ export namespace Incremental {
     changedFiles: string[],
     opts?: { include?: string[]; maxFiles?: number },
   ): Promise<string[]> {
-    const cwd = Instance.directory
+    const cwd = codeReasonHost().projectRoot()
     const maxFiles = opts?.maxFiles ?? 500
     const includeGlobs = opts?.include ?? ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"]
 
@@ -120,7 +121,7 @@ export namespace Incremental {
       .split("\n")
       .filter((l) => l.length > 0)
       .map((rel) => path.resolve(cwd, rel))
-      .filter((f) => Instance.containsPath(f))
+      .filter((f) => codeReasonHost().containsPath(f))
       // Exclude the changed files themselves — they're already in the scan set
       .filter((f) => !changedFiles.includes(f))
 

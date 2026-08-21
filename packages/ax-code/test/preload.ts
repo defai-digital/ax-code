@@ -122,3 +122,4 @@ if (process.env["AX_CODE_PROFILE_NATIVE"]) {
 // same wiring the boot entrypoints install in production. Must run before any
 // test touches the extracted LSP package.
 await import("../src/lsp-glue")
+await import("../src/dre-glue")

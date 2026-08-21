@@ -1,10 +1,11 @@
+import { codeReasonHost } from "./host"
 import fs from "fs/promises"
 import path from "path"
-import { git } from "../util/git"
-import { toErrorMessage } from "../util/error-message"
-import { Instance } from "../project/instance"
-import { Log } from "../util/log"
-import type { ProjectID } from "../project/schema"
+import { git } from "./internal/git"
+import { toErrorMessage } from "./internal/error-message"
+
+import { Log } from "./internal/log"
+import type { ProjectID } from "./id"
 
 // Shadow worktree helper for Safe Refactor Mode (ADR-007).
 //
@@ -103,13 +104,13 @@ export namespace ShadowWorktree {
    * can do it upfront.
    */
   export async function precheck(): Promise<{ ok: true } | OpenPreconditionFailure> {
-    if (Instance.project.vcs !== "git") return { ok: false, reason: "not-git" }
+    if (codeReasonHost().projectVcs() !== "git") return { ok: false, reason: "not-git" }
     // --no-renames keeps the porcelain output in a single-path-per-line
     // format. Without it, renamed entries are `R  old -> new` and the
     // naive `slice(3)` leaks the old name into the reported file
     // list. We don't need rename detection here — we only want the
     // list of files with uncommitted changes.
-    const status = await git(["status", "--porcelain", "--no-renames"], { cwd: Instance.worktree })
+    const status = await git(["status", "--porcelain", "--no-renames"], { cwd: codeReasonHost().worktreeRoot() })
     if (status.exitCode !== 0) return { ok: false, reason: "not-git" }
     const text = status.text().trim()
     if (text.length > 0) {
@@ -134,11 +135,11 @@ export namespace ShadowWorktree {
    * order — no errors, just backpressure.
    */
   export async function open(params: { planId: string; allowDirty?: boolean }): Promise<OpenResult> {
-    const projectID = Instance.project.id
+    const projectID = codeReasonHost().projectID()
 
     // Preconditions first so we don't burn a concurrency slot on a
     // request that can never succeed.
-    if (Instance.project.vcs !== "git") return { ok: false, reason: "not-git" }
+    if (codeReasonHost().projectVcs() !== "git") return { ok: false, reason: "not-git" }
     if (!params.allowDirty) {
       const pre = await precheck()
       if (pre.ok === false) return pre
@@ -147,8 +148,8 @@ export namespace ShadowWorktree {
     const release = await acquireSlot(projectID)
 
     try {
-      const worktreeRoot = Instance.worktree
-      const shadowBase = path.join(Instance.directory, "dre", "shadow")
+      const worktreeRoot = codeReasonHost().worktreeRoot()
+      const shadowBase = path.join(codeReasonHost().projectRoot(), "dre", "shadow")
       await fs.mkdir(shadowBase, { recursive: true })
       const shadowPath = path.join(shadowBase, params.planId)
       const branch = `ax-code/dre/shadow/${params.planId}`
@@ -240,13 +241,13 @@ export namespace ShadowWorktree {
    * resource accumulation after crashes.
    */
   export async function cleanupOrphans(): Promise<{ branches: number; directories: number }> {
-    if (Instance.project.vcs !== "git") return { branches: 0, directories: 0 }
-    const cwd = Instance.worktree
+    if (codeReasonHost().projectVcs() !== "git") return { branches: 0, directories: 0 }
+    const cwd = codeReasonHost().worktreeRoot()
     let branches = 0
     let directories = 0
 
     // Remove orphan DRE shadow branches
-    const shadowBase = path.join(Instance.directory, "dre", "shadow")
+    const shadowBase = path.join(codeReasonHost().projectRoot(), "dre", "shadow")
     const branchList = await git(["branch", "--list", "ax-code/dre/shadow/*"], { cwd })
     if (branchList.exitCode === 0) {
       const names = branchList

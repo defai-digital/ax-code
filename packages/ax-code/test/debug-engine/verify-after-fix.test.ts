@@ -5,8 +5,8 @@ import {
   classifyEnvelope,
   classifyEnvelopeSet,
   resolveCaseStatus,
-} from "../../src/debug-engine/verify-after-fix"
-import type { DebugHypothesis } from "../../src/debug-engine/runtime-debug"
+} from "@ax-code/ax-codereason/verify-after-fix"
+import type { DebugHypothesis } from "@ax-code/ax-codereason/runtime-debug"
 import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
 
 function envelope(overrides: Partial<VerificationEnvelope> = {}): VerificationEnvelope {

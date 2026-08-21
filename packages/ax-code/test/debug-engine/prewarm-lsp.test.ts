@@ -1,17 +1,17 @@
-import { describe, expect, test, vi, beforeEach } from "vitest"
+import { describe, expect, test, vi, beforeEach, afterAll } from "vitest"
+import { LSP } from "@ax-code/ax-codeintel"
+import { prewarmAffectedFiles, __clearPrewarmState } from "@ax-code/ax-codereason/prewarm-lsp"
+import type { DebugEngine } from "@ax-code/ax-codereason"
 
-const { touchFile } = vi.hoisted(() => ({
-  touchFile: vi.fn(),
-}))
-
-vi.mock("@ax-code/ax-codeintel", () => ({
-  LSP: {
-    touchFile,
-  },
-}))
-
-import { prewarmAffectedFiles, __clearPrewarmState } from "../../src/debug-engine/prewarm-lsp"
-import type { DebugEngine } from "../../src/debug-engine"
+// The engine package imports @ax-code/ax-codeintel across a package boundary,
+// where vi.mock from this test file cannot reliably intercept it. Spy on the
+// shared LSP namespace object instead — both workspace packages are inlined
+// in the vitest config, which makes the namespace exports spyable, and both
+// sides observe the same module instance.
+const touchFile = vi.spyOn(LSP, "touchFile")
+afterAll(() => {
+  touchFile.mockRestore()
+})
 
 function report(files: string[]): DebugEngine.ImpactReport {
   return {
@@ -30,7 +30,7 @@ describe("prewarmAffectedFiles rate-limit dedup", () => {
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
-    touchFile.mockImplementation(() => gate.then(() => undefined))
+    touchFile.mockImplementation(() => gate.then(() => 0))
 
     const file = "/repo/src/a.ts"
     const p1 = prewarmAffectedFiles(report([file]))
@@ -52,14 +52,14 @@ describe("prewarmAffectedFiles rate-limit dedup", () => {
     expect(r1).toBe(0)
     expect(touchFile).toHaveBeenCalledTimes(1)
 
-    touchFile.mockResolvedValueOnce(undefined)
+    touchFile.mockResolvedValueOnce(0)
     const r2 = await prewarmAffectedFiles(report([file]))
     expect(r2).toBe(1)
     expect(touchFile).toHaveBeenCalledTimes(2)
   })
 
   test("respects the minimum interval for sequential successful calls", async () => {
-    touchFile.mockResolvedValue(undefined)
+    touchFile.mockResolvedValue(0)
     const file = "/repo/src/c.ts"
 
     const r1 = await prewarmAffectedFiles(report([file]))

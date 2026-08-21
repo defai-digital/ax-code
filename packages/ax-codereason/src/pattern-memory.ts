@@ -14,12 +14,12 @@
  */
 
 import { eq, and, desc, sql } from "drizzle-orm"
-import { Log } from "../util/log"
-import { Database } from "../storage/db"
+import { Log } from "./internal/log"
+import { codeReasonHost } from "./host"
 import { DebugPatternTable, type DebugPatternCategory } from "./schema.sql"
 import { DebugPatternID } from "./id"
-import type { ProjectID } from "../project/schema"
-import { uniqueStrings } from "../util/string-list"
+import type { ProjectID } from "./id"
+import { uniqueStrings } from "./internal/string-list"
 
 const log = Log.create({ service: "debug-engine.pattern-memory" })
 
@@ -66,7 +66,7 @@ export async function storePattern(input: {
   await evictIfNeeded(input.projectID)
 
   try {
-    await Database.use((db) =>
+    await codeReasonHost().db.use((db) =>
       db.insert(DebugPatternTable).values({
         id,
         project_id: input.projectID,
@@ -105,7 +105,7 @@ export async function findSimilarPatterns(input: {
   const affectedFilePatterns = input.affectedFiles ? toGlobPatterns(input.affectedFiles) : []
 
   try {
-    const rows = await Database.use((db) =>
+    const rows = await codeReasonHost().db.use((db) =>
       db
         .select()
         .from(DebugPatternTable)
@@ -161,7 +161,7 @@ export async function findSimilarPatterns(input: {
 
     // Update last_matched_at for top matches
     for (const match of matches.slice(0, 3)) {
-      await Database.use((db) =>
+      await codeReasonHost().db.use((db) =>
         db
           .update(DebugPatternTable)
           .set({ last_matched_at: Date.now(), time_updated: Date.now() })
@@ -339,7 +339,7 @@ function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
 }
 
 async function evictIfNeeded(projectID: ProjectID): Promise<void> {
-  const count = await Database.use((db) =>
+  const count = await codeReasonHost().db.use((db) =>
     db
       .select({ count: sql<number>`count(*)` })
       .from(DebugPatternTable)
@@ -350,7 +350,7 @@ async function evictIfNeeded(projectID: ProjectID): Promise<void> {
   if (currentCount >= MAX_PATTERNS) {
     // Evict oldest 10% of patterns (by last_matched_at, then by time_created)
     const toDelete = Math.ceil(MAX_PATTERNS * 0.1)
-    const toEvict = await Database.use((db) =>
+    const toEvict = await codeReasonHost().db.use((db) =>
       db
         .select({ id: DebugPatternTable.id })
         .from(DebugPatternTable)
@@ -360,7 +360,7 @@ async function evictIfNeeded(projectID: ProjectID): Promise<void> {
     )
 
     if (toEvict.length > 0) {
-      await Database.use((db) =>
+      await codeReasonHost().db.use((db) =>
         db.delete(DebugPatternTable).where(
           and(
             eq(DebugPatternTable.project_id, projectID),
@@ -379,7 +379,7 @@ async function evictIfNeeded(projectID: ProjectID): Promise<void> {
 // ─── Query helpers ─────────────────────────────────────────────────
 
 export async function countPatterns(projectID: ProjectID): Promise<number> {
-  const result = await Database.use((db) =>
+  const result = await codeReasonHost().db.use((db) =>
     db
       .select({ count: sql<number>`count(*)` })
       .from(DebugPatternTable)
@@ -389,7 +389,7 @@ export async function countPatterns(projectID: ProjectID): Promise<number> {
 }
 
 export async function listPatterns(projectID: ProjectID): Promise<DebugPatternRecord[]> {
-  const rows = await Database.use((db) =>
+  const rows = await codeReasonHost().db.use((db) =>
     db
       .select()
       .from(DebugPatternTable)

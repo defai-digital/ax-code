@@ -10,7 +10,7 @@ import {
   computeDebugCaseId,
   computeDebugEvidenceId,
   computeDebugHypothesisId,
-} from "../../src/debug-engine/runtime-debug"
+} from "@ax-code/ax-codereason/runtime-debug"
 import { Recorder } from "../../src/replay/recorder"
 import { EventQuery } from "../../src/replay/query"
 import { Risk } from "../../src/risk/score"

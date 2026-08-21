@@ -1,6 +1,6 @@
-import { CodeIntelligence } from "../code-intelligence"
-import { CodeNodeID } from "../code-intelligence/id"
-import type { ProjectID } from "../project/schema"
+import { codeReasonHost, type Graph } from "./host"
+import { CodeNodeID } from "./id"
+import type { ProjectID } from "./id"
 import { DebugEngine } from "./index"
 
 // analyzeBug — root-cause chain assembly for a reported error.
@@ -183,12 +183,12 @@ export function resolveFrame(
   projectID: ProjectID,
   frame: ParsedFrame,
   scope: "worktree" | "none",
-  ciExplains: CodeIntelligence.Explain[],
-): CodeIntelligence.Symbol | null {
+  ciExplains: Graph.Explain[],
+): Graph.Symbol | null {
   if (frame.symbolName) {
     const leaf = extractLeafName(frame.symbolName)
     if (leaf) {
-      const hits = CodeIntelligence.findSymbol(projectID, leaf, { file: frame.file, scope })
+      const hits = codeReasonHost().graph.findSymbol(projectID, leaf, { file: frame.file, scope })
       if (hits.length > 0) {
         ciExplains.push(hits[0].explain)
         return hits[0]
@@ -198,10 +198,10 @@ export function resolveFrame(
   // Fallback: list all symbols in the file, pick the one whose range
   // contains `frame.line` (1-indexed in stack traces, 0-indexed in the
   // graph).
-  const fileSymbols = CodeIntelligence.symbolsInFile(projectID, frame.file, { scope })
+  const fileSymbols = codeReasonHost().graph.symbolsInFile(projectID, frame.file, { scope })
   if (fileSymbols.length === 0) return null
   const line0 = frame.line - 1
-  let best: CodeIntelligence.Symbol | null = null
+  let best: Graph.Symbol | null = null
   let bestSpan = Infinity
   for (const sym of fileSymbols) {
     if (sym.range.start.line <= line0 && sym.range.end.line >= line0) {
@@ -222,17 +222,17 @@ export function resolveFrame(
 // callers. Cycles are broken by a visited set.
 function walkCallers(
   projectID: ProjectID,
-  entry: CodeIntelligence.Symbol,
+  entry: Graph.Symbol,
   depth: number,
   scope: "worktree" | "none",
-  ciExplains: CodeIntelligence.Explain[],
-): { chain: CodeIntelligence.Symbol[]; truncated: boolean } {
-  const chain: CodeIntelligence.Symbol[] = []
+  ciExplains: Graph.Explain[],
+): { chain: Graph.Symbol[]; truncated: boolean } {
+  const chain: Graph.Symbol[] = []
   const visited = new Set<string>([entry.id])
   let current = entry
   let truncated = false
   for (let i = 0; i < depth; i++) {
-    const callers = CodeIntelligence.findCallers(projectID, current.id, { scope })
+    const callers = codeReasonHost().graph.findCallers(projectID, current.id, { scope })
     if (callers.length === 0) break
     // Stable pick: first caller whose id we haven't visited yet.
     const next = callers.find((c) => !visited.has(c.symbol.id))
@@ -248,7 +248,7 @@ function walkCallers(
     // not tell apart "walk exhausted at depth N" from "budget cut
     // walk off at depth N", producing false truncation warnings.
     if (i === depth - 1) {
-      const more = CodeIntelligence.findCallers(projectID, current.id, { scope })
+      const more = codeReasonHost().graph.findCallers(projectID, current.id, { scope })
       if (more.some((c) => !visited.has(c.symbol.id))) truncated = true
     }
   }
@@ -280,7 +280,7 @@ export async function analyzeBugImpl(
   const requestedDepth = input.chainDepth ?? DEFAULT_CHAIN_DEPTH
   const chainDepth = Math.min(Math.max(1, requestedDepth), MAX_CHAIN_DEPTH)
   const heuristics: string[] = []
-  const ciExplains: CodeIntelligence.Explain[] = []
+  const ciExplains: Graph.Explain[] = []
 
   // Parse the stack trace if provided. Without one, we have nothing
   // deterministic to resolve, so the chain is empty and the hypothesis
@@ -342,7 +342,7 @@ export async function analyzeBugImpl(
   // didn't yield anything, use it as the seed and walk callers. Covers
   // the "I already know what failed, show me who calls it" workflow.
   if (chain.length === 0 && input.entrySymbol) {
-    const seed = CodeIntelligence.getSymbol(projectID, input.entrySymbol, { scope })
+    const seed = codeReasonHost().graph.getSymbol(projectID, input.entrySymbol, { scope })
     if (seed) {
       ciExplains.push(seed.explain)
       chain.push({

@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process"
 import { describe, expect, test } from "vitest"
 import { writeFile, mkdir } from "node:fs/promises"
 import path from "path"
-import { Incremental } from "../../src/debug-engine"
+import { Incremental } from "@ax-code/ax-codereason"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 

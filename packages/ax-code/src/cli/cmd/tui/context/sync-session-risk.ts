@@ -8,7 +8,7 @@ import {
   DebugEvidenceSchema,
   DebugHypothesisSchema,
   DebugInstrumentationPlanSchema,
-} from "../../../../debug-engine/runtime-debug"
+} from "@ax-code/ax-codereason/runtime-debug"
 import { DecisionHints } from "../../../../session/decision-hints"
 
 export const SyncedSessionQualityReadiness = z.object({

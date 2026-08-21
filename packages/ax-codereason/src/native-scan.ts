@@ -1,14 +1,26 @@
-import { NativePerf } from "../perf/native"
-import { Log } from "../util/log"
-import { NativeAddon } from "../native/addon"
-import { Flag } from "../flag/flag"
+import { Log } from "./internal/log"
+
+import { codeReasonHostMaybe } from "./host"
 import z from "zod"
-import { parseNativeJson } from "../util/native-json"
+import { parseNativeJson } from "./internal/native-json"
 
 const log = Log.create({ service: "debug-engine.native-scan" })
 
 function nativeScanEnabled() {
-  return Flag.AX_CODE_DEBUG_ENGINE_NATIVE_SCAN
+  return codeReasonHostMaybe()?.flags().nativeScan ?? false
+}
+
+// Perf-sampled native call. Falls back to a plain call when the host has no
+// native sampler (the native addon itself is checked by callers).
+function nativePerfRun<T>(name: string, meta: Record<string, unknown>, fn: () => T): T {
+  const native = codeReasonHostMaybe()?.native
+  return native ? native.perfRun(name, meta, fn) : fn()
+}
+
+// The slice of the native @ax-code/fs addon API this module calls.
+type NativeFsAddon = {
+  scanFiles(cwd: string, optionsJson: string): string
+  readFilesBatch(filesJson: string): string
 }
 
 export interface ScanPattern {
@@ -81,10 +93,10 @@ export function nativeScanFiles(input: {
   contextLines?: number
 }): ScanResult | undefined {
   if (!nativeScanEnabled()) return undefined
-  const native = NativeAddon.fs()
+  const native = codeReasonHostMaybe()?.native?.fs() as NativeFsAddon | undefined
   if (!native) return undefined
   try {
-    const json = NativePerf.run(
+    const json = nativePerfRun(
       "fs.scanFiles",
       {
         cwd: input.cwd,
@@ -119,10 +131,10 @@ export function nativeScanFiles(input: {
 export function nativeReadFilesBatch(files: string[]): Map<string, string> | undefined {
   if (files.length === 0) return new Map()
   if (!nativeScanEnabled()) return undefined
-  const native = NativeAddon.fs()
+  const native = codeReasonHostMaybe()?.native?.fs() as NativeFsAddon | undefined
   if (!native) return undefined
   try {
-    const json = NativePerf.run("fs.readFilesBatch", { files: files.length }, () =>
+    const json = nativePerfRun("fs.readFilesBatch", { files: files.length }, () =>
       native.readFilesBatch(JSON.stringify(files)),
     )
     const pairs = parseNativeReadFilesBatchResult(json)
@@ -158,12 +170,12 @@ export function parseNativeDetectResult<F>(json: string): DetectResult<F> {
 
 function callNativeDetector<F>(fnName: string, input: DetectInput): DetectResult<F> | undefined {
   if (!nativeScanEnabled()) return undefined
-  const native = NativeAddon.fs() as Record<string, unknown> | undefined
+  const native = codeReasonHostMaybe()?.native?.fs() as NativeFsAddon | undefined as Record<string, unknown> | undefined
   if (!native) return undefined
   if (typeof native[fnName] !== "function") return undefined
   try {
     const fn = native[fnName] as (json: string) => string
-    const json = NativePerf.run(
+    const json = nativePerfRun(
       `fs.${fnName}`,
       {
         cwd: input.cwd,

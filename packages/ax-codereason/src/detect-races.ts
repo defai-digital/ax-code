@@ -1,3 +1,4 @@
+import { codeReasonHost } from "./host"
 import fs from "fs/promises"
 import {
   collectScannerFileBatch,
@@ -8,7 +9,7 @@ import {
   sortScannerFindings,
   type ScannerInputControls,
 } from "./scanner-utils"
-import { Instance } from "../project/instance"
+
 import { DebugEngine } from "./index"
 
 // detect-races — AST-lite scanner for common race condition patterns
@@ -427,7 +428,7 @@ export async function detectRacesImpl(input: DetectRacesInput): Promise<DebugEng
   const heuristics: string[] = [`patterns=${patterns.join(",")}`]
   if (excludeTests) heuristics.push("exclude-tests")
 
-  const cwd = Instance.directory
+  const cwd = codeReasonHost().projectRoot()
 
   const fileBatch = await collectScannerFileBatch(input, { cwd, include, excludeTests, maxFiles })
   heuristics.push(...scannerFileBatchHeuristics(fileBatch))

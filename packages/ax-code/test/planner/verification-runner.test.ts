@@ -7,7 +7,10 @@ import {
   resolveCommands,
   runCommand,
 } from "../../src/planner/verification/runner"
-import { Process } from "../../src/util/process"
+// The runner implementation lives in @ax-code/ax-codereason and uses its own
+// vendored Process module — spy on that copy so the spy observes the same
+// namespace object the runner calls (both packages are inlined by vitest).
+import { Process } from "@ax-code/ax-codereason/internal/process"
 import { tmpdir } from "../fixture/fixture"
 
 async function writePackageJson(dir: string, scripts: Record<string, string>) {

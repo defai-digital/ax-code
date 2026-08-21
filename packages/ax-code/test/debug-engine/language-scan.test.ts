@@ -14,7 +14,7 @@ import {
   parseMypyOutput,
   parseRuffDiagnosticsJson,
   parseRuffOutput,
-} from "../../src/debug-engine/language-scan"
+} from "@ax-code/ax-codereason/language-scan"
 
 describe("language-scan", () => {
   describe("mapClippyLevel", () => {

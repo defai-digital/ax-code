@@ -1,8 +1,17 @@
 import { sqliteTable, text, integer, blob, index } from "drizzle-orm/sqlite-core"
-import { ProjectTable } from "../project/project.sql"
-import type { ProjectID } from "../project/schema"
+
+import type { ProjectID } from "./id"
 import type { RefactorPlanID, EmbeddingCacheID, DebugPatternID } from "./id"
-import { Timestamps } from "../storage/schema.sql"
+// Local copy of the core Timestamps column pair (storage/schema.sql) so the
+// package carries its own table definitions.
+const Timestamps = {
+  time_created: integer()
+    .notNull()
+    .$default(() => Date.now()),
+  time_updated: integer()
+    .notNull()
+    .$onUpdate(() => Date.now()),
+}
 
 // Debugging & Refactoring Engine tables.
 //
@@ -26,8 +35,7 @@ export const RefactorPlanTable = sqliteTable(
     id: text().$type<RefactorPlanID>().primaryKey(),
     project_id: text()
       .$type<ProjectID>()
-      .notNull()
-      .references(() => ProjectTable.id, { onDelete: "cascade" }),
+      .notNull(),
     kind: text().$type<RefactorPlanKind>().notNull(),
     // Human-readable markdown summary. Never empty; the planner always
     // writes at least a one-line description.
@@ -65,8 +73,7 @@ export const EmbeddingCacheTable = sqliteTable(
     id: text().$type<EmbeddingCacheID>().primaryKey(),
     project_id: text()
       .$type<ProjectID>()
-      .notNull()
-      .references(() => ProjectTable.id, { onDelete: "cascade" }),
+      .notNull(),
     // References code_node.id but NO foreign key — see ADR-004.
     node_id: text().notNull(),
     // Hash of the normalized function signature/body that produced this
@@ -115,8 +122,7 @@ export const DebugPatternTable = sqliteTable(
     id: text().$type<DebugPatternID>().primaryKey(),
     project_id: text()
       .$type<ProjectID>()
-      .notNull()
-      .references(() => ProjectTable.id, { onDelete: "cascade" }),
+      .notNull(),
     // Short problem description (1-500 chars)
     problem: text().notNull(),
     // Root cause category

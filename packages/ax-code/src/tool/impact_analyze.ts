@@ -2,7 +2,7 @@ import z from "zod"
 import { Tool } from "./tool"
 import DESCRIPTION from "./impact_analyze.txt"
 import { Instance } from "../project/instance"
-import { DebugEngine } from "../debug-engine"
+import { DebugEngine } from "@ax-code/ax-codereason"
 import { CodeIntelligence } from "../code-intelligence"
 import { CodeNodeID } from "../code-intelligence/id"
 import { ToolNumber } from "./schema"
@@ -63,7 +63,7 @@ export const ImpactAnalyzeTool = Tool.define("impact_analyze", {
     // Fail-open; only when exactly one seed resolved (else ambiguous anchor).
     try {
       if (report.seeds.length === 1 && report.seeds[0]) {
-        const seed = CodeIntelligence.getSymbol(projectID, report.seeds[0], { scope: "worktree" })
+        const seed = CodeIntelligence.getSymbol(projectID, CodeNodeID.make(report.seeds[0]), { scope: "worktree" })
         if (seed) {
           CodeIntelligence.recordNote(projectID, {
             qualifiedName: seed.qualifiedName,

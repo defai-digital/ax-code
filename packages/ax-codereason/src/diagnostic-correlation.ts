@@ -1,10 +1,9 @@
-import { Log } from "../util/log"
-import { Bus } from "../bus"
+import { Log } from "./internal/log"
 import { LSPClient } from "@ax-code/ax-codeintel/client"
-import { CodeIntelligence } from "../code-intelligence"
-import { Instance } from "../project/instance"
-import { ProjectID } from "../project/schema"
-import { uniqueStrings } from "../util/string-list"
+import { codeReasonHost, type Graph } from "./host"
+
+import type { ProjectID } from "./id"
+import { uniqueStrings } from "./internal/string-list"
 import { DebugEngine } from "./index"
 
 // diagnostic-correlation — Cross-file root-cause analysis for LSP diagnostics.
@@ -81,7 +80,7 @@ export namespace DiagnosticCorrelation {
   export function start(): () => void {
     state()
     return () => {
-      void state.invalidate()
+      void getState().invalidate()
     }
   }
 
@@ -128,10 +127,7 @@ export namespace DiagnosticCorrelation {
 
 // ─── Exported for testing ─────────────────────────────────────────────
 
-export function __testFindEnclosingSymbol(
-  symbols: CodeIntelligence.Symbol[],
-  line: number,
-): CodeIntelligence.Symbol | null {
+export function __testFindEnclosingSymbol(symbols: Graph.Symbol[], line: number): Graph.Symbol | null {
   return findEnclosingSymbol(symbols, line)
 }
 
@@ -141,17 +137,9 @@ export function __testFindCrossFileRootCause(
   line: number,
   message: string,
   severity: number,
-  symbol: CodeIntelligence.Symbol,
+  symbol: Graph.Symbol,
 ): DebugEngine.CorrelatedDiagnostic {
-  return findCrossFileRootCause(
-    ProjectID.make(projectID),
-    file,
-    line,
-    message,
-    severity,
-    symbol,
-    defaultLspProvenance(),
-  )
+  return findCrossFileRootCause(projectID, file, line, message, severity, symbol, defaultLspProvenance())
 }
 
 export function __testRenderCorrelationBlock(
@@ -168,33 +156,46 @@ function normalizePath(file: string): string {
 }
 
 function cacheKey(file: string): string {
-  return `${Instance.project.id}\0${normalizePath(file)}`
+  return `${codeReasonHost().projectID()}\0${normalizePath(file)}`
 }
 
-const state = Instance.state(
-  () => {
-    const current: CorrelationState = {
-      cache: new Map<string, CacheEntry>(),
-      pendingTimers: new Map<string, ReturnType<typeof setTimeout>>(),
-      unsubscribe: () => {},
-    }
-    current.unsubscribe = Bus.subscribe(LSPClient.Event.Diagnostics, (event) => {
-      const { path } = event.properties
-      scheduleCorrelation(current, path)
-    })
-    activeStates.add(current)
-    log.info("diagnostic correlation subscriber started")
-    return current
-  },
-  async (current) => {
-    current.unsubscribe()
-    for (const timer of current.pendingTimers.values()) clearTimeout(timer)
-    current.pendingTimers.clear()
-    current.cache.clear()
-    activeStates.delete(current)
-    log.info("diagnostic correlation subscriber stopped")
-  },
-)
+// Lazily created per-workspace correlation state. The host is only required
+// on first use, never at module load, so importing this package does not
+// require the host to be configured yet.
+let stateHolder: ReturnType<typeof createCorrelationState> | undefined
+function getState() {
+  return (stateHolder ??= createCorrelationState())
+}
+function state() {
+  return getState()()
+}
+
+function createCorrelationState() {
+  return codeReasonHost().state(
+    () => {
+      const current: CorrelationState = {
+        cache: new Map<string, CacheEntry>(),
+        pendingTimers: new Map<string, ReturnType<typeof setTimeout>>(),
+        unsubscribe: () => {},
+      }
+      current.unsubscribe = codeReasonHost().events.subscribeClientDiagnostics((event) => {
+        const { path } = event
+        scheduleCorrelation(current, path)
+      })
+      activeStates.add(current)
+      log.info("diagnostic correlation subscriber started")
+      return current
+    },
+    async (current) => {
+      current.unsubscribe()
+      for (const timer of current.pendingTimers.values()) clearTimeout(timer)
+      current.pendingTimers.clear()
+      current.cache.clear()
+      activeStates.delete(current)
+      log.info("diagnostic correlation subscriber stopped")
+    },
+  )
+}
 
 function isErrorDiagnostic(diagnostic: LSPClient.Diagnostic): diagnostic is ErrorDiagnostic {
   return diagnostic.severity === 1
@@ -204,7 +205,7 @@ function scheduleCorrelation(current: CorrelationState, file: string): void {
   const key = normalizePath(file)
   const existing = current.pendingTimers.get(key)
   if (existing) clearTimeout(existing)
-  const run = Instance.bind(async () => {
+  const run = codeReasonHost().bind(async () => {
     current.pendingTimers.delete(key)
     try {
       await runCorrelation(file)
@@ -217,7 +218,7 @@ function scheduleCorrelation(current: CorrelationState, file: string): void {
 
 async function runCorrelation(file: string): Promise<DebugEngine.CorrelatedDiagnostic[]> {
   const current = state()
-  const projectID = Instance.project.id
+  const projectID = codeReasonHost().projectID()
   const normalized = normalizePath(file)
   const key = cacheKey(file)
 
@@ -232,7 +233,7 @@ async function runCorrelation(file: string): Promise<DebugEngine.CorrelatedDiagn
   }
 
   // Resolve symbols in this file from the code graph.
-  const symbols = CodeIntelligence.symbolsInFile(projectID, file, { scope: "worktree" })
+  const symbols = codeReasonHost().graph.symbolsInFile(projectID, file, { scope: "worktree" })
   if (symbols.length === 0) {
     // No graph data — return uncorrelated diagnostics.
     const uncorrelated = errorDiagnostics.slice(0, MAX_CORRELATIONS_PER_FILE).map((d) => ({
@@ -292,7 +293,7 @@ async function runCorrelation(file: string): Promise<DebugEngine.CorrelatedDiagn
   evictStaleEntries(current)
 
   if (correlations.some((c) => c.rootCauseFile !== null)) {
-    Bus.publishDetached(DebugEngine.Event.CorrelatedDiagnostics, {
+    codeReasonHost().events.publishCorrelatedDiagnostics({
       file: normalized,
       correlations,
     })
@@ -307,10 +308,10 @@ async function runCorrelation(file: string): Promise<DebugEngine.CorrelatedDiagn
   return correlations
 }
 
-function findEnclosingSymbol(symbols: CodeIntelligence.Symbol[], line: number): CodeIntelligence.Symbol | null {
+function findEnclosingSymbol(symbols: Graph.Symbol[], line: number): Graph.Symbol | null {
   // Find the symbol whose range contains the diagnostic line. If multiple
   // match, prefer the innermost (smallest range).
-  let best: CodeIntelligence.Symbol | null = null
+  let best: Graph.Symbol | null = null
   let bestSpan = Infinity
   for (const sym of symbols) {
     const startLine = sym.range.start.line
@@ -332,23 +333,24 @@ function findCrossFileRootCause(
   line: number,
   message: string,
   severity: number,
-  symbol: CodeIntelligence.Symbol,
+  symbol: Graph.Symbol,
   lspProvenance: LspProvenance,
 ): DebugEngine.CorrelatedDiagnostic {
   // Walk callers at depth 1 first (direct callers in other files).
-  const callers = CodeIntelligence.findCallers(projectID, symbol.id, { scope: "worktree" }).slice(
-    0,
-    MAX_CALLERS_PER_SYMBOL,
-  )
+  const callers = codeReasonHost()
+    .graph.findCallers(projectID, symbol.id, { scope: "worktree" })
+    .slice(0, MAX_CALLERS_PER_SYMBOL)
 
   // Depth-2 expansion: for each depth-1 caller in a different file, find
   // its callers too. This catches "A calls B calls C, error in C but root
   // cause in A" patterns.
-  const allCandidates: { sym: CodeIntelligence.Symbol; depth: number }[] = []
+  const allCandidates: { sym: Graph.Symbol; depth: number }[] = []
   for (const caller of callers) {
     allCandidates.push({ sym: caller.symbol, depth: 1 })
     if (caller.symbol.file !== file && allCandidates.length < MAX_CALLERS_PER_SYMBOL * 2) {
-      const deeperCallers = CodeIntelligence.findCallers(projectID, caller.symbol.id, { scope: "worktree" }).slice(0, 3)
+      const deeperCallers = codeReasonHost()
+        .graph.findCallers(projectID, caller.symbol.id, { scope: "worktree" })
+        .slice(0, 3)
       for (const dc of deeperCallers) {
         allCandidates.push({ sym: dc.symbol, depth: 2 })
       }
@@ -474,7 +476,7 @@ function defaultLspProvenance(): LspProvenance {
   return { timestamp: Date.now(), serverIDs: [] }
 }
 
-function graphProvenance(symbols: CodeIntelligence.Symbol[]): GraphProvenance {
+function graphProvenance(symbols: Graph.Symbol[]): GraphProvenance {
   const explains = symbols.map((symbol) => symbol.explain)
   const queryIds = uniqueStrings(explains.map((explain) => explain.queryId))
   const indexedAt = explains.length === 0 ? 0 : Math.min(...explains.map((explain) => explain.indexedAt))

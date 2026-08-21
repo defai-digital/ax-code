@@ -1,7 +1,7 @@
-import { Log } from "../util/log"
-import { CodeIntelligence } from "../code-intelligence"
-import { CodeNodeID } from "../code-intelligence/id"
-import type { ProjectID } from "../project/schema"
+import { Log } from "./internal/log"
+import { codeReasonHost, type Graph } from "./host"
+import { CodeNodeID } from "./id"
+import type { ProjectID } from "./id"
 import { DebugEngineQuery } from "./query"
 import { RefactorPlanID } from "./id"
 import type { RefactorPlanKind, RefactorPlanRisk, RefactorPlanStatus } from "./schema.sql"
@@ -14,9 +14,9 @@ import { applySafeRefactorImpl, type ApplySafeRefactorInput } from "./apply-safe
 import { detectRacesImpl, type DetectRacesInput } from "./detect-races"
 import { detectLifecycleImpl, type DetectLifecycleInput } from "./detect-lifecycle"
 import { detectSecurityImpl, type DetectSecurityInput } from "./detect-security"
-import { BusEvent } from "../bus/bus-event"
 import z from "zod"
 
+export * from "./host"
 export { Incremental } from "./incremental"
 export { DiagnosticCorrelation } from "./diagnostic-correlation"
 export { prewarmAffectedFiles } from "./prewarm-lsp"
@@ -40,32 +40,36 @@ const log = Log.create({ service: "debug-engine" })
 export namespace DebugEngine {
   // ─── Bus Events ────────────────────────────────────────────────────
 
-	  export const CorrelatedDiagnosticSchema = z.object({
-	    file: z.string(),
-	    line: z.number(),
-	    message: z.string(),
-	    severity: z.number(),
-	    rootCauseFile: z.string().nullable(),
-	    rootCauseSymbol: z.string().nullable(),
-	    rootCauseChain: z.array(z.string()),
-	    confidence: z.enum(["high", "medium", "low"]),
-	    lspTimestamp: z.number(),
-	    lspServerIDs: z.array(z.string()),
-	    graphQueryIds: z.array(z.string()),
-	    graphIndexedAt: z.number(),
-	    graphCompleteness: z.enum(["full", "partial", "lsp-only"]),
-	  })
+  export const CorrelatedDiagnosticSchema = z.object({
+    file: z.string(),
+    line: z.number(),
+    message: z.string(),
+    severity: z.number(),
+    rootCauseFile: z.string().nullable(),
+    rootCauseSymbol: z.string().nullable(),
+    rootCauseChain: z.array(z.string()),
+    confidence: z.enum(["high", "medium", "low"]),
+    lspTimestamp: z.number(),
+    lspServerIDs: z.array(z.string()),
+    graphQueryIds: z.array(z.string()),
+    graphIndexedAt: z.number(),
+    graphCompleteness: z.enum(["full", "partial", "lsp-only"]),
+  })
 
   export type CorrelatedDiagnostic = z.infer<typeof CorrelatedDiagnosticSchema>
 
+  // Event shape is owned here; publishing and bus registration are host
+  // responsibilities (see CodeReasonHost.events). The ax-code glue registers
+  // "debug-engine.correlated-diagnostics" with its BusEvent registry so the
+  // event stays part of the SSE/OpenAPI contract.
   export const Event = {
-    CorrelatedDiagnostics: BusEvent.define(
-      "debug-engine.correlated-diagnostics",
-      z.object({
+    CorrelatedDiagnostics: {
+      type: "debug-engine.correlated-diagnostics" as const,
+      properties: z.object({
         file: z.string(),
         correlations: z.array(CorrelatedDiagnosticSchema),
       }),
-    ),
+    },
   }
 
   // ─── Explain ────────────────────────────────────────────────────────
@@ -112,7 +116,7 @@ export namespace DebugEngine {
   // explain records. The ordering "full" > "lsp-only" > "partial" reflects
   // the v3 semantics: "partial" (tree-sitter only) is the weakest, then
   // "lsp-only" (LSP with gaps), then "full" (LSP precise).
-  function minCompleteness(explains: ReadonlyArray<CodeIntelligence.Explain>): Completeness {
+  function minCompleteness(explains: ReadonlyArray<Graph.Explain>): Completeness {
     let worst: Completeness = "full"
     for (const e of explains) {
       if (e.completeness === "partial") return "partial"
@@ -124,11 +128,7 @@ export namespace DebugEngine {
   // Build a DebugEngine.Explain from a list of CodeIntelligence results
   // consulted by a DRE call. `tool` identifies the DRE feature;
   // `heuristics` are human-readable tags the feature applied.
-  export function buildExplain(
-    tool: Tool,
-    ciExplains: ReadonlyArray<CodeIntelligence.Explain>,
-    heuristics: string[],
-  ): Explain {
+  export function buildExplain(tool: Tool, ciExplains: ReadonlyArray<Graph.Explain>, heuristics: string[]): Explain {
     return {
       source: "debug-engine",
       tool,
@@ -144,7 +144,7 @@ export namespace DebugEngine {
 
   export type StackFrame = {
     frame: number
-    symbol: CodeIntelligence.Symbol | null
+    symbol: Graph.Symbol | null
     file: string
     line: number
     role: "entry" | "intermediate" | "failure"
@@ -171,7 +171,7 @@ export namespace DebugEngine {
 
   export type DuplicateCluster = {
     id: string
-    members: CodeIntelligence.Symbol[]
+    members: Graph.Symbol[]
     similarityScore: number
     sharedLines: number
     suggestedExtractionTarget: string
@@ -189,7 +189,7 @@ export namespace DebugEngine {
   // ─── analyzeImpact output shape ─────────────────────────────────────
 
   export type ImpactAffectedSymbol = {
-    symbol: CodeIntelligence.Symbol
+    symbol: Graph.Symbol
     distance: number
     path: CodeNodeID[]
   }

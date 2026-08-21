@@ -13,8 +13,8 @@ import {
   __testFindEnclosingSymbol,
   __testFindCrossFileRootCause,
   __testRenderCorrelationBlock,
-} from "../../src/debug-engine/diagnostic-correlation"
-import type { DebugEngine } from "../../src/debug-engine"
+} from "@ax-code/ax-codereason/diagnostic-correlation"
+import type { DebugEngine } from "@ax-code/ax-codereason"
 import { LSP } from "@ax-code/ax-codeintel"
 import { Bus } from "../../src/bus"
 import { LSPClient } from "@ax-code/ax-codeintel/client"

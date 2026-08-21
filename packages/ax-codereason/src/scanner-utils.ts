@@ -1,7 +1,8 @@
+import { codeReasonHost } from "./host"
 import path from "path"
-import { Instance } from "../project/instance"
-import { Glob } from "../util/glob"
-import { uniqueStrings } from "../util/string-list"
+
+import { Glob } from "./internal/glob"
+import { uniqueStrings } from "./internal/string-list"
 import { nativeReadFilesBatch } from "./native-scan"
 
 // Defaults shared by all detect-* scanners. The pattern set covers
@@ -83,7 +84,7 @@ export async function collectScannerFiles(
           .filter((file) => {
             if (isExcludedDir(file, options.cwd)) return false
             if (options.excludeTests && isTestFile(file)) return false
-            return Instance.containsPath(file)
+            return codeReasonHost().containsPath(file)
           }),
       ),
     }
@@ -95,7 +96,7 @@ export async function collectScannerFiles(
     for (const file of hits) {
       if (isExcludedDir(file, options.cwd)) continue
       if (options.excludeTests && isTestFile(file)) continue
-      if (!Instance.containsPath(file)) continue
+      if (!codeReasonHost().containsPath(file)) continue
       files.push(file)
     }
   }

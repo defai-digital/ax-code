@@ -2,7 +2,7 @@ import z from "zod"
 import { Tool } from "./tool"
 import DESCRIPTION from "./refactor_plan.txt"
 import { Instance } from "../project/instance"
-import { DebugEngine } from "../debug-engine"
+import { DebugEngine } from "@ax-code/ax-codereason"
 import { CodeNodeID } from "../code-intelligence/id"
 
 // Tool wrapper around DebugEngine.planRefactor. Plan-only, never writes

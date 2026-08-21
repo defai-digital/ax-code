@@ -9,7 +9,7 @@ import {
   DebugEvidenceSchema,
   DebugHypothesisSchema,
   DebugInstrumentationPlanSchema,
-} from "../debug-engine/runtime-debug"
+} from "@ax-code/ax-codereason/runtime-debug"
 import z from "zod"
 import { Risk } from "../risk/score"
 import { QualityShadow } from "../quality/shadow-runtime"

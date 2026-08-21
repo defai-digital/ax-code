@@ -1,5 +1,6 @@
+import { codeReasonHost } from "./host"
 import fs from "fs/promises"
-import { Instance } from "../project/instance"
+
 import { DebugEngine } from "./index"
 import { nativeDetectLifecycle } from "./native-scan"
 import {
@@ -288,7 +289,7 @@ export async function detectLifecycleImpl(input: DetectLifecycleInput): Promise<
     "map_growth",
   ]
   const enabledTypes = new Set(resourceTypes)
-  const cwd = Instance.directory
+  const cwd = codeReasonHost().projectRoot()
 
   // Native fast-path: run entire detection in Rust
   if (!scannerUsesIncrementalFiles(input)) {

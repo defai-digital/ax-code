@@ -1,7 +1,7 @@
-import { CodeIntelligence } from "../code-intelligence"
-import { CodeNodeID } from "../code-intelligence/id"
-import { Instance } from "../project/instance"
-import type { ProjectID } from "../project/schema"
+import { codeReasonHost, type Graph } from "./host"
+import { CodeNodeID } from "./id"
+
+import type { ProjectID } from "./id"
 import { DebugEngine } from "./index"
 import path from "path"
 
@@ -77,7 +77,7 @@ function normalizePatchFile(raw: string): string {
 function fileCandidates(file: string): string[] {
   const candidates = new Set<string>([file])
   if (!path.isAbsolute(file)) {
-    candidates.add(path.join(Instance.worktree, file))
+    candidates.add(path.join(codeReasonHost().worktreeRoot(), file))
   }
   return [...candidates]
 }
@@ -89,14 +89,14 @@ function resolveSeeds(
   projectID: ProjectID,
   changes: ImpactChange[],
   scope: "worktree" | "none",
-  ciExplains: CodeIntelligence.Explain[],
-): { seeds: CodeNodeID[]; seedSymbols: Map<string, CodeIntelligence.Symbol> } {
+  ciExplains: Graph.Explain[],
+): { seeds: CodeNodeID[]; seedSymbols: Map<string, Graph.Symbol> } {
   const seeds: CodeNodeID[] = []
-  const seedSymbols = new Map<string, CodeIntelligence.Symbol>()
+  const seedSymbols = new Map<string, Graph.Symbol>()
 
   for (const change of changes) {
     if (change.kind === "symbol") {
-      const sym = CodeIntelligence.getSymbol(projectID, change.id, { scope })
+      const sym = codeReasonHost().graph.getSymbol(projectID, change.id, { scope })
       if (sym) {
         seeds.push(sym.id)
         seedSymbols.set(sym.id, sym)
@@ -105,7 +105,7 @@ function resolveSeeds(
       continue
     }
     if (change.kind === "file") {
-      const symbols = CodeIntelligence.symbolsInFile(projectID, change.path, { scope })
+      const symbols = codeReasonHost().graph.symbolsInFile(projectID, change.path, { scope })
       for (const sym of symbols) {
         seeds.push(sym.id)
         seedSymbols.set(sym.id, sym)
@@ -118,7 +118,7 @@ function resolveSeeds(
       for (const file of files) {
         const candidates = fileCandidates(file)
         for (const candidate of candidates) {
-          const symbols = CodeIntelligence.symbolsInFile(projectID, candidate, { scope })
+          const symbols = codeReasonHost().graph.symbolsInFile(projectID, candidate, { scope })
           if (symbols.length === 0) continue
           for (const sym of symbols) {
             seeds.push(sym.id)
@@ -150,16 +150,16 @@ function bfsUpstream(
   depth: number,
   budget: number,
   scope: "worktree" | "none",
-  ciExplains: CodeIntelligence.Explain[],
+  ciExplains: Graph.Explain[],
 ): {
-  visited: Map<string, { symbol: CodeIntelligence.Symbol; distance: number; parent: string | null }>
+  visited: Map<string, { symbol: Graph.Symbol; distance: number; parent: string | null }>
   truncated: boolean
 } {
-  const visited = new Map<string, { symbol: CodeIntelligence.Symbol; distance: number; parent: string | null }>()
+  const visited = new Map<string, { symbol: Graph.Symbol; distance: number; parent: string | null }>()
   // Seeds live at distance 0. They count toward the budget.
   const queue: { id: CodeNodeID; distance: number }[] = []
   for (const seed of seeds) {
-    const sym = CodeIntelligence.getSymbol(projectID, seed, { scope })
+    const sym = codeReasonHost().graph.getSymbol(projectID, seed, { scope })
     if (!sym) continue
     if (visited.has(sym.id)) continue
     visited.set(sym.id, { symbol: sym, distance: 0, parent: null })
@@ -173,7 +173,7 @@ function bfsUpstream(
     const { id, distance } = queue.shift()!
     if (distance >= depth) continue
 
-    const callers = CodeIntelligence.findCallers(projectID, id, { scope })
+    const callers = codeReasonHost().graph.findCallers(projectID, id, { scope })
     // Note: findReferences returns Reference objects (source locations),
     // not resolved symbols — they can't feed into the BFS visited set.
     // When import edges land (Phase 2), use findDependents here instead.
@@ -199,7 +199,7 @@ function bfsUpstream(
 // path as a list of CodeNodeIDs, seed-first.
 function shortestPathToSeed(
   nodeId: string,
-  visited: Map<string, { symbol: CodeIntelligence.Symbol; distance: number; parent: string | null }>,
+  visited: Map<string, { symbol: Graph.Symbol; distance: number; parent: string | null }>,
 ): CodeNodeID[] {
   const chain: CodeNodeID[] = []
   let cursor: string | null = nodeId
@@ -239,7 +239,7 @@ function computeRisk(params: {
   return { score, label }
 }
 
-function isPublicSymbol(sym: CodeIntelligence.Symbol): boolean {
+function isPublicSymbol(sym: Graph.Symbol): boolean {
   // Visibility may be undefined when the language doesn't express it or
   // LSP didn't report it. Treat undefined as "potentially public" to
   // err on the side of caution — public-exposure risk is only inflated,
@@ -255,7 +255,7 @@ export async function analyzeImpactImpl(
   const depth = Math.min(Math.max(1, input.depth ?? DEFAULT_DEPTH), MAX_DEPTH)
   const budget = Math.min(Math.max(10, input.maxVisited ?? DEFAULT_VISIT_BUDGET), MAX_VISIT_BUDGET)
   const heuristics: string[] = [`depth=${depth}`, `budget=${budget}`]
-  const ciExplains: CodeIntelligence.Explain[] = []
+  const ciExplains: Graph.Explain[] = []
 
   const { seeds } = resolveSeeds(projectID, input.changes, scope, ciExplains)
   heuristics.push(`seeds=${seeds.length}`)

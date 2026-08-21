@@ -5,7 +5,7 @@ import {
   computeDebugEvidenceId,
   computeDebugHypothesisId,
   DebugHypothesisSchema,
-} from "../../src/debug-engine/runtime-debug"
+} from "@ax-code/ax-codereason/runtime-debug"
 import { Installation } from "../../src/installation"
 import { computeEnvelopeId, type VerificationEnvelope } from "../../src/quality/verification-envelope"
 import { Recorder } from "../../src/replay/recorder"

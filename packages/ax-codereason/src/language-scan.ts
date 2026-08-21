@@ -1,3 +1,4 @@
+import { codeReasonHost } from "./host"
 /**
  * Language-native scanner plugins for the Debug Engine.
  *
@@ -14,10 +15,10 @@
 
 import { spawn } from "child_process"
 import z from "zod"
-import { Instance } from "../project/instance"
-import { toErrorMessage } from "../util/error-message"
-import { parseJsonPayload, parseJsonStrict } from "../util/json-value"
-import { Process } from "../util/process"
+
+import { toErrorMessage } from "./internal/error-message"
+import { parseJsonPayload, parseJsonStrict } from "./internal/json-value"
+import { Process } from "./internal/process"
 
 // ─── Shared types ──────────────────────────────────────────────────
 
@@ -138,7 +139,7 @@ export function parseClippyJsonLine(line: string): ClippyDiagnosticMessage | und
 
 export async function detectClippy(input: DetectClippyInput = {}): Promise<LanguageScanResult> {
   const t0 = performance.now()
-  const cwd = input.cwd ?? Instance.worktree ?? process.cwd()
+  const cwd = input.cwd ?? codeReasonHost().worktreeRoot() ?? process.cwd()
   const args = [
     "clippy",
     "--all-targets",
@@ -246,7 +247,7 @@ export function parseRuffDiagnosticsJson(json: unknown): RuffDiagnostic[] {
 
 export async function detectRuff(input: DetectRuffInput = {}): Promise<LanguageScanResult> {
   const t0 = performance.now()
-  const cwd = input.cwd ?? Instance.worktree ?? process.cwd()
+  const cwd = input.cwd ?? codeReasonHost().worktreeRoot() ?? process.cwd()
   const args = ["check", "--output-format=json", "--show-fixes", ...(input.args ?? [])]
 
   try {
@@ -346,7 +347,7 @@ export function parseMypyFilesJson(json: unknown): Array<MypyFile & { decodedMes
 
 export async function detectMypy(input: DetectMypyInput = {}): Promise<LanguageScanResult> {
   const t0 = performance.now()
-  const cwd = input.cwd ?? Instance.worktree ?? process.cwd()
+  const cwd = input.cwd ?? codeReasonHost().worktreeRoot() ?? process.cwd()
   const args = ["--json-output", ...(input.args ?? [])]
 
   try {

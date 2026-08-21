@@ -1,6 +1,6 @@
-import { CodeIntelligence } from "../code-intelligence"
-import { CodeNodeID } from "../code-intelligence/id"
-import type { ProjectID } from "../project/schema"
+import { codeReasonHost, type Graph } from "./host"
+import { CodeNodeID } from "./id"
+import type { ProjectID } from "./id"
 import { DebugEngine } from "./index"
 import { DebugEngineQuery } from "./query"
 import { RefactorPlanID } from "./id"
@@ -60,9 +60,9 @@ function classifyRisk(params: {
 // review. Phase 2 expands this.
 function buildEdits(
   kind: RefactorPlanKind,
-  targets: CodeIntelligence.Symbol[],
-  callers: Map<string, CodeIntelligence.CallChainNode[]>,
-  references: Map<string, CodeIntelligence.Reference[]>,
+  targets: Graph.Symbol[],
+  callers: Map<string, Graph.CallChainNode[]>,
+  references: Map<string, Graph.Reference[]>,
 ): DebugEngine.RefactorEdit[] {
   const edits: DebugEngine.RefactorEdit[] = []
   if (kind === "extract") {
@@ -165,7 +165,7 @@ function buildEdits(
 
 function buildSummary(
   kind: RefactorPlanKind,
-  targets: CodeIntelligence.Symbol[],
+  targets: Graph.Symbol[],
   affectedFiles: string[],
   risk: RefactorPlanRisk,
 ): string {
@@ -190,14 +190,14 @@ export async function planRefactorImpl(
   const scope: "worktree" | "none" = input.scope ?? "worktree"
   const kind = input.kind ?? classifyIntent(input.intent)
   const heuristics: string[] = [`intent-classified:${kind}`]
-  const ciExplains: CodeIntelligence.Explain[] = []
+  const ciExplains: Graph.Explain[] = []
 
   // Resolve every target to a real graph symbol. Missing targets are
   // dropped (we log) so the plan never contains phantom node IDs — the
   // "cite or drop" principle from analyzeBug applies here too.
-  const resolved: CodeIntelligence.Symbol[] = []
+  const resolved: Graph.Symbol[] = []
   for (const id of input.targets) {
-    const sym = CodeIntelligence.getSymbol(projectID, id, { scope })
+    const sym = codeReasonHost().graph.getSymbol(projectID, id, { scope })
     if (sym) {
       resolved.push(sym)
       ciExplains.push(sym.explain)
@@ -207,11 +207,11 @@ export async function planRefactorImpl(
 
   // Pull caller and reference sets for each resolved target. One pass,
   // stored in maps keyed by node id so buildEdits can reuse them.
-  const callers = new Map<string, CodeIntelligence.CallChainNode[]>()
-  const references = new Map<string, CodeIntelligence.Reference[]>()
+  const callers = new Map<string, Graph.CallChainNode[]>()
+  const references = new Map<string, Graph.Reference[]>()
   for (const t of resolved) {
-    const cs = CodeIntelligence.findCallers(projectID, t.id, { scope })
-    const rs = CodeIntelligence.findReferences(projectID, t.id, { scope })
+    const cs = codeReasonHost().graph.findCallers(projectID, t.id, { scope })
+    const rs = codeReasonHost().graph.findReferences(projectID, t.id, { scope })
     callers.set(t.id, cs)
     references.set(t.id, rs)
     for (const c of cs) ciExplains.push(c.symbol.explain)
@@ -251,7 +251,7 @@ export async function planRefactorImpl(
   // Snapshot the graph cursor so applySafeRefactor can detect staleness.
   // In Phase 1 the cursor may be null for fresh projects; we store null
   // faithfully and the staleness check in Phase 3 handles both branches.
-  const status = CodeIntelligence.status(projectID)
+  const status = codeReasonHost().graph.status(projectID)
   const cursorSha = status.lastCommitSha
 
   DebugEngineQuery.insertPlan({

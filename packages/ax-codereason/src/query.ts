@@ -1,7 +1,8 @@
-import { Database, eq, and, desc } from "../storage/db"
+import { eq, and, desc } from "drizzle-orm"
+import { codeReasonHost } from "./host"
 import { RefactorPlanTable, EmbeddingCacheTable, type RefactorPlanStatus } from "./schema.sql"
 import type { RefactorPlanID } from "./id"
-import type { ProjectID } from "../project/schema"
+import type { ProjectID } from "./id"
 
 // Low-level CRUD for DRE-owned tables. Mirrors the structure of
 // code-intelligence/query.ts — one namespace, one file, every function
@@ -25,11 +26,11 @@ export namespace DebugEngineQuery {
   export type PlanInsert = typeof RefactorPlanTable.$inferInsert
 
   export function insertPlan(row: PlanInsert): void {
-    Database.use((db) => db.insert(RefactorPlanTable).values(row).run())
+    codeReasonHost().db.use((db) => db.insert(RefactorPlanTable).values(row).run())
   }
 
   export function getPlan(projectID: ProjectID, id: RefactorPlanID): PlanRow | undefined {
-    return Database.use((db) =>
+    return codeReasonHost().db.use((db) =>
       db
         .select()
         .from(RefactorPlanTable)
@@ -44,7 +45,7 @@ export namespace DebugEngineQuery {
     if (limit === 0) return []
     const filters = [eq(RefactorPlanTable.project_id, projectID)]
     if (opts?.status) filters.push(eq(RefactorPlanTable.status, opts.status))
-    return Database.use((db) => {
+    return codeReasonHost().db.use((db) => {
       const q = db
         .select()
         .from(RefactorPlanTable)
@@ -55,7 +56,7 @@ export namespace DebugEngineQuery {
   }
 
   export function updatePlanStatus(projectID: ProjectID, id: RefactorPlanID, status: RefactorPlanStatus): void {
-    Database.use((db) =>
+    codeReasonHost().db.use((db) =>
       db
         .update(RefactorPlanTable)
         .set({ status })
@@ -65,7 +66,7 @@ export namespace DebugEngineQuery {
   }
 
   export function deletePlan(projectID: ProjectID, id: RefactorPlanID): void {
-    Database.use((db) =>
+    codeReasonHost().db.use((db) =>
       db
         .delete(RefactorPlanTable)
         .where(and(eq(RefactorPlanTable.project_id, projectID), eq(RefactorPlanTable.id, id)))
@@ -82,7 +83,7 @@ export namespace DebugEngineQuery {
     // On node_id collision, replace. We key the cache by (project_id,
     // node_id) rather than the surrogate `id`, so the only sensible
     // conflict policy is "newest wins".
-    Database.transaction((db) => {
+    codeReasonHost().db.transaction((db) => {
       db.delete(EmbeddingCacheTable)
         .where(and(eq(EmbeddingCacheTable.project_id, row.project_id), eq(EmbeddingCacheTable.node_id, row.node_id)))
         .run()
@@ -91,7 +92,7 @@ export namespace DebugEngineQuery {
   }
 
   export function getEmbedding(projectID: ProjectID, nodeID: string): CacheRow | undefined {
-    return Database.use((db) =>
+    return codeReasonHost().db.use((db) =>
       db
         .select()
         .from(EmbeddingCacheTable)
@@ -102,7 +103,7 @@ export namespace DebugEngineQuery {
   }
 
   export function deleteEmbedding(projectID: ProjectID, nodeID: string): void {
-    Database.use((db) =>
+    codeReasonHost().db.use((db) =>
       db
         .delete(EmbeddingCacheTable)
         .where(and(eq(EmbeddingCacheTable.project_id, projectID), eq(EmbeddingCacheTable.node_id, nodeID)))
@@ -113,7 +114,7 @@ export namespace DebugEngineQuery {
   // Test helper. Clears every DRE row for a project. Production code
   // should not need this — plans and caches live as long as the project.
   export function __clearProject(projectID: ProjectID): void {
-    Database.use((db) => {
+    codeReasonHost().db.use((db) => {
       db.delete(RefactorPlanTable).where(eq(RefactorPlanTable.project_id, projectID)).run()
       db.delete(EmbeddingCacheTable).where(eq(EmbeddingCacheTable.project_id, projectID)).run()
     })

@@ -1,5 +1,6 @@
+import { codeReasonHost } from "./host"
 import fs from "fs/promises"
-import { Instance } from "../project/instance"
+
 import { DebugEngine } from "./index"
 import { nativeDetectHardcodes } from "./native-scan"
 import {
@@ -354,7 +355,7 @@ export async function detectHardcodesImpl(input: DetectHardcodesInput): Promise<
   const { excludeTests, maxFiles, maxPerFile, include } = resolveScannerDefaults(input)
   const patterns = input.patterns ?? ["magic_number", "inline_url", "inline_path", "inline_secret_shape"]
   const enabledKinds = new Set(patterns)
-  const cwd = Instance.directory
+  const cwd = codeReasonHost().projectRoot()
 
   // Native fast-path: run entire detection in Rust
   if (!scannerUsesIncrementalFiles(input)) {
