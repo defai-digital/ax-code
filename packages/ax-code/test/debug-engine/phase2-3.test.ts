@@ -1642,7 +1642,6 @@ describe("applySafeRefactor", () => {
         expect(result.checks.typecheck.skipped).toBe(true)
         expect(result.checks.lint.skipped).toBe(true)
         expect(result.checks.tests.skipped).toBe(true)
-        expect(result.rolledBack).toBe(false)
         expect(result.filesChanged).toEqual([])
 
         CodeIntelligence.__clearProject(projectID)
@@ -1684,7 +1683,6 @@ describe("applySafeRefactor", () => {
         expect(result.checks.typecheck.skipped).toBeUndefined()
         expect(result.checks.lint.skipped).toBe(true)
         expect(result.checks.tests.skipped).toBe(true)
-        expect(result.rolledBack).toBe(false)
 
         CodeIntelligence.__clearProject(projectID)
         DebugEngine.__clearProject(projectID)

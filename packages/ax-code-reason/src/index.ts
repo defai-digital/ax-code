@@ -252,7 +252,6 @@ export namespace DebugEngine {
       tests: TestResult
     }
     filesChanged: string[]
-    rolledBack: boolean
     abortReason: string | null
     explain: Explain
   }

@@ -231,7 +231,7 @@ fn scan_security(
                 file: file.to_string(),
                 line: i + 1,
                 pattern: "ssrf".into(),
-                severity: "medium".into(),
+                severity: "high".into(),
                 description: format!(
                     "fetch/axios with variable URL at line {} without SSRF validation",
                     i + 1

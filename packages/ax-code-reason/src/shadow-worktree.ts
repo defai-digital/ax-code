@@ -41,29 +41,35 @@ const concurrencyGates = new Map<
   {
     inFlight: number
     waiters: Array<() => void>
+    // planIds currently holding a slot. Consulted by cleanupOrphans so it
+    // never removes a shadow that is still in use.
+    activePlanIds: Set<string>
   }
 >()
 
-async function acquireSlot(projectID: ProjectID): Promise<() => void> {
+async function acquireSlot(projectID: ProjectID, planId: string): Promise<() => void> {
   const key = projectID as unknown as string
   let gate = concurrencyGates.get(key)
   if (!gate) {
-    gate = { inFlight: 0, waiters: [] }
+    gate = { inFlight: 0, waiters: [], activePlanIds: new Set() }
     concurrencyGates.set(key, gate)
   }
   if (gate.inFlight < MAX_CONCURRENT_PER_PROJECT) {
     gate.inFlight++
-    return () => releaseSlot(projectID)
+    gate.activePlanIds.add(planId)
+    return () => releaseSlot(projectID, planId)
   }
   await new Promise<void>((resolve) => gate!.waiters.push(resolve))
   // Slot ownership transferred from releaser — don't increment
-  return () => releaseSlot(projectID)
+  gate.activePlanIds.add(planId)
+  return () => releaseSlot(projectID, planId)
 }
 
-function releaseSlot(projectID: ProjectID): void {
+function releaseSlot(projectID: ProjectID, planId: string): void {
   const key = projectID as unknown as string
   const gate = concurrencyGates.get(key)
   if (!gate) return
+  gate.activePlanIds.delete(planId)
   const waiter = gate.waiters.shift()
   if (waiter) {
     // Transfer slot ownership directly to waiter — no decrement/increment
@@ -145,7 +151,7 @@ export namespace ShadowWorktree {
       if (pre.ok === false) return pre
     }
 
-    const release = await acquireSlot(projectID)
+    const release = await acquireSlot(projectID, params.planId)
 
     try {
       const worktreeRoot = codeReasonHost().worktreeRoot()
@@ -234,15 +240,17 @@ export namespace ShadowWorktree {
 
   /**
    * Clean up orphan shadow worktrees and branches left behind by a
-   * process crash between `open()` and `dispose()`. Safe to call at
-   * any time — it only touches DRE-owned artifacts.
+   * process crash between `open()` and `dispose()`.
    *
-   * Call this during startup or before a new shadow open to prevent
-   * resource accumulation after crashes.
+   * Startup-only. Skips any planId currently held by the in-memory
+   * concurrency gate, so it will not remove a shadow that a live
+   * `open()` still owns. Do NOT call while applies are in flight.
    */
   export async function cleanupOrphans(): Promise<{ branches: number; directories: number }> {
     if (codeReasonHost().projectVcs() !== "git") return { branches: 0, directories: 0 }
     const cwd = codeReasonHost().worktreeRoot()
+    const projectID = codeReasonHost().projectID()
+    const active = concurrencyGates.get(projectID as unknown as string)?.activePlanIds
     let branches = 0
     let directories = 0
 
@@ -259,6 +267,8 @@ export namespace ShadowWorktree {
       for (const name of names) {
         // Force-remove the worktree first (if it still exists), then the branch
         const planId = name.replace("ax-code/dre/shadow/", "")
+        // Skip shadows currently held by the concurrency gate.
+        if (active?.has(planId)) continue
         const worktreeDir = path.join(shadowBase, planId)
         await git(["worktree", "remove", "--force", worktreeDir], { cwd }).catch(() => undefined)
         const del = await git(["branch", "-D", name], { cwd })
@@ -269,6 +279,8 @@ export namespace ShadowWorktree {
     // Remove orphan shadow directories
     const entries = await fs.readdir(shadowBase).catch(() => [] as string[])
     for (const entry of entries) {
+      // Skip directories currently held by the concurrency gate.
+      if (active?.has(entry)) continue
       const full = path.join(shadowBase, entry)
       const stat = await fs.stat(full).catch(() => null)
       if (stat?.isDirectory()) {

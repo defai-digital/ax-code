@@ -249,9 +249,7 @@ function detectSsrf(lines: string[], file: string, max: number): DebugEngine.Sec
     const match = fetchRe.exec(lines[i])
     if (!match) continue
 
-    // Skip if the argument is a string literal
     const arg = match[1]
-    if (/^["'`]/.test(arg)) continue
 
     // Check for URL validation within +-10 lines
     const nearby = lines.slice(Math.max(0, i - 10), Math.min(lines.length, i + 3)).join("\n")

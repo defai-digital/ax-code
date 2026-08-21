@@ -1,17 +1,12 @@
 import fs from "fs/promises"
 import path from "path"
+import os from "os"
 import { git } from "./internal/git"
 
 import { Log } from "./internal/log"
 import { codeReasonHost, type Graph } from "./host"
 import type { ProjectID } from "./id"
-import {
-  resolveCommands,
-  runCheck,
-  runTests,
-  type TimedCheckResult,
-  type TimedTestResult,
-} from "./verification-runner"
+import { resolveCommands, runCheck, runTests, type TimedCheckResult, type TimedTestResult } from "./verification-runner"
 import { DebugEngine } from "./index"
 import { DebugEngineQuery } from "./query"
 import { ShadowWorktree } from "./shadow-worktree"
@@ -137,7 +132,6 @@ export async function applySafeRefactorImpl(
     planId: input.planId,
     checks: checks ?? emptyChecks(),
     filesChanged: [],
-    rolledBack: false,
     abortReason: reason,
     explain: DebugEngine.buildExplain("apply-safe-refactor", [], heuristics),
   })
@@ -290,7 +284,6 @@ export async function applySafeRefactorImpl(
           tests: legacyTests(testResult),
         },
         filesChanged: [],
-        rolledBack: false,
         abortReason: "no-patch-supplied",
         explain: DebugEngine.buildExplain("apply-safe-refactor", [], heuristics),
       }
@@ -299,9 +292,16 @@ export async function applySafeRefactorImpl(
     // Step 9: real apply. We re-apply the patch to the actual worktree
     // via git apply. The shadow's job is now done; it's disposed in
     // the finally block. The git() util helper passes `stdin: "ignore"`,
-    // so we can't use `git apply -`; write the patch to a temp file
-    // and apply from there.
-    const tmpPatch = path.join(codeReasonHost().worktreeRoot(), ".dre-apply.patch")
+    // so we can't use `git apply -`. Write the patch to a unique temp
+    // dir OUTSIDE the worktree so concurrent applies never share a
+    // filename and a crash never leaves an untracked file behind.
+    // Both joins below are rooted at os.tmpdir() and every other segment is a
+    // string literal, so no caller-controlled input reaches them. The
+    // path-traversal heuristic cannot see that and flags them anyway.
+    // @scan-suppress security_scan
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "dre-apply-"))
+    // @scan-suppress security_scan
+    const tmpPatch = path.join(tmpDir, "apply.patch")
     await fs.writeFile(tmpPatch, input.patch, "utf8")
     let realResult: Awaited<ReturnType<typeof git>>
     try {
@@ -309,7 +309,7 @@ export async function applySafeRefactorImpl(
         cwd: codeReasonHost().worktreeRoot(),
       })
     } finally {
-      await fs.rm(tmpPatch, { force: true }).catch(() => undefined)
+      await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined)
     }
 
     if (realResult.exitCode !== 0) {
@@ -337,7 +337,6 @@ export async function applySafeRefactorImpl(
         tests: legacyTests(testResult),
       },
       filesChanged,
-      rolledBack: false,
       abortReason: null,
       explain: DebugEngine.buildExplain("apply-safe-refactor", [], heuristics),
     }
