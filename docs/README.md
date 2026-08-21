@@ -2,17 +2,28 @@
 
 Status: Active
 Scope: public, current-state
-Last reviewed: 2026-07-25
+Last reviewed: 2026-08-21
 Owner: AX Code maintainers
+
+AX Code is an open-source coding-agent runtime for reviewable, reversible work: every session is recorded as a
+structured event log with file snapshots, candidate implementations can be verified against your repository's own
+checks, and nothing merges automatically. [Why AX Code](why-ax-code.md) explains what that optimizes for, who it is
+for, and what it deliberately does not claim.
 
 The root [README](../README.md) is the shortest path to install and launch AX Code. Use this hub when you need to
 configure a workflow, understand a runtime boundary, or integrate AX Code with another system.
+
+`module-quality-audit/`, `planning/`, and `prd/` under `docs/` are internal process records kept in Git for
+traceability. They are not product documentation; the public pages are the ones linked below.
 
 ## Choose by task
 
 | I want to…                                               | Start here                                                              |
 | -------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Decide whether AX Code fits my work                      | [Why AX Code](why-ax-code.md)                                           |
 | Understand AX Code before installing it                  | [Start Here](getting-started/start-here.md)                             |
+| Review, compare, or undo what an agent did               | [Execution Evidence](guides/execution-evidence.md)                      |
+| Get several models to attempt the same change            | [Verified Multi-Model Changes](guides/verified-multi-model-change.md)   |
 | Choose an install or runtime channel                     | [Installation and Runtime Channels](getting-started/install-runtime.md) |
 | Connect a hosted, CLI, custom, or local provider         | [Supported Providers and Models](providers/supported-providers.md)      |
 | Try AX Code with a free-tier model API                   | [Free-Tier API Quickstart](providers/free-tier-apis.md)                 |
@@ -28,12 +39,17 @@ configure a workflow, understand a runtime boundary, or integrate AX Code with a
 
 ## Getting started
 
+- [Why AX Code](why-ax-code.md) — what AX Code optimizes for, its intended audience, how it differs, and what it does
+  not claim.
 - [Start Here](getting-started/start-here.md) — product mental model and the shortest paths by use case.
 - [Installation and Runtime Channels](getting-started/install-runtime.md) — supported platforms, packages, updates, and
   contributor launchers.
 
 ## Runtime guides
 
+- [Execution Evidence](guides/execution-evidence.md) — graph, compare, replay, risk, rollback, branch, trace, and
+  audit export.
+- [Verified Multi-Model Changes](guides/verified-multi-model-change.md) — the council and arena workflow end to end.
 - [Sandbox Mode](guides/sandbox.md) — isolation modes, protected paths, network controls, and precedence.
 - [Autonomous Mode](guides/autonomous.md) — unattended execution, approvals, headless use, and safeguards.
 - [Loop Mode and Scheduled Tasks](guides/loop-mode.md) — recurring prompts, durable schedules, and long-run limits.

@@ -1,12 +1,8 @@
-**A local-first agent runtime for serious software work.**
+<h1 align="center">AX Code</h1>
 
-AX Code runs coding agents against your actual repositories through AX Code Desktop, a terminal TUI, one-shot CLI, VS Code, a TypeScript SDK, and a local HTTP server. It is built around durable sessions, explicit tools, sandboxed execution, provider routing, code intelligence, and MCP/plugin extensibility so teams can let agents act without losing control of the work.
+<p align="center"><strong>Inspect the run. Verify the change. Decide what stays.</strong></p>
 
-- Work interactively in the terminal with model, provider, agent, session, MCP, and skill controls
-- Run headless tasks for scripts, CI, bots, and internal automation with the same runtime
-- Preserve work with persistent sessions, replay, fork, export, compare, rollback, and repo instructions in `AGENTS.md`
-- Bound execution with `workspace-write`, `read-only`, or `full-access` isolation plus permission rules
-- Extend with MCP servers, plugins, custom agents, Agent Skills, SDK tools, and VS Code integration
+AX Code is an open-source coding-agent runtime for reviewable, reversible work. Every session is recorded as a structured event log with file snapshots, so you can reconstruct what the agent did, compare two runs against each other, and roll back what you do not want. Candidate implementations can be built in isolated Git worktrees and ranked against your repository's own checks — nothing merges automatically.
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
@@ -19,271 +15,195 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ---
 
-## Get Started
+## The problem
 
-### Supported Install Targets
+Coding agents now write real code in real repositories. The gap is what happens after the agent says it is done: which files it touched, which decisions it made, whether the result passes your checks, how one attempt compared with another, and how to undo the specific step that went wrong.
 
-| Platform                        | Status         | Install path                                           |
-| ------------------------------- | -------------- | ------------------------------------------------------ |
-| macOS Apple Silicon             | Active support | Homebrew CLI formula and Desktop cask                  |
-| Windows x64                     | Active support | PowerShell CLI installer and Desktop release installer |
-| Windows ARM64                   | Active support | PowerShell CLI installer and Desktop release installer |
-| Ubuntu 24.04+ (amd64 and arm64) | Active support | Bash CLI installer plus Desktop `.deb`/AppImage        |
+Most agents give you a transcript. AX Code gives you an execution record.
 
-**Recommended: AX Code Desktop**
+## What that looks like
 
-**macOS**
+Every session is recorded while it runs. Afterwards you can compare two runs directly:
 
-1. Install Homebrew if you do not already have it:
+```console
+$ ax-code compare ses_01H8XK ses_01H8XM
 
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  Session Comparison
+  ============================================================
+
+  A: ses_01H8XK
+     add rate limiting to the ingest API
+     Risk: HIGH (53/100) — 8 files changed, rewrite, cross-module change
+
+  B: ses_01H8XM
+     add rate limiting to the ingest API (second attempt)
+     Risk: CRITICAL (93/100) — 25 files changed, rewrite, security-related files,
+                               cross-module change, 15 tool failures
+
+  Risk Comparison
+  ----------------------------------------
+  Score: 53 → 93 (+40) ↑
+  Level: HIGH → CRITICAL
+  Files: 8 → 25
+  Failures: 0 → 15
+
+  Event Summary
+  ----------------------------------------
+  tool.call: 12 → 127
+  step.finish: 6 → 90
+  Total: 69 → 817
 ```
 
-2. Install AX Code CLI and Desktop:
+Or reconstruct a single run step by step, with timings:
+
+```console
+$ ax-code graph ses_01H8XK
+
+## Session ses_01H8XK
+
+Duration: 9m 54s | Risk: HIGH (53/100) | Tokens: 167,650 in / 18,494 out
+Agents: architect
+
+### Step 1 (8s) | tokens: 12263/587
+
+- read: api.ts → ok (5ms)
+- grep: rateLimit → ok (12ms)
+
+### Step 2 (4m 42s) | tokens: 12327/3626
+
+- task: explore rate limiter call sites → ok (215021ms)
+```
+
+The output format above is verbatim from these commands; the session IDs and task names are illustrative. The risk score is a deterministic heuristic computed from signals including churn, validation state, tool failures, touched paths, affected API surface, control-plane outcomes, and security-sensitive file patterns — it is a review aid, not a probability, a confidence measure, or a security assurance.
+
+## What you get
+
+**Inspect what the agent did.** `ax-code graph` reconstructs the session as an execution graph with per-step tool calls and timings. `ax-code compare` diffs two runs by risk, decision path, and event counts. `ax-code trace` produces replay-backed diagnostics. The evidence exports out of AX Code as JSONL (`ax-code audit export`), a Markdown report (`ax-code audit report`), or OpenTelemetry spans (`ax-code audit otlp`).
+
+**Undo precisely.** File changes are snapshotted to an out-of-tree Git object store during the run. `ax-code rollback <session> --list` shows recoverable points; `--step N` restores a specific one. Rollback depends on a usable snapshot, so it has real boundaries — see [Execution Evidence](docs/guides/execution-evidence.md).
+
+**Verify competing implementations.** In arena implement mode, each contestant gets an isolated worktree from the same clean base commit, its patch is snapshotted to a branch, your repository's typecheck/lint/test commands run, and candidates that verify rank above candidates that do not. AX Code does not merge the winner for you.
+
+**Understand impact before editing.** With the code-intelligence graph built (`ax-code index`), the agent can compute the blast radius of a proposed change — transitive callers, API boundaries hit, and a bounded risk score — deterministically, with no model call and no file reads.
+
+**Keep repository knowledge durable.** `ax-code wiki` compiles a source-backed wiki: deterministic page planning, source-hash change detection, protected manual sections, atomic writes, and lint checks including dead links. Page prose is model-generated from cited source; the planning, validation, and incremental-update framework around it is deterministic.
+
+## Get started
 
 ```bash
+# macOS
 brew install defai-digital/tap/ax-code
 brew install --cask defai-digital/tap/ax-code-desktop
-```
 
-Already have Homebrew? Start from step 2. The fully qualified commands add the shared DefAI Digital tap
-automatically.
-
-![Install AX Code with Homebrew](docs/images/install-homebrew-ax-code.gif)
-
-**Windows**
-
-1. Install the AX Code CLI with PowerShell (release archives are verified with minisign; if minisign is not on PATH the installer bootstraps a pinned official build):
-
-```powershell
+# Windows (CLI)
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
-```
 
-Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only if you intentionally accept an unverifiable download. For a download-and-inspect flow that also verifies `install.ps1` itself, see [Installation and Runtime Channels](docs/getting-started/install-runtime.md).
-
-2. Install AX Code Desktop separately from the [latest GitHub Release](https://github.com/defai-digital/ax-code/releases/latest):
-
-- Intel/AMD Windows: download and run the latest `AX-Code-<version>-win-x64.exe`.
-- Windows on Arm: download and run the latest `AX-Code-<version>-win-arm64.exe`.
-
-Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**. SmartScreen may still warn for a newly released build while it develops download reputation; continue only when Windows shows that expected publisher. Do not run an installer reported as **Unknown publisher**.
-
-The PowerShell `install.ps1` path installs the CLI only. It does not install the Desktop app.
-
-**Ubuntu 24.04+ (CLI)**
-
-Ubuntu Desktop/Server **24.04 LTS** and newer (glibc) on **amd64** and **arm64**:
-
-```bash
+# Ubuntu 24.04+ (CLI)
 curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 ```
 
-Pin a version with `bash -s -- --version <release>`. The installer verifies the downloaded archive with minisign (bootstraps a pinned minisign build when needed). Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only if you intentionally accept an unverifiable download.
-
-Linux CLI archives are `ax-code-linux-x64.tar.gz` / `ax-code-linux-arm64.tar.gz`. AX Code Desktop for Linux ships as `.deb` and AppImage assets on `desktop-v*` releases (for example `AX-Code-<version>-linux-amd64.deb` and `AX-Code-<version>-linux-x86_64.AppImage`). Musl-based distros (for example Alpine) are not a supported install target for current release archives.
-
-AX Code Desktop is the primary graphical workspace. It shares the AX Code runtime and provider setup, and its source lives in this monorepo under [`desktop/`](desktop/). The standalone Desktop source repository has been retired.
-
-**Run**
+Then:
 
 ```bash
-ax-code
+ax-code                  # open the terminal UI
 ```
 
-Or open **AX Code** from Applications / Start Menu to use the Desktop app. The terminal UI can also start or open the browser web UI with `/webui`, and shell users can run `ax-code webui`. The web UI prefers `http://127.0.0.1:3100` and scans upward if that port is busy. No project setup or config file is required. On first launch, connect a provider from the Desktop onboarding flow or use `/connect` inside the terminal UI.
+Connect a provider from the Desktop onboarding flow, with `/connect` in the terminal UI, or with `ax-code providers login`. No project setup or config file is required.
 
-**CLI-only install**
+Release archives are verified with minisign. Platform support, update paths, signature verification, contributor source builds, and troubleshooting live in [Installation and Runtime Channels](docs/getting-started/install-runtime.md).
 
-Use this path for terminals, headless tasks, CI jobs, bots, servers, and SDK/integration hosts.
+![Install AX Code with Homebrew](docs/images/install-homebrew-ax-code.gif)
 
-**macOS**
+## When AX Code fits
 
-```bash
-brew install defai-digital/tap/ax-code
-```
+**Good fit:** consequential changes in Git repositories where the change has to be reviewed — refactors, migrations, cross-module fixes, security-sensitive edits; unattended or scheduled runs whose output someone must audit afterwards; teams that want model choice without handing the review record to a single hosted product.
 
-**Windows**
+**Poor fit:** inline autocomplete; a single quick disposable edit; fully managed cloud delegation; workflows where you will not use Git or run repository checks. A lighter editor assistant is the better tool for those.
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
-```
+## Surfaces
 
-Verifies the downloaded release archive with minisign (bootstraps a pinned minisign binary when needed). Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only if you intentionally accept an unverifiable download. Installs the node-bundled CLI under `%USERPROFILE%\.ax-code\bin`. Pin a version with `-Version <release>`. Uninstall with `.\install.ps1 -Uninstall`.
+The same runtime, session store, and evidence model back every surface.
 
-Supported CLI install paths are Homebrew (macOS), the GitHub release installer for Windows PowerShell, and the bash installer for Ubuntu 24.04+ on amd64/arm64. The Windows PowerShell and Ubuntu bash installers are CLI-only; use the platform Desktop release assets (macOS DMG/cask, Windows `.exe`, Ubuntu `.deb`/AppImage) for the Desktop app. npm packages are not a supported release channel. See [Installation and Runtime Channels](docs/getting-started/install-runtime.md) for the full matrix.
+| Surface              | Entry point                                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------------------------ |
+| Desktop app          | AX Code Desktop for macOS, Windows, and Ubuntu 24.04+, from [`desktop/`](desktop/)                     |
+| Terminal UI          | `ax-code` — provider, model, agent, session, MCP, and skill flows                                      |
+| One-shot / headless  | `ax-code run "review the auth flow"` for scripts, CI, and bots                                         |
+| Local service        | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                         |
+| TypeScript embedding | `@ax-code/sdk` provides `createAgent()`, streaming events, sessions, and custom tools                  |
+| VS Code              | The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=AutomatosX.ax-code-vscode) |
 
-AX Engine local inference is available only on eligible Apple Silicon Macs. Install its matching MLX runtime with `brew install defai-digital/ax-engine/ax-engine`; AX Code then starts and manages the local server on demand. Windows Desktop users should use hosted providers or OpenAI-compatible provider gateways; AX Code itself remains local-only and cannot be used as a remote server. For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `HF_TOKEN`, `UNOROUTER_API_KEY`, `ZHIPU_API_KEY`, Alibaba plan keys, and `GITHUB_TOKEN`.
+## Control model
 
-### Update
+AX Code starts with autonomous mode on and runtime isolation in `workspace-write` by default: network disabled, writes confined to the workspace, and protected paths such as `.git/` and `.ax-code/` blocked. The agent makes progress without asking about every low-risk step while the sandbox holds the boundary.
 
-`ax-code upgrade` and package-manager update commands apply to the node-bundled runtime shipped by supported installers.
-
-```bash
-ax-code upgrade
-```
-
-**macOS**
-
-```bash
-brew upgrade defai-digital/tap/ax-code
-brew upgrade --cask defai-digital/tap/ax-code-desktop
-```
-
-If `ax-code` is missing after a Homebrew upgrade (older setups installed the Desktop cask under the
-conflicting `ax-code` token, which makes Homebrew skip linking the CLI formula), restore it with:
-
-```bash
-brew link ax-code
-hash -r
-```
-
-If `ax-code --version` still shows an older version after `brew upgrade`, another `ax-code` earlier
-on PATH is shadowing Homebrew (commonly `~/.local/bin/ax-code` from `pnpm run setup:cli` or a
-previous curl install). Check with `which -a ax-code`, then move the extra launcher aside:
-
-```bash
-mv ~/.local/bin/ax-code ~/.local/bin/ax-code.bak
-hash -r
-ax-code --version
-```
-
-**Windows**
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
-```
-
-This updates the Windows CLI. AX Code Desktop updates through the Desktop auto-updater, or by downloading the latest `AX-Code-<version>-win-x64.exe` / `AX-Code-<version>-win-arm64.exe` installer from GitHub Releases. For unattended Desktop installs, run the NSIS installer with `/S` (for example `.\AX-Code-7.7.6-win-x64.exe /S`).
-
-### From Source (contributors)
-
-```bash
-git clone https://github.com/defai-digital/ax-code.git
-cd ax-code && pnpm install && pnpm run setup:cli
-```
-
-Requires [pnpm](https://pnpm.io) v10.33.4+ and [Node.js](https://nodejs.org) matching the root `package.json` engine (`>=24`, `>=26` for source-mode TUI commands that use `--experimental-ffi`). `setup:cli` builds and installs a node-bundled launcher. `ax-code doctor` should report `Runtime: Node vX.Y.Z (node-bundled)` — the same node-bundled runtime shipped by every supported install channel (Homebrew, Windows installer, and Ubuntu installer).
-
-Refresh the local bundled runtime after code changes:
-
-```bash
-pnpm --dir packages/ax-code run build -- --single
-pnpm run setup:cli -- --rebuild
-ax-code doctor
-```
-
-For contributor-only source debugging, install the checkout-bound launcher explicitly:
-
-```bash
-pnpm run setup:cli -- --source
-```
-
-That source launcher should report `Runtime: Node vX.Y.Z (source)` and is intentionally separate from the default node-bundled launcher.
-
----
-
-## What AX Code Does
-
-AX Code is designed for agent work that touches real files, shells, sessions, and team policy. The same runtime powers every surface:
-
-| Need                         | Use                                                                                                                                                              |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Desktop app                  | AX Code Desktop provides the graphical app from [`desktop/`](desktop/) for macOS, Windows, and Ubuntu 24.04+                                                     |
-| Interactive coding           | `ax-code` opens the terminal UI with provider, model, agent, session, MCP, and skill flows                                                                       |
-| One-shot automation          | `ax-code run "review the auth flow"` runs a bounded headless task                                                                                                |
-| Local service / integrations | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                                                                                   |
-| TypeScript embedding         | `@ax-code/sdk` provides `createAgent()`, streaming events, sessions, custom tools, and tests                                                                     |
-| VS Code                      | The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=AutomatosX.ax-code-vscode) uses the installed CLI/server while staying editor-native |
-
-## Current Capabilities
-
-- **Terminal command center**: prompt editing, provider/model picker, agent picker, session list, MCP status, skill dialog, sandbox/autonomous toggles, and live tool progress.
-- **Controlled execution**: tools such as read, edit, write, grep, glob, bash (foreground and background shells), web fetch/search, todo, task, and skill execution all pass through permission and isolation boundaries.
-- **Durable sessions**: resume, fork, compact, export/import, replay, compare, rollback, and inspect session risk instead of losing work when a chat closes.
-- **Repository intelligence**: `ax-code init` writes a thin `AGENTS.md`; the native `ax-code wiki` compiler creates source-backed semantic docs; `ax-code index`, `graph`, semantic diff, LSP-backed context, and risk/DRE views provide structural precision on larger codebases.
-- **Provider flexibility**: connect hosted or local providers from `/connect` or `ax-code providers login`; list available models with `ax-code models`.
-- **Extensibility**: add MCP servers, create custom agents, validate Agent Skills, and embed custom SDK tools without rebuilding the orchestration layer.
-
-## Control Model
-
-AX Code starts with autonomous mode on and runtime isolation in `workspace-write` by default: network is disabled, writes stay inside the workspace, and protected paths such as `.git/` and `.ax-code/` remain blocked. The agent can make progress without asking about every low-risk step, while the sandbox still enforces the boundary.
-
-- Use `/sandbox`, `--sandbox read-only`, `--sandbox workspace-write`, or `--sandbox full-access` to change isolation intentionally.
-- Use `/autonomous` or `AX_CODE_AUTONOMOUS=false` when you want the agent to stop for each permission or question.
-- Use `ax-code mcp list --tools`, `ax-code mcp trust`, and permission rules to control external MCP tool surfaces.
+- Change isolation intentionally with `/sandbox`, or `--sandbox read-only | workspace-write | full-access`.
+- Use `/autonomous` or `AX_CODE_AUTONOMOUS=false` to stop for each permission and question.
+- Control external tool surfaces with `ax-code mcp list --tools`, `ax-code mcp trust`, and permission rules.
 - Provider and MCP credentials are encrypted at rest; server mode is localhost-only by default.
 
-See [Sandbox Mode](docs/guides/sandbox.md), [Autonomous Mode](docs/guides/autonomous.md), [MCP Integrations](docs/integrations/mcp.md), and [SECURITY.md](SECURITY.md) for the full control model.
+Verification gates apply where they are enforceable: arena candidates and gated refactor application run your checks before a result is accepted. Ordinary interactive edits are not automatically verified — run `verify_project` or your own commands for those.
 
-## Typical Workflow
+See [Sandbox Mode](docs/guides/sandbox.md), [Autonomous Mode](docs/guides/autonomous.md), [MCP Integrations](docs/integrations/mcp.md), and [SECURITY.md](SECURITY.md).
 
-1. Open a repository and run `ax-code`.
-2. Use `/connect` to add a provider or switch models. For automation, use `ax-code providers login` or provider environment variables.
-3. Run `ax-code init` so `AGENTS.md` captures local conventions, safety rules, and project context. Use `ax-code init --wiki` (or `ax-code wiki generate`) when you want a native semantic wiki under `ax-wiki/`.
-4. Keep the default sandbox for broad edits; change it only when the task needs a different boundary.
-5. Run `ax-code index` on larger repos when structural code-intelligence (symbols, callers, refs) matters; use the wiki for architecture narrative.
-6. Use `ax-code run`, `ax-code serve`, or `@ax-code/sdk` when the same agent workflow needs to move into scripts, CI, bots, or applications.
+## Providers and models
 
-Grok runs exclusively through `Grok Build CLI`. Select `grok-build-cli` in `/connect`; AX Code invokes the local `grok` command and reuses its CLI login/session. The former direct `xai` cloud API provider is no longer supported.
+| Family                   | Providers                                                                                                  | Model source                                                      |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Cloud API providers      | Google, GroqCloud, OpenRouter, Hugging Face, UnoRouter, Alibaba plans, MiniMax plans, GitHub Copilot, Z.AI | Hosted provider model catalogs bundled with AX Code               |
+| CLI providers            | Claude Code, Codex CLI, Grok Build CLI, Qoder CLI, Kimi Code CLI                                           | One model ID per CLI bridge, reusing the local vendor CLI session |
+| AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                                 | Curated AXQ 6-bit MLX models served from the live catalog         |
 
-## Supported Providers and Models
+CLI bridges reuse a local vendor CLI and its login session. AX Code records its own tool execution in full; activity that happens inside a vendor CLI process is visible only through that bridge's output.
 
-Default setup flows support three provider families:
+See [Supported Providers and Models](docs/providers/supported-providers.md) for provider IDs and credentials, [Free-Tier API Quickstart](docs/providers/free-tier-apis.md) to evaluate without buying credits, and [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md) for local inference.
 
-| Family                   | Providers                                                                                         | Model source                                                    |
-| ------------------------ | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Cloud API providers      | Google, GroqCloud, OpenRouter, Hugging Face, UnoRouter, Alibaba plans, GitHub Copilot, and Z.AI   | Hosted provider model catalogs bundled with AX Code             |
-| CLI providers            | Claude Code, Gemini CLI, Codex CLI, Grok Build CLI, Qoder CLI, Antigravity CLI, and Kimi Code CLI | One model ID per CLI bridge, using the local vendor CLI session |
-| AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                        | Three curated AXQ 6-bit MLX models served from the live catalog |
+## Commands
 
-See [Supported Providers and Models](docs/providers/supported-providers.md) for provider IDs, credential variables, and
-the command that lists the exact model IDs bundled with your installed release.
+Evidence and review:
 
-To evaluate AX Code without purchasing model credits, use the [Free-Tier API Quickstart](docs/providers/free-tier-apis.md);
-free quotas and account terms are controlled by the external provider.
+| Command                      | Purpose                                             |
+| ---------------------------- | --------------------------------------------------- |
+| `ax-code graph <session>`    | Reconstruct a session as an execution graph         |
+| `ax-code compare <a> <b>`    | Compare two runs by risk, decision path, and events |
+| `ax-code replay <session>`   | Inspect and reconstruct the recorded event log      |
+| `ax-code risk <session>`     | Explainable risk signals and mitigations for a run  |
+| `ax-code rollback <session>` | List and restore snapshot points from a run         |
+| `ax-code branch <session>`   | Fork session state to try a different strategy      |
+| `ax-code trace <session>`    | Replay-backed diagnostics and timeline              |
+| `ax-code audit export`       | Export run evidence as JSON Lines                   |
+| `ax-code audit report`       | Generate a Markdown audit report for a run          |
+| `ax-code audit otlp`         | Export a run as OpenTelemetry trace spans           |
+| `ax-code dre-graph`          | Open the local run-report dashboard in a browser    |
 
-## Local AX Engine Models
+Everyday use:
 
-AX Engine local inference is optimized for eligible Apple Silicon Macs. The built-in AX Code provider uses a
-curated AXQ 6-bit MLX model set and defaults to Qwen3.8-27B AXQ with its packaged MTP sidecar. Ornith-1.0-35B
-provides the long-context reasoning option, while Qwen3-Coder-Next is the larger coding specialist. See
-[AX Engine Model Selection](docs/providers/ax-engine-model-selection.md) for memory and disk guidance.
+| Command                   | Purpose                                                         |
+| ------------------------- | --------------------------------------------------------------- |
+| `ax-code`                 | Open the interactive terminal UI                                |
+| `ax-code run "<task>"`    | Run a one-shot headless task                                    |
+| `ax-code init`            | Create or update repository `AGENTS.md` (`--wiki` adds AX Wiki) |
+| `ax-code index`           | Build the code-intelligence graph                               |
+| `ax-code wiki`            | Plan, generate, update, or lint the AX Wiki                     |
+| `ax-code providers login` | Configure provider credentials                                  |
+| `ax-code models`          | List available provider/model IDs                               |
+| `ax-code mcp add`         | Add a local or remote MCP server                                |
+| `ax-code agent create`    | Generate a custom project or global agent                       |
+| `ax-code serve`           | Start the local HTTP/OpenAPI server                             |
+| `ax-code doctor`          | Diagnose install, runtime, storage, and auth                    |
+
+`ax-code --help` lists the full command set.
 
 ## Documentation
 
-- [Start Here](docs/getting-started/start-here.md): understand what AX Code is, where the value comes from, and which docs to read next
-- [Documentation Hub](docs/README.md): guides, architecture, specs, and reference docs
-- [Sandbox Mode](docs/guides/sandbox.md): isolation modes, protected paths, and network controls
-- [Autonomous Mode](docs/guides/autonomous.md): unattended execution behavior and safeguards
-- [MCP Integrations](docs/integrations/mcp.md): trust, permissions, and prompt/resource safety for MCP servers
-- [Auto-Route](docs/guides/auto-route.md): keyword-based specialist routing and optional fast-model complexity routing
-- [Supported Providers and Models](docs/providers/supported-providers.md): Cloud API providers, CLI providers, and AX Engine model IDs
-- [Free-Tier API Quickstart](docs/providers/free-tier-apis.md): test AX Code with compatible free-tier or free-credit providers
-- [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md): local AX Engine model ranking and memory guidance
-- [Semantic Layer](docs/architecture/semantic-layer.md): provenance and replay boundaries for graph and LSP-backed answers
-- [AX Wiki](docs/integrations/wiki.md): native source-backed semantic wiki; complements `ax-code index`
-- [Stability](docs/architecture/stability.md): crash hygiene, aborts vs faults, TUI lifecycle, timeouts
-
-## Common Commands
-
-| Command                                        | Purpose                                         |
-| ---------------------------------------------- | ----------------------------------------------- |
-| `ax-code`                                      | Open the interactive terminal UI                |
-| `ax-code run "debug why the build is failing"` | Run a one-shot headless task                    |
-| `ax-code providers login`                      | Configure provider credentials                  |
-| `ax-code models`                               | List available provider/model IDs               |
-| `ax-code init`                                 | Create or update repository `AGENTS.md`         |
-| `ax-code init --wiki`                          | AGENTS.md + native AX Wiki bootstrap            |
-| `ax-code wiki`                                 | AX Wiki plan / generate / update / lint / cards |
-| `ax-code index`                                | Build code-intelligence indexes                 |
-| `ax-code graph`                                | Inspect the repository graph                    |
-| `ax-code mcp list --tools`                     | Review MCP servers, exposed tools, and rules    |
-| `ax-code mcp add`                              | Add a local or remote MCP server                |
-| `ax-code agent create`                         | Generate a custom project or global agent       |
-| `ax-code skill list`                           | List discovered Agent Skills                    |
-| `ax-code serve`                                | Start the local HTTP/OpenAPI server             |
-| `ax-code doctor`                               | Diagnose install, runtime, storage, and auth    |
+- [Why AX Code](docs/why-ax-code.md) — what it optimizes for, who it is for, and how it differs from other agents
+- [Start Here](docs/getting-started/start-here.md) — product mental model and shortest paths by use case
+- [Execution Evidence](docs/guides/execution-evidence.md) — graph, replay, compare, risk, rollback, trace, and audit export
+- [Verified Multi-Model Changes](docs/guides/verified-multi-model-change.md) — council review and arena implementation
+- [Documentation Hub](docs/README.md) — guides, architecture, providers, and reference
+- [Sandbox Mode](docs/guides/sandbox.md) · [Autonomous Mode](docs/guides/autonomous.md) · [MCP Integrations](docs/integrations/mcp.md)
+- [Semantic Layer](docs/architecture/semantic-layer.md) — provenance and replay boundaries for graph and LSP answers
+- [AX Wiki](docs/integrations/wiki.md) · [Stability](docs/architecture/stability.md)
 
 ## Community
 
@@ -291,14 +211,16 @@ Report bugs, feature requests, and questions through [GitHub Issues](https://git
 
 ## Provenance
 
-AX Code is maintained by [DEFAI Private Limited](https://github.com/defai-digital). The repository includes code with upstream history from these MIT-licensed projects:
+AX Code began on the MIT-licensed [OpenCode](https://github.com/anomalyco/opencode) codebase, and that attribution is preserved here and in [NOTICE](NOTICE). DEFAI's independent work since then is what this README describes: the execution-evidence layer (event log, snapshots, replay reconstruction, run comparison, risk scoring, audit export), the deterministic debug and refactor engine with shadow-worktree verification, the code-intelligence graph and impact analysis, council and arena execution modes, the AX Wiki compiler, OS-level sandboxing, and AX Code Desktop.
 
-- [OpenCode](https://github.com/anomalyco/opencode): the AX Code CLI, runtime, session, provider, and tool foundations began as a DEFAI-maintained product built on the OpenCode codebase. See [NOTICE](NOTICE) for the root runtime attribution.
-- [OpenChamber](https://github.com/btriapitsyn/openchamber): AX Code Desktop includes code derived from OpenChamber, adapted for the AX Code Desktop product, packaging, settings, and runtime model. See [desktop/NOTICE](desktop/NOTICE) for the Desktop attribution.
-- [OpenTUI](https://github.com/anomalyco/opentui): the renderer snapshot underlying AX Code TUI began from OpenTUI's MIT-licensed work. AX Code owns the `@ax-code/tui` package, integration, patches, and release process.
-- [ax-cli](https://github.com/defai-digital/ax-cli): selected AX/CLI capabilities were ported from DEFAI's earlier ax-cli project. See [NOTICE](NOTICE) for the root attribution.
+The repository also includes code with upstream history from these MIT-licensed projects:
 
-These notices preserve license provenance and upstream credit. They do not mean the upstream OpenCode, OpenChamber, OpenTUI, or ax-cli projects maintain AX Code, AX Code Desktop, or current DEFAI modifications.
+- [OpenCode](https://github.com/anomalyco/opencode): the CLI, runtime, session, provider, and tool foundations. See [NOTICE](NOTICE).
+- [OpenChamber](https://github.com/btriapitsyn/openchamber): AX Code Desktop includes derived code. See [desktop/NOTICE](desktop/NOTICE).
+- [OpenTUI](https://github.com/anomalyco/opentui): the renderer snapshot underlying AX Code TUI. AX Code owns the `@ax-code/tui` package, integration, patches, and release process.
+- [ax-cli](https://github.com/defai-digital/ax-cli): selected AX/CLI capabilities ported from DEFAI's earlier project. See [NOTICE](NOTICE).
+
+These notices preserve license provenance and upstream credit. They do not mean the upstream projects maintain AX Code or current DEFAI modifications.
 
 ## License
 
