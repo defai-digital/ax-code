@@ -1,6 +1,5 @@
 {
   "name": "@ax-code/integration-github",
-  "module": "index.ts",
   "type": "module",
   "private": true,
   "license": "Apache-2.0",
@@ -10,13 +9,5 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "typescript": "catalog:"
-  },
-  "dependencies": {
-    "@actions/core": "catalog:",
-    "@actions/github": "catalog:",
-    "@octokit/webhooks-types": "catalog:",
-    "@octokit/graphql": "catalog:",
-    "@octokit/rest": "catalog:",
-    "@ax-code/sdk": "workspace:*"
   }
 }

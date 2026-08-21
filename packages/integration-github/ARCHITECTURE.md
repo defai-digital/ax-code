@@ -2,17 +2,17 @@
 
 ## Purpose
 
-`packages/integration-github/` contains the GitHub-specific integration package for repository automation and release flows.
+`packages/integration-github/` is an action shell: it hosts the composite GitHub Action (`action.yml`) that installs the published ax-code CLI and runs `ax-code github run`. The GitHub integration implementation lives in `packages/ax-code/src/cli/cmd/github-agent/`.
 
 ## Allowed Dependencies
 
-- may depend on `@ax-code/sdk`
+- no runtime dependencies; the action shells out to the published ax-code CLI
 
 ## Placement
 
-- keep GitHub workflow and release integration logic here
-- do not place general-purpose repo tooling here
+- keep the action definition and its user-facing docs here
+- do not place GitHub workflow implementation logic here; it belongs in the core `github-agent` command
 
 ## Testing
 
-- keep logic small and integration-oriented
+- the canonical implementation is tested in `packages/ax-code/test/cli/`
