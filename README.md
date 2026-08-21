@@ -10,7 +10,7 @@ AX Code runs coding agents against your actual repositories through AX Code Desk
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
-[![Release v7.7.5](https://img.shields.io/badge/Release-v7.7.5-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v7.7.5)
+[![Release v7.7.6](https://img.shields.io/badge/Release-v7.7.6-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v7.7.6)
 [![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![Windows x64/ARM64](https://img.shields.io/badge/Windows-x64%20%2B%20ARM64-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![Ubuntu 24.04+ amd64/arm64](https://img.shields.io/badge/Ubuntu%2024.04%2B-amd64%20%2B%20arm64-E95420?logo=ubuntu&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
@@ -154,7 +154,7 @@ ax-code --version
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
-This updates the Windows CLI. AX Code Desktop updates through the Desktop auto-updater, or by downloading the latest `AX-Code-<version>-win-x64.exe` / `AX-Code-<version>-win-arm64.exe` installer from GitHub Releases. For unattended Desktop installs, run the NSIS installer with `/S` (for example `.\AX-Code-7.7.5-win-x64.exe /S`).
+This updates the Windows CLI. AX Code Desktop updates through the Desktop auto-updater, or by downloading the latest `AX-Code-<version>-win-x64.exe` / `AX-Code-<version>-win-arm64.exe` installer from GitHub Releases. For unattended Desktop installs, run the NSIS installer with `/S` (for example `.\AX-Code-7.7.6-win-x64.exe /S`).
 
 ### From Source (contributors)
 
@@ -187,14 +187,14 @@ That source launcher should report `Runtime: Node vX.Y.Z (source)` and is intent
 
 AX Code is designed for agent work that touches real files, shells, sessions, and team policy. The same runtime powers every surface:
 
-| Need                         | Use                                                                                                          |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Desktop app                  | AX Code Desktop provides the graphical app from [`desktop/`](desktop/) for macOS, Windows, and Ubuntu 24.04+ |
-| Interactive coding           | `ax-code` opens the terminal UI with provider, model, agent, session, MCP, and skill flows                   |
-| One-shot automation          | `ax-code run "review the auth flow"` runs a bounded headless task                                            |
-| Local service / integrations | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                               |
-| TypeScript embedding         | `@ax-code/sdk` provides `createAgent()`, streaming events, sessions, custom tools, and tests                 |
-| VS Code                      | The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=AutomatosX.ax-code-vscode) uses the installed CLI/server while staying editor-native                 |
+| Need                         | Use                                                                                                                                                              |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop app                  | AX Code Desktop provides the graphical app from [`desktop/`](desktop/) for macOS, Windows, and Ubuntu 24.04+                                                     |
+| Interactive coding           | `ax-code` opens the terminal UI with provider, model, agent, session, MCP, and skill flows                                                                       |
+| One-shot automation          | `ax-code run "review the auth flow"` runs a bounded headless task                                                                                                |
+| Local service / integrations | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                                                                                   |
+| TypeScript embedding         | `@ax-code/sdk` provides `createAgent()`, streaming events, sessions, custom tools, and tests                                                                     |
+| VS Code                      | The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=AutomatosX.ax-code-vscode) uses the installed CLI/server while staying editor-native |
 
 ## Current Capabilities
 

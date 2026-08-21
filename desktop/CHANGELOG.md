@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.7.6] - 2026-08-20
+
+### Added
+
+- Move home mode chips into prompt footer.
+- Waitfor tool, lifecycle hook events, fan-out gate fix (ADR-057).
+
+### Changed
+
+- Ci: allow approved TUI architecture records.
+- Remove retired hostname references.
+- Consolidate AX-owned renderer package.
+- Remove dead Babel strip helper after devDeps migration.
+- Move Babel transform deps to devDependencies.
+- Reproducible build + typecheck, fix display width.
+
+### Fixed
+
+- Harden terminal input and VS Code workflows.
+- Stabilize Kimi headless runs.
+- Harden standalone runtime packaging.
+- Prefer MiniMax Token Plan aux models.
+- Restore package contracts and harden checks.
+- Fix set-name width regression and native handle leak.
+- Filter kimi-k2.7-code, qwen3.6-plus, qwen3.7-max from Alibaba Token Plan.
+- Rename MiniMax Token Plan entries to match documented convention.
+- Scan vue/svelte by default and report CLI scan failures cleanly.
+
 ## [7.7.5] - 2026-08-20
 
 ### Added
