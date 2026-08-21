@@ -162,6 +162,8 @@ import type {
   ScheduledTaskGetResponses,
   ScheduledTaskListErrors,
   ScheduledTaskListResponses,
+  ScheduledTaskListRunsErrors,
+  ScheduledTaskListRunsResponses,
   ScheduledTaskPauseErrors,
   ScheduledTaskPauseResponses,
   ScheduledTaskResumeErrors,
@@ -1914,6 +1916,42 @@ export class ScheduledTask extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<ScheduledTaskGetResponses, ScheduledTaskGetErrors, ThrowOnError>({
       url: "/scheduled-task/{scheduledTaskID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List scheduled task runs
+   *
+   * Return the bounded run-history for one scheduled task (newest first): fired, completed, failed, timeout, skipped-overlap, and missed-skip occurrences.
+   */
+  public listRuns<ThrowOnError extends boolean = false>(
+    parameters: {
+      scheduledTaskID: string
+      directory?: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "scheduledTaskID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ScheduledTaskListRunsResponses,
+      ScheduledTaskListRunsErrors,
+      ThrowOnError
+    >({
+      url: "/scheduled-task/{scheduledTaskID}/runs",
       ...options,
       ...params,
     })

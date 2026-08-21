@@ -20,6 +20,10 @@ const ScheduledTaskRunDueQuery = z.object({
   now: OptionalQueryNumber(z.number().int().positive()),
 })
 
+const ScheduledTaskRunsQuery = z.object({
+  limit: OptionalQueryNumber(z.number().int().positive().max(500)),
+})
+
 const ScheduledTaskUpdateBody = ScheduledTask.UpdateInput.omit({ id: true })
 
 function scheduledTaskID(c: { req: { valid: (input: "param") => { scheduledTaskID: ScheduledTaskID } } }) {
@@ -82,6 +86,35 @@ export const ScheduledTaskRoutes = lazy(() =>
       }),
       validator("param", SCHEDULED_TASK_ID_PARAM),
       async (c) => c.json(await ScheduledTask.get(scheduledTaskID(c))),
+    )
+    .get(
+      "/:scheduledTaskID/runs",
+      describeRoute({
+        summary: "List scheduled task runs",
+        description:
+          "Return the bounded run-history for one scheduled task (newest first): fired, completed, failed, timeout, skipped-overlap, and missed-skip occurrences.",
+        operationId: "scheduledTask.list_runs",
+        responses: {
+          200: {
+            description: "Scheduled task run history.",
+            content: {
+              "application/json": {
+                schema: resolver(ScheduledTask.RunInfo.array()),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", SCHEDULED_TASK_ID_PARAM),
+      validator("query", ScheduledTaskRunsQuery),
+      async (c) =>
+        c.json(
+          await ScheduledTask.listRuns({
+            taskID: scheduledTaskID(c),
+            limit: c.req.valid("query").limit,
+          }),
+        ),
     )
     .post(
       "/:scheduledTaskID/update",

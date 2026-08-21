@@ -283,6 +283,7 @@ async function syncScheduledTaskOutcome(item: TaskQueue.Info, error?: unknown) {
         ScheduledTaskID.make(scheduledTaskID),
         item.status === "completed" ? "completed" : "failed",
         error,
+        item.id,
       ),
     )
     .catch((syncError) => {

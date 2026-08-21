@@ -81,7 +81,11 @@ const ScheduleParameter = z.preprocess(
         type: z.literal("cron"),
         expression: z
           .string()
-          .describe("Standard 5-field cron expression (minute hour day-of-month month day-of-week)."),
+          .describe(
+            "Standard 5-field cron expression (minute hour day-of-month month day-of-week). " +
+              "When both day-of-month and day-of-week are restricted, either may match (POSIX). " +
+              'Example: "0 9 1 * *" runs at 09:00 on the 1st of every month.',
+          ),
         timezone: z.string().optional().describe("IANA timezone. Defaults to the machine timezone."),
       }),
     ])
@@ -108,9 +112,12 @@ export const ScheduleTaskTool = Tool.define("schedule_task", {
     // tool/registry imports this module, and ScheduledTask's import chain
     // (task-queue → session → prompt → registry) cycles back, so the
     // namespace may still be uninitialized when this file is evaluated.
-    catchUpPolicy: z.enum(["skip", "run_once"]).optional().describe(
-      'What to do after backend downtime: "run_once" (the default) coalesces missed occurrences into one run; "skip" advances without running.',
-    ),
+    catchUpPolicy: z
+      .enum(["skip", "run_once"])
+      .optional()
+      .describe(
+        'What to do after backend downtime: "run_once" (the default) coalesces missed occurrences into one run; "skip" advances without running.',
+      ),
     maxRunDurationMs: z
       .number()
       .int()
@@ -185,6 +192,70 @@ export const ManageScheduledTaskTool = Tool.define("manage_scheduled_task", {
       title: `${params.action === "pause" ? "Paused" : "Resumed"}: ${task.title}`,
       output: taskOutput(task),
       metadata: { task: taskSummary(task) } as ManageMetadata,
+    }
+  },
+})
+
+function runSummary(run: ScheduledTask.RunInfo) {
+  return {
+    id: run.id,
+    status: run.status,
+    triggerType: run.triggerType,
+    occurrenceAt: run.occurrenceAt,
+    coalescedCount: run.coalescedCount,
+    queueID: run.queueID,
+    workflowRunID: run.workflowRunID,
+    error: run.error,
+    timeStarted: run.timeStarted,
+    timeCompleted: run.timeCompleted,
+    timeCreated: run.time.created,
+  }
+}
+
+export const RunScheduledTaskTool = Tool.define("run_scheduled_task", {
+  description:
+    "Trigger a scheduled task to run immediately (by id, from list_scheduled_tasks), without waiting for its next " +
+    "scheduled time. Useful to test a task you just created. This is a one-shot manual run: it records a run-history " +
+    "entry with trigger 'manual' and does NOT advance or alter the task's regular schedule. It honors overlap " +
+    "protection, so it fails if the task already has a run in progress. Only run tasks the user asks for.",
+  parameters: z.object({
+    id: z.string().min(1).describe("The scheduled task id."),
+  }),
+  async execute(params) {
+    const id = ScheduledTaskID.zod.parse(params.id)
+    const result = await ScheduledTask.runNow(id)
+    return {
+      title: `Running now: ${result.task.title}`,
+      output: JSON.stringify(
+        {
+          task: taskSummary(result.task),
+          queueItemID: result.queueItem?.id,
+          workflowRunID: result.workflowRun?.id,
+        },
+        null,
+        2,
+      ),
+      metadata: { task: taskSummary(result.task) },
+    }
+  },
+})
+
+export const ListScheduledTaskRunsTool = Tool.define("list_scheduled_task_runs", {
+  description:
+    "List the recent run history for one scheduled task (by id, from list_scheduled_tasks), newest first. Each entry " +
+    "shows status (running/completed/failed/timeout/skipped_overlap/missed_skip), trigger, how many occurrences it " +
+    "covered, timing, and any error. Use to answer 'did it run, when, and why did it fail'.",
+  parameters: z.object({
+    id: z.string().min(1).describe("The scheduled task id."),
+    limit: z.number().int().positive().max(500).optional().describe("Max runs to return (newest first)."),
+  }),
+  async execute(params) {
+    const id = ScheduledTaskID.zod.parse(params.id)
+    const runs = await ScheduledTask.listRuns({ taskID: id, limit: params.limit })
+    return {
+      title: `${runs.length} run(s)`,
+      output: JSON.stringify({ runs: runs.map(runSummary) }, null, 2),
+      metadata: { count: runs.length },
     }
   },
 })

@@ -25,6 +25,7 @@ export namespace Identifier {
     debug_pattern: "dpt",
     task_queue: "tsk",
     scheduled_task: "sch",
+    scheduled_task_run: "str",
     workflow_run: "wfr",
     workflow_phase: "wfp",
     workflow_child: "wfc",

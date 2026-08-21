@@ -95,4 +95,91 @@ describe("ScheduledTask.nextRunAt", () => {
     expect(ScheduledTask.nextRunAt({ type: "once", runAt: from }, from)).toBeUndefined()
     expect(ScheduledTask.nextRunAt({ type: "once", runAt: from - 1_000 }, from)).toBeUndefined()
   })
+
+  test("cron supports day-of-month and month fields", () => {
+    // 09:00 on the 1st of every month
+    const from = new Date(2026, 7, 20, 8, 0, 0).getTime() // Aug 20
+    const first = ScheduledTask.nextRunAt({ type: "cron", expression: "0 9 1 * *" }, from)
+    expect(first).toBe(new Date(2026, 8, 1, 9, 0, 0).getTime()) // Sep 1
+    // the following occurrence is the next month
+    expect(ScheduledTask.nextRunAt({ type: "cron", expression: "0 9 1 * *" }, first!)).toBe(
+      new Date(2026, 9, 1, 9, 0, 0).getTime(),
+    )
+  })
+
+  test("cron month field restricts firing to the named month", () => {
+    const from = new Date(2026, 0, 15, 0, 0, 0).getTime() // Jan 15
+    // 00:00 on day 1 of March only
+    const next = ScheduledTask.nextRunAt({ type: "cron", expression: "0 0 1 3 *" }, from)
+    expect(next).toBe(new Date(2026, 2, 1, 0, 0, 0).getTime()) // Mar 1
+  })
+
+  test("cron applies POSIX OR when both dom and dow are restricted", () => {
+    // 09:00 on the 1st OR on Mondays
+    const from = new Date(2026, 7, 20, 8, 0, 0).getTime() // Thu Aug 20
+    const next = ScheduledTask.nextRunAt({ type: "cron", expression: "0 9 1 * 1" }, from)
+    // Next Monday is Aug 24, which comes before Sep 1 — OR semantics pick it.
+    expect(next).toBe(new Date(2026, 7, 24, 9, 0, 0).getTime())
+    expect(new Date(next!).getDay()).toBe(1)
+  })
+
+  test("cron treats a restricted dom with wildcard dow as AND (dom only)", () => {
+    // 09:00 on the 15th (dow is *)
+    const from = new Date(2026, 7, 20, 8, 0, 0).getTime() // Aug 20
+    const next = ScheduledTask.nextRunAt({ type: "cron", expression: "0 9 15 * *" }, from)
+    expect(next).toBe(new Date(2026, 8, 15, 9, 0, 0).getTime()) // Sep 15
+    expect(new Date(next!).getDate()).toBe(15)
+  })
+
+  test("cron accepts 7 as Sunday alias for 0", () => {
+    const from = new Date(2026, 7, 20, 8, 0, 0).getTime() // Thursday
+    const bySeven = ScheduledTask.nextRunAt({ type: "cron", expression: "0 9 * * 7" }, from)
+    const byZero = ScheduledTask.nextRunAt({ type: "cron", expression: "0 9 * * 0" }, from)
+    expect(bySeven).toBe(byZero)
+    expect(new Date(bySeven!).getDay()).toBe(0)
+  })
+
+  test("validateSchedule rejects impossible cron expressions", () => {
+    // February 31 never exists
+    expect(() => ScheduledTask.validateSchedule({ type: "cron", expression: "0 0 31 2 *" })).toThrow(
+      ScheduledTask.InvalidSchedule,
+    )
+    // structurally invalid
+    expect(() => ScheduledTask.validateSchedule({ type: "cron", expression: "not a cron" })).toThrow(
+      ScheduledTask.InvalidSchedule,
+    )
+    // a valid, realizable expression passes
+    expect(() => ScheduledTask.validateSchedule({ type: "cron", expression: "0 9 1 * *" })).not.toThrow()
+  })
+
+  test("jitter is deterministic per id and never applied to one-time tasks", () => {
+    const schedule: ScheduledTask.Schedule = { type: "daily", time: "09:00" }
+    const a = ScheduledTask.jitterOffsetMs({ id: "sch_test_a" as never, schedule })
+    const b = ScheduledTask.jitterOffsetMs({ id: "sch_test_a" as never, schedule })
+    const c = ScheduledTask.jitterOffsetMs({ id: "sch_test_c" as never, schedule })
+    expect(a).toBe(b) // stable across calls
+    expect(a).toBeGreaterThanOrEqual(0)
+    expect(c).toBeGreaterThanOrEqual(0)
+    // one-time schedules are never jittered
+    expect(ScheduledTask.jitterOffsetMs({ id: "sch_test_a" as never, schedule: { type: "once", runAt: 1 } })).toBe(0)
+  })
+
+  test("countCoalesced counts missed occurrences up to now", () => {
+    const schedule: ScheduledTask.Schedule = { type: "cron", expression: "0 * * * *" } // hourly
+    const first = new Date(2026, 7, 20, 0, 0, 0).getTime()
+    // 8 hourly occurrences later
+    const now = new Date(2026, 7, 20, 8, 30, 0).getTime()
+    const { count, lastOccurrence } = ScheduledTask.countCoalesced(schedule, first, now)
+    expect(count).toBe(9) // 00:00 .. 08:00 inclusive
+    expect(lastOccurrence).toBe(new Date(2026, 7, 20, 8, 0, 0).getTime())
+  })
+
+  test("countCoalesced returns 1 when nothing was missed", () => {
+    const schedule: ScheduledTask.Schedule = { type: "cron", expression: "0 * * * *" }
+    const first = new Date(2026, 7, 20, 0, 0, 0).getTime()
+    const now = new Date(2026, 7, 20, 0, 10, 0).getTime()
+    const { count, lastOccurrence } = ScheduledTask.countCoalesced(schedule, first, now)
+    expect(count).toBe(1)
+    expect(lastOccurrence).toBe(first)
+  })
 })

@@ -225,6 +225,30 @@ export namespace Shard {
     )`,
     `CREATE INDEX IF NOT EXISTS "scheduled_task_project_status_idx" ON "scheduled_task" ("project_id","status")`,
     `CREATE INDEX IF NOT EXISTS "scheduled_task_project_next_run_idx" ON "scheduled_task" ("project_id","next_run_at")`,
+    // ADR-059 run history. NEW table (not an ALTER on scheduled_task) so existing
+    // shard files pick it up on next open via CREATE TABLE IF NOT EXISTS. Intra-shard
+    // FKs preserved: task_id -> scheduled_task.id (cascade), queue_id -> task_queue.id
+    // (set null); the cross-file project_id FK is a plain column as elsewhere.
+    `CREATE TABLE IF NOT EXISTS "scheduled_task_run" (
+      "id" text PRIMARY KEY NOT NULL,
+      "task_id" text NOT NULL,
+      "project_id" text NOT NULL,
+      "trigger_type" text NOT NULL,
+      "status" text NOT NULL,
+      "occurrence_at" integer,
+      "coalesced_count" integer NOT NULL DEFAULT 1,
+      "queue_id" text,
+      "workflow_run_id" text,
+      "error" text,
+      "time_started" integer,
+      "time_completed" integer,
+      "time_created" integer NOT NULL,
+      "time_updated" integer NOT NULL,
+      FOREIGN KEY ("task_id") REFERENCES "scheduled_task"("id") ON DELETE CASCADE,
+      FOREIGN KEY ("queue_id") REFERENCES "task_queue"("id") ON DELETE SET NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "scheduled_task_run_task_created_idx" ON "scheduled_task_run" ("task_id","time_created","id")`,
+    `CREATE INDEX IF NOT EXISTS "scheduled_task_run_queue_idx" ON "scheduled_task_run" ("queue_id")`,
     `CREATE TABLE IF NOT EXISTS "workflow_run" (
       "id" text PRIMARY KEY NOT NULL,
       "project_id" text NOT NULL,

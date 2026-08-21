@@ -14,3 +14,6 @@ export const TaskQueueID = defineBrandedIdentifier("TaskQueueID", "task_queue")
 
 export type ScheduledTaskID = BrandedIdentifier<"ScheduledTaskID">
 export const ScheduledTaskID = defineBrandedIdentifier("ScheduledTaskID", "scheduled_task")
+
+export type ScheduledTaskRunID = BrandedIdentifier<"ScheduledTaskRunID">
+export const ScheduledTaskRunID = defineBrandedIdentifier("ScheduledTaskRunID", "scheduled_task_run")

@@ -5312,6 +5312,158 @@
         ]
       }
     },
+    "/scheduled-task/{scheduledTaskID}/runs": {
+      "get": {
+        "operationId": "scheduledTask.list_runs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scheduledTaskID",
+            "schema": {
+              "type": "string",
+              "pattern": "^sch_.*"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 500
+            }
+          }
+        ],
+        "summary": "List scheduled task runs",
+        "description": "Return the bounded run-history for one scheduled task (newest first): fired, completed, failed, timeout, skipped-overlap, and missed-skip occurrences.",
+        "responses": {
+          "200": {
+            "description": "Scheduled task run history.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^str_.*"
+                      },
+                      "taskID": {
+                        "type": "string",
+                        "pattern": "^sch_.*"
+                      },
+                      "projectID": {
+                        "type": "string"
+                      },
+                      "triggerType": {
+                        "type": "string",
+                        "enum": [
+                          "scheduled",
+                          "manual"
+                        ]
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "running",
+                          "completed",
+                          "failed",
+                          "timeout",
+                          "skipped_overlap",
+                          "missed_skip"
+                        ]
+                      },
+                      "occurrenceAt": {
+                        "type": "number"
+                      },
+                      "coalescedCount": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      },
+                      "queueID": {
+                        "type": "string"
+                      },
+                      "workflowRunID": {
+                        "type": "string"
+                      },
+                      "error": {
+                        "type": "string"
+                      },
+                      "timeStarted": {
+                        "type": "number"
+                      },
+                      "timeCompleted": {
+                        "type": "number"
+                      },
+                      "time": {
+                        "type": "object",
+                        "properties": {
+                          "created": {
+                            "type": "number"
+                          },
+                          "updated": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "created"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "taskID",
+                      "projectID",
+                      "triggerType",
+                      "status",
+                      "coalescedCount",
+                      "time"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.scheduledTask.list_runs({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/scheduled-task/{scheduledTaskID}/update": {
       "post": {
         "operationId": "scheduledTask.update",
@@ -35056,6 +35208,30 @@
           "properties"
         ]
       },
+      "Event.server.instance.disposed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "server.instance.disposed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "directory": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "directory"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.server.connected": {
         "type": "object",
         "properties": {
@@ -35090,22 +35266,84 @@
           "properties"
         ]
       },
-      "Event.server.instance.disposed": {
+      "Event.file.watcher.updated": {
         "type": "object",
         "properties": {
           "type": {
             "type": "string",
-            "const": "server.instance.disposed"
+            "const": "file.watcher.updated"
           },
           "properties": {
             "type": "object",
             "properties": {
-              "directory": {
+              "file": {
+                "type": "string"
+              },
+              "event": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "add"
+                  },
+                  {
+                    "type": "string",
+                    "const": "change"
+                  },
+                  {
+                    "type": "string",
+                    "const": "unlink"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "file",
+              "event"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.lsp.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "lsp.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.lsp.client.diagnostics": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "lsp.client.diagnostics"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "serverID": {
+                "type": "string"
+              },
+              "path": {
                 "type": "string"
               }
             },
             "required": [
-              "directory"
+              "serverID",
+              "path"
             ]
           }
         },
@@ -35204,92 +35442,6 @@
               "sessionID",
               "goal"
             ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.lsp.client.diagnostics": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "lsp.client.diagnostics"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "serverID": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "serverID",
-              "path"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.file.watcher.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "file.watcher.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "file": {
-                "type": "string"
-              },
-              "event": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "const": "add"
-                  },
-                  {
-                    "type": "string",
-                    "const": "change"
-                  },
-                  {
-                    "type": "string",
-                    "const": "unlink"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "file",
-              "event"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.lsp.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "lsp.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {}
           }
         },
         "required": [
@@ -40767,6 +40919,1420 @@
           "properties"
         ]
       },
+      "Event.scheduled.task.fired": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "scheduled.task.fired"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "task": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^sch_.*"
+                  },
+                  "projectID": {
+                    "type": "string"
+                  },
+                  "directory": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "schedule": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "once"
+                          },
+                          "runAt": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "runAt"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "daily"
+                          },
+                          "time": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}$"
+                          },
+                          "timezone": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "time"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "weekly"
+                          },
+                          "day": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 6
+                          },
+                          "time": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}$"
+                          },
+                          "timezone": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "day",
+                          "time"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "cron"
+                          },
+                          "expression": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          "timezone": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "expression"
+                        ]
+                      }
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "paused",
+                      "disabled"
+                    ]
+                  },
+                  "agent": {
+                    "type": "string"
+                  },
+                  "model": {},
+                  "workflowTemplateID": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120,
+                    "pattern": "^(builtin|user|project):[a-z][a-z0-9-]*$"
+                  },
+                  "workflowStartOptions": {
+                    "type": "object",
+                    "properties": {
+                      "allowScaleBeyondDefaults": {
+                        "type": "boolean"
+                      },
+                      "allowWriteWorkflows": {
+                        "type": "boolean"
+                      },
+                      "durableChildren": {
+                        "type": "boolean"
+                      },
+                      "enqueueChildren": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "lastQueueID": {
+                    "type": "string"
+                  },
+                  "lastWorkflowRunID": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "nextRunAt": {
+                    "type": "number"
+                  },
+                  "lastRunAt": {
+                    "type": "number"
+                  },
+                  "catchUpPolicy": {
+                    "type": "string",
+                    "enum": [
+                      "skip",
+                      "run_once"
+                    ]
+                  },
+                  "maxRunDurationMs": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 259200000
+                  },
+                  "time": {
+                    "type": "object",
+                    "properties": {
+                      "created": {
+                        "type": "number"
+                      },
+                      "updated": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "created"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "projectID",
+                  "directory",
+                  "title",
+                  "prompt",
+                  "schedule",
+                  "status",
+                  "catchUpPolicy",
+                  "time"
+                ]
+              },
+              "run": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^str_.*"
+                  },
+                  "taskID": {
+                    "type": "string",
+                    "pattern": "^sch_.*"
+                  },
+                  "projectID": {
+                    "type": "string"
+                  },
+                  "triggerType": {
+                    "type": "string",
+                    "enum": [
+                      "scheduled",
+                      "manual"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "running",
+                      "completed",
+                      "failed",
+                      "timeout",
+                      "skipped_overlap",
+                      "missed_skip"
+                    ]
+                  },
+                  "occurrenceAt": {
+                    "type": "number"
+                  },
+                  "coalescedCount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "queueID": {
+                    "type": "string"
+                  },
+                  "workflowRunID": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "timeStarted": {
+                    "type": "number"
+                  },
+                  "timeCompleted": {
+                    "type": "number"
+                  },
+                  "time": {
+                    "type": "object",
+                    "properties": {
+                      "created": {
+                        "type": "number"
+                      },
+                      "updated": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "created"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "taskID",
+                  "projectID",
+                  "triggerType",
+                  "status",
+                  "coalescedCount",
+                  "time"
+                ]
+              }
+            },
+            "required": [
+              "task",
+              "run"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.scheduled.task.succeeded": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "scheduled.task.succeeded"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "task": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^sch_.*"
+                  },
+                  "projectID": {
+                    "type": "string"
+                  },
+                  "directory": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "schedule": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "once"
+                          },
+                          "runAt": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "runAt"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "daily"
+                          },
+                          "time": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}$"
+                          },
+                          "timezone": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "time"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "weekly"
+                          },
+                          "day": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 6
+                          },
+                          "time": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}$"
+                          },
+                          "timezone": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "day",
+                          "time"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "cron"
+                          },
+                          "expression": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          "timezone": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "expression"
+                        ]
+                      }
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "paused",
+                      "disabled"
+                    ]
+                  },
+                  "agent": {
+                    "type": "string"
+                  },
+                  "model": {},
+                  "workflowTemplateID": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120,
+                    "pattern": "^(builtin|user|project):[a-z][a-z0-9-]*$"
+                  },
+                  "workflowStartOptions": {
+                    "type": "object",
+                    "properties": {
+                      "allowScaleBeyondDefaults": {
+                        "type": "boolean"
+                      },
+                      "allowWriteWorkflows": {
+                        "type": "boolean"
+                      },
+                      "durableChildren": {
+                        "type": "boolean"
+                      },
+                      "enqueueChildren": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "lastQueueID": {
+                    "type": "string"
+                  },
+                  "lastWorkflowRunID": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "nextRunAt": {
+                    "type": "number"
+                  },
+                  "lastRunAt": {
+                    "type": "number"
+                  },
+                  "catchUpPolicy": {
+                    "type": "string",
+                    "enum": [
+                      "skip",
+                      "run_once"
+                    ]
+                  },
+                  "maxRunDurationMs": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 259200000
+                  },
+                  "time": {
+                    "type": "object",
+                    "properties": {
+                      "created": {
+                        "type": "number"
+                      },
+                      "updated": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "created"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "projectID",
+                  "directory",
+                  "title",
+                  "prompt",
+                  "schedule",
+                  "status",
+                  "catchUpPolicy",
+                  "time"
+                ]
+              },
+              "run": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^str_.*"
+                  },
+                  "taskID": {
+                    "type": "string",
+                    "pattern": "^sch_.*"
+                  },
+                  "projectID": {
+                    "type": "string"
+                  },
+                  "triggerType": {
+                    "type": "string",
+                    "enum": [
+                      "scheduled",
+                      "manual"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "running",
+                      "completed",
+                      "failed",
+                      "timeout",
+                      "skipped_overlap",
+                      "missed_skip"
+                    ]
+                  },
+                  "occurrenceAt": {
+                    "type": "number"
+                  },
+                  "coalescedCount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "queueID": {
+                    "type": "string"
+                  },
+                  "workflowRunID": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "timeStarted": {
+                    "type": "number"
+                  },
+                  "timeCompleted": {
+                    "type": "number"
+                  },
+                  "time": {
+                    "type": "object",
+                    "properties": {
+                      "created": {
+                        "type": "number"
+                      },
+                      "updated": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "created"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "taskID",
+                  "projectID",
+                  "triggerType",
+                  "status",
+                  "coalescedCount",
+                  "time"
+                ]
+              }
+            },
+            "required": [
+              "task",
+              "run"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.scheduled.task.failed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "scheduled.task.failed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "task": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^sch_.*"
+                  },
+                  "projectID": {
+                    "type": "string"
+                  },
+                  "directory": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "schedule": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "once"
+                          },
+                          "runAt": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "runAt"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "daily"
+                          },
+                          "time": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}$"
+                          },
+                          "timezone": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "time"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "weekly"
+                          },
+                          "day": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 6
+                          },
+                          "time": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}$"
+                          },
+                          "timezone": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "day",
+                          "time"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "cron"
+                          },
+                          "expression": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          "timezone": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "expression"
+                        ]
+                      }
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "paused",
+                      "disabled"
+                    ]
+                  },
+                  "agent": {
+                    "type": "string"
+                  },
+                  "model": {},
+                  "workflowTemplateID": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120,
+                    "pattern": "^(builtin|user|project):[a-z][a-z0-9-]*$"
+                  },
+                  "workflowStartOptions": {
+                    "type": "object",
+                    "properties": {
+                      "allowScaleBeyondDefaults": {
+                        "type": "boolean"
+                      },
+                      "allowWriteWorkflows": {
+                        "type": "boolean"
+                      },
+                      "durableChildren": {
+                        "type": "boolean"
+                      },
+                      "enqueueChildren": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "lastQueueID": {
+                    "type": "string"
+                  },
+                  "lastWorkflowRunID": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "nextRunAt": {
+                    "type": "number"
+                  },
+                  "lastRunAt": {
+                    "type": "number"
+                  },
+                  "catchUpPolicy": {
+                    "type": "string",
+                    "enum": [
+                      "skip",
+                      "run_once"
+                    ]
+                  },
+                  "maxRunDurationMs": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 259200000
+                  },
+                  "time": {
+                    "type": "object",
+                    "properties": {
+                      "created": {
+                        "type": "number"
+                      },
+                      "updated": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "created"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "projectID",
+                  "directory",
+                  "title",
+                  "prompt",
+                  "schedule",
+                  "status",
+                  "catchUpPolicy",
+                  "time"
+                ]
+              },
+              "run": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^str_.*"
+                  },
+                  "taskID": {
+                    "type": "string",
+                    "pattern": "^sch_.*"
+                  },
+                  "projectID": {
+                    "type": "string"
+                  },
+                  "triggerType": {
+                    "type": "string",
+                    "enum": [
+                      "scheduled",
+                      "manual"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "running",
+                      "completed",
+                      "failed",
+                      "timeout",
+                      "skipped_overlap",
+                      "missed_skip"
+                    ]
+                  },
+                  "occurrenceAt": {
+                    "type": "number"
+                  },
+                  "coalescedCount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "queueID": {
+                    "type": "string"
+                  },
+                  "workflowRunID": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "timeStarted": {
+                    "type": "number"
+                  },
+                  "timeCompleted": {
+                    "type": "number"
+                  },
+                  "time": {
+                    "type": "object",
+                    "properties": {
+                      "created": {
+                        "type": "number"
+                      },
+                      "updated": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "created"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "taskID",
+                  "projectID",
+                  "triggerType",
+                  "status",
+                  "coalescedCount",
+                  "time"
+                ]
+              }
+            },
+            "required": [
+              "task",
+              "run"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.scheduled.task.skipped": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "scheduled.task.skipped"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "task": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^sch_.*"
+                  },
+                  "projectID": {
+                    "type": "string"
+                  },
+                  "directory": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "schedule": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "once"
+                          },
+                          "runAt": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "runAt"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "daily"
+                          },
+                          "time": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}$"
+                          },
+                          "timezone": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "time"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "weekly"
+                          },
+                          "day": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 6
+                          },
+                          "time": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}$"
+                          },
+                          "timezone": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "day",
+                          "time"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "cron"
+                          },
+                          "expression": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          "timezone": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "expression"
+                        ]
+                      }
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "paused",
+                      "disabled"
+                    ]
+                  },
+                  "agent": {
+                    "type": "string"
+                  },
+                  "model": {},
+                  "workflowTemplateID": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120,
+                    "pattern": "^(builtin|user|project):[a-z][a-z0-9-]*$"
+                  },
+                  "workflowStartOptions": {
+                    "type": "object",
+                    "properties": {
+                      "allowScaleBeyondDefaults": {
+                        "type": "boolean"
+                      },
+                      "allowWriteWorkflows": {
+                        "type": "boolean"
+                      },
+                      "durableChildren": {
+                        "type": "boolean"
+                      },
+                      "enqueueChildren": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "lastQueueID": {
+                    "type": "string"
+                  },
+                  "lastWorkflowRunID": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "nextRunAt": {
+                    "type": "number"
+                  },
+                  "lastRunAt": {
+                    "type": "number"
+                  },
+                  "catchUpPolicy": {
+                    "type": "string",
+                    "enum": [
+                      "skip",
+                      "run_once"
+                    ]
+                  },
+                  "maxRunDurationMs": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 259200000
+                  },
+                  "time": {
+                    "type": "object",
+                    "properties": {
+                      "created": {
+                        "type": "number"
+                      },
+                      "updated": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "created"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "projectID",
+                  "directory",
+                  "title",
+                  "prompt",
+                  "schedule",
+                  "status",
+                  "catchUpPolicy",
+                  "time"
+                ]
+              },
+              "run": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^str_.*"
+                  },
+                  "taskID": {
+                    "type": "string",
+                    "pattern": "^sch_.*"
+                  },
+                  "projectID": {
+                    "type": "string"
+                  },
+                  "triggerType": {
+                    "type": "string",
+                    "enum": [
+                      "scheduled",
+                      "manual"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "running",
+                      "completed",
+                      "failed",
+                      "timeout",
+                      "skipped_overlap",
+                      "missed_skip"
+                    ]
+                  },
+                  "occurrenceAt": {
+                    "type": "number"
+                  },
+                  "coalescedCount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "queueID": {
+                    "type": "string"
+                  },
+                  "workflowRunID": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "timeStarted": {
+                    "type": "number"
+                  },
+                  "timeCompleted": {
+                    "type": "number"
+                  },
+                  "time": {
+                    "type": "object",
+                    "properties": {
+                      "created": {
+                        "type": "number"
+                      },
+                      "updated": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "created"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "taskID",
+                  "projectID",
+                  "triggerType",
+                  "status",
+                  "coalescedCount",
+                  "time"
+                ]
+              }
+            },
+            "required": [
+              "task",
+              "run"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.scheduled.task.failed_persistently": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "scheduled.task.failed_persistently"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "task": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^sch_.*"
+                  },
+                  "projectID": {
+                    "type": "string"
+                  },
+                  "directory": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "schedule": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "once"
+                          },
+                          "runAt": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "runAt"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "daily"
+                          },
+                          "time": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}$"
+                          },
+                          "timezone": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "time"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "weekly"
+                          },
+                          "day": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 6
+                          },
+                          "time": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}$"
+                          },
+                          "timezone": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "day",
+                          "time"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "cron"
+                          },
+                          "expression": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          "timezone": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "expression"
+                        ]
+                      }
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "paused",
+                      "disabled"
+                    ]
+                  },
+                  "agent": {
+                    "type": "string"
+                  },
+                  "model": {},
+                  "workflowTemplateID": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120,
+                    "pattern": "^(builtin|user|project):[a-z][a-z0-9-]*$"
+                  },
+                  "workflowStartOptions": {
+                    "type": "object",
+                    "properties": {
+                      "allowScaleBeyondDefaults": {
+                        "type": "boolean"
+                      },
+                      "allowWriteWorkflows": {
+                        "type": "boolean"
+                      },
+                      "durableChildren": {
+                        "type": "boolean"
+                      },
+                      "enqueueChildren": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "lastQueueID": {
+                    "type": "string"
+                  },
+                  "lastWorkflowRunID": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "nextRunAt": {
+                    "type": "number"
+                  },
+                  "lastRunAt": {
+                    "type": "number"
+                  },
+                  "catchUpPolicy": {
+                    "type": "string",
+                    "enum": [
+                      "skip",
+                      "run_once"
+                    ]
+                  },
+                  "maxRunDurationMs": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 259200000
+                  },
+                  "time": {
+                    "type": "object",
+                    "properties": {
+                      "created": {
+                        "type": "number"
+                      },
+                      "updated": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "created"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "projectID",
+                  "directory",
+                  "title",
+                  "prompt",
+                  "schedule",
+                  "status",
+                  "catchUpPolicy",
+                  "time"
+                ]
+              }
+            },
+            "required": [
+              "task"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.worktree.ready": {
         "type": "object",
         "properties": {
@@ -41526,25 +43092,25 @@
             "$ref": "#/components/schemas/Event.project.updated"
           },
           {
+            "$ref": "#/components/schemas/Event.server.instance.disposed"
+          },
+          {
             "$ref": "#/components/schemas/Event.server.connected"
           },
           {
             "$ref": "#/components/schemas/Event.global.disposed"
           },
           {
-            "$ref": "#/components/schemas/Event.server.instance.disposed"
+            "$ref": "#/components/schemas/Event.file.watcher.updated"
           },
           {
-            "$ref": "#/components/schemas/Event.session.goal"
+            "$ref": "#/components/schemas/Event.lsp.updated"
           },
           {
             "$ref": "#/components/schemas/Event.lsp.client.diagnostics"
           },
           {
-            "$ref": "#/components/schemas/Event.file.watcher.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.lsp.updated"
+            "$ref": "#/components/schemas/Event.session.goal"
           },
           {
             "$ref": "#/components/schemas/Event.message.updated"
@@ -41704,6 +43270,21 @@
           },
           {
             "$ref": "#/components/schemas/Event.scheduled.task.deleted"
+          },
+          {
+            "$ref": "#/components/schemas/Event.scheduled.task.fired"
+          },
+          {
+            "$ref": "#/components/schemas/Event.scheduled.task.succeeded"
+          },
+          {
+            "$ref": "#/components/schemas/Event.scheduled.task.failed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.scheduled.task.skipped"
+          },
+          {
+            "$ref": "#/components/schemas/Event.scheduled.task.failed_persistently"
           },
           {
             "$ref": "#/components/schemas/Event.worktree.ready"
@@ -43365,10 +44946,28 @@
                     "maximum": 9007199254740991
                   },
                   "timeoutMs": {
-                    "description": "Per-member timeout in ms for council fan-out (default: 180000; reasoning models receive twice this budget).",
+                    "description": "Per-member timeout in ms for council fan-out (default: 180000; reasoning models receive reasoningTimeoutScale times this budget).",
                     "type": "integer",
                     "exclusiveMinimum": 0,
                     "maximum": 9007199254740991
+                  },
+                  "reasoningTimeoutScale": {
+                    "description": "Timeout multiplier applied to members whose model declares reasoning capability (default: 3). Raise when slow reasoning members (e.g. DeepSeek V4 Pro on large contexts) time out.",
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "memberTimeoutMs": {
+                    "description": "Absolute per-member timeout overrides in ms, keyed by \"providerID\" or \"providerID/modelID\". Takes precedence over timeoutMs and reasoningTimeoutScale for matching members.",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    }
                   },
                   "debateRounds": {
                     "description": "Optional multi-round anonymous debate rounds (default: 0; Phase 3+).",

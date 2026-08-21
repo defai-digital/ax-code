@@ -48,6 +48,13 @@ export type EventProjectUpdated = {
   properties: Project
 }
 
+export type EventServerInstanceDisposed = {
+  type: "server.instance.disposed"
+  properties: {
+    directory: string
+  }
+}
+
 export type EventServerConnected = {
   type: "server.connected"
   properties: {
@@ -62,10 +69,26 @@ export type EventGlobalDisposed = {
   }
 }
 
-export type EventServerInstanceDisposed = {
-  type: "server.instance.disposed"
+export type EventFileWatcherUpdated = {
+  type: "file.watcher.updated"
   properties: {
-    directory: string
+    file: string
+    event: "add" | "change" | "unlink"
+  }
+}
+
+export type EventLspUpdated = {
+  type: "lsp.updated"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
+export type EventLspClientDiagnostics = {
+  type: "lsp.client.diagnostics"
+  properties: {
+    serverID: string
+    path: string
   }
 }
 
@@ -86,29 +109,6 @@ export type EventSessionGoal = {
       }
       remainingTokens?: number
     } | null
-  }
-}
-
-export type EventLspClientDiagnostics = {
-  type: "lsp.client.diagnostics"
-  properties: {
-    serverID: string
-    path: string
-  }
-}
-
-export type EventFileWatcherUpdated = {
-  type: "file.watcher.updated"
-  properties: {
-    file: string
-    event: "add" | "change" | "unlink"
-  }
-}
-
-export type EventLspUpdated = {
-  type: "lsp.updated"
-  properties: {
-    [key: string]: unknown
   }
 }
 
@@ -1532,6 +1532,353 @@ export type EventScheduledTaskDeleted = {
   }
 }
 
+export type EventScheduledTaskFired = {
+  type: "scheduled.task.fired"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+      lastQueueID?: string
+      lastWorkflowRunID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      catchUpPolicy: "skip" | "run_once"
+      maxRunDurationMs?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+    run: {
+      id: string
+      taskID: string
+      projectID: string
+      triggerType: "scheduled" | "manual"
+      status: "running" | "completed" | "failed" | "timeout" | "skipped_overlap" | "missed_skip"
+      occurrenceAt?: number
+      coalescedCount: number
+      queueID?: string
+      workflowRunID?: string
+      error?: string
+      timeStarted?: number
+      timeCompleted?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+  }
+}
+
+export type EventScheduledTaskSucceeded = {
+  type: "scheduled.task.succeeded"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+      lastQueueID?: string
+      lastWorkflowRunID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      catchUpPolicy: "skip" | "run_once"
+      maxRunDurationMs?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+    run: {
+      id: string
+      taskID: string
+      projectID: string
+      triggerType: "scheduled" | "manual"
+      status: "running" | "completed" | "failed" | "timeout" | "skipped_overlap" | "missed_skip"
+      occurrenceAt?: number
+      coalescedCount: number
+      queueID?: string
+      workflowRunID?: string
+      error?: string
+      timeStarted?: number
+      timeCompleted?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+  }
+}
+
+export type EventScheduledTaskFailed = {
+  type: "scheduled.task.failed"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+      lastQueueID?: string
+      lastWorkflowRunID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      catchUpPolicy: "skip" | "run_once"
+      maxRunDurationMs?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+    run: {
+      id: string
+      taskID: string
+      projectID: string
+      triggerType: "scheduled" | "manual"
+      status: "running" | "completed" | "failed" | "timeout" | "skipped_overlap" | "missed_skip"
+      occurrenceAt?: number
+      coalescedCount: number
+      queueID?: string
+      workflowRunID?: string
+      error?: string
+      timeStarted?: number
+      timeCompleted?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+  }
+}
+
+export type EventScheduledTaskSkipped = {
+  type: "scheduled.task.skipped"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+      lastQueueID?: string
+      lastWorkflowRunID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      catchUpPolicy: "skip" | "run_once"
+      maxRunDurationMs?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+    run: {
+      id: string
+      taskID: string
+      projectID: string
+      triggerType: "scheduled" | "manual"
+      status: "running" | "completed" | "failed" | "timeout" | "skipped_overlap" | "missed_skip"
+      occurrenceAt?: number
+      coalescedCount: number
+      queueID?: string
+      workflowRunID?: string
+      error?: string
+      timeStarted?: number
+      timeCompleted?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+  }
+}
+
+export type EventScheduledTaskFailedPersistently = {
+  type: "scheduled.task.failed_persistently"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+      lastQueueID?: string
+      lastWorkflowRunID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      catchUpPolicy: "skip" | "run_once"
+      maxRunDurationMs?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+  }
+}
+
 export type EventWorktreeReady = {
   type: "worktree.ready"
   properties: {
@@ -1759,13 +2106,13 @@ export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
   | EventProjectUpdated
+  | EventServerInstanceDisposed
   | EventServerConnected
   | EventGlobalDisposed
-  | EventServerInstanceDisposed
-  | EventSessionGoal
-  | EventLspClientDiagnostics
   | EventFileWatcherUpdated
   | EventLspUpdated
+  | EventLspClientDiagnostics
+  | EventSessionGoal
   | EventMessageUpdated
   | EventMessageRemoved
   | EventMessagePartUpdated
@@ -1819,6 +2166,11 @@ export type Event =
   | EventScheduledTaskCreated
   | EventScheduledTaskUpdated
   | EventScheduledTaskDeleted
+  | EventScheduledTaskFired
+  | EventScheduledTaskSucceeded
+  | EventScheduledTaskFailed
+  | EventScheduledTaskSkipped
+  | EventScheduledTaskFailedPersistently
   | EventWorktreeReady
   | EventWorktreeFailed
   | EventCodeIndexProgress
@@ -2628,9 +2980,19 @@ export type Config = {
        */
       maxMembers?: number
       /**
-       * Per-member timeout in ms for council fan-out (default: 180000; reasoning models receive twice this budget).
+       * Per-member timeout in ms for council fan-out (default: 180000; reasoning models receive reasoningTimeoutScale times this budget).
        */
       timeoutMs?: number
+      /**
+       * Timeout multiplier applied to members whose model declares reasoning capability (default: 3). Raise when slow reasoning members (e.g. DeepSeek V4 Pro on large contexts) time out.
+       */
+      reasoningTimeoutScale?: number
+      /**
+       * Absolute per-member timeout overrides in ms, keyed by "providerID" or "providerID/modelID". Takes precedence over timeoutMs and reasoningTimeoutScale for matching members.
+       */
+      memberTimeoutMs?: {
+        [key: string]: number
+      }
       /**
        * Optional multi-round anonymous debate rounds (default: 0; Phase 3+).
        */
@@ -6025,6 +6387,57 @@ export type ScheduledTaskGetResponses = {
 }
 
 export type ScheduledTaskGetResponse = ScheduledTaskGetResponses[keyof ScheduledTaskGetResponses]
+
+export type ScheduledTaskListRunsData = {
+  body?: never
+  path: {
+    scheduledTaskID: string
+  }
+  query?: {
+    directory?: string
+    limit?: number
+  }
+  url: "/scheduled-task/{scheduledTaskID}/runs"
+}
+
+export type ScheduledTaskListRunsErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+}
+
+export type ScheduledTaskListRunsError = ScheduledTaskListRunsErrors[keyof ScheduledTaskListRunsErrors]
+
+export type ScheduledTaskListRunsResponses = {
+  /**
+   * Scheduled task run history.
+   */
+  200: Array<{
+    id: string
+    taskID: string
+    projectID: string
+    triggerType: "scheduled" | "manual"
+    status: "running" | "completed" | "failed" | "timeout" | "skipped_overlap" | "missed_skip"
+    occurrenceAt?: number
+    coalescedCount: number
+    queueID?: string
+    workflowRunID?: string
+    error?: string
+    timeStarted?: number
+    timeCompleted?: number
+    time: {
+      created: number
+      updated?: number
+    }
+  }>
+}
+
+export type ScheduledTaskListRunsResponse = ScheduledTaskListRunsResponses[keyof ScheduledTaskListRunsResponses]
 
 export type ScheduledTaskUpdateData = {
   body?: {

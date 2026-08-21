@@ -54,7 +54,13 @@ import { VerifyProjectTool } from "./verify_project"
 import { ReviewCompleteTool } from "./review_complete"
 import { MemorySaveTool } from "./memory"
 import { GetGoalTool, CreateGoalTool, UpdateGoalTool } from "./goal"
-import { ScheduleTaskTool, ListScheduledTasksTool, ManageScheduledTaskTool } from "./schedule"
+import {
+  ScheduleTaskTool,
+  ListScheduledTasksTool,
+  ManageScheduledTaskTool,
+  RunScheduledTaskTool,
+  ListScheduledTaskRunsTool,
+} from "./schedule"
 import { BrowserOpenTool } from "./browser/open"
 import { BrowserSnapshotTool } from "./browser/snapshot"
 import { BrowserActionTool } from "./browser/action"
@@ -261,6 +267,8 @@ export namespace ToolRegistry {
       ScheduleTaskTool,
       ListScheduledTasksTool,
       ManageScheduledTaskTool,
+      RunScheduledTaskTool,
+      ListScheduledTaskRunsTool,
       ApplyPatchTool,
       RegisterFindingTool,
       VerifyProjectTool,

@@ -99,6 +99,50 @@ describe("scheduled task routes", () => {
     })
   })
 
+  test("run-now records a manual run row exposed via /runs and guards overlap", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.Default()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+        // Keep the run in-flight so its run row stays non-terminal.
+        const start = vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        try {
+          const task = await ScheduledTask.create({
+            title: "History task",
+            prompt: "Record me.",
+            schedule: { type: "once", runAt: Date.now() + 86_400_000 },
+          })
+
+          const runNowResponse = await app.request(`/scheduled-task/${task.id}/run-now?${directoryQuery}`, {
+            method: "POST",
+          })
+          expect(runNowResponse.status).toBe(200)
+
+          const runsResponse = await app.request(`/scheduled-task/${task.id}/runs?${directoryQuery}`)
+          expect(runsResponse.status).toBe(200)
+          const runs = (await runsResponse.json()) as Array<{
+            status: string
+            triggerType: string
+            queueID?: string
+            coalescedCount: number
+          }>
+          expect(runs.length).toBe(1)
+          expect(runs[0]).toMatchObject({ status: "running", triggerType: "manual", coalescedCount: 1 })
+          expect(runs[0]!.queueID).toStartWith("tsk_")
+
+          // Overlap protection: a second run-now while the first is in flight 409s.
+          const second = await app.request(`/scheduled-task/${task.id}/run-now?${directoryQuery}`, { method: "POST" })
+          expect(second.status).toBe(409)
+        } finally {
+          start.mockRestore()
+        }
+      },
+    })
+  })
+
   test("scheduler loop creates queue items for due scheduled tasks", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -341,8 +385,11 @@ describe("scheduled task routes", () => {
 
         const now = vi.spyOn(Date, "now").mockReturnValue(runAt)
         try {
+          // ADR-059: resuming an already-due one-time task yields a targeted
+          // "already ran" error (resource "status") instead of the confusing
+          // raw "timestamp is not in the future" schedule error.
           await expect(ScheduledTask.resume(task.id)).rejects.toMatchObject({
-            data: { resource: "schedule.runAt" },
+            data: { resource: "status" },
           })
           expect((await ScheduledTask.get(task.id)).status).toBe("paused")
         } finally {

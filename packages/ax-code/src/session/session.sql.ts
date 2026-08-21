@@ -4,7 +4,7 @@ import type { MessageV2 } from "./message-v2"
 import type { Snapshot } from "../snapshot"
 import type { Permission } from "../permission"
 import type { ProjectID } from "../project/schema"
-import type { SessionID, MessageID, PartID, TaskQueueID, ScheduledTaskID } from "./schema"
+import type { SessionID, MessageID, PartID, TaskQueueID, ScheduledTaskID, ScheduledTaskRunID } from "./schema"
 import type { WorkspaceID } from "../control-plane/schema"
 import { WorkspaceTable } from "../control-plane/workspace.sql"
 import { Timestamps } from "../storage/schema.sql"
@@ -196,6 +196,43 @@ export const ScheduledTaskTable = sqliteTable(
   (table) => [
     index("scheduled_task_project_status_idx").on(table.project_id, table.status),
     index("scheduled_task_project_next_run_idx").on(table.project_id, table.next_run_at),
+  ],
+)
+
+// One row per scheduled-task occurrence (fired / skipped / coalesced / failed).
+// Introduced by ADR-059 to make the headless scheduler auditable and to derive
+// overlap protection and failure backoff WITHOUT adding columns to
+// `scheduled_task` — per-project shards apply `CREATE TABLE IF NOT EXISTS` DDL
+// on open and have no ALTER path, so a NEW table is the shard-safe home for all
+// new scheduler state. `status='running'` is the only non-terminal state.
+export const ScheduledTaskRunTable = sqliteTable(
+  "scheduled_task_run",
+  {
+    id: text().$type<ScheduledTaskRunID>().primaryKey(),
+    task_id: text()
+      .$type<ScheduledTaskID>()
+      .notNull()
+      .references(() => ScheduledTaskTable.id, { onDelete: "cascade" }),
+    project_id: text()
+      .$type<ProjectID>()
+      .notNull()
+      .references(() => ProjectTable.id, { onDelete: "cascade" }),
+    trigger_type: text().notNull(),
+    status: text().notNull(),
+    occurrence_at: integer(),
+    coalesced_count: integer().notNull().default(1),
+    queue_id: text()
+      .$type<TaskQueueID>()
+      .references(() => TaskQueueTable.id, { onDelete: "set null" }),
+    workflow_run_id: text(),
+    error: text(),
+    time_started: integer(),
+    time_completed: integer(),
+    ...Timestamps,
+  },
+  (table) => [
+    index("scheduled_task_run_task_created_idx").on(table.task_id, table.time_created, table.id),
+    index("scheduled_task_run_queue_idx").on(table.queue_id),
   ],
 )
 
