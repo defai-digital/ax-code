@@ -822,7 +822,11 @@ describe("ax-engine server lifecycle", () => {
           apiKey: "configured-secret",
           readyTimeoutMs: 5000,
         }),
-      ).rejects.toThrow("exited before becoming ready")
+        // Same race class as the live-but-not-ready test below: the fake
+        // binary exits right after writing, but under load its exit may not
+        // be observed within the deadline, so accept either readiness
+        // failure. The API-key assertion is below.
+      ).rejects.toThrow(/exited before becoming ready|did not become ready/)
     })
 
     expect(await fs.readFile(captured, "utf8")).toBe("configured-secret")
@@ -862,7 +866,12 @@ describe("ax-engine server lifecycle", () => {
             preferredPort: 38195,
             readyTimeoutMs: 1500,
           }),
-        ).rejects.toThrow("exited before becoming ready")
+          // Either readiness failure is legitimate here: under load the
+          // detached child's exit may not be observable before the short
+          // deadline, so the wait can classify as a health timeout instead of
+          // a process exit. The intent is that the start fails and the wedged
+          // old server is reclaimed (asserted below), not duplicated.
+        ).rejects.toThrow(/exited before becoming ready|did not become ready/)
       })
       // The wedged/orphaned old server must have been reclaimed, not left
       // running alongside the replacement.

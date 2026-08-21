@@ -10,10 +10,14 @@ const e2e = new Set([
   "test/control-plane/session-proxy-middleware.test.ts",
   "test/control-plane/workspace-sync.test.ts",
   "test/control-plane/workspace-server-sse.test.ts",
-  // Bash tool tests spawn real child processes via child_process.spawn and are
-  // flaky on Bun/Linux CI — proc.exitCode is null and stdout is empty on the
-  // GitHub Actions Ubuntu runner even for simple echo commands. Tests pass on
-  // macOS. Kept in e2e so they run locally but don't block release CI.
+  // Bash tool tests spawn real child processes via child_process.spawn. They
+  // were moved here in May 2026 after Linux CI failures (exit null, empty
+  // stdout) — later root-caused to `mock.module("child_process")` in
+  // test/session/prompt-shell-command.test.ts leaking across files in the
+  // shared `bun test` process, not a BashTool/Bun spawn bug. The vitest
+  // migration removed that mock (vi.mock is file-scoped and the forks pool
+  // isolates files), so the original cause is gone. Kept in e2e pending
+  // re-validation on Linux CI before returning to deterministic.
   "test/tool/bash.test.ts",
   "test/tool/bash-background.test.ts",
   // Needs process isolation: mock.module leaks across files in one Bun process.
