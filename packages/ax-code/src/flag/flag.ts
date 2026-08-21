@@ -152,7 +152,8 @@ export namespace Flag {
   // first release window. When on, LSP.referencesEnvelope and
   // LSP.documentSymbolEnvelope check code_intel_lsp_cache before
   // issuing an LSP RPC and populate it on every successful `full`
-  // result. Correctness is content-addressable (see schema comment).
+  // result. Correctness is content-and-context addressable (see schema
+  // comment).
   export const AX_CODE_LSP_CACHE = truthy("AX_CODE_LSP_CACHE")
 
   // Semantic audit write mode (Semantic Trust Layer PRD §S3).

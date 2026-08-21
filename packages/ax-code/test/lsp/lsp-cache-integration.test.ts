@@ -10,6 +10,7 @@ import { Flag } from "../../src/flag/flag"
 import { tmpdir } from "../fixture/fixture"
 import { Log } from "../../src/util/log"
 import { LSPCache } from "@/code-intelligence/lsp-cache"
+import { scopedHash } from "@ax-code/ax-code-intel/cache-context"
 
 Log.init({ print: false })
 
@@ -124,7 +125,7 @@ describe("LSP cache integration", () => {
           projectID: Instance.project.id,
           operation: "references",
           filePath: file,
-          contentHash: contentHash!,
+          contentHash: await scopedHash("references", contentHash!),
           line: 5,
           character: 2,
           payload: [{ uri: pathToFileURL(file).href, range: { start: { line: 5, character: 2 } } }],
@@ -166,7 +167,7 @@ describe("LSP cache integration", () => {
           projectID: Instance.project.id,
           operation: "documentSymbol",
           filePath: file,
-          contentHash: contentHash!,
+          contentHash: await scopedHash("documentSymbol", contentHash!),
           line: -1,
           character: -1,
           payload: [

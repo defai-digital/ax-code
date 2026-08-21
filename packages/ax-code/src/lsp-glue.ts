@@ -74,6 +74,10 @@ configureCodeIntelHost({
     Bus.subscribe(FileWatcher.Event.Updated, (event) => {
       callback(event.properties.file)
     }),
+  subscribeFileChange: (callback) =>
+    Bus.subscribe(FileWatcher.Event.Updated, (event) => {
+      callback(event.properties.file)
+    }),
   publishUpdated: () => Bus.publishDetached(LspEvent.Updated, {}),
   publishClientDiagnostics: (payload) => Bus.publishDetached(LspEvent.ClientDiagnostics, payload),
   cacheStore: {
