@@ -23,8 +23,15 @@ const normalizeVitePath = (input: string) => input.replaceAll("\\", "/")
 // `ReferenceError: <member> is not defined`. esbuild has full namespace support,
 // so transform our SRC TS with it (enforce:"pre") before Oxc sees it. Scoped to
 // src/ only: test files must keep vitest's own transform so vi.mock() hoisting
-// (which esbuild would bypass) keeps working.
+// (which esbuild would bypass) keeps working. The extracted workspace packages
+// (ax-codeintel, ax-codereason) are namespace-heavy too, so they get the same
+// treatment.
 const srcDir = normalizeVitePath(path.join(dir, "src")) + "/"
+const namespaceTsDirs = [
+  srcDir,
+  normalizeVitePath(path.join(dir, "..", "ax-codeintel", "src")) + "/",
+  normalizeVitePath(path.join(dir, "..", "ax-codereason", "src")) + "/",
+]
 // Tools import their descriptions as `import D from "./x.txt"`. Bun returns the
 // file contents; vite treats .txt as an asset (returns its path). Load .txt as
 // raw text so descriptions are correct (matches Bun + the build's text loader).
@@ -45,7 +52,7 @@ const forceEsbuildTs: Plugin = {
   enforce: "pre",
   async transform(code, id) {
     const file = normalizeVitePath(id.split("?")[0])
-    if (!file.startsWith(srcDir) || !/\.tsx?$/.test(file)) return null
+    if (!namespaceTsDirs.some((prefix) => file.startsWith(prefix)) || !/\.tsx?$/.test(file)) return null
     const result = await esbuildTransform(code, {
       loader: file.endsWith(".tsx") ? "tsx" : "ts",
       format: "esm",
@@ -102,7 +109,13 @@ export default defineConfig({
     // Inline these deps so vitest transforms them and their ESM exports become
     // spyable (vi.spyOn). Bun allowed spying on frozen ESM namespaces; Node does
     // not, so tests that spy on a library's exports need the module inlined.
-    server: { deps: { inline: ["@clack/prompts"] } },
+    // The workspace engine packages are inlined so the esbuild namespace
+    // transform above applies to them too.
+    server: {
+      deps: {
+        inline: ["@clack/prompts", "@ax-code/ax-codeintel", "@ax-code/ax-codereason"],
+      },
+    },
     testTimeout: 30000,
     hookTimeout: 30000,
     pool: "forks",

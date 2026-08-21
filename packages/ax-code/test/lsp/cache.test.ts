@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { CodeGraphQuery } from "../../src/code-intelligence/query"
-import { LSPCache } from "../../src/lsp/cache"
+import { LSPCache } from "@/code-intelligence/lsp-cache"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 

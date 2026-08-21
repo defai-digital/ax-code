@@ -1,6 +1,6 @@
 import { Hono } from "hono"
 import { describeRoute, resolver } from "hono-openapi"
-import { LSP } from "@/lsp"
+import { LSP } from "@ax-code/ax-codeintel"
 import { DebugEngine } from "@/debug-engine"
 import { DiagnosticCorrelation } from "@/debug-engine"
 import { CodeIntelligence } from "@/code-intelligence"

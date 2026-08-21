@@ -1,0 +1,48 @@
+import { codeIntelHost } from "./host"
+import type { ChildProcessWithoutNullStreams } from "child_process"
+import { Process } from "./internal/process"
+import { Env } from "./internal/env"
+
+type Child = Process.Child & ChildProcessWithoutNullStreams
+type SpawnOptions = Process.Options & {
+  onStderr?: (chunk: Buffer | string) => void
+}
+
+const liveChildren = new Set<Child>()
+const killLiveChildren = () => {
+  for (const child of liveChildren) {
+    // Best-effort cleanup during process exit. Logging is unreliable here
+    // since the process is terminating, so we silently ignore kill failures.
+    void codeIntelHost().killTree(child).catch(() => {
+      // Intentionally silent: process is exiting, no opportunity to log.
+    })
+  }
+}
+process.once("exit", killLiveChildren)
+
+export function spawn(cmd: string, args: string[], opts?: SpawnOptions): Child
+export function spawn(cmd: string, opts?: SpawnOptions): Child
+export function spawn(cmd: string, argsOrOpts?: string[] | SpawnOptions, opts?: SpawnOptions) {
+  const args = Array.isArray(argsOrOpts) ? [...argsOrOpts] : []
+  const cfg = Array.isArray(argsOrOpts) ? opts : argsOrOpts
+  const { onStderr, ...processOptions } = cfg ?? {}
+  const proc = Process.spawn([cmd, ...args], {
+    ...processOptions,
+    detached: process.platform !== "win32",
+    env: processOptions.env ?? { ...Env.sanitize() },
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+  }) as Child
+
+  if (!proc.stdin || !proc.stdout || !proc.stderr) throw new Error("Process output not available")
+  if (onStderr) proc.stderr.on("data", onStderr)
+
+  liveChildren.add(proc)
+  proc.once("close", () => {
+    liveChildren.delete(proc)
+    if (onStderr) proc.stderr.off("data", onStderr)
+  })
+
+  return proc
+}

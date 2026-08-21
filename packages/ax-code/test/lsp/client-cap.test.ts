@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
 import { readFile } from "node:fs/promises"
-import { LSP } from "../../src/lsp/index-impl"
+import { LSP } from "@ax-code/ax-codeintel/index-impl"
 
 // Regression guard for the LSP client explosion: clients are keyed by
 // (root, serverID) and NearestRoot() mints one root per nested marker
@@ -71,7 +71,7 @@ describe("LSP per-server client cap", () => {
 
 describe("LSP client cap wiring (source guardrails)", () => {
   test("fresh registrations mark use and evict, reuses refresh the LRU clock", async () => {
-    const source = await readFile(path.join(__dirname, "../../src/lsp/index-impl.ts"), "utf-8")
+    const source = await readFile(path.join(__dirname, "../../../ax-codeintel/src/index-impl.ts"), "utf-8")
 
     expect(source).toContain("const MAX_CLIENTS_PER_SERVER")
 

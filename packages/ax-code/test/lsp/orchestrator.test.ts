@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
-import type { LSPClient } from "../../src/lsp/client"
-import type { LSPServer } from "../../src/lsp/server"
-import { computeBackoff, isBroken, markBroken, type BrokenEntry } from "../../src/lsp/broken-server"
+import type { LSPClient } from "@ax-code/ax-codeintel/client"
+import type { LSPServer } from "@ax-code/ax-codeintel/server"
+import { computeBackoff, isBroken, markBroken, type BrokenEntry } from "@ax-code/ax-codeintel/broken-server"
 import {
   clientMethodMatchesServer,
   clientModeMatchesServer,
@@ -10,7 +10,7 @@ import {
   resolveClientRequest,
   serverMatchesClientRequest,
   serverSupportsFileExtension,
-} from "../../src/lsp/selection"
+} from "@ax-code/ax-codeintel/selection"
 
 function client(input: {
   serverID: string

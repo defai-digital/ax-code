@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
 import { collectDiagnostics } from "../../src/tool/diagnostics"
-import { LSP } from "../../src/lsp"
+import { LSP } from "@ax-code/ax-codeintel"
 import { Log } from "../../src/util/log"
 import { DebugEngine } from "../../src/debug-engine"
 

@@ -1,6 +1,6 @@
 import { Log } from "../util/log"
 import { Bus } from "../bus"
-import { LSPClient } from "../lsp/client"
+import { LSPClient } from "@ax-code/ax-codeintel/client"
 import { CodeIntelligence } from "../code-intelligence"
 import { Instance } from "../project/instance"
 import { ProjectID } from "../project/schema"
@@ -459,7 +459,7 @@ async function getDiagnosticsForFile(file: string): Promise<{
   // Pull from the aggregated LSP diagnostics cache. This uses the same
   // data source as tool/diagnostics.ts — the per-client diagnostic maps
   // populated by textDocument/publishDiagnostics.
-  const lsp = await import("../lsp").then((m) => m.LSP)
+  const lsp = await import("@ax-code/ax-codeintel").then((m) => m.LSP)
   const [all, envelope] = await Promise.all([lsp.diagnostics(), lsp.diagnosticsAggregated(file)])
   return {
     diagnostics: all[file] ?? [],

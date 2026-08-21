@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
-import { LSP } from "../../src/lsp"
-import { Diagnostic, aggregate, aggregateEnvelope, collect } from "../../src/lsp/diagnostics"
+import { LSP } from "@ax-code/ax-codeintel"
+import { Diagnostic, aggregate, aggregateEnvelope, collect } from "@ax-code/ax-codeintel/diagnostics"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })

@@ -7,7 +7,7 @@ import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
 import { CodeIntelligence } from "../../src/code-intelligence"
 import { CodeGraphQuery } from "../../src/code-intelligence/query"
-import { LSP } from "../../src/lsp"
+import { LSP } from "@ax-code/ax-codeintel"
 import {
   CodeGraphBuilder,
   lookupCallerKind,

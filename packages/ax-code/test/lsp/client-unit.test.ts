@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
-import { LSPClient } from "../../src/lsp/client"
+import { LSPClient } from "@ax-code/ax-codeintel/client"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
@@ -12,13 +12,13 @@ Log.init({ print: false })
 // grouped separately.
 describe("LSPClient unit", () => {
   test("registers close and error handlers for dead LSP connections", async () => {
-    const clientSrc = await fs.readFile(path.join(import.meta.dirname, "../../src/lsp/client.ts"), "utf-8")
+    const clientSrc = await fs.readFile(path.join(import.meta.dirname, "../../../ax-codeintel/src/client.ts"), "utf-8")
     expect(clientSrc).toContain("connection.onClose")
     expect(clientSrc).toContain("connection.onError")
     expect(clientSrc).toContain("input.onClose?.")
     expect(clientSrc).toContain("get closed()")
 
-    const indexSrc = await fs.readFile(path.join(import.meta.dirname, "../../src/lsp/index-impl.ts"), "utf-8")
+    const indexSrc = await fs.readFile(path.join(import.meta.dirname, "../../../ax-codeintel/src/index-impl.ts"), "utf-8")
     expect(indexSrc).toContain("onClose: () => {")
     expect(indexSrc).toContain("LSPBrokenServer.markBroken(s.broken, key)")
     expect(indexSrc).toContain("s.clients.splice(idx, 1)")
@@ -34,7 +34,7 @@ describe("LSPClient unit", () => {
   })
 
   test("starts diagnostics timeout only after didOpen or didChange is sent", async () => {
-    const clientSrc = await fs.readFile(path.join(import.meta.dirname, "../../src/lsp/client.ts"), "utf-8")
+    const clientSrc = await fs.readFile(path.join(import.meta.dirname, "../../../ax-codeintel/src/client.ts"), "utf-8")
 
     expect(clientSrc).toContain("wait?.start()")
     expect(clientSrc).toContain("await wait?.promise")

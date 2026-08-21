@@ -15,9 +15,9 @@ import {
   __testRenderCorrelationBlock,
 } from "../../src/debug-engine/diagnostic-correlation"
 import type { DebugEngine } from "../../src/debug-engine"
-import { LSP } from "../../src/lsp"
+import { LSP } from "@ax-code/ax-codeintel"
 import { Bus } from "../../src/bus"
-import { LSPClient } from "../../src/lsp/client"
+import { LSPClient } from "@ax-code/ax-codeintel/client"
 
 Log.init({ print: false })
 

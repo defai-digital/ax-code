@@ -9,8 +9,8 @@ import {
   requestEnvelope,
   requestSemanticArrayEnvelope,
   textDocumentPositionParams,
-} from "../../src/lsp/point"
-import type { LSPClient } from "../../src/lsp/client"
+} from "@ax-code/ax-codeintel/point"
+import type { LSPClient } from "@ax-code/ax-codeintel/client"
 
 function clientWithResponses(responses: Record<string, unknown>): LSPClient.Info {
   return {

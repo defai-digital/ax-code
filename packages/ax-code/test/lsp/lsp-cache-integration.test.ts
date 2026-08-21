@@ -4,12 +4,12 @@ import { pathToFileURL } from "url"
 import { writeFile } from "node:fs/promises"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
-import { LSP } from "../../src/lsp"
+import { LSP } from "@ax-code/ax-codeintel"
 import { CodeGraphQuery } from "../../src/code-intelligence/query"
 import { Flag } from "../../src/flag/flag"
 import { tmpdir } from "../fixture/fixture"
 import { Log } from "../../src/util/log"
-import { LSPCache } from "../../src/lsp/cache"
+import { LSPCache } from "@/code-intelligence/lsp-cache"
 
 Log.init({ print: false })
 

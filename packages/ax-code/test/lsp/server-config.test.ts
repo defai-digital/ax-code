@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import { writeFile } from "node:fs/promises"
-import { LSPServerConfig } from "../../src/lsp/server-config"
+import { LSPServerConfig } from "@ax-code/ax-codeintel/server-config"
 import { Instance } from "../../src/project/instance"
 import { Process } from "../../src/util/process"
 import { tmpdir } from "../fixture/fixture"

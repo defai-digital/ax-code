@@ -1,5 +1,5 @@
 import { Log } from "../util/log"
-import { LSP } from "../lsp"
+import { LSP } from "@ax-code/ax-codeintel"
 import type { DebugEngine } from "./index"
 
 // prewarm-lsp — Impact-driven LSP client prewarming.

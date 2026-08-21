@@ -8,7 +8,7 @@ import { CodeIntelligence } from "../../src/code-intelligence"
 import { CodeGraphQuery } from "../../src/code-intelligence/query"
 import { CodeGraphBuilder } from "../../src/code-intelligence/builder"
 import { SyntacticExtractor } from "../../src/code-intelligence/syntactic"
-import { LSP } from "../../src/lsp"
+import { LSP } from "@ax-code/ax-codeintel"
 
 Log.init({ print: false })
 

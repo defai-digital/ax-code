@@ -1,4 +1,4 @@
-import { LSP } from "../lsp"
+import { LSP } from "@ax-code/ax-codeintel"
 import { Filesystem } from "../util/filesystem"
 import { Bus } from "../bus"
 import { File } from "../file"
@@ -125,7 +125,7 @@ function renderCorrelationBlock(
 
 async function runCorrelationAndPrewarm(
   editedFiles: string[],
-  diagnostics: Record<string, import("../lsp/client").LSPClient.Diagnostic[]>,
+  diagnostics: Record<string, import("@ax-code/ax-codeintel/client").LSPClient.Diagnostic[]>,
 ): Promise<Map<string, DebugEngine.CorrelatedDiagnostic[]>> {
   const correlationMap = new Map<string, DebugEngine.CorrelatedDiagnostic[]>()
 

@@ -1,5 +1,5 @@
 import path from "path"
-import { LANGUAGE_EXTENSIONS } from "@/lsp/language"
+import { LANGUAGE_EXTENSIONS } from "@ax-code/ax-codeintel/language"
 import { Filesystem } from "@/util/filesystem"
 
 export const diagnostics = (input: Record<string, Record<string, any>[]> | undefined, file: string) => {

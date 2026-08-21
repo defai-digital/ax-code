@@ -117,3 +117,8 @@ if (process.env["AX_CODE_PROFILE_NATIVE"]) {
     if (report) console.error("\n" + report)
   })
 }
+
+// Configure the @ax-code/ax-codeintel host port with the core runtime, the
+// same wiring the boot entrypoints install in production. Must run before any
+// test touches the extracted LSP package.
+await import("../src/lsp-glue")

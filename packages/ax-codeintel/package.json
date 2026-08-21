@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@ax-code/ax-codeintel",
+  "version": "0.1.0",
+  "description": "Language Server Protocol client and server orchestration for AX Code",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ax-code/util": "workspace:*",
+    "cross-spawn": "^7.0.6",
+    "diff": "catalog:",
+    "fast-glob": "catalog:",
+    "mime-types": "3.0.2",
+    "minimatch": "10.2.3",
+    "vscode-jsonrpc": "8.2.1",
+    "vscode-languageserver-types": "3.17.5",
+    "which": "6.0.1",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/cross-spawn": "6.0.6",
+    "@types/mime-types": "catalog:",
+    "@types/node": "catalog:",
+    "@types/which": "3.0.4",
+    "@typescript/native-preview": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "^4.1.9"
+  }
+}

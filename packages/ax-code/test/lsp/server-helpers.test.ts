@@ -26,7 +26,7 @@ import {
   venvPaths,
   venvPython,
   pathExists,
-} from "../../src/lsp/server-helpers"
+} from "@ax-code/ax-codeintel/server-helpers"
 import {
   PINNED_CHECKSUM_LSP_RELEASES,
   PINNED_DIRECT_LSP_RELEASES,
@@ -55,10 +55,10 @@ import {
   tinymistAsset,
   zlsAsset,
   zlsReleaseForZig,
-} from "../../src/lsp/server-releases"
-import { BunProc } from "../../src/bun"
-import { Filesystem } from "../../src/util/filesystem"
-import { Process } from "../../src/util/process"
+} from "@ax-code/ax-codeintel/server-releases"
+import { codeIntelHost } from "@ax-code/ax-codeintel/host"
+import { Filesystem } from "@ax-code/ax-codeintel/internal/filesystem"
+import { Process } from "@ax-code/ax-codeintel/internal/process"
 
 describe("lsp server helpers", () => {
   test("pathExists returns false only for missing paths", async () => {
@@ -457,7 +457,7 @@ describe("lsp server helpers", () => {
   test("does not spawn a bun-backed server after package install fails", async () => {
     await using tmp = await tmpdir()
     const exists = vi.spyOn(Filesystem, "exists").mockResolvedValue(false)
-    const whichBun = vi.spyOn(BunProc, "which").mockReturnValue("/bin/bun")
+    const whichBun = vi.spyOn(codeIntelHost().runtime, "executable").mockReturnValue("/bin/bun")
     const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
       exited: Promise.resolve(1),
       exitCode: 1,

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest
 import path from "path"
 import { writeFile } from "node:fs/promises"
 import { Instance } from "../../src/project/instance"
-import { LSP } from "../../src/lsp"
+import { LSP } from "@ax-code/ax-codeintel"
 import { LspTool } from "../../src/tool/lsp"
 import { AuditQuery } from "../../src/audit/query"
 import { AuditSemanticCall } from "../../src/audit/semantic-call"

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest"
-import { LspScheduler } from "../../src/lsp/scheduler"
+import { LspScheduler } from "@ax-code/ax-codeintel/scheduler"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })

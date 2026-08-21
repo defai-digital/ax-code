@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
-import { envelope, references } from "../../src/lsp/references"
-import type { LSPClient } from "../../src/lsp/client"
+import { envelope, references } from "@ax-code/ax-codeintel/references"
+import type { LSPClient } from "@ax-code/ax-codeintel/client"
 
 test("references envelope uses semantic selection and include-declaration request params", async () => {
   const requests: Array<{ method: string; params: unknown }> = []

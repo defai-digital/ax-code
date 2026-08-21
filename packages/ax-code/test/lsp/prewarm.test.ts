@@ -4,7 +4,7 @@ import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
-import { LSP } from "../../src/lsp"
+import { LSP } from "@ax-code/ax-codeintel"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })

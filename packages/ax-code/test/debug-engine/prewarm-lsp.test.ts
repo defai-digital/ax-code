@@ -4,7 +4,7 @@ const { touchFile } = vi.hoisted(() => ({
   touchFile: vi.fn(),
 }))
 
-vi.mock("../../src/lsp", () => ({
+vi.mock("@ax-code/ax-codeintel", () => ({
   LSP: {
     touchFile,
   },

@@ -3,7 +3,7 @@ import { Bus } from "../bus"
 import { Log } from "../util/log"
 import { FileWatcher } from "../file/watcher"
 import { Instance } from "../project/instance"
-import { LANGUAGE_EXTENSIONS } from "../lsp/language"
+import { LANGUAGE_EXTENSIONS } from "@ax-code/ax-codeintel/language"
 import { CodeGraphBuilder } from "./builder"
 import type { ProjectID } from "../project/schema"
 

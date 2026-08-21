@@ -1,6 +1,6 @@
 import { Plugin } from "../plugin"
 import { Format } from "../format"
-import { LSP } from "../lsp"
+import { LSP } from "@ax-code/ax-codeintel"
 import { File } from "../file"
 import { FileWatcher } from "../file/watcher"
 import { Snapshot } from "../snapshot"
@@ -24,7 +24,7 @@ import {
   BOOTSTRAP_PREWARM_MAX_LANGUAGES,
   BOOTSTRAP_PREWARM_TIMEOUT_MS,
   INDEXER_SEMANTIC_METHODS,
-} from "../lsp/prewarm-profile"
+} from "@ax-code/ax-codeintel/prewarm-profile"
 
 const BOOTSTRAP_TIMEOUT_MS = 30_000
 
