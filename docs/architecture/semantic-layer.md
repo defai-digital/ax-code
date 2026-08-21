@@ -13,7 +13,7 @@ This page documents shipped semantic behavior, not future code-graph ambitions. 
 
 - `packages/ax-code/src/tool/lsp.ts` and related LSP modules for live semantic operations.
 - `packages/ax-code/src/code-intelligence/` for indexed graph behavior.
-- `packages/ax-code/src/debug-engine/` for graph-backed debugging/refactoring consumers.
+- `packages/ax-code-reason/` for graph-backed debugging/refactoring analyses (impact, bug paths, races, lifecycle, duplication, hardcoded values, security findings, and gated refactor application).
 - Replay, export, and audit tests before claiming durable provenance guarantees.
 
 If a capability is planned or experimental, keep that status explicit.
