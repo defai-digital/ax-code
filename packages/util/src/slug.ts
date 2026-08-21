@@ -1,3 +1,4 @@
+// Derived from OpenCode (https://github.com/anomalyco/opencode), MIT-licensed; see NOTICE and LICENSE-MIT.
 export namespace Slug {
   const ADJECTIVES = [
     "brave",

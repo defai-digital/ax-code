@@ -1,3 +1,4 @@
+// Derived from OpenCode (https://github.com/anomalyco/opencode), MIT-licensed; see NOTICE and LICENSE-MIT.
 export namespace Binary {
   export function search<T>(array: T[], id: string, compare: (item: T) => string): { found: boolean; index: number } {
     let left = 0

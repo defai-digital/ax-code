@@ -1,3 +1,4 @@
+// Derived from OpenCode (https://github.com/anomalyco/opencode), MIT-licensed; see NOTICE and LICENSE-MIT.
 export type ShellFunction = (input: Uint8Array) => Uint8Array
 
 export type ShellExpression =
