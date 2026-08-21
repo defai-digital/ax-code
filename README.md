@@ -135,7 +135,7 @@ The same runtime, session store, and evidence model back every surface.
 
 ## Control model
 
-AX Code starts with autonomous mode on and isolation set to `workspace-write`: network disabled, writes confined to the workspace, and protected paths such as `.git/` and `.ax-code/` blocked. The agent makes progress without asking about every low-risk step while the sandbox holds the boundary.
+AX Code starts with autonomous mode on and runtime isolation in `workspace-write` by default: network disabled, writes confined to the workspace, and protected paths such as `.git/` and `.ax-code/` blocked. The agent makes progress without asking about every low-risk step while the sandbox holds the boundary.
 
 - Change isolation intentionally with `/sandbox`, or `--sandbox read-only | workspace-write | full-access`.
 - Use `/autonomous` or `AX_CODE_AUTONOMOUS=false` to stop for each permission and question.
