@@ -344,7 +344,6 @@ export namespace DebugEngine {
     pattern: SecurityPattern
     severity: "high" | "medium" | "low"
     description: string
-    userControlled: boolean
   }
 
   export type SecurityReport = {

@@ -1204,7 +1204,6 @@ describe("detectSecurity", () => {
         expect(report.findings.length).toBeGreaterThan(0)
         expect(report.findings[0].pattern).toBe("path_traversal")
         expect(report.findings[0].severity).toBe("high")
-        expect(report.findings[0].userControlled).toBe(true)
       },
     })
   })
@@ -1383,7 +1382,6 @@ describe("detectSecurity", () => {
         expect(report.findings.length).toBeGreaterThan(0)
         expect(report.findings[0].pattern).toBe("ssrf")
         expect(report.findings[0].severity).toBe("high")
-        expect(report.findings[0].userControlled).toBe(true)
       },
     })
   })

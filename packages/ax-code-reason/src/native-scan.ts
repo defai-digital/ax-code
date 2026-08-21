@@ -210,7 +210,6 @@ export interface NativeSecurityFinding {
   pattern: string
   severity: string
   description: string
-  userControlled: boolean
 }
 
 export function nativeDetectSecurity(input: DetectInput): DetectResult<NativeSecurityFinding> | undefined {

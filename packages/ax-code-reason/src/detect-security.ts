@@ -16,7 +16,7 @@ import {
   type ScannerInputControls,
 } from "./scanner-utils"
 
-// detect-security — AST-lite scanner for common security anti-patterns.
+// detect-security — line-based heuristic scanner for common security anti-patterns.
 //
 // Phase 2 uses regex + structural heuristics against raw source text.
 // Catches the most mechanical patterns (path traversal, command
@@ -77,7 +77,6 @@ function detectPathTraversal(lines: string[], file: string, max: number): DebugE
       pattern: "path_traversal",
       severity: "high",
       description: `path.join/resolve with variable input at line ${i + 1} without containment check. May allow path traversal to access files outside the intended directory.`,
-      userControlled: true,
     })
   }
   return findings
@@ -160,7 +159,6 @@ function detectCommandInjection(lines: string[], file: string, max: number): Deb
       pattern: "command_injection",
       severity: "high",
       description: `${isExec ? "exec" : "spawn"} with string interpolation/concatenation at line ${i + 1}. Variable input may allow command injection.`,
-      userControlled: true,
     })
   }
   return findings
@@ -192,7 +190,6 @@ function detectEnvLeak(lines: string[], file: string, max: number): DebugEngine.
       pattern: "env_leak",
       severity: "medium",
       description: `process.env spread to child process at line ${i + 1} without sanitization. Secrets (API keys, tokens) may leak to subprocesses.`,
-      userControlled: false,
     })
   }
   return findings
@@ -226,7 +223,6 @@ function detectMissingValidation(lines: string[], file: string, max: number): De
       pattern: "missing_validation",
       severity: "medium",
       description: `Mutation route "${match[1]}" at line ${i + 1} without schema validation middleware. Unvalidated input may cause unexpected behavior.`,
-      userControlled: true,
     })
   }
   return findings
@@ -261,7 +257,6 @@ function detectSsrf(lines: string[], file: string, max: number): DebugEngine.Sec
       pattern: "ssrf",
       severity: "high",
       description: `fetch/request with variable URL \`${arg}\` at line ${i + 1} without URL validation. May allow SSRF to internal services.`,
-      userControlled: true,
     })
   }
   return findings
@@ -330,7 +325,6 @@ export async function detectSecurityImpl(input: DetectSecurityInput): Promise<De
           pattern: f.pattern as DebugEngine.SecurityPattern,
           severity: f.severity as DebugEngine.SecurityFinding["severity"],
           description: f.description,
-          userControlled: f.userControlled,
         })),
         filesScanned: native.filesScanned,
         truncated: native.truncated,

@@ -191,19 +191,12 @@ async function normalizeSecurityFinding(
   const anchor = await sourceAnchor(finding.file, finding.line)
   return {
     scanner: "security_scan",
-    fingerprint: fingerprint([
-      "security_scan:v2",
-      file,
-      finding.severity,
-      finding.pattern,
-      finding.userControlled ? "user-controlled" : "not-user-controlled",
-      anchor,
-    ]),
+    fingerprint: fingerprint(["security_scan:v2", file, finding.severity, finding.pattern, anchor]),
     file,
     line: finding.line,
     severity: finding.severity,
     kind,
-    summary: `${kind}${finding.userControlled ? " user-controlled" : ""}`,
+    summary: kind,
   }
 }
 

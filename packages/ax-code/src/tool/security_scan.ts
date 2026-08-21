@@ -28,7 +28,7 @@ export const SecurityScanTool = Tool.define("security_scan", {
       report,
       include: args.include,
       renderFinding: (finding) => [
-        `- [${finding.severity}] ${finding.pattern} at ${finding.file}:${finding.line}${finding.userControlled ? " (user-controlled)" : ""}`,
+        `- [${finding.severity}] ${finding.pattern} at ${finding.file}:${finding.line}`,
         `  ${finding.description}`,
       ],
     })
