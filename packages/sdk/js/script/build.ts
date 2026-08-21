@@ -260,7 +260,7 @@ try {
         },
         {
           name: "@hey-api/sdk",
-          instance: "OpencodeClient",
+          instance: "AxCodeClient",
           exportFromIndex: false,
           auth: false,
           paramsStructure: "flat",

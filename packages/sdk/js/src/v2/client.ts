@@ -8,9 +8,8 @@ import {
   withWorkspaceHeaders,
   createNoTimeoutFetch,
 } from "../protocol.js"
-import { OpencodeClient } from "./gen/sdk.gen.js"
-export { type Config as OpencodeClientConfig, OpencodeClient }
-export { type Config as AxCodeClientConfig, OpencodeClient as AxCodeClient }
+import { AxCodeClient } from "./gen/sdk.gen.js"
+export { type Config as AxCodeClientConfig, AxCodeClient }
 
 export function createAxCodeClient(input?: Config & { directory?: string; experimental_workspaceID?: string }) {
   // Always spread into a new object to avoid mutating the caller's config.
@@ -39,7 +38,5 @@ export function createAxCodeClient(input?: Config & { directory?: string; experi
   }
 
   const client = createClient(config)
-  return new OpencodeClient({ client })
+  return new AxCodeClient({ client })
 }
-
-export const createOpencodeClient = createAxCodeClient

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest"
 import { createAxCodeClient } from "../src/client"
 import { createAxCodeClient as createAxCodeClientV2 } from "../src/v2/client"
+import * as clientV1Exports from "../src/client"
+import * as clientV2Exports from "../src/v2/client"
 import type { AppErrorEnvelope } from "../src/gen/types.gen"
 
 async function captureDirectoryHeaders(directory: string) {
@@ -49,6 +51,14 @@ async function captureV2Headers(options: { directory: string; workspaceID?: stri
 }
 
 describe("createAxCodeClient", () => {
+  test("exposes only the AX Code generated client name", () => {
+    expect(clientV1Exports.AxCodeClient.name).toBe("AxCodeClient")
+    expect(clientV2Exports.AxCodeClient.name).toBe("AxCodeClient")
+    expect("OpencodeClient" in clientV1Exports).toBe(false)
+    expect("OpencodeClient" in clientV2Exports).toBe(false)
+    expect("createOpencodeClient" in clientV2Exports).toBe(false)
+  })
+
   test("rejects remote AX Code base URLs in v1 and v2 clients", () => {
     expect(() => createAxCodeClient({ baseUrl: "https://ax-code.example.com" })).toThrow("local-only")
     expect(() => createAxCodeClientV2({ baseUrl: "https://ax-code.example.com" })).toThrow("local-only")
