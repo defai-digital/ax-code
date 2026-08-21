@@ -20,6 +20,8 @@ export namespace ModePolicy {
       enabled?: boolean
       maxMembers?: number
       timeoutMs?: number
+      reasoningTimeoutScale?: number
+      memberTimeoutMs?: Record<string, number>
       debateRounds?: number
     }
     arena?: {

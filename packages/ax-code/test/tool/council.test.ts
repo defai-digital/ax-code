@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { Council } from "../../src/mode/council"
-import { CouncilTool } from "../../src/tool/council"
+import { CouncilTool, DEFAULT_REASONING_TIMEOUT_SCALE, resolveMemberTimeoutMs } from "../../src/tool/council"
 
 describe("council tool contract", () => {
   test("tool id is council", () => {
@@ -93,5 +93,42 @@ describe("council aggregation used by tool", () => {
     expect(report.incomplete).toBe(false)
     const md = Council.renderReportMarkdown(report)
     expect(md).toContain("Consensus")
+  })
+})
+
+describe("council member timeout resolution", () => {
+  const base = { providerID: "deepseek", modelID: "deepseek-v4-pro", baseTimeoutMs: 180_000 }
+
+  test("non-reasoning members get the base timeout", () => {
+    expect(resolveMemberTimeoutMs({ ...base, reasoning: false })).toBe(180_000)
+  })
+
+  test("reasoning members get the default 3x scale", () => {
+    expect(resolveMemberTimeoutMs({ ...base, reasoning: true })).toBe(180_000 * DEFAULT_REASONING_TIMEOUT_SCALE)
+    expect(DEFAULT_REASONING_TIMEOUT_SCALE).toBe(3)
+  })
+
+  test("configured reasoningTimeoutScale overrides the default", () => {
+    expect(resolveMemberTimeoutMs({ ...base, reasoning: true, reasoningScale: 4 })).toBe(720_000)
+  })
+
+  test("provider-wide override beats the reasoning scale", () => {
+    expect(resolveMemberTimeoutMs({ ...base, reasoning: true, memberOverrides: { deepseek: 600_000 } })).toBe(600_000)
+  })
+
+  test("exact provider/model override beats the provider-wide override", () => {
+    expect(
+      resolveMemberTimeoutMs({
+        ...base,
+        reasoning: true,
+        memberOverrides: { deepseek: 600_000, "deepseek/deepseek-v4-pro": 900_000 },
+      }),
+    ).toBe(900_000)
+  })
+
+  test("overrides for other members do not apply", () => {
+    expect(resolveMemberTimeoutMs({ ...base, reasoning: true, memberOverrides: { "anthropic/claude": 900_000 } })).toBe(
+      540_000,
+    )
   })
 })

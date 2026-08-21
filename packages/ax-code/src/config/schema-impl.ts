@@ -1056,8 +1056,22 @@ export const Info = z
               "Maximum council members per invocation (default: 3, hard max: 6).",
             ),
             timeoutMs: PositiveInteger.optional().describe(
-              "Per-member timeout in ms for council fan-out (default: 180000; reasoning models receive twice this budget).",
+              "Per-member timeout in ms for council fan-out (default: 180000; reasoning models receive reasoningTimeoutScale times this budget).",
             ),
+            reasoningTimeoutScale: z
+              .number()
+              .min(1)
+              .max(10)
+              .optional()
+              .describe(
+                "Timeout multiplier applied to members whose model declares reasoning capability (default: 3). Raise when slow reasoning members (e.g. DeepSeek V4 Pro on large contexts) time out.",
+              ),
+            memberTimeoutMs: z
+              .record(z.string(), PositiveInteger)
+              .optional()
+              .describe(
+                'Absolute per-member timeout overrides in ms, keyed by "providerID" or "providerID/modelID". Takes precedence over timeoutMs and reasoningTimeoutScale for matching members.',
+              ),
             debateRounds: NonNegativeInteger.optional().describe(
               "Optional multi-round anonymous debate rounds (default: 0; Phase 3+).",
             ),

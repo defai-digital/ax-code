@@ -33,7 +33,7 @@ vi.mock("@/mode/memory", () => ({
   },
 }))
 
-import { CouncilTool, DEFAULT_TIMEOUT_MS } from "../../src/tool/council"
+import { CouncilTool, DEFAULT_REASONING_TIMEOUT_SCALE, DEFAULT_TIMEOUT_MS } from "../../src/tool/council"
 import { generateObject, generateText } from "ai"
 import { Config } from "../../src/config/config"
 import { EnsembleShared } from "../../src/mode/ensemble-shared"
@@ -233,7 +233,8 @@ describe("council timeout", () => {
 
     expect(result.metadata.failedMembers).toBe(1)
     expect(result.output).toContain("timeout: member exceeded 1ms")
-    expect(result.output).toContain("Ask the USER to raise modes.council.timeoutMs in ax-code.json")
+    expect(result.output).toContain("Ask the USER to raise modes.council.timeoutMs")
+    expect(result.output).toContain("modes.council.memberTimeoutMs")
     expect(result.output).toContain("agents cannot edit that protected config file")
   })
 
@@ -247,6 +248,19 @@ describe("council timeout", () => {
     const result = await tool.execute({ question: "Review auth" }, ctx)
 
     expect(result.metadata.failedMembers).toBe(1)
-    expect(result.output).toContain("timeout: member exceeded 2ms")
+    expect(result.output).toContain(`timeout: member exceeded ${1 * DEFAULT_REASONING_TIMEOUT_SCALE}ms`)
+  })
+
+  test("memberTimeoutMs override beats the reasoning scale", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue(singleMemberConfig({ timeoutMs: 1, memberTimeoutMs: { "a/m": 42 } }))
+    oneMember()
+    vi.mocked(Provider.getModel).mockResolvedValue({ capabilities: { reasoning: true } } as any)
+    hangUntilAbort()
+
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review auth" }, ctx)
+
+    expect(result.metadata.failedMembers).toBe(1)
+    expect(result.output).toContain("timeout: member exceeded 42ms")
   })
 })

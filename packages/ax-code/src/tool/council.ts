@@ -31,8 +31,33 @@ const DEFAULT_MAX_MEMBERS = 3
 export const DEFAULT_TIMEOUT_MS = 180_000
 // Reasoning members get this multiple of the configured timeout — thinking
 // before the structured answer is exactly what the base budget underestimates.
-const REASONING_TIMEOUT_SCALE = 2
+// Default 3: deepseek-v4-pro was observed timing out at the old 2× (360s) on
+// large-context reviews. Configurable via modes.council.reasoningTimeoutScale.
+// Exported for tests.
+export const DEFAULT_REASONING_TIMEOUT_SCALE = 3
 const HARD_MAX_MEMBERS = 6
+
+// Resolve the effective timeout for one council member. Absolute overrides in
+// modes.council.memberTimeoutMs win — "providerID/modelID" first, then the
+// provider-wide "providerID" key — because a known-slow model should not force
+// the global base/scale up for every other member. Otherwise reasoning models
+// get base × scale and everyone else gets the base.
+export function resolveMemberTimeoutMs(input: {
+  providerID: string
+  modelID: string
+  reasoning?: boolean
+  baseTimeoutMs: number
+  reasoningScale?: number
+  memberOverrides?: Record<string, number>
+}): number {
+  const { providerID, modelID, reasoning, baseTimeoutMs, memberOverrides } = input
+  const exact = memberOverrides?.[`${providerID}/${modelID}`]
+  if (exact !== undefined) return exact
+  const providerWide = memberOverrides?.[providerID]
+  if (providerWide !== undefined) return providerWide
+  const scale = input.reasoningScale ?? DEFAULT_REASONING_TIMEOUT_SCALE
+  return reasoning ? baseTimeoutMs * scale : baseTimeoutMs
+}
 
 // Length/count caps are enforced by clamping after parse (see clampMemberOutput),
 // not by hard zod .max() constraints: verbose members (observed with DeepSeek)
@@ -192,6 +217,8 @@ async function runMember(input: {
   context?: string
   debateContext?: string
   timeoutMs: number
+  reasoningScale?: number
+  memberOverrides?: Record<string, number>
   abort: AbortSignal
   retryOnce?: boolean
 }): Promise<Council.CouncilMemberResult> {
@@ -214,7 +241,14 @@ async function runMember(input: {
       error: error instanceof Error ? error.message : String(error),
     }
   }
-  const memberTimeoutMs = model.capabilities?.reasoning ? timeoutMs * REASONING_TIMEOUT_SCALE : timeoutMs
+  const memberTimeoutMs = resolveMemberTimeoutMs({
+    providerID: String(member.providerID),
+    modelID: String(member.modelID),
+    reasoning: model.capabilities?.reasoning,
+    baseTimeoutMs: timeoutMs,
+    reasoningScale: input.reasoningScale,
+    memberOverrides: input.memberOverrides,
+  })
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (abort.aborted) break
@@ -340,7 +374,7 @@ async function runMember(input: {
       modelID: String(member.modelID),
       issues: [],
       error: wasTimeout
-        ? `${errMessage} — this member (often a reasoning model) needs more time than the council timeout allows. Ask the USER to raise modes.council.timeoutMs in ax-code.json; agents cannot edit that protected config file, so do not attempt to change it yourself.`
+        ? `${errMessage} — this member (often a reasoning model) needs more time than the council timeout allows. Ask the USER to raise modes.council.timeoutMs or set a per-member modes.council.memberTimeoutMs override (e.g. { "${member.providerID}": 600000 }) in ax-code.json; agents cannot edit that protected config file, so do not attempt to change it yourself.`
         : errMessage,
     }
   }
@@ -405,6 +439,8 @@ export const CouncilTool = Tool.define("council", async () => {
       }
 
       const timeoutMs = modes?.council?.timeoutMs ?? DEFAULT_TIMEOUT_MS
+      const reasoningScale = modes?.council?.reasoningTimeoutScale
+      const memberOverrides = modes?.council?.memberTimeoutMs
       const kind = args.kind ?? "review"
       const maxMembers = Math.min(HARD_MAX_MEMBERS, Math.max(1, modes?.council?.maxMembers ?? DEFAULT_MAX_MEMBERS))
       const maxRounds = Debate.resolveMaxRounds(args.debateRounds ?? modes?.council?.debateRounds)
@@ -473,6 +509,8 @@ export const CouncilTool = Tool.define("council", async () => {
             question: args.question,
             context: args.context,
             timeoutMs,
+            reasoningScale,
+            memberOverrides,
             abort: ctx.abort,
           })
           councilCompleted++
@@ -515,6 +553,8 @@ export const CouncilTool = Tool.define("council", async () => {
               context: args.context,
               debateContext: synthesis,
               timeoutMs,
+              reasoningScale,
+              memberOverrides,
               abort: ctx.abort,
               retryOnce: false,
             }),

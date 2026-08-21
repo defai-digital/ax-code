@@ -84,7 +84,7 @@ In `ax-code.json`:
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `modes.default`        | `local` \| `cloud` \| `hybrid` \| `arena` \| `council`. Unset: hybrid when local fits the policy signals, else cloud for single-path defaults.                                    |
 | `modes.hybrid.*`       | Local preference, high-complexity escalate to cloud, local provider id                                                                                                            |
-| `modes.council.*`      | Enable, member cap, timeout, optional anonymous debate rounds (maximum 3)                                                                                                         |
+| `modes.council.*`      | Enable, member cap, timeout, reasoning-model timeout scale, per-member timeout overrides, optional anonymous debate rounds (maximum 3)                                            |
 | `modes.arena.enabled`  | Must be `true` for the `arena` tool (default off). Mid-session edits are picked up on the next tool call (`Config.getFresh`). Or pass `enableIfDisabled: true` on the arena tool. |
 | `modes.arena.strategy` | `verify_first` (recommended for implement), `diversity`, or `hybrid_score`                                                                                                        |
 | `modes.budget.*`       | Fail-closed cap on estimated USD for ensemble fan-out                                                                                                                             |
@@ -114,6 +114,24 @@ Local models and memory guidance: [AX Engine Model Selection](../providers/ax-en
 5. Returns an **advisory** markdown report. Does not edit files.
 
 Needs at least two successful members for meaningful consensus tiers; otherwise the report is marked incomplete.
+
+**Timeouts.** Each member runs under `modes.council.timeoutMs` (default 180000 ms); models that declare
+reasoning capability get `modes.council.reasoningTimeoutScale` times that budget (default 3, so 540000 ms).
+To give one known-slow member more time without inflating everyone else's wait, set an absolute
+`modes.council.memberTimeoutMs` override keyed by `"providerID"` or `"providerID/modelID"` — the exact
+model key wins over the provider-wide key, and either wins over the base/scale computation:
+
+```json
+{
+  "modes": {
+    "council": {
+      "memberTimeoutMs": { "deepseek/deepseek-v4-pro": 900000 }
+    }
+  }
+}
+```
+
+`ax-code.json` is a protected config file — agents must ask the user to change it.
 
 ### When to use
 
