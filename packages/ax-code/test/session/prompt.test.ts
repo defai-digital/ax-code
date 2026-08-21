@@ -3,6 +3,8 @@ import os from "os"
 import path from "path"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { hash as bunCompatHash } from "../../src/bun/node-compat"
+import { scopedHash } from "@ax-code/ax-code-intel/cache-context"
+import { Flag } from "../../src/flag/flag"
 import { NamedError } from "@ax-code/util/error"
 import { fileURLToPath, pathToFileURL } from "url"
 import { Instance } from "../../src/project/instance"
@@ -291,7 +293,19 @@ describe("session.prompt missing file", () => {
         const session = await Session.create({})
         const file = path.join(tmp.path, "demo.ts")
         const uri = pathToFileURL(file).href
-        const contentHash = bunCompatHash(new Uint8Array(await fs.readFile(file))).toString()
+        // The cached read path is gated on AX_CODE_LSP_CACHE (schema.sql.ts:
+        // entries are only written/read when the flag is on) and the flag is
+        // evaluated at module load, so override it for this test the same way
+        // test/lsp/cache-probe.test.ts does. Without it hashAndRead short
+        // circuits and the attachment falls through to a live LSP call.
+        const originalCacheFlag = Flag.AX_CODE_LSP_CACHE
+        Object.defineProperty(Flag, "AX_CODE_LSP_CACHE", { value: true, configurable: true, writable: true })
+
+        // The cache is keyed by `<context>#<content-hash>`, not the bare content
+        // hash — see LSPCacheContext.scopedHash. Seed under the same scoped key
+        // the read path derives, otherwise the lookup misses.
+        const rawContentHash = bunCompatHash(new Uint8Array(await fs.readFile(file))).toString()
+        const contentHash = await scopedHash("documentSymbol", rawContentHash)
 
         CodeGraphQuery.upsertLspCache({
           projectID: Instance.project.id,
@@ -360,6 +374,11 @@ describe("session.prompt missing file", () => {
         } finally {
           cachedSpy.mockRestore()
           liveSpy.mockRestore()
+          Object.defineProperty(Flag, "AX_CODE_LSP_CACHE", {
+            value: originalCacheFlag,
+            configurable: true,
+            writable: true,
+          })
         }
       },
     })
