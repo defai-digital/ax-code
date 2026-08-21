@@ -745,7 +745,9 @@ export namespace ScheduledTask {
       const claimedTask = fromRow(claimed)
       const queueItem = TaskQueue.enqueueInTransaction(
         db,
-        scheduledQueueInput(claimedTask, task.nextRunAt!, "scheduled", coalescedCount),
+        // Pass the PRE-claim lastRunAt: the claim above already stamped
+        // last_run_at=now, which must not leak into the coalesce envelope.
+        scheduledQueueInput(claimedTask, task.nextRunAt!, "scheduled", coalescedCount, task.lastRunAt),
         { now },
       )
       const run = insertRunRow(db, {
@@ -782,7 +784,13 @@ export namespace ScheduledTask {
     return SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const claimed = db
         .update(ScheduledTaskTable)
-        .set({ next_run_at: next ?? null, time_updated: now })
+        .set({
+          next_run_at: next ?? null,
+          time_updated: now,
+          // A skipped one-time occurrence must not linger as an active row with a
+          // null next_run_at (a zombie that never fires); disable it like a claim.
+          ...(task.schedule.type === "once" ? { status: "disabled" } : {}),
+        })
         .where(
           and(
             eq(ScheduledTaskTable.id, task.id),
@@ -939,9 +947,14 @@ export namespace ScheduledTask {
     occurrenceAt: number,
     reason: "manual" | "scheduled",
     coalescedCount = 1,
+    envelopeLastRunAt?: number,
   ): TaskQueue.EnqueueInput {
+    // The coalesce envelope reports when the task PREVIOUSLY ran. Callers that
+    // stamp last_run_at before building the payload (the claim path) must pass
+    // the pre-claim value, otherwise the envelope echoes the current fire time.
+    const lastRunAt = envelopeLastRunAt ?? task.lastRunAt
     const prompt =
-      coalescedCount > 1 ? withCoalesceEnvelope(task.prompt, coalescedCount, occurrenceAt, task.lastRunAt) : task.prompt
+      coalescedCount > 1 ? withCoalesceEnvelope(task.prompt, coalescedCount, occurrenceAt, lastRunAt) : task.prompt
     return {
       kind: "automation",
       title: task.title,
@@ -1094,16 +1107,37 @@ export namespace ScheduledTask {
     return task
   }
 
+  // Transition the task's single open (`running`) run row to a terminal state.
+  // Overlap protection guarantees at most one open row per task, so keying by the
+  // task (rather than a queue id) is safe. Used by workflow outcomes, which are
+  // reported by the workflow bridge and carry no queue-item id. Idempotent: a row
+  // already terminal is left untouched and undefined is returned.
+  function completeOpenRun(taskID: ScheduledTaskID, status: RunStatus, error?: string): RunInfo | undefined {
+    const now = Date.now()
+    return SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const row = db
+        .update(ScheduledTaskRunTable)
+        .set({ status, error, time_completed: now, time_updated: now })
+        .where(and(eq(ScheduledTaskRunTable.task_id, taskID), eq(ScheduledTaskRunTable.status, "running")))
+        .returning()
+        .get()
+      return row ? runFromRow(row) : undefined
+    })
+  }
+
   export async function recordWorkflowOutcome(
     id: ScheduledTaskID,
     status: "completed" | "failed" | "cancelled",
     error?: unknown,
   ): Promise<Info> {
-    return recordQueueOutcome(
-      id,
-      status === "completed" ? "completed" : "failed",
-      error ?? (status === "cancelled" ? "Scheduled workflow was cancelled." : "Scheduled workflow failed."),
-    )
+    const fallback = status === "cancelled" ? "Scheduled workflow was cancelled." : "Scheduled workflow failed."
+    const runStatus: RunStatus = status === "completed" ? "completed" : "failed"
+    const errorMessage = status === "completed" ? undefined : toErrorMessage(error ?? fallback)
+    // Without this the run row inserted at claim/dispatch would stay `running`
+    // until orphan reconciliation mislabeled a finished workflow as failed.
+    const run = completeOpenRun(id, runStatus, errorMessage)
+    if (run) emitRunEvents(id, runStatus, run, errorMessage)
+    return recordQueueOutcome(id, status === "completed" ? "completed" : "failed", error ?? fallback)
   }
 
   function normalizeSchedulerPollMs(value: number | undefined) {
