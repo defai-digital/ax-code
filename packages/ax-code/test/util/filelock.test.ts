@@ -80,12 +80,19 @@ describe("util.filelock", () => {
     }
   })
 
-  test("unreferences polling timers while waiting for an active holder", async () => {
+  // Polling timers must stay ref'd. They were briefly unref'd (see the
+  // sleep() note in src/util/timeout.ts): if the poll timer is the only
+  // pending work, Node drains the event loop and exits while the caller is
+  // still awaiting acquire(), so the awaiting promise never settles. In a CLI
+  // process that is a silent exit 13 with no output. The bounded timeoutMs
+  // below is what guarantees termination, not the unref.
+  test("keeps polling timers referenced while waiting for an active holder", async () => {
     await using tmp = await tmpdir()
     const filepath = path.join(tmp.path, "state.json")
     const lockpath = filepath + ".lock"
     const originalSetTimeout = globalThis.setTimeout
     let unrefCalls = 0
+    let pollTimers = 0
     let nowCalls = 0
 
     await fs.writeFile(
@@ -104,6 +111,7 @@ describe("util.filelock", () => {
     })
 
     globalThis.setTimeout = ((fn: (...args: any[]) => void, _ms?: number, ...args: any[]) => {
+      pollTimers += 1
       originalSetTimeout(() => fn(...args), 0)
       return {
         unref() {
@@ -117,7 +125,10 @@ describe("util.filelock", () => {
       await expect(FileLock.acquire(filepath, { timeoutMs: 5, staleMs: 60_000 })).rejects.toThrow(
         "timed out waiting for file lock",
       )
-      expect(unrefCalls).toBeGreaterThan(0)
+      // The loop did poll...
+      expect(pollTimers).toBeGreaterThan(0)
+      // ...and never unref'd, so an awaited acquire cannot be silently dropped.
+      expect(unrefCalls).toBe(0)
     } finally {
       globalThis.setTimeout = originalSetTimeout
       killSpy.mockRestore()
