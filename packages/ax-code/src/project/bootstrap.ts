@@ -1,3 +1,5 @@
+import "../lsp-glue"
+import "../dre-glue"
 import { Plugin } from "../plugin"
 import { Format } from "../format"
 import { LSP } from "@ax-code/ax-code-intel"
@@ -82,9 +84,9 @@ function background(input: {
   service: string
   label: string
   timeoutMs?: number
-  task: () => Promise<unknown> | unknown
+  task: (signal: AbortSignal) => Promise<unknown> | unknown
 }) {
-  fireAndForget(input.label, () => runtimeTask({ ...input, task: () => input.task() }))
+  fireAndForget(input.label, () => runtimeTask({ ...input, task: (signal) => input.task(signal) }))
 }
 
 export async function InstanceBootstrap() {
@@ -155,13 +157,14 @@ export async function InstanceBootstrap() {
     service: "LSP.prewarmWorkspace",
     label: "lsp semantic prewarm",
     timeoutMs: BOOTSTRAP_PREWARM_TIMEOUT_MS,
-    task: () =>
+    task: (signal) =>
       LSP.prewarmWorkspace({
         mode: "semantic",
         methods: [...INDEXER_SEMANTIC_METHODS],
         maxFiles: BOOTSTRAP_PREWARM_MAX_FILES,
         maxLanguages: BOOTSTRAP_PREWARM_MAX_LANGUAGES,
         preferredFiles: safeWarmupHints(),
+        signal,
       }),
   })
   background({

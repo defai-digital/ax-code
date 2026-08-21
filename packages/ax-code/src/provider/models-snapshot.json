@@ -19203,6 +19203,45 @@
           "output": 131072
         }
       },
+      "deepseek/deepseek-v4-flash-vision-exp": {
+        "id": "deepseek/deepseek-v4-flash-vision-exp",
+        "name": "DeepSeek V4 Flash Vision Exp",
+        "description": "Experimental multimodal DeepSeek V4 Flash model for image understanding, coding, and agentic work",
+        "family": "deepseek-flash",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-21",
+        "last_updated": "2026-08-21",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 384000
+        }
+      },
       "deepseek/deepseek-v4-pro-0813:thinking": {
         "id": "deepseek/deepseek-v4-pro-0813:thinking",
         "name": "DeepSeek V4 Pro 0813 Thinking",
@@ -26181,6 +26220,43 @@
           "context": 16384,
           "input": 16384,
           "output": 8192
+        }
+      },
+      "stealth/ox-alpha": {
+        "id": "stealth/ox-alpha",
+        "name": "Ox Alpha",
+        "description": "Ox Alpha is an experimental stealth model with long-context reasoning, vision, tool calling, and structured output support. Prompts and responses are logged and retained by the provider.",
+        "family": "alpha",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-21",
+        "last_updated": "2026-08-21",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "input": 1000000,
+          "output": 32768
         }
       },
       "zai-org/glm-5.3:thinking": {
@@ -173501,6 +173577,47 @@
           "output": 262144
         }
       },
+      "thinkingmachines/inkling:free": {
+        "id": "thinkingmachines/inkling:free",
+        "name": "Thinking Machines: Inkling (free)",
+        "description": "Inkling is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 41B active parameters out of 975B total. It is designed for general-purpose reasoning, coding, agentic and tool-use systems,...",
+        "family": "ling",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-07-15",
+        "last_updated": "2026-07-15",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        }
+      },
       "thinkingmachines/inkling": {
         "id": "thinkingmachines/inkling",
         "name": "Inkling",
@@ -173539,6 +173656,47 @@
         "open_weights": true,
         "limit": {
           "context": 524288,
+          "output": 262144
+        }
+      },
+      "thinkingmachines/inkling-small:free": {
+        "id": "thinkingmachines/inkling-small:free",
+        "name": "Thinking Machines: Inkling Small (free)",
+        "description": "Inkling Small is an open-weight multimodal mixture-of-experts model from Thinking Machines Lab, with 12B active parameters out of 276B total. It is positioned as the smaller, more efficient member of...",
+        "family": "ling",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-07-30",
+        "last_updated": "2026-07-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
           "output": 262144
         }
       },

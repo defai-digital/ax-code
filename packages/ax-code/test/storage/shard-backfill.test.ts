@@ -1,19 +1,12 @@
-import { describe, expect, test, vi } from "vitest"
+import { afterAll, beforeAll, describe, expect, test } from "vitest"
 
-// AX_CODE_SHARD_SESSIONS is an import-time const in the Flag namespace, and the
-// vitest setup chain already loads flag.ts before test files run, so setting
-// process.env here is too late. Mock the Flag module instead: preserve every
-// other flag and force the sharding flag ON for this file only (vitest isolates
-// module state per test file under the forks pool).
-vi.mock("../../src/flag/flag", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("../../src/flag/flag")>()
-  return {
-    ...mod,
-    Flag: {
-      ...mod.Flag,
-      AX_CODE_SHARD_SESSIONS: true,
-    },
-  }
+const previousShardSessions = process.env.AX_CODE_SHARD_SESSIONS
+beforeAll(() => {
+  process.env.AX_CODE_SHARD_SESSIONS = "1"
+})
+afterAll(() => {
+  if (previousShardSessions === undefined) delete process.env.AX_CODE_SHARD_SESSIONS
+  else process.env.AX_CODE_SHARD_SESSIONS = previousShardSessions
 })
 
 import { Session } from "../../src/session/index"

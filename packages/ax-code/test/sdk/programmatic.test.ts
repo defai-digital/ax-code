@@ -37,6 +37,13 @@ test("programmatic SDK internals use AX Code client naming", async () => {
   expect(src).not.toContain("OpencodeClient")
 })
 
+test("project bootstrap configures extracted engine hosts for programmatic callers", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/project/bootstrap.ts"), "utf-8")
+
+  expect(src).toContain('import "../lsp-glue"')
+  expect(src).toContain('import "../dre-glue"')
+})
+
 test("programmatic stream removes abort listeners when prompt fails", async () => {
   const src = await readFile(path.join(import.meta.dirname, "../../src/sdk/programmatic-impl.ts"), "utf-8")
   const start = src.indexOf("stream(message: string, options?: RunOptions): StreamHandle")
@@ -83,6 +90,7 @@ test("programmatic agent dispose aborts sessions created by the agent", async ()
   expect(createAgentBody).toContain("const abortActiveSessions = async () => {")
   expect(createAgentBody).toContain("sdk.session.abort({ sessionID })")
   expect(src.slice(end, src.indexOf("}", end) + 1)).toContain("await abortActiveSessions()")
+  expect(src.slice(end, src.indexOf("}", end) + 1)).toContain("await bootstrapPromise")
 })
 
 test("programmatic agent stream does not mark initialization started before it succeeds", async () => {

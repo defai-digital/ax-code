@@ -7,6 +7,7 @@ const originalModelsUrl = process.env["AX_CODE_MODELS_URL"]
 const originalAutonomous = process.env["AX_CODE_AUTONOMOUS"]
 const originalSuperLong = process.env["AX_CODE_SUPER_LONG"]
 const originalSuperLongOverride = process.env["AX_CODE_SUPER_LONG_SESSION_OVERRIDE"]
+const originalShardSessions = process.env["AX_CODE_SHARD_SESSIONS"]
 
 afterEach(() => {
   restoreEnv("AX_CODE_CONFIG_CONTENT", originalConfigContent)
@@ -15,6 +16,7 @@ afterEach(() => {
   restoreEnv("AX_CODE_AUTONOMOUS", originalAutonomous)
   restoreEnv("AX_CODE_SUPER_LONG", originalSuperLong)
   restoreEnv("AX_CODE_SUPER_LONG_SESSION_OVERRIDE", originalSuperLongOverride)
+  restoreEnv("AX_CODE_SHARD_SESSIONS", originalShardSessions)
 })
 
 test("autonomous flag defaults on but honors explicit false", () => {
@@ -66,6 +68,17 @@ test("runtime config/model flags read process.env at access time", () => {
   expect(Flag.AX_CODE_CONFIG_CONTENT).toBe('{"username":"second"}')
   expect(Flag.AX_CODE_MODELS_PATH).toBe("/tmp/second-models.json")
   expect(Flag.AX_CODE_MODELS_URL).toBe("https://example.com/second-models.json")
+})
+
+test("session sharding flag reads process.env at access time", () => {
+  delete process.env["AX_CODE_SHARD_SESSIONS"]
+  expect(Flag.AX_CODE_SHARD_SESSIONS).toBe(false)
+
+  process.env["AX_CODE_SHARD_SESSIONS"] = "true"
+  expect(Flag.AX_CODE_SHARD_SESSIONS).toBe(true)
+
+  process.env["AX_CODE_SHARD_SESSIONS"] = "false"
+  expect(Flag.AX_CODE_SHARD_SESSIONS).toBe(false)
 })
 
 test("positive integer flag parser rejects non-decimal numerics", () => {

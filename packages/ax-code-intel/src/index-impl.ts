@@ -625,7 +625,11 @@ export namespace LSP {
 
   export const selectPrewarmFiles = LSPPrewarm.selectFiles
 
-  export async function prewarmFiles(files: string[], opts: ClientOptions = {}): Promise<PrewarmResult> {
+  export async function prewarmFiles(
+    files: string[],
+    opts: ClientOptions & { signal?: AbortSignal } = {},
+  ): Promise<PrewarmResult> {
+    opts.signal?.throwIfAborted()
     const request = resolveClientRequest(opts)
     const uniqueFiles = uniqueStrings(files)
 
@@ -641,7 +645,9 @@ export namespace LSP {
           return { readyCount: 0, freshSpawnCount: 0 }
         }
 
+        opts.signal?.throwIfAborted()
         const s = await state()
+        opts.signal?.throwIfAborted()
         const planned = new Map<
           string,
           {
@@ -653,6 +659,7 @@ export namespace LSP {
         let freshSpawnCount = 0
 
         for (const file of uniqueFiles) {
+          opts.signal?.throwIfAborted()
           const extension = path.parse(file).ext || path.basename(file)
           for (const server of Object.values(s.servers)) {
             if (!serverMatchesClientRequest(server, request)) continue
@@ -692,6 +699,7 @@ export namespace LSP {
         const pending: PendingClientSpawn[] = []
         const warmed: LSPClient.Info[] = []
         for (const [, target] of targets) {
+          opts.signal?.throwIfAborted()
           if (queueClientForRoot(s, target.server, target.root, warmed, pending)) freshSpawnCount++
         }
 
@@ -710,8 +718,9 @@ export namespace LSP {
   }
 
   export async function prewarmWorkspace(
-    opts: ClientOptions & PrewarmSelectionOptions = {},
+    opts: ClientOptions & PrewarmSelectionOptions & { signal?: AbortSignal } = {},
   ): Promise<PrewarmWorkspaceResult> {
+    opts.signal?.throwIfAborted()
     const maxFiles = normalizePrewarmWorkspaceLimit(opts.maxFiles, 0)
     const maxLanguages = normalizePrewarmWorkspaceLimit(opts.maxLanguages, maxFiles)
     if (maxFiles === 0 || maxLanguages === 0) {
@@ -741,11 +750,13 @@ export namespace LSP {
     // ripgrep fallback so historically-hot files win a prewarm slot. Each hint
     // is validated for language + client availability and skipped otherwise.
     for (const probe of opts.preferredFiles ?? []) {
+      opts.signal?.throwIfAborted()
       if (selected.length >= maxFiles || seenLanguages.size >= maxLanguages) break
       const language = LSPPrewarm.detectLanguage(probe)
       if (language === "unknown" || language === "plaintext") continue
       if (seenLanguages.has(language)) continue
       if (!(await hasPrewarmClients(probe, opts))) continue
+      opts.signal?.throwIfAborted()
       selected.push(probe)
       seenLanguages.add(language)
     }
@@ -754,6 +765,7 @@ export namespace LSP {
       cwd: codeIntelHost().projectRoot(),
       limit: WORKSPACE_PROBE_SCAN_LIMIT,
     })) {
+      opts.signal?.throwIfAborted()
       if (selected.length >= maxFiles || seenLanguages.size >= maxLanguages) break
 
       const probe = path.join(codeIntelHost().projectRoot(), rel)
@@ -761,11 +773,13 @@ export namespace LSP {
       if (language === "unknown" || language === "plaintext") continue
       if (seenLanguages.has(language)) continue
       if (!(await hasPrewarmClients(probe, opts))) continue
+      opts.signal?.throwIfAborted()
 
       selected.push(probe)
       seenLanguages.add(language)
     }
 
+    opts.signal?.throwIfAborted()
     const warmed = await prewarmFiles(selected, opts)
     log.info("workspace semantic prewarm completed", {
       files: selected.length,

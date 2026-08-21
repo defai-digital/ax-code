@@ -139,4 +139,26 @@ describe("ServiceManager", () => {
     release()
     await task
   })
+
+  test("aborts tracked tasks during runtime disposal", async () => {
+    const manager = ServiceManager.create()
+    const task = manager.track({
+      service: "LSP.prewarmWorkspace",
+      label: "lsp semantic prewarm",
+      task: (signal) =>
+        new Promise<void>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true })
+        }),
+    })
+
+    manager.abortAll()
+
+    await expect(task).rejects.toMatchObject({ name: "AbortError" })
+    expect(manager.snapshot().tasks).toEqual([
+      expect.objectContaining({
+        service: "LSP.prewarmWorkspace",
+        state: "aborted",
+      }),
+    ])
+  })
 })

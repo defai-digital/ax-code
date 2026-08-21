@@ -12,6 +12,7 @@
 
 import { configureCodeReasonHost, DebugEngine, type GraphPort } from "@ax-code/ax-code-reason"
 import type { DreTxOrDb } from "@ax-code/ax-code-reason/host"
+import { Log as PackageLog } from "@ax-code/ax-code-reason/internal/log"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { CodeIntelligence } from "@/code-intelligence"
@@ -24,6 +25,7 @@ import { NativeAddon } from "@/native/addon"
 import { NativePerf } from "@/perf/native"
 import { Shell } from "@/shell/shell"
 import { Database } from "@/storage/db"
+import { Log } from "@/util/log"
 
 export const DreEvent = {
   CorrelatedDiagnostics: BusEvent.define(
@@ -31,6 +33,19 @@ export const DreEvent = {
     DebugEngine.Event.CorrelatedDiagnostics.properties,
   ),
 }
+
+// Route package log output into the core log stack. Without a sink the
+// standalone package writes to stderr, which corrupts compatible-mode TUI
+// rendering and bypasses the configured AX Code log destination.
+const loggerCache = new Map<string, ReturnType<typeof Log.create>>()
+PackageLog.setSink((level, service, message, extra) => {
+  let logger = loggerCache.get(service)
+  if (!logger) {
+    logger = Log.create({ service })
+    loggerCache.set(service, logger)
+  }
+  logger[level](message, extra)
+})
 
 // Graph adapter: the engine speaks plain-string IDs across the port; the
 // core graph uses branded ProjectID/CodeNodeID. Convert at the boundary.

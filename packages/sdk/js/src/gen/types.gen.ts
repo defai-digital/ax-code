@@ -793,28 +793,6 @@ export type EventFileEdited = {
   }
 }
 
-export type EventDebugEngineCorrelatedDiagnostics = {
-  type: "debug-engine.correlated-diagnostics"
-  properties: {
-    file: string
-    correlations: Array<{
-      file: string
-      line: number
-      message: string
-      severity: number
-      rootCauseFile: string | null
-      rootCauseSymbol: string | null
-      rootCauseChain: Array<string>
-      confidence: "high" | "medium" | "low"
-      lspTimestamp: number
-      lspServerIDs: Array<string>
-      graphQueryIds: Array<string>
-      graphIndexedAt: number
-      graphCompleteness: "full" | "partial" | "lsp-only"
-    }>
-  }
-}
-
 export type EventMcpToolsChanged = {
   type: "mcp.tools.changed"
   properties: {
@@ -920,6 +898,28 @@ export type EventTaskQueueDeleted = {
     id: string
     projectID: string
     sessionID?: string
+  }
+}
+
+export type EventDebugEngineCorrelatedDiagnostics = {
+  type: "debug-engine.correlated-diagnostics"
+  properties: {
+    file: string
+    correlations: Array<{
+      file: string
+      line: number
+      message: string
+      severity: number
+      rootCauseFile: string | null
+      rootCauseSymbol: string | null
+      rootCauseChain: Array<string>
+      confidence: "high" | "medium" | "low"
+      lspTimestamp: number
+      lspServerIDs: Array<string>
+      graphQueryIds: Array<string>
+      graphIndexedAt: number
+      graphCompleteness: "full" | "partial" | "lsp-only"
+    }>
   }
 }
 
@@ -2131,12 +2131,12 @@ export type Event =
   | EventNotificationMonitorLine
   | EventNotificationMonitorExit
   | EventFileEdited
-  | EventDebugEngineCorrelatedDiagnostics
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
   | EventTaskQueueCreated
   | EventTaskQueueUpdated
   | EventTaskQueueDeleted
+  | EventDebugEngineCorrelatedDiagnostics
   | EventVcsBranchUpdated
   | EventCommandExecuted
   | EventWorkflowRunCreated

@@ -1,17 +1,12 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest"
 
-// AX_CODE_SHARD_SESSIONS is an import-time const in the Flag namespace (same
-// caveat as test/storage/shard-backfill.test.ts), so mock the Flag module to
-// force sharding ON for this file only.
-vi.mock("../../src/flag/flag", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("../../src/flag/flag")>()
-  return {
-    ...mod,
-    Flag: {
-      ...mod.Flag,
-      AX_CODE_SHARD_SESSIONS: true,
-    },
-  }
+const previousShardSessions = process.env.AX_CODE_SHARD_SESSIONS
+beforeAll(() => {
+  process.env.AX_CODE_SHARD_SESSIONS = "1"
+})
+afterAll(() => {
+  if (previousShardSessions === undefined) delete process.env.AX_CODE_SHARD_SESSIONS
+  else process.env.AX_CODE_SHARD_SESSIONS = previousShardSessions
 })
 
 import { Instance } from "../../src/project/instance"

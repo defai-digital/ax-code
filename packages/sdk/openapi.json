@@ -37844,126 +37844,6 @@
           "properties"
         ]
       },
-      "Event.debug-engine.correlated-diagnostics": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "debug-engine.correlated-diagnostics"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "file": {
-                "type": "string"
-              },
-              "correlations": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "file": {
-                      "type": "string"
-                    },
-                    "line": {
-                      "type": "number"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "severity": {
-                      "type": "number"
-                    },
-                    "rootCauseFile": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "rootCauseSymbol": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "rootCauseChain": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "confidence": {
-                      "type": "string",
-                      "enum": [
-                        "high",
-                        "medium",
-                        "low"
-                      ]
-                    },
-                    "lspTimestamp": {
-                      "type": "number"
-                    },
-                    "lspServerIDs": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "graphQueryIds": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "graphIndexedAt": {
-                      "type": "number"
-                    },
-                    "graphCompleteness": {
-                      "type": "string",
-                      "enum": [
-                        "full",
-                        "partial",
-                        "lsp-only"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "file",
-                    "line",
-                    "message",
-                    "severity",
-                    "rootCauseFile",
-                    "rootCauseSymbol",
-                    "rootCauseChain",
-                    "confidence",
-                    "lspTimestamp",
-                    "lspServerIDs",
-                    "graphQueryIds",
-                    "graphIndexedAt",
-                    "graphCompleteness"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "file",
-              "correlations"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.mcp.tools.changed": {
         "type": "object",
         "properties": {
@@ -38319,6 +38199,126 @@
             "required": [
               "id",
               "projectID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.debug-engine.correlated-diagnostics": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "debug-engine.correlated-diagnostics"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "correlations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "file": {
+                      "type": "string"
+                    },
+                    "line": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "severity": {
+                      "type": "number"
+                    },
+                    "rootCauseFile": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "rootCauseSymbol": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "rootCauseChain": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "confidence": {
+                      "type": "string",
+                      "enum": [
+                        "high",
+                        "medium",
+                        "low"
+                      ]
+                    },
+                    "lspTimestamp": {
+                      "type": "number"
+                    },
+                    "lspServerIDs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "graphQueryIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "graphIndexedAt": {
+                      "type": "number"
+                    },
+                    "graphCompleteness": {
+                      "type": "string",
+                      "enum": [
+                        "full",
+                        "partial",
+                        "lsp-only"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "file",
+                    "line",
+                    "message",
+                    "severity",
+                    "rootCauseFile",
+                    "rootCauseSymbol",
+                    "rootCauseChain",
+                    "confidence",
+                    "lspTimestamp",
+                    "lspServerIDs",
+                    "graphQueryIds",
+                    "graphIndexedAt",
+                    "graphCompleteness"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "file",
+              "correlations"
             ]
           }
         },
@@ -43167,9 +43167,6 @@
             "$ref": "#/components/schemas/Event.file.edited"
           },
           {
-            "$ref": "#/components/schemas/Event.debug-engine.correlated-diagnostics"
-          },
-          {
             "$ref": "#/components/schemas/Event.mcp.tools.changed"
           },
           {
@@ -43183,6 +43180,9 @@
           },
           {
             "$ref": "#/components/schemas/Event.task.queue.deleted"
+          },
+          {
+            "$ref": "#/components/schemas/Event.debug-engine.correlated-diagnostics"
           },
           {
             "$ref": "#/components/schemas/Event.vcs.branch.updated"

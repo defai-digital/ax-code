@@ -236,7 +236,7 @@ export namespace Flag {
   // Phase 2 per-project DB sharding (slice 0: foundation only). Default off;
   // slice 0 is inert with the flag on OR off — no call sites route to shards
   // yet. Later slices gate shard routing on this flag for staged rollout.
-  export const AX_CODE_SHARD_SESSIONS = truthy("AX_CODE_SHARD_SESSIONS")
+  export declare const AX_CODE_SHARD_SESSIONS: boolean
   // Visual Browser Agent (ADR-047): snapshot-first browser automation for
   // local web UI review and repair. Gated behind feature flag until the
   // Playwright runtime dependency and permission model are stable.
@@ -361,6 +361,11 @@ defineBooleanFlag("AX_CODE_NATIVE_DIFF", true)
 defineBooleanFlag("AX_CODE_NATIVE_PARSER", true)
 
 defineBooleanFlag("AX_CODE_DISABLE_FILETIME_CHECK")
+
+// Project bootstrap and test preloads load the shard router before every
+// caller has finalized its environment. Keep the rollout flag lazy so
+// embedders and per-file test harnesses can enable sharding before use.
+defineBooleanFlag("AX_CODE_SHARD_SESSIONS")
 
 // Session-first TUI launch is off by default (ADR-035). When enabled, the TUI
 // auto-resumes the most recent session instead of landing on the home/new-session

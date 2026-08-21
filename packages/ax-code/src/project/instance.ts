@@ -291,6 +291,7 @@ export const Instance = {
       directory,
     })
     try {
+      ServiceManager.peek(directory)?.abortAll()
       await Promise.allSettled([State.dispose(directory)])
       cache.delete(directory)
       const next = track(directory, boot({ ...input, directory }))
@@ -328,6 +329,7 @@ export const Instance = {
       projectID: Instance.project.id,
     })
     try {
+      Instance.runtime().abortAll()
       await Promise.allSettled([State.dispose(directory)])
       cache.delete(directory)
       emit(directory)

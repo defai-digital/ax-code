@@ -962,8 +962,9 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
     resolveKeepAlive = r
   })
 
+  let bootstrapPromise: Promise<void>
   const initPromise = new Promise<void>((resolve, reject) => {
-    bootstrap(opts.directory, async () => {
+    bootstrapPromise = bootstrap(opts.directory, async () => {
       // Enhancement #5: Direct API key auth
       if (opts.auth) {
         await Auth.set(opts.auth.provider, { type: "api", key: opts.auth.apiKey })
@@ -1184,6 +1185,7 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
       // returns and `Instance.provide` runs its finally-block
       // teardown (LSP shutdown, DB close, watcher cleanup, etc.).
       resolveKeepAlive()
+      await bootstrapPromise
     },
   }
 }

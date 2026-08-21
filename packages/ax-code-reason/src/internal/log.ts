@@ -28,7 +28,7 @@ export namespace Log {
   const levelRank: Record<Level, number> = { debug: 0, info: 1, warn: 2, error: 3 }
 
   function threshold(): number {
-    const configured = process.env.AX_CODEINTEL_LOG_LEVEL?.toUpperCase()
+    const configured = process.env.AX_CODE_REASON_LOG_LEVEL?.toUpperCase()
     if (configured === "DEBUG") return levelRank.debug
     if (configured === "WARN") return levelRank.warn
     if (configured === "ERROR") return levelRank.error

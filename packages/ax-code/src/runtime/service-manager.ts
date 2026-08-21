@@ -5,6 +5,7 @@ interface ManagerState {
   nextTaskID: number
   services: Map<string, ServiceManager.ServiceStatus>
   tasks: Map<string, ServiceManager.BackgroundTaskStatus>
+  controllers: Map<string, AbortController>
 }
 
 const registry = new Map<string, ManagerState>()
@@ -15,6 +16,7 @@ function createState(): ManagerState {
     nextTaskID: 0,
     services: new Map(),
     tasks: new Map(),
+    controllers: new Map(),
   }
 }
 
@@ -154,6 +156,12 @@ function describeError(error: unknown) {
   return toErrorMessage(error)
 }
 
+function createAbortError() {
+  const error = new Error("Runtime service manager disposed")
+  error.name = "AbortError"
+  return error
+}
+
 function createManager(state: ManagerState): ServiceManager.Manager {
   return {
     ensureService(name: string) {
@@ -239,6 +247,7 @@ function createManager(state: ManagerState): ServiceManager.Manager {
       }))
 
       const controller = new AbortController()
+      state.controllers.set(id, controller)
       let timedOut = false
       let settled = false
       const abortFromParent = () => {
@@ -339,6 +348,7 @@ function createManager(state: ManagerState): ServiceManager.Manager {
         throw error
       } finally {
         settled = true
+        state.controllers.delete(id)
         if (timeout) {
           clearTimeout(timeout)
         }
@@ -353,6 +363,11 @@ function createManager(state: ManagerState): ServiceManager.Manager {
     },
     snapshot() {
       return snapshotFromState(state)
+    },
+    abortAll(reason: unknown = createAbortError()) {
+      for (const controller of state.controllers.values()) {
+        if (!controller.signal.aborted) controller.abort(reason)
+      }
     },
   }
 }
@@ -447,6 +462,7 @@ export namespace ServiceManager {
     fail(name: string, error: unknown, time?: number): ServiceStatus
     track<T>(input: TrackInput<T>): Promise<T>
     snapshot(): Snapshot
+    abortAll(reason?: unknown): void
   }
 
   export interface Service {
@@ -524,12 +540,16 @@ export namespace ServiceManager {
   }
 
   export function reset(directory: string) {
+    const previous = registry.get(directory)
+    if (previous) createManager(previous).abortAll()
     const state = createState()
     touchRegistry(directory, state)
     return createManager(state)
   }
 
   export function clear(directory: string) {
+    const state = registry.get(directory)
+    if (state) createManager(state).abortAll()
     registry.delete(directory)
   }
 

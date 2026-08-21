@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url"
 import type { DebugEngine as DebugEngineTypes } from "@ax-code/ax-code-reason"
 import "./register-node"
 
+await import("../src/lsp-glue")
+await import("../src/dre-glue")
 const { Instance } = await import("../src/project/instance")
 const { DebugEngine } = await import("@ax-code/ax-code-reason")
 
@@ -47,8 +49,11 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const packageDir = path.resolve(scriptDir, "..")
 const repoRoot = path.resolve(packageDir, "../..")
 const defaultBaselinePath = path.join(scriptDir, "self-scan-baseline.json")
-const sourceScope = "packages/ax-code/src"
-const sourceGlobs = ["src/**/*.ts", "src/**/*.tsx", "src/**/*.js", "src/**/*.jsx", "src/**/*.mjs", "src/**/*.cjs"]
+const sourceRoots = ["src", "../ax-code-intel/src", "../ax-code-reason/src"]
+const sourceScope = sourceRoots.map((root) => path.relative(repoRoot, path.resolve(packageDir, root))).join(", ")
+const sourceGlobs = sourceRoots.flatMap((root) =>
+  ["ts", "tsx", "js", "jsx", "mjs", "cjs"].map((extension) => `${root}/**/*.${extension}`),
+)
 
 const scannerOrder: ScannerName[] = ["race_scan", "lifecycle_scan", "security_scan", "hardcode_scan"]
 

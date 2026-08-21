@@ -1,16 +1,12 @@
-import { describe, expect, test, vi } from "vitest"
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest"
 
-// AX_CODE_SHARD_SESSIONS is an import-time const in the Flag namespace; force
-// it ON for this file only (same pattern as test/storage/shard-backfill.test.ts).
-vi.mock("../../src/flag/flag", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("../../src/flag/flag")>()
-  return {
-    ...mod,
-    Flag: {
-      ...mod.Flag,
-      AX_CODE_SHARD_SESSIONS: true,
-    },
-  }
+const previousShardSessions = process.env.AX_CODE_SHARD_SESSIONS
+beforeAll(() => {
+  process.env.AX_CODE_SHARD_SESSIONS = "1"
+})
+afterAll(() => {
+  if (previousShardSessions === undefined) delete process.env.AX_CODE_SHARD_SESSIONS
+  else process.env.AX_CODE_SHARD_SESSIONS = previousShardSessions
 })
 
 import { Session } from "../../src/session/index"
