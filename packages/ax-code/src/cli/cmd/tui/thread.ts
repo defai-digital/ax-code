@@ -25,7 +25,7 @@ import { internalBaseUrl } from "@/util/internal-url"
 import { TUI_BACKEND_EXITED, type StreamConnectionStatus } from "./util/resilient-stream"
 import { runtimeMode } from "@/installation/runtime-mode"
 import { spawn } from "node:child_process"
-import { flushTuiStdout, resetTuiTerminalState } from "./terminal-cleanup"
+import { drainTuiStdin, flushTuiStdout, resetTuiTerminalState } from "./terminal-cleanup"
 import { parseIntegerEnv } from "./util/env"
 import { formatWorkerLoadError } from "./util/log-error"
 import { parseTuiJsonPayload } from "./util/json"
@@ -1019,6 +1019,10 @@ export const TuiThreadCommand = cmd({
       unguard?.()
     }
     await flushTuiStdout()
+    // Swallow in-flight terminal input (Kitty key-release bytes, paste tails)
+    // so it cannot echo into the restored shell prompt after we exit. Bounded;
+    // resolves early once stdin goes idle.
+    await drainTuiStdin()
     // Honor an exit code set by exit(reason) (e.g. a bootstrap failure) —
     // exiting unconditionally with 0 here reported fatal startup failures as
     // success to the shell.

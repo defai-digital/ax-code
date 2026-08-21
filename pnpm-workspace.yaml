@@ -41,6 +41,15 @@ catalog:
   "zod": "4.3.6"
   "zod-to-json-schema": "3.24.5"
 
+# Named catalog for @ax-code/tui: the vendored opentui renderer pins newer
+# majors of diff/marked than the rest of the workspace (catalog diff is 8.x,
+# marked is 12.x), so they live in their own catalog rather than hardcoded in
+# packages/ax-code-tui/package.json.
+catalogs:
+  tui:
+    "diff": "9.0.0"
+    "marked": "17.0.1"
+
 onlyBuiltDependencies:
   - electron
   - node-pty-prebuilt-multiarch

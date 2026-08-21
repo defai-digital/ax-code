@@ -121,9 +121,9 @@
     "babel-plugin-module-resolver": "5.0.2",
     "babel-preset-solid": "1.9.12",
     "bun-ffi-structs": "0.2.3",
-    "diff": "9.0.0",
+    "diff": "catalog:tui",
     "entities": "7.0.1",
-    "marked": "17.0.1",
+    "marked": "catalog:tui",
     "string-width": "7.2.0",
     "strip-ansi": "catalog:"
   },

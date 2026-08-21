@@ -6,6 +6,7 @@ vi.mock("@/flag/flag", () => ({ Flag: {} }))
 
 import {
   createTuiTerminalCrashResetSequence,
+  drainTuiStdin,
   resetTuiTerminalState,
   TUI_KITTY_KEYBOARD_POP_SEQUENCE,
   TUI_MAIN_SCREEN_CLEAR_SEQUENCE,
@@ -68,6 +69,40 @@ describe("resetTuiTerminalState", () => {
     expect(writes[0]).toContain(TUI_MODIFY_OTHER_KEYS_DISABLE_SEQUENCE)
     expect(writes[0]).not.toContain(TUI_KITTY_KEYBOARD_POP_SEQUENCE)
   })
+
+  function fakeTtyStdin(events: string[]) {
+    const stream = {
+      isTTY: true,
+      setRawMode: (mode: boolean) => {
+        events.push(`setRawMode(${mode})`)
+      },
+    }
+    return stream
+  }
+
+  test("writes the protocol reset BEFORE restoring stdin raw mode", () => {
+    // Once the terminal stops reporting Kitty/modifyOtherKeys sequences,
+    // in-flight key releases stop generating escape bytes that would drain
+    // into the shell after teardown — so the reset must land first.
+    const events: string[] = []
+    const { stream } = fakeStdout()
+    const write = stream.write
+    stream.write = (chunk: string, callback?: () => void) => {
+      events.push("stdout.write")
+      return write(chunk, callback)
+    }
+    resetTuiTerminalState({ stdout: stream, stdin: fakeTtyStdin(events), screenMode: "alternate-screen" })
+    expect(events).toEqual(["stdout.write", "setRawMode(false)"])
+  })
+
+  test("still restores stdin raw mode when stdout is not writable", () => {
+    const events: string[] = []
+    const { stream, writes } = fakeStdout()
+    stream.writable = false
+    resetTuiTerminalState({ stdout: stream, stdin: fakeTtyStdin(events), screenMode: "main-screen" })
+    expect(writes).toEqual([])
+    expect(events).toEqual(["setRawMode(false)"])
+  })
 })
 
 describe("modifyOtherKeys (Shift+Enter on non-Kitty terminals)", () => {
@@ -93,5 +128,60 @@ describe("kitty keyboard crash recovery", () => {
 
   test("default crash reset pops Kitty flags when the protocol was enabled", () => {
     expect(TUI_TERMINAL_CRASH_RESET_SEQUENCE).toContain(TUI_KITTY_KEYBOARD_POP_SEQUENCE)
+  })
+})
+
+describe("drainTuiStdin", () => {
+  function fakeDrainableStdin() {
+    const listeners = new Set<(chunk: unknown) => void>()
+    const calls: string[] = []
+    const stream = {
+      isTTY: true,
+      destroyed: false,
+      resume: () => {
+        calls.push("resume")
+      },
+      pause: () => {
+        calls.push("pause")
+      },
+      on: (_event: "data", listener: (chunk: unknown) => void) => {
+        listeners.add(listener)
+      },
+      off: (_event: "data", listener: (chunk: unknown) => void) => {
+        listeners.delete(listener)
+      },
+      emit: (chunk: unknown) => {
+        for (const listener of [...listeners]) listener(chunk)
+      },
+      listenerCount: () => listeners.size,
+    }
+    return { stream, calls }
+  }
+
+  test("resolves immediately for non-TTY stdin", async () => {
+    await drainTuiStdin({ stream: { isTTY: false }, timeoutMs: 10, idleMs: 5 })
+  })
+
+  test("discards late input bytes, then pauses and detaches once idle", async () => {
+    const { stream, calls } = fakeDrainableStdin()
+    const drained = drainTuiStdin({ stream, timeoutMs: 500, idleMs: 10 })
+    expect(calls).toEqual(["resume"])
+    // Late Kitty key-release bytes arriving after teardown are swallowed.
+    stream.emit("\x1b[13;1:3u")
+    stream.emit("\x1b[97;1:3u")
+    await drained
+    expect(stream.listenerCount()).toBe(0)
+    expect(calls).toEqual(["resume", "pause"])
+  })
+
+  test("is bounded by the hard cap when bytes keep arriving", async () => {
+    const { stream, calls } = fakeDrainableStdin()
+    const started = Date.now()
+    const interval = setInterval(() => stream.emit("x"), 2)
+    interval.unref()
+    await drainTuiStdin({ stream, timeoutMs: 30, idleMs: 60_000 })
+    clearInterval(interval)
+    expect(Date.now() - started).toBeLessThan(1000)
+    expect(calls).toContain("pause")
   })
 })

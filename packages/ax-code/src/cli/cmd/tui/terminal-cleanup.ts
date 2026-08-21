@@ -93,24 +93,100 @@ export function resetTuiTerminalState(
     kittyKeyboard?: boolean
   } = {},
 ) {
-  const stdinRestored = restoreTuiStdinMode(input.stdin)
   const stdout = input.stdout ?? process.stdout
-  if (stdout.writable === false || stdout.destroyed) return stdinRestored
-  const screenMode = input.screenMode ?? (Flag.AX_CODE_TUI_ADVANCED_TERMINAL ? "alternate-screen" : "main-screen")
-  try {
-    // Alternate-screen restores the prior shell view via \x1b[?1049l above.
-    // Main-screen paints on the normal buffer, so the crash path must also
-    // erase the last frame — otherwise a dead full-screen TUI lingers above
-    // the shell prompt (the clean-exit path does the same in renderer.ts).
-    const clear = screenMode === "main-screen" ? TUI_MAIN_SCREEN_CLEAR_SEQUENCE : ""
-    const reset = createTuiTerminalCrashResetSequence({
-      kittyKeyboard: input.kittyKeyboard ?? Flag.AX_CODE_TUI_KITTY_KEYBOARD,
-    })
-    stdout.write(reset + clear)
-    return true
-  } catch {
-    return stdinRestored
+  let written = false
+  if (stdout.writable !== false && !stdout.destroyed) {
+    const screenMode = input.screenMode ?? (Flag.AX_CODE_TUI_ADVANCED_TERMINAL ? "alternate-screen" : "main-screen")
+    try {
+      // Alternate-screen restores the prior shell view via \x1b[?1049l above.
+      // Main-screen paints on the normal buffer, so the crash path must also
+      // erase the last frame — otherwise a dead full-screen TUI lingers above
+      // the shell prompt (the clean-exit path does the same in renderer.ts).
+      const clear = screenMode === "main-screen" ? TUI_MAIN_SCREEN_CLEAR_SEQUENCE : ""
+      const reset = createTuiTerminalCrashResetSequence({
+        kittyKeyboard: input.kittyKeyboard ?? Flag.AX_CODE_TUI_KITTY_KEYBOARD,
+      })
+      // Protocol disables are written BEFORE stdin raw mode is restored:
+      // once the terminal stops reporting Kitty/modifyOtherKeys sequences,
+      // in-flight key releases no longer generate escape bytes that would
+      // otherwise drain into the shell after teardown.
+      stdout.write(reset + clear)
+      written = true
+    } catch {
+      // Fall through — stdin must still be restored even when stdout is dead.
+    }
   }
+  const stdinRestored = restoreTuiStdinMode(input.stdin)
+  return written || stdinRestored
+}
+
+type DrainableStdin = RawModeStream & {
+  destroyed?: boolean
+  paused?: () => boolean
+  resume?: () => unknown
+  pause?: () => unknown
+  on?: (event: "data", listener: (chunk: unknown) => void) => unknown
+  off?: (event: "data", listener: (chunk: unknown) => void) => unknown
+}
+
+// After teardown, terminals can still deliver in-flight input bytes (Kitty
+// key-release events, a bracketed-paste tail) that arrived before the protocol
+// disables took effect — over a slow SSH link this is common. Left unread they
+// are echoed into the restored shell prompt as literal garbage. Drain stdin in
+// flowing mode with a discard listener until the stream goes idle, bounded so
+// exit is never delayed by more than `timeoutMs`. Mirrors the drain discipline
+// used by other terminal agents (e.g. pi-tui's drainInput).
+export function drainTuiStdin(
+  input: {
+    stream?: DrainableStdin
+    // Hard cap on the whole drain. Keeps `process.exit` prompt even when the
+    // terminal keeps emitting bytes (e.g. a stuck key repeating).
+    timeoutMs?: number
+    // Resolve early once no new bytes arrive for this long.
+    idleMs?: number
+  } = {},
+) {
+  const stream = input.stream ?? process.stdin
+  if (!stream.isTTY || stream.destroyed) return Promise.resolve()
+  if (typeof stream.on !== "function" || typeof stream.off !== "function" || typeof stream.resume !== "function") {
+    return Promise.resolve()
+  }
+  const timeoutMs = input.timeoutMs ?? 200
+  const idleMs = input.idleMs ?? 50
+  return new Promise<void>((resolve) => {
+    let settled = false
+    let idle: ReturnType<typeof setTimeout> | undefined
+    const discard = () => {
+      // Any byte resets the idle clock: a burst of late key-release events is
+      // drained as a unit, then we stop waiting.
+      if (idle) clearTimeout(idle)
+      idle = setTimeout(done, idleMs)
+      idle.unref?.()
+    }
+    const done = () => {
+      if (settled) return
+      settled = true
+      if (idle) clearTimeout(idle)
+      clearTimeout(cap)
+      try {
+        stream.off?.("data", discard)
+        stream.pause?.()
+      } catch {
+        // Best effort — the process is exiting anyway.
+      }
+      resolve()
+    }
+    const cap = setTimeout(done, timeoutMs)
+    cap.unref?.()
+    try {
+      stream.on?.("data", discard)
+      idle = setTimeout(done, idleMs)
+      idle.unref?.()
+      stream.resume?.()
+    } catch {
+      done()
+    }
+  })
 }
 
 // Cap how long teardown waits for the final stdout write. If the stream is in
