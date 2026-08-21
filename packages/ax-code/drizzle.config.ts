@@ -10,7 +10,9 @@ const dataDir =
 
 export default defineConfig({
   dialect: "sqlite",
-  schema: "./src/**/*.sql.ts",
+  // Include the extracted engine package's tables — without this glob the next
+  // `drizzle-kit generate` would emit DROP TABLEs for debug_engine_*.
+  schema: ["./src/**/*.sql.ts", "../ax-codereason/src/**/*.sql.ts"],
   out: "./migration",
   dbCredentials: {
     url: path.join(dataDir, "ax-code", "ax-code.db"),

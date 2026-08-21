@@ -1,4 +1,4 @@
-// Minimal leveled logger for @ax-code/ax-codeintel.
+// Minimal leveled logger for @ax-code/ax-codereason.
 //
 // The package must not depend on the core logging stack, so this writes to
 // stderr by default. Hosts can route entries into their own logger via
