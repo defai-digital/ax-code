@@ -1,6 +1,7 @@
 {
   "name": "@ax-code/ax-wiki",
   "version": "0.1.0",
+  "private": true,
   "description": "Deterministic, source-backed repository wiki engine for AX Code",
   "type": "module",
   "license": "Apache-2.0",
