@@ -8,7 +8,10 @@ export namespace Module {
   export function resolve(id: string, dir: string) {
     try {
       return createRequire(path.join(dir, "package.json")).resolve(id)
-    } catch {}
+    } catch {
+      // Resolution failure is a normal "not installed" signal; callers fall
+      // back to manifest-based resolution or undefined. (AUDIT-pkg-util-empty-catch)
+    }
   }
 
   /**
