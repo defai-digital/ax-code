@@ -11,7 +11,13 @@ const CHANNEL = (() => {
   if (env.AX_CODE_CHANNEL) return env.AX_CODE_CHANNEL
   if (env.AX_CODE_BUMP) return "latest"
   if (env.AX_CODE_VERSION && !env.AX_CODE_VERSION.startsWith("0.0.0-")) return "latest"
-  return execFileSync("git", ["branch", "--show-current"]).toString().trim()
+  const branch = execFileSync("git", ["branch", "--show-current"]).toString().trim()
+  if (!branch) {
+    // Detached HEAD exits 0 with empty output; an empty channel would produce
+    // an invalid preview version ("0.0.0--...") and an unusable npm dist-tag.
+    throw new Error("Could not resolve release channel: git HEAD is detached. Set AX_CODE_CHANNEL explicitly.")
+  }
+  return branch
 })()
 const IS_PREVIEW = CHANNEL !== "latest"
 
@@ -20,8 +26,10 @@ const VERSION = await (async () => {
   if (IS_PREVIEW) {
     // Channel names can contain characters that are invalid in semver prerelease
     // identifiers (e.g. "feature/release"); normalize so preview versions stay parseable.
+    // Include seconds (14 digits): minute precision let two builds in the same
+    // UTC minute collide on the same preview version.
     const channel = CHANNEL.replace(/[^a-zA-Z0-9-]/g, "-")
-    return `0.0.0-${channel}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}`
+    return `0.0.0-${channel}-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "")}`
   }
   const version = await fetch("https://api.github.com/repos/defai-digital/ax-code/releases/latest")
     .then((res) => {

@@ -26,12 +26,12 @@ describe("Script", () => {
     const Script = await loadScript({ AX_CODE_CHANNEL: "beta" })
     expect(Script.channel).toBe("beta")
     expect(Script.preview).toBe(true)
-    expect(Script.version).toMatch(/^0\.0\.0-beta-\d{12}$/)
+    expect(Script.version).toMatch(/^0\.0\.0-beta-\d{14}$/)
   })
 
   test("preview channel is sanitized into a valid semver prerelease", async () => {
     const Script = await loadScript({ AX_CODE_CHANNEL: "feature/release" })
     expect(Script.preview).toBe(true)
-    expect(Script.version).toMatch(/^0\.0\.0-feature-release-\d{12}$/)
+    expect(Script.version).toMatch(/^0\.0\.0-feature-release-\d{14}$/)
   })
 })
