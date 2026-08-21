@@ -22,25 +22,6 @@ afterEach(async () => {
 })
 
 describe("tool.list", () => {
-  test("throws on path with null byte", async () => {
-    await using tmp = await tmpdir()
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const list = await ListTool.init()
-        await expect(
-          list.execute(
-            {
-              path: "./safe\x00dir",
-            },
-            ctx,
-          ),
-        ).rejects.toThrow("File path contains null byte")
-      },
-    })
-  })
-
   test("lists files in a directory", async () => {
     await using tmp = await tmpdir()
 

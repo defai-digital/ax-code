@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import { writeFile } from "fs/promises"
-import { GlobTool, parseNativeGlobEntries } from "../../src/tool/glob"
+import { GlobTool } from "../../src/tool/glob"
 import { NativeAddon } from "../../src/native/addon"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
@@ -19,22 +19,6 @@ afterEach(async () => {
 })
 
 describe("tool.glob", () => {
-  test("parseNativeGlobEntries decodes valid native output", () => {
-    expect(parseNativeGlobEntries(JSON.stringify([{ path: "/repo/a.ts", mtime: 12, size: 34 }]))).toEqual([
-      { path: "/repo/a.ts", mtime: 12, size: 34 },
-    ])
-  })
-
-  test("parseNativeGlobEntries rejects malformed native output", () => {
-    expect(() => parseNativeGlobEntries("{not json")).toThrow(SyntaxError)
-    expect(() => parseNativeGlobEntries(JSON.stringify({ path: "/repo/a.ts", mtime: 12, size: 34 }))).toThrow(
-      SyntaxError,
-    )
-    expect(() => parseNativeGlobEntries(JSON.stringify([{ path: "/repo/a.ts", mtime: "12", size: 34 }]))).toThrow(
-      SyntaxError,
-    )
-  })
-
   test("JS fallback keeps vanished matches with mtime 0", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

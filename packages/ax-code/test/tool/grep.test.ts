@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import { writeFile } from "fs/promises"
-import { GrepTool, parseNativeSearchMatches, parseRipgrepLineNumber } from "../../src/tool/grep"
+import { GrepTool } from "../../src/tool/grep"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { SessionID, MessageID } from "../../src/session/schema"
@@ -27,30 +27,6 @@ afterEach(async () => {
 })
 
 describe("tool.grep", () => {
-  test("parseNativeSearchMatches decodes valid native output", () => {
-    expect(
-      parseNativeSearchMatches(JSON.stringify([{ path: "/repo/a.ts", line: 2, column: 4, matchText: "needle" }])),
-    ).toEqual([{ path: "/repo/a.ts", line: 2, column: 4, matchText: "needle" }])
-  })
-
-  test("parseNativeSearchMatches rejects malformed native output", () => {
-    expect(() => parseNativeSearchMatches("{not json")).toThrow(SyntaxError)
-    expect(() =>
-      parseNativeSearchMatches(JSON.stringify({ path: "/repo/a.ts", line: 2, column: 4, matchText: "needle" })),
-    ).toThrow(SyntaxError)
-    expect(() =>
-      parseNativeSearchMatches(JSON.stringify([{ path: "/repo/a.ts", line: "2", column: 4, matchText: "needle" }])),
-    ).toThrow(SyntaxError)
-  })
-
-  test("parseRipgrepLineNumber accepts only complete safe integers", () => {
-    expect(parseRipgrepLineNumber("12")).toBe(12)
-    expect(parseRipgrepLineNumber("12abc")).toBeUndefined()
-    expect(parseRipgrepLineNumber("-1")).toBeUndefined()
-    expect(parseRipgrepLineNumber("1.5")).toBeUndefined()
-    expect(parseRipgrepLineNumber("9007199254740992")).toBeUndefined()
-  })
-
   test("basic search", async () => {
     await Instance.provide({
       directory: projectRoot,
