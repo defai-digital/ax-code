@@ -49,6 +49,11 @@ PackageLog.setSink((level, service, message, extra) => {
   logger[level](message, extra)
 })
 
+const subscribeFileUpdated = (callback: (file: string) => void) =>
+  Bus.subscribe(FileWatcher.Event.Updated, (event) => {
+    callback(event.properties.file)
+  })
+
 configureCodeIntelHost({
   projectRoot: () => Instance.directory,
   worktreeRoot: () => Instance.worktree,
@@ -70,10 +75,11 @@ configureCodeIntelHost({
   },
   killTree: (proc, opts) => Shell.killTree(proc, opts),
   listFiles: (input) => Ripgrep.files(input),
-  subscribeRootMarkerChange: (callback) =>
-    Bus.subscribe(FileWatcher.Event.Updated, (event) => {
-      callback(event.properties.file)
-    }),
+  // Both root-marker and workspace-generation invalidation react to the same
+  // file-watcher event; they differ only in what the consumer does with it.
+  // Share one subscriber rather than duplicating the body.
+  subscribeRootMarkerChange: subscribeFileUpdated,
+  subscribeFileChange: subscribeFileUpdated,
   publishUpdated: () => Bus.publishDetached(LspEvent.Updated, {}),
   publishClientDiagnostics: (payload) => Bus.publishDetached(LspEvent.ClientDiagnostics, payload),
   cacheStore: {

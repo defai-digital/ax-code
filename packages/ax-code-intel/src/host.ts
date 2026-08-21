@@ -124,6 +124,11 @@ export type CodeIntelHost = {
   // Subscribe to project root marker file changes (package.json, lockfiles...).
   // Returns an unsubscribe function.
   subscribeRootMarkerChange(callback: (file: string) => void): () => void
+  // Subscribe to workspace file changes (any file under the workspace).
+  // Used to invalidate workspace-dependent cache entries. Optional: hosts
+  // without a watcher simply omit it, at the cost of weaker cache
+  // invalidation. Returns an unsubscribe function.
+  subscribeFileChange?(callback: (file: string) => void): () => void
   // Publish the "lsp.updated" event on the host's event bus. The host is
   // responsible for registering the event definition with its own bus so it
   // appears in event contracts (e.g. SSE/OpenAPI).

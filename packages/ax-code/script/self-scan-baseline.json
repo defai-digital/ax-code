@@ -1444,9 +1444,9 @@
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "f673ac35339509c03a500498df4247e2f5d80b7b9f11e48e6087baaab28c1ebe",
+          "fingerprint": "b065461d00889e88cca68b1c6cf858453d77aff286e4f3a5e72979aadba24c56",
           "file": "src/lsp-glue.ts",
-          "line": 74,
+          "line": 53,
           "severity": "medium",
           "kind": "subscription:no_cleanup",
           "summary": "subscription:no_cleanup"
@@ -1971,7 +1971,7 @@
         {
           "fingerprint": "ea3dee262816ea739342fb280c91744acc40329996b1a5005203d3624b544f0d",
           "file": "../ax-code-intel/src/client.ts",
-          "line": 517,
+          "line": 542,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -1979,7 +1979,7 @@
         {
           "fingerprint": "45478769f1aad20aacea7cbb72cbf518fa3bb9a89e0026b86ef0dd4a143501ef",
           "file": "../ax-code-intel/src/client.ts",
-          "line": 651,
+          "line": 678,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -1987,7 +1987,7 @@
         {
           "fingerprint": "fd594fc1b0f281986e8cd5630f9fe83695d078c5e7bde3d4348c9c137514fc1f",
           "file": "../ax-code-intel/src/client.ts",
-          "line": 660,
+          "line": 687,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"

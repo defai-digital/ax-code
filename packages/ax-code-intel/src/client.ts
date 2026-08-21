@@ -1,4 +1,5 @@
 import { codeIntelHost } from "./host"
+import { noteWorkspaceChange } from "./cache-context"
 import { InternalBus } from "./internal/events"
 import path from "path"
 import { pathToFileURL, fileURLToPath } from "url"
@@ -119,6 +120,22 @@ export function computeIncrementalChanges(oldText: string, newText: string): Lsp
   if (incrementalTextBytes >= newText.length) return null
 
   return changes
+}
+
+/**
+ * Parse the server's declared `textDocumentSync` capability: either a bare
+ * TextDocumentSyncKind number (0 = None, 1 = Full, 2 = Incremental) or an
+ * options object carrying it in `change`. Returns undefined when the server
+ * declared nothing — callers must treat that as full sync.
+ */
+export function textDocumentSyncKind(capabilities: Record<string, unknown> | undefined): number | undefined {
+  const value = capabilities?.["textDocumentSync"]
+  if (typeof value === "number") return value
+  if (value && typeof value === "object") {
+    const change = (value as { change?: unknown }).change
+    if (typeof change === "number") return change
+  }
+  return undefined
 }
 
 export namespace LSPClient {
@@ -310,7 +327,11 @@ export namespace LSPClient {
           workspace: {
             configuration: true,
             didChangeWatchedFiles: {
-              dynamicRegistration: true,
+              // No dynamic registration: the client/registerCapability
+              // handler is a deliberate no-op, so claiming support here
+              // would be a lie. Watched-file notifications are sent
+              // proactively instead.
+              dynamicRegistration: false,
             },
           },
           textDocument: {
@@ -336,6 +357,9 @@ export namespace LSPClient {
     })
 
     const runtimeCapabilityHints = capabilityHintsFromInitialize(initializeResult?.capabilities)
+    // Negotiated document sync mode. Ranged (incremental) didChange payloads
+    // are only protocol-legal when this is TextDocumentSyncKind.Incremental.
+    const syncKind = textDocumentSyncKind(initializeResult?.capabilities)
 
     await connection.sendNotification("initialized", {})
 
@@ -464,6 +488,7 @@ export namespace LSPClient {
           // clean up local state.
         })
       if (input.deleted) {
+        noteWorkspaceChange()
         await connection
           .sendNotification("workspace/didChangeWatchedFiles", {
             changes: [
@@ -564,13 +589,15 @@ export namespace LSPClient {
 
               const next = version + 1
               files[normalized] = next
+              noteWorkspaceChange()
 
-              // Try incremental sync first. If we have the previously-sent
-              // text cached and computeIncrementalChanges produces a reasonable
-              // hunk list, send ranges. Otherwise fall back to full-document
-              // sync — which works on every server regardless of their
-              // declared sync kind, since LSP treats a range-less change as
-              // "replace the whole document".
+              // Ranged incremental changes are only protocol-legal when the
+              // server negotiated TextDocumentSyncKind.Incremental. For Full,
+              // undeclared, or None servers send a single range-less change —
+              // LSP treats that as "replace the whole document", the only
+              // change payload a Full-sync server accepts. Also fall back to
+              // full when no previously-sent text is cached or the diff is
+              // pathological.
               let contentChanges: Array<
                 | { text: string }
                 | {
@@ -579,7 +606,7 @@ export namespace LSPClient {
                   }
               >
               const prevText = lastContent.get(normalized)?.text
-              const incremental = prevText ? computeIncrementalChanges(prevText, text) : null
+              const incremental = syncKind === 2 && prevText ? computeIncrementalChanges(prevText, text) : null
               if (incremental && incremental.length > 0) {
                 contentChanges = incremental
                 log.info("textDocument/didChange (incremental)", {

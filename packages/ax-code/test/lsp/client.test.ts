@@ -379,7 +379,11 @@ describe("LSPClient interop", () => {
     await fs.mkdir(path.dirname(absolutePath), { recursive: true })
     await fs.writeFile(absolutePath, "export const x = 1\n")
 
-    const handle = spawnFakeServer() as any
+    // Incremental (ranged) didChange is only sent when the server negotiated
+    // TextDocumentSyncKind.Incremental.
+    const handle = spawnFakeServer({
+      FAKE_LSP_CAPABILITIES_JSON: JSON.stringify({ textDocumentSync: 2 }),
+    }) as any
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -411,6 +415,52 @@ describe("LSPClient interop", () => {
         expect(didChange?.params?.contentChanges?.length).toBeGreaterThan(0)
         const incremental = didChange?.params?.contentChanges?.some((change: { range?: object }) => "range" in change)
         expect(incremental).toBe(true)
+
+        await client.shutdown()
+      },
+    })
+  })
+
+  test("notify.open sends full-document didChange when the server is full-sync only", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "index.ts")
+    await fs.writeFile(file, "export const x = 1\n")
+
+    const handle = spawnFakeServer({
+      FAKE_LSP_CAPABILITIES_JSON: JSON.stringify({ textDocumentSync: 1 }),
+    }) as any
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const client = await LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        })
+
+        const sent: { method: string; params: any }[] = []
+        const conn = client.connection as typeof client.connection & {
+          sendNotification: (method: string, params: any) => Promise<void>
+        }
+        const originalSendNotification = conn.sendNotification.bind(conn)
+        conn.sendNotification = ((method: string, params: any) => {
+          sent.push({ method, params })
+          return originalSendNotification(method, params)
+        }) as typeof conn.sendNotification
+
+        await client.notify.open({ path: file })
+        sent.length = 0
+
+        const updated = "export const x = 1\nexport const y = 2\n"
+        await fs.writeFile(file, updated)
+        const changed = await client.notify.open({ path: file })
+        expect(changed).toBe(true)
+
+        // A Full-sync server must never receive ranged changes: the whole
+        // document is sent as a single range-less change instead.
+        const didChange = sent.find((entry) => entry.method === "textDocument/didChange")
+        expect(didChange).toBeDefined()
+        expect(didChange?.params?.contentChanges).toEqual([{ text: updated }])
 
         await client.shutdown()
       },
