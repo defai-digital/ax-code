@@ -11,7 +11,7 @@ import {
   scannerUsesIncrementalFiles,
   scanScannerFiles,
   sortScannerFindings,
-} from "@ax-code/ax-codereason/scanner-utils"
+} from "@ax-code/ax-code-reason/scanner-utils"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 

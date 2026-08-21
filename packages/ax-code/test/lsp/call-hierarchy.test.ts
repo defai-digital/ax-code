@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import path from "path"
 import { writeFile } from "node:fs/promises"
-import { LSP } from "@ax-code/ax-codeintel"
+import { LSP } from "@ax-code/ax-code-intel"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"

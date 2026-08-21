@@ -26,7 +26,7 @@ import {
   venvPaths,
   venvPython,
   pathExists,
-} from "@ax-code/ax-codeintel/server-helpers"
+} from "@ax-code/ax-code-intel/server-helpers"
 import {
   PINNED_CHECKSUM_LSP_RELEASES,
   PINNED_DIRECT_LSP_RELEASES,
@@ -55,10 +55,10 @@ import {
   tinymistAsset,
   zlsAsset,
   zlsReleaseForZig,
-} from "@ax-code/ax-codeintel/server-releases"
-import { codeIntelHost } from "@ax-code/ax-codeintel/host"
-import { Filesystem } from "@ax-code/ax-codeintel/internal/filesystem"
-import { Process } from "@ax-code/ax-codeintel/internal/process"
+} from "@ax-code/ax-code-intel/server-releases"
+import { codeIntelHost } from "@ax-code/ax-code-intel/host"
+import { Filesystem } from "@ax-code/ax-code-intel/internal/filesystem"
+import { Process } from "@ax-code/ax-code-intel/internal/process"
 
 describe("lsp server helpers", () => {
   test("pathExists returns false only for missing paths", async () => {

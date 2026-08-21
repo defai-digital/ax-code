@@ -1,7 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
 import z from "zod"
-import type { DebugEngine } from "@ax-code/ax-codereason"
+import type { DebugEngine } from "@ax-code/ax-code-reason"
 import { Flag } from "../flag/flag"
 import { Installation } from "../installation"
 import type { Risk } from "../risk/score"

@@ -2,7 +2,7 @@ import z from "zod"
 import { Tool } from "./tool"
 import DESCRIPTION from "./hardcode_scan.txt"
 import { Instance } from "../project/instance"
-import { DebugEngine } from "@ax-code/ax-codereason"
+import { DebugEngine } from "@ax-code/ax-code-reason"
 import { buildScanToolResult, scanToolCommonDetectInput, SCAN_TOOL_COMMON_PARAMETERS } from "./scan-coverage"
 
 // Tool wrapper around DebugEngine.detectHardcodes. Read-only scan,

@@ -8,7 +8,7 @@ import { Process } from "@/util/process"
 import { Ssrf } from "@/util/ssrf"
 import { Log } from "@/util/log"
 import { toErrorMessage } from "@/util/error-message"
-import { installReleaseBin } from "@ax-code/ax-codeintel/server-releases"
+import { installReleaseBin } from "@ax-code/ax-code-intel/server-releases"
 import {
   AX_ENGINE_BINARY_RELEASE,
   AX_ENGINE_ERROR,

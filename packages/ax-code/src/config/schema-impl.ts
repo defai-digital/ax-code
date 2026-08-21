@@ -2,7 +2,7 @@ import z from "zod"
 import { isRecord } from "@/util/record"
 import { ModelsDev } from "../provider/models"
 import { Log } from "../util/log"
-import { LSPServer } from "@ax-code/ax-codeintel/server"
+import { LSPServer } from "@ax-code/ax-code-intel/server"
 import { GITHUB_REPO_URL as REPO_URL } from "@/constants/project"
 import { MCP_DEFAULT_TIMEOUT_MS } from "@/mcp/constants"
 

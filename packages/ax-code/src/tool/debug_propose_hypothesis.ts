@@ -6,8 +6,8 @@ import {
   DebugHypothesisSchema,
   DebugHypothesisStatus,
   DEBUG_ID_PATTERN,
-} from "@ax-code/ax-codereason/runtime-debug"
-import { classifyEnvelopeSet } from "@ax-code/ax-codereason/verify-after-fix"
+} from "@ax-code/ax-code-reason/runtime-debug"
+import { classifyEnvelopeSet } from "@ax-code/ax-code-reason/verify-after-fix"
 import { Installation } from "../installation"
 import { SessionDebug } from "../session/debug"
 import { SessionVerifications } from "../session/verifications"

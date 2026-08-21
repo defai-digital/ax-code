@@ -4,7 +4,7 @@ import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { LspTool, normalizeLspToolEnvelopeData } from "../../src/tool/lsp"
 import { Instance } from "../../src/project/instance"
-import { LSP } from "@ax-code/ax-codeintel"
+import { LSP } from "@ax-code/ax-code-intel"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { Log } from "../../src/util/log"
 

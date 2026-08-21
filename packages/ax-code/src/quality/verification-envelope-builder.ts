@@ -1,4 +1,4 @@
-import type { DebugEngine } from "@ax-code/ax-codereason"
+import type { DebugEngine } from "@ax-code/ax-code-reason"
 import { Installation } from "../installation"
 import { Process } from "../util/process"
 import { type StructuredFailure, type VerificationEnvelope, VerificationEnvelopeSchema } from "./verification-envelope"

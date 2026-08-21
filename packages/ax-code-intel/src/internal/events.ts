@@ -1,4 +1,4 @@
-// Minimal in-process pub/sub for @ax-code/ax-codeintel internal event flow.
+// Minimal in-process pub/sub for @ax-code/ax-code-intel internal event flow.
 // Cross-process/host event propagation (e.g. the ax-code core Bus) is handled
 // by the host port; this only serves listeners inside the package.
 

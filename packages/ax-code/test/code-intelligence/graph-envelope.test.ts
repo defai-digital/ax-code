@@ -3,7 +3,7 @@ import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { CodeIntelligence } from "../../src/code-intelligence"
 import { CodeGraphQuery } from "../../src/code-intelligence/query"
-import { LSP } from "@ax-code/ax-codeintel"
+import { LSP } from "@ax-code/ax-code-intel"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })

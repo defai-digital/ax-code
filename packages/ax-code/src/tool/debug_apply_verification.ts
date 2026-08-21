@@ -1,12 +1,12 @@
 import z from "zod"
 import { Tool } from "./tool"
 import DESCRIPTION from "./debug_apply_verification.txt"
-import { DEBUG_ID_PATTERN, DebugHypothesisSchema } from "@ax-code/ax-codereason/runtime-debug"
+import { DEBUG_ID_PATTERN, DebugHypothesisSchema } from "@ax-code/ax-code-reason/runtime-debug"
 import {
   applyVerificationSetToHypothesis,
   classifyEnvelopeSet,
   resolveCaseStatus,
-} from "@ax-code/ax-codereason/verify-after-fix"
+} from "@ax-code/ax-code-reason/verify-after-fix"
 import { Installation } from "../installation"
 import { SessionDebug } from "../session/debug"
 import { SessionVerifications } from "../session/verifications"

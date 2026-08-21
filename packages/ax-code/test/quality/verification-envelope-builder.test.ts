@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import type { DebugEngine } from "@ax-code/ax-codereason"
+import type { DebugEngine } from "@ax-code/ax-code-reason"
 import { fromRefactorApplyResult, fromVerificationCommandResult } from "../../src/quality/verification-envelope-builder"
 import { VerificationEnvelopeSchema } from "../../src/quality/verification-envelope"
 import { Installation } from "../../src/installation"

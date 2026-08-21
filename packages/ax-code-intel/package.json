@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@ax-code/ax-codeintel",
+  "name": "@ax-code/ax-code-intel",
   "version": "0.1.0",
   "description": "Language Server Protocol client and server orchestration for AX Code",
   "type": "module",

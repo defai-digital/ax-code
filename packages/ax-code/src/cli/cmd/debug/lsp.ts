@@ -1,4 +1,4 @@
-import { LSP } from "@ax-code/ax-codeintel"
+import { LSP } from "@ax-code/ax-code-intel"
 import { bootstrap } from "../../bootstrap"
 import { cmd } from "../cmd"
 import { Log } from "../../../util/log"

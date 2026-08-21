@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@ax-code/ax-codereason",
+  "name": "@ax-code/ax-code-reason",
   "version": "0.1.0",
   "description": "Deterministic debugging and refactoring reasoning engine for AX Code",
   "type": "module",
@@ -14,7 +14,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@ax-code/ax-codeintel": "workspace:*",
+    "@ax-code/ax-code-intel": "workspace:*",
     "@ax-code/util": "workspace:*",
     "cross-spawn": "^7.0.6",
     "drizzle-orm": "catalog:",

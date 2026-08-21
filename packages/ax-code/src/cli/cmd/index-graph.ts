@@ -6,13 +6,13 @@ import { CodeGraphBuilder } from "../../code-intelligence/builder"
 import { CodeGraphQuery } from "../../code-intelligence/query"
 import { AutoIndex } from "../../code-intelligence/auto-index"
 import { Ripgrep } from "../../file/ripgrep"
-import { LANGUAGE_EXTENSIONS } from "@ax-code/ax-codeintel/language"
-import { LSP } from "@ax-code/ax-codeintel"
+import { LANGUAGE_EXTENSIONS } from "@ax-code/ax-code-intel/language"
+import { LSP } from "@ax-code/ax-code-intel"
 import {
   INDEXER_SEMANTIC_METHODS,
   INDEX_PREWARM_MAX_FILES,
   INDEX_PREWARM_MAX_LANGUAGES,
-} from "@ax-code/ax-codeintel/prewarm-profile"
+} from "@ax-code/ax-code-intel/prewarm-profile"
 import { NativePerf } from "../../perf/native"
 import type { NativePerfSnapshot } from "../../perf/native"
 import { UI } from "../ui"

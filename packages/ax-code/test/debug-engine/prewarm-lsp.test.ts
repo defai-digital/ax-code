@@ -1,9 +1,9 @@
 import { describe, expect, test, vi, beforeEach, afterAll } from "vitest"
-import { LSP } from "@ax-code/ax-codeintel"
-import { prewarmAffectedFiles, __clearPrewarmState } from "@ax-code/ax-codereason/prewarm-lsp"
-import type { DebugEngine } from "@ax-code/ax-codereason"
+import { LSP } from "@ax-code/ax-code-intel"
+import { prewarmAffectedFiles, __clearPrewarmState } from "@ax-code/ax-code-reason/prewarm-lsp"
+import type { DebugEngine } from "@ax-code/ax-code-reason"
 
-// The engine package imports @ax-code/ax-codeintel across a package boundary,
+// The engine package imports @ax-code/ax-code-intel across a package boundary,
 // where vi.mock from this test file cannot reliably intercept it. Spy on the
 // shared LSP namespace object instead — both workspace packages are inlined
 // in the vitest config, which makes the namespace exports spyable, and both

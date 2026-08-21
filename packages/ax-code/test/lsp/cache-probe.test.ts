@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { LSPCache } from "@/code-intelligence/lsp-cache"
-import * as LSPCacheProbe from "@ax-code/ax-codeintel/cache-probe"
-import * as LSPPerf from "@ax-code/ax-codeintel/perf"
+import * as LSPCacheProbe from "@ax-code/ax-code-intel/cache-probe"
+import * as LSPPerf from "@ax-code/ax-code-intel/perf"
 
 let lookupSpy: MockInstance | undefined
 let hashFileSpy: MockInstance | undefined

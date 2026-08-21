@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { DebugOpenCaseTool } from "../../src/tool/debug_open_case"
-import { computeDebugCaseId, DebugCaseSchema, DEBUG_ID_PATTERN } from "@ax-code/ax-codereason/runtime-debug"
+import { computeDebugCaseId, DebugCaseSchema, DEBUG_ID_PATTERN } from "@ax-code/ax-code-reason/runtime-debug"
 import { Installation } from "../../src/installation"
 
 const ctx = {

@@ -7,7 +7,7 @@ import { execFileSync } from "child_process"
 import { createHash } from "crypto"
 
 import { AxEnginePaths } from "../../../src/provider/ax-engine/paths"
-import { installReleaseBin } from "@ax-code/ax-codeintel/server-releases"
+import { installReleaseBin } from "@ax-code/ax-code-intel/server-releases"
 import {
   AX_ENGINE_BINARY_RELEASE,
   AX_ENGINE_ERROR,

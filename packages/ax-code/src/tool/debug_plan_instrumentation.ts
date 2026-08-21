@@ -7,7 +7,7 @@ import {
   DebugInstrumentationStatus,
   DebugInstrumentationPlanSchema,
   DebugInstrumentationTargetSchema,
-} from "@ax-code/ax-codereason/runtime-debug"
+} from "@ax-code/ax-code-reason/runtime-debug"
 import { Installation } from "../installation"
 import { SessionDebug } from "../session/debug"
 import type { SessionID } from "../session/schema"

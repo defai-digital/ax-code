@@ -1,4 +1,4 @@
-// Host port for @ax-code/ax-codereason.
+// Host port for @ax-code/ax-code-reason.
 //
 // The package is a deterministic debugging & refactoring reasoning engine on
 // top of a code graph. It must not depend on the ax-code core, so everything
@@ -147,7 +147,7 @@ export type CorrelatedDiagnosticsPayload = {
 
 export type DreEventsPort = {
   // Subscribe to LSP client diagnostics events (emitted by language servers
-  // through ax-codeintel). Returns an unsubscribe function.
+  // through ax-code-intel). Returns an unsubscribe function.
   subscribeClientDiagnostics(callback: (event: DiagnosticEvent) => void): () => void
   // Publish correlated-diagnostics results on the host's event bus. The host
   // registers the event definition with its own bus so it appears in event
@@ -207,7 +207,7 @@ export function configureCodeReasonHost(host: CodeReasonHost): void {
 export function codeReasonHost(): CodeReasonHost {
   if (!current) {
     throw new Error(
-      "@ax-code/ax-codereason is not configured: call configureCodeReasonHost() before using the engine API",
+      "@ax-code/ax-code-reason is not configured: call configureCodeReasonHost() before using the engine API",
     )
   }
   return current

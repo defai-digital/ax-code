@@ -2,11 +2,11 @@ import { afterEach, describe, expect, test, beforeEach, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
-import { LSPClient } from "@ax-code/ax-codeintel/client"
-import { LSPServer } from "@ax-code/ax-codeintel/server"
+import { LSPClient } from "@ax-code/ax-code-intel/client"
+import { LSPServer } from "@ax-code/ax-code-intel/server"
 import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
-import { Filesystem } from "@ax-code/ax-codeintel/internal/filesystem"
+import { Filesystem } from "@ax-code/ax-code-intel/internal/filesystem"
 
 // Minimal fake LSP server that speaks JSON-RPC over stdio
 function spawnFakeServer(env?: Record<string, string>) {

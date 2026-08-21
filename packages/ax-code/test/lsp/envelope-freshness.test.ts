@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
-import { LSP } from "@ax-code/ax-codeintel"
-import { participantStatus } from "@ax-code/ax-codeintel/envelope"
-import { isMethodNotFound } from "@ax-code/ax-codeintel/envelope-runner"
+import { LSP } from "@ax-code/ax-code-intel"
+import { participantStatus } from "@ax-code/ax-code-intel/envelope"
+import { isMethodNotFound } from "@ax-code/ax-code-intel/envelope-runner"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })

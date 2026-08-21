@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
-import { documentSymbols, envelope } from "@ax-code/ax-codeintel/document-symbol"
-import type { LSPClient } from "@ax-code/ax-codeintel/client"
+import { documentSymbols, envelope } from "@ax-code/ax-code-intel/document-symbol"
+import type { LSPClient } from "@ax-code/ax-code-intel/client"
 
 test("documentSymbol envelope uses semantic selection and document-symbol request params", async () => {
   const requests: Array<{ method: string; params: unknown }> = []

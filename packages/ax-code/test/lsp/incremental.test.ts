@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { computeIncrementalChanges } from "@ax-code/ax-codeintel/client"
+import { computeIncrementalChanges } from "@ax-code/ax-code-intel/client"
 
 describe("computeIncrementalChanges", () => {
   test("returns null and empty list for identical inputs", () => {

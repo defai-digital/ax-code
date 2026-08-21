@@ -1,6 +1,6 @@
 import { Plugin } from "../plugin"
 import { Format } from "../format"
-import { LSP } from "@ax-code/ax-codeintel"
+import { LSP } from "@ax-code/ax-code-intel"
 import { File } from "../file"
 import { FileWatcher } from "../file/watcher"
 import { Snapshot } from "../snapshot"
@@ -15,7 +15,7 @@ import { Session } from "../session"
 import { ScheduledTask } from "@/session/scheduled-task"
 import { TaskQueue } from "@/session/task-queue"
 import { Provider } from "../provider/provider"
-import { DiagnosticCorrelation } from "@ax-code/ax-codereason/diagnostic-correlation"
+import { DiagnosticCorrelation } from "@ax-code/ax-code-reason/diagnostic-correlation"
 import { CodeIntelligence } from "../code-intelligence"
 import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
 import { toErrorMessage } from "@/util/error-message"
@@ -24,7 +24,7 @@ import {
   BOOTSTRAP_PREWARM_MAX_LANGUAGES,
   BOOTSTRAP_PREWARM_TIMEOUT_MS,
   INDEXER_SEMANTIC_METHODS,
-} from "@ax-code/ax-codeintel/prewarm-profile"
+} from "@ax-code/ax-code-intel/prewarm-profile"
 
 const BOOTSTRAP_TIMEOUT_MS = 30_000
 

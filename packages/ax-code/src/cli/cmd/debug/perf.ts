@@ -5,12 +5,12 @@ import { CodeIntelligence } from "../../../code-intelligence"
 import { CodeGraphQuery } from "../../../code-intelligence/query"
 import { Instance } from "../../../project/instance"
 import { Ripgrep } from "../../../file/ripgrep"
-import { LSP } from "@ax-code/ax-codeintel"
+import { LSP } from "@ax-code/ax-code-intel"
 import {
   INDEXER_SEMANTIC_METHODS,
   INDEX_PREWARM_MAX_FILES,
   INDEX_PREWARM_MAX_LANGUAGES,
-} from "@ax-code/ax-codeintel/prewarm-profile"
+} from "@ax-code/ax-code-intel/prewarm-profile"
 import { NativePerf } from "../../../perf/native"
 import {
   buildIndexReport,

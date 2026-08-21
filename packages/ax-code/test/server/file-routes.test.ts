@@ -4,7 +4,7 @@ import path from "path"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { tmpdir } from "../fixture/fixture"
-import { LSP } from "@ax-code/ax-codeintel"
+import { LSP } from "@ax-code/ax-code-intel"
 import { Log } from "../../src/util/log"
 import { File } from "../../src/file"
 

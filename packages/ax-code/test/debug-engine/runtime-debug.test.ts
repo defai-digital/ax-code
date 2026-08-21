@@ -9,13 +9,13 @@ import {
   DebugEvidenceSchema,
   DebugHypothesisSchema,
   DebugInstrumentationPlanSchema,
-} from "@ax-code/ax-codereason/runtime-debug"
+} from "@ax-code/ax-code-reason/runtime-debug"
 import type {
   DebugCase,
   DebugEvidence,
   DebugHypothesis,
   DebugInstrumentationPlan,
-} from "@ax-code/ax-codereason/runtime-debug"
+} from "@ax-code/ax-code-reason/runtime-debug"
 
 const validCase: DebugCase = {
   schemaVersion: 1,

@@ -1,4 +1,4 @@
-// Core glue for @ax-code/ax-codereason.
+// Core glue for @ax-code/ax-code-reason.
 //
 // Wires the ax-code runtime (code-intelligence graph, shard-aware database,
 // project instance context, bus, native addons) into the engine's host port.
@@ -10,8 +10,8 @@
 // drift — keeping the event registered in the core event registry for the
 // SSE/OpenAPI contract.
 
-import { configureCodeReasonHost, DebugEngine, type GraphPort } from "@ax-code/ax-codereason"
-import type { DreTxOrDb } from "@ax-code/ax-codereason/host"
+import { configureCodeReasonHost, DebugEngine, type GraphPort } from "@ax-code/ax-code-reason"
+import type { DreTxOrDb } from "@ax-code/ax-code-reason/host"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { CodeIntelligence } from "@/code-intelligence"

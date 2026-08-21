@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
-import { spawn } from "@ax-code/ax-codeintel/launch"
+import { spawn } from "@ax-code/ax-code-intel/launch"
 import { tmpdir } from "../fixture/fixture"
 
 describe("lsp.launch", () => {

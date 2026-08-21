@@ -12,11 +12,11 @@ import { CodeNodeID, CodeEdgeID, CodeFileID } from "../../src/code-intelligence/
 import { CodeNodeTable, CodeEdgeTable, CodeFileTable } from "../../src/code-intelligence/schema.sql"
 import { eq } from "drizzle-orm"
 import type { ProjectID } from "../../src/project/schema"
-import { DebugEngine } from "@ax-code/ax-codereason"
-import { parsePythonStack, parseStackTrace, detectStackFormat } from "@ax-code/ax-codereason/analyze-bug"
-import { extractFilesFromDiff } from "@ax-code/ax-codereason/analyze-impact"
-import { ShadowWorktree } from "@ax-code/ax-codereason/shadow-worktree"
-import { RefactorPlanID } from "@ax-code/ax-codereason/id"
+import { DebugEngine } from "@ax-code/ax-code-reason"
+import { parsePythonStack, parseStackTrace, detectStackFormat } from "@ax-code/ax-code-reason/analyze-bug"
+import { extractFilesFromDiff } from "@ax-code/ax-code-reason/analyze-impact"
+import { ShadowWorktree } from "@ax-code/ax-code-reason/shadow-worktree"
+import { RefactorPlanID } from "@ax-code/ax-code-reason/id"
 
 Log.init({ print: false })
 
@@ -1565,7 +1565,7 @@ describe("applySafeRefactor", () => {
         })
 
         // Manually transition to applied, then try to re-apply.
-        const { DebugEngineQuery } = await import("@ax-code/ax-codereason/query")
+        const { DebugEngineQuery } = await import("@ax-code/ax-code-reason/query")
         DebugEngineQuery.updatePlanStatus(projectID, plan.planId, "applied")
 
         const result = await DebugEngine.applySafeRefactor(projectID, { planId: plan.planId })

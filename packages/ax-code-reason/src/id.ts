@@ -1,7 +1,7 @@
 import z from "zod"
 import { Identifier } from "@ax-code/util/identifier"
 
-// Branded identifier machinery for @ax-code/ax-codereason.
+// Branded identifier machinery for @ax-code/ax-code-reason.
 //
 // Mirrors the core's defineBrandedIdentifier shape, but the prefix lives
 // with the definition: the package must not depend on the core id module.

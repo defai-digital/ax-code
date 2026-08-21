@@ -1,4 +1,4 @@
-// Core glue for @ax-code/ax-codeintel.
+// Core glue for @ax-code/ax-code-intel.
 //
 // Wires the ax-code runtime (project instance, global paths, flags, config,
 // shell, bus, graph-backed LSP cache) into the package's host port. Importing
@@ -10,8 +10,8 @@
 // SSE/OpenAPI event contract now that their shapes live in the package.
 
 import z from "zod"
-import { configureCodeIntelHost, type LspCacheOperation } from "@ax-code/ax-codeintel/host"
-import { Log as PackageLog } from "@ax-code/ax-codeintel/internal/log"
+import { configureCodeIntelHost, type LspCacheOperation } from "@ax-code/ax-code-intel/host"
+import { Log as PackageLog } from "@ax-code/ax-code-intel/internal/log"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Config } from "@/config/config"

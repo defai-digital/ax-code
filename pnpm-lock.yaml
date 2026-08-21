@@ -791,12 +791,12 @@ importers:
       '@ai-sdk/provider-utils':
         specifier: 4.0.22
         version: 4.0.22(zod@4.3.6)
-      '@ax-code/ax-codeintel':
+      '@ax-code/ax-code-intel':
         specifier: workspace:*
-        version: link:../ax-codeintel
-      '@ax-code/ax-codereason':
+        version: link:../ax-code-intel
+      '@ax-code/ax-code-reason':
         specifier: workspace:*
-        version: link:../ax-codereason
+        version: link:../ax-code-reason
       '@ax-code/ax-wiki':
         specifier: workspace:*
         version: link:../ax-wiki
@@ -1117,65 +1117,7 @@ importers:
         specifier: 'catalog:'
         version: 3.0.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@26.0.0)(emnapi@1.9.2(node-addon-api@8.7.0))
 
-  packages/ax-code-parser-native:
-    devDependencies:
-      '@napi-rs/cli':
-        specifier: 'catalog:'
-        version: 3.0.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@26.0.0)(emnapi@1.9.2(node-addon-api@8.7.0))
-
-  packages/ax-code-terminal-native:
-    devDependencies:
-      '@napi-rs/cli':
-        specifier: 'catalog:'
-        version: 3.0.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@26.0.0)(emnapi@1.9.2(node-addon-api@8.7.0))
-
-  packages/ax-code-tui:
-    dependencies:
-      '@babel/core':
-        specifier: 7.29.6
-        version: 7.29.6
-      '@babel/preset-typescript':
-        specifier: 7.27.1
-        version: 7.27.1(@babel/core@7.29.6)
-      babel-plugin-module-resolver:
-        specifier: 5.0.2
-        version: 5.0.2
-      babel-preset-solid:
-        specifier: 1.9.12
-        version: 1.9.12(@babel/core@7.29.6)(solid-js@1.9.12)
-      bun-ffi-structs:
-        specifier: 0.2.3
-        version: 0.2.3(typescript@5.9.3)
-      diff:
-        specifier: catalog:tui
-        version: 9.0.0
-      entities:
-        specifier: 7.0.1
-        version: 7.0.1
-      marked:
-        specifier: catalog:tui
-        version: 17.0.1
-      solid-js:
-        specifier: 'catalog:'
-        version: 1.9.12
-      string-width:
-        specifier: 7.2.0
-        version: 7.2.0
-      strip-ansi:
-        specifier: 'catalog:'
-        version: 7.1.2
-      web-tree-sitter:
-        specifier: 0.25.10
-        version: 0.25.10
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 24.13.2
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-
-  packages/ax-codeintel:
+  packages/ax-code-intel:
     dependencies:
       '@ax-code/util':
         specifier: workspace:*
@@ -1230,11 +1172,17 @@ importers:
         specifier: ^4.1.9
         version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@24.13.2)(@vitest/coverage-v8@4.1.9)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
-  packages/ax-codereason:
+  packages/ax-code-parser-native:
+    devDependencies:
+      '@napi-rs/cli':
+        specifier: 'catalog:'
+        version: 3.0.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@26.0.0)(emnapi@1.9.2(node-addon-api@8.7.0))
+
+  packages/ax-code-reason:
     dependencies:
-      '@ax-code/ax-codeintel':
+      '@ax-code/ax-code-intel':
         specifier: workspace:*
-        version: link:../ax-codeintel
+        version: link:../ax-code-intel
       '@ax-code/util':
         specifier: workspace:*
         version: link:../util
@@ -1269,6 +1217,58 @@ importers:
       vitest:
         specifier: ^4.1.9
         version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@24.13.2)(@vitest/coverage-v8@4.1.9)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+
+  packages/ax-code-terminal-native:
+    devDependencies:
+      '@napi-rs/cli':
+        specifier: 'catalog:'
+        version: 3.0.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@26.0.0)(emnapi@1.9.2(node-addon-api@8.7.0))
+
+  packages/ax-code-tui:
+    dependencies:
+      '@babel/core':
+        specifier: 7.29.6
+        version: 7.29.6
+      '@babel/preset-typescript':
+        specifier: 7.27.1
+        version: 7.27.1(@babel/core@7.29.6)
+      babel-plugin-module-resolver:
+        specifier: 5.0.2
+        version: 5.0.2
+      babel-preset-solid:
+        specifier: 1.9.12
+        version: 1.9.12(@babel/core@7.29.6)(solid-js@1.9.12)
+      bun-ffi-structs:
+        specifier: 0.2.3
+        version: 0.2.3(typescript@5.9.3)
+      diff:
+        specifier: catalog:tui
+        version: 9.0.0
+      entities:
+        specifier: 7.0.1
+        version: 7.0.1
+      marked:
+        specifier: catalog:tui
+        version: 17.0.1
+      solid-js:
+        specifier: 'catalog:'
+        version: 1.9.12
+      string-width:
+        specifier: 7.2.0
+        version: 7.2.0
+      strip-ansi:
+        specifier: 'catalog:'
+        version: 7.1.2
+      web-tree-sitter:
+        specifier: 0.25.10
+        version: 0.25.10
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
 
   packages/ax-wiki:
     devDependencies:

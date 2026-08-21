@@ -6,7 +6,7 @@ import {
   computeDebugEvidenceId,
   DebugHypothesisSchema,
   DEBUG_ID_PATTERN,
-} from "@ax-code/ax-codereason/runtime-debug"
+} from "@ax-code/ax-code-reason/runtime-debug"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
 import { tmpdir } from "../fixture/fixture"

@@ -8,7 +8,7 @@ import {
   validateIndexConcurrency,
   validateIndexLimit,
 } from "../../src/cli/cmd/index-graph"
-import { LSP } from "@ax-code/ax-codeintel"
+import { LSP } from "@ax-code/ax-code-intel"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })

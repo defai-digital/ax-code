@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { BuiltinServerProfiles } from "@ax-code/ax-codeintel/server-profile"
+import { BuiltinServerProfiles } from "@ax-code/ax-code-intel/server-profile"
 
 describe("BuiltinServerProfiles", () => {
   test("marks lint servers as auxiliary and unsupported for semantic navigation", () => {

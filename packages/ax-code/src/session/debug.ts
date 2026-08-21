@@ -8,8 +8,8 @@ import {
   DebugHypothesisSchema,
   type DebugInstrumentationPlan,
   DebugInstrumentationPlanSchema,
-} from "@ax-code/ax-codereason/runtime-debug"
-import { resolveCaseStatus } from "@ax-code/ax-codereason/verify-after-fix"
+} from "@ax-code/ax-code-reason/runtime-debug"
+import { resolveCaseStatus } from "@ax-code/ax-code-reason/verify-after-fix"
 import { EventQuery } from "../replay/query"
 import { Log } from "../util/log"
 import type { SessionID } from "./schema"

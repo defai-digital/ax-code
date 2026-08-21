@@ -1,4 +1,4 @@
-import { LSP } from "@ax-code/ax-codeintel"
+import { LSP } from "@ax-code/ax-code-intel"
 import { Filesystem } from "../util/filesystem"
 import { Bus } from "../bus"
 import { File } from "../file"
@@ -6,8 +6,8 @@ import { FileWatcher } from "../file/watcher"
 import { MAX_DIAGNOSTICS_PER_FILE, MAX_PROJECT_DIAGNOSTICS_FILES } from "@/constants/tool"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
-import { DiagnosticCorrelation, prewarmAffectedFiles } from "@ax-code/ax-codereason"
-import { DebugEngine } from "@ax-code/ax-codereason"
+import { DiagnosticCorrelation, prewarmAffectedFiles } from "@ax-code/ax-code-reason"
+import { DebugEngine } from "@ax-code/ax-code-reason"
 import { Instance } from "@/project/instance"
 import { uniqueStrings } from "@/util/string-list"
 
@@ -125,7 +125,7 @@ function renderCorrelationBlock(
 
 async function runCorrelationAndPrewarm(
   editedFiles: string[],
-  diagnostics: Record<string, import("@ax-code/ax-codeintel/client").LSPClient.Diagnostic[]>,
+  diagnostics: Record<string, import("@ax-code/ax-code-intel/client").LSPClient.Diagnostic[]>,
 ): Promise<Map<string, DebugEngine.CorrelatedDiagnostic[]>> {
   const correlationMap = new Map<string, DebugEngine.CorrelatedDiagnostic[]>()
 

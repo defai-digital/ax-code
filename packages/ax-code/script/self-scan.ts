@@ -2,11 +2,11 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { createHash } from "node:crypto"
 import { fileURLToPath } from "node:url"
-import type { DebugEngine as DebugEngineTypes } from "@ax-code/ax-codereason"
+import type { DebugEngine as DebugEngineTypes } from "@ax-code/ax-code-reason"
 import "./register-node"
 
 const { Instance } = await import("../src/project/instance")
-const { DebugEngine } = await import("@ax-code/ax-codereason")
+const { DebugEngine } = await import("@ax-code/ax-code-reason")
 
 type ScannerName = "race_scan" | "lifecycle_scan" | "security_scan" | "hardcode_scan"
 type Severity = "high" | "medium" | "low"

@@ -16,7 +16,7 @@ import { isolationRetryState } from "../../src/session/prompt-tools"
 import { applyPromptIsolationPolicy } from "../../src/session/prompt-runtime-policy"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
-import { LSP } from "@ax-code/ax-codeintel"
+import { LSP } from "@ax-code/ax-code-intel"
 import { CodeGraphQuery } from "../../src/code-intelligence/query"
 import { Isolation } from "../../src/isolation"
 

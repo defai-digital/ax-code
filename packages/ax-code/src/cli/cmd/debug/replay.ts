@@ -2,7 +2,7 @@ import { EOL } from "os"
 import { pathToFileURL } from "url"
 import { bootstrap } from "../../bootstrap"
 import { cmd } from "../cmd"
-import { LSP } from "@ax-code/ax-codeintel"
+import { LSP } from "@ax-code/ax-code-intel"
 import { AuditQuery } from "../../../audit/query"
 import { AuditCallID } from "../../../audit/id"
 

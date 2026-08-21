@@ -24,13 +24,13 @@ const normalizeVitePath = (input: string) => input.replaceAll("\\", "/")
 // so transform our SRC TS with it (enforce:"pre") before Oxc sees it. Scoped to
 // src/ only: test files must keep vitest's own transform so vi.mock() hoisting
 // (which esbuild would bypass) keeps working. The extracted workspace packages
-// (ax-codeintel, ax-codereason) are namespace-heavy too, so they get the same
+// (ax-code-intel, ax-code-reason) are namespace-heavy too, so they get the same
 // treatment.
 const srcDir = normalizeVitePath(path.join(dir, "src")) + "/"
 const namespaceTsDirs = [
   srcDir,
-  normalizeVitePath(path.join(dir, "..", "ax-codeintel", "src")) + "/",
-  normalizeVitePath(path.join(dir, "..", "ax-codereason", "src")) + "/",
+  normalizeVitePath(path.join(dir, "..", "ax-code-intel", "src")) + "/",
+  normalizeVitePath(path.join(dir, "..", "ax-code-reason", "src")) + "/",
 ]
 // Tools import their descriptions as `import D from "./x.txt"`. Bun returns the
 // file contents; vite treats .txt as an asset (returns its path). Load .txt as
@@ -113,7 +113,7 @@ export default defineConfig({
     // transform above applies to them too.
     server: {
       deps: {
-        inline: ["@clack/prompts", "@ax-code/ax-codeintel", "@ax-code/ax-codereason"],
+        inline: ["@clack/prompts", "@ax-code/ax-code-intel", "@ax-code/ax-code-reason"],
       },
     },
     testTimeout: 30000,

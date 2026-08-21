@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "vitest"
-import { closeAll, openAll } from "@ax-code/ax-codeintel/client-notify"
+import { closeAll, openAll } from "@ax-code/ax-code-intel/client-notify"
 import { Log } from "../../src/util/log"
 
 beforeEach(async () => {

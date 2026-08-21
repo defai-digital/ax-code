@@ -13,11 +13,11 @@ import {
   __testFindEnclosingSymbol,
   __testFindCrossFileRootCause,
   __testRenderCorrelationBlock,
-} from "@ax-code/ax-codereason/diagnostic-correlation"
-import type { DebugEngine } from "@ax-code/ax-codereason"
-import { LSP } from "@ax-code/ax-codeintel"
+} from "@ax-code/ax-code-reason/diagnostic-correlation"
+import type { DebugEngine } from "@ax-code/ax-code-reason"
+import { LSP } from "@ax-code/ax-code-intel"
 import { Bus } from "../../src/bus"
-import { LSPClient } from "@ax-code/ax-codeintel/client"
+import { LSPClient } from "@ax-code/ax-code-intel/client"
 
 Log.init({ print: false })
 

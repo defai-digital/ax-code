@@ -1,4 +1,4 @@
-// Host port for @ax-code/ax-codeintel.
+// Host port for @ax-code/ax-code-intel.
 //
 // The package is a generic LSP client/server orchestration layer and must not
 // depend on the ax-code core. Everything environment-specific (workspace
@@ -148,7 +148,7 @@ export function configureCodeIntelHost(host: CodeIntelHost): void {
 
 export function codeIntelHost(): CodeIntelHost {
   if (!current) {
-    throw new Error("@ax-code/ax-codeintel is not configured: call configureCodeIntelHost() before using the LSP API")
+    throw new Error("@ax-code/ax-code-intel is not configured: call configureCodeIntelHost() before using the LSP API")
   }
   return current
 }
