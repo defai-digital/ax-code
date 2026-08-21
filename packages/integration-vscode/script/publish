@@ -1,21 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Get the latest Git tag
-latest_tag=$(git tag --sort=committerdate | grep -E '^vscode-v[0-9]+\.[0-9]+\.[0-9]+$' | tail -1)
-if [ -z "$latest_tag" ]; then
-    echo "No tags found"
-    exit 1
-fi
-echo "Latest tag: $latest_tag"
-version=$(echo "$latest_tag" | sed 's/^vscode-v//')
-echo "Latest version: $version"
+# Package and publish the VS Code extension (marketplace extension ID
+# AutomatosX.ax-code-vscode). The version comes from package.json — bump it first
+# via script/release.
 
-# package-marketplace
-vsce package --no-git-tag-version --no-update-package-json --no-dependencies --skip-license -o dist/ax-code.vsix "$version"
+cd "$(dirname "$0")/.."
+
+version=$(node -p "require('./package.json').version")
+echo "Publishing ax-code $version"
+
+# Build the production bundle and package the VSIX (dist/ax-code-$version.vsix).
+bash script/package-vsix
 
 # publish-marketplace
-vsce publish --packagePath dist/ax-code.vsix
+./node_modules/.bin/vsce publish --packagePath "dist/ax-code-$version.vsix"
 
-# publish-openvsx
-npx ovsx publish dist/ax-code.vsix -p "$OPENVSX_TOKEN"
+# publish-openvsx (optional — skipped when no token is configured)
+if [ -n "${OPENVSX_TOKEN:-}" ]; then
+  pnpm dlx ovsx publish "dist/ax-code-$version.vsix" -p "$OPENVSX_TOKEN"
+else
+  echo "OPENVSX_TOKEN not set — skipping Open VSX publish"
+fi

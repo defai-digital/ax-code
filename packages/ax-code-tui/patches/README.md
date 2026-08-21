@@ -16,4 +16,5 @@ sync. Drop in the upstream JS, then run the applier.
 | `ffi-pointer-pin`          | [ffi-pointer-pin.md](./ffi-pointer-pin.md)                   | V8 GC use-after-free under `node:ffi`                    |
 | `ffi-geometry-guard`       | [ffi-geometry-guard.md](./ffi-geometry-guard.md)             | `u32` crash on off-screen draw geometry                  |
 | `vendored-native-resolver` | [vendored-native-resolver.md](./vendored-native-resolver.md) | Load `vendor/<target>/` instead of npm platform packages |
+| `kitty-keyboard-opt-out`   | [kitty-keyboard-opt-out.md](./kitty-keyboard-opt-out.md)     | Preserve the documented `null` protocol opt-out          |
 | `drop-zig-parser`          | [drop-zig-parser.md](./drop-zig-parser.md)                   | Stop shipping / loading the unused Zig highlight grammar |

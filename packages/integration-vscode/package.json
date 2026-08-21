@@ -1,20 +1,20 @@
 {
   "name": "ax-code-vscode",
-  "version": "2.1.2",
+  "version": "7.7.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/defai-digital/ax-code"
   },
   "main": "./dist/extension.js",
   "devDependencies": {
-    "@types/node": "20.x",
+    "@types/node": "catalog:",
     "@types/vscode": "^1.94.0",
     "@typescript-eslint/eslint-plugin": "^8.31.1",
     "@typescript-eslint/parser": "^8.31.1",
     "@vscode/vsce": "^3.2.1",
     "esbuild": "^0.28.1",
     "eslint": "^9.25.1",
-    "typescript": "^5.8.3",
+    "typescript": "catalog:",
     "vitest": "4.1.9"
   },
   "categories": [
@@ -27,7 +27,7 @@
       "activitybar": [
         {
           "id": "ax-code",
-          "title": "ax-code",
+          "title": "AX Code",
           "icon": "images/logo/activity-icon.png"
         }
       ]
@@ -78,6 +78,10 @@
           "light": "images/logo/activity-icon.png",
           "dark": "images/logo/activity-icon.png"
         }
+      },
+      {
+        "command": "ax-code.insertFileReference",
+        "title": "ax-code: Insert File Reference"
       }
     ],
     "menus": {
@@ -110,20 +114,10 @@
     },
     "keybindings": [
       {
-        "command": "ax-code.openChat",
-        "key": "ctrl+shift+a",
-        "mac": "cmd+shift+a"
-      },
-      {
-        "command": "ax-code.explainSelection",
-        "key": "ctrl+alt+e",
-        "mac": "cmd+alt+e",
-        "when": "editorHasSelection && editorTextFocus"
-      },
-      {
-        "command": "ax-code.openTerminal",
-        "key": "ctrl+escape",
-        "mac": "cmd+escape"
+        "command": "ax-code.insertFileReference",
+        "key": "ctrl+alt+k",
+        "mac": "cmd+alt+k",
+        "when": "editorTextFocus"
       }
     ],
     "configuration": {
@@ -155,7 +149,7 @@
     }
   },
   "description": "AI coding agent for VS Code — powered by AX Code",
-  "displayName": "AX Code",
+  "displayName": "AX Code (AutomatosX)",
   "engines": {
     "vscode": "^1.94.0"
   },
@@ -165,14 +159,14 @@
   },
   "icon": "images/icon.png",
   "license": "Apache-2.0",
-  "publisher": "defai-digital",
+  "publisher": "AutomatosX",
   "scripts": {
     "vscode:prepublish": "pnpm run package",
     "compile": "pnpm run check-types && pnpm run lint && node esbuild.js",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "package": "pnpm run check-types && pnpm run lint && node esbuild.js --production",
-    "package:vsix": "pnpm run package && vsce package --no-git-tag-version --no-update-package-json --no-dependencies --skip-license -o dist/ax-code-$npm_package_version.vsix",
+    "package:vsix": "bash script/package-vsix",
     "check-types": "tsc --noEmit",
     "typecheck": "pnpm run check-types",
     "lint": "eslint src",
@@ -181,6 +175,6 @@
   },
   "dependencies": {
     "@ax-code/sdk": "workspace:*",
-    "marked": "^12"
+    "marked": "catalog:"
   }
 }

@@ -2,12 +2,15 @@ import { describe, expect, test } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import {
+  applyKittyKeyboardOptOut,
   applySlimCatalogue,
   axRuntimeIdentityApplied,
   checkTuiPatches,
   findFfiModule,
+  findRendererModule,
   geometryGuardApplied,
   nativeResolverApplied,
+  kittyKeyboardOptOutApplied,
   pointerPinApplied,
   slimCatalogueApplied,
   zigParserDropped,
@@ -30,9 +33,20 @@ describe("script.tui-patches", () => {
 
   test("apply helpers are idempotent on already-patched source", () => {
     const ffi = readFileSync(findFfiModule(), "utf8")
+    const renderer = readFileSync(findRendererModule(), "utf8")
     expect(pointerPinApplied(ffi)).toBe(true)
     expect(geometryGuardApplied(ffi)).toBe(true)
     expect(nativeResolverApplied(ffi)).toBe(true)
+    expect(kittyKeyboardOptOutApplied(renderer)).toBe(true)
+    expect(applyKittyKeyboardOptOut(renderer)).toBe(renderer)
+  })
+
+  test("Kitty keyboard null opt-out is preserved instead of defaulted back on", () => {
+    const source = "const kittyConfig = config.useKittyKeyboard ?? {};"
+    const next = applyKittyKeyboardOptOut(source)
+    expect(kittyKeyboardOptOutApplied(next)).toBe(true)
+    expect(next).toContain("config.useKittyKeyboard === undefined")
+    expect(next).not.toContain("config.useKittyKeyboard ?? {}")
   })
 
   test("AX-owned runtime configuration and plugin identities use AX names", () => {

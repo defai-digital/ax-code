@@ -1,12 +1,10 @@
 import * as vscode from "vscode"
 import { spawn, type ChildProcess } from "node:child_process"
 import { randomBytes } from "node:crypto"
-import { createRequire } from "node:module"
-import * as fs from "node:fs"
 import * as path from "node:path"
-import { pathToFileURL } from "node:url"
 import { startHeadlessBackend, type HeadlessBackendHandle } from "@ax-code/sdk/headless"
 import { enrichPath, getConfig } from "./config"
+import { devLauncherArgs, resolveAxCodeTarget } from "./terminal-launch"
 
 interface AxCodePath {
   mode: "sdk" | "legacy"
@@ -152,32 +150,11 @@ export class AxCodeServer {
 
       this.currentHeaders = auth.headers
       const proc = axCodePath.useNodeLauncher
-        ? spawn(
-            process.execPath,
-            [
-              "--experimental-ffi",
-              "--disable-warning=ExperimentalWarning",
-              // Absolute loader paths: cwd is the user's workspace, not ax-code,
-              // so bare specifiers would not resolve. tsx strips TS; the Solid
-              // loader transforms OpenTUI JSX; TSX_TSCONFIG_PATH gives tsx the
-              // @/* aliases. Entry is index-node-tui.ts (index.ts imports the
-              // Bun-only @opentui/solid/preload).
-              "--import",
-              pathToFileURL(createRequire(path.join(axCodePath.cwd, "package.json")).resolve("tsx")).href,
-              "--import",
-              pathToFileURL(path.resolve(axCodePath.cwd, "..", "..", "script", "solid-loader.mjs")).href,
-              "--conditions=node",
-              axCodePath.entry,
-              "serve",
-              `--hostname=127.0.0.1`,
-              `--port=${port}`,
-            ],
-            {
-              cwd: workspaceFolder,
-              env: { ...env, TSX_TSCONFIG_PATH: path.join(axCodePath.cwd, "tsconfig.json") },
-              shell: false,
-            },
-          )
+        ? spawn(process.execPath, [...devLauncherArgs(axCodePath), "serve", `--hostname=127.0.0.1`, `--port=${port}`], {
+            cwd: workspaceFolder,
+            env: { ...env, TSX_TSCONFIG_PATH: path.join(axCodePath.cwd, "tsconfig.json") },
+            shell: false,
+          })
         : spawn(axCodePath.command, ["serve", `--hostname=127.0.0.1`, `--port=${port}`], {
             cwd: workspaceFolder,
             env,
@@ -263,27 +240,27 @@ export class AxCodeServer {
   }
 
   private findAxCodePath(): AxCodePath {
-    // Highest priority: explicit user config.
-    const override = getConfig().binaryPath
-    if (override && fs.existsSync(override)) {
-      return { mode: "legacy", useNodeLauncher: false, command: override, cwd: "", entry: "" }
+    const target = resolveAxCodeTarget({
+      binaryPath: getConfig().binaryPath,
+      extensionPath: this.context.extensionPath,
+    })
+    switch (target.kind) {
+      // Highest priority: explicit user config.
+      case "binary":
+        return { mode: "legacy", useNodeLauncher: false, command: target.command, cwd: "", entry: "" }
+      // Dev mode: extension is inside the monorepo next to packages/ax-code.
+      case "dev":
+        return {
+          mode: "legacy",
+          useNodeLauncher: true,
+          command: process.execPath,
+          cwd: target.cwd,
+          entry: target.entry,
+        }
+      // Fall back to globally-installed ax-code command.
+      case "path":
+        return { mode: "sdk", useNodeLauncher: false, command: "ax-code", cwd: "", entry: "" }
     }
-
-    // Dev mode: extension is inside the monorepo next to packages/ax-code.
-    // Require both the ax-code entry AND a repo-root signal (pnpm-workspace.yaml)
-    // so an installed VSIX at ~/.vscode/extensions/... with unrelated sibling dirs
-    // isn't misdetected as a monorepo checkout.
-    const extensionDir = this.context.extensionPath
-    const monorepoRoot = path.resolve(extensionDir, "..", "..")
-    const axCodeEntry = path.join(monorepoRoot, "packages", "ax-code", "src", "index-node-tui.ts")
-    const axCodeCwd = path.join(monorepoRoot, "packages", "ax-code")
-    const workspaceMarker = path.join(monorepoRoot, "pnpm-workspace.yaml")
-    if (fs.existsSync(axCodeEntry) && fs.existsSync(workspaceMarker)) {
-      return { mode: "legacy", useNodeLauncher: true, command: process.execPath, cwd: axCodeCwd, entry: axCodeEntry }
-    }
-
-    // Fall back to globally-installed ax-code command.
-    return { mode: "sdk", useNodeLauncher: false, command: "ax-code", cwd: "", entry: "" }
   }
 }
 

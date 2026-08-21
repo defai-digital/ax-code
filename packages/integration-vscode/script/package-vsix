@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Build the production bundle and package dist/ax-code-<version>.vsix.
+#
+# The extension ID is <publisher>.ax-code-vscode — the marketplace requires
+# globally unique extension names and plain "ax-code" is taken by the legacy
+# defai-digital listing. Packaging happens in a staging directory so vsce never
+# re-runs vscode:prepublish in a dependency-free folder (the bundle is already
+# built above) and never shells out to npm inside the pnpm/npm workspace.
+
+cd "$(dirname "$0")/.."
+
+version=$(node -p "require('./package.json').version")
+
+pnpm run package
+
+staging=$(mktemp -d)
+trap 'rm -rf "$staging"' EXIT
+
+mkdir "$staging/dist"
+cp dist/extension.js "$staging/dist/"
+cp -R images "$staging/images"
+cp README.md CHANGELOG.md .vscodeignore "$staging/"
+node -e '
+  const fs = require("fs")
+  const manifest = JSON.parse(fs.readFileSync("package.json", "utf8"))
+  // The bundle is already built; the staged manifest must not let vsce
+  // re-run vscode:prepublish (or any script) in the dependency-free staging dir.
+  manifest.scripts = {}
+  fs.writeFileSync(process.argv[1], JSON.stringify(manifest, null, 2) + "\n")
+' "$staging/package.json"
+
+vsce_bin="$(pwd)/node_modules/.bin/vsce"
+out_dir="$(pwd)/dist"
+(cd "$staging" && "$vsce_bin" package --no-git-tag-version --no-update-package-json --no-dependencies --skip-license -o "$out_dir/ax-code-$version.vsix")
+
+publisher=$(node -p "require('./package.json').publisher")
+name=$(node -p "require('./package.json').name")
+echo "Packaged dist/ax-code-$version.vsix (extension ID $publisher.$name)"

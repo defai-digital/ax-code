@@ -6,7 +6,6 @@ src/**
 script/**
 .gitignore
 .yarnrc
-bun.lock
 esbuild.js
 vsc-extension-quickstart.md
 **/tsconfig.json

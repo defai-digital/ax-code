@@ -1,14 +1,15 @@
 /**
  * ax-code VSCode Extension
  *
- * Full chat panel with agent support, file context, and inline edits.
+ * Sidebar agent panel with file/selection context, code-block actions
+ * (copy / insert at cursor / open in file), and terminal launcher.
  * Uses the Programmatic SDK for direct agent communication.
  */
 
 import * as vscode from "vscode"
 import { ChatViewProvider } from "./chat-provider"
-
-const TERMINAL_NAME = "ax-code"
+import { enrichPath, getConfig } from "./config"
+import { TERMINAL_NAME, resolveAxCodeTarget, terminalLaunch, terminalLaunchEnv } from "./terminal-launch"
 
 let chatProviderInstance: ChatViewProvider | null = null
 
@@ -29,11 +30,13 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   )
 
-  const safeSend = async (text: string) => {
+  // Editor commands prefill the chat input instead of sending immediately, so
+  // the user reviews and edits the prompt before it goes out.
+  const prefill = async (text: string) => {
     try {
-      await chatProvider.sendMessage(text)
+      await chatProvider.prefillInput(text)
     } catch (err: any) {
-      vscode.window.showErrorMessage(`ax-code: ${err?.message ?? "send failed"}`)
+      vscode.window.showErrorMessage(`ax-code: ${err?.message ?? "failed to open chat"}`)
     }
   }
 
@@ -45,7 +48,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showWarningMessage("No file is currently open")
         return
       }
-      await safeSend(`Explain ${fileRef.relativePath}`)
+      await prefill(`Explain ${fileRef.relativePath}${fileRef.selection ?? ""}`)
     }),
   )
 
@@ -57,7 +60,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showWarningMessage("No file is currently open")
         return
       }
-      await safeSend(`Fix any issues in ${fileRef.relativePath}`)
+      await prefill(`Fix any issues in ${fileRef.relativePath}${fileRef.selection ?? ""}`)
     }),
   )
 
@@ -71,7 +74,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
       const selectedText = editor.document.getText(editor.selection)
       const fileName = vscode.workspace.asRelativePath(editor.document.uri)
-      await safeSend(`Explain this code from ${fileName}:\n\`\`\`\n${selectedText}\n\`\`\``)
+      await prefill(`Explain this code from ${fileName}:\n\`\`\`\n${selectedText}\n\`\`\``)
     }),
   )
 
@@ -85,53 +88,82 @@ export function activate(context: vscode.ExtensionContext) {
       }
       const selectedText = editor.document.getText(editor.selection)
       const fileName = vscode.workspace.asRelativePath(editor.document.uri)
-      await safeSend(`Review this code from ${fileName} for bugs and improvements:\n\`\`\`\n${selectedText}\n\`\`\``)
+      await prefill(`Review this code from ${fileName} for bugs and improvements:\n\`\`\`\n${selectedText}\n\`\`\``)
     }),
   )
+
+  // Command: Insert a reference to the current file (optionally with the
+  // selection's line range) into the chat input.
+  context.subscriptions.push(
+    vscode.commands.registerCommand("ax-code.insertFileReference", async () => {
+      const fileRef = getActiveFileContext()
+      if (!fileRef) {
+        vscode.window.showWarningMessage("No file is currently open")
+        return
+      }
+      try {
+        await chatProvider.insertTextAtInput(`@${fileRef.relativePath}${fileRef.selection ?? ""}`)
+      } catch (err: any) {
+        vscode.window.showErrorMessage(`ax-code: ${err?.message ?? "failed to open chat"}`)
+      }
+    }),
+  )
+
+  // Resolve the same launch target the chat backend uses (axCode.binaryPath →
+  // monorepo dev → PATH) so the terminal never disagrees with the chat panel.
+  const createAxCodeTerminal = () => {
+    const target = resolveAxCodeTarget({
+      binaryPath: getConfig().binaryPath,
+      extensionPath: context.extensionPath,
+    })
+    const launch = terminalLaunch(target)
+    const terminal = vscode.window.createTerminal({
+      name: TERMINAL_NAME,
+      iconPath: {
+        light: vscode.Uri.file(context.asAbsolutePath("images/logo/activity-icon.png")),
+        dark: vscode.Uri.file(context.asAbsolutePath("images/logo/activity-icon.png")),
+      },
+      location: { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
+      env: {
+        PATH: enrichPath(process.env.PATH ?? ""),
+        AX_CODE_CALLER: "vscode",
+        ...terminalLaunchEnv(target),
+      },
+      ...(launch.kind === "direct" ? { shellPath: launch.shellPath, shellArgs: launch.shellArgs } : {}),
+    })
+    terminal.show()
+    if (launch.kind === "shell") {
+      terminal.sendText(launch.command)
+    }
+  }
 
   // Command: Open in terminal (legacy, kept for compatibility)
   context.subscriptions.push(
     vscode.commands.registerCommand("ax-code.openTerminal", async () => {
-      const existingTerminal = vscode.window.terminals.find((t) => t.name === TERMINAL_NAME)
+      // Also adopt terminals created by older versions, which used the
+      // lowercase "ax-code" or hyphenated "AX-Code" names.
+      const existingTerminal = vscode.window.terminals.find(
+        (t) => t.name === TERMINAL_NAME || t.name === "ax-code" || t.name === "AX-Code",
+      )
       if (existingTerminal) {
         existingTerminal.show()
         return
       }
-      const terminal = vscode.window.createTerminal({
-        name: TERMINAL_NAME,
-        iconPath: {
-          light: vscode.Uri.file(context.asAbsolutePath("images/logo/activity-icon.png")),
-          dark: vscode.Uri.file(context.asAbsolutePath("images/logo/activity-icon.png")),
-        },
-        location: { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
-        env: { AX_CODE_CALLER: "vscode" },
-      })
-      terminal.show()
-      terminal.sendText("ax-code")
+      createAxCodeTerminal()
     }),
   )
 
   // Command: Open new terminal
   context.subscriptions.push(
     vscode.commands.registerCommand("ax-code.openNewTerminal", async () => {
-      const terminal = vscode.window.createTerminal({
-        name: TERMINAL_NAME,
-        iconPath: {
-          light: vscode.Uri.file(context.asAbsolutePath("images/logo/activity-icon.png")),
-          dark: vscode.Uri.file(context.asAbsolutePath("images/logo/activity-icon.png")),
-        },
-        location: { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
-        env: { AX_CODE_CALLER: "vscode" },
-      })
-      terminal.show()
-      terminal.sendText("ax-code")
+      createAxCodeTerminal()
     }),
   )
 
   // Status bar item
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100)
-  statusBar.text = "$(hubot) ax-code"
-  statusBar.tooltip = "Open ax-code chat"
+  statusBar.text = "$(hubot) AX Code"
+  statusBar.tooltip = "Open AX Code chat"
   statusBar.command = "ax-code.openChat"
   statusBar.show()
   context.subscriptions.push(statusBar)

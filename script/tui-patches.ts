@@ -44,6 +44,18 @@ export function findDefaultParserModule(coreDir = CORE_DIR) {
   return match
 }
 
+export function findRendererModule(coreDir = CORE_DIR) {
+  const files = readdirSync(coreDir)
+    .filter((name) => /^index-.*\.js$/.test(name))
+    .map((name) => join(coreDir, name))
+  const match = files.find((file) => {
+    const text = readFileSync(file, "utf8")
+    return text.includes("function buildKittyKeyboardFlags(config)") && text.includes("class CliRenderer")
+  })
+  if (!match) throw new Error("Could not locate the @ax-code/tui renderer module")
+  return match
+}
+
 const POINTER_PIN_MARKERS = ["function pinNodePointerSource(value)", "var NODE_POINTER_PIN_SLOTS"] as const
 const GEOMETRY_MARKERS = [
   "function ffiCellOrigin(x, y)",
@@ -82,6 +94,10 @@ export function geometryGuardApplied(source: string) {
 
 export function nativeResolverApplied(source: string) {
   return RESOLVER_MARKERS.every((marker) => source.includes(marker)) && !source.includes('import("@opentui/core-')
+}
+
+export function kittyKeyboardOptOutApplied(source: string) {
+  return source.includes("const kittyConfig = config.useKittyKeyboard === undefined ? {} : config.useKittyKeyboard;")
 }
 
 export function zigParserDropped(source: string) {
@@ -292,6 +308,22 @@ function applyNativeResolver(source: string) {
   throw new Error("vendored-native-resolver: apply did not satisfy the contract")
 }
 
+export function applyKittyKeyboardOptOut(source: string) {
+  if (kittyKeyboardOptOutApplied(source)) return source
+  const anchor = "const kittyConfig = config.useKittyKeyboard ?? {};"
+  if (!source.includes(anchor)) {
+    throw new Error("kitty-keyboard-opt-out: missing renderer configuration anchor")
+  }
+  const next = source.replace(
+    anchor,
+    "const kittyConfig = config.useKittyKeyboard === undefined ? {} : config.useKittyKeyboard;",
+  )
+  if (!kittyKeyboardOptOutApplied(next)) {
+    throw new Error("kitty-keyboard-opt-out: apply did not satisfy the contract")
+  }
+  return next
+}
+
 function applyZigParserDrop(source: string) {
   if (zigParserDropped(source)) return source
   let next = source.replace(
@@ -343,11 +375,13 @@ export function applySlimCatalogue(source: string) {
 export function checkTuiPatches(): PatchStatus[] {
   const ffi = readFileSync(findFfiModule(), "utf8")
   const parsers = readFileSync(findDefaultParserModule(), "utf8")
+  const renderer = readFileSync(findRendererModule(), "utf8")
   const solidFiles = ["index.js", "index.bun.js", "components.js"].map((name) => join(SOLID_DIR, name))
   return [
     { id: "ffi-pointer-pin", ok: pointerPinApplied(ffi), detail: findFfiModule() },
     { id: "ffi-geometry-guard", ok: geometryGuardApplied(ffi), detail: findFfiModule() },
     { id: "vendored-native-resolver", ok: nativeResolverApplied(ffi), detail: findFfiModule() },
+    { id: "kitty-keyboard-opt-out", ok: kittyKeyboardOptOutApplied(renderer), detail: findRendererModule() },
     { id: "drop-zig-parser", ok: zigParserDropped(parsers) && zigAssetsAbsent(), detail: findDefaultParserModule() },
     {
       id: "slim-catalogue",
@@ -370,6 +404,9 @@ export function applyTuiPatches() {
   ffi = applyGeometryGuard(ffi)
   ffi = applyNativeResolver(ffi)
   writeFileSync(ffiPath, ffi)
+
+  const rendererPath = findRendererModule()
+  writeFileSync(rendererPath, applyKittyKeyboardOptOut(readFileSync(rendererPath, "utf8")))
 
   const parserPath = findDefaultParserModule()
   writeFileSync(parserPath, applyZigParserDrop(readFileSync(parserPath, "utf8")))

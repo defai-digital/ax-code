@@ -73,6 +73,17 @@ export namespace Flag {
   // work on supporting terminals; set to 0/false to opt out on terminals
   // that mishandle the flags push.
   export const AX_CODE_TUI_KITTY_KEYBOARD = !falsy("AX_CODE_TUI_KITTY_KEYBOARD")
+  // xterm modifyOtherKeys mode 2 is the non-Kitty path to distinct
+  // Shift+Enter/Ctrl+Enter reporting (xterm.js/VS Code, iTerm2 legacy mode).
+  // The renderer's native mode-1 baseline remains; this mode-2 enhancement is
+  // enabled by default and can be disabled on terminals that mishandle it.
+  export const AX_CODE_TUI_MODIFY_OTHER_KEYS = !falsy("AX_CODE_TUI_MODIFY_OTHER_KEYS")
+  // Native Shift+Enter detection for terminals that cannot report modified
+  // keys at all (Apple Terminal, Windows console): a bare CR with Shift
+  // physically held (OS-level query via node:ffi) is treated as Shift+Enter
+  // (newline) instead of Enter (submit). Same approach as kimi-code.
+  // Enabled by default; set to 0/false to opt out.
+  export const AX_CODE_TUI_NATIVE_SHIFT_ENTER = !falsy("AX_CODE_TUI_NATIVE_SHIFT_ENTER")
   export const AX_CODE_PERMISSION = process.env["AX_CODE_PERMISSION"]
   export const AX_CODE_DISABLE_DEFAULT_PLUGINS = truthy("AX_CODE_DISABLE_DEFAULT_PLUGINS")
   export const AX_CODE_DISABLE_LSP_DOWNLOAD = truthy("AX_CODE_DISABLE_LSP_DOWNLOAD")

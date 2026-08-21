@@ -37864,110 +37864,6 @@
           "properties"
         ]
       },
-      "Event.vcs.branch.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "vcs.branch.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "branch": {
-                "type": "string"
-              }
-            }
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.command.executed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "command.executed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses_.*"
-              },
-              "arguments": {
-                "type": "string"
-              },
-              "messageID": {
-                "type": "string",
-                "pattern": "^msg_.*"
-              },
-              "source": {
-                "type": "string",
-                "enum": [
-                  "command",
-                  "file",
-                  "mcp",
-                  "skill"
-                ]
-              },
-              "sourceTool": {
-                "type": "string"
-              },
-              "workflow": {
-                "type": "string"
-              },
-              "workflowRunID": {
-                "type": "string"
-              },
-              "warnings": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "code": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "severity": {
-                      "type": "string",
-                      "enum": [
-                        "info",
-                        "warn",
-                        "error"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "code",
-                    "message",
-                    "severity"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "name",
-              "sessionID",
-              "arguments",
-              "messageID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.task.queue.created": {
         "type": "object",
         "properties": {
@@ -38271,6 +38167,110 @@
             "required": [
               "id",
               "projectID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.vcs.branch.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "vcs.branch.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "branch": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.command.executed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "command.executed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses_.*"
+              },
+              "arguments": {
+                "type": "string"
+              },
+              "messageID": {
+                "type": "string",
+                "pattern": "^msg_.*"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "command",
+                  "file",
+                  "mcp",
+                  "skill"
+                ]
+              },
+              "sourceTool": {
+                "type": "string"
+              },
+              "workflow": {
+                "type": "string"
+              },
+              "workflowRunID": {
+                "type": "string"
+              },
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "severity": {
+                      "type": "string",
+                      "enum": [
+                        "info",
+                        "warn",
+                        "error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "severity"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "name",
+              "sessionID",
+              "arguments",
+              "messageID"
             ]
           }
         },
@@ -41610,12 +41610,6 @@
             "$ref": "#/components/schemas/Event.mcp.browser.open.failed"
           },
           {
-            "$ref": "#/components/schemas/Event.vcs.branch.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.command.executed"
-          },
-          {
             "$ref": "#/components/schemas/Event.task.queue.created"
           },
           {
@@ -41623,6 +41617,12 @@
           },
           {
             "$ref": "#/components/schemas/Event.task.queue.deleted"
+          },
+          {
+            "$ref": "#/components/schemas/Event.vcs.branch.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.command.executed"
           },
           {
             "$ref": "#/components/schemas/Event.workflow.run.created"

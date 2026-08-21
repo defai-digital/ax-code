@@ -1,26 +1,31 @@
 # AX Code for VS Code
 
-Chat with the [AX Code](https://github.com/defai-digital/ax-code) agent directly from VS Code — streaming responses, markdown rendering, workspace-aware context, and a model picker.
+The [AX Code](https://github.com/defai-digital/ax-code) coding agent inside your editor — it reads your actual workspace, explains and reviews code, and hands you changes you can insert or apply with one click. Not a chatbot: an agent wired into your editing workflow.
+
+## Install
+
+Grab it from the VS Code Marketplace: [AX Code (AutomatosX)](https://marketplace.visualstudio.com/items?itemName=AutomatosX.ax-code-vscode) — or from the command line:
+
+```bash
+code --install-extension AutomatosX.ax-code-vscode
+```
 
 ## Features
 
-- **Sidebar chat panel** with streaming assistant output and markdown-rendered code blocks.
-- **Editor commands** for the current file or selection:
+- **Agent panel in the sidebar** with streaming, markdown-rendered answers and inline tool activity.
+- **Code blocks that act**: every block has Copy / Insert at cursor / Open in new file — no manual select-copy-paste.
+- **Editor commands** for the current file or selection (right-click):
   - `ax-code: Explain This File`
   - `ax-code: Fix This File`
   - `ax-code: Explain Selection`
   - `ax-code: Review Selection`
+    Commands prefill the input so you review the prompt before it goes out — nothing auto-sends.
+- **`@` file references**: `Cmd/Ctrl+Alt+K` inserts the current file (with selection range, e.g. `@src/app.ts#L12-34`) into the input.
+- **Paste images** (`Ctrl+V` screenshots) straight into the input as prompt attachments.
+- **Input history**: `↑`/`↓` recalls previous prompts.
 - **Model picker** over any provider configured via `ax-code providers login`.
 - **Persistent sessions** across panel reloads.
-- **Terminal launcher** for the full TUI experience (`Cmd/Ctrl+Esc`).
-
-## Keybindings
-
-| Action                | macOS         | Windows / Linux |
-| --------------------- | ------------- | --------------- |
-| Open chat             | `Cmd+Shift+A` | `Ctrl+Shift+A`  |
-| Explain selection     | `Cmd+Alt+E`   | `Ctrl+Alt+E`    |
-| Open AX Code terminal | `Cmd+Esc`     | `Ctrl+Esc`      |
+- **Terminal launcher** for the full TUI experience.
 
 ## Settings
 
@@ -43,8 +48,9 @@ ax-code providers login
 
 1. `code packages/integration-vscode` — open this package directly (not the repo root).
 2. `pnpm install`
-3. Press `F5` to launch a debug VS Code window with the extension loaded.
-4. Reload the debug window (`Cmd+Shift+P` → `Developer: Reload Window`) after code changes.
+3. `pnpm run watch:esbuild` — bundle `dist/extension.js` (rebuilds on change; requires the workspace SDK to be built: `pnpm --dir ../sdk/js run build`).
+4. Press `F5` to launch a debug VS Code window with the extension loaded.
+5. Reload the debug window (`Cmd+Shift+P` → `Developer: Reload Window`) after code changes.
 
 ## Issues
 

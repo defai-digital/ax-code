@@ -8,6 +8,7 @@ import {
   clearTuiMainScreen,
   disableTuiMouseTracking,
   flushTuiStdout,
+  TUI_MODIFY_OTHER_KEYS_ENABLE_SEQUENCE,
   TUI_TERMINAL_PROGRESS_ACTIVE_SEQUENCE,
   TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE,
 } from "./terminal-cleanup"
@@ -26,6 +27,7 @@ export type TuiRenderProfile = {
   useThread: boolean
   useMouse: boolean
   useKittyKeyboard: boolean
+  useModifyOtherKeys: boolean
   screenMode: "alternate-screen" | "main-screen"
   allowTerminalTitle: boolean
 }
@@ -34,6 +36,7 @@ export function resolveTuiRenderProfile(input: {
   advancedTerminal: boolean
   terminalTitleDisabled: boolean
   kittyKeyboard?: boolean
+  modifyOtherKeys?: boolean
 }): TuiRenderProfile {
   const { advancedTerminal, terminalTitleDisabled } = input
   return {
@@ -53,6 +56,9 @@ export function resolveTuiRenderProfile(input: {
     // push), so it is decoupled from the advanced profile and enabled by
     // default — Shift+Enter/Ctrl+Enter newline bindings depend on it.
     useKittyKeyboard: input.kittyKeyboard ?? true,
+    // Keep whether AX Code enabled xterm's complementary keyboard protocol
+    // so teardown never resets inherited state when the user opted out.
+    useModifyOtherKeys: input.modifyOtherKeys ?? true,
     screenMode: advancedTerminal ? "alternate-screen" : "main-screen",
     // Terminal title/progress are fire-and-forget OSC escapes written
     // directly to stdout (probe-free, same risk class as the kitty keyboard
@@ -68,6 +74,7 @@ export function getTuiRenderProfile(): TuiRenderProfile {
     advancedTerminal: Flag.AX_CODE_TUI_ADVANCED_TERMINAL,
     terminalTitleDisabled: Flag.AX_CODE_DISABLE_TERMINAL_TITLE,
     kittyKeyboard: Flag.AX_CODE_TUI_KITTY_KEYBOARD,
+    modifyOtherKeys: Flag.AX_CODE_TUI_MODIFY_OTHER_KEYS,
   })
 }
 
@@ -269,5 +276,16 @@ export async function destroyTuiRenderer(
 }
 
 export function renderTui(root: TuiRenderRoot, options?: Parameters<typeof createTuiRenderOptions>[0]) {
-  return render(root, createTuiRenderOptions(options))
+  const profile = getTuiRenderProfile()
+  // xterm modifyOtherKeys is the complementary path for terminals that do not
+  // support Kitty keyboard reporting. The native renderer owns Kitty setup,
+  // parsing, and clean teardown in both profiles. Native terminal setup also
+  // sets modifyOtherKeys mode 1, so mode 2 must be applied after setup resolves
+  // or Shift+Enter is immediately downgraded back to a plain Enter.
+  return render(root, createTuiRenderOptionsFromProfile(profile, options)).then((result) => {
+    if (profile.useModifyOtherKeys) {
+      writeTuiSequence(process.stdout, TUI_MODIFY_OTHER_KEYS_ENABLE_SEQUENCE)
+    }
+    return result
+  })
 }

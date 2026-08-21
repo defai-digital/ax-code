@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-# Parse command line arguments
+# Bump the extension version (patch by default, --minor for a minor bump),
+# commit it, tag vscode-v<version>, and push the commit and tag.
+
 minor=false
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -9,33 +12,19 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-# Get the latest Git tag
-git fetch --force --tags
-latest_tag=$(git tag --sort=committerdate | grep -E '^vscode-v[0-9]+\.[0-9]+\.[0-9]+$' | tail -1)
-if [ -z "$latest_tag" ]; then
-    echo "No tags found"
-    exit 1
-fi
-
-echo "Latest tag: $latest_tag"
-
-# Split the tag into major, minor, and patch numbers
-IFS='.' read -ra VERSION <<< "$latest_tag"
+cd "$(dirname "$0")/.."
 
 if [ "$minor" = true ]; then
-    # Increment the minor version and reset patch to 0
-    minor_number=${VERSION[1]}
-    let "minor_number++"
-    new_version="${VERSION[0]}.$minor_number.0"
+  bump="minor"
 else
-    # Increment the patch version
-    patch_number=${VERSION[2]}
-    let "patch_number++"
-    new_version="${VERSION[0]}.${VERSION[1]}.$patch_number"
+  bump="patch"
 fi
 
+new_version=$(pnpm version "$bump" --no-git-tag-version)
+new_version="${new_version#v}"
 echo "New version: $new_version"
 
-# Tag
-git tag $new_version
-git push --tags
+git add package.json
+git commit -m "chore(vscode): release $new_version"
+git tag "vscode-v$new_version"
+git push origin HEAD "vscode-v$new_version"

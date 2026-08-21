@@ -830,32 +830,6 @@ export type EventMcpBrowserOpenFailed = {
   }
 }
 
-export type EventVcsBranchUpdated = {
-  type: "vcs.branch.updated"
-  properties: {
-    branch?: string
-  }
-}
-
-export type EventCommandExecuted = {
-  type: "command.executed"
-  properties: {
-    name: string
-    sessionID: string
-    arguments: string
-    messageID: string
-    source?: "command" | "file" | "mcp" | "skill"
-    sourceTool?: string
-    workflow?: string
-    workflowRunID?: string
-    warnings?: Array<{
-      code: string
-      message: string
-      severity: "info" | "warn" | "error"
-    }>
-  }
-}
-
 export type EventTaskQueueCreated = {
   type: "task.queue.created"
   properties: {
@@ -946,6 +920,32 @@ export type EventTaskQueueDeleted = {
     id: string
     projectID: string
     sessionID?: string
+  }
+}
+
+export type EventVcsBranchUpdated = {
+  type: "vcs.branch.updated"
+  properties: {
+    branch?: string
+  }
+}
+
+export type EventCommandExecuted = {
+  type: "command.executed"
+  properties: {
+    name: string
+    sessionID: string
+    arguments: string
+    messageID: string
+    source?: "command" | "file" | "mcp" | "skill"
+    sourceTool?: string
+    workflow?: string
+    workflowRunID?: string
+    warnings?: Array<{
+      code: string
+      message: string
+      severity: "info" | "warn" | "error"
+    }>
   }
 }
 
@@ -1787,11 +1787,11 @@ export type Event =
   | EventDebugEngineCorrelatedDiagnostics
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
-  | EventVcsBranchUpdated
-  | EventCommandExecuted
   | EventTaskQueueCreated
   | EventTaskQueueUpdated
   | EventTaskQueueDeleted
+  | EventVcsBranchUpdated
+  | EventCommandExecuted
   | EventWorkflowRunCreated
   | EventWorkflowRunUpdated
   | EventWorkflowRunStarted

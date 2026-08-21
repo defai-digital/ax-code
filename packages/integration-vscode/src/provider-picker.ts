@@ -12,7 +12,9 @@ export function providerModelPickItems(config: ProviderListResponse): ProviderMo
   const connected = new Set(config.connected ?? [])
   const items: ProviderModelPickItem[] = []
   for (const provider of config.all) {
-    if (!connected.has(provider.id)) continue
+    if (!connected.has(provider.id)) {
+      continue
+    }
     for (const modelID of Object.keys(provider.models ?? {})) {
       items.push({
         label: `${provider.id}/${modelID}`,

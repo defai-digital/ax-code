@@ -8,9 +8,8 @@
 
 import * as vscode from "vscode"
 import { getConfig } from "./config"
-import { renderMarkdown } from "./markdown"
 import { AxCodeServer } from "./server-lifecycle"
-import { SelectedModel, SessionClient, ServerError } from "./session-client"
+import { SelectedModel, SessionClient, ServerError, type PromptImage } from "./session-client"
 import { buildChatHtml, generateNonce } from "./webview-html"
 import { providerModelPickItems } from "./provider-picker"
 
@@ -74,7 +73,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             this.postInitialState()
             break
           case "send":
-            await this.handleUserMessage(message.text)
+            await this.handleUserMessage(message.text, message.images)
+            break
+          case "insertAtCursor":
+            await this.handleInsertAtCursor(message.code)
+            break
+          case "openInNewFile":
+            await this.handleOpenInNewFile(message.code, message.language)
             break
           case "clear":
             await this.handleClear()
@@ -88,7 +93,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
       }),
       webviewView.onDidDispose(() => {
-        if (this.webviewView === webviewView) this.webviewView = undefined
+        if (this.webviewView === webviewView) {
+          this.webviewView = undefined
+        }
         this.session.dispose()
         this.server.dispose()
       }),
@@ -96,10 +103,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   private disposeView() {
-    for (const disposable of this.viewDisposables.splice(0)) disposable.dispose()
+    for (const disposable of this.viewDisposables.splice(0)) {
+      disposable.dispose()
+    }
   }
 
-  async sendMessage(text: string) {
+  private async ensureViewOpen(): Promise<boolean> {
     if (!this.webviewView) {
       await vscode.commands.executeCommand("ax-code.chatView.focus")
       const start = Date.now()
@@ -108,13 +117,27 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
       if (!this.webviewView) {
         vscode.window.showErrorMessage("ax-code chat view failed to open")
-        return
+        return false
       }
     }
     this.webviewView.show(true)
-    // Do NOT echo the prompt here: handleUserMessage owns echoing so a prompt
-    // rejected by the isProcessing guard never appears in the transcript. See #267.
-    await this.handleUserMessage(text)
+    return true
+  }
+
+  /** Prefill the chat input without sending — the user reviews, then sends. */
+  async prefillInput(text: string) {
+    if (!(await this.ensureViewOpen())) {
+      return
+    }
+    this.postMessage({ type: "prefill", text })
+  }
+
+  /** Insert text at the chat input's cursor, keeping whatever is already there. */
+  async insertTextAtInput(text: string) {
+    if (!(await this.ensureViewOpen())) {
+      return
+    }
+    this.postMessage({ type: "insertText", text })
   }
 
   dispose() {
@@ -132,7 +155,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async handleUserMessage(text: string) {
+  private async handleUserMessage(text: string, images?: PromptImage[]) {
     if (this.isProcessing) {
       vscode.window.showWarningMessage("ax-code is still processing...")
       return
@@ -140,8 +163,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     // Echo the accepted prompt now that it has passed the processing guard, so
     // both the webview-typed and command-send paths render it exactly once and
-    // only after acceptance. See #267.
-    this.postMessage({ type: "userMessage", text })
+    // only after acceptance. See #267. An image-only prompt has no text — echo
+    // the attachment names instead of rendering an empty bubble.
+    const echo = text || (images ?? []).map((img) => `[image: ${img.filename ?? img.mime}]`).join(" ")
+    if (echo) {
+      this.postMessage({ type: "userMessage", text: echo })
+    }
 
     this.isProcessing = true
     this.activeCancelReason = null
@@ -169,7 +196,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs)
 
       try {
-        const result = await this.session.sendMessage(text, this.selectedModel, controller.signal)
+        const result = await this.session.sendMessage(text, this.selectedModel, controller.signal, images)
         clearTimeout(timeoutId)
         this.postMessage({
           type: "done",
@@ -218,6 +245,28 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       return
     }
     this.postMessage({ type: "error", message: "Request timed out." })
+  }
+
+  private async handleInsertAtCursor(code: string) {
+    const editor = vscode.window.activeTextEditor
+    if (!editor) {
+      vscode.window.showWarningMessage("No active editor — open a file to insert the code into")
+      return
+    }
+    await editor.edit((edit) => {
+      for (const selection of editor.selections) {
+        if (selection.isEmpty) {
+          edit.insert(selection.active, code)
+        } else {
+          edit.replace(selection, code)
+        }
+      }
+    })
+  }
+
+  private async handleOpenInNewFile(code: string, language?: string) {
+    const doc = await vscode.workspace.openTextDocument({ content: code, language: language || undefined })
+    await vscode.window.showTextDocument(doc, { preview: false })
   }
 
   private async handleClear() {
@@ -271,7 +320,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     } catch (error: any) {
       // Re-enable the chat UI after surfacing the error; otherwise the webview
       // stays stuck on "Starting ax-code..." with send disabled. See #256.
-      if (postedInitializing) this.postMessage({ type: "status", status: "idle" })
+      if (postedInitializing) {
+        this.postMessage({ type: "status", status: "idle" })
+      }
       vscode.window.showErrorMessage(`Failed to load models: ${error.message}`)
     }
   }
@@ -280,6 +331,3 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.webviewView?.webview.postMessage(message)
   }
 }
-
-// Re-export the markdown helper for any future webview-side renders.
-export { renderMarkdown }

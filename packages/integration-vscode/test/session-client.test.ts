@@ -222,4 +222,55 @@ describe("SessionClient server restart handling", () => {
     expect(providers.default.groq).toBe("qwen/qwen3.6-27b")
     expect(providers.connected).toEqual(["groq"])
   })
+
+  test("sends pasted images as file parts alongside the text part", async () => {
+    const prompts: any[] = []
+    clientFactory = () => ({
+      ...createSdkClient("default"),
+      session: {
+        ...createSdkClient("default").session,
+        prompt: async (params: any) => {
+          prompts.push(params)
+          return createSdkClient("default").session.prompt()
+        },
+      },
+    })
+
+    const server = new FakeServer("http://server")
+    const stream = createStreamEvents()
+    const client = new SessionClient(createContext() as any, server as any, stream.events)
+
+    await client.sendMessage("what is this?", null, new AbortController().signal, [
+      { mime: "image/png", url: "data:image/png;base64,AAAA", filename: "shot.png" },
+    ])
+
+    expect(prompts[0].parts).toEqual([
+      { type: "text", text: "what is this?" },
+      { type: "file", mime: "image/png", url: "data:image/png;base64,AAAA", filename: "shot.png" },
+    ])
+  })
+
+  test("omits the text part for image-only prompts", async () => {
+    const prompts: any[] = []
+    clientFactory = () => ({
+      ...createSdkClient("default"),
+      session: {
+        ...createSdkClient("default").session,
+        prompt: async (params: any) => {
+          prompts.push(params)
+          return createSdkClient("default").session.prompt()
+        },
+      },
+    })
+
+    const server = new FakeServer("http://server")
+    const stream = createStreamEvents()
+    const client = new SessionClient(createContext() as any, server as any, stream.events)
+
+    await client.sendMessage("", null, new AbortController().signal, [
+      { mime: "image/png", url: "data:image/png;base64,AAAA" },
+    ])
+
+    expect(prompts[0].parts).toEqual([{ type: "file", mime: "image/png", url: "data:image/png;base64,AAAA" }])
+  })
 })

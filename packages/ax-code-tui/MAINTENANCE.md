@@ -29,6 +29,7 @@ Named, idempotent patch contracts live under `patches/` and `solid/patches/`. Th
 
 - Node FFI pointer liveness;
 - safe native draw geometry;
+- a working Kitty keyboard protocol opt-out;
 - deterministic, offline native resolution;
 - omission of the unused Zig parser;
 - the reduced Solid intrinsic catalogue; and
@@ -74,7 +75,8 @@ packaging changes.
 ## Runtime invariants
 
 The compatible terminal profile is the default. The advanced profile is opt-in through
-`AX_CODE_TUI_ADVANCED_TERMINAL=1` and enables alternate-screen, Kitty keyboard negotiation, and the render thread.
+`AX_CODE_TUI_ADVANCED_TERMINAL=1` and enables alternate-screen plus the render thread. Kitty keyboard negotiation is
+enabled in both profiles unless `AX_CODE_TUI_KITTY_KEYBOARD=0` explicitly disables it.
 
 Terminal teardown is ordered and best-effort: title cleanup, renderer destruction, mouse reset, main-screen clearing,
 and output flushing are separate failure domains. Deferred work, timers, subscriptions, process handlers, and renderable

@@ -1,5 +1,25 @@
 # Changelog
 
+## 7.7.2
+
+- **Fix:** sending an image-only prompt (no text) no longer renders an empty user bubble — the echo shows the attachment names.
+- **Fix:** editor commands (Explain/Fix/Review) no longer clobber an unsent draft — the prefilled prompt is appended below it.
+- **Fix:** input-history restore validates the persisted webview state instead of trusting its shape.
+- **Fix:** the no-stream fallback answer bubble now shows the token count and scrolls into view like the streamed path.
+- **Change:** user-facing labels use "AX Code" (activity bar container, status bar item) instead of "ax-code".
+
+## 7.7.1
+
+- **New:** code blocks in agent replies have Copy / Insert at cursor / Open in new file actions; assistant messages have a Copy button.
+- **New:** paste images (`Ctrl+V`) into the input as prompt attachments; `↑`/`↓` input history; `Cmd/Ctrl+Alt+K` inserts an `@file#L1-2` reference to the current file.
+- **Change:** editor commands (Explain/Fix/Review) prefill the input for review instead of auto-sending; the default `Cmd+Shift+A` / `Cmd+Alt+E` / `Cmd+Esc` keybindings were removed (commands remain in the palette and context menu).
+- **Fix:** selecting text in a streaming reply no longer gets destroyed by re-renders.
+- **Chore:** version realigned with the AX Code product line (jumped from 2.1.x); publisher moved to `AutomatosX` (extension ID `AutomatosX.ax-code-vscode`).
+- **Fix:** terminal commands now title the tab "AX Code" (matching the TUI's own title write) instead of falling back to the launcher's process name ("node").
+- **Fix:** `ax-code.openTerminal` / `openNewTerminal` honor `axCode.binaryPath`, monorepo dev mode, and PATH enrichment — the terminal launches the same ax-code the chat panel uses instead of a hardcoded `ax-code`.
+- **Fix:** `askAboutFile` / `fixFile` include the current line selection (`#L12-34`) in the prompt instead of dropping it.
+- **Chore:** working release/publish scripts (version from `package.json`, build before packaging); dropped stale `bun.lock` and SST leftovers; dependencies moved to the pnpm catalog.
+
 ## 2.1.2
 
 - **Fix:** cancelling during session setup no longer surfaces a spurious "Unknown error" — the cancel-reason path is honored before and during the message request.

@@ -20,6 +20,13 @@ export interface SendMessageResult {
   html: string
 }
 
+/** An image attached to a prompt, as a data URL (matches FilePartInput). */
+export interface PromptImage {
+  mime: string
+  url: string
+  filename?: string
+}
+
 /**
  * Streaming events emitted to the chat view. The provider translates these
  * into webview postMessages — keeping SessionClient ignorant of webview
@@ -70,7 +77,12 @@ export class SessionClient {
     return this.sessionId
   }
 
-  async sendMessage(text: string, model: SelectedModel | null, signal: AbortSignal): Promise<SendMessageResult> {
+  async sendMessage(
+    text: string,
+    model: SelectedModel | null,
+    signal: AbortSignal,
+    images: PromptImage[] = [],
+  ): Promise<SendMessageResult> {
     await this.ensureEventStream()
     await this.ensureSession(signal)
     const client = this.requireClient()
@@ -78,9 +90,18 @@ export class SessionClient {
     const { data, error, response } = await client.session.prompt(
       {
         sessionID: this.sessionId!,
-        parts: [{ type: "text", text }],
+        parts: [
+          // Image-only prompts are valid — the text part is optional.
+          ...(text ? [{ type: "text" as const, text }] : []),
+          ...images.map((image) => ({
+            type: "file" as const,
+            mime: image.mime,
+            url: image.url,
+            ...(image.filename ? { filename: image.filename } : {}),
+          })),
+        ],
         ...(model ? { model } : {}),
-      } as any,
+      },
       { signal },
     )
 

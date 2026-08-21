@@ -70,6 +70,8 @@ import { axEngineDownloadChip } from "../ax-engine-downloads-view-model"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
+import { isNativeShiftPressed, shouldDetectNativeShiftEnter } from "@tui/util/native-shift-enter"
+import { Flag } from "@/flag/flag"
 import { Usage } from "../../routes/session/usage"
 import { Log } from "@/util/log"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
@@ -759,6 +761,16 @@ export function Prompt(props: PromptProps) {
         hidden: true,
         onSelect: (dialog) => {
           if (!input.focused) return
+          // Terminals that cannot report Shift+Enter at all (Apple Terminal,
+          // Windows console): this command only ever fires for a bare CR, so
+          // when the OS says Shift is physically held the user really pressed
+          // Shift+Enter — insert a newline instead of submitting. Same
+          // approach as kimi-code's native modifier polling.
+          if (Flag.AX_CODE_TUI_NATIVE_SHIFT_ENTER && shouldDetectNativeShiftEnter() && isNativeShiftPressed()) {
+            input.insertText("\n")
+            dialog.clear()
+            return
+          }
           submit()
           dialog.clear()
         },
