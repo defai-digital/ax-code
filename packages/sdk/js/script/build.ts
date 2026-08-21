@@ -260,7 +260,11 @@ try {
         },
         {
           name: "@hey-api/sdk",
-          instance: "AxCodeClient",
+          operations: {
+            strategy: "single",
+            containerName: "AxCodeClient",
+            methods: "instance",
+          },
           exportFromIndex: false,
           auth: false,
           paramsStructure: "flat",
