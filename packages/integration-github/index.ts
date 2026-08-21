@@ -152,7 +152,8 @@ let accessToken: string
 let octoRest: Octokit
 let octoGraph: typeof graphql
 let commentId: number | undefined
-let gitConfig: string
+let gitConfig: string | undefined
+let gitConfigExisted = false
 let session: { id: string; title: string; version: string }
 let exitCode = 0
 type PromptFiles = Awaited<ReturnType<typeof getUserPrompt>>["promptFiles"]
@@ -597,6 +598,9 @@ async function subscribeSessionEvents() {
   const decoder = new TextDecoder()
 
   let text = ""
+  // SSE events can be split across network chunks; keep the trailing partial
+  // line until the next chunk completes it.
+  let buffer = ""
   ;(async () => {
     while (true) {
       try {
@@ -604,7 +608,9 @@ async function subscribeSessionEvents() {
         if (done) break
 
         const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split("\n")
+        buffer += chunk
+        const lines = buffer.split("\n")
+        buffer = lines.pop() ?? ""
 
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue
@@ -622,9 +628,8 @@ async function subscribeSessionEvents() {
               if (part.type === "tool" && part.state.status === "completed") {
                 const [tool, color] = TOOL[part.tool] ?? [part.tool, "\x1b[34m\x1b[1m"]
                 const title =
-                  part.state.title || Object.keys(part.state.input).length > 0
-                    ? JSON.stringify(part.state.input)
-                    : "Unknown"
+                  part.state.title ||
+                  (Object.keys(part.state.input).length > 0 ? JSON.stringify(part.state.input) : "Unknown")
                 console.log()
                 console.log(color + `|`, "\x1b[0m\x1b[2m" + ` ${tool.padEnd(7, " ")}`, "", "\x1b[0m" + title)
               }
@@ -736,8 +741,15 @@ async function configureGit(appToken: string) {
 
   console.log("Configuring git...")
   const config = "http.https://github.com/.extraheader"
-  const ret = await $`git config --local --get ${config}`
-  gitConfig = ret.stdout.toString().trim()
+  // `git config --get` exits non-zero when the key is missing; treat that as
+  // "nothing was set" rather than failing the run.
+  try {
+    const ret = await $`git config --local --get ${config}`
+    gitConfig = ret.stdout.toString().trim()
+    gitConfigExisted = true
+  } catch {
+    gitConfigExisted = false
+  }
 
   const newCredentials = Buffer.from(`x-access-token:${appToken}`, "utf8").toString("base64")
 
@@ -751,7 +763,13 @@ async function restoreGitConfig() {
   if (gitConfig === undefined) return
   console.log("Restoring git config...")
   const config = "http.https://github.com/.extraheader"
-  await $`git config --local ${config} ${gitConfig}`
+  if (gitConfigExisted) {
+    await $`git config --local ${config} ${gitConfig}`
+    return
+  }
+  // The key did not exist before we set it; remove it instead of leaving an
+  // empty extraheader behind.
+  await $`git config --local --unset-all ${config}`.catch(() => {})
 }
 
 async function checkoutNewBranch() {

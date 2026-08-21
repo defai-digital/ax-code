@@ -1,5 +1,5 @@
 {
-  "name": "github",
+  "name": "@ax-code/integration-github",
   "module": "index.ts",
   "type": "module",
   "private": true,
@@ -10,9 +10,6 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "typescript": "catalog:"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
   },
   "dependencies": {
     "@actions/core": "catalog:",
