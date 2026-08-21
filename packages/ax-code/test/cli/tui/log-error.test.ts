@@ -2,8 +2,31 @@ import { describe, expect, test } from "vitest"
 import { formatTuiLogError, formatWorkerLoadError } from "../../../src/cli/cmd/tui/util/log-error"
 
 describe("tui log error formatting", () => {
-  test("preserves normal String(error) formatting", () => {
-    expect(formatTuiLogError(new Error("route failed"))).toBe("Error: route failed")
+  test("includes the stack for Error inputs", () => {
+    const formatted = formatTuiLogError(new Error("route failed"))
+    expect(formatted).toContain("Error: route failed")
+    expect(formatted).toContain("\n    at ")
+  })
+
+  test("falls back to name and message when an Error has no stack", () => {
+    const error = new Error("route failed")
+    error.stack = undefined
+    expect(formatTuiLogError(error)).toBe("Error: route failed")
+  })
+
+  test("appends recursively formatted cause info", () => {
+    const error = new Error("route failed", { cause: new Error("connection refused") })
+    const formatted = formatTuiLogError(error)
+    expect(formatted).toContain("Error: route failed")
+    expect(formatted).toContain("Caused by: Error: connection refused")
+  })
+
+  test("appends non-Error cause info", () => {
+    const error = new Error("route failed", { cause: "plain failure" })
+    expect(formatTuiLogError(error)).toContain("Caused by: plain failure")
+  })
+
+  test("preserves normal String(error) formatting for non-Error inputs", () => {
     expect(formatTuiLogError("plain failure")).toBe("plain failure")
   })
 
