@@ -23,7 +23,7 @@ describe("repository internal-only path policy", () => {
   })
 
   test("allows only the explicitly approved architecture records", () => {
-    expect(APPROVED_TRACKED_INTERNAL_FILES).toHaveLength(13)
+    expect(APPROVED_TRACKED_INTERNAL_FILES).toHaveLength(14)
     expect(isApprovedTrackedInternalPath("./.internal/adr/ADR-058-ax-code-tui.md")).toBe(true)
     expect(isApprovedTrackedInternalPath(".internal\\prd\\PRD-2026-08-20-ax-code-tui.md")).toBe(true)
     expect(isApprovedTrackedInternalPath("./.internal/adr/ADR-060-instance-scoped-tool-execution.md")).toBe(true)
@@ -31,6 +31,7 @@ describe("repository internal-only path policy", () => {
     expect(
       isApprovedTrackedInternalPath(".internal/prd/PRD-2026-08-21-ax-code-intel-stabilization-acceleration.md"),
     ).toBe(true)
+    expect(isApprovedTrackedInternalPath(".internal/prd/PRD-2026-08-22-ax-code-reason-stabilization.md")).toBe(true)
     expect(isApprovedTrackedInternalPath(".internal/reports/qa/self-scan.md")).toBe(false)
     expect(
       unapprovedTrackedInternalPaths([...APPROVED_TRACKED_INTERNAL_FILES, ".internal/reports/qa/self-scan.md"]),
