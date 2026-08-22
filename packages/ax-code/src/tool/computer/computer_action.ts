@@ -10,12 +10,18 @@ import { toErrorMessage } from "@/util/error-message"
 import type { ComputerAction, ComputerTarget } from "@ax-code/computer"
 import { renderObservation, renderTrajectory } from "./render"
 
+/**
+ * Finite number. Plain `z.number()` accepts NaN and Infinity, which must never
+ * reach a backend input path (a NaN mouse coordinate is an arbitrary click).
+ */
+const finiteNumber = z.number().refine(Number.isFinite, "must be a finite number")
+
 const target = z
   .union([
-    z.string().min(1).describe("Element id from the latest computer_snapshot (e.g. 'e1:3')"),
-    z.object({ x: z.number(), y: z.number() }).describe("Screenshot pixel coordinates from the latest observation"),
+    z.string().min(1).max(256).describe("Element id from the latest computer_snapshot (e.g. 'e1:3')"),
+    z.object({ x: finiteNumber, y: finiteNumber }).describe("Screenshot pixel coordinates from the latest observation"),
     z
-      .object({ describe: z.string().min(1) })
+      .object({ describe: z.string().min(1).max(2000) })
       .describe(
         "Natural-language description of the target element; resolved to coordinates by the configured grounder model",
       ),
@@ -110,17 +116,21 @@ const parameters = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("type"),
-    text: z.string().describe("Text to type into the focused element"),
+    text: z.string().max(10_000).describe("Text to type into the focused element"),
   }),
   z.object({
     type: z.literal("keypress"),
-    keys: z.array(z.string()).min(1).describe("Keys or combination, e.g. ['cmd','s'] or ['return']"),
+    keys: z
+      .array(z.string().min(1).max(32))
+      .min(1)
+      .max(8)
+      .describe("Keys or combination, e.g. ['cmd','s'] or ['return']"),
   }),
   z.object({
     type: z.literal("scroll"),
     target: target.optional(),
     direction: z.enum(["up", "down", "left", "right"]),
-    amount: z.number().optional().describe("Scroll amount in pixels"),
+    amount: finiteNumber.optional().describe("Scroll amount in pixels"),
   }),
   z.object({
     type: z.literal("drag"),
@@ -130,15 +140,15 @@ const parameters = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("set_value"),
     target,
-    value: z.string().describe("Value to set on the element"),
+    value: z.string().max(100_000).describe("Value to set on the element"),
   }),
   z.object({
     type: z.literal("activate_window"),
-    windowId: z.string().describe("Window id from a previous observation"),
+    windowId: z.string().min(1).max(64).describe("Window id from a previous observation"),
   }),
   z.object({
     type: z.literal("launch_app"),
-    app: z.string().describe("Application name to launch or focus"),
+    app: z.string().min(1).max(512).describe("Application name to launch or focus"),
   }),
 ])
 
