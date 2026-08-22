@@ -12,6 +12,7 @@
  */
 import { createRequire } from "node:module"
 import { Log } from "@/util/log"
+import { Config } from "@/config/config"
 
 const log = Log.create({ service: "visual.browser" })
 
@@ -198,6 +199,8 @@ export class BrowserRuntime {
   private static bySession = new Map<string, BrowserRuntime>()
 
   private browser: PwBrowser | undefined
+  /** true when connected to the user's real browser via CDP (browser.cdpUrl) */
+  private attached = false
   private pages = new Map<string, PageEntry>()
   private consoleBuffers = new Map<string, BrowserConsoleMessage[]>()
   private networkBuffers = new Map<string, BrowserNetworkRequest[]>()
@@ -293,12 +296,32 @@ export class BrowserRuntime {
 
   // ---- public API ----
 
+  /**
+   * Launch the managed headless browser, or attach to the user's real
+   * Chrome/Edge over CDP when `browser.cdpUrl` is configured.
+   */
+  private async launchOrConnect(pw: PlaywrightModule): Promise<PwBrowser> {
+    const cdpUrl = (await Config.get()).browser?.cdpUrl
+    if (!cdpUrl) return pw.chromium.launch({ headless: true })
+    try {
+      const browser = await pw.chromium.connectOverCDP(cdpUrl)
+      this.attached = true
+      log.info("attached to browser via CDP", { cdpUrl })
+      return browser
+    } catch (err) {
+      throw new Error(
+        `Failed to attach to a browser at ${cdpUrl}. Start Chrome or Edge with --remote-debugging-port=9222 (or fix browser.cdpUrl) and try again.`,
+        { cause: err },
+      )
+    }
+  }
+
   async open(url: string, viewport: { width: number; height: number }): Promise<BrowserPage> {
     const pw = this.ensurePlaywright()
 
     if (!this.browser) {
       if (!this.launchPromise) {
-        this.launchPromise = pw.chromium.launch({ headless: true })
+        this.launchPromise = this.launchOrConnect(pw)
       }
       try {
         this.browser = await this.launchPromise
@@ -309,9 +332,17 @@ export class BrowserRuntime {
       log.info("browser launched")
     }
 
-    const context = await this.browser.newContext({
-      viewport: { width: viewport.width, height: viewport.height },
-    })
+    // In attach mode the user's session (tabs, cookies, sign-in state) lives in
+    // the browser's existing default context; a fresh isolated context would
+    // not see it. Fall back to newContext only when none exists.
+    const context = this.attached
+      ? (this.browser.contexts()[0] ??
+        (await this.browser.newContext({
+          viewport: { width: viewport.width, height: viewport.height },
+        })))
+      : await this.browser.newContext({
+          viewport: { width: viewport.width, height: viewport.height },
+        })
     const pwPage = await context.newPage()
 
     this.pageCounter++
@@ -405,7 +436,9 @@ export class BrowserRuntime {
   consumeSnapshot(snapshotID: string): { pageID: string } {
     const snap = this.snapshots.get(snapshotID)
     if (!snap || snap.consumed) {
-      throw new Error(`BROWSER_STALE_SNAPSHOT: snapshot "${snapshotID}" is missing, consumed, or belongs to another session`)
+      throw new Error(
+        `BROWSER_STALE_SNAPSHOT: snapshot "${snapshotID}" is missing, consumed, or belongs to another session`,
+      )
     }
     snap.consumed = true
     return { pageID: snap.pageID }
@@ -654,7 +687,10 @@ export class BrowserRuntime {
   async close(): Promise<void> {
     for (const entry of this.pages.values()) {
       try {
-        await entry.context.close()
+        // Attach mode: the context is the user's shared default context —
+        // close only the pages (tabs) this runtime created, never the context.
+        if (this.attached) await entry.pwPage.close()
+        else await entry.context.close()
       } catch {
         // Context may already be closed
       }
@@ -668,12 +704,19 @@ export class BrowserRuntime {
 
     if (this.browser) {
       try {
+        // playwright-core 1.51: on a CDP connection browser.close() only
+        // closes the transport — the server-side browserProcess.close is
+        // chromeTransport.closeAndWait() and never sends CDP Browser.close
+        // (verified in playwright-core/lib/server/chromium/chromium.js,
+        // _connectOverCDPInternal). So this is a safe disconnect in attach
+        // mode; the user's real browser stays alive.
         await this.browser.close()
       } catch {
         // Browser may already be closed
       }
       this.browser = undefined
       this.launchPromise = undefined
+      this.attached = false
       log.info("browser closed")
     }
   }
@@ -696,7 +739,9 @@ export class BrowserRuntime {
     this.networkBuffers.delete(entry.pageID)
 
     try {
-      await entry.context.close()
+      // Attach mode: close only the tab we created, never the user's context.
+      if (this.attached) await entry.pwPage.close()
+      else await entry.context.close()
     } catch {
       // Context may already be closed
     }

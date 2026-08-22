@@ -4,3 +4,4 @@
 - Only http:// and https:// protocols are allowed
 - Localhost and local development servers are supported
 - The browser uses an isolated profile (no cookies, history, or signed-in state)
+- CDP attach mode: set browser.cdpUrl in config (e.g. http://localhost:9222, Chrome/Edge started with --remote-debugging-port) to observe and act in the user's real browser instead of the isolated one

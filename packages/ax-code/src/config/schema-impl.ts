@@ -938,6 +938,14 @@ export const Info = z
           .describe(
             "Intercept browser-open commands (open/xdg-open/start) targeting local HTML files or localhost URLs to prevent unexpected focus-steals during HTML development. Defaults to true.",
           ),
+        // Plain z.string(): the endpoint may be http://host:port or a ws:// URL,
+        // and zod's .url() is needlessly strict about both.
+        cdpUrl: z
+          .string()
+          .optional()
+          .describe(
+            "Attach to a running Chrome/Edge via CDP (e.g. http://localhost:9222, started with --remote-debugging-port) instead of launching a headless browser. browser_* tools then observe and act in the real browser.",
+          ),
       })
       .optional()
       .describe("Browser integration settings"),
