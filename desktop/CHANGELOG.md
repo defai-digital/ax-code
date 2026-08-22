@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.7.8] - 2026-08-21
+
+### Fixed
+
+- Make migration locking crash-safe.
+- Serialize schema migrations across concurrent processes.
+
 ## [7.7.7] - 2026-08-21
 
 ### Added
