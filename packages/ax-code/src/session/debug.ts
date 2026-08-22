@@ -10,6 +10,7 @@ import {
   DebugInstrumentationPlanSchema,
 } from "@ax-code/ax-code-reason/runtime-debug"
 import { resolveCaseStatus } from "@ax-code/ax-code-reason/verify-after-fix"
+import { HYPOTHESIS_TERMINAL_STATUSES } from "@ax-code/ax-code-reason/lifecycle"
 import { EventQuery } from "../replay/query"
 import { Log } from "../util/log"
 import type { SessionID } from "./schema"
@@ -86,6 +87,20 @@ export namespace SessionDebug {
       if (meta.debugHypothesis) {
         const parsed = DebugHypothesisSchema.safeParse(meta.debugHypothesis)
         if (parsed.success) {
+          // Phase 3 (D5) terminal-status guard: once a hypothesis is terminal
+          // (confirmed / refuted / unresolved) it is frozen. Event-log replay
+          // can keep-LAST status updates among non-terminal states (active →
+          // confirmed), but can never overwrite a terminal hypothesis into a
+          // non-terminal state or move it between terminal states — reviving
+          // a terminal hypothesis requires a NEW hypothesis id.
+          const existing = hypothesesById.get(parsed.data.hypothesisId)
+          if (
+            existing &&
+            HYPOTHESIS_TERMINAL_STATUSES.includes(existing.status) &&
+            existing.status !== parsed.data.status
+          ) {
+            continue
+          }
           // Map.set on an existing key updates value but preserves
           // insertion order; later events overwrite earlier ones with
           // the same hypothesisId.

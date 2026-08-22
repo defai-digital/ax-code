@@ -4,7 +4,15 @@ import type { ProjectID } from "./id"
 import { DebugEngine } from "./index"
 import { DebugEngineQuery } from "./query"
 import { RefactorPlanID } from "./id"
-import type { RefactorPlanKind, RefactorPlanRisk } from "./schema.sql"
+import { sha256Hex } from "./quality/digest"
+import fs from "fs/promises"
+import type {
+  RefactorEditGroup,
+  RefactorPlanKind,
+  RefactorPlanPreconditions,
+  RefactorPlanRisk,
+  RefactorVerificationStep,
+} from "./schema.sql"
 
 // planRefactor — produces an auditable refactor plan without writing any
 // files. The plan is persisted in debug_engine_refactor_plan and later
@@ -243,6 +251,49 @@ export async function planRefactorImpl(
   const edits = buildEdits(kind, resolved, callers, references)
   const summary = buildSummary(kind, resolved, affectedFiles, risk)
 
+  // Phase 3 (D5): capture plan preconditions — the source-state fingerprint
+  // and a content digest per affected file — so applySafeRefactor can detect
+  // drift before opening the shadow worktree. Reading files is read-only and
+  // does not violate the ADR-006 no-file-writes invariant.
+  const sourceState = await codeReasonHost().sourceState()
+  const affectedFileDigests: Record<string, string> = {}
+  for (const file of affectedFiles) {
+    try {
+      const contents = await fs.readFile(file, "utf8")
+      affectedFileDigests[file] = sha256Hex(contents)
+    } catch {
+      // Missing/unreadable file (deleted mid-plan, permission, etc.) — omit
+      // its digest. Drift detection treats an absent digest as "cannot
+      // verify" and fails closed to full re-planning.
+    }
+  }
+  const preconditions: RefactorPlanPreconditions = {
+    sourceState,
+    affectedFileDigests,
+  }
+
+  // Group edits so the applier can reason about atomicity. Each edit is its
+  // own atomic group keyed by target; a multi-edit rename/collapse can be
+  // composed from these.
+  const editGroups: RefactorEditGroup[] = edits.map((edit, index) => {
+    const targetFile = resolved.find((t) => t.id === edit.target)?.file
+    return {
+      id: `g${index}`,
+      kind: "atomic" as const,
+      targets: [edit.target],
+      files: targetFile ? [targetFile] : [],
+      detail: edit.detail,
+    }
+  })
+
+  // Verification mapping: typecheck always full-scope, lint + tests scoped to
+  // affected files when the plan touches anything, else full.
+  const verificationPlan: RefactorVerificationStep[] = [
+    { check: "typecheck", scope: "full", files: [] },
+    { check: "lint", scope: affectedFiles.length > 0 ? "affected" : "full", files: affectedFiles },
+    { check: "test", scope: affectedFiles.length > 0 ? "affected" : "full", files: affectedFiles },
+  ]
+
   // Persist. This is the only write in the entire function and it's to
   // a DRE-owned table — never to v3 tables or the filesystem.
   const planId = RefactorPlanID.ascending()
@@ -265,6 +316,9 @@ export async function planRefactorImpl(
     risk,
     status: "pending",
     graph_cursor_at_creation: cursorSha,
+    preconditions,
+    edit_groups: editGroups,
+    verification_plan: verificationPlan,
     time_created: now,
     time_updated: now,
   })

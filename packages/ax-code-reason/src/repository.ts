@@ -16,7 +16,14 @@
 // without dragging a drizzle row type into the contract.
 
 import type { EmbeddingCacheID, ProjectID, RefactorPlanID } from "./id"
-import type { RefactorPlanKind, RefactorPlanRisk, RefactorPlanStatus } from "./schema.sql"
+import type {
+  RefactorPlanKind,
+  RefactorPlanRisk,
+  RefactorPlanStatus,
+  RefactorPlanPreconditions,
+  RefactorEditGroup,
+  RefactorVerificationStep,
+} from "./schema.sql"
 
 // Runtime sentinel exported so consumers can detect that the repository
 // surface is wired — interfaces alone are erased by the bundler. The
@@ -49,6 +56,11 @@ export type PlanRow = {
   // Null when no cursor existed yet (fresh project). Existence +
   // staleness comparison happens in apply-safe-refactor.ts.
   graph_cursor_at_creation: string | null
+  // Phase 3 (D5): nullable JSON columns (see schema.sql.ts). Null for rows
+  // written before the migration or by callers that don't supply them.
+  preconditions: RefactorPlanPreconditions | null
+  edit_groups: RefactorEditGroup[] | null
+  verification_plan: RefactorVerificationStep[] | null
   time_created: number
   time_updated: number
 }

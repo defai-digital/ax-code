@@ -63728,33 +63728,6 @@
           "output": 272000
         }
       },
-      "openai/gpt-4o-search-preview": {
-        "id": "openai/gpt-4o-search-preview",
-        "name": "GPT-4o Search Preview (OpenAI)",
-        "description": "GPT model for general reasoning, writing, coding, and tool-assisted tasks",
-        "family": "gpt",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": false,
-        "release_date": "2024-10-01",
-        "last_updated": "2024-10-01",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 128000,
-          "output": 16384
-        }
-      },
       "openai/gpt-4.1": {
         "id": "openai/gpt-4.1",
         "name": "GPT-4.1 (OpenAI)",
@@ -63932,33 +63905,6 @@
         "limit": {
           "context": 200000,
           "output": 100000
-        }
-      },
-      "openai/gpt-4o-mini-search-preview": {
-        "id": "openai/gpt-4o-mini-search-preview",
-        "name": "GPT-4o Mini Search Preview (OpenAI)",
-        "description": "Compact GPT model for low-latency assistance and high-volume workloads",
-        "family": "gpt",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": false,
-        "release_date": "2024-10-01",
-        "last_updated": "2024-10-01",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 128000,
-          "output": 16384
         }
       },
       "openai/gpt-5.2-pro": {
@@ -157409,33 +157355,6 @@
           "output": 4096
         }
       },
-      "gpt-4o-search-preview": {
-        "id": "gpt-4o-search-preview",
-        "name": "GPT-4o Search Preview",
-        "description": "GPT model for general reasoning, writing, coding, and tool-assisted tasks",
-        "family": "gpt",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2024-10-01",
-        "last_updated": "2024-10-01",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 128000,
-          "output": 16384
-        }
-      },
       "qwen3-next-80b-a3b-thinking": {
         "id": "qwen3-next-80b-a3b-thinking",
         "name": "Qwen3-Next 80B-A3B (Thinking)",
@@ -158719,33 +158638,6 @@
         "limit": {
           "context": 110000,
           "output": 110000
-        }
-      },
-      "gpt-4o-mini-search-preview": {
-        "id": "gpt-4o-mini-search-preview",
-        "name": "GPT-4o Mini Search Preview",
-        "description": "Compact GPT model for low-latency assistance and high-volume workloads",
-        "family": "gpt",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2024-10-01",
-        "last_updated": "2024-10-01",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 128000,
-          "output": 16384
         }
       },
       "ministral-14b-2512": {

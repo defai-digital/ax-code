@@ -9,6 +9,8 @@
     ".": "./src/index.ts",
     "./host": "./src/host.ts",
     "./id": "./src/id.ts",
+    "./lifecycle": "./src/lifecycle.ts",
+    "./incremental": "./src/incremental.ts",
     "./query": "./src/query.ts",
     "./repository": "./src/repository.ts",
     "./schema.sql": "./src/schema.sql.ts",

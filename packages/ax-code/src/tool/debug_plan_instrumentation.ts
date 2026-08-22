@@ -8,6 +8,11 @@ import {
   DebugInstrumentationPlanSchema,
   DebugInstrumentationTargetSchema,
 } from "@ax-code/ax-code-reason/runtime-debug"
+import {
+  INSTRUMENTATION_TRANSITIONS,
+  INSTRUMENTATION_TERMINAL_STATUSES,
+  validateTransition,
+} from "@ax-code/ax-code-reason/lifecycle"
 import { Installation } from "../installation"
 import { SessionDebug } from "../session/debug"
 import type { SessionID } from "../session/schema"
@@ -36,13 +41,34 @@ export const DebugPlanInstrumentationTool = Tool.define("debug_plan_instrumentat
       purpose: args.purpose,
       targets: args.targets,
     })
+    const newStatus = args.status ?? "planned"
+
+    // Phase 3 (D5): validate the status move against the instrumentation
+    // state machine. A re-emitted plan must transition planned → applied →
+    // removed; `removed` is terminal. When no prior plan exists (first
+    // emission) any status is accepted as the initial state.
+    const existingPlan = SessionDebug.load(sessionID).instrumentationPlans.find((item) => item.planId === planId)
+    if (existingPlan && existingPlan.status !== newStatus) {
+      const transition = validateTransition(
+        INSTRUMENTATION_TRANSITIONS,
+        INSTRUMENTATION_TERMINAL_STATUSES,
+        existingPlan.status,
+        newStatus,
+      )
+      if (!transition.ok) {
+        throw new Error(
+          `debug_plan_instrumentation: illegal transition ${existingPlan.status} → ${newStatus} for plan ${planId} (${transition.reason})`,
+        )
+      }
+    }
+
     const debugInstrumentationPlan = DebugInstrumentationPlanSchema.parse({
       schemaVersion: 1,
       planId,
       caseId: args.caseId,
       purpose: args.purpose,
       targets: args.targets,
-      status: args.status ?? "planned",
+      status: newStatus,
       createdAt: new Date().toISOString(),
       source: { tool: "debug_plan_instrumentation", version: Installation.VERSION, runId: ctx.sessionID },
     })

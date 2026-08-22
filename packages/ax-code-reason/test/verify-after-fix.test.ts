@@ -10,11 +10,10 @@ import { computeEnvelopeId } from "../src/quality/verification-envelope"
 import type { DebugHypothesis } from "../src/runtime-debug"
 import { makeEnvelope } from "./fixture/envelope"
 
-// Current-behavior contract for verify-after-fix. NOTE: Phase 3 of the
-// stabilization plan introduces explicit lifecycle state machines that will
-// REJECT some transitions these tests currently codify as overwriting
-// (e.g. confirmed → refuted). When Phase 3 lands, update the tests marked
-// "current overwrite behavior".
+// Current-behavior contract for verify-after-fix. Phase 3 introduced the
+// explicit hypothesis state machine: confirmed/refuted/unresolved are
+// terminal, so the tests below assert that illegal transitions return the
+// unchanged hypothesis instead of overwriting.
 
 const source = { tool: "debug", version: "7.7.8", runId: "run-1" }
 
@@ -120,18 +119,23 @@ describe("applyVerificationToHypothesis", () => {
     expect(applyVerificationToHypothesis({ hypothesis, envelope })).toBe(hypothesis)
   })
 
-  test("current overwrite behavior: a confirmed hypothesis can flip to refuted", () => {
-    // Phase 3 makes confirmed terminal and rejects this transition; today
-    // applyVerificationToHypothesis overwrites ANY status.
+  test("confirmed is terminal: a failing envelope cannot refute it", () => {
+    // Phase 3 (D5): confirmed is a terminal state. A later failing envelope
+    // must NOT demote the hypothesis — the transition is rejected and the
+    // unchanged hypothesis is returned.
     const confirmedHypothesis = makeHypothesis({ status: "confirmed" })
     const envelope = makeEnvelope({ status: "failed", passed: false, structuredFailures: [failing] })
-    expect(applyVerificationToHypothesis({ hypothesis: confirmedHypothesis, envelope }).status).toBe("refuted")
+    const result = applyVerificationToHypothesis({ hypothesis: confirmedHypothesis, envelope })
+    expect(result).toBe(confirmedHypothesis)
+    expect(result.status).toBe("confirmed")
   })
 
-  test("current overwrite behavior: an unresolved hypothesis can jump straight to confirmed", () => {
+  test("unresolved is terminal: cannot jump straight to confirmed", () => {
     const unresolvedHypothesis = makeHypothesis({ status: "unresolved" })
     const envelope = makeEnvelope()
-    expect(applyVerificationToHypothesis({ hypothesis: unresolvedHypothesis, envelope }).status).toBe("confirmed")
+    const result = applyVerificationToHypothesis({ hypothesis: unresolvedHypothesis, envelope })
+    expect(result).toBe(unresolvedHypothesis)
+    expect(result.status).toBe("unresolved")
   })
 })
 

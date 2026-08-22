@@ -18,6 +18,9 @@ function seedPlan(projectID: ProjectID) {
     risk: "low",
     status: "pending",
     graph_cursor_at_creation: null,
+    preconditions: null,
+    edit_groups: null,
+    verification_plan: null,
     time_created: time,
     time_updated: time,
   })

@@ -12,6 +12,9 @@ import { DebugEngineQuery } from "./query"
 import { ShadowWorktree } from "./shadow-worktree"
 import { extractFilesFromDiff } from "./analyze-impact"
 import { RefactorPlanID } from "./id"
+import { sha256Hex } from "./quality/digest"
+import { PLAN_TRANSITIONS, PLAN_TERMINAL_STATUSES, validateTransition } from "./lifecycle"
+import type { RefactorPlanPreconditions } from "./schema.sql"
 
 // applySafeRefactor — orchestrates the Plan → Validate → Apply pipeline
 // (ADR-006, PRD §4.5).
@@ -90,6 +93,34 @@ function isPlanStale(params: { planCursor: string | null; currentCursor: string 
   return params.planCursor !== params.currentCursor
 }
 
+// Phase 3 (D5): precondition drift detection. Re-derives the source-state
+// fingerprint and per-file content digests captured at plan time; any
+// mismatch means the world moved under the plan and it must be re-planned
+// (stale) before the shadow worktree opens. Returns a drift reason string,
+// or null when the preconditions still hold.
+async function detectPreconditionDrift(preconditions: RefactorPlanPreconditions): Promise<string | null> {
+  const current = await codeReasonHost().sourceState()
+  const captured = preconditions.sourceState
+  if (captured && current) {
+    if (captured.available !== current.available) return "source-availability-changed"
+    if (captured.available && current.available) {
+      if (captured.commit !== current.commit) return "source-commit-moved"
+      if (captured.dirtyDigest !== current.dirtyDigest) return "source-dirty-changed"
+    }
+  }
+  for (const [file, digest] of Object.entries(preconditions.affectedFileDigests)) {
+    let currentDigest: string
+    try {
+      currentDigest = sha256Hex(await fs.readFile(file, "utf8"))
+    } catch {
+      // File vanished or became unreadable after planning.
+      return `file-missing:${file}`
+    }
+    if (currentDigest !== digest) return `file-changed:${file}`
+  }
+  return null
+}
+
 export async function applySafeRefactorImpl(
   projectID: ProjectID,
   input: ApplySafeRefactorInput,
@@ -141,6 +172,15 @@ export async function applySafeRefactorImpl(
     explain: DebugEngine.buildExplain("apply-safe-refactor", [], heuristics),
   })
 
+  // Hard failures (a check ran and failed, or a patch couldn't apply) write
+  // the plan to `aborted` so the caller can retry via `aborted → pending`.
+  // Soft paths (no-patch pre-flight, stale, not-git) keep their own status.
+  const hardAbort = (reason: string, checks?: DebugEngine.ApplyResult["checks"]): DebugEngine.ApplyResult => {
+    DebugEngineQuery.updatePlanStatus(projectID, input.planId, "aborted")
+    heuristics.push("plan-aborted")
+    return abort(reason, checks)
+  }
+
   // Step 1: load plan.
   // Boundary validation (PRD E3, Phase 2): the public entrypoint receives a
   // branded `RefactorPlanID`, but blind `.make()` casts at the package boundary
@@ -154,8 +194,17 @@ export async function applySafeRefactorImpl(
   }
   const row = DebugEngineQuery.getPlan(projectID, input.planId)
   if (!row) return abort("plan-not-found")
-  if (row.status !== "pending") {
+
+  // Phase 3 (D5): validate `row.status → pending` against the plan state
+  // machine. `pending` stays put; `aborted` re-arms for idempotent retry;
+  // `applied` / `stale` are terminal and refuse.
+  const statusTransition = validateTransition(PLAN_TRANSITIONS, PLAN_TERMINAL_STATUSES, row.status, "pending")
+  if (!statusTransition.ok) {
     return abort(`plan-status-${row.status}`)
+  }
+  if (row.status === "aborted") {
+    DebugEngineQuery.updatePlanStatus(projectID, input.planId, "pending")
+    heuristics.push("retry-from-aborted")
   }
   heuristics.push(`plan-kind=${row.kind}`)
 
@@ -168,6 +217,18 @@ export async function applySafeRefactorImpl(
     DebugEngineQuery.updatePlanStatus(projectID, input.planId, "stale")
     heuristics.push("stale-plan")
     return abort("plan-stale")
+  }
+
+  // Step 2.5 (Phase 3 D5): precondition drift detection. If the source state
+  // or any affected file changed since planning, mark the plan stale before
+  // opening the shadow worktree.
+  if (row.preconditions) {
+    const drift = await detectPreconditionDrift(row.preconditions)
+    if (drift) {
+      DebugEngineQuery.updatePlanStatus(projectID, input.planId, "stale")
+      heuristics.push(`precondition-drift:${drift}`)
+      return abort(`plan-stale:${drift}`)
+    }
   }
 
   // Step 3: preconditions + shadow worktree.
@@ -226,7 +287,7 @@ export async function applySafeRefactorImpl(
       await fs.rm(patchFile, { force: true }).catch(() => undefined)
       if (applyResult.exitCode !== 0) {
         heuristics.push("patch-apply-failed")
-        return abort("patch-apply-failed")
+        return hardAbort("patch-apply-failed")
       }
       heuristics.push("patch-applied-in-shadow")
     } else {
@@ -249,7 +310,7 @@ export async function applySafeRefactorImpl(
     const typecheckCheck = await runCheck("typecheck", commands.typecheck, shadowHandle.path, checkOptions)
     if (input.signal?.aborted) return abort("aborted")
     if (!typecheckCheck.ok) {
-      return abort("typecheck-failed", {
+      return hardAbort("typecheck-failed", {
         typecheck: legacyCheck(typecheckCheck),
         lint: skippedCheck(),
         tests: skippedTests(),
@@ -262,7 +323,7 @@ export async function applySafeRefactorImpl(
         : await runCheck("lint", commands.lint, shadowHandle.path, checkOptions)
     if (input.signal?.aborted) return abort("aborted")
     if (!lintCheck.ok) {
-      return abort("lint-failed", {
+      return hardAbort("lint-failed", {
         typecheck: legacyCheck(typecheckCheck),
         lint: legacyCheck(lintCheck),
         tests: skippedTests(),
@@ -282,7 +343,7 @@ export async function applySafeRefactorImpl(
         } satisfies DebugEngine.TestResult & { skipped: boolean })
       : await runTests(commands.test, shadowHandle.path, row.affected_files, projectID, scope, checkOptions)
     if (!testResult.ok) {
-      return abort("tests-failed", {
+      return hardAbort("tests-failed", {
         typecheck: legacyCheck(typecheckCheck),
         lint: legacyCheck(lintCheck),
         tests: legacyTests(testResult),
@@ -335,7 +396,7 @@ export async function applySafeRefactorImpl(
 
     if (realResult.exitCode !== 0) {
       // Worktree is unchanged because git apply failed atomically.
-      return abort("real-apply-failed", {
+      return hardAbort("real-apply-failed", {
         typecheck: legacyCheck(typecheckCheck),
         lint: legacyCheck(lintCheck),
         tests: legacyTests(testResult),

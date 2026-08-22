@@ -2,6 +2,7 @@ import { sqliteTable, text, integer, blob, index } from "drizzle-orm/sqlite-core
 
 import type { ProjectID } from "./id"
 import type { RefactorPlanID, EmbeddingCacheID, DebugPatternID } from "./id"
+import type { SourceState } from "./quality/verification-envelope"
 // Local copy of the core Timestamps column pair (storage/schema.sql) so the
 // package carries its own table definitions.
 const Timestamps = {
@@ -29,6 +30,37 @@ export type RefactorPlanKind = "extract" | "rename" | "collapse" | "move" | "inl
 export type RefactorPlanRisk = "low" | "medium" | "high"
 export type RefactorPlanStatus = "pending" | "applied" | "aborted" | "stale"
 
+// ─── Phase 3 (D5) plan-rigor column shapes ─────────────────────────────
+//
+// These are the JSON shapes stored in the additive nullable columns added in
+// the first DRE schema migration. All three are null for rows written before
+// the migration (and stay null unless the planner populates them).
+
+// Source-state fingerprint + per-affected-file content digest captured at plan
+// time. apply-safe-refactor re-derives both before opening the shadow worktree;
+// any drift ⇒ the plan is stale.
+export type RefactorPlanPreconditions = {
+  sourceState: SourceState | null
+  affectedFileDigests: Record<string, string>
+}
+
+// One ordered or atomic group of edits. Atomic groups must apply as a unit;
+// ordered groups carry a sequence the applier walks left-to-right.
+export type RefactorEditGroup = {
+  id: string
+  kind: "atomic" | "ordered"
+  targets: string[]
+  files: string[]
+  detail: string
+}
+
+// Maps a verification check to the scope it must cover after the plan applies.
+export type RefactorVerificationStep = {
+  check: "typecheck" | "lint" | "test"
+  scope: "full" | "affected"
+  files: string[]
+}
+
 export const RefactorPlanTable = sqliteTable(
   "debug_engine_refactor_plan",
   {
@@ -53,6 +85,12 @@ export const RefactorPlanTable = sqliteTable(
     // the cursor has moved since, applySafeRefactor may refuse the plan
     // as stale. Null when no cursor existed yet (fresh project).
     graph_cursor_at_creation: text(),
+    // Phase 3 (D5): additive nullable JSON columns. The planner populates
+    // these; rows created before the migration (or by callers that don't
+    // supply them) leave them null.
+    preconditions: text({ mode: "json" }).$type<RefactorPlanPreconditions | null>(),
+    edit_groups: text({ mode: "json" }).$type<RefactorEditGroup[] | null>(),
+    verification_plan: text({ mode: "json" }).$type<RefactorVerificationStep[] | null>(),
     ...Timestamps,
   },
   (table) => [

@@ -1688,6 +1688,48 @@ describe("applySafeRefactor", () => {
     })
   })
 
+  test("hard failure writes 'aborted' and aborted → pending retry re-arms the plan", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(path.join(tmp.path, "package.json"), JSON.stringify({ name: "t", version: "0.0.0" }))
+    execFileSync("git", ["add", "."], { cwd: tmp.path, stdio: "pipe" })
+    execFileSync("git", ["commit", "-m", "init"], { cwd: tmp.path, stdio: "pipe" })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+        DebugEngine.__clearProject(projectID)
+        ShadowWorktree.__resetGates()
+
+        const file = path.join(tmp.path, "a.ts")
+        const sym = seedSymbol(projectID, { name: "a", file, signature: "() => void" })
+        const plan = await DebugEngine.planRefactor(projectID, { intent: "extract", targets: [sym] })
+
+        // First apply: typecheck fails — a hard failure writes "aborted".
+        const first = await DebugEngine.applySafeRefactor(projectID, {
+          planId: plan.planId,
+          commands: { typecheck: "false", lint: null, test: null },
+        })
+        expect(first.applied).toBe(false)
+        expect(first.abortReason).toBe("typecheck-failed")
+        expect(DebugEngine.getPlan(projectID, plan.planId)?.status).toBe("aborted")
+
+        // Retry: the aborted plan re-arms to pending and proceeds to the soft
+        // no-patch pre-flight (not "plan-status-aborted").
+        const second = await DebugEngine.applySafeRefactor(projectID, {
+          planId: plan.planId,
+          commands: { typecheck: null, lint: null, test: null },
+        })
+        expect(second.abortReason).toBe("no-patch-supplied")
+        expect(second.explain.heuristicsApplied).toContain("retry-from-aborted")
+
+        CodeIntelligence.__clearProject(projectID)
+        DebugEngine.__clearProject(projectID)
+      },
+    })
+  })
+
   test("happy path with a real patch modifies the real worktree", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(path.join(tmp.path, "greet.ts"), 'export const msg = "hello"\n')

@@ -255,6 +255,91 @@ describe("SessionDebug.load", () => {
     })
   })
 
+  test("terminal-status guard: a later non-terminal emit cannot overwrite a confirmed hypothesis", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const c = buildCase(session.id, "p")
+        const confirmed = buildHypothesis(session.id, c.caseId, "claim X", "confirmed")
+        const active = buildHypothesis(session.id, c.caseId, "claim X", "active")
+        // Sanity — same caseId+claim → same hypothesisId
+        expect(active.hypothesisId).toBe(confirmed.hypothesisId)
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        await emit(session.id, {
+          kind: "debug_open_case",
+          metadata: { caseId: c.caseId, debugCase: c.debugCase },
+        })
+        // Confirmed first, then a stale "active" re-emit during replay. The
+        // terminal-status guard must keep "confirmed".
+        await emit(session.id, {
+          kind: "debug_propose_hypothesis",
+          metadata: { hypothesisId: confirmed.hypothesisId, debugHypothesis: confirmed.debugHypothesis },
+        })
+        await emit(session.id, {
+          kind: "debug_propose_hypothesis",
+          metadata: { hypothesisId: active.hypothesisId, debugHypothesis: active.debugHypothesis },
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const loaded = SessionDebug.load(session.id)
+        expect(loaded.hypotheses).toHaveLength(1)
+        expect(loaded.hypotheses[0].status).toBe("confirmed")
+      },
+    })
+  })
+
+  test("terminal-status guard: a terminal hypothesis cannot move between terminal states", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const c = buildCase(session.id, "p")
+        const confirmed = buildHypothesis(session.id, c.caseId, "claim X", "confirmed")
+        const refuted = buildHypothesis(session.id, c.caseId, "claim X", "refuted")
+        expect(confirmed.hypothesisId).toBe(refuted.hypothesisId)
+
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: session.id,
+          agent: "build",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        await emit(session.id, {
+          kind: "debug_open_case",
+          metadata: { caseId: c.caseId, debugCase: c.debugCase },
+        })
+        await emit(session.id, {
+          kind: "debug_propose_hypothesis",
+          metadata: { hypothesisId: confirmed.hypothesisId, debugHypothesis: confirmed.debugHypothesis },
+        })
+        await emit(session.id, {
+          kind: "debug_propose_hypothesis",
+          metadata: { hypothesisId: refuted.hypothesisId, debugHypothesis: refuted.debugHypothesis },
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const loaded = SessionDebug.load(session.id)
+        expect(loaded.hypotheses).toHaveLength(1)
+        expect(loaded.hypotheses[0].status).toBe("confirmed")
+      },
+    })
+  })
+
   test("dedups cases / evidence / hypotheses by id across repeated emits", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

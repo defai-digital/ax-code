@@ -38,6 +38,25 @@ const SUBPATHS: Subpath[] = [
     symbols: ["RefactorPlanID", "EmbeddingCacheID", "DebugPatternID", "CodeNodeID", "defineBrandedIdentifier"],
   },
   {
+    name: "./lifecycle",
+    load: () => import("@ax-code/ax-code-reason/lifecycle"),
+    symbols: [
+      "HYPOTHESIS_TRANSITIONS",
+      "CASE_TRANSITIONS",
+      "INSTRUMENTATION_TRANSITIONS",
+      "PLAN_TRANSITIONS",
+      "transitionHypothesis",
+      "validateTransition",
+      "HYPOTHESIS_TERMINAL_STATUSES",
+      "PLAN_TERMINAL_STATUSES",
+    ],
+  },
+  {
+    name: "./incremental",
+    load: () => import("@ax-code/ax-code-reason/incremental"),
+    symbols: ["Incremental", "shouldFallbackToFull", "computeObsoleteFindings"],
+  },
+  {
     name: "./query",
     load: () => import("@ax-code/ax-code-reason/query"),
     symbols: ["DebugEngineQuery"],

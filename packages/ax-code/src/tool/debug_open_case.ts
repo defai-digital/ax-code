@@ -2,6 +2,7 @@ import z from "zod"
 import { Tool } from "./tool"
 import DESCRIPTION from "./debug_open_case.txt"
 import { computeDebugCaseId, DebugCaseSchema } from "@ax-code/ax-code-reason/runtime-debug"
+import { CASE_TRANSITIONS, CASE_TERMINAL_STATUSES, validateTransition } from "@ax-code/ax-code-reason/lifecycle"
 import { Installation } from "../installation"
 
 export const DebugOpenCaseTool = Tool.define("debug_open_case", {
@@ -11,6 +12,15 @@ export const DebugOpenCaseTool = Tool.define("debug_open_case", {
   }),
   execute: async (args, ctx) => {
     const caseId = computeDebugCaseId({ problem: args.problem, runId: ctx.sessionID })
+
+    // Phase 3 (D5): a new debug case opens in the "open" state, which must be
+    // a legal initial state per the case transition table. Defensive — the
+    // transition table is the single source of truth for case statuses.
+    const openTransition = validateTransition(CASE_TRANSITIONS, CASE_TERMINAL_STATUSES, "open", "open")
+    if (!openTransition.ok) {
+      throw new Error(`debug_open_case: illegal initial case status "open" (${openTransition.reason})`)
+    }
+
     const debugCase = DebugCaseSchema.parse({
       schemaVersion: 1,
       caseId,

@@ -1,5 +1,6 @@
 import { computeEnvelopeId, type VerificationEnvelope } from "./quality/verification-envelope"
 import type { DebugCase, DebugHypothesis } from "./runtime-debug"
+import { transitionHypothesis } from "./lifecycle"
 
 // Phase 3 P3.4: pure helpers that wire a verification result into a debug
 // case + hypothesis. No IO, no session writes — callers consume the
@@ -62,6 +63,15 @@ export function applyVerificationToHypothesis(input: VerifyApplication): DebugHy
   const outcome = classifyEnvelope(input.envelope)
   if (outcome === "inconclusive") return input.hypothesis
 
+  // Phase 3 (D5): route the status flip through the hypothesis state
+  // machine. Illegal transitions (confirmed/refuted/unresolved are
+  // terminal) return the UNCHANGED hypothesis instead of overwriting —
+  // signature-compatible, but no longer silently demotes a terminal
+  // hypothesis.
+  const target = outcome === "confirmed" ? "confirmed" : "refuted"
+  const transition = transitionHypothesis(input.hypothesis.status, target, { envelopes: [input.envelope] })
+  if (!transition.ok) return input.hypothesis
+
   const envelopeId = computeEnvelopeId(input.envelope)
   // We track the envelope id in evidenceRefs even though it's an envelope
   // id (not an evidence id). The Phase 0 contract is the union of "ids
@@ -73,7 +83,7 @@ export function applyVerificationToHypothesis(input: VerifyApplication): DebugHy
 
   return {
     ...input.hypothesis,
-    status: outcome === "confirmed" ? "confirmed" : "refuted",
+    status: transition.status,
     evidenceRefs,
   }
 }
@@ -87,6 +97,11 @@ export function applyVerificationSetToHypothesis(input: VerifySetApplication): D
   const outcome = classifyEnvelopeSet(input.envelopes)
   if (outcome === "inconclusive") return input.hypothesis
 
+  // Phase 3 (D5): terminal-state guard. See applyVerificationToHypothesis.
+  const target = outcome === "confirmed" ? "confirmed" : "refuted"
+  const transition = transitionHypothesis(input.hypothesis.status, target, { envelopes: input.envelopes })
+  if (!transition.ok) return input.hypothesis
+
   const evidenceRefs = [...input.hypothesis.evidenceRefs]
   for (const envelope of input.envelopes) {
     const envelopeId = computeEnvelopeId(envelope)
@@ -95,7 +110,7 @@ export function applyVerificationSetToHypothesis(input: VerifySetApplication): D
 
   return {
     ...input.hypothesis,
-    status: outcome === "confirmed" ? "confirmed" : "refuted",
+    status: transition.status,
     evidenceRefs,
   }
 }

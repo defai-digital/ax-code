@@ -3,6 +3,7 @@ import path from "path"
 
 import { Process } from "./internal/process"
 import { uniqueStrings } from "./internal/string-list"
+import type { SourceState } from "./quality/freshness"
 
 // incremental — Git-diff-aware file selection for scanner incremental mode.
 //
@@ -147,4 +148,54 @@ export namespace Incremental {
       truncated: all.length > maxFiles || changed.truncated,
     }
   }
+}
+
+// ─── Incremental equivalence (PRD G4 / D4) ─────────────────────────────
+//
+// An incremental re-analysis is only equivalent to a full run when the graph
+// revision AND the source fingerprint are continuous with the prior run. The
+// context pair below is the engine's invalidation boundary: `revision` is the
+// derived graph revision hash (host.graphRevision(), null when the index
+// cursor is missing), and `source` is the worktree fingerprint
+// (host.sourceState()). When continuity can't be established — null/regressed
+// revision, unavailable source, or a moved/dirtied worktree — callers MUST
+// fall back to a full analysis.
+
+export type IncrementalContext = {
+  revision: string | null
+  source: SourceState | null
+}
+
+// True when the prior incremental base can no longer be trusted, so a full
+// run is required. Falls back to full whenever:
+//   - the current revision is null (no index cursor), or
+//   - the prior revision is null (nothing to compare against), or
+//   - the revision changed (regress or move),
+//   - either source fingerprint is missing/unavailable, or
+//   - the source commit or dirty digest moved.
+export function shouldFallbackToFull(prev: IncrementalContext, next: IncrementalContext): boolean {
+  if (next.revision === null) return true
+  if (prev.revision === null) return true
+  if (prev.revision !== next.revision) return true
+
+  const p = prev.source
+  const n = next.source
+  if (p === null || n === null) return true
+  if (p.available !== n.available) return true
+  if (p.commit !== n.commit) return true
+  if (p.dirtyDigest !== n.dirtyDigest) return true
+  return false
+}
+
+// Findings whose `file` is in `changedFiles` (the rescan set — typically the
+// changed files plus their importers). These must be dropped from the carried-
+// over previous results because they are about to be recomputed; carrying them
+// over would double-count. Pure: operates on any finding-like shape with a
+// `file` field (scanner findings, quality findings, etc.).
+export function computeObsoleteFindings<T extends { file: string }>(
+  previous: readonly T[],
+  changedFiles: ReadonlySet<string> | readonly string[],
+): T[] {
+  const changed = changedFiles instanceof Set ? changedFiles : new Set(changedFiles)
+  return previous.filter((finding) => changed.has(finding.file))
 }

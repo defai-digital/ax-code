@@ -427,4 +427,64 @@ describe("DebugApplyVerificationTool", () => {
       },
     })
   })
+
+  test("a terminal (confirmed) hypothesis is not demoted by a later failing envelope", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { caseId, hypothesisId } = await emitDebugHypothesis(session.id, tmp.path)
+
+        // Re-emit the same hypothesis as confirmed (same caseId+claim ⇒ same id).
+        const claim = "worker pool starvation caused the failure"
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id as any,
+          tool: "debug_apply_verification",
+          callID: "call-confirm",
+          status: "completed",
+          metadata: {
+            hypothesisId,
+            debugHypothesis: {
+              schemaVersion: 1,
+              hypothesisId,
+              caseId,
+              claim,
+              confidence: 0.65,
+              evidenceRefs: [],
+              status: "confirmed",
+              source: { tool: "debug_apply_verification", version: Installation.VERSION, runId: session.id },
+            },
+          },
+          durationMs: 1,
+        })
+        await waitForRecorder()
+
+        const sourceState = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
+        const failingEnvelopeId = await emitVerification(
+          session.id,
+          verificationEnvelope(
+            session.id,
+            "failed",
+            [{ kind: "test", testName: "worker pool recovers", framework: "bun", file: "test/worker.test.ts" }],
+            sourceState,
+          ),
+        )
+
+        const tool = await DebugApplyVerificationTool.init()
+        const result = await tool.execute({ hypothesisId, envelopeId: failingEnvelopeId }, fakeCtx(session.id))
+
+        expect(result.metadata.verificationOutcome).toBe("refuted")
+        // Terminal-status guard: the hypothesis stays confirmed.
+        expect(result.metadata.debugHypothesis.status).toBe("confirmed")
+        expect(result.metadata.transitionRejection).toEqual({
+          reason: "terminal-status",
+          from: "confirmed",
+          to: "refuted",
+        })
+        expect(result.output).toContain("Transition rejected: terminal-status")
+      },
+    })
+  })
 })

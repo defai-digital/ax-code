@@ -24,6 +24,9 @@ function planRow(id: string, overrides: Partial<PlanInsert> = {}): PlanInsert {
     risk: "low",
     status: "pending",
     graph_cursor_at_creation: null,
+    preconditions: null,
+    edit_groups: null,
+    verification_plan: null,
     time_created: 1000,
     ...overrides,
   }

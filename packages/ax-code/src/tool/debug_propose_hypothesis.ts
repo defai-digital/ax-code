@@ -9,6 +9,7 @@ import {
 } from "@ax-code/ax-code-reason/runtime-debug"
 import { classifyEnvelopeSet } from "@ax-code/ax-code-reason/verify-after-fix"
 import { classifyEnvelopeFreshness, enforceCitationFreshness } from "@ax-code/ax-code-reason/quality/freshness"
+import { HYPOTHESIS_TERMINAL_STATUSES, transitionHypothesis } from "@ax-code/ax-code-reason/lifecycle"
 import type { SourceState } from "@ax-code/ax-code-reason/quality/freshness"
 import { Installation } from "../installation"
 import { Instance } from "../project/instance"
@@ -173,6 +174,21 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
     const status = needsVerification ? "active" : (args.status ?? "active")
 
     const hypothesisId = computeDebugHypothesisId({ caseId: args.caseId, claim: args.claim })
+
+    // Phase 3 (D5): a terminal hypothesis (confirmed/refuted/unresolved) is
+    // frozen. Re-proposing the same case+claim into a different status is an
+    // illegal transition — surface the rejection reason rather than silently
+    // demoting via event-log keep-LAST.
+    const existingHypothesis = SessionDebug.load(sessionID).hypotheses.find((h) => h.hypothesisId === hypothesisId)
+    if (existingHypothesis && HYPOTHESIS_TERMINAL_STATUSES.includes(existingHypothesis.status)) {
+      const terminalTransition = transitionHypothesis(existingHypothesis.status, status)
+      if (!terminalTransition.ok) {
+        throw new Error(
+          `Cannot move terminal hypothesis ${hypothesisId} from ${existingHypothesis.status} to ${status} (transition rejected: ${terminalTransition.reason}). Revive it under a new hypothesis id.`,
+        )
+      }
+    }
+
     const confidence = computeConfidence({
       staticAnalysis: args.staticAnalysis,
       evidenceCount: evidenceRefs.length,

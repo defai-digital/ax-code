@@ -1,12 +1,13 @@
 import z from "zod"
 import { Tool } from "./tool"
 import DESCRIPTION from "./debug_apply_verification.txt"
-import { DEBUG_ID_PATTERN, DebugHypothesisSchema } from "@ax-code/ax-code-reason/runtime-debug"
+import { DEBUG_ID_PATTERN, DebugHypothesisSchema, type DebugHypothesis } from "@ax-code/ax-code-reason/runtime-debug"
 import {
   applyVerificationSetToHypothesis,
   classifyEnvelopeSet,
   resolveCaseStatus,
 } from "@ax-code/ax-code-reason/verify-after-fix"
+import { transitionHypothesis } from "@ax-code/ax-code-reason/lifecycle"
 import { classifyEnvelopeFreshness, enforceCitationFreshness } from "@ax-code/ax-code-reason/quality/freshness"
 import { Installation } from "../installation"
 import { Instance } from "../project/instance"
@@ -67,13 +68,25 @@ export const DebugApplyVerificationTool = Tool.define("debug_apply_verification"
 
     const verificationOutcome =
       verificationPolicyFailed || needsVerification ? "inconclusive" : classifyEnvelopeSet(verificationSet)
-    const applied =
-      verificationPolicyFailed || needsVerification
-        ? hypothesis
-        : applyVerificationSetToHypothesis({
-            hypothesis,
-            envelopes: verificationSet,
-          })
+
+    // Phase 3 (D5): delegate the status flip to the hypothesis state machine.
+    // When the transition is legal (active → confirmed/refuted) the hypothesis
+    // is applied as before; when it's illegal (a terminal hypothesis), the
+    // hypothesis stays put and the rejection reason is surfaced.
+    let applied: DebugHypothesis = hypothesis
+    let transitionRejection: { reason: string; from: string; to: string } | undefined
+    if (!verificationPolicyFailed && !needsVerification && verificationOutcome !== "inconclusive") {
+      const target = verificationOutcome === "confirmed" ? "confirmed" : "refuted"
+      const transition = transitionHypothesis(hypothesis.status, target, { envelopes: verificationSet })
+      if (transition.ok) {
+        applied = applyVerificationSetToHypothesis({
+          hypothesis,
+          envelopes: verificationSet,
+        })
+      } else {
+        transitionRejection = { reason: transition.reason, from: hypothesis.status, to: target }
+      }
+    }
     const debugHypothesis = DebugHypothesisSchema.parse({
       ...applied,
       source: { tool: "debug_apply_verification", version: Installation.VERSION, runId: ctx.sessionID },
@@ -97,6 +110,11 @@ export const DebugApplyVerificationTool = Tool.define("debug_apply_verification"
                 .join(", ")}) — re-run verify_project against the current worktree before confirming`,
             ]
           : []),
+        ...(transitionRejection
+          ? [
+              `Transition rejected: ${transitionRejection.reason} (cannot move ${transitionRejection.from} → ${transitionRejection.to})`,
+            ]
+          : []),
         `Hypothesis status: ${debugHypothesis.status}`,
         `Case status: ${effectiveCaseStatus}`,
       ].join("\n"),
@@ -111,6 +129,9 @@ export const DebugApplyVerificationTool = Tool.define("debug_apply_verification"
         // Freshness metadata is only attached on the failure path so fresh
         // citations keep the exact pre-Phase-1 metadata shape.
         ...(needsVerification ? { needsVerification: true, verificationFreshness: staleEvidence } : {}),
+        // Phase 3 (D5): attached only when the transition was rejected so the
+        // legal-transition metadata shape stays unchanged.
+        ...(transitionRejection ? { transitionRejection } : {}),
       },
     }
   },

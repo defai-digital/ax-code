@@ -7,6 +7,7 @@ import {
   DebugEvidenceSchema,
   DEBUG_ID_PATTERN,
 } from "@ax-code/ax-code-reason/runtime-debug"
+import { CASE_TERMINAL_STATUSES } from "@ax-code/ax-code-reason/lifecycle"
 import { Installation } from "../installation"
 import { SessionDebug } from "../session/debug"
 import type { SessionID } from "../session/schema"
@@ -44,6 +45,17 @@ export const DebugCaptureEvidenceTool = Tool.define("debug_capture_evidence", {
     if (args.kind === "instrumentation_result" && args.planId === undefined) {
       throw new Error(
         `debug_capture_evidence: kind "instrumentation_result" requires planId — pass the id returned by debug_plan_instrumentation`,
+      )
+    }
+
+    // Phase 3 (D5): evidence can only be captured while the case is still
+    // open/investigating. A terminal case (resolved/unresolved) has no
+    // outgoing transitions per CASE_TRANSITIONS, so further evidence is
+    // rejected rather than silently attached to a closed investigation.
+    const debugCase = SessionDebug.load(sessionID).cases.find((item) => item.caseId === args.caseId)
+    if (debugCase && CASE_TERMINAL_STATUSES.includes(debugCase.status)) {
+      throw new Error(
+        `debug_capture_evidence: cannot capture evidence for terminal debug case ${args.caseId} (status ${debugCase.status})`,
       )
     }
 

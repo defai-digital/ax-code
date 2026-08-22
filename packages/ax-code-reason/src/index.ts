@@ -18,7 +18,7 @@ import { detectSecurityImpl, type DetectSecurityInput } from "./detect-security"
 import z from "zod"
 
 export * from "./host"
-export { Incremental } from "./incremental"
+export { Incremental, type IncrementalContext, shouldFallbackToFull, computeObsoleteFindings } from "./incremental"
 export { DiagnosticCorrelation } from "./diagnostic-correlation"
 export { prewarmAffectedFiles } from "./prewarm-lsp"
 
