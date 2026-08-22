@@ -1,0 +1,4 @@
+# Recorded baselines are local artifacts; only the reviewed reference is committed.
+*
+!*.reference.json
+!.gitignore

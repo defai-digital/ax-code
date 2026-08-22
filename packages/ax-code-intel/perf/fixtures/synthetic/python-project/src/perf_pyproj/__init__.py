@@ -1,0 +1,1 @@
+"""Synthetic perf fixture package."""

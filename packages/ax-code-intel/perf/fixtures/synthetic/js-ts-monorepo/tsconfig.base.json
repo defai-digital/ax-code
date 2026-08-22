@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "composite": true,
+    "declaration": true,
+    "baseUrl": ".",
+    "paths": {
+      "@perf/core": ["packages/core/src/index.ts"],
+      "@perf/api": ["packages/api/src/index.ts"],
+      "@perf/cli": ["packages/cli/src/index.ts"]
+    }
+  }
+}

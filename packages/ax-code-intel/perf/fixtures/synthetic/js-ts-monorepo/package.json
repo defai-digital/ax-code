@@ -1,0 +1,8 @@
+{
+  "name": "perf-js-ts-monorepo",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ]
+}

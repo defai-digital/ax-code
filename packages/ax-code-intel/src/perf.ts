@@ -12,6 +12,7 @@ type PerfEntry = {
   cursor: number
   okCount: number
   errorCount: number
+  peakRssKb?: number
 }
 
 const perfSamples = new Map<string, PerfEntry>()
@@ -24,6 +25,19 @@ export type PerfRow = {
   p95: number
   maxMs: number
   totalMs: number
+  peakRssKb?: number
+}
+
+// Peak resident-set-size observation for an operation, recorded by out-of-band
+// samplers (the perf harness polls the server process while queries run).
+// Keeps the maximum seen; durations stay untouched so p50/p95 are unaffected.
+export function recordPeakRss(operation: string, kb: number) {
+  let entry = perfSamples.get(operation)
+  if (!entry) {
+    entry = { durations: [], cursor: 0, okCount: 0, errorCount: 0 }
+    perfSamples.set(operation, entry)
+  }
+  entry.peakRssKb = Math.max(entry.peakRssKb ?? 0, kb)
 }
 
 export function recordSample(operation: string, durationMs: number, ok: boolean) {
@@ -67,6 +81,7 @@ export function snapshot(): Record<string, PerfRow> {
       p95: percentile(sorted, 95),
       maxMs: sorted.at(-1) ?? 0,
       totalMs,
+      ...(entry.peakRssKb !== undefined ? { peakRssKb: entry.peakRssKb } : {}),
     }
   }
   return out

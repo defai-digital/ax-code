@@ -1,0 +1,29 @@
+{
+  "$comment": "External fixtures for the recorded baseline (PRD Phase 0). Each entry must be pinned to an exact commit SHA before use; a null sha makes the harness fail fast rather than benchmark a moving target. SHAs are pinned by the maintainer when the first baseline is recorded.",
+  "fixtures": [
+    {
+      "id": "ts-stripe-cli",
+      "url": "https://github.com/stripe/stripe-cli",
+      "sha": null,
+      "language": "ts",
+      "serverId": "typescript",
+      "serverBinary": "typescript-language-server"
+    },
+    {
+      "id": "py-pydantic",
+      "url": "https://github.com/pydantic/pydantic",
+      "sha": null,
+      "language": "py",
+      "serverId": "pyright",
+      "serverBinary": "pyright-langserver"
+    },
+    {
+      "id": "rust-ripgrep",
+      "url": "https://github.com/BurntSushi/ripgrep",
+      "sha": null,
+      "language": "rust",
+      "serverId": "rust",
+      "serverBinary": "rust-analyzer"
+    }
+  ]
+}
