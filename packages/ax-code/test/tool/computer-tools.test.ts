@@ -7,6 +7,10 @@ import { ToolRegistry } from "../../src/tool/registry"
 import { ComputerSnapshotTool } from "../../src/tool/computer/computer_snapshot"
 import { ComputerActionTool } from "../../src/tool/computer/computer_action"
 import { ComputerWatchTool } from "../../src/tool/computer/computer_watch"
+import { ComputerPlanTool } from "../../src/tool/computer/computer_plan"
+import { _setPlanDepsForTests } from "../../src/tool/computer/plan"
+import type { PlanJudgeDeps } from "../../src/tool/computer/plan"
+import { renderTrajectory } from "../../src/tool/computer/render"
 import { checkVisualRouting } from "../../src/visual/router"
 import { tmpdir } from "../fixture/fixture"
 import { FakeComputerProvider } from "./computer-fixture"
@@ -25,6 +29,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs()
+  _setPlanDepsForTests(undefined)
 })
 
 type Ask = Omit<Permission.Request, "id" | "sessionID" | "tool">
@@ -69,6 +74,7 @@ describe("computer tools gating", () => {
         expect(ids).not.toContain("computer_snapshot")
         expect(ids).not.toContain("computer_action")
         expect(ids).not.toContain("computer_watch")
+        expect(ids).not.toContain("computer_plan")
         expect(await Computer.configured()).toBe(false)
         await expect(Computer.observe({ desktop: true })).rejects.toThrow(/not configured/)
       },
@@ -84,6 +90,7 @@ describe("computer tools gating", () => {
         expect(ids).toContain("computer_snapshot")
         expect(ids).toContain("computer_action")
         expect(ids).toContain("computer_watch")
+        expect(ids).toContain("computer_plan")
         // lazy: status must not construct the backend provider
         expect(await Computer.status()).toMatchObject({ configured: true, provider: "cua", activeProvider: undefined })
       },
@@ -373,6 +380,102 @@ describe("computer_watch tool", () => {
 
       expect(result.metadata.aborted).toBe(true)
       expect(result.metadata.polls).toBe(1)
+    })
+  })
+})
+
+describe("computer_plan tool", () => {
+  const planA = {
+    title: "Direct save",
+    steps: ["Click the Save button", "Confirm the dialog"],
+    risks: ["dialog may not appear"],
+  }
+  const planB = {
+    title: "Menu route",
+    steps: ["Open the File menu", "Click the Save menu item"],
+    risks: [],
+  }
+
+  test("generates candidates in parallel, judge picks the winner, plan recorded", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async ({ provider, asks }) => {
+      const generateCandidate = vi.fn<NonNullable<PlanJudgeDeps["generateCandidate"]>>(async ({ temperature }) =>
+        temperature === 0.4 ? planA : planB,
+      )
+      const judge = vi.fn<NonNullable<PlanJudgeDeps["judge"]>>(async () => ({
+        winner: 1,
+        rationale: "menu route matches the visible menu bar",
+      }))
+      _setPlanDepsForTests({ generateCandidate, judge })
+
+      const tool = await ComputerPlanTool.init()
+      const result = await tool.execute({ task: "Save the document", candidates: 2 }, makeCtx(asks))
+
+      expect(asks[0]).toMatchObject({ permission: "computer", patterns: ["plan:desktop"] })
+      expect(generateCandidate).toHaveBeenCalledTimes(2)
+      const temperatures = generateCandidate.mock.calls.map((call) => call[0].temperature).sort()
+      expect(temperatures).toEqual([0.4, 0.8])
+      expect(judge).toHaveBeenCalledTimes(1)
+
+      expect(result.output).toContain('winner: "Menu route" (candidate 2 of 2)')
+      expect(result.output).toContain("1. Open the File menu")
+      expect(result.output).toContain("Judge rationale: menu route matches the visible menu bar")
+      expect(result.output).toContain("- Direct save")
+      expect(result.metadata).toMatchObject({ winner: 1, candidateCount: 2, scope: "desktop" })
+      expect(provider.scopes).toEqual([{ desktop: true }])
+
+      const entries = await Computer.trajectory()
+      expect(entries.at(-1)).toMatchObject({ kind: "plan", summary: 'plan "Save the document" → Menu route' })
+      // plan entries render without an outcome suffix (that arrow is the summary's own)
+      expect(renderTrajectory(entries)).toBe('1. plan "Save the document" → Menu route')
+    })
+  })
+
+  test("candidates: 1 skips the judge entirely", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async () => {
+      const judge = vi.fn<NonNullable<PlanJudgeDeps["judge"]>>(async () => ({ winner: 0, rationale: "unused" }))
+      _setPlanDepsForTests({ generateCandidate: async () => planA, judge })
+
+      const tool = await ComputerPlanTool.init()
+      const result = await tool.execute({ task: "Save the document", candidates: 1 }, makeCtx([]))
+
+      expect(judge).not.toHaveBeenCalled()
+      expect(result.output).toContain('winner: "Direct save" (candidate 1 of 1)')
+      expect(result.output).toContain("Judging skipped")
+      expect(result.metadata).toMatchObject({ winner: 0, candidateCount: 1 })
+    })
+  })
+
+  test("judge failure falls back to the first candidate with a note", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async () => {
+      const generateCandidate = vi.fn<NonNullable<PlanJudgeDeps["generateCandidate"]>>(async ({ temperature }) =>
+        temperature === 0.4 ? planA : planB,
+      )
+      _setPlanDepsForTests({
+        generateCandidate,
+        judge: async () => {
+          throw new Error("model returned junk")
+        },
+      })
+
+      const tool = await ComputerPlanTool.init()
+      const result = await tool.execute({ task: "Save the document", candidates: 2 }, makeCtx([]))
+
+      expect(result.output).toContain('winner: "Direct save" (candidate 1 of 2)')
+      expect(result.output).toContain("Judging skipped")
+      expect(result.output).toContain("- Menu route")
+      expect(result.metadata).toMatchObject({ winner: 0, candidateCount: 2 })
+    })
+  })
+
+  test("scoped plan asks with the scoped descriptor", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async ({ provider, asks }) => {
+      _setPlanDepsForTests({ generateCandidate: async () => planA })
+
+      const tool = await ComputerPlanTool.init()
+      await tool.execute({ task: "Save the document", candidates: 1, app: "TextEdit" }, makeCtx(asks))
+
+      expect(asks[0]).toMatchObject({ permission: "computer", patterns: ["plan:app:TextEdit"] })
+      expect(provider.scopes).toEqual([{ app: "TextEdit" }])
     })
   })
 })

@@ -45,12 +45,9 @@ export function renderTrajectory(entries: Computer.TrajectoryEntry[]): string {
   const lines: string[] = []
   if (skipped > 0) lines.push(`(${skipped} earlier ${skipped === 1 ? "step" : "steps"} omitted)`)
   shown.forEach((entry, index) => {
+    // outcome markers apply to acts only; observes and plans have no outcome
     const outcome =
-      entry.kind === "observe"
-        ? ""
-        : entry.ok === false
-          ? ` → REFUSED${entry.detail ? ` (${entry.detail})` : ""}`
-          : " → ok"
+      entry.kind !== "act" ? "" : entry.ok === false ? ` → REFUSED${entry.detail ? ` (${entry.detail})` : ""}` : " → ok"
     lines.push(`${index + 1 + skipped}. ${entry.summary}${outcome}`)
   })
   return lines.join("\n")

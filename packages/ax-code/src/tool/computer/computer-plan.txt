@@ -1,0 +1,7 @@
+- Generates and ranks candidate action plans for a GUI task on the current screen (plan-level best-of-N with a behavior judge)
+- Use for complex or uncertain GUI tasks — multi-step flows, ambiguous targets, unfamiliar apps
+- NOT for simple one-step actions; each call costs N+1 model calls (N candidates + 1 judge)
+- Scope: pass app to plan against one application, windowId for one window, or neither for the whole desktop (never both)
+- The result is the winning plan as numbered narrative steps plus risks, the judge's rationale, and losing candidate titles
+- The plan is NOT executed by this tool: execute it step-by-step afterwards with computer_snapshot + computer_action, re-observing as you go
+- Requires a vision-capable model; on macOS the backend needs Accessibility and Screen Recording permissions for the terminal app

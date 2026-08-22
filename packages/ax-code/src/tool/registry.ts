@@ -71,6 +71,7 @@ import { BrowserEvaluateTool } from "./browser/evaluate"
 import { ComputerSnapshotTool } from "./computer/computer_snapshot"
 import { ComputerActionTool } from "./computer/computer_action"
 import { ComputerWatchTool } from "./computer/computer_watch"
+import { ComputerPlanTool } from "./computer/computer_plan"
 import { VisualCritiqueTool } from "./visual/critique"
 import { VisualCompareTool } from "./visual/compare"
 import { VisualSnapshotTool } from "./visual/snapshot"
@@ -304,7 +305,9 @@ export namespace ToolRegistry {
       ...(debugEngineEnabled ? [...DEBUG_ENGINE_TOOLS] : []),
       ...(cfg.experimental?.batch_tool === true ? [BatchTool] : []),
       // computer-use tools require an explicit backend configuration
-      ...(cfg.computer?.provider ? [ComputerSnapshotTool, ComputerActionTool, ComputerWatchTool] : []),
+      ...(cfg.computer?.provider
+        ? [ComputerSnapshotTool, ComputerActionTool, ComputerWatchTool, ComputerPlanTool]
+        : []),
       ...(Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE && Flag.AX_CODE_CLIENT === "cli" ? [PlanExitTool] : []),
       ...(Flag.AX_CODE_EXPERIMENTAL_BROWSER_AGENT
         ? [

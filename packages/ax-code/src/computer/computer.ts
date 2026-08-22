@@ -72,10 +72,10 @@ export namespace Computer {
   export interface TrajectoryEntry {
     /** epoch milliseconds */
     at: number
-    kind: "observe" | "act"
+    kind: "observe" | "act" | "plan"
     /** e.g. "observe desktop", "click element e1:3" */
     summary: string
-    /** act outcome; omitted for observes */
+    /** act outcome; omitted for observes and plans */
     ok?: boolean
     /** backend refusal code or error detail */
     detail?: string
