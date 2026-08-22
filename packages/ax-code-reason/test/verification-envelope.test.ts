@@ -59,7 +59,7 @@ describe("VerificationEnvelopeSchema failure shapes", () => {
     expect(
       VerificationEnvelopeSchema.safeParse({
         ...envelope,
-        result: { ...envelope.result, status: "unavailable" },
+        result: { ...envelope.result, status: "cancelled" },
       }).success,
     ).toBe(false)
     expect(VerificationEnvelopeSchema.safeParse({ ...envelope, schemaVersion: 2 }).success).toBe(false)
@@ -93,10 +93,11 @@ describe("verificationEnvelopesFromPayload", () => {
   })
 })
 
-describe("computeEnvelopeId — current whole-object hash contract", () => {
-  // Phase 1 switches computeEnvelopeId to an identity projection; these
-  // tests lock the CURRENT behavior (hash of the canonicalized whole
-  // object) and must be revisited when that lands.
+describe("computeEnvelopeId — identity projection contract", () => {
+  // Phase 1 switched computeEnvelopeId to hash only the v1 identity keys
+  // (schemaVersion, workflow, scope, command, result, structuredFailures,
+  // artifactRefs, source). The bit-identical regression lock for v1
+  // envelopes lives in test/freshness.test.ts.
 
   test("same content with different key insertion order produces the same ID", () => {
     const a = makeEnvelope()
