@@ -3,6 +3,7 @@
 import { describe, test } from "vitest"
 import { CuaProvider } from "../src/providers/cua"
 import { OcuProvider } from "../src/providers/ocu"
+import { AXNativeProvider } from "../src/providers/axnative"
 
 const probe = process.env.AX_COMPUTER_PROBE === "1"
 const app = process.env.AX_COMPUTER_LIVE_APP ?? "TextEdit"
@@ -38,6 +39,18 @@ describe.skipIf(!probe)("live probe", () => {
       console.log("CUA observe app:", summarize(obs))
       const desktop = await provider.observe({ desktop: true })
       console.log("CUA observe desktop:", summarize(desktop))
+    } finally {
+      await provider.dispose()
+    }
+  })
+
+  test("axnative observe", { timeout: 120_000 }, async () => {
+    const provider = new AXNativeProvider({ command: process.env.AX_COMPUTER_AXNATIVE_COMMAND })
+    try {
+      const apps = await provider.listApps()
+      console.log("AXNATIVE listApps count:", apps.length, "sample:", JSON.stringify(apps.slice(0, 3)))
+      const obs = await provider.observe({ app })
+      console.log("AXNATIVE observe:", summarize(obs))
     } finally {
       await provider.dispose()
     }

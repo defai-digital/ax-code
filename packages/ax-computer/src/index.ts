@@ -18,5 +18,6 @@ export {
   type StdioMcpClientOptions,
 } from "./mcp/stdio-client"
 export { OcuProvider, type OcuProviderConfig } from "./providers/ocu"
+export { AXNativeProvider, defaultAxnativeCommand } from "./providers/axnative"
 export { CuaProvider, type CuaProviderConfig, type CuaSdkDriver, type CuaSdkToolResult } from "./providers/cua"
 export { probeProvider, type ProbeReport } from "./probe"

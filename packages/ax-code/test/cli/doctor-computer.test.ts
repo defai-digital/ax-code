@@ -105,4 +105,39 @@ describe("doctor computer use check", () => {
     expect(check.status).toBe("warn")
     expect(check.detail).toContain("kaboom")
   })
+
+  test("axnative with a missing binary path fails fast with a swift-build hint", async () => {
+    const probe = probeReturning({ ok: true })
+    const check = await getComputerUseCheck({
+      config: { provider: "axnative", command: "/nonexistent/ax-computer-driver" },
+      platform: "darwin",
+      probe,
+    })
+    expect(check.status).toBe("fail")
+    expect(check.detail).toContain("/nonexistent/ax-computer-driver")
+    expect(check.detail).toContain("build:native")
+    expect(probe).not.toHaveBeenCalled()
+  })
+
+  test("axnative probe ok → ok with command and latency", async () => {
+    const check = await getComputerUseCheck({
+      config: { provider: "axnative", command: process.execPath },
+      platform: "darwin",
+      probe: probeReturning({ ok: true, provider: "axnative", latencyMs: 9, apps: 2 }),
+    })
+    expect(check.status).toBe("ok")
+    expect(check.detail).toContain(`provider axnative via ${process.execPath} mcp`)
+  })
+
+  test("axnative on non-darwin → warn, no probe spawned", async () => {
+    const probe = probeReturning({ ok: true })
+    const check = await getComputerUseCheck({
+      config: { provider: "axnative" },
+      platform: "linux",
+      probe,
+    })
+    expect(check.status).toBe("warn")
+    expect(check.detail).toContain("macOS-only")
+    expect(probe).not.toHaveBeenCalled()
+  })
 })
