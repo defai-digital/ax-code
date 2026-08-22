@@ -1,6 +1,7 @@
 - Observes the local computer through an external computer-use backend (OCU on macOS, cua-driver elsewhere)
 - Returns a screenshot attachment, a list of targetable elements, and the accessibility tree when available
 - Scope: pass app to observe one application, windowId for one window, or neither for the whole desktop (never both)
+- A desktop-scope snapshot also lists available apps and windows — use those exact names/ids to scope follow-up observations
 - ALWAYS call this tool before interacting with the screen; element ids come from the returned observation
 - Element ids are epoch-scoped: any new snapshot or backend failover invalidates previously returned ids
 - The screenshot requires a vision-capable model; set includeScreenshot=false only when the element list alone suffices

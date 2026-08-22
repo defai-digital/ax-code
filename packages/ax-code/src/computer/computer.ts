@@ -1,10 +1,12 @@
 import { ComputerSession, ComputerUseError, CuaProvider, McpClientError, OcuProvider } from "@ax-code/computer/index"
 import type {
   ActionResult,
+  AppInfo,
   ComputerAction,
   ComputerObservation,
   ComputerUseProvider,
   ObserveScope,
+  WindowInfo,
 } from "@ax-code/computer/index"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
@@ -156,6 +158,19 @@ export namespace Computer {
   export async function reobserve(): Promise<ComputerObservation> {
     const s = await state()
     return observe(s.lastScope ?? { desktop: true })
+  }
+
+  /** App/window inventory for scope discovery; listWindows is optional on providers. */
+  export async function listTargets(): Promise<{ apps: AppInfo[]; windows: WindowInfo[] }> {
+    try {
+      const provider = (await session()).activeProvider
+      const apps = await provider.listApps()
+      const windows = (await provider.listWindows?.()) ?? []
+      return { apps, windows }
+    } catch (err) {
+      if (isUnavailable(err)) throw await unavailable(err)
+      throw err
+    }
   }
 
   /** label for permission patterns: the app/window the action lands on */

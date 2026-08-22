@@ -3,7 +3,7 @@ import { Tool } from "../tool"
 import DESCRIPTION from "./computer-snapshot.txt"
 import { checkVisualRouting } from "@/visual/router"
 import { Computer } from "@/computer/computer"
-import { renderObservation } from "./render"
+import { renderObservation, renderTargets } from "./render"
 import type { ObserveScope } from "@ax-code/computer"
 
 export const ComputerSnapshotTool = Tool.define("computer_snapshot", {
@@ -47,14 +47,25 @@ export const ComputerSnapshotTool = Tool.define("computer_snapshot", {
       screenshotName: "computer-snapshot",
     })
 
+    // Desktop scope is the entry point: append the app/window inventory so the
+    // model can discover valid values for scoped follow-up observations.
+    let output = rendered.output
+    let targets: { appCount: number; windowCount: number } | undefined
+    if (!params.app && !params.windowId) {
+      const discovered = await Computer.listTargets()
+      output = [rendered.output, "", renderTargets(discovered)].join("\n")
+      targets = { appCount: discovered.apps.length, windowCount: discovered.windows.length }
+    }
+
     return {
       title: `Observed ${descriptor}`,
-      output: rendered.output,
+      output,
       metadata: {
         scope: descriptor,
         provider: observation.provider,
         platform: observation.platform,
         elementCount: observation.elements.length,
+        ...targets,
       },
       attachments: rendered.attachments,
     }

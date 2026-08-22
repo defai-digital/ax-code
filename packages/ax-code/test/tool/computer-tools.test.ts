@@ -100,6 +100,22 @@ describe("computer_snapshot tool", () => {
     })
   })
 
+  test("desktop scope lists discoverable apps and windows; app scope does not", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async () => {
+      const tool = await ComputerSnapshotTool.init()
+
+      const desktop = await tool.execute({ includeScreenshot: false }, makeCtx([]))
+      expect(desktop.output).toContain("Available apps")
+      expect(desktop.output).toContain("- TextEdit")
+      expect(desktop.output).toContain("- [101] Untitled (TextEdit)")
+      expect(desktop.metadata).toMatchObject({ appCount: 1, windowCount: 1 })
+
+      const scoped = await tool.execute({ app: "TextEdit", includeScreenshot: false }, makeCtx([]))
+      expect(scoped.output).not.toContain("Available apps")
+      expect(scoped.metadata.appCount).toBeUndefined()
+    })
+  })
+
   test("unavailable backend fails with the command tried and the env override", async () => {
     await setup({ config: { computer: { provider: "cua" } } }, async ({ provider }) => {
       vi.spyOn(provider, "observe").mockRejectedValue(new McpClientError("spawn_failed", "command not found"))

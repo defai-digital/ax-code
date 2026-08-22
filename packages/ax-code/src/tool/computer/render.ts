@@ -2,10 +2,32 @@
  * Renders a ComputerObservation as tool output text plus an optional
  * screenshot attachment (base64 data: URL, same convention as visual_snapshot).
  */
-import type { ComputerObservation } from "@ax-code/computer"
+import type { AppInfo, ComputerObservation, WindowInfo } from "@ax-code/computer"
 
 /** Caps the accessibility-tree text included in tool output. */
 const A11Y_TEXT_CAP = 20_000
+
+/** Caps each side of the app/window discovery listing. */
+const TARGET_LIST_CAP = 50
+
+/**
+ * Renders the provider's app/window inventory so the model can discover valid
+ * values for the app and windowId scopes before targeting an observation.
+ */
+export function renderTargets(targets: { apps: AppInfo[]; windows: WindowInfo[] }): string {
+  const lines: string[] = []
+  lines.push("Available apps (pass as the app scope):")
+  if (targets.apps.length === 0) lines.push("(none reported)")
+  for (const app of targets.apps.slice(0, TARGET_LIST_CAP)) lines.push(`- ${app.name}`)
+  if (targets.apps.length > TARGET_LIST_CAP) lines.push(`(truncated at ${TARGET_LIST_CAP} apps)`)
+  lines.push("", "Available windows (pass as the windowId scope):")
+  if (targets.windows.length === 0) lines.push("(none reported)")
+  for (const win of targets.windows.slice(0, TARGET_LIST_CAP)) {
+    lines.push(`- [${win.id}] ${win.title}${win.app ? ` (${win.app.name})` : ""}`)
+  }
+  if (targets.windows.length > TARGET_LIST_CAP) lines.push(`(truncated at ${TARGET_LIST_CAP} windows)`)
+  return lines.join("\n")
+}
 
 export function renderObservation(
   observation: ComputerObservation,
