@@ -7,7 +7,11 @@ import {
   type EnvelopeFreshness,
   type SourceState,
 } from "../src/quality/freshness"
-import { computeEnvelopeId, VerificationEnvelopeSchema, type VerificationEnvelope } from "../src/quality/verification-envelope"
+import {
+  computeEnvelopeId,
+  VerificationEnvelopeSchema,
+  type VerificationEnvelope,
+} from "../src/quality/verification-envelope"
 import { makeEnvelope } from "./fixture/envelope"
 
 const available: SourceState = {
@@ -30,10 +34,7 @@ describe("classifyEnvelopeFreshness", () => {
 
   test("envelope sourceState unavailable → unknown/source-unavailable", () => {
     expect(
-      classifyEnvelopeFreshness(
-        withSourceState({ available: false, commit: null, dirtyDigest: null }),
-        available,
-      ),
+      classifyEnvelopeFreshness(withSourceState({ available: false, commit: null, dirtyDigest: null }), available),
     ).toEqual({ status: "unknown", reason: "source-unavailable" })
   })
 
@@ -53,14 +54,18 @@ describe("classifyEnvelopeFreshness", () => {
 
   test("commit mismatch → stale/commit-moved", () => {
     expect(
-      classifyEnvelopeFreshness(withSourceState(available), { ...available, commit: "ffffffffffffffffffffffffffffffffffffffff" }),
+      classifyEnvelopeFreshness(withSourceState(available), {
+        ...available,
+        commit: "ffffffffffffffffffffffffffffffffffffffff",
+      }),
     ).toEqual({ status: "stale", reason: "commit-moved" })
   })
 
   test("dirtyDigest mismatch → stale/dirty-changed", () => {
-    expect(
-      classifyEnvelopeFreshness(withSourceState(available), { ...available, dirtyDigest: "cafef00d" }),
-    ).toEqual({ status: "stale", reason: "dirty-changed" })
+    expect(classifyEnvelopeFreshness(withSourceState(available), { ...available, dirtyDigest: "cafef00d" })).toEqual({
+      status: "stale",
+      reason: "dirty-changed",
+    })
   })
 
   test("commit mismatch wins over dirtyDigest mismatch", () => {
