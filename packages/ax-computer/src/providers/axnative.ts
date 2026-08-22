@@ -1,7 +1,7 @@
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { OcuProvider } from "./ocu"
+import { OcuProtocolProvider } from "./ocu-protocol"
 
 /**
  * Default command for the AX-owned native driver: the SwiftPM build product
@@ -27,7 +27,7 @@ export function defaultAxnativeCommand(exists: (candidate: string) => boolean = 
  * Command precedence: config.command > AX_COMPUTER_AXNATIVE_COMMAND env >
  * built binary (release, then debug) > "ax-computer-driver" on PATH.
  */
-export class AXNativeProvider extends OcuProvider {
+export class AXNativeProvider extends OcuProtocolProvider {
   override readonly name = "axnative"
 
   protected override commandEnvVar(): string {

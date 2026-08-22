@@ -4,7 +4,7 @@ import { StdioMcpClient, mcpImage, mcpText, toActionResult, type McpClient } fro
 import type { ComputerUseProvider, ObserveScope, ProviderCapabilities } from "../provider"
 import type { AppInfo, ComputerElement, ComputerObservation } from "../types"
 
-export interface OcuProviderConfig {
+export interface OcuProtocolProviderConfig {
   command?: string
   args?: string[]
   requestTimeoutMs?: number
@@ -42,7 +42,7 @@ function xdotoolKey(key: string): string {
   return key
 }
 
-// OCU renders the AX tree as one `\t`-indented line per element:
+// the OCU dialect renders the AX tree as one `\t`-indented line per element:
 //   3 outline (showing 0-19 of 32 items) Description: sidebar
 // i.e. `<index> <role words> [(flags)] [free-text label] [Key: value ...]`.
 const KNOWN_ROLES = [
@@ -111,9 +111,9 @@ function splitRole(segment: string): { role: string; label?: string } {
 }
 
 /**
- * Parse OCU's rendered accessibility tree into canonical elements. Indices
- * are valid against the snapshot the tree came from. OCU exposes no geometry
- * in this rendering, so elements carry no bounds.
+ * Parse the OCU dialect's rendered accessibility tree into canonical elements.
+ * Indices are valid against the snapshot the tree came from. The dialect
+ * exposes no geometry in this rendering, so elements carry no bounds.
  */
 export function parseA11yTree(text: string): ComputerElement[] {
   const elements: ComputerElement[] = []
@@ -161,22 +161,29 @@ export function parseA11yTree(text: string): ComputerElement[] {
 }
 
 /**
- * Adapter for OCU (`open-computer-use mcp`). OCU is macOS-only and app-scoped:
- * every tool takes an `app` argument, and `get_app_state` launches/activates
- * the app as a side effect — there is no window-level activation.
+ * Base adapter for backends speaking the app-scoped OCU tool dialect over
+ * stdio MCP (`<binary> mcp`): every tool takes an `app` argument, and
+ * `get_app_state` launches/activates the app as a side effect — there is no
+ * window-level activation. Shared by the AX-owned native driver
+ * (AXNativeProvider) and the test-only upstream reference arm; CuaProvider is
+ * also MCP-based but speaks a different dialect and does not derive from this
+ * class.
+ *
+ * Error messages surfaced to the model name `this.name` (or the dialect), so
+ * subclasses never mislabel themselves as the upstream backend.
  */
-export class OcuProvider implements ComputerUseProvider {
-  readonly name: string = "ocu"
+export abstract class OcuProtocolProvider implements ComputerUseProvider {
+  abstract readonly name: string
 
   private client: McpClient | undefined
   /** in-flight spawn, so concurrent first calls share one server process */
   private connecting: Promise<McpClient> | undefined
-  /** app of the most recent observe/launch; OCU tools require it */
+  /** app of the most recent observe/launch; dialect tools require it */
   private currentApp: string | undefined
   /** elements of the most recent observation (raw provider ids) */
   private lastElements: ComputerElement[] = []
 
-  constructor(protected readonly config: OcuProviderConfig = {}) {}
+  constructor(protected readonly config: OcuProtocolProviderConfig = {}) {}
 
   capabilities(): ProviderCapabilities {
     return {
@@ -191,7 +198,7 @@ export class OcuProvider implements ComputerUseProvider {
     const result = await (await this.mcp()).callTool("list_apps", {})
     const apps: AppInfo[] = []
     for (const line of mcpText(result).split("\n")) {
-      // OCU renders one app per line: "Name — bundle.id [running, frontmost]"
+      // the dialect renders one app per line: "Name — bundle.id [running, frontmost]"
       const match = /^(?<name>.+?) — (?<bundle>\S+)(?: \[.*\])?$/.exec(line.trim())
       if (match?.groups) apps.push({ name: match.groups.name, bundleId: match.groups.bundle })
     }
@@ -200,7 +207,7 @@ export class OcuProvider implements ComputerUseProvider {
 
   async observe(scope: ObserveScope): Promise<ComputerObservation> {
     if (!("app" in scope)) {
-      throw new ComputerUseError("OcuProvider only supports the { app } scope; OCU is app-scoped", {
+      throw new ComputerUseError(`${this.name} only supports the { app } scope; the dialect is app-scoped`, {
         provider: this.name,
         code: "unsupported_scope",
       })
@@ -208,11 +215,11 @@ export class OcuProvider implements ComputerUseProvider {
     const result = await (await this.mcp()).callTool("get_app_state", { app: scope.app })
     this.currentApp = scope.app
     const a11yText = mcpText(result)
-    // element indices come from the rendered tree text; OCU exposes no
+    // element indices come from the rendered tree text; the dialect exposes no
     // geometry in it, so elements carry no bounds
     this.lastElements = parseA11yTree(a11yText)
     return {
-      platform: "darwin", // OCU is macOS-only
+      platform: "darwin", // the OCU dialect is macOS-only
       provider: this.name,
       timestamp: Date.now(),
       app: { name: scope.app },
@@ -225,7 +232,7 @@ export class OcuProvider implements ComputerUseProvider {
 
   async act(action: ComputerAction): Promise<ActionResult> {
     if (action.type === "activate_window") {
-      throw new ComputerUseError("OCU is app-scoped and cannot activate individual windows", {
+      throw new ComputerUseError("the app-scoped OCU tool dialect cannot activate individual windows", {
         provider: this.name,
         code: "unsupported_action",
       })
@@ -253,17 +260,17 @@ export class OcuProvider implements ComputerUseProvider {
       case "type":
         return this.call(action, "type_text", { app, text: action.text })
       case "keypress":
-        // OCU takes xdotool key syntax: ["ctrl", "c"] -> "ctrl+c"
+        // the dialect takes xdotool key syntax: ["ctrl", "c"] -> "ctrl+c"
         return this.call(action, "press_key", { app, key: action.keys.map(xdotoolKey).join("+") })
       case "scroll": {
         if (action.target?.kind === "point") {
-          throw new ComputerUseError("OCU scroll targets elements, not points", {
+          throw new ComputerUseError("the app-scoped OCU tool dialect scrolls elements, not points", {
             provider: this.name,
             code: "unsupported_target",
           })
         }
-        // OCU's scroll schema requires element_index; without an explicit
-        // target, anchor on the first scrollable element of the last
+        // the dialect's scroll schema requires element_index; without an
+        // explicit target, anchor on the first scrollable element of the last
         // observation rather than calling the tool with a missing argument
         let elementIndex = action.target?.kind === "element" ? action.target.id : undefined
         if (!elementIndex) {
@@ -289,7 +296,7 @@ export class OcuProvider implements ComputerUseProvider {
       }
       case "drag": {
         if (action.from.kind !== "point" || action.to.kind !== "point") {
-          throw new ComputerUseError("OCU drag takes pixel coordinates only", {
+          throw new ComputerUseError("the app-scoped OCU tool dialect drags pixel coordinates only", {
             provider: this.name,
             code: "unsupported_target",
           })
@@ -304,7 +311,7 @@ export class OcuProvider implements ComputerUseProvider {
       }
       case "set_value": {
         if (action.target.kind !== "element") {
-          throw new ComputerUseError("OCU set_value requires an element target", {
+          throw new ComputerUseError("the app-scoped OCU tool dialect set_value requires an element target", {
             provider: this.name,
             code: "unsupported_target",
           })
@@ -334,14 +341,19 @@ export class OcuProvider implements ComputerUseProvider {
   private requireApp(action: ComputerAction): string {
     if (!this.currentApp) {
       throw new ComputerUseError(
-        `OcuProvider.act("${action.type}") requires a prior observe({ app }) — OCU tools are app-scoped`,
+        `${this.name}.act("${action.type}") requires a prior observe({ app }) — the dialect tools are app-scoped`,
         { provider: this.name, code: "no_active_observation" },
       )
     }
     return this.currentApp
   }
 
-  private async call(action: ComputerAction, tool: string, args: Record<string, unknown>): Promise<ActionResult> {
+  /**
+   * The single protected tool-call hook: invokes one dialect tool and maps the
+   * result. Subclasses use it to add AX-only tools beyond the shared surface;
+   * connection state itself stays private to the base.
+   */
+  protected async call(action: ComputerAction, tool: string, args: Record<string, unknown>): Promise<ActionResult> {
     const result = await (await this.mcp()).callTool(tool, args)
     return toActionResult(this.name, action, result)
   }
@@ -358,14 +370,10 @@ export class OcuProvider implements ComputerUseProvider {
   }
 
   /** command used when neither config.command nor an env override is set */
-  protected defaultCommand(): string {
-    return "open-computer-use"
-  }
+  protected abstract defaultCommand(): string
 
-  /** env var consulted before defaultCommand(); subclasses override the var name */
-  protected commandEnvVar(): string {
-    return "AX_COMPUTER_OCU_COMMAND"
-  }
+  /** env var consulted before defaultCommand(); subclasses name their own var */
+  protected abstract commandEnvVar(): string
 
   protected defaultArgs(): string[] {
     return ["mcp"]

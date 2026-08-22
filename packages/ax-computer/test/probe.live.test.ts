@@ -2,8 +2,8 @@
 // Run: AX_COMPUTER_PROBE=1 AX_COMPUTER_OCU_COMMAND=... AX_COMPUTER_CUA_COMMAND=... vitest run test/probe.live.test.ts
 import { describe, test } from "vitest"
 import { CuaProvider } from "../src/providers/cua"
-import { OcuProvider } from "../src/providers/ocu"
 import { AXNativeProvider } from "../src/providers/axnative"
+import { UpstreamOcuReferenceProvider } from "./helpers/upstream-ocu"
 
 const probe = process.env.AX_COMPUTER_PROBE === "1"
 const app = process.env.AX_COMPUTER_LIVE_APP ?? "TextEdit"
@@ -17,7 +17,7 @@ function summarize(obs: unknown) {
 
 describe.skipIf(!probe)("live probe", () => {
   test("ocu observe", { timeout: 120_000 }, async () => {
-    const provider = new OcuProvider({ command: process.env.AX_COMPUTER_OCU_COMMAND })
+    const provider = new UpstreamOcuReferenceProvider({ command: process.env.AX_COMPUTER_OCU_COMMAND })
     try {
       const apps = await provider.listApps()
       console.log("OCU listApps count:", apps.length, "sample:", JSON.stringify(apps.slice(0, 3)))

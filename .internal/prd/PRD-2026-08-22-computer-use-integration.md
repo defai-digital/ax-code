@@ -51,6 +51,26 @@ code reviews of both reference implementations (vendored under
   configs that still say `"ocu"` fail zod validation with a clear enum
   error naming the two valid values.
 
+> **Provider-class refactor (2026-08-22, same day).** Two independent
+  design reviews (Codex gpt-5.6-sol, Qwen3.8-Max) both rejected merging
+  into a single `AXNativeProvider` (option B) — the merged class cannot
+  serve as the upstream reference arm once axnative gains AX-only tools,
+  and both A/B arms would report the same `provider.name`, breaking
+  evidence comparability (plus a silent self-comparison hazard via the
+  command-resolution chain). Both recommended option C, which landed:
+  the shared implementation is now `OcuProtocolProvider` (abstract,
+  `src/providers/ocu-protocol.ts`) with abstract `name` /
+  `commandEnvVar()` / `defaultCommand()`; `AXNativeProvider` extends it;
+  the upstream OCU adapter is test-only (`test/helpers/upstream-ocu.ts`,
+  `UpstreamOcuReferenceProvider`, `name = "ocu"` preserved for report
+  continuity) and is no longer exported from the package root. The
+  refactor also fixed a real defect both reviews caught: model-visible
+  error messages hardcoded "OcuProvider"/"OCU" even when the AX-native
+  backend produced them — they now interpolate `this.name`. One
+  `protected call()` hook was exposed (connection state stays private)
+  so future AX-only tools land in the subclass without touching the
+  dialect base.
+
 Harness patterns worth absorbing: (1) staged tool-execution pipeline
 (pre-execute waterfall → fail-closed guards → one-shot approval → execute →
 post-execute → frozen durable result); (2) capability-seam discipline

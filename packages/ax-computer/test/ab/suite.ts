@@ -4,7 +4,8 @@
 // The pure logic in this file is decoupled from any concrete provider
 // implementation: it accepts any provider factory and runs the same task set
 // against each, recording success/failure, verbatim refusal codes, and
-// latency. Live runs use the real OcuProvider / CuaProvider; mock runs in CI
+// latency. Live runs use the real CuaProvider and the test-only
+// UpstreamOcuReferenceProvider (test/helpers/upstream-ocu.ts); mock runs in CI
 // use FakeProvider implementations from test/ab/ab.test.ts.
 
 import type { ActionResult, ComputerAction } from "../../src/action"
