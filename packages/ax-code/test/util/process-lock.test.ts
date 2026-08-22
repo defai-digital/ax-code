@@ -32,5 +32,8 @@ describe("util.process-lock", () => {
     expect(parseProcessLockBody(JSON.stringify({ pid: "123", startedAt: 456, host: "host" }))).toBeUndefined()
     expect(parseProcessLockBody(JSON.stringify({ pid: 123, startedAt: Number.NaN, host: "host" }))).toBeUndefined()
     expect(parseProcessLockBody(JSON.stringify({ pid: 123, startedAt: 456, host: null }))).toBeUndefined()
+    expect(parseProcessLockBody(JSON.stringify({ pid: -1, startedAt: 456, host: "host" }))).toBeUndefined()
+    expect(parseProcessLockBody(JSON.stringify({ pid: 123.5, startedAt: 456, host: "host" }))).toBeUndefined()
+    expect(parseProcessLockBody(JSON.stringify({ pid: 123, startedAt: -1, host: "host" }))).toBeUndefined()
   })
 })

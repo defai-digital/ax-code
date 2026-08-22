@@ -1,124 +1,306 @@
+import { randomUUID } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
+import { DatabaseSync } from "node:sqlite"
 import { Log } from "../util/log"
-import { createProcessLockBody, isSameProcessLockHost, parseProcessLockBody } from "../util/process-lock"
+import {
+  createProcessLockBody,
+  isSameProcessLockHost,
+  parseProcessLockBody,
+  type ProcessLockBody,
+} from "../util/process-lock"
 
 // Synchronous cross-process mutex for schema migrations.
 //
-// drizzle's dialect.migrate() reads `__drizzle_migrations` BEFORE opening its
-// BEGIN/COMMIT block and filters pending migrations by name from that stale
-// snapshot. Two ax-code processes booting simultaneously after an upgrade
-// (double-launch, TUI + CLI, desktop + headless) therefore both decide the
-// same new migration is pending and both run its DDL. Migration SQL is not
-// idempotent (plain CREATE TABLE / CREATE INDEX), so the loser dies with
-// "table already exists" and the whole bootstrap fails fatally — the v7.7.7
-// `scheduled_task_run` boot crash. PRAGMA busy_timeout cannot help: the
-// conflict is a stale journal read, not an SQLite page lock.
+// drizzle reads `__drizzle_migrations` before opening its transaction. Two
+// processes booting after an upgrade can therefore both decide the same
+// non-idempotent DDL is pending. The main mutex is a write transaction on a
+// tiny sidecar SQLite database. SQLite owns the OS-level lock, so it is
+// released automatically on process exit and never needs unsafe stale-file
+// deletion.
 //
-// This is an advisory lockfile, not an SQLite lock — the same pattern as the
-// code-index lock (code-intelligence/lockfile.ts), but synchronous because
-// Database.Client init (and dialect.migrate) is synchronous. The critical
-// section is a few milliseconds of DDL, so a brief sync spin at boot is
-// acceptable and blocks nothing else (the event loop has no other work yet).
-//
-// Design notes:
-//
-// - Lockfile lives next to the database file (`<db>.migrate.lock`), so
-//   per-channel and AX_CODE_DB-override databases each get their own lock.
-// - Acquired via fs.openSync(path, "wx") — atomic create-or-fail. On EEXIST
-//   we inspect the body (PID + timestamp + host) and steal when the holder
-//   is dead, the lock is stale, or it outlives ACQUIRE_TIMEOUT_MS.
-// - Crash-on-held is handled by the staleness/dead-pid checks on the next
-//   acquire, same as IndexLock.
+// We also hold the v7.7.7 `<db>.migrate.lock` file while migrating. That keeps
+// rolling upgrades safe when an older CLI, desktop, or headless process is
+// still running. New processes are serialized by the sidecar guard before
+// they inspect or reclaim this compatibility file.
 
 const log = Log.create({ service: "db.migrate-lock" })
 
-// Migrations are sub-second DDL. A lock older than this belongs to a crashed
-// process (generous: IndexLock uses 8h for multi-minute index batches).
-const STALE_LOCK_MS = 5 * 60 * 1000
-
-// If a live holder wedges past this, steal anyway. Proceeding unlocked
-// degrades to the pre-fix race in a pathological case; blocking boot forever
-// would be worse.
 const ACQUIRE_TIMEOUT_MS = 60 * 1000
-
 const POLL_MS = 100
 
+// A v7.7.7 process creates the compatibility file before writing its JSON
+// body. Do not mistake that brief empty/partial state for an abandoned file.
+const MALFORMED_LOCK_GRACE_MS = 5 * 1000
+
+type Options = {
+  timeoutMs?: number
+  pollMs?: number
+  malformedGraceMs?: number
+}
+
+type MigrationLockBody = ProcessLockBody & { token: string }
+
+type Snapshot = {
+  body: ProcessLockBody | undefined
+  dev: number
+  ino: number
+  mtimeMs: number
+  size: number
+  text: string
+}
+
 export namespace MigrationLock {
-  // Acquire the lock for the given database path. Returns a release function
-  // that MUST be called (use try/finally) once migration completes.
-  export function acquire(dbPath: string): () => void {
+  // Acquire the lock for the given database path. Returns an idempotent
+  // release function that MUST be called (use try/finally) after migration.
+  export function acquire(dbPath: string, options: Options = {}): () => void {
+    const timeoutMs = duration("timeoutMs", options.timeoutMs, ACQUIRE_TIMEOUT_MS)
+    const pollMs = duration("pollMs", options.pollMs, POLL_MS)
+    const malformedGraceMs = duration("malformedGraceMs", options.malformedGraceMs, MALFORMED_LOCK_GRACE_MS)
     const target = dbPath + ".migrate.lock"
+    const deadline = Date.now() + timeoutMs
+
     fs.mkdirSync(path.dirname(target), { recursive: true })
-    const deadline = Date.now() + ACQUIRE_TIMEOUT_MS
-    while (true) {
+
+    const releaseGuard = acquireGuard(dbPath, deadline, target)
+    let releaseCompatibility: (() => void) | undefined
+    try {
+      releaseCompatibility = acquireCompatibilityLock(target, deadline, pollMs, malformedGraceMs)
+    } catch (error) {
+      releaseGuard()
+      throw error
+    }
+
+    let released = false
+    return () => {
+      if (released) return
+      released = true
       try {
-        const handle = fs.openSync(target, "wx")
-        try {
-          fs.writeFileSync(handle, JSON.stringify(createProcessLockBody()))
-        } finally {
-          fs.closeSync(handle)
-        }
-        return () => release(target)
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException)?.code !== "EEXIST") throw err
+        releaseCompatibility?.()
+      } finally {
+        releaseGuard()
       }
-      const body = readBody(target)
-      if (stealable(body)) {
-        log.warn("stealing stale or abandoned migration lock", { target, body })
-        fs.rmSync(target, { force: true })
-        continue
-      }
-      if (Date.now() >= deadline) {
-        log.warn("migration lock held past timeout; stealing", { target, body })
-        fs.rmSync(target, { force: true })
-        continue
-      }
-      sleep(POLL_MS)
     }
   }
 
-  function stealable(body: ReturnType<typeof readBody>): boolean {
-    if (!body) return true // corrupt or unreadable — safe to steal
-    if (Date.now() - body.startedAt > STALE_LOCK_MS) return true
-    if (body.pid === process.pid) return false // our own (should not happen; Client is lazy-once)
-    if (!isSameProcessLockHost(body)) return false // NFS-style foreign host: never steal
+  function acquireGuard(dbPath: string, deadline: number, target: string): () => void {
+    const guardPath = dbPath + ".migrate.guard"
+    fs.closeSync(fs.openSync(guardPath, "a", 0o600))
+
+    const remaining = Math.max(1, deadline - Date.now())
+    const guard = new DatabaseSync(guardPath, {
+      open: true,
+      readOnly: false,
+      // SQLite stores the busy timeout as a signed 32-bit millisecond value.
+      timeout: Math.min(remaining, 2_147_483_647),
+    })
+    try {
+      guard.exec("BEGIN IMMEDIATE")
+    } catch (error) {
+      guard.close()
+      if (isBusyError(error)) {
+        throw new Error(`Timed out waiting for migration lock: ${target}`, { cause: error })
+      }
+      throw error
+    }
+
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      try {
+        guard.exec("ROLLBACK")
+      } catch (error) {
+        log.error("failed to release migration guard transaction", { guardPath, error })
+      } finally {
+        try {
+          guard.close()
+        } catch (error) {
+          log.error("failed to close migration guard database", { guardPath, error })
+        }
+      }
+    }
+  }
+
+  function acquireCompatibilityLock(
+    target: string,
+    deadline: number,
+    pollMs: number,
+    malformedGraceMs: number,
+  ): () => void {
+    const body: MigrationLockBody = { ...createProcessLockBody(), token: randomUUID() }
+    const ownText = JSON.stringify(body)
+    const prepared = prepareOwnerFile(target, ownText)
+
+    try {
+      while (true) {
+        if (prepared.tryLink()) {
+          prepared.cleanup()
+          return () => releaseCompatibilityLock(target, ownText)
+        }
+
+        const snapshot = readSnapshot(target)
+        if (!snapshot) continue
+        if (reclaimable(snapshot, malformedGraceMs) && removeIfUnchanged(target, snapshot)) {
+          log.warn("reclaimed abandoned migration compatibility lock", {
+            target,
+            holder: snapshot.body,
+          })
+          continue
+        }
+
+        if (Date.now() >= deadline) {
+          throw new Error(`Timed out waiting for migration lock: ${target}`)
+        }
+        sleep(Math.min(pollMs, Math.max(1, deadline - Date.now())))
+      }
+    } catch (error) {
+      prepared.cleanup()
+      throw error
+    }
+  }
+
+  // Create a complete owner file first, then atomically hard-link it into the
+  // lock path. Unlike open("wx") followed by write(), contenders can never
+  // observe this version's lock with an empty or partially written body.
+  function prepareOwnerFile(target: string, text: string) {
+    const preparedPath = `${target}.${process.pid}.${randomUUID()}.tmp`
+    const handle = fs.openSync(preparedPath, "wx", 0o600)
+    try {
+      fs.writeFileSync(handle, text)
+    } catch (error) {
+      try {
+        fs.unlinkSync(preparedPath)
+      } catch {
+        // Preserve the write error. A uniquely named incomplete temp file is
+        // never considered a lock owner and is harmless after a crash.
+      }
+      throw error
+    } finally {
+      fs.closeSync(handle)
+    }
+
+    let cleaned = false
+    return {
+      tryLink(): boolean {
+        try {
+          fs.linkSync(preparedPath, target)
+          return true
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException)?.code === "EEXIST") return false
+          throw error
+        }
+      },
+      cleanup() {
+        if (cleaned) return
+        cleaned = true
+        try {
+          fs.unlinkSync(preparedPath)
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") {
+            log.warn("failed to clean prepared migration lockfile", { preparedPath, error })
+          }
+        }
+      },
+    }
+  }
+
+  function readSnapshot(target: string): Snapshot | undefined {
+    try {
+      const before = fs.statSync(target)
+      if (!before.isFile()) throw new Error(`Migration lock path is not a regular file: ${target}`)
+      const text = fs.readFileSync(target, "utf-8")
+      const after = fs.statSync(target)
+      if (
+        before.dev !== after.dev ||
+        before.ino !== after.ino ||
+        before.mtimeMs !== after.mtimeMs ||
+        before.size !== after.size
+      ) {
+        return undefined
+      }
+      return {
+        body: parseProcessLockBody(text),
+        dev: after.dev,
+        ino: after.ino,
+        mtimeMs: after.mtimeMs,
+        size: after.size,
+        text,
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return undefined
+      throw error
+    }
+  }
+
+  function reclaimable(snapshot: Snapshot, malformedGraceMs: number): boolean {
+    const body = snapshot.body
+    if (!body) return Date.now() - snapshot.mtimeMs > malformedGraceMs
+    if (!isSameProcessLockHost(body)) return false
+    if (body.pid === process.pid) return false
     return !pidAlive(body.pid)
   }
 
-  function readBody(target: string) {
+  // The sidecar guard serializes all v7.7.8+ reclaimers. Comparing the whole
+  // snapshot immediately before unlink also prevents a changed owner from
+  // being removed accidentally. Older v7.7.7 contenders still coordinate via
+  // the target's atomic create semantics.
+  function removeIfUnchanged(target: string, expected: Snapshot): boolean {
+    const current = readSnapshot(target)
+    if (!current) return true
+    if (
+      current.dev !== expected.dev ||
+      current.ino !== expected.ino ||
+      current.mtimeMs !== expected.mtimeMs ||
+      current.size !== expected.size ||
+      current.text !== expected.text
+    ) {
+      return false
+    }
     try {
-      return parseProcessLockBody(fs.readFileSync(target, "utf-8"))
-    } catch {
-      return undefined
+      fs.unlinkSync(target)
+      return true
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return true
+      throw error
     }
   }
 
-  // Signal-0 liveness probe, mirroring IndexLock: EPERM means alive (no
-  // permission to signal), ESRCH means dead, anything else is treated as
-  // alive out of caution.
+  function releaseCompatibilityLock(target: string, ownText: string) {
+    try {
+      const current = fs.readFileSync(target, "utf-8")
+      if (current !== ownText) {
+        log.warn("skipping migration lock release after ownership changed", { target })
+        return
+      }
+      fs.unlinkSync(target)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return
+      log.error("failed to release migration compatibility lock", { target, error })
+    }
+  }
+
   function pidAlive(pid: number): boolean {
     try {
       process.kill(pid, 0)
       return true
-    } catch (err) {
-      return (err as NodeJS.ErrnoException)?.code !== "ESRCH"
+    } catch (error) {
+      return (error as NodeJS.ErrnoException)?.code !== "ESRCH"
     }
   }
 
-  // Synchronous sleep. Atomics.wait on a fresh SharedArrayBuffer blocks the
-  // thread without burning CPU; legal on Node's main thread (unlike browsers).
+  function isBusyError(error: unknown): boolean {
+    const errcode = (error as { errcode?: unknown } | undefined)?.errcode
+    return typeof errcode === "number" && (errcode & 0xff) === 5
+  }
+
+  function duration(name: string, value: number | undefined, fallback: number): number {
+    if (value === undefined) return fallback
+    if (!Number.isFinite(value) || value < 0) throw new TypeError(`${name} must be a non-negative finite number`)
+    return Math.ceil(value)
+  }
+
   function sleep(ms: number) {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
-  }
-
-  function release(target: string) {
-    try {
-      fs.rmSync(target, { force: true })
-    } catch (err) {
-      // Best-effort: a stolen lock is already gone, and a leftover file is
-      // reclaimed by the staleness check on the next boot.
-      log.error("failed to release migration lock", { target, err })
-    }
   }
 }

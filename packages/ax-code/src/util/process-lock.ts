@@ -10,8 +10,13 @@ export interface ProcessLockBody {
 
 const ProcessLockBodySchema = z
   .object({
-    pid: z.number().finite(),
-    startedAt: z.number().finite(),
+    // process.kill() accepts negative PIDs as process-group selectors. Lock
+    // metadata is untrusted filesystem input, so validate before probing it.
+    pid: z.number().int().positive().safe(),
+    startedAt: z.number().int().nonnegative().safe(),
+    // Keep accepting an empty legacy host. Older releases could write one;
+    // treating an active legacy lock as malformed would make some callers
+    // reclaim it immediately instead of conservatively treating it as remote.
     host: z.string(),
   })
   .passthrough()
