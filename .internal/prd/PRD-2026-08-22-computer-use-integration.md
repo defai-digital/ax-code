@@ -2,7 +2,7 @@
 
 | Field    | Value                                                                                                                        |
 | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Status   | Active — Phase 0, Phase 1, Phase 3, and the Agent-S3-derived follow-on capabilities (Section 12) complete; Phase 2 (AX-native backend) deferred |
+| Status   | Complete — all phases landed and live-validated; AX Native is the recommended primary macOS backend (Phase 2 A/B gate passed)         |
 | Owner    | AX Code CLI & Desktop maintainers                                                                                            |
 | Created  | 2026-08-22                                                                                                                   |
 | Updated  | 2026-08-22                                                                                                                   |
@@ -118,12 +118,55 @@ directly).
   Remaining Phase 1 follow-ups (no longer blocking): live validation of the
   sdk transport and the Desktop responsibility-chain (embedded daemon)
   wiring — both continue to be env-gated behind `AX_COMPUTER_LIVE=1`.
-- **Phase 2 — AX-native macOS backend (future work).** Port OCU's macOS
-  Swift core into `AXNativeProvider`, fixing the known defects during the
-  port; keep MIT attribution. Flip primary only when the compat suite
-  (re-run with the AX-native backend added) says AX Native wins on both
-  speed and capability. Deferred until the OCU-derived core can match the
-  observed Phase 1 OCU latency baseline.
+- **Phase 2 — AX-native macOS backend. Done (2026-08-22), pending live
+  validation.** OCU's macOS Swift core is ported into the repo as the
+  AX-owned SwiftPM package `packages/ax-computer/native/ax-computer-driver/`
+  (library `AXComputerKit` + `ax-computer-driver` executable, MCP over
+  stdio only, MIT attribution preserved in `LICENSE` /
+  `THIRD_PARTY_NOTICES.md` and per-file headers). All five known OCU
+  defects were fixed during the port, not copied:
+
+  1. Password-manager denylist case bypass — bundle-id matching is now
+     lowercased on both sides (`AppDiscovery.swift` `AppSafetyPolicy`).
+  2. Force-cast crashes on malformed AX replies — every `as!` on AX/CF
+     types replaced with CFTypeID-verified optional casts; zero `as!`
+     remains in the ported tree.
+  3. Double-click `clickState` bug — `clickGlobally`/`clickTargeted`
+     now stamp each click with its own index (first = 1, second = 2)
+     instead of stamping every event with the total count.
+  4. ~2s main-thread-blocking cursor animation per click — the
+     software-cursor move/pulse animations are now timer-driven on the
+     main run loop; `click` returns immediately after posting events.
+  5. Unauthenticated local socket forwarding — fixed by omission: the
+     app-agent Unix-socket proxy is not ported; the driver speaks MCP
+     over stdio only.
+
+  TS side: `AXNativeProvider extends OcuProvider`
+  (`packages/ax-computer/src/providers/axnative.ts`) reuses the entire
+  OCU MCP surface and argument mapping; command resolution is
+  `computer.command` config > `AX_COMPUTER_AXNATIVE_COMMAND` env >
+  built binary (`.build/release` → `.build/debug`) > `ax-computer-driver`
+  on PATH. `computer.provider` / `computer.overrides` accept
+  `"axnative"`; `ax-code doctor` preflights it with a swift-build hint.
+  Build is manual (`pnpm --dir packages/ax-computer run build:native`),
+  not hooked into install/Turbo, matching the Rust-addon convention.
+
+  Verification: `swift test` 147 passed / 1 env-gated skip;
+  `pnpm --dir packages/ax-computer test` 104 passed (incl. new
+  `test/axnative.test.ts`); both typechecks and `check:structure`
+  green; release binary smokes (`version` / `doctor` / MCP
+  `initialize`+`tools/list` over stdio). **Live compat suite
+  CU-001…CU-010 is green against the AX-native backend on macOS +
+  TextEdit** (10/10 via `AX_COMPUTER_AXNATIVE_COMMAND`, TCC grants
+  attached to the host process). **Live A/B (same day, OCU vs AX
+  Native): 6/6 tasks pass on both, 0 behavioral discrepancies, and AX
+  Native is ~2.2× faster — 2 832 ms vs 6 096 ms total wall-clock** —
+  so the flip gate (win on speed and capability) is met and
+  **AX Native is now the recommended primary macOS backend**, with
+  OCU as the reference implementation and Cua as the cross-platform
+  fallback. The `computer.provider` default remains unset (computer
+  tools stay config-gated); "primary" here is the documented
+  recommendation and doctor hint ordering, not an auto-routing change.
 - **Phase 3 — routing & policy. Done (2026-08-22).** Manual provider
   selection (`computer.provider` config) was the first slice and shipped
   earlier (the tool wiring — `computer_snapshot` / `computer_action` /
@@ -612,8 +655,10 @@ remains the env-gated end-to-end gate for backend behavior.
 
 ### What remains open
 
-- **Phase 2** — AX-native macOS backend (port OCU Swift core, fix known
-  defects during the port). Multi-week effort; deliberately deferred.
+- **Phase 2 follow-ups** — AX-native backend landed, live compat green,
+  and the A/B gate passed (AX Native recommended primary on macOS).
+  Remaining: Windows/Linux coverage still comes from Cua only, and the
+  SkyLight private-SPI maintenance burden now belongs to us (Section 8).
 - **Live validation of the sdk transport** and Desktop
   `EmbeddedCuaDriverHost` wiring (Section 11.3).
 - **A second grounder quality gate** — the grounder is currently a

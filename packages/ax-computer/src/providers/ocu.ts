@@ -166,7 +166,7 @@ export function parseA11yTree(text: string): ComputerElement[] {
  * the app as a side effect — there is no window-level activation.
  */
 export class OcuProvider implements ComputerUseProvider {
-  readonly name = "ocu"
+  readonly name: string = "ocu"
 
   private client: McpClient | undefined
   /** in-flight spawn, so concurrent first calls share one server process */
@@ -176,7 +176,7 @@ export class OcuProvider implements ComputerUseProvider {
   /** elements of the most recent observation (raw provider ids) */
   private lastElements: ComputerElement[] = []
 
-  constructor(private readonly config: OcuProviderConfig = {}) {}
+  constructor(protected readonly config: OcuProviderConfig = {}) {}
 
   capabilities(): ProviderCapabilities {
     return {
@@ -357,12 +357,31 @@ export class OcuProvider implements ComputerUseProvider {
     }
   }
 
+  /** command used when neither config.command nor an env override is set */
+  protected defaultCommand(): string {
+    return "open-computer-use"
+  }
+
+  /** env var consulted before defaultCommand(); subclasses override the var name */
+  protected commandEnvVar(): string {
+    return "AX_COMPUTER_OCU_COMMAND"
+  }
+
+  protected defaultArgs(): string[] {
+    return ["mcp"]
+  }
+
+  /** full command resolution chain: config.command > env override > default */
+  protected resolveCommand(): string {
+    return this.config.command ?? process.env[this.commandEnvVar()] ?? this.defaultCommand()
+  }
+
   private async connect(): Promise<McpClient> {
     const client =
       this.config.client ??
       (await StdioMcpClient.start({
-        command: this.config.command ?? process.env.AX_COMPUTER_OCU_COMMAND ?? "open-computer-use",
-        args: this.config.args ?? ["mcp"],
+        command: this.resolveCommand(),
+        args: this.config.args ?? this.defaultArgs(),
         requestTimeoutMs: this.config.requestTimeoutMs,
       }))
     this.client = client

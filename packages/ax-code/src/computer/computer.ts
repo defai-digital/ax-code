@@ -1,4 +1,12 @@
-import { ComputerSession, ComputerUseError, CuaProvider, McpClientError, OcuProvider } from "@ax-code/computer/index"
+import {
+  AXNativeProvider,
+  ComputerSession,
+  ComputerUseError,
+  CuaProvider,
+  McpClientError,
+  OcuProvider,
+  defaultAxnativeCommand,
+} from "@ax-code/computer/index"
 import type {
   ActionResult,
   AppInfo,
@@ -41,6 +49,8 @@ export namespace Computer {
   const BACKENDS = {
     cua: { command: "cua-driver", env: "AX_COMPUTER_CUA_COMMAND" },
     ocu: { command: "open-computer-use", env: "AX_COMPUTER_OCU_COMMAND" },
+    // built binary under packages/ax-computer/native (release, then debug), else PATH
+    axnative: { command: defaultAxnativeCommand(), env: "AX_COMPUTER_AXNATIVE_COMMAND" },
   } as const
 
   export type BackendName = keyof typeof BACKENDS
@@ -256,7 +266,7 @@ export namespace Computer {
   function createProvider(computer: Config.Info["computer"], target: ProviderName): ComputerUseProvider {
     if (!computer?.provider) {
       throw new Error(
-        'Computer use is not configured. Set computer.provider ("cua" or "ocu") in ax-code.json to enable computer tools.',
+        'Computer use is not configured. Set computer.provider ("cua", "ocu", or "axnative") in ax-code.json to enable computer tools.',
       )
     }
     // command/args fall through to the providers, which apply the
@@ -269,9 +279,11 @@ export namespace Computer {
         return new CuaProvider(options)
       case "ocu":
         return new OcuProvider(options)
+      case "axnative":
+        return new AXNativeProvider(options)
       default:
         throw new Error(
-          `Computer use override "${target}" is not a built-in backend; only "cua" and "ocu" are recognized.`,
+          `Computer use override "${target}" is not a built-in backend; only "cua", "ocu", and "axnative" are recognized.`,
         )
     }
   }
@@ -323,7 +335,7 @@ export namespace Computer {
     const cfg = await Config.get()
     const resolved = resolveBackend(cfg.computer)
     const command = resolved ? `${resolved.command} ${resolved.args.join(" ")}` : "unknown"
-    const env = resolved?.env ?? "AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_OCU_COMMAND"
+    const env = resolved?.env ?? "AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_OCU_COMMAND / AX_COMPUTER_AXNATIVE_COMMAND"
     const detail = err instanceof Error ? err.message : String(err)
     return new Error(
       `Computer-use backend "${name}" is unavailable (tried "${command}"; override with ${env} or computer.command config). ${detail}`,
@@ -376,7 +388,7 @@ export namespace Computer {
     const name = await resolveObserveProvider(s, scope)
     if (!name) {
       throw new Error(
-        'Computer use is not configured. Set computer.provider ("cua" or "ocu") in ax-code.json to enable computer tools.',
+        'Computer use is not configured. Set computer.provider ("cua", "ocu", or "axnative") in ax-code.json to enable computer tools.',
       )
     }
     const session = await sessionFor(name)
@@ -496,7 +508,7 @@ export namespace Computer {
     const name = await resolveObserveProvider(s, { desktop: true })
     if (!name) {
       throw new Error(
-        'Computer use is not configured. Set computer.provider ("cua" or "ocu") in ax-code.json to enable computer tools.',
+        'Computer use is not configured. Set computer.provider ("cua", "ocu", or "axnative") in ax-code.json to enable computer tools.',
       )
     }
     const session = await sessionFor(name)

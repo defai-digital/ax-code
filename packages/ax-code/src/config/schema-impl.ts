@@ -952,23 +952,23 @@ export const Info = z
     computer: z
       .object({
         provider: z
-          .enum(["cua", "ocu"])
+          .enum(["cua", "ocu", "axnative"])
           .optional()
           .describe(
-            'Computer-use backend: "cua" (cua-driver) or "ocu" (open-computer-use). Unset = computer tools unavailable.',
+            'Computer-use backend: "cua" (cua-driver), "ocu" (open-computer-use), or "axnative" (AX-owned ax-computer-driver). Unset = computer tools unavailable.',
           ),
         command: z
           .string()
           .optional()
           .describe(
-            "Backend server command override. Precedence: this config > AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_OCU_COMMAND env > default command name.",
+            "Backend server command override. Precedence: this config > AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_OCU_COMMAND / AX_COMPUTER_AXNATIVE_COMMAND env > default command name.",
           ),
         args: z.array(z.string()).optional().describe('Backend server command arguments (default: ["mcp"])'),
         overrides: z
-          .record(z.string(), z.enum(["cua", "ocu"]))
+          .record(z.string(), z.enum(["cua", "ocu", "axnative"]))
           .optional()
           .describe(
-            'Per-app provider overrides: map an application name (as observed by computer_snapshot) to "cua" or "ocu". Observations and element acts against a matching app route to the named provider; everything else uses `provider`. Element ids are only valid against the provider that issued them — crossing providers requires a fresh observation.',
+            'Per-app provider overrides: map an application name (as observed by computer_snapshot) to "cua", "ocu", or "axnative". Observations and element acts against a matching app route to the named provider; everything else uses `provider`. Element ids are only valid against the provider that issued them — crossing providers requires a fresh observation.',
           ),
         grounder: z
           .object({

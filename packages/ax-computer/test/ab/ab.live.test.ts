@@ -5,6 +5,8 @@
 // Run:
 //   AX_COMPUTER_LIVE=1 AX_COMPUTER_OCU_COMMAND=... AX_COMPUTER_CUA_COMMAND=... \
 //     pnpm --dir packages/ax-computer exec vitest run test/ab/ab.live.test.ts
+// The ocu-vs-axnative block uses AX_COMPUTER_AXNATIVE_COMMAND, or the built
+// native/ax-computer-driver binary when the env var is unset.
 //
 // The "restore TextEdit between providers" step is best-effort: we close the
 // document with cmd+w (don't save), then reopen a fresh document with cmd+n.
@@ -16,6 +18,7 @@ import { fileURLToPath } from "node:url"
 import { describe, expect, test } from "vitest"
 import { CuaProvider } from "../../src/providers/cua"
 import { OcuProvider } from "../../src/providers/ocu"
+import { AXNativeProvider } from "../../src/providers/axnative"
 import type { ComputerUseProvider } from "../../src/provider"
 import { compareAbRuns, formatAbReport, runAbSuite, type AbSuiteRunResult } from "./suite"
 
@@ -97,5 +100,45 @@ describe.skipIf(!live)("live A/B: ocu vs cua on TextEdit", () => {
     expect(report.rows).toHaveLength(6)
     expect(report.primary.name).toBe("ocu")
     expect(report.secondary.name).toBe("cua")
+  })
+})
+
+// Same task set against the AX-owned native driver. Runs only when
+// AX_COMPUTER_AXNATIVE_COMMAND (or a built binary) is available live; the
+// provider falls back to the built release/debug binary when the env var is
+// unset, so no extra wiring is needed after `pnpm build:native`.
+describe.skipIf(!live)("live A/B: ocu vs axnative on TextEdit", () => {
+  test("AB-001..AB-006 run on both providers", { timeout: 240_000 }, async () => {
+    const ocuRun: AbSuiteRunResult = await runAbSuite(
+      async () => new OcuProvider({ command: process.env.AX_COMPUTER_OCU_COMMAND }),
+      { app: liveApp },
+    )
+
+    await new Promise((r) => setTimeout(r, 500))
+    try {
+      const restoreProvider = new OcuProvider({ command: process.env.AX_COMPUTER_OCU_COMMAND })
+      try {
+        await restoreTextEdit(restoreProvider)
+      } finally {
+        await restoreProvider.dispose().catch(() => {})
+      }
+    } catch {
+      // best-effort; ignore restore failures
+    }
+
+    await new Promise((r) => setTimeout(r, 750))
+
+    const axnativeRun: AbSuiteRunResult = await runAbSuite(
+      async () => new AXNativeProvider({ command: process.env.AX_COMPUTER_AXNATIVE_COMMAND }),
+      { app: liveApp },
+    )
+
+    const report = compareAbRuns(ocuRun, axnativeRun)
+    // eslint-disable-next-line no-console
+    console.log("\n" + formatAbReport(report))
+
+    expect(report.rows).toHaveLength(6)
+    expect(report.primary.name).toBe("ocu")
+    expect(report.secondary.name).toBe("axnative")
   })
 })

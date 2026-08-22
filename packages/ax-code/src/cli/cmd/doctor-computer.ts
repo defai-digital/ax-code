@@ -1,11 +1,16 @@
-import { CuaProvider, OcuProvider, probeProvider } from "@ax-code/computer"
+import fs from "node:fs"
+import { AXNativeProvider, CuaProvider, OcuProvider, probeProvider } from "@ax-code/computer"
 import type { ComputerUseProvider, ProbeReport } from "@ax-code/computer"
 import { Computer } from "@/computer/computer"
 import type { Config } from "@/config/config"
 import { toErrorMessage } from "@/util/error-message"
 import type { DoctorCheck } from "./doctor-health"
 
-const INSTALL_HINTS = { cua: "cua-driver", ocu: "open-computer-use" } as const
+const INSTALL_HINTS = {
+  cua: "cua-driver",
+  ocu: "open-computer-use",
+  axnative: "ax-computer-driver (build with `pnpm --dir packages/ax-computer run build:native`)",
+} as const
 
 /**
  * Computer-use preflight: when `computer.provider` is configured, spawn the
@@ -26,16 +31,36 @@ export async function getComputerUseCheck(
   }
 
   const platform = input.platform ?? process.platform
-  if (resolved.provider === "ocu" && platform !== "darwin") {
-    return { name, status: "warn", detail: "OCU is macOS-only; use provider cua on this platform" }
+  if ((resolved.provider === "ocu" || resolved.provider === "axnative") && platform !== "darwin") {
+    const label = resolved.provider === "ocu" ? "OCU" : "ax-computer-driver"
+    return { name, status: "warn", detail: `${label} is macOS-only; use provider cua on this platform` }
   }
 
   const command = `${resolved.command} ${resolved.args.join(" ")}`
+
+  // axnative resolves to a built binary path when one exists; fail fast with a
+  // build hint when a configured/env path points at a missing binary instead
+  // of waiting for the spawn to fail inside the probe.
+  if (resolved.provider === "axnative" && resolved.command.includes("/") && !fs.existsSync(resolved.command)) {
+    return {
+      name,
+      status: "fail",
+      detail:
+        `provider axnative binary missing at "${resolved.command}". ` +
+        `Build it with \`pnpm --dir packages/ax-computer run build:native\` or override with ${resolved.env} / computer.command.`,
+    }
+  }
+
   const probe = input.probe ?? probeProvider
 
   try {
     const options = { command: resolved.command, args: resolved.args }
-    const provider = resolved.provider === "ocu" ? new OcuProvider(options) : new CuaProvider(options)
+    const provider =
+      resolved.provider === "cua"
+        ? new CuaProvider(options)
+        : resolved.provider === "ocu"
+          ? new OcuProvider(options)
+          : new AXNativeProvider(options)
     const report = await probe(provider)
     if (report.ok) {
       let detail = `provider ${resolved.provider} via ${command} — handshake ok in ${report.latencyMs}ms, ${report.apps ?? 0} apps visible`

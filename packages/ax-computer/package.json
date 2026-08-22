@@ -10,7 +10,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:native": "swift build --package-path native/ax-computer-driver -c release",
+    "build:native:debug": "swift build --package-path native/ax-computer-driver"
   },
   "dependencies": {
     "@trycua/cua-driver": "catalog:"

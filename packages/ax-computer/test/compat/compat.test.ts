@@ -3,6 +3,7 @@ import type { ActionResult, ComputerAction } from "../../src/action"
 import type { ComputerUseProvider, ObserveScope, ProviderCapabilities } from "../../src/provider"
 import { CuaProvider } from "../../src/providers/cua"
 import { OcuProvider } from "../../src/providers/ocu"
+import { AXNativeProvider } from "../../src/providers/axnative"
 import type { AppInfo, ComputerObservation, WindowInfo } from "../../src/types"
 import { runCompatSuite } from "./suite"
 import { PNG_BASE64 } from "../fixtures"
@@ -234,6 +235,18 @@ describe.skipIf(!live)("compat suite: live cua", () => {
   test("CU-001..CU-010 all pass", { timeout: 180_000 }, async () => {
     const results = await runCompatSuite(
       async () => new CuaProvider({ command: process.env.AX_COMPUTER_CUA_COMMAND }),
+      {
+        app: liveApp,
+      },
+    )
+    expectAllPass(results)
+  })
+})
+
+describe.skipIf(!live)("compat suite: live axnative", () => {
+  test("CU-001..CU-010 all pass", { timeout: 180_000 }, async () => {
+    const results = await runCompatSuite(
+      async () => new AXNativeProvider({ command: process.env.AX_COMPUTER_AXNATIVE_COMMAND }),
       {
         app: liveApp,
       },
