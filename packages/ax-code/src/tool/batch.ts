@@ -1,6 +1,5 @@
 import z from "zod"
 import { Tool } from "./tool"
-import { ProviderID, ModelID } from "../provider/schema"
 import DESCRIPTION from "./batch.txt"
 import { toError, toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
@@ -109,13 +108,9 @@ export const BatchTool = Tool.define("batch", async () => {
 
       const toolCalls = params.tool_calls.slice(0, 25)
       const discardedCalls = params.tool_calls.slice(25)
-
-      const { ToolRegistry } = await import("./registry")
-      const availableTools = await ToolRegistry.tools({
-        modelID: ctx.extra?.model?.api?.id ? ModelID.make(ctx.extra.model.api.id) : ModelID.make(""),
-        providerID: ctx.extra?.model?.providerID ?? ProviderID.make(""),
-      })
-      const toolMap = new Map(availableTools.map((t) => [t.id, t]))
+      const dispatcher = ctx.extra?.toolDispatcher as Tool.Dispatcher | undefined
+      if (!dispatcher) throw new Error("Batch tool dispatcher is unavailable for this execution context")
+      const availableTools = new Set(dispatcher.ids)
 
       // Pre-generate all PartIDs in declaration order BEFORE the
       // parallel execution. Generating `PartID.ascending()` inside
@@ -136,14 +131,12 @@ export const BatchTool = Tool.define("batch", async () => {
             )
           }
 
-          const tool = toolMap.get(call.tool)
-          if (!tool) {
-            const availableToolsList = Array.from(toolMap.keys()).filter((name) => !FILTERED_FROM_SUGGESTIONS.has(name))
+          if (!availableTools.has(call.tool)) {
+            const availableToolsList = [...availableTools].filter((name) => !FILTERED_FROM_SUGGESTIONS.has(name))
             throw new Error(
               `Tool '${call.tool}' not in registry. External tools (MCP, environment) cannot be batched - call them directly. Available tools: ${availableToolsList.join(", ")}`,
             )
           }
-          const validatedParams = tool.parameters.parse(call.parameters)
 
           await Session.updatePart({
             id: partID,
@@ -166,19 +159,13 @@ export const BatchTool = Tool.define("batch", async () => {
             parent: ctx.abort,
             timeoutMs: TOOL_TIMEOUT,
             run: (abort) =>
-              tool.execute(validatedParams, {
-                ...ctx,
+              dispatcher.execute({
+                tool: call.tool,
+                parameters: call.parameters,
                 callID: partID,
                 abort,
               }),
           })
-          const attachments = result.attachments?.map((attachment) => ({
-            ...attachment,
-            id: PartID.ascending(),
-            sessionID: ctx.sessionID,
-            messageID: ctx.messageID,
-          }))
-
           await Session.updatePart({
             id: partID,
             messageID: ctx.messageID,
@@ -192,7 +179,7 @@ export const BatchTool = Tool.define("batch", async () => {
               output: result.output,
               title: result.title,
               metadata: result.metadata,
-              attachments,
+              attachments: result.attachments,
               time: {
                 start: callStartTime,
                 end: Date.now(),

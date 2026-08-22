@@ -33547,6 +33547,49 @@
         },
         "status": "deprecated"
       },
+      "claude-fable-5@default": {
+        "id": "claude-fable-5@default",
+        "name": "Claude Fable 5",
+        "description": "Claude model for creative writing, analysis, and controlled agent workflows",
+        "family": "claude-fable",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-06-09",
+        "last_updated": "2026-06-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/google-vertex/anthropic"
+        }
+      },
       "gemini-3-flash-preview": {
         "id": "gemini-3-flash-preview",
         "name": "Gemini 3 Flash Preview",
@@ -43241,6 +43284,46 @@
           "output": 64000
         },
         "status": "deprecated"
+      },
+      "claude-fable-5@default": {
+        "id": "claude-fable-5@default",
+        "name": "Claude Fable 5",
+        "description": "Claude model for creative writing, analysis, and controlled agent workflows",
+        "family": "claude-fable",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-06-09",
+        "last_updated": "2026-06-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
       },
       "claude-opus-4-5@20251101": {
         "id": "claude-opus-4-5@20251101",
@@ -78636,7 +78719,7 @@
         "name": "Qwen3.5 35B A3B",
         "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
         "family": "qwen",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "reasoning_options": [
           {
@@ -78650,7 +78733,8 @@
         "last_updated": "2026-02-23",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -78658,8 +78742,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "output": 32768
+          "context": 256000,
+          "output": 64000
         }
       },
       "qwen/qwen3-vl-235b-a22b-thinking": {
@@ -79322,7 +79406,7 @@
         "name": "Qwen3.5 122B A10B",
         "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
         "family": "qwen",
-        "attachment": true,
+        "attachment": false,
         "reasoning": true,
         "reasoning_options": [
           {
@@ -79336,8 +79420,7 @@
         "last_updated": "2026-02-23",
         "modalities": {
           "input": [
-            "text",
-            "image"
+            "text"
           ],
           "output": [
             "text"
@@ -79345,8 +79428,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 256000,
-          "output": 64000
+          "context": 131072,
+          "output": 32768
         }
       },
       "qwen/qwen3-coder-plus": {
@@ -130438,16 +130521,6 @@
             "type": "toggle"
           },
           {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high",
-              "max"
-            ]
-          },
-          {
             "type": "budget_tokens",
             "min": 1,
             "max": 393216
@@ -130620,6 +130693,11 @@
               "high",
               "max"
             ]
+          },
+          {
+            "type": "budget_tokens",
+            "min": 1,
+            "max": 393216
           }
         ],
         "tool_call": true,
@@ -130651,16 +130729,6 @@
         "reasoning_options": [
           {
             "type": "toggle"
-          },
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high",
-              "max"
-            ]
           },
           {
             "type": "budget_tokens",
@@ -132049,16 +132117,6 @@
         "reasoning_options": [
           {
             "type": "toggle"
-          },
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high",
-              "max"
-            ]
           }
         ],
         "tool_call": true,
@@ -172373,7 +172431,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 16384
+          "output": 262144
         }
       },
       "qwen/qwen3.8-27b": {

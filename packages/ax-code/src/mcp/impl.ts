@@ -200,11 +200,15 @@ export namespace MCP {
   export type Status = z.infer<typeof Status>
 
   // Register notification handlers for MCP client
-  function registerNotificationHandlers(client: MCPClient, serverName: string) {
-    client.setNotificationHandler(ToolListChangedNotificationSchema, async () => {
-      log.info("tools list changed notification received", { server: serverName })
-      Bus.publishDetached(ToolsChanged, { server: serverName })
-    })
+  function registerNotificationHandlers(client: MCPClient, serverName: string, owner: McpState) {
+    client.setNotificationHandler(
+      ToolListChangedNotificationSchema,
+      Instance.bind(async () => {
+        if (owner.disposed || owner.clients[serverName] !== client) return
+        log.info("tools list changed notification received", { server: serverName })
+        Bus.publishDetached(ToolsChanged, { server: serverName })
+      }),
+    )
   }
 
   // Store transports for OAuth servers to allow finishing auth
@@ -312,82 +316,119 @@ export namespace MCP {
     clients: Record<string, MCPClient>
     /** Set true in the dispose hook so late connect completions drop clients. */
     disposed: boolean
+    tools: {
+      cached?: Record<string, ConvertedMcpTool>
+      pending?: Promise<Record<string, ConvertedMcpTool>>
+      unsubscribe?: () => void
+      generation: number
+    }
+    connectQueue: KeyedSerialQueue
+    ready: Promise<void>
   }
 
-  const state = Instance.state(
-    async (): Promise<McpState> => {
-      const cfg = await Config.get()
-      const config = cfg.mcp ?? {}
-      const entries = await Config.mcpEntries()
+  const rawState = Instance.state(
+    (): McpState => {
       const clients: Record<string, MCPClient> = {}
       const status: Record<string, Status> = {}
-      const next: McpState = { status, clients, disposed: false }
+      const next: McpState = {
+        status,
+        clients,
+        disposed: false,
+        tools: { generation: 0 },
+        connectQueue: new KeyedSerialQueue(),
+        ready: Promise.resolve(),
+      }
 
-      await Promise.all(
-        Object.entries(config).map(async ([key, mcp]) => {
-          if (!isConfigured(mcp)) {
-            log.error("Ignoring MCP config entry without type", { key })
-            return
-          }
-
-          // If disabled by config, mark as disabled without trying to connect
-          if (mcp.enabled === false) {
-            status[key] = { status: "disabled" }
-            return
-          }
-
-          const trust = await McpTrust.decision(key, mcp, entries[key]?.source ?? Config.trustedMcpSource("unknown"))
-          if (!trust.trusted) {
-            status[key] = needsTrustStatus(trust)
-            return
-          }
-
-          // Log MCP creation failures and record a "failed" status so
-          // the user sees why a server isn't connecting. Previously
-          // this swallowed all errors into `undefined`, leaving
-          // misconfigured MCP servers silently missing from the status
-          // map with no feedback at all.
-          const result = await create(key, mcp).catch((err) => {
-            log.error("MCP server creation failed", { server: key, err })
-            status[key] = {
-              status: "failed" as const,
-              error: toErrorMessage(err),
+      next.ready = (async () => {
+        const cfg = await Config.get()
+        const config = cfg.mcp ?? {}
+        const entries = await Config.mcpEntries()
+        await Promise.all(
+          Object.entries(config).map(async ([key, mcp]) => {
+            if (!isConfigured(mcp)) {
+              log.error("Ignoring MCP config entry without type", { key })
+              return
             }
-            return undefined
-          })
-          if (!result) return
 
-          // Instance may have disposed while we were connecting — drop the
-          // client instead of registering it on a torn-down instance (STAB-05).
-          if (next.disposed) {
+            // If disabled by config, mark as disabled without trying to connect
+            if (mcp.enabled === false) {
+              status[key] = { status: "disabled" }
+              return
+            }
+
+            const trust = await McpTrust.decision(key, mcp, entries[key]?.source ?? Config.trustedMcpSource("unknown"))
+            if (!trust.trusted) {
+              if (!next.disposed) status[key] = needsTrustStatus(trust)
+              return
+            }
+
+            // Log MCP creation failures and record a "failed" status so the
+            // user sees why a server isn't connecting.
+            const result = await create(key, mcp, next).catch((err) => {
+              log.error("MCP server creation failed", { server: key, err })
+              if (!next.disposed) {
+                status[key] = {
+                  status: "failed" as const,
+                  error: toErrorMessage(err),
+                }
+              }
+              return undefined
+            })
+            if (!result) return
+
+            // The synchronous state shell lets disposal mark `disposed` even
+            // while startup connection work is still pending.
+            if (next.disposed) {
+              if (result.mcpClient) {
+                await closeIfPossible(result.mcpClient, key, "discard after instance disposal")
+              }
+              return
+            }
+
+            status[key] = result.status
+
             if (result.mcpClient) {
-              await closeIfPossible(result.mcpClient, key, "discard after instance disposal")
+              clients[key] = result.mcpClient
+              registerClientOnClose(key, result.mcpClient, next)
             }
-            return
-          }
-
-          status[key] = result.status
-
-          if (result.mcpClient) {
-            clients[key] = result.mcpClient
-            registerClientOnClose(key, result.mcpClient)
-          }
-        }),
-      )
+          }),
+        )
+      })()
       return next
     },
     async (mcpState) => {
       mcpState.disposed = true
+      mcpState.tools.unsubscribe?.()
+      mcpState.tools.unsubscribe = undefined
+      invalidateTools(mcpState)
+      mcpState.connectQueue.close()
+      // Close already-established clients before waiting for startup or
+      // admitted queue work. Those operations may take up to the MCP connect
+      // timeout, while State disposal has a much smaller per-entry budget.
+      // Late clients still observe `disposed` and are closed by their owner
+      // callback; the second pass below is a final safety net.
+      const establishedClients = Object.entries(mcpState.clients)
+      for (const [mcpName, client] of establishedClients) {
+        if (mcpState.clients[mcpName] === client) delete mcpState.clients[mcpName]
+      }
+      await Promise.all(
+        establishedClients.map(([mcpName, client]) =>
+          closeIfPossible(client, mcpName, "instance shutdown before queue drain"),
+        ),
+      )
+      await mcpState.ready.catch((error) => {
+        log.debug("MCP startup settled with an error during instance shutdown", { error: toErrorMessage(error) })
+      })
+      // clear() alone does not stop already-started or chained queue work.
+      // Wait for those owner-bound callbacks to observe `disposed` and settle
+      // before closing the final client set.
+      await mcpState.connectQueue.drain()
+      mcpState.connectQueue.clear()
       await Promise.all(
         Object.entries(mcpState.clients).map(([mcpName, client]) =>
           closeIfPossible(client, mcpName, "instance shutdown"),
         ),
       )
-      toolsCacheUnsub?.()
-      toolsCacheUnsub = undefined
-      toolsCacheSubscribed = false
-      cachedTools = undefined
-      toolsPromise = undefined
       // The callback listener is process-global and otherwise keeps one-shot
       // commands alive after their instance has been disposed. Do not disrupt
       // an authorization flow owned by another concurrent instance.
@@ -398,9 +439,25 @@ export namespace MCP {
       // Self-cleaning via `finally` would still happen, but explicit
       // clear keeps shutdown deterministic and stops confusing post-
       // shutdown error logs from late `connectImpl` writes.
-      connectQueue.clear()
     },
   )
+
+  async function state(): Promise<McpState> {
+    const current = rawState()
+    try {
+      await current.ready
+      return current
+    } catch (error) {
+      await rawState.invalidate()
+      throw error
+    }
+  }
+
+  function invalidateTools(mcpState: McpState) {
+    mcpState.tools.cached = undefined
+    mcpState.tools.pending = undefined
+    mcpState.tools.generation++
+  }
 
   function createClient() {
     return new Client({
@@ -419,24 +476,19 @@ export namespace MCP {
   // must be wired on EVERY path that stores a client — both the lazy startup
   // bulk-connect in state() and the explicit connect() — otherwise servers
   // connected at startup (the common case) would stall on reconnect.
-  function registerClientOnClose(name: string, client: MCPClient) {
+  function registerClientOnClose(name: string, client: MCPClient, owner: McpState) {
+    const s = owner
     client.onclose = Instance.bind(() => {
       void Promise.resolve()
         .then(() => {
-          // Only update state if instance is still active.
-          // After disposal, state() would re-initialize disposed state,
-          // creating zombie entries.
-          try {
-            return state()
-          } catch {
-            return undefined
-          }
-        })
-        .then((s) => {
-          if (!s) return
+          // Capture the owning state instead of calling state() here. A late
+          // close callback can fire after Instance disposal; resolving state
+          // again would create a zombie MCP state for the disposed directory.
+          if (s.disposed) return
           if (s.clients[name] === client) {
             delete s.clients[name]
             s.status[name] = { status: "failed", error: "Server closed the connection" }
+            invalidateTools(s)
           }
         })
         .catch((error) => {
@@ -485,18 +537,22 @@ export namespace MCP {
   }
 
   export async function add(name: string, mcp: Config.Mcp) {
-    return withConnectLock(name, "MCP add failed", async () => {
-      const s = await state()
-      const result = await create(name, mcp).catch((error) => {
+    return withConnectLock(name, "MCP add failed", async (s) => {
+      const result = await create(name, mcp, s).catch((error) => {
         return { error }
       })
+      if (s.disposed) {
+        if (!("error" in result) && result.mcpClient) {
+          await closeIfPossible(result.mcpClient, name, "discard add after instance disposal")
+        }
+        return { status: s.status }
+      }
       if ("error" in result) {
         const existingClient = s.clients[name]
         delete s.clients[name]
         await closeIfPossible(existingClient, name, "replacement creation failed")
         s.status[name] = { status: "failed", error: NamedError.message(result.error) }
-        cachedTools = undefined
-        toolsCacheGeneration++
+        invalidateTools(s)
         throw result.error
       }
       if (!result.mcpClient) {
@@ -504,8 +560,7 @@ export namespace MCP {
         delete s.clients[name]
         await closeIfPossible(existingClient, name, "replacement did not connect")
         s.status[name] = result.status
-        cachedTools = undefined
-        toolsCacheGeneration++
+        invalidateTools(s)
         return {
           status: s.status,
         }
@@ -515,11 +570,14 @@ export namespace MCP {
       if (existingClient) {
         await closeIfPossible(existingClient, name, "replacing existing client")
       }
+      if (s.disposed) {
+        await closeIfPossible(result.mcpClient, name, "discard replacement after instance disposal")
+        return { status: s.status }
+      }
       s.clients[name] = result.mcpClient
-      registerClientOnClose(name, result.mcpClient)
+      registerClientOnClose(name, result.mcpClient, s)
       s.status[name] = result.status
-      cachedTools = undefined
-      toolsCacheGeneration++
+      invalidateTools(s)
 
       return {
         status: s.status,
@@ -527,7 +585,7 @@ export namespace MCP {
     })
   }
 
-  async function create(key: string, mcp: Config.Mcp) {
+  async function create(key: string, mcp: Config.Mcp, owner: McpState) {
     if (mcp.enabled === false) {
       log.info("mcp server disabled", { key })
       return {
@@ -604,7 +662,7 @@ export namespace MCP {
             client = createClient()
             await withTimeout(client.connect(transport), connectTimeout)
             rememberClientTransport(client, transport)
-            registerNotificationHandlers(client, key)
+            registerNotificationHandlers(client, key, owner)
             mcpClient = client
             log.info("connected", { key, transport: name })
             status = { status: "connected" }
@@ -613,7 +671,11 @@ export namespace MCP {
             // clients from leaking sockets (notably SSE when StreamableHTTP succeeds).
             for (let j = i + 1; j < transports.length; j++) {
               await transports[j].transport.close?.().catch((e) => {
-                log.debug("failed to close unused transport", { key, transport: transports[j].name, error: toErrorMessage(e) })
+                log.debug("failed to close unused transport", {
+                  key,
+                  transport: transports[j].name,
+                  error: toErrorMessage(e),
+                })
               })
             }
             break
@@ -641,7 +703,11 @@ export namespace MCP {
                   await closeIfPossible(client, key, `connect attempt failed (${name})`)
                 }
                 await transport.close?.().catch((e) => {
-                  log.debug("failed to close transport after registration rejection", { key, transport: name, error: toErrorMessage(e) })
+                  log.debug("failed to close transport after registration rejection", {
+                    key,
+                    transport: name,
+                    error: toErrorMessage(e),
+                  })
                 })
                 status = {
                   status: "needs_client_registration" as const,
@@ -664,7 +730,11 @@ export namespace MCP {
                 // close the *other* untried candidates.
                 for (let j = i + 1; j < transports.length; j++) {
                   await transports[j].transport.close?.().catch((e) => {
-                    log.debug("failed to close unused transport during auth flow", { key, transport: transports[j].name, error: toErrorMessage(e) })
+                    log.debug("failed to close unused transport during auth flow", {
+                      key,
+                      transport: transports[j].name,
+                      error: toErrorMessage(e),
+                    })
                   })
                 }
                 await closePendingOAuthTransport(key)
@@ -688,7 +758,11 @@ export namespace MCP {
               await closeIfPossible(client, key, `connect attempt failed (${name})`)
             }
             await transport.close?.().catch((e) => {
-              log.debug("failed to close transport after connection failure", { key, transport: name, error: toErrorMessage(e) })
+              log.debug("failed to close transport after connection failure", {
+                key,
+                transport: name,
+                error: toErrorMessage(e),
+              })
             })
             log.debug("transport connection failed", {
               key,
@@ -746,7 +820,7 @@ export namespace MCP {
         const client = createClient()
         await withTimeout(client.connect(transport), connectTimeout)
         rememberClientTransport(client, transport)
-        registerNotificationHandlers(client, key)
+        registerNotificationHandlers(client, key, owner)
         const close = client.close.bind(client)
         client.close = async () => {
           cleanupStderr()
@@ -840,9 +914,13 @@ export namespace MCP {
   // reference is silently dropped without `.close()`, leaking the
   // child process. The lock scopes to `name` so different servers
   // still connect in parallel.
-  const connectQueue = new KeyedSerialQueue()
-  async function withConnectLock<T>(name: string, errorLabel: string, fn: () => Promise<T>) {
-    const next = connectQueue.run(name, fn)
+  async function withConnectLock<T>(name: string, errorLabel: string, fn: (owner: McpState) => Promise<T>) {
+    const s = await state()
+    if (s.disposed) throw new Error(`MCP instance was disposed before ${name} operation was queued`)
+    const next = s.connectQueue.run(name, async () => {
+      if (s.disposed) throw new Error(`MCP instance was disposed before ${name} operation started`)
+      return fn(s)
+    })
     next.catch((err) => {
       log.warn(errorLabel, {
         name,
@@ -853,12 +931,11 @@ export namespace MCP {
     return next
   }
   export async function connect(name: string) {
-    return withConnectLock(name, "MCP connect failed", () => connectImpl(name))
+    return withConnectLock(name, "MCP connect failed", (s) => connectImpl(name, s))
   }
 
-  async function connectImpl(name: string) {
-    cachedTools = undefined
-    toolsCacheGeneration++
+  async function connectImpl(name: string, s: McpState) {
+    invalidateTools(s)
     const cfg = await Config.get()
     const config = cfg.mcp ?? {}
     const mcp = config[name]
@@ -874,7 +951,6 @@ export namespace MCP {
 
     const trust = await trustDecision(name, mcp)
     if (!trust.trusted) {
-      const s = await state()
       s.status[name] = needsTrustStatus(trust)
       if (s.clients[name]) {
         await closeIfPossible(s.clients[name], name, "trust revoked")
@@ -883,11 +959,10 @@ export namespace MCP {
       return
     }
 
-    const s = await state()
     if (s.disposed) return
     if (s.status[name]?.status === "connected" && s.clients[name]) return
 
-    const result = await create(name, { ...mcp, enabled: true }).catch(async (error) => {
+    const result = await create(name, { ...mcp, enabled: true }, s).catch(async (error) => {
       if (s.disposed) throw error
       const existingClient = s.clients[name]
       delete s.clients[name]
@@ -923,7 +998,7 @@ export namespace MCP {
         await closeIfPossible(existingClient, name, "disconnecting existing client")
       }
       s.clients[name] = result.mcpClient
-      registerClientOnClose(name, result.mcpClient)
+      registerClientOnClose(name, result.mcpClient, s)
     } else {
       const existingClient = s.clients[name]
       delete s.clients[name]
@@ -932,10 +1007,8 @@ export namespace MCP {
   }
 
   export async function disconnect(name: string) {
-    return withConnectLock(name, "MCP disconnect failed", async () => {
-      cachedTools = undefined
-      toolsCacheGeneration++
-      const s = await state()
+    return withConnectLock(name, "MCP disconnect failed", async (s) => {
+      invalidateTools(s)
       const client = s.clients[name]
       if (client) {
         await closeIfPossible(client, name, "disconnecting")
@@ -964,10 +1037,8 @@ export namespace MCP {
       throw new Error(`MCP server not found: ${name}`)
     }
     const decision = await McpTrust.untrust(name, mcp)
-    await withConnectLock(name, "MCP untrust failed", async () => {
-      cachedTools = undefined
-      toolsCacheGeneration++
-      const s = await state()
+    await withConnectLock(name, "MCP untrust failed", async (s) => {
+      invalidateTools(s)
       const client = s.clients[name]
       if (client) {
         await closeIfPossible(client, name, "untrusting")
@@ -979,41 +1050,32 @@ export namespace MCP {
     return status()
   }
 
-  let cachedTools: Record<string, ConvertedMcpTool> | undefined
-  let toolsPromise: Promise<Record<string, ConvertedMcpTool>> | undefined
-  let toolsCacheSubscribed = false
-  let toolsCacheUnsub: (() => void) | undefined
-  let toolsCacheGeneration = 0
-
   export async function tools() {
-    if (!toolsCacheSubscribed) {
-      toolsCacheSubscribed = true
-      toolsCacheUnsub = Bus.subscribe(ToolsChanged, () => {
+    const s = await state()
+    if (!s.tools.unsubscribe) {
+      s.tools.unsubscribe = Bus.subscribe(ToolsChanged, () => {
         // Always invalidate. The previous TTL guard suppressed
         // server-emitted `tools/list_changed` notifications inside a 10s
         // window, leaving the LLM using stale tool definitions until the
-        // TTL elapsed. Burst protection is provided by the `toolsPromise`
+        // TTL elapsed. Burst protection is provided by the pending-promise
         // coalescing below — concurrent callers share a single fetch.
-        cachedTools = undefined
-        toolsPromise = undefined
-        toolsCacheGeneration++
+        invalidateTools(s)
       })
     }
-    if (cachedTools) return cachedTools
+    if (s.tools.cached) return s.tools.cached
     // Coalesce concurrent callers onto a single in-flight computation.
     // Without this, two simultaneous `tools()` calls would each do a
     // full listTools() roundtrip, and worse: if a client died during
     // the async window, one caller's result could bake a dead client
     // reference into the shared cache while the other completed a
     // clean fetch.
-    if (toolsPromise) return toolsPromise
-    const generation = toolsCacheGeneration
-    toolsPromise = (async () => {
+    if (s.tools.pending) return s.tools.pending
+    const generation = s.tools.generation
+    const promise = (async () => {
       const result: Record<string, ConvertedMcpTool> = {}
-      const s = await state()
       const cfg = await Config.get()
       const config = cfg.mcp ?? {}
-      const clientsSnapshot = await clients()
+      const clientsSnapshot = { ...s.clients }
       const defaultTimeout = cfg.experimental?.mcp_timeout
 
       const connectedClients = Object.entries(clientsSnapshot).filter(
@@ -1037,15 +1099,19 @@ export namespace MCP {
         }),
       )
 
+      if (s.disposed) return {}
+
       // Apply state mutations after all concurrent reads complete (BUG-021)
       for (const { clientName, client, toolsResult } of toolsResults) {
         if (toolsResult && "_failed" in toolsResult) {
+          // A reconnect may have replaced this snapshot while listTools was
+          // pending. Never let the stale request downgrade or close the new
+          // connected client.
+          if (s.clients[clientName] !== client) continue
           if (s.status[clientName]?.status !== "disabled") {
             s.status[clientName] = { status: "failed" as const, error: (toolsResult as { error: string }).error }
           }
-          if (s.clients[clientName] === client) {
-            delete s.clients[clientName]
-          }
+          delete s.clients[clientName]
           await closeIfPossible(client, clientName, "listTools failed")
         }
       }
@@ -1066,6 +1132,7 @@ export namespace MCP {
         conversions.push(
           convertMcpTool(mcpTool, client, timeout)
             .then((tool) => {
+              if (s.disposed || s.clients[clientName] !== client) return
               result[key] = tool
             })
             .catch((e) => {
@@ -1075,25 +1142,27 @@ export namespace MCP {
                 tool: mcpTool.name,
                 error,
               })
-              s.status[clientName] = {
-                status: "failed",
-                error: `Failed to convert MCP tool ${mcpTool.name}: ${error}`,
+              if (!s.disposed && s.clients[clientName] === client) {
+                s.status[clientName] = {
+                  status: "failed",
+                  error: `Failed to convert MCP tool ${mcpTool.name}: ${error}`,
+                }
               }
             }),
         )
       }
       await Promise.all(conversions)
       // Only cache if no invalidation occurred during computation
-      if (toolsCacheGeneration === generation) {
-        cachedTools = result
+      if (s.tools.generation === generation) {
+        s.tools.cached = result
       }
       return result
     })()
-    const currentPromise = toolsPromise
+    s.tools.pending = promise
     try {
-      return await currentPromise
+      return await promise
     } finally {
-      if (toolsPromise === currentPromise) toolsPromise = undefined
+      if (s.tools.pending === promise) s.tools.pending = undefined
     }
   }
 

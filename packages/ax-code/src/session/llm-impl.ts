@@ -43,6 +43,7 @@ import { attachThinkTagStream } from "@/provider/think-tags"
 import { isKnownCliProviderID } from "@/provider/cli/ids"
 
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
+import { RequestProvenance } from "./request-provenance"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -68,7 +69,7 @@ export namespace LLM {
 
   export type StreamInput = {
     user: MessageV2.User
-    sessionID: string
+    sessionID: MessageV2.User["sessionID"]
     model: Provider.Model
     agent: Agent.Info
     permission?: Permission.Ruleset
@@ -86,6 +87,11 @@ export namespace LLM {
      * multi-minute full max_tokens windows when the model ignores them.
      */
     maxOutputTokens?: number
+    /** Replay correlation for the final AX/AI-SDK pre-adapter request boundary. */
+    replay?: {
+      messageID?: string
+      stepIndex?: number
+    }
   }
 
   export type StreamOutput = StreamTextResult<ToolSet, any>
@@ -337,6 +343,7 @@ export namespace LLM {
       },
     )
     const paramsOptions = ProviderTransform.sanitizeOptions(input.model, params.options)
+    const providerOptions = ProviderTransform.providerOptions(input.model, paramsOptions)
 
     const { headers } = await Plugin.trigger(
       "chat.headers",
@@ -364,16 +371,6 @@ export namespace LLM {
     // thousands of tokens to a turn whose sole purpose is to synthesize an answer.
     const toolsEnabled = supportsToolCalls && input.toolChoice !== "none"
     const tools = toolsEnabled ? await resolveTools(input, cfg) : {}
-    const pacingReservation = await applySuperLongPacing({
-      enabled: superLongEnabled,
-      providerID: input.model.providerID,
-      modelID: input.model.id,
-      sessionID: input.sessionID,
-      small: input.small,
-      abort: input.abort,
-      baseURL: typeof provider.options?.baseURL === "string" ? provider.options.baseURL : undefined,
-      pacingGraceMs: SuperLongPolicy.pacingGraceMs(SuperLongPolicy.fromConfig(cfg.super_long)),
-    })
 
     // LiteLLM and some Anthropic proxies require the tools parameter to be present
     // when message history contains tool calls, even if no tools are being used.
@@ -394,6 +391,63 @@ export namespace LLM {
         execute: async () => ({ output: "", title: "", metadata: {} }),
       })
     }
+    const activeToolNames = supportsToolCalls ? Object.keys(tools).filter((name) => name !== "invalid") : []
+
+    if (input.replay && Recorder.active(input.sessionID)) {
+      const baseEvent = {
+        type: "llm.request" as const,
+        sessionID: input.sessionID,
+        messageID: input.replay.messageID,
+        stepIndex: input.replay.stepIndex,
+        model: providerModelKey({ providerID: input.model.providerID, modelID: input.model.id }),
+        messageCount: input.messages.length,
+        temperature: params.temperature,
+      }
+      try {
+        const provenance = await RequestProvenance.build({
+          providerID: input.model.providerID,
+          modelID: input.model.id,
+          systemMessages,
+          messages,
+          tools,
+          activeToolNames,
+          options: {
+            temperature: params.temperature,
+            topP: params.topP,
+            topK: params.topK,
+            toolChoice: supportsToolCalls ? input.toolChoice : "none",
+            maxOutputTokens,
+            retries: input.retries ?? 0,
+            reasoningDepth: reasoningPolicyDecision.depth,
+            variant: input.user.variant,
+            providerOptions,
+          },
+        })
+        Recorder.emit({
+          ...baseEvent,
+          ...provenance,
+        })
+      } catch (error) {
+        // Evidence generation is best-effort and must not block an otherwise
+        // valid request. The boundary intentionally excludes headers and raw
+        // content from the persisted event.
+        // Do not log the raw exception/cause: schema resolvers and proxy
+        // getters can embed request content in their error text.
+        l.warn("failed to build request provenance", { errorCode: "manifest_unavailable" })
+        Recorder.emit({ ...baseEvent, provenanceErrorCode: "manifest_unavailable" })
+      }
+    }
+
+    const pacingReservation = await applySuperLongPacing({
+      enabled: superLongEnabled,
+      providerID: input.model.providerID,
+      modelID: input.model.id,
+      sessionID: input.sessionID,
+      small: input.small,
+      abort: input.abort,
+      baseURL: typeof provider.options?.baseURL === "string" ? provider.options.baseURL : undefined,
+      pacingGraceMs: SuperLongPolicy.pacingGraceMs(SuperLongPolicy.fromConfig(cfg.super_long)),
+    })
 
     let requestHeaders: Record<string, string> = {
       ...(input.model.providerID.startsWith("ax-code")
@@ -451,8 +505,8 @@ export namespace LLM {
         temperature: params.temperature,
         topP: params.topP,
         topK: params.topK,
-        providerOptions: ProviderTransform.providerOptions(input.model, paramsOptions),
-        activeTools: supportsToolCalls ? Object.keys(tools).filter((x) => x !== "invalid") : [],
+        providerOptions,
+        activeTools: activeToolNames,
         tools,
         toolChoice: supportsToolCalls ? input.toolChoice : "none",
         maxOutputTokens,

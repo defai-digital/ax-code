@@ -96,6 +96,7 @@ export async function work<T>(concurrency: number, items: T[], fn: (item: T) => 
 // in-flight deduper: every submitted function still runs.
 export class KeyedSerialQueue {
   private tails = new Map<string, Promise<unknown>>()
+  private accepting = true
 
   size(): number {
     return this.tails.size
@@ -108,7 +109,20 @@ export class KeyedSerialQueue {
     this.tails.clear()
   }
 
+  /** Permanently stop accepting work while allowing already-admitted work to drain. */
+  close(): void {
+    this.accepting = false
+  }
+
+  /** Wait until all work submitted so far, including already-chained waiters, settles. */
+  async drain(): Promise<void> {
+    while (this.tails.size > 0) {
+      await Promise.allSettled([...this.tails.values()])
+    }
+  }
+
   run<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    if (!this.accepting) return Promise.reject(new Error("Keyed serial queue is closed"))
     const prev = this.tails.get(key) ?? Promise.resolve()
     const next = prev.then(fn, fn)
     const tail = next.catch(() => undefined)

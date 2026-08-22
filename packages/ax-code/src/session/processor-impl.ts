@@ -30,7 +30,6 @@ import { Recorder } from "@/replay/recorder"
 import { Database } from "@/storage/db"
 import { asRecord } from "@/util/record"
 import { toErrorMessage } from "../util/error-message"
-import { providerModelKey } from "@/provider/model-key"
 import { usageSource } from "@/provider/usage"
 import { AgentOptimizationTrace } from "@/session/agent-optimization-trace"
 import { longAgentProfileForModel } from "@/provider/agent-optimization-profile"
@@ -308,15 +307,13 @@ export namespace SessionProcessor {
               | { type: "reasoning"; text: string }
               | { type: "tool_call"; callID: string; tool: string; input: Record<string, unknown> }
             > = []
-            Recorder.emit({
-              type: "llm.request",
-              sessionID: input.sessionID,
-              messageID: input.assistantMessage.id,
-              model: providerModelKey({ providerID: input.model.providerID, modelID: input.model.id }),
-              messageCount: streamInput.messages.length,
-              stepIndex: attempt,
+            const stream = await LLM.stream({
+              ...streamInput,
+              replay: {
+                messageID: input.assistantMessage.id,
+                stepIndex: attempt,
+              },
             })
-            const stream = await LLM.stream(streamInput)
 
             // Heartbeat: update lastActivityAt periodically during long
             // streaming responses so the TUI doesn't show "no activity"

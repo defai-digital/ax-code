@@ -4,11 +4,16 @@ export const INTERNAL_ONLY_ROOTS = [".internal"] as const
 // Keep this list exact: every other `.internal` file remains local-only.
 export const APPROVED_TRACKED_INTERNAL_FILES = [
   ".internal/adr/ADR-058-ax-code-tui.md",
+  ".internal/adr/ADR-060-instance-scoped-tool-execution.md",
   ".internal/prd/PRD-2026-08-20-ax-code-tui.md",
+  ".internal/prd/PRD-2026-08-21-tool-execution-integrity.md",
   ".internal/reports/planning/ax-code-tui/REFERENCE-REVIEW.md",
   ".internal/reports/planning/ax-code-tui/TECH-SPEC.md",
   ".internal/reports/planning/ax-code-tui/reviews/minimax-m3-review.md",
   ".internal/reports/planning/ax-code-tui/reviews/qwen-3.8-max-qa.md",
+  ".internal/reports/planning/tool-execution-integrity/PHASES.md",
+  ".internal/reports/reviews/2026-08-21-deepseek-harness-selective-adoption-review.md",
+  ".internal/spec/SPEC-2026-08-21-tool-execution-integrity.md",
 ] as const
 
 function normalizeRepositoryPath(file: string) {

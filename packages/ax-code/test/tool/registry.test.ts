@@ -6,6 +6,7 @@ import { Instance } from "../../src/project/instance"
 import { ToolRegistry } from "../../src/tool/registry"
 import { Config } from "../../src/config/config"
 import { ModelID, ProviderID } from "../../src/provider/schema"
+import z from "zod"
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -51,6 +52,159 @@ describe("tool.registry", () => {
     } finally {
       configSpy.mockRestore()
     }
+  })
+
+  test("keeps initialized tool caches isolated between live instances", async () => {
+    const project = (tool: string) =>
+      tmpdir({
+        init: async (dir) => {
+          const toolDir = path.join(dir, ".ax-code", "tool")
+          await fs.mkdir(toolDir, { recursive: true })
+          await fs.writeFile(
+            path.join(toolDir, `${tool}.ts`),
+            [
+              "export default {",
+              `  description: '${tool} tool',`,
+              "  args: {},",
+              `  execute: async () => '${tool}',`,
+              "}",
+              "",
+            ].join("\n"),
+          )
+        },
+      })
+    await using alpha = await project("alpha")
+    await using beta = await project("beta")
+    const model = { providerID: ProviderID.make("test"), modelID: ModelID.make("shared-model") }
+
+    const alphaIDs = await Instance.provide({
+      directory: alpha.path,
+      fn: async () => (await ToolRegistry.tools(model)).map((tool) => tool.id),
+    })
+    const betaIDs = await Instance.provide({
+      directory: beta.path,
+      fn: async () => (await ToolRegistry.tools(model)).map((tool) => tool.id),
+    })
+    const alphaAgain = await Instance.provide({
+      directory: alpha.path,
+      fn: async () => (await ToolRegistry.tools(model)).map((tool) => tool.id),
+    })
+
+    expect(alphaIDs).toContain("alpha")
+    expect(alphaIDs).not.toContain("beta")
+    expect(betaIDs).toContain("beta")
+    expect(betaIDs).not.toContain("alpha")
+    expect(alphaAgain).toContain("alpha")
+    expect(alphaAgain).not.toContain("beta")
+  }, 60_000)
+
+  test("returns exact idempotent disposers for stacked registrations", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        const toolDir = path.join(dir, ".ax-code", "tool")
+        await fs.mkdir(toolDir, { recursive: true })
+        await fs.writeFile(
+          path.join(toolDir, "layered.ts"),
+          ["export default {", "  description: 'base',", "  args: {},", "  execute: async () => 'base',", "}", ""].join(
+            "\n",
+          ),
+        )
+      },
+    })
+    const model = { providerID: ProviderID.make("test"), modelID: ModelID.make("layered-model") }
+    const registration = (description: string) => ({
+      id: "layered",
+      init: async () => ({
+        description,
+        parameters: z.object({}),
+        execute: async () => ({ title: "", output: description, metadata: {} }),
+      }),
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const description = async () =>
+          (await ToolRegistry.tools(model)).find((tool) => tool.id === "layered")?.description
+        expect(await description()).toBe("base")
+
+        const disposeFirst = await ToolRegistry.register(registration("first"))
+        const disposeSecond = await ToolRegistry.register(registration("second"))
+        expect(await description()).toBe("second")
+
+        disposeSecond()
+        disposeSecond()
+        expect(await description()).toBe("first")
+
+        const disposeThird = await ToolRegistry.register(registration("third"))
+        disposeFirst()
+        expect(await description()).toBe("third")
+
+        disposeThird()
+        expect(await description()).toBe("base")
+      },
+    })
+  }, 60_000)
+
+  test("registration disposers retain their owner when called from another instance", async () => {
+    await using owner = await tmpdir()
+    await using caller = await tmpdir()
+    const model = { providerID: ProviderID.make("test"), modelID: ModelID.make("cross-instance-model") }
+    let dispose!: () => void
+
+    await Instance.provide({
+      directory: owner.path,
+      fn: async () => {
+        dispose = await ToolRegistry.register({
+          id: "owner-only",
+          init: async () => ({
+            description: "owner registration",
+            parameters: z.object({}),
+            execute: async () => ({ title: "", output: "owner", metadata: {} }),
+          }),
+        })
+        expect((await ToolRegistry.tools(model)).some((tool) => tool.id === "owner-only")).toBe(true)
+      },
+    })
+
+    await Instance.provide({ directory: caller.path, fn: async () => dispose() })
+
+    await Instance.provide({
+      directory: owner.path,
+      fn: async () => {
+        expect((await ToolRegistry.tools(model)).some((tool) => tool.id === "owner-only")).toBe(false)
+      },
+    })
+  })
+
+  test("a scoped registration replaces a built-in exactly once and restores it", async () => {
+    await using tmp = await tmpdir()
+    const model = { providerID: ProviderID.make("test"), modelID: ModelID.make("override-model") }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const original = (await ToolRegistry.tools(model)).find((tool) => tool.id === "read")
+        expect(original).toBeDefined()
+
+        const dispose = await ToolRegistry.register({
+          id: "read",
+          init: async () => ({
+            description: "scoped read",
+            parameters: z.object({}),
+            execute: async () => ({ title: "", output: "scoped", metadata: {} }),
+          }),
+        })
+        const overridden = (await ToolRegistry.tools(model)).filter((tool) => tool.id === "read")
+        expect(overridden).toHaveLength(1)
+        expect(overridden[0]?.description).toBe("scoped read")
+
+        dispose()
+        const restored = (await ToolRegistry.tools(model)).filter((tool) => tool.id === "read")
+        expect(restored).toHaveLength(1)
+        expect(restored[0]?.description).toBe(original?.description)
+      },
+    })
   })
 
   test("loads tools from .ax-code/tool (singular)", async () => {

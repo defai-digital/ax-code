@@ -103,7 +103,15 @@ export namespace ToolRegistry {
 
   type InitializedTool = Awaited<ReturnType<Tool.Info["init"]>> & { id: string }
 
-  const state = Instance.state(async () => {
+  type RegistryState = {
+    custom: Tool.Info[]
+    registrations: Map<string, Array<{ token: symbol; tool: Tool.Info }>>
+    cache?: { key: string; result: InitializedTool[] }
+    pending?: { key: string; promise: Promise<InitializedTool[]> }
+    generation: number
+  }
+
+  const state = Instance.state(async (): Promise<RegistryState> => {
     const ctx = Instance.current
     const custom: Tool.Info[] = []
 
@@ -173,7 +181,7 @@ export namespace ToolRegistry {
       }
     }
 
-    return { custom }
+    return { custom, registrations: new Map(), generation: 0 }
   })
 
   type ToolConfig = Awaited<ReturnType<typeof Config.get>>
@@ -302,23 +310,53 @@ export namespace ToolRegistry {
     ]
   }
 
-  let toolCache: { key: string; result: InitializedTool[] } | undefined
+  function invalidate(current: RegistryState) {
+    current.cache = undefined
+    current.pending = undefined
+    current.generation++
+  }
 
-  export async function register(tool: Tool.Info): Promise<void> {
-    const current = await state()
-    const idx = current.custom.findIndex((t) => t.id === tool.id)
-    if (idx >= 0) {
-      current.custom.splice(idx, 1, tool)
-      toolCache = undefined
-      return
+  function activeRegistrations(current: RegistryState): Map<string, Tool.Info> {
+    const active = new Map<string, Tool.Info>()
+    for (const [id, layers] of current.registrations) {
+      const latest = layers.at(-1)
+      if (latest) active.set(id, latest.tool)
     }
-    current.custom.push(tool)
-    toolCache = undefined
+    return active
+  }
+
+  async function allForState(current: RegistryState, cfg?: ToolConfig, providerID?: ProviderID): Promise<Tool.Info[]> {
+    const base = await all(current.custom, cfg, providerID)
+    const active = activeRegistrations(current)
+    if (active.size === 0) return base
+    return [...base.filter((tool) => !active.has(tool.id)), ...active.values()]
+  }
+
+  export async function register(tool: Tool.Info): Promise<() => void> {
+    const current = await state()
+    const token = Symbol(tool.id)
+    const layers = current.registrations.get(tool.id) ?? []
+    layers.push({ token, tool })
+    current.registrations.set(tool.id, layers)
+    invalidate(current)
+
+    let disposed = false
+    return () => {
+      if (disposed) return
+      disposed = true
+      const existing = current.registrations.get(tool.id)
+      if (!existing) return
+      const index = existing.findIndex((layer) => layer.token === token)
+      if (index === -1) return
+      existing.splice(index, 1)
+      if (existing.length === 0) current.registrations.delete(tool.id)
+      invalidate(current)
+    }
   }
 
   export async function ids(): Promise<string[]> {
     const current = await state()
-    const tools = await all(current.custom)
+    const tools = await allForState(current)
     return tools.map((t) => t.id)
   }
 
@@ -329,64 +367,74 @@ export namespace ToolRegistry {
     },
     agent?: Agent.Info,
   ): Promise<InitializedTool[]> {
+    const current = await state()
     const cfg = await Config.get()
     const key = cacheKey({ model, agent, cfg })
-    if (toolCache?.key === key) return toolCache.result
+    if (current.cache?.key === key) return current.cache.result
+    if (current.pending?.key === key) return current.pending.promise
 
-    const current = await state()
-    const allTools = await all(current.custom, cfg, model.providerID)
-    // Per-tool try/catch so one broken tool (most commonly a
-    // flaky MCP server whose `init()` rejects during tool
-    // registration) doesn't reject Promise.all and leave the
-    // agent with zero usable tools — including the built-in
-    // read/write/bash/edit that have no dependency on the
-    // failing tool. Failed tools are logged and filtered out;
-    // the remaining tools register normally.
-    const raw = await Promise.all(
-      allTools
-        .filter((tool) => {
-          // Enable websearch/codesearch for zen users OR via enable flag
-          if (tool.id === "codesearch" || tool.id === "websearch") {
-            return model.providerID === ProviderID.axCode || Flag.AX_CODE_ENABLE_EXA
-          }
-
-          // use apply tool in same format as codex
-          const usePatch =
-            model.modelID.includes("gpt-") && !model.modelID.includes("oss") && !model.modelID.includes("gpt-4")
-          if (tool.id === "apply_patch") return usePatch
-          if (tool.id === "edit" || tool.id === "write") return !usePatch
-
-          return true
-        })
-        .map(async (tool) => {
-          try {
-            using _ = log.time(tool.id)
-            const next = await tool.init({ agent, model })
-            const description =
-              model.providerID === AX_ENGINE_PROVIDER_ID && tool.id === "bash"
-                ? AX_ENGINE_BASH_DESCRIPTION.replaceAll("${directory}", Instance.directory)
-                    .replaceAll("${maxLines}", String(Truncate.MAX_LINES))
-                    .replaceAll("${maxBytes}", String(Truncate.MAX_BYTES))
-                : next.description
-            const output = {
-              description,
-              parameters: next.parameters,
+    const generation = current.generation
+    const promise = (async () => {
+      const allTools = await allForState(current, cfg, model.providerID)
+      // Per-tool try/catch so one broken tool (most commonly a
+      // flaky MCP server whose `init()` rejects during tool
+      // registration) doesn't reject Promise.all and leave the
+      // agent with zero usable tools — including the built-in
+      // read/write/bash/edit that have no dependency on the
+      // failing tool. Failed tools are logged and filtered out;
+      // the remaining tools register normally.
+      const raw = await Promise.all(
+        allTools
+          .filter((tool) => {
+            // Enable websearch/codesearch for zen users OR via enable flag
+            if (tool.id === "codesearch" || tool.id === "websearch") {
+              return model.providerID === ProviderID.axCode || Flag.AX_CODE_ENABLE_EXA
             }
-            await Plugin.trigger("tool.definition", { toolID: tool.id }, output)
-            return {
-              id: tool.id,
-              ...next,
-              description: output.description,
-              parameters: output.parameters,
+
+            // use apply tool in same format as codex
+            const usePatch =
+              model.modelID.includes("gpt-") && !model.modelID.includes("oss") && !model.modelID.includes("gpt-4")
+            if (tool.id === "apply_patch") return usePatch
+            if (tool.id === "edit" || tool.id === "write") return !usePatch
+
+            return true
+          })
+          .map(async (tool) => {
+            try {
+              using _ = log.time(tool.id)
+              const next = await tool.init({ agent, model })
+              const description =
+                model.providerID === AX_ENGINE_PROVIDER_ID && tool.id === "bash"
+                  ? AX_ENGINE_BASH_DESCRIPTION.replaceAll("${directory}", Instance.directory)
+                      .replaceAll("${maxLines}", String(Truncate.MAX_LINES))
+                      .replaceAll("${maxBytes}", String(Truncate.MAX_BYTES))
+                  : next.description
+              const output = {
+                description,
+                parameters: next.parameters,
+              }
+              await Plugin.trigger("tool.definition", { toolID: tool.id }, output)
+              return {
+                id: tool.id,
+                ...next,
+                description: output.description,
+                parameters: output.parameters,
+              }
+            } catch (err) {
+              log.error("tool init failed, skipping", { id: tool.id, err })
+              return undefined
             }
-          } catch (err) {
-            log.error("tool init failed, skipping", { id: tool.id, err })
-            return undefined
-          }
-        }),
-    )
-    const result = raw.filter((t): t is InitializedTool => t !== undefined)
-    toolCache = { key, result }
-    return result
+          }),
+      )
+      const result = raw.filter((tool): tool is InitializedTool => tool !== undefined)
+      if (current.generation === generation) current.cache = { key, result }
+      return result
+    })()
+    current.pending = { key, promise }
+    try {
+      return await promise
+    } finally {
+      if (current.pending?.promise === promise) current.pending = undefined
+    }
   }
 }

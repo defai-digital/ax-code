@@ -16,6 +16,8 @@ import type { MessageV2 } from "../../src/session/message-v2"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { createStructuredOutputTool } from "../../src/session/prompt-helpers"
 import { SuperLongRuntime } from "../../src/session/super-long-runtime"
+import { Recorder } from "../../src/replay/recorder"
+import { RequestProvenance } from "../../src/session/request-provenance"
 
 describe("session.llm.hasToolCalls", () => {
   test("repairs common directory listing tool aliases", () => {
@@ -307,6 +309,11 @@ describe("session.llm.stream", () => {
           },
           permission: [{ permission: "*", pattern: "*", action: "allow" }],
         } satisfies Agent.Info
+        const replayEvents: Array<Parameters<typeof Recorder.emit>[0]> = []
+        const emitSpy = vi.spyOn(Recorder, "emit").mockImplementation((event) => {
+          replayEvents.push(event)
+        })
+        Recorder.begin(sessionID)
 
         const stream = await LLM.stream({
           user,
@@ -316,11 +323,20 @@ describe("session.llm.stream", () => {
           system: ["You are a helpful assistant."],
           abort: new AbortController().signal,
           messages: [{ role: "user", content: "Hello" }],
-          tools: {},
+          tools: {
+            echo: tool({
+              description: "Echo a value",
+              inputSchema: z.object({ value: z.string() }),
+              execute: async () => ({ title: "", output: "", metadata: {} }),
+            }),
+          },
+          replay: { messageID: user.id, stepIndex: 0 },
         })
 
         for await (const _ of stream.fullStream) {
         }
+        await Recorder.end(sessionID)
+        emitSpy.mockRestore()
 
         const capture = await request
         expect(capture.url.pathname.startsWith("/v1/")).toBe(true)
@@ -331,6 +347,68 @@ describe("session.llm.stream", () => {
         expect(capture.body.reasoning).toEqual({ effort: "high" })
         expect(capture.body.reasoningEffort).toBeUndefined()
         expect(capture.body.reasoning_effort).toBeUndefined()
+        const provenance = replayEvents.find((event) => event.type === "llm.request")
+        expect(provenance).toMatchObject({
+          type: "llm.request",
+          provenanceVersion: 1,
+          provenanceBoundary: "ai-sdk-pre-adapter",
+          providerID,
+          messageCount: 1,
+          assembledMessageCount: 2,
+          systemMessageCount: 1,
+          toolCount: 1,
+          toolNames: ["echo"],
+          stepIndex: 0,
+        })
+        if (!provenance || provenance.type !== "llm.request") throw new Error("missing provenance event")
+        expect(provenance.requestHash).toMatch(/^[a-f0-9]{64}$/)
+
+        const fallbackRequest = waitRequest(
+          "/chat/completions",
+          new Response(createChatStream("Fallback still dispatched"), {
+            status: 200,
+            headers: { "Content-Type": "text/event-stream" },
+          }),
+        )
+        const provenanceSpy = vi
+          .spyOn(RequestProvenance, "build")
+          .mockRejectedValueOnce(new Error("schema unavailable"))
+        const fallbackEvents: Array<Parameters<typeof Recorder.emit>[0]> = []
+        const fallbackEmitSpy = vi.spyOn(Recorder, "emit").mockImplementation((event) => {
+          fallbackEvents.push(event)
+        })
+        Recorder.begin(sessionID)
+        const fallbackStream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["You are a helpful assistant."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Hello again" }],
+          tools: {
+            echo: tool({
+              description: "Echo a value",
+              inputSchema: z.object({ value: z.string() }),
+              execute: async () => ({ title: "", output: "", metadata: {} }),
+            }),
+          },
+          replay: { messageID: user.id, stepIndex: 1 },
+        })
+        for await (const _ of fallbackStream.fullStream) {
+        }
+        await fallbackRequest
+        await Recorder.end(sessionID)
+        fallbackEmitSpy.mockRestore()
+        provenanceSpy.mockRestore()
+
+        expect(fallbackEvents).toContainEqual(
+          expect.objectContaining({
+            type: "llm.request",
+            stepIndex: 1,
+            provenanceErrorCode: "manifest_unavailable",
+          }),
+        )
       },
     })
   })

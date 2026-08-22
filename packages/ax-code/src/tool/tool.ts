@@ -48,6 +48,25 @@ export namespace Tool {
     metadata(input: { title?: string; metadata?: M }): void
     ask(input: Omit<Permission.Request, "id" | "sessionID" | "tool">): Promise<void>
   }
+
+  export type InvocationResult<M extends Metadata = Metadata> = {
+    title: string
+    metadata: M
+    output: string
+    attachments?: MessageV2.FilePart[]
+  }
+
+  /**
+   * Instance/session-scoped access to the already-enabled registry tools.
+   * Alternate execution surfaces such as Batch use this instead of resolving
+   * the raw registry again, which keeps visibility, hooks, and isolation
+   * policy at one boundary. MCP tools are intentionally not included.
+   */
+  export type Dispatcher = {
+    readonly ids: readonly string[]
+    execute(input: { tool: string; parameters: unknown; callID: string; abort: AbortSignal }): Promise<InvocationResult>
+  }
+
   export interface Info<Parameters extends z.ZodType = z.ZodType, M extends Metadata = Metadata> {
     id: string
     init: (ctx?: InitContext) => Promise<{

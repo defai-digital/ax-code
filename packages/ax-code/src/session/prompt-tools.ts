@@ -28,28 +28,30 @@ import { uniqueStrings } from "@/util/string-list"
 import type { SessionProcessor } from "./processor"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { estimateToolDefinitionTokens } from "./prompt-request"
+import { createHash } from "node:crypto"
 
 const log = Log.create({ service: "session.prompt.tools" })
 
-// Cache transformed schemas across steps — key: "toolId:npm:provider"
-let _schemaCache: Map<string, any> | undefined
-const mcpSchemaPending = new Map<string, Promise<any>>()
+// Schema transforms may capture project-defined tool schemas. Keep both the
+// LRU and in-flight work scoped to the active project instance so two projects
+// with the same tool ID/model cannot reuse each other's schema.
+const schemaState = Instance.state(() => ({
+  cache: new Map<string, any>(),
+  mcpPending: new Map<string, Promise<any>>(),
+}))
 const SCHEMA_CACHE_MAX = 500
 const SCHEMA_CACHE_DROP = 100
 
 function schemaCache() {
-  if (!_schemaCache) _schemaCache = new Map()
-  return _schemaCache
+  return schemaState().cache
 }
 
-function touchSchemaCache(cacheKey: string, value: any) {
-  const cache = schemaCache()
+function touchSchemaCache(cache: Map<string, any>, cacheKey: string, value: any) {
   cache.delete(cacheKey)
   cache.set(cacheKey, value)
 }
 
-function setSchemaCache(cacheKey: string, value: any) {
-  const cache = schemaCache()
+function setSchemaCache(cache: Map<string, any>, cacheKey: string, value: any) {
   if (!cache.has(cacheKey) && cache.size >= SCHEMA_CACHE_MAX) {
     let dropped = 0
     for (const key of cache.keys()) {
@@ -60,36 +62,51 @@ function setSchemaCache(cacheKey: string, value: any) {
   cache.set(cacheKey, value)
 }
 
+function schemaFingerprint(schema: unknown) {
+  return createHash("sha256")
+    .update(JSON.stringify(schema) ?? "undefined")
+    .digest("base64url")
+}
+
 export async function transformMcpInputSchema(input: {
   cacheKey: string
   model: Provider.Model
   inputSchema: Parameters<typeof asSchema>[0]
 }) {
-  const cached = schemaCache().get(input.cacheKey)
+  const current = schemaState()
+  const schemaJson = await Promise.resolve(asSchema(input.inputSchema).jsonSchema)
+  const modelIdentity = schemaFingerprint({
+    id: input.model.id,
+    providerID: input.model.providerID,
+    apiID: input.model.api.id,
+    npm: input.model.api.npm,
+    url: input.model.api.url,
+  })
+  const cacheKey = `${input.cacheKey}:${modelIdentity}:${schemaFingerprint(schemaJson)}`
+  const cached = current.cache.get(cacheKey)
   if (cached !== undefined) {
-    touchSchemaCache(input.cacheKey, cached)
+    touchSchemaCache(current.cache, cacheKey, cached)
     return cached
   }
 
-  const pending = mcpSchemaPending.get(input.cacheKey)
+  const pending = current.mcpPending.get(cacheKey)
   if (pending) return pending
 
   const promise = (async () => {
-    const schemaJson = await Promise.resolve(asSchema(input.inputSchema).jsonSchema)
-    const cachedAfterAwait = schemaCache().get(input.cacheKey)
+    const cachedAfterAwait = current.cache.get(cacheKey)
     if (cachedAfterAwait !== undefined) {
-      touchSchemaCache(input.cacheKey, cachedAfterAwait)
+      touchSchemaCache(current.cache, cacheKey, cachedAfterAwait)
       return cachedAfterAwait
     }
     const transformed = ProviderTransform.schema(input.model, schemaJson)
-    setSchemaCache(input.cacheKey, transformed)
+    setSchemaCache(current.cache, cacheKey, transformed)
     return transformed
   })()
-  mcpSchemaPending.set(input.cacheKey, promise)
+  current.mcpPending.set(cacheKey, promise)
   try {
     return await promise
   } finally {
-    if (mcpSchemaPending.get(input.cacheKey) === promise) mcpSchemaPending.delete(input.cacheKey)
+    if (current.mcpPending.get(cacheKey) === promise) current.mcpPending.delete(cacheKey)
   }
 }
 
@@ -109,6 +126,79 @@ export function isolationRetryState(input: {
     network: input.networkBypass ? true : input.isolation.network,
     ...(bypass.length ? { bypass } : {}),
   }
+}
+
+/**
+ * Shared evidence boundary for every supported tool surface. The execution
+ * closure remains surface-specific (registry isolation, MCP permission, etc.)
+ * while plugin and user lifecycle hooks stay consistent.
+ */
+export async function runToolLifecycle<T>(input: {
+  toolID: string
+  sessionID: string
+  callID?: string
+  args: unknown
+  cwd: string
+  execute(): Promise<T>
+}): Promise<T> {
+  await Plugin.trigger(
+    "tool.execute.before",
+    {
+      tool: input.toolID,
+      sessionID: input.sessionID,
+      callID: input.callID,
+    },
+    { args: input.args },
+  )
+
+  try {
+    const { LifecycleHooks } = await import("@/hooks/lifecycle")
+    const pre = await LifecycleHooks.runForWorkspace({
+      event: "PreToolUse",
+      sessionID: input.sessionID,
+      tool: input.toolID,
+      args: input.args,
+      cwd: input.cwd,
+    })
+    if (pre.blocked) {
+      const detail = pre.outputs
+        .filter((output) => output.exit !== 0)
+        .map((output) => output.stderr || output.stdout || `exit ${output.exit}`)
+        .join("\n")
+      throw new Error(`PreToolUse hook blocked tool ${input.toolID}: ${detail || "hook failed"}`)
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("PreToolUse hook blocked")) throw error
+    // Hook load/run failures must not brick the agent loop.
+  }
+
+  const result = await input.execute()
+
+  await Plugin.trigger(
+    "tool.execute.after",
+    {
+      tool: input.toolID,
+      sessionID: input.sessionID,
+      callID: input.callID,
+      args: input.args,
+    },
+    result,
+  )
+
+  try {
+    const { LifecycleHooks } = await import("@/hooks/lifecycle")
+    await LifecycleHooks.runForWorkspace({
+      event: "PostToolUse",
+      sessionID: input.sessionID,
+      tool: input.toolID,
+      args: input.args,
+      cwd: input.cwd,
+    })
+  } catch {
+    // Post hooks are evidence/automation helpers and remain non-fatal.
+  }
+
+  return result
 }
 
 interface ResolveToolsInput {
@@ -231,10 +321,24 @@ export async function resolveTools(input: ResolveToolsInput) {
   )
   // Share transformed schemas across tool resolution calls.
   const cache = schemaCache()
-  const schemaCacheKey = (toolId: string) => `${toolId}:${input.model.api.npm}:${input.model.providerID}`
+  const modelSchemaIdentity = schemaFingerprint({
+    id: input.model.id,
+    providerID: input.model.providerID,
+    apiID: input.model.api.id,
+    npm: input.model.api.npm,
+    url: input.model.api.url,
+  })
+  const schemaCacheKey = (toolId: string) => `${toolId}:${modelSchemaIdentity}`
   const isDisabledByConfig = (toolID: string) => input.tools?.[toolID] === false
+  let registryDispatcher: Tool.Dispatcher | undefined
 
-  const context = (args: any, options: ToolCallOptions, isolationOverride?: Isolation.State): Tool.Context => ({
+  type InvocationOptions = Pick<ToolCallOptions, "toolCallId" | "abortSignal">
+  const context = (
+    args: any,
+    options: InvocationOptions,
+    isolationOverride?: Isolation.State,
+    exposeDispatcher = false,
+  ): Tool.Context => ({
     sessionID: input.session.id,
     // The AI SDK normally passes an AbortSignal, but `abortSignal` is
     // typed as optional. Fall back to a fresh never-firing controller
@@ -248,6 +352,7 @@ export async function resolveTools(input: ResolveToolsInput) {
       model: input.model,
       bypassAgentCheck: input.bypassAgentCheck,
       isolation: isolationOverride ?? isolation,
+      ...(exposeDispatcher ? { toolDispatcher: registryDispatcher } : {}),
     },
     agent: input.agent.name,
     messages: input.messages,
@@ -290,129 +395,107 @@ export async function resolveTools(input: ResolveToolsInput) {
     registryTools.map((item) => item.id),
     ruleset,
   )
-  for (const item of registryTools) {
-    if (isDisabledByConfig(item.id) || disabledRegistryTools.has(item.id)) continue
+  const isolationDisabled = new Set<string>()
+  if (isolation.mode === "read-only") {
+    for (const id of ["edit", "write", "apply_patch", "multiedit", "bash"]) isolationDisabled.add(id)
+  }
+  if (!isolation.network) {
+    for (const id of ["webfetch", "websearch", "codesearch"]) isolationDisabled.add(id)
+  }
+  const enabledRegistryTools = registryTools.filter(
+    (item) => !isDisabledByConfig(item.id) && !disabledRegistryTools.has(item.id) && !isolationDisabled.has(item.id),
+  )
+  const batchableRegistryTools = new Map(
+    enabledRegistryTools.filter((item) => item.id !== "batch" && item.id !== "task").map((item) => [item.id, item]),
+  )
 
-    const cacheKey = schemaCacheKey(item.id)
-    const cached = cache.get(cacheKey)
-    const schema =
-      cached !== undefined
-        ? // LRU: move to end so recently-used entries survive eviction
-          (touchSchemaCache(cacheKey, cached), cached)
-        : (() => {
-            const s = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
-            // Bound the cache to avoid a slow memory leak in long-running
-            // processes (TUI/daemon) that accumulate tool×model entries
-            // across session lifetimes. LRU eviction: when we reach the
-            // cap, drop the 100 least-recently-used entries. Maps preserve
-            // insertion order, so `.keys()` iterates oldest first.
-            setSchemaCache(cacheKey, s)
-            return s
-          })()
-    tools[item.id] = tool({
-      id: item.id as any,
-      description: item.description,
-      inputSchema: jsonSchema(schema as any),
-      async execute(args, options) {
-        const ctx = context(args, options)
-        await Plugin.trigger(
-          "tool.execute.before",
-          {
-            tool: item.id,
-            sessionID: ctx.sessionID,
-            callID: ctx.callID,
-          },
-          {
-            args,
-          },
-        )
-        // User lifecycle hooks (PreToolUse) — official packs + .ax-code/hooks.json
-        try {
-          const { LifecycleHooks } = await import("@/hooks/lifecycle")
-          const pre = await LifecycleHooks.runForWorkspace({
-            event: "PreToolUse",
-            sessionID: ctx.sessionID,
-            tool: item.id,
-            args,
-            cwd: Instance.directory,
-          })
-          if (pre.blocked) {
-            const detail = pre.outputs
-              .filter((o) => o.exit !== 0)
-              .map((o) => o.stderr || o.stdout || `exit ${o.exit}`)
-              .join("\n")
-            throw new Error(`PreToolUse hook blocked tool ${item.id}: ${detail || "hook failed"}`)
-          }
-        } catch (error) {
-          if (error instanceof Error && error.message.startsWith("PreToolUse hook blocked")) throw error
-          // Hook load/run failures must not brick the agent loop.
-        }
+  async function invokeRegistryTool(inputTool: {
+    item: (typeof registryTools)[number]
+    args: any
+    options: InvocationOptions
+    isolationPolicy: "escalate" | "fail-closed"
+  }): Promise<Tool.InvocationResult> {
+    const { item, args, options, isolationPolicy } = inputTool
+    const exposeDispatcher = item.id === "batch" && isolationPolicy === "escalate"
+    const ctx = context(args, options, undefined, exposeDispatcher)
+
+    return runToolLifecycle({
+      toolID: item.id,
+      sessionID: ctx.sessionID,
+      callID: ctx.callID,
+      args,
+      cwd: Instance.directory,
+      execute: async () => {
         let result: Awaited<ReturnType<typeof item.execute>> | undefined
-        // Per-path bypass: when the user approves an isolation_escalation
-        // for one path inside a multi-path tool call (e.g. apply_patch
-        // with several hunks), we must NOT exempt every other path in
-        // the same call. Accumulate approved paths and re-run the tool;
-        // if a later path also fails, ask again. Cap retries to bounding
-        // the loop in the rare case the tool is non-deterministic about
-        // which path it touches first.
-        //
-        // Network denials have no path, so retry by enabling only network
-        // access while preserving the active write/protected-path policy.
-        const bypass: string[] = []
-        let networkBypass = false
-        let lastError: Isolation.DeniedError | undefined
-        for (let attempt = 0; attempt < 16; attempt++) {
-          let attemptCtx = ctx
-          if (attempt > 0 && ctx.extra?.isolation) {
-            attemptCtx = context(
-              args,
-              options,
-              isolationRetryState({
-                isolation: ctx.extra.isolation,
-                pathBypass: bypass,
-                networkBypass,
-              }),
-            )
-          }
-          try {
-            result = await item.execute(args, attemptCtx)
-            break
-          } catch (e) {
-            if (!(e instanceof Isolation.DeniedError)) throw e
-            if (ctx.extra?.isolation?.mode === "read-only")
-              throw new Error(`Tool denied in read-only mode: ${e.reason}`, { cause: e })
-            if (!e.path) {
-              if (e.reason !== "network") throw e
-              if (networkBypass) {
-                lastError = e
-                throw e
+        if (isolationPolicy === "fail-closed") {
+          // Batch calls run concurrently. Never open interactive escalation
+          // prompts from nested workers; an isolation denial is the result.
+          result = await item.execute(args, ctx)
+        } else {
+          // Per-path bypass: when the user approves an isolation_escalation
+          // for one path inside a multi-path tool call (e.g. apply_patch with
+          // several hunks), exempt only that path and retry. Network denials
+          // similarly enable only network access. Bound retries in case a tool
+          // is non-deterministic about the first denied operation it touches.
+          const bypass: string[] = []
+          let networkBypass = false
+          let lastError: Isolation.DeniedError | undefined
+          for (let attempt = 0; attempt < 16; attempt++) {
+            let attemptCtx = ctx
+            if (attempt > 0 && ctx.extra?.isolation) {
+              attemptCtx = context(
+                args,
+                options,
+                isolationRetryState({
+                  isolation: ctx.extra.isolation,
+                  pathBypass: bypass,
+                  networkBypass,
+                }),
+                exposeDispatcher,
+              )
+            }
+            try {
+              result = await item.execute(args, attemptCtx)
+              break
+            } catch (error) {
+              if (!(error instanceof Isolation.DeniedError)) throw error
+              if (ctx.extra?.isolation?.mode === "read-only") {
+                throw new Error(`Tool denied in read-only mode: ${error.reason}`, { cause: error })
+              }
+              if (!error.path) {
+                if (error.reason !== "network") throw error
+                if (networkBypass) {
+                  lastError = error
+                  throw error
+                }
+                await ctx.ask({
+                  permission: "isolation_escalation",
+                  patterns: [error.message],
+                  always: [],
+                  metadata: { reason: error.reason, requireInteractive: true },
+                })
+                networkBypass = true
+                lastError = error
+                continue
+              }
+              if (bypass.includes(error.path)) {
+                lastError = error
+                throw error
               }
               await ctx.ask({
                 permission: "isolation_escalation",
-                patterns: [e.message],
+                patterns: [error.message],
                 always: [],
-                metadata: { reason: e.reason, requireInteractive: true },
+                metadata: { reason: error.reason, path: error.path, requireInteractive: true },
               })
-              networkBypass = true
-              lastError = e
-              continue
+              bypass.push(error.path)
+              lastError = error
             }
-            if (bypass.includes(e.path)) {
-              lastError = e
-              throw e
-            }
-            await ctx.ask({
-              permission: "isolation_escalation",
-              patterns: [e.message],
-              always: [],
-              metadata: { reason: e.reason, path: e.path, requireInteractive: true },
-            })
-            bypass.push(e.path)
-            lastError = e
           }
+          if (result === undefined) throw lastError ?? new Error("Tool execution exhausted isolation retries")
         }
-        if (result === undefined) throw lastError ?? new Error("Tool execution exhausted isolation retries")
-        const output = {
+
+        return {
           ...result,
           attachments: result.attachments?.map((attachment) => ({
             ...attachment,
@@ -421,29 +504,57 @@ export async function resolveTools(input: ResolveToolsInput) {
             messageID: input.processor.message.id,
           })),
         }
-        await Plugin.trigger(
-          "tool.execute.after",
-          {
-            tool: item.id,
-            sessionID: ctx.sessionID,
-            callID: ctx.callID,
-            args,
-          },
-          output,
-        )
-        try {
-          const { LifecycleHooks } = await import("@/hooks/lifecycle")
-          await LifecycleHooks.runForWorkspace({
-            event: "PostToolUse",
-            sessionID: ctx.sessionID,
-            tool: item.id,
-            args,
-            cwd: Instance.directory,
-          })
-        } catch {
-          // non-fatal
+      },
+    })
+  }
+
+  registryDispatcher = {
+    ids: [...batchableRegistryTools.keys()],
+    async execute(dispatch) {
+      const item = batchableRegistryTools.get(dispatch.tool)
+      if (!item) throw new Error(`Tool '${dispatch.tool}' is not enabled for Batch execution`)
+      let args: unknown
+      try {
+        args = item.parameters.parse(dispatch.parameters)
+      } catch (error) {
+        if (error instanceof z.ZodError && item.formatValidationError) {
+          throw new Error(item.formatValidationError(error), { cause: error })
         }
-        return output
+        throw error
+      }
+      return invokeRegistryTool({
+        item,
+        args,
+        options: { toolCallId: dispatch.callID, abortSignal: dispatch.abort },
+        isolationPolicy: "fail-closed",
+      })
+    },
+  }
+
+  for (const item of enabledRegistryTools) {
+    const schemaJson = z.toJSONSchema(item.parameters)
+    const cacheKey = schemaCacheKey(`${item.id}:${schemaFingerprint(schemaJson)}`)
+    const cached = cache.get(cacheKey)
+    const schema =
+      cached !== undefined
+        ? // LRU: move to end so recently-used entries survive eviction
+          (touchSchemaCache(cache, cacheKey, cached), cached)
+        : (() => {
+            const s = ProviderTransform.schema(input.model, schemaJson)
+            // Bound the cache to avoid a slow memory leak in long-running
+            // processes (TUI/daemon) that accumulate tool×model entries
+            // across session lifetimes. LRU eviction: when we reach the
+            // cap, drop the 100 least-recently-used entries. Maps preserve
+            // insertion order, so `.keys()` iterates oldest first.
+            setSchemaCache(cache, cacheKey, s)
+            return s
+          })()
+    tools[item.id] = tool({
+      id: item.id as any,
+      description: item.description,
+      inputSchema: jsonSchema(schema as any),
+      async execute(args, options) {
+        return invokeRegistryTool({ item, args, options, isolationPolicy: "escalate" })
       },
     })
   }
@@ -472,42 +583,26 @@ export async function resolveTools(input: ResolveToolsInput) {
     // Wrap execute to add plugin hooks and format output
     mcpTool.execute = async (args, opts) => {
       const ctx = context(args, opts)
-
-      await Plugin.trigger(
-        "tool.execute.before",
-        {
-          tool: key,
-          sessionID: ctx.sessionID,
-          callID: opts.toolCallId,
+      const result = await runToolLifecycle({
+        toolID: key,
+        sessionID: ctx.sessionID,
+        callID: opts.toolCallId,
+        args,
+        cwd: Instance.directory,
+        execute: async () => {
+          const permissionPattern = McpPermissionPattern.derive(key, args, { worktree: Instance.worktree })
+          await ctx.ask({
+            permission: key,
+            metadata: {
+              mcp: true,
+              ...permissionPattern.metadata,
+            },
+            patterns: permissionPattern.patterns,
+            always: permissionPattern.always,
+          })
+          return execute(args, opts)
         },
-        {
-          args,
-        },
-      )
-
-      const permissionPattern = McpPermissionPattern.derive(key, args, { worktree: Instance.worktree })
-      await ctx.ask({
-        permission: key,
-        metadata: {
-          mcp: true,
-          ...permissionPattern.metadata,
-        },
-        patterns: permissionPattern.patterns,
-        always: permissionPattern.always,
       })
-
-      const result = await execute(args, opts)
-
-      await Plugin.trigger(
-        "tool.execute.after",
-        {
-          tool: key,
-          sessionID: ctx.sessionID,
-          callID: opts.toolCallId,
-          args,
-        },
-        result,
-      )
 
       const { textParts, attachments } = collectMcpToolContent(result.content as McpToolContentItem[])
 

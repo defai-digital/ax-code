@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { KeyedSerialQueue } from "../../src/util/queue"
 
 function deferred() {
@@ -14,6 +14,41 @@ async function flush(count = 3) {
 }
 
 describe("KeyedSerialQueue", () => {
+  test("drain waits for running and chained work", async () => {
+    const queue = new KeyedSerialQueue()
+    const gate = deferred()
+    const order: string[] = []
+
+    void queue.run("same", async () => {
+      order.push("first:start")
+      await gate.promise
+      order.push("first:end")
+    })
+    void queue.run("same", async () => {
+      order.push("second")
+    })
+
+    const drained = queue.drain().then(() => order.push("drained"))
+    await Promise.resolve()
+    expect(order).toEqual(["first:start"])
+    gate.resolve()
+    await drained
+
+    expect(order).toEqual(["first:start", "first:end", "second", "drained"])
+    expect(queue.size()).toBe(0)
+  })
+
+  test("close prevents new work from entering the queue", async () => {
+    const queue = new KeyedSerialQueue()
+    const run = vi.fn(async () => "unexpected")
+
+    queue.close()
+
+    await expect(queue.run("closed", run)).rejects.toThrow("queue is closed")
+    expect(run).not.toHaveBeenCalled()
+    expect(queue.size()).toBe(0)
+  })
+
   test("serializes work for the same key and cleans up when idle", async () => {
     const queue = new KeyedSerialQueue()
     const releaseFirst = deferred()
