@@ -5,6 +5,9 @@
 //   slow-init     like basic, but delays the initialize response (spawn-race tests)
 //   exit          writes to stderr and exits immediately
 //   crash-on-call answers the handshake, exits on the first tools/call
+//   bad-result    tools/call returns a non-object result
+//   bad-content   tools/call returns a result whose content is not an array
+//   huge-line     after the handshake, emits one giant unterminated stdout line
 // When AX_FAKE_MCP_COUNT_FILE is set, each process appends one line to that
 // file on startup so tests can count spawned servers.
 import fs from "node:fs"

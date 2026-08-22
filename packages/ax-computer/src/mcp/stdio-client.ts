@@ -46,6 +46,8 @@ export interface StdioMcpClientOptions {
   env?: Record<string, string | undefined>
   /** per-request timeout, default 60s */
   requestTimeoutMs?: number
+  /** max bytes of one unterminated stdout line before the connection is dropped (default 16MB) */
+  stdoutLineLimit?: number
 }
 
 const PROTOCOL_VERSION = "2024-11-05"
@@ -112,6 +114,7 @@ interface PendingRequest {
 export class StdioMcpClient implements McpClient {
   private readonly child: ChildProcess
   private readonly requestTimeoutMs: number
+  private readonly stdoutLineLimit: number
   private nextId = 1
   private readonly pending = new Map<number, PendingRequest>()
   private stdoutBuffer = ""
@@ -141,6 +144,7 @@ export class StdioMcpClient implements McpClient {
 
   constructor(private readonly options: StdioMcpClientOptions) {
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
+    this.stdoutLineLimit = options.stdoutLineLimit ?? STDOUT_LINE_LIMIT
     assertSpawnableCommand(options.command)
     this.child = spawn(options.command, options.args ?? [], {
       stdio: ["pipe", "pipe", "pipe"],
@@ -285,10 +289,10 @@ export class StdioMcpClient implements McpClient {
     // framing is newline-delimited: a buffer this large without a newline is
     // an unbounded line from a misbehaving/hostile backend — fail the
     // connection rather than grow memory without limit
-    if (this.stdoutBuffer.length > STDOUT_LINE_LIMIT) {
+    if (this.stdoutBuffer.length > this.stdoutLineLimit) {
       const error = new McpClientError(
         "protocol",
-        `MCP server emitted a line larger than ${STDOUT_LINE_LIMIT} bytes; dropping the connection`,
+        `MCP server emitted a line larger than ${this.stdoutLineLimit} bytes; dropping the connection`,
       )
       this.stdoutBuffer = ""
       this.exitError ??= error

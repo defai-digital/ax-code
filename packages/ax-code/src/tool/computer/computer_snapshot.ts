@@ -3,6 +3,7 @@ import { Tool } from "../tool"
 import DESCRIPTION from "./computer-snapshot.txt"
 import { checkVisualRouting } from "@/visual/router"
 import { Computer } from "@/computer/computer"
+import { toErrorMessage } from "@/util/error-message"
 import { renderObservation, renderTargets } from "./render"
 import type { ObserveScope } from "@ax-code/computer"
 
@@ -51,13 +52,22 @@ export const ComputerSnapshotTool = Tool.define("computer_snapshot", {
     })
 
     // Desktop scope is the entry point: append the app/window inventory so the
-    // model can discover valid values for scoped follow-up observations.
+    // model can discover valid values for scoped follow-up observations. The
+    // observation above already succeeded, so a transient discovery failure
+    // (backend hiccup, permission flap) must not discard it — report the
+    // observation and note that discovery is unavailable.
     let output = rendered.output
     let targets: { appCount: number; windowCount: number } | undefined
     if (!params.app && !params.windowId) {
-      const discovered = await Computer.listTargets()
-      output = [rendered.output, "", renderTargets(discovered)].join("\n")
-      targets = { appCount: discovered.apps.length, windowCount: discovered.windows.length }
+      try {
+        const discovered = await Computer.listTargets()
+        output = [rendered.output, "", renderTargets(discovered)].join("\n")
+        targets = { appCount: discovered.apps.length, windowCount: discovered.windows.length }
+      } catch (err) {
+        output = [rendered.output, "", `(app/window discovery temporarily unavailable: ${toErrorMessage(err)})`].join(
+          "\n",
+        )
+      }
     }
 
     return {

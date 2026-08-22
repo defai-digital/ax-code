@@ -107,6 +107,59 @@ async function translate(params: z.infer<typeof parameters>): Promise<ComputerAc
   }
 }
 
+function isDescribeTarget(t: z.infer<typeof target>): boolean {
+  return typeof t === "object" && "describe" in t
+}
+
+function hasDescribeTarget(params: z.infer<typeof parameters>): boolean {
+  switch (params.type) {
+    case "click":
+    case "set_value":
+      return isDescribeTarget(params.target)
+    case "scroll":
+      return params.target !== undefined && isDescribeTarget(params.target)
+    case "drag":
+      return isDescribeTarget(params.from) || isDescribeTarget(params.to)
+    default:
+      return false
+  }
+}
+
+/**
+ * Cheap preflight for describe targets, without the grounding call itself: the
+ * grounder must be configured and a prior observation with a screenshot must
+ * exist. Runs before the permission ask so a misconfigured grounder fails fast
+ * without prompting the user (and grounding itself only runs after the ask, so
+ * the screenshot never leaves for the grounder model without consent).
+ */
+async function assertDescribeTargetsResolvable(params: z.infer<typeof parameters>): Promise<void> {
+  if (!hasDescribeTarget(params)) return
+  const grounder = (await Config.get()).computer?.grounder
+  if (!grounder?.model) {
+    throw new Error(
+      'computer.grounder is not configured — set computer.grounder.model (e.g. a UI-TARS vision endpoint, "provider/model") to enable natural-language targets, or use element ids from computer_snapshot instead',
+    )
+  }
+  const observation = await Computer.lastObservation()
+  if (!observation?.screenshot) {
+    throw new Error(
+      "No observation with a screenshot is available for grounding. Call computer_snapshot first, then retry the describe target.",
+    )
+  }
+}
+
+/**
+ * Permission scope label computed from the raw params, mirroring
+ * Computer.scopeLabel but usable before the action is translated (launch_app /
+ * activate_window carry their scope in params; everything else inherits the
+ * last observation scope).
+ */
+async function scopeLabelForParams(params: z.infer<typeof parameters>): Promise<string | undefined> {
+  if (params.type === "launch_app") return `app:${params.app}`
+  if (params.type === "activate_window") return `window:${params.windowId}`
+  return Computer.lastScopeDescriptor()
+}
+
 const parameters = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("click"),
@@ -162,20 +215,29 @@ export const ComputerActionTool = Tool.define("computer_action", {
       throw new Error(routing.diagnostic)
     }
 
-    const action = await translate(params)
+    // Cheap describe-target preflight (grounder configured, prior observation
+    // exists) before the ask — a misconfigured grounder fails fast without
+    // prompting. The expensive grounding call itself stays inside translate(),
+    // which now runs AFTER the permission ask below.
+    await assertDescribeTargetsResolvable(params)
+
     const summary = summarize(params)
 
     // Permission pattern is scope-based (app/window/desktop the action lands
     // on) so durable "always" grants survive across snapshots; the full action
-    // summary stays in the title/output and the translated action in metadata.
-    const label = await Computer.scopeLabel(action)
+    // summary stays in the title/output. The ask precedes translate() because
+    // translating a describe target sends the latest screenshot to the grounder
+    // model, which must not happen before the user consents to the action.
+    const label = await scopeLabelForParams(params)
     const pattern = label ? `${params.type}:${label}` : params.type
     await ctx.ask({
       permission: "computer",
       patterns: [pattern],
       always: label ? [pattern, `${params.type}:*`] : [pattern],
-      metadata: { action },
+      metadata: { params },
     })
+
+    const action = await translate(params)
 
     let result
     try {
