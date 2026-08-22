@@ -60,6 +60,8 @@ export namespace Computer {
     /** test hook: provider substitute, bypasses config and process spawning */
     injected?: ComputerUseProvider
     lastScope?: ObserveScope
+    /** most recent successful observation (grounder input); reset by useProvider */
+    lastObservation?: ComputerObservation
     /** recent observe/act history, oldest first, capped at TRAJECTORY_CAP */
     trajectory?: TrajectoryEntry[]
   }
@@ -109,6 +111,12 @@ export namespace Computer {
     await s.session?.dispose()
     s.session = undefined
     s.injected = provider
+    s.lastObservation = undefined
+  }
+
+  /** the most recent successful observation; undefined until the first observe */
+  export async function lastObservation(): Promise<ComputerObservation | undefined> {
+    return (await state()).lastObservation
   }
 
   export async function configured(): Promise<boolean> {
@@ -185,6 +193,7 @@ export namespace Computer {
       throw err
     }
     s.lastScope = scope
+    s.lastObservation = observation
     return observation
   }
 

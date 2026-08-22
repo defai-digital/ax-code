@@ -964,6 +964,18 @@ export const Info = z
             "Backend server command override. Precedence: this config > AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_OCU_COMMAND env > default command name.",
           ),
         args: z.array(z.string()).optional().describe('Backend server command arguments (default: ["mcp"])'),
+        grounder: z
+          .object({
+            model: z
+              .string()
+              .describe(
+                'Vision model used to resolve natural-language action targets to screenshot coordinates (e.g. a UI-TARS endpoint), as "provider/model"',
+              ),
+          })
+          .optional()
+          .describe(
+            "Grounder fallback for natural-language computer_action targets. Optional; unset = describe targets unavailable.",
+          ),
       })
       .optional()
       .describe("Computer-use (desktop control) integration. Disabled unless provider is set."),

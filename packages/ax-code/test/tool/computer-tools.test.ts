@@ -10,6 +10,7 @@ import { ComputerWatchTool } from "../../src/tool/computer/computer_watch"
 import { ComputerPlanTool } from "../../src/tool/computer/computer_plan"
 import { _setPlanDepsForTests } from "../../src/tool/computer/plan"
 import type { PlanJudgeDeps } from "../../src/tool/computer/plan"
+import { _setGroundDepsForTests, parseGroundPoint } from "../../src/computer/ground"
 import { renderTrajectory } from "../../src/tool/computer/render"
 import { checkVisualRouting } from "../../src/visual/router"
 import { tmpdir } from "../fixture/fixture"
@@ -30,6 +31,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs()
   _setPlanDepsForTests(undefined)
+  _setGroundDepsForTests(undefined)
 })
 
 type Ask = Omit<Permission.Request, "id" | "sessionID" | "tool">
@@ -477,5 +479,95 @@ describe("computer_plan tool", () => {
       expect(asks[0]).toMatchObject({ permission: "computer", patterns: ["plan:app:TextEdit"] })
       expect(provider.scopes).toEqual([{ app: "TextEdit" }])
     })
+  })
+})
+
+describe("computer_action describe targets (grounder)", () => {
+  const grounded = { config: { computer: { provider: "cua" as const, grounder: { model: "test/ui-tars" } } } }
+
+  test("describe target is grounded to a point and acted on", async () => {
+    await setup(grounded, async ({ provider, asks }) => {
+      // fixture observation is a 2x2 screenshot; grounded coords clamp into it
+      const ask = vi.fn(async () => '{"x": 1, "y": 1}')
+      _setGroundDepsForTests({ ask })
+
+      const snapshot = await ComputerSnapshotTool.init()
+      await snapshot.execute({ includeScreenshot: true }, makeCtx(asks))
+
+      const tool = await ComputerActionTool.init()
+      const result = await tool.execute(
+        { type: "click", target: { describe: "the Save button in the toolbar" } },
+        makeCtx(asks),
+      )
+
+      expect(ask).toHaveBeenCalledTimes(1)
+      expect(provider.acts).toEqual([
+        { type: "click", target: { kind: "point", x: 1, y: 1 }, button: undefined, count: undefined },
+      ])
+      expect(result.output).toContain('click describe:"the Save button in the toolbar": ok')
+      // observe ask + action ask — exactly one permission ask for the action
+      expect(asks.filter((a) => a.permission === "computer")).toHaveLength(2)
+      expect(asks[1]).toMatchObject({ permission: "computer", patterns: ["click:desktop"] })
+    })
+  })
+
+  test("grounder unconfigured → actionable error, no act, no ask", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async ({ provider, asks }) => {
+      const tool = await ComputerActionTool.init()
+      await expect(
+        tool.execute({ type: "click", target: { describe: "the Save button" } }, makeCtx(asks)),
+      ).rejects.toThrow(/computer\.grounder/)
+      expect(provider.acts).toHaveLength(0)
+      expect(asks).toHaveLength(0)
+    })
+  })
+
+  test("no prior observation → call computer_snapshot first", async () => {
+    await setup(grounded, async ({ provider, asks }) => {
+      _setGroundDepsForTests({ ask: async () => '{"x": 1, "y": 1}' })
+      const tool = await ComputerActionTool.init()
+      await expect(
+        tool.execute({ type: "click", target: { describe: "the Save button" } }, makeCtx(asks)),
+      ).rejects.toThrow(/computer_snapshot first/)
+      expect(provider.acts).toHaveLength(0)
+    })
+  })
+
+  test("unparseable grounder response → clear error, no act", async () => {
+    await setup(grounded, async ({ provider }) => {
+      _setGroundDepsForTests({ ask: async () => "I cannot locate that element, sorry." })
+      const snapshot = await ComputerSnapshotTool.init()
+      await snapshot.execute({ includeScreenshot: true }, makeCtx([]))
+
+      const tool = await ComputerActionTool.init()
+      await expect(
+        tool.execute({ type: "click", target: { describe: "the Save button" } }, makeCtx([])),
+      ).rejects.toThrow(/could not be parsed into coordinates/)
+      expect(provider.acts).toHaveLength(0)
+    })
+  })
+})
+
+describe("parseGroundPoint", () => {
+  const image = { width: 100, height: 50 }
+
+  test("parses clean JSON", () => {
+    expect(parseGroundPoint('{"x": 12, "y": 34}', image)).toEqual({ x: 12, y: 34 })
+  })
+
+  test("parses prose-wrapped JSON", () => {
+    expect(parseGroundPoint('The element is at {"x": 12, "y": 34} as requested.', image)).toEqual({ x: 12, y: 34 })
+  })
+
+  test("clamps out-of-bounds coordinates to the image", () => {
+    expect(parseGroundPoint('{"x": 500, "y": -10}', image)).toEqual({ x: 99, y: 0 })
+  })
+
+  test("falls back to a bare number pair", () => {
+    expect(parseGroundPoint("approximately 42, 17 pixels", image)).toEqual({ x: 42, y: 17 })
+  })
+
+  test("garbage response throws a clear error", () => {
+    expect(() => parseGroundPoint("no idea where that is", image)).toThrow(/could not be parsed into coordinates/)
   })
 })

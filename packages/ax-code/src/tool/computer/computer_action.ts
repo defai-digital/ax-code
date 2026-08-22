@@ -3,6 +3,8 @@ import { Tool } from "../tool"
 import DESCRIPTION from "./computer-action.txt"
 import { checkVisualRouting } from "@/visual/router"
 import { Computer } from "@/computer/computer"
+import { ground } from "@/computer/ground"
+import { Config } from "@/config/config"
 import { ComputerUseError } from "@ax-code/computer"
 import { toErrorMessage } from "@/util/error-message"
 import type { ComputerAction, ComputerTarget } from "@ax-code/computer"
@@ -12,15 +14,39 @@ const target = z
   .union([
     z.string().min(1).describe("Element id from the latest computer_snapshot (e.g. 'e1:3')"),
     z.object({ x: z.number(), y: z.number() }).describe("Screenshot pixel coordinates from the latest observation"),
+    z
+      .object({ describe: z.string().min(1) })
+      .describe(
+        "Natural-language description of the target element; resolved to coordinates by the configured grounder model",
+      ),
   ])
-  .describe("Element id or {x,y} point to act on")
+  .describe("Element id, {x,y} point, or {describe} natural-language target to act on")
 
-function resolveTarget(input: z.infer<typeof target>): ComputerTarget {
-  return typeof input === "string" ? { kind: "element", id: input } : { kind: "point", x: input.x, y: input.y }
+async function resolveTarget(input: z.infer<typeof target>): Promise<ComputerTarget> {
+  if (typeof input === "string") return { kind: "element", id: input }
+  if ("describe" in input) {
+    const grounder = (await Config.get()).computer?.grounder
+    if (!grounder?.model) {
+      throw new Error(
+        'computer.grounder is not configured — set computer.grounder.model (e.g. a UI-TARS vision endpoint, "provider/model") to enable natural-language targets, or use element ids from computer_snapshot instead',
+      )
+    }
+    const observation = await Computer.lastObservation()
+    if (!observation?.screenshot) {
+      throw new Error(
+        "No observation with a screenshot is available for grounding. Call computer_snapshot first, then retry the describe target.",
+      )
+    }
+    const point = await ground({ image: observation.screenshot, description: input.describe })
+    return { kind: "point", x: point.x, y: point.y }
+  }
+  return { kind: "point", x: input.x, y: input.y }
 }
 
 function describeTarget(t: z.infer<typeof target>): string {
-  return typeof t === "string" ? `element ${t}` : `(${t.x},${t.y})`
+  if (typeof t === "string") return `element ${t}`
+  if ("describe" in t) return `describe:"${t.describe}"`
+  return `(${t.x},${t.y})`
 }
 
 function summarize(params: z.infer<typeof parameters>): string {
@@ -44,12 +70,12 @@ function summarize(params: z.infer<typeof parameters>): string {
   }
 }
 
-function translate(params: z.infer<typeof parameters>): ComputerAction {
+async function translate(params: z.infer<typeof parameters>): Promise<ComputerAction> {
   switch (params.type) {
     case "click":
       return {
         type: "click",
-        target: resolveTarget(params.target),
+        target: await resolveTarget(params.target),
         button: params.button,
         count: params.count,
       }
@@ -60,14 +86,14 @@ function translate(params: z.infer<typeof parameters>): ComputerAction {
     case "scroll":
       return {
         type: "scroll",
-        target: params.target ? resolveTarget(params.target) : undefined,
+        target: params.target ? await resolveTarget(params.target) : undefined,
         direction: params.direction,
         amount: params.amount,
       }
     case "drag":
-      return { type: "drag", from: resolveTarget(params.from), to: resolveTarget(params.to) }
+      return { type: "drag", from: await resolveTarget(params.from), to: await resolveTarget(params.to) }
     case "set_value":
-      return { type: "set_value", target: resolveTarget(params.target), value: params.value }
+      return { type: "set_value", target: await resolveTarget(params.target), value: params.value }
     case "activate_window":
       return { type: "activate_window", windowId: params.windowId }
     case "launch_app":
@@ -126,7 +152,7 @@ export const ComputerActionTool = Tool.define("computer_action", {
       throw new Error(routing.diagnostic)
     }
 
-    const action = translate(params)
+    const action = await translate(params)
     const summary = summarize(params)
 
     // Permission pattern is scope-based (app/window/desktop the action lands
