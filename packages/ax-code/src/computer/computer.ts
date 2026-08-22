@@ -104,11 +104,16 @@ export namespace Computer {
 
   async function session(): Promise<ComputerSession> {
     const s = await state()
-    if (!s.session) {
-      const provider = s.injected ?? createProvider((await Config.get()).computer)
-      log.info("starting computer session", { provider: provider.name, injected: s.injected !== undefined })
-      s.session = new ComputerSession(provider)
-    }
+    if (s.session) return s.session
+    // Config load is the only yield point before assignment; a concurrent
+    // first use may have installed a session (or a test may have injected a
+    // provider) while this call awaited. Providers connect lazily, so
+    // discarding the never-used duplicate leaks nothing.
+    const computer = s.injected ? undefined : (await Config.get()).computer
+    if (s.session) return s.session
+    const provider = s.injected ?? createProvider(computer)
+    log.info("starting computer session", { provider: provider.name, injected: s.injected !== undefined })
+    s.session = new ComputerSession(provider)
     return s.session
   }
 
@@ -128,7 +133,11 @@ export namespace Computer {
   /** failures that mean the configured backend itself is not usable */
   function isUnavailable(err: unknown): boolean {
     if (err instanceof McpClientError) return true
-    if (err instanceof ComputerUseError) return err.code === "provider_unavailable" || err.code === "provider_error"
+    // provider_error is deliberately excluded: providers use it for routine,
+    // user-fixable scoping failures (app/window not found, non-numeric window
+    // id) — wrapping those as "backend unavailable" would send the model
+    // chasing the command path instead of fixing the scope.
+    if (err instanceof ComputerUseError) return err.code === "provider_unavailable"
     return false
   }
 

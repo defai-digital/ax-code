@@ -169,6 +169,8 @@ export class OcuProvider implements ComputerUseProvider {
   readonly name = "ocu"
 
   private client: McpClient | undefined
+  /** in-flight spawn, so concurrent first calls share one server process */
+  private connecting: Promise<McpClient> | undefined
   /** app of the most recent observe/launch; OCU tools require it */
   private currentApp: string | undefined
   /** elements of the most recent observation (raw provider ids) */
@@ -313,6 +315,18 @@ export class OcuProvider implements ComputerUseProvider {
   }
 
   async dispose(): Promise<void> {
+    const connecting = this.connecting
+    this.connecting = undefined
+    // a spawn still in flight when dispose runs lands afterwards — close it
+    // instead of leaking the process, and never cache it as the live client
+    if (connecting)
+      void connecting.then(
+        (client) => {
+          if (this.client === client) this.client = undefined
+          void client.close()
+        },
+        () => {},
+      )
     await this.client?.close()
     this.client = undefined
   }
@@ -333,13 +347,25 @@ export class OcuProvider implements ComputerUseProvider {
   }
 
   private async mcp(): Promise<McpClient> {
-    this.client ??=
+    if (this.client) return this.client
+    // concurrent first calls share one spawn; a failed spawn is not cached
+    this.connecting ??= this.connect()
+    try {
+      return await this.connecting
+    } finally {
+      this.connecting = undefined
+    }
+  }
+
+  private async connect(): Promise<McpClient> {
+    const client =
       this.config.client ??
       (await StdioMcpClient.start({
         command: this.config.command ?? process.env.AX_COMPUTER_OCU_COMMAND ?? "open-computer-use",
         args: this.config.args ?? ["mcp"],
         requestTimeoutMs: this.config.requestTimeoutMs,
       }))
-    return this.client
+    this.client = client
+    return client
   }
 }

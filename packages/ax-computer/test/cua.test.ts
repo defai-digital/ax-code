@@ -1,7 +1,13 @@
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { describe, expect, test } from "vitest"
 import type { McpCallToolResult } from "../src/mcp/stdio-client"
 import { CuaProvider } from "../src/providers/cua"
 import { FakeMcpClient, PNG_BASE64, cua } from "./fixtures"
+
+const server = fileURLToPath(new URL("./helpers/fake-mcp-server.mjs", import.meta.url))
 
 function makeProvider(handler?: (tool: string) => McpCallToolResult) {
   const client = new FakeMcpClient((tool) => {
@@ -132,6 +138,41 @@ describe("CuaProvider", () => {
     await provider.observe({ desktop: true })
     await provider.act({ type: "click", target: { kind: "point", x: 5, y: 6 } })
     expect(client.lastCall()).toEqual({ tool: "click", args: { x: 5, y: 6, scope: "desktop" } })
+  })
+
+  test("desktop-scope double/right clicks stay on the click tool", async () => {
+    // double_click/right_click require pid and reject `scope`, so a desktop
+    // context must route button/count through the plain click tool instead
+    const { client, provider } = makeProvider()
+    await provider.observe({ desktop: true })
+
+    await provider.act({ type: "click", target: { kind: "point", x: 5, y: 6 }, count: 2 })
+    expect(client.lastCall()).toEqual({ tool: "click", args: { x: 5, y: 6, scope: "desktop", count: 2 } })
+
+    await provider.act({ type: "click", target: { kind: "point", x: 5, y: 6 }, button: "right" })
+    expect(client.lastCall()).toEqual({ tool: "click", args: { x: 5, y: 6, scope: "desktop", button: "right" } })
+  })
+
+  test("desktop-scope type, keypress and drag route with scope: desktop", async () => {
+    // without scope:"desktop" the backend rejects these calls with a
+    // missing-pid error (type_text/press_key/hotkey/drag require pid otherwise)
+    const { client, provider } = makeProvider()
+    await provider.observe({ desktop: true })
+
+    await provider.act({ type: "type", text: "hi" })
+    expect(client.lastCall()).toEqual({ tool: "type_text", args: { scope: "desktop", text: "hi" } })
+
+    await provider.act({ type: "keypress", keys: ["a"] })
+    expect(client.lastCall()).toEqual({ tool: "press_key", args: { scope: "desktop", key: "a" } })
+
+    await provider.act({ type: "keypress", keys: ["cmd", "s"] })
+    expect(client.lastCall()).toEqual({ tool: "hotkey", args: { scope: "desktop", keys: ["cmd", "s"] } })
+
+    await provider.act({ type: "drag", from: { kind: "point", x: 1, y: 2 }, to: { kind: "point", x: 3, y: 4 } })
+    expect(client.lastCall()).toEqual({
+      tool: "drag",
+      args: { scope: "desktop", from_x: 1, from_y: 2, to_x: 3, to_y: 4 },
+    })
   })
 
   test("target-less scroll after a desktop observe anchors at the screenshot center", async () => {
@@ -335,5 +376,21 @@ describe("CuaProvider", () => {
     expect(caps.windowActivation).toBe(true)
     expect(caps.backgroundDelivery).toBe(true)
     expect(caps.actions).toContain("activate_window")
+  })
+
+  test("concurrent first calls share a single spawned server process", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ax-computer-spawn-"))
+    const countFile = path.join(dir, "spawns.txt")
+    process.env.AX_FAKE_MCP_COUNT_FILE = countFile
+    try {
+      const provider = new CuaProvider({ command: process.execPath, args: [server, "slow-init"] })
+      await Promise.all([provider.listApps(), provider.listApps()])
+      await provider.dispose()
+      const spawns = fs.readFileSync(countFile, "utf8").trim().split("\n")
+      expect(spawns).toHaveLength(1)
+    } finally {
+      delete process.env.AX_FAKE_MCP_COUNT_FILE
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

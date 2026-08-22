@@ -32,6 +32,7 @@ function createMockBrowser(contexts: ReturnType<typeof createMockContext>[] = []
   return {
     contexts: vi.fn().mockReturnValue(contexts),
     newContext: vi.fn().mockImplementation(async () => createMockContext(createMockPage())),
+    isConnected: vi.fn().mockReturnValue(true),
     close: vi.fn().mockResolvedValue(undefined),
   }
 }
@@ -189,6 +190,117 @@ describe("browser runtime CDP attach mode", () => {
         await expect(rt.open("https://example.com", { width: 1440, height: 900 })).resolves.toMatchObject({
           pageID: "page_1",
         })
+      },
+    })
+  })
+
+  test("goto failure in attach mode closes the orphan page, not the user's context", async () => {
+    await using tmp = await tmpdir({ config: { browser: { cdpUrl: "http://localhost:9222" } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const page = createMockPage()
+        page.goto.mockRejectedValueOnce(new Error("net::ERR_ABORTED"))
+        const context = createMockContext(page)
+        _setPlaywrightForTest(createMockPlaywright(createMockBrowser([context])) as never)
+
+        const rt = BrowserRuntime.forSession("ses_cdp")
+        await expect(rt.open("https://example.com", { width: 1440, height: 900 })).rejects.toThrow(/ERR_ABORTED/)
+
+        // the page was never registered, so without explicit cleanup it
+        // would leak as an orphan tab in the user's real browser
+        expect(page.close).toHaveBeenCalled()
+        expect(context.close).not.toHaveBeenCalled()
+        expect(getInternals(rt).pages.size).toBe(0)
+      },
+    })
+  })
+
+  test("goto failure in launch mode closes the created context", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const page = createMockPage()
+        page.goto.mockRejectedValueOnce(new Error("net::ERR_ABORTED"))
+        const context = createMockContext(page)
+        const launched = createMockBrowser()
+        launched.newContext.mockResolvedValueOnce(context)
+        _setPlaywrightForTest(createMockPlaywright(createMockBrowser(), launched) as never)
+
+        const rt = BrowserRuntime.forSession("ses_headless")
+        await expect(rt.open("https://example.com", { width: 1440, height: 900 })).rejects.toThrow(/ERR_ABORTED/)
+
+        expect(context.close).toHaveBeenCalled()
+        expect(getInternals(rt).pages.size).toBe(0)
+      },
+    })
+  })
+
+  test("attach-mode fallback context is owned by the runtime and closed on close()", async () => {
+    await using tmp = await tmpdir({ config: { browser: { cdpUrl: "http://localhost:9222" } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const page = createMockPage()
+        const fallback = createMockContext(page)
+        const browser = createMockBrowser([])
+        browser.newContext.mockResolvedValueOnce(fallback)
+        _setPlaywrightForTest(createMockPlaywright(browser) as never)
+
+        const rt = BrowserRuntime.forSession("ses_cdp")
+        await rt.open("https://example.com", { width: 1440, height: 900 })
+        await rt.close()
+
+        // the runtime created this context, so it must close it — otherwise
+        // it leaks in the user's browser past the CDP disconnect
+        expect(fallback.close).toHaveBeenCalled()
+        expect(browser.close).toHaveBeenCalled()
+      },
+    })
+  })
+
+  test("closePage in attach mode closes the owned fallback context", async () => {
+    await using tmp = await tmpdir({ config: { browser: { cdpUrl: "http://localhost:9222" } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const page = createMockPage()
+        const fallback = createMockContext(page)
+        const browser = createMockBrowser([])
+        browser.newContext.mockResolvedValueOnce(fallback)
+        _setPlaywrightForTest(createMockPlaywright(browser) as never)
+
+        const rt = BrowserRuntime.forSession("ses_cdp")
+        const opened = await rt.open("https://example.com", { width: 1440, height: 900 })
+        await rt.closePage(opened.pageID)
+
+        expect(fallback.close).toHaveBeenCalled()
+        expect(getInternals(rt).pages.size).toBe(0)
+      },
+    })
+  })
+
+  test("reconnects when the CDP connection has dropped", async () => {
+    await using tmp = await tmpdir({ config: { browser: { cdpUrl: "http://localhost:9222" } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const page = createMockPage()
+        const context = createMockContext(page)
+        const browser = createMockBrowser([context])
+        const pw = createMockPlaywright(browser)
+        _setPlaywrightForTest(pw as never)
+
+        const rt = BrowserRuntime.forSession("ses_cdp")
+        await rt.open("https://example.com", { width: 1440, height: 900 })
+        expect(pw.chromium.connectOverCDP).toHaveBeenCalledTimes(1)
+
+        // user closed their Chrome; the runtime must re-attach instead of
+        // failing with "Target closed" on every subsequent call
+        browser.isConnected.mockReturnValue(false)
+        await rt.open("https://example.com", { width: 1440, height: 900 })
+        expect(pw.chromium.connectOverCDP).toHaveBeenCalledTimes(2)
       },
     })
   })

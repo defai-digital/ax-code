@@ -105,6 +105,8 @@ export class CuaProvider implements ComputerUseProvider {
   readonly name = "cua"
 
   private client: McpClient | undefined
+  /** in-flight spawn, so concurrent first calls share one server process */
+  private connecting: Promise<McpClient> | undefined
   private context: CuaContext | undefined
   /** canonical element id -> cua targeting data, latest observation only */
   private elements = new Map<string, CuaElementEntry>()
@@ -195,6 +197,18 @@ export class CuaProvider implements ComputerUseProvider {
   }
 
   async dispose(): Promise<void> {
+    const connecting = this.connecting
+    this.connecting = undefined
+    // a spawn still in flight when dispose runs lands afterwards — close it
+    // instead of leaking the process, and never cache it as the live client
+    if (connecting)
+      void connecting.then(
+        (client) => {
+          if (this.client === client) this.client = undefined
+          void client.close()
+        },
+        () => {},
+      )
     await this.client?.close()
     this.client = undefined
   }
@@ -328,8 +342,17 @@ export class CuaProvider implements ComputerUseProvider {
         // { Window { pid, window_id } }). x,y are pixels of the last
         // get_window_state PNG; the driver reverses Retina backing scale and
         // any window-image downscale to window-local points.
-        // assumption: double_click/right_click take the same target fields as click
-        const tool = action.count === 2 ? "double_click" : action.button === "right" ? "right_click" : "click"
+        // assumption: double_click/right_click take the same target fields as click.
+        // They require pid and reject `scope` (additionalProperties: false), so
+        // they only apply to window-routed clicks; on desktop scope the click
+        // tool's own button/count fields drive the screen-absolute pixel path.
+        const windowed = this.context?.scope === "window"
+        const tool =
+          windowed && action.count === 2
+            ? "double_click"
+            : windowed && action.button === "right"
+              ? "right_click"
+              : "click"
         const args = this.targetArgs(action.target)
         if (tool === "click" && action.button && action.button !== "left") args.button = action.button
         if (tool === "click" && action.count && action.count > 1) args.count = action.count
@@ -359,7 +382,6 @@ export class CuaProvider implements ComputerUseProvider {
             args.x = center.x
             args.y = center.y
           }
-          if (this.context?.scope === "desktop") args.scope = "desktop"
         }
         args.direction = action.direction
         args.amount = action.amount ?? 3
@@ -392,8 +414,11 @@ export class CuaProvider implements ComputerUseProvider {
     }
   }
 
-  /** (pid, window_id) of the last observation, when it was window-scoped */
+  /** routing fields of the last observation: pid/window_id for a window scope, scope for desktop */
   private routeArgs(): Record<string, unknown> {
+    // desktop-scoped input tools take scope:"desktop" instead of pid/window_id;
+    // without it the backend fails the call with a missing-pid error
+    if (this.context?.scope === "desktop") return { scope: "desktop" }
     if (this.context?.scope !== "window" || this.context.pid === undefined) return {}
     return { pid: this.context.pid, window_id: this.context.windowId }
   }
@@ -442,14 +467,26 @@ export class CuaProvider implements ComputerUseProvider {
   }
 
   private async mcp(): Promise<McpClient> {
-    this.client ??=
+    if (this.client) return this.client
+    // concurrent first calls share one spawn; a failed spawn is not cached
+    this.connecting ??= this.connect()
+    try {
+      return await this.connecting
+    } finally {
+      this.connecting = undefined
+    }
+  }
+
+  private async connect(): Promise<McpClient> {
+    const client =
       this.config.client ??
       (await StdioMcpClient.start({
         command: this.config.command ?? process.env.AX_COMPUTER_CUA_COMMAND ?? "cua-driver",
         args: this.config.args ?? ["mcp"],
         requestTimeoutMs: this.config.requestTimeoutMs,
       }))
-    return this.client
+    this.client = client
+    return client
   }
 }
 

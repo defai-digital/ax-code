@@ -92,6 +92,7 @@ function injectPage(
     pageID,
     pwPage: page,
     context,
+    ownsContext: true, // launch-mode entries always own their context
     url: "http://localhost:3000",
     title: "Test Page",
     viewport: { width: 1440, height: 900 },
@@ -593,6 +594,36 @@ describe("browser runtime", () => {
 
     expect(getInternals(runtime).latestPageID).toBe("page_1")
     expect(getInternals(runtime).pages.size).toBe(1)
+  })
+
+  test("closePage invalidates snapshots bound to that page", async () => {
+    const page = createMockPage()
+    injectPage(runtime, "page_1", page, createMockContext())
+
+    page.evaluate.mockResolvedValueOnce([])
+    const snap = await runtime.snapshot("latest", false)
+
+    await runtime.closePage("page_1")
+
+    // The stale snapshot must fail with the contract error, not a generic
+    // "page not found" from resolvePage after consumeSnapshot succeeds.
+    await expect(runtime.action("latest", "click", { snapshotID: snap.snapshotID, uid: "uid_1" })).rejects.toThrow(
+      /BROWSER_STALE_SNAPSHOT/,
+    )
+  })
+
+  test("close invalidates outstanding snapshots", async () => {
+    const page = createMockPage()
+    injectPage(runtime, "page_1", page, createMockContext())
+
+    page.evaluate.mockResolvedValueOnce([])
+    const snap = await runtime.snapshot("latest", false)
+
+    await runtime.close()
+
+    await expect(runtime.action("latest", "click", { snapshotID: snap.snapshotID, uid: "uid_1" })).rejects.toThrow(
+      /BROWSER_STALE_SNAPSHOT/,
+    )
   })
 
   // -- UID clearing on snapshot --

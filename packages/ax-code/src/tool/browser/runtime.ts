@@ -108,6 +108,10 @@ type PageEntry = {
   pageID: string
   pwPage: PwPage
   context: PwBrowserContext
+  /** true when this runtime created the context (always in launch mode;
+   *  in attach mode only for the newContext fallback) and may therefore
+   *  close it. The user's shared default context is never closed. */
+  ownsContext: boolean
   url: string
   title: string
   viewport: { width: number; height: number }
@@ -319,6 +323,15 @@ export class BrowserRuntime {
   async open(url: string, viewport: { width: number; height: number }): Promise<BrowserPage> {
     const pw = this.ensurePlaywright()
 
+    // The peer may have gone away silently (e.g. the user closed their
+    // browser in attach mode). Drop the stale handle so the launch/connect
+    // below runs again instead of failing with "Target closed" forever.
+    if (this.browser && this.browser.isConnected() === false) {
+      this.browser = undefined
+      this.launchPromise = undefined
+      this.attached = false
+    }
+
     if (!this.browser) {
       if (!this.launchPromise) {
         this.launchPromise = this.launchOrConnect(pw)
@@ -335,14 +348,13 @@ export class BrowserRuntime {
     // In attach mode the user's session (tabs, cookies, sign-in state) lives in
     // the browser's existing default context; a fresh isolated context would
     // not see it. Fall back to newContext only when none exists.
-    const context = this.attached
-      ? (this.browser.contexts()[0] ??
-        (await this.browser.newContext({
-          viewport: { width: viewport.width, height: viewport.height },
-        })))
-      : await this.browser.newContext({
-          viewport: { width: viewport.width, height: viewport.height },
-        })
+    const existing = this.attached ? this.browser.contexts()[0] : undefined
+    const context =
+      existing ??
+      (await this.browser.newContext({
+        viewport: { width: viewport.width, height: viewport.height },
+      }))
+    const ownsContext = !existing
     const pwPage = await context.newPage()
 
     this.pageCounter++
@@ -369,13 +381,30 @@ export class BrowserRuntime {
       })
     })
 
-    await pwPage.goto(url, { waitUntil: "domcontentloaded" })
-    const title = await pwPage.title()
+    let title: string
+    try {
+      await pwPage.goto(url, { waitUntil: "domcontentloaded" })
+      title = await pwPage.title()
+    } catch (err) {
+      // The page is not registered in this.pages yet, so close() and
+      // closePage() would never see it. Close it (and the context if we
+      // created one) here — otherwise it leaks as an orphan tab, which in
+      // attach mode survives even browser.close() (a transport-only
+      // disconnect on CDP connections).
+      try {
+        if (ownsContext) await context.close()
+        else await pwPage.close()
+      } catch {
+        // Page/context may already be closed
+      }
+      throw err
+    }
 
     const entry: PageEntry = {
       pageID,
       pwPage,
       context,
+      ownsContext,
       url,
       title,
       viewport,
@@ -687,10 +716,11 @@ export class BrowserRuntime {
   async close(): Promise<void> {
     for (const entry of this.pages.values()) {
       try {
-        // Attach mode: the context is the user's shared default context —
-        // close only the pages (tabs) this runtime created, never the context.
-        if (this.attached) await entry.pwPage.close()
-        else await entry.context.close()
+        // Close only what this runtime owns: contexts it created, and in
+        // attach mode the pages (tabs) it opened in the user's shared
+        // default context — never that context itself.
+        if (entry.ownsContext) await entry.context.close()
+        else await entry.pwPage.close()
       } catch {
         // Context may already be closed
       }
@@ -699,6 +729,7 @@ export class BrowserRuntime {
     this.consoleBuffers.clear()
     this.networkBuffers.clear()
     this.uidRegistry.clear()
+    this.snapshots.clear()
     this.latestPageID = undefined
     this.pageCounter = 0
 
@@ -722,8 +753,8 @@ export class BrowserRuntime {
   }
 
   /**
-   * Close a single page and its browser context, releasing resources.
-   * Safe to call with an unknown pageID (no-op).
+   * Close a single page (and its browser context when this runtime owns
+   * it), releasing resources. Safe to call with an unknown pageID (no-op).
    */
   async closePage(pageID: string): Promise<void> {
     const entry = this.pages.get(pageID)
@@ -733,15 +764,21 @@ export class BrowserRuntime {
     for (const [uid, ref] of this.uidRegistry) {
       if (ref.pageID === entry.pageID) this.uidRegistry.delete(uid)
     }
+    // Clear snapshots bound to this page
+    for (const [snapshotID, snap] of this.snapshots) {
+      if (snap.pageID === entry.pageID) this.snapshots.delete(snapshotID)
+    }
 
     this.pages.delete(entry.pageID)
     this.consoleBuffers.delete(entry.pageID)
     this.networkBuffers.delete(entry.pageID)
 
     try {
-      // Attach mode: close only the tab we created, never the user's context.
-      if (this.attached) await entry.pwPage.close()
-      else await entry.context.close()
+      // Attach mode with the user's shared context: close only the tab we
+      // created, never the context. Contexts this runtime owns (launch
+      // mode, or the attach-mode newContext fallback) are closed outright.
+      if (entry.ownsContext) await entry.context.close()
+      else await entry.pwPage.close()
     } catch {
       // Context may already be closed
     }

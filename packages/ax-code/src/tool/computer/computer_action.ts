@@ -4,6 +4,7 @@ import DESCRIPTION from "./computer-action.txt"
 import { checkVisualRouting } from "@/visual/router"
 import { Computer } from "@/computer/computer"
 import { ComputerUseError } from "@ax-code/computer"
+import { toErrorMessage } from "@/util/error-message"
 import type { ComputerAction, ComputerTarget } from "@ax-code/computer"
 import { renderObservation } from "./render"
 
@@ -153,28 +154,42 @@ export const ComputerActionTool = Tool.define("computer_action", {
     }
 
     // Verify-after-act: re-observe the same scope so the model can check the
-    // outcome against a fresh screenshot and element list.
-    const observation = await Computer.reobserve()
-    const rendered = renderObservation(observation, {
-      includeScreenshot: true,
-      screenshotName: "computer-action",
-    })
+    // outcome against a fresh screenshot and element list. The action already
+    // happened at this point, so a failed re-observation must not mask its
+    // result — report the outcome and note that verification is unavailable.
+    let observation: Awaited<ReturnType<typeof Computer.reobserve>> | undefined
+    let rendered: ReturnType<typeof renderObservation> | undefined
+    let reobserveError: string | undefined
+    try {
+      observation = await Computer.reobserve()
+      rendered = renderObservation(observation, {
+        includeScreenshot: true,
+        screenshotName: "computer-action",
+      })
+    } catch (err) {
+      reobserveError = toErrorMessage(err)
+    }
 
     const header = result.ok
       ? `${summary}: ok`
       : `${summary}: REFUSED by ${result.provider}${result.refusal ? ` (${result.refusal})` : ""}${result.detail ? ` — ${result.detail}` : ""}. Do not retry the same action blindly.`
 
+    const body = rendered
+      ? `Fresh observation after the action:\n${rendered.output}`
+      : `Re-observation failed (${reobserveError}), so the outcome is unverified. Call computer_snapshot to check the current state before acting again.`
+
     return {
       title: summary,
-      output: `${header}\n\nFresh observation after the action:\n${rendered.output}`,
+      output: `${header}\n\n${body}`,
       metadata: {
         action: result.action,
         provider: result.provider,
         ok: result.ok,
         refusal: result.refusal,
-        elementCount: observation.elements.length,
+        elementCount: observation?.elements.length,
+        reobserveError,
       },
-      attachments: rendered.attachments,
+      attachments: rendered?.attachments,
     }
   },
 })

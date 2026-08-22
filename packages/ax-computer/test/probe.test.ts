@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url"
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import type { ActionResult, ComputerAction } from "../src/action"
 import { probeProvider } from "../src/probe"
 import { OcuProvider } from "../src/providers/ocu"
@@ -40,21 +40,27 @@ class HangingProvider implements ComputerUseProvider {
 
 describe("probeProvider", () => {
   test("ok path: real MCP round-trip (spawn + handshake + list_apps), apps counted", async () => {
-    const report = await probeProvider(ocuOnFakeServer("basic"))
+    const provider = ocuOnFakeServer("basic")
+    const dispose = vi.spyOn(provider, "dispose")
+    const report = await probeProvider(provider)
 
     // the fake server answers list_apps with an empty catalog text
     expect(report).toMatchObject({ ok: true, provider: "ocu", apps: 0 })
     expect(report.latencyMs).toBeGreaterThanOrEqual(0)
     expect(report.error).toBeUndefined()
+    // a successful probe must not leak the backend process either
+    expect(dispose).toHaveBeenCalledTimes(1)
   })
 
   test("spawn failure: ok:false, error names the command", async () => {
     const provider = new OcuProvider({ command: "ax-code-definitely-not-a-real-binary" })
+    const dispose = vi.spyOn(provider, "dispose")
     const report = await probeProvider(provider)
 
     expect(report.ok).toBe(false)
     expect(report.provider).toBe("ocu")
     expect(report.error).toContain("ax-code-definitely-not-a-real-binary")
+    expect(dispose).toHaveBeenCalledTimes(1)
   })
 
   test("slow server: timeout flips ok:false and disposes the provider", async () => {

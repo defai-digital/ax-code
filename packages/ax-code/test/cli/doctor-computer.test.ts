@@ -1,6 +1,18 @@
-import { describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import type { ComputerUseProvider, ProbeReport } from "@ax-code/computer"
 import { getComputerUseCheck } from "../../src/cli/cmd/doctor-computer"
+
+// Computer.resolveBackend honors AX_COMPUTER_*_COMMAND host env overrides, and
+// the default-command assertions below would fail on a machine that exports
+// them. Pin them away so the check output is host-independent.
+beforeEach(() => {
+  vi.stubEnv("AX_COMPUTER_CUA_COMMAND", undefined)
+  vi.stubEnv("AX_COMPUTER_OCU_COMMAND", undefined)
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
 
 function probeReturning(report: Partial<ProbeReport>) {
   return vi.fn(
