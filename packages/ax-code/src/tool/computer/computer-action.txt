@@ -5,7 +5,7 @@
 - Prefer element ids; a {describe: "..."} target is the fallback for elements without ids/bounds and requires computer.grounder configured (a grounding model resolves the description to coordinates)
 - type: types text into the focused element
 - keypress: presses keys or combinations (e.g. ["cmd", "s"], ["return"])
-- scroll: scrolls at an optional target, direction up/down/left/right, amount in pixels
+- scroll: scrolls in a direction (up/down/left/right); prefer an element-id target (required for the macOS OCU/axnative backend)
 - drag: drags from one element/point to another
 - set_value: sets an element's value directly by element id
 - activate_window: brings a window to the front by windowId

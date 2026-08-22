@@ -51,6 +51,51 @@ export interface StdioMcpClientOptions {
 const PROTOCOL_VERSION = "2024-11-05"
 const DEFAULT_REQUEST_TIMEOUT_MS = 60_000
 const STDERR_TAIL_LIMIT = 8 * 1024
+/**
+ * A single newline-delimited JSON-RPC frame must fit under this bound. A
+ * misbehaving or hostile backend that emits an unbounded unterminated line
+ * would otherwise grow the read buffer without limit; crossing the cap fails
+ * the connection instead of exhausting memory.
+ */
+const STDOUT_LINE_LIMIT = 16 * 1024 * 1024
+
+/**
+ * Reject command strings that cannot be a legitimate executable path before
+ * they reach spawn. The client always spawns with `shell: false`, so shell
+ * metacharacters are never interpreted — but an empty command or one carrying
+ * control characters (newline / carriage return / NUL) is either a
+ * misconfiguration or an injection attempt, and is refused up front. Relative
+ * names ("cua-driver") are intentionally allowed so PATH lookup keeps working.
+ */
+export function assertSpawnableCommand(command: unknown): asserts command is string {
+  if (typeof command !== "string" || command.trim().length === 0) {
+    throw new McpClientError("spawn_failed", "MCP server command must be a non-empty string")
+  }
+  if (/[\0\n\r]/.test(command)) {
+    throw new McpClientError(
+      "spawn_failed",
+      `MCP server command contains invalid control characters: ${JSON.stringify(command)}`,
+    )
+  }
+}
+
+/**
+ * Validate the shape of a tools/call result before providers consume it. A
+ * backend that returns a primitive, an array, or a malformed content list must
+ * surface a protocol error here — not a crash deep inside result mapping.
+ * `null`/`undefined` is a legal empty result.
+ */
+function normalizeCallToolResult(result: unknown, tool: string): McpCallToolResult {
+  if (result === null || result === undefined) return {}
+  if (typeof result !== "object" || Array.isArray(result)) {
+    throw new McpClientError("protocol", `MCP tool "${tool}" returned a non-object result`)
+  }
+  const record = result as Record<string, unknown>
+  if (record.content !== undefined && !Array.isArray(record.content)) {
+    throw new McpClientError("protocol", `MCP tool "${tool}" returned a non-array content field`)
+  }
+  return record as McpCallToolResult
+}
 
 interface PendingRequest {
   resolve: (result: unknown) => void
@@ -96,9 +141,13 @@ export class StdioMcpClient implements McpClient {
 
   constructor(private readonly options: StdioMcpClientOptions) {
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
+    assertSpawnableCommand(options.command)
     this.child = spawn(options.command, options.args ?? [], {
       stdio: ["pipe", "pipe", "pipe"],
       env: options.env ?? process.env,
+      // never run the backend through a shell: the command is an executable
+      // path (or PATH name), and args are passed as argv, not a command line
+      shell: false,
     })
     this.exited = new Promise<void>((resolve) => {
       this.child.once("error", (error) => {
@@ -148,7 +197,7 @@ export class StdioMcpClient implements McpClient {
 
   async callTool(tool: string, args: Record<string, unknown>): Promise<McpCallToolResult> {
     const result = await this.request("tools/call", { name: tool, arguments: args })
-    return (result ?? {}) as McpCallToolResult
+    return normalizeCallToolResult(result, tool)
   }
 
   async close(): Promise<void> {
@@ -228,10 +277,23 @@ export class StdioMcpClient implements McpClient {
     this.stdoutBuffer += chunk
     for (;;) {
       const newline = this.stdoutBuffer.indexOf("\n")
-      if (newline < 0) return
+      if (newline < 0) break
       const line = this.stdoutBuffer.slice(0, newline).trim()
       this.stdoutBuffer = this.stdoutBuffer.slice(newline + 1)
       if (line) this.onMessage(line)
+    }
+    // framing is newline-delimited: a buffer this large without a newline is
+    // an unbounded line from a misbehaving/hostile backend — fail the
+    // connection rather than grow memory without limit
+    if (this.stdoutBuffer.length > STDOUT_LINE_LIMIT) {
+      const error = new McpClientError(
+        "protocol",
+        `MCP server emitted a line larger than ${STDOUT_LINE_LIMIT} bytes; dropping the connection`,
+      )
+      this.stdoutBuffer = ""
+      this.exitError ??= error
+      this.rejectAll(error)
+      this.child.kill()
     }
   }
 

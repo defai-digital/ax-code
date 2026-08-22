@@ -84,7 +84,7 @@ describe("AXNativeProvider MCP surface", () => {
     await provider.act({ type: "click", target: { kind: "element", id: "0" } })
     await provider.act({ type: "type", text: "hello" })
     await provider.act({ type: "keypress", keys: ["cmd", "n"] })
-    await provider.act({ type: "scroll", direction: "down" })
+    await provider.act({ type: "scroll", direction: "down", target: { kind: "element", id: "2" } })
     await provider.act({ type: "drag", from: { kind: "point", x: 1, y: 2 }, to: { kind: "point", x: 3, y: 4 } })
     await provider.act({ type: "set_value", target: { kind: "element", id: "1" }, value: "42" })
 
