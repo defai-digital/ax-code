@@ -314,6 +314,8 @@ enum AppDiscovery {
         return nil
     }
 
+    private static let appLaunchTimeout: TimeInterval = 10
+
     private static func openApplication(at appURL: URL) throws {
         let configuration = NSWorkspace.OpenConfiguration()
         let semaphore = DispatchSemaphore(value: 0)
@@ -324,22 +326,30 @@ enum AppDiscovery {
             semaphore.signal()
         }
 
-        waitForSignal(semaphore)
+        guard waitForSignal(semaphore, timeout: appLaunchTimeout) else {
+            throw ComputerUseError.stateUnavailable(
+                "Timed out after \(Int(appLaunchTimeout))s waiting for \(appURL.lastPathComponent) to launch."
+            )
+        }
 
         if let launchError = errorBox.error {
             throw launchError
         }
     }
 
-    private static func waitForSignal(_ semaphore: DispatchSemaphore) {
+    private static func waitForSignal(_ semaphore: DispatchSemaphore, timeout: TimeInterval) -> Bool {
+        let deadline = Date(timeIntervalSinceNow: timeout)
         if Thread.isMainThread {
             while semaphore.wait(timeout: .now()) == .timedOut {
+                if Date() >= deadline {
+                    return false
+                }
                 RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.01))
             }
-            return
+            return true
         }
 
-        semaphore.wait()
+        return semaphore.wait(timeout: .now() + timeout) == .success
     }
 
     private final class LaunchErrorBox: @unchecked Sendable {
@@ -395,6 +405,8 @@ enum AppDiscovery {
     }
 
     private enum SpotlightAppIndex {
+        private static let maxSpotlightResults = 500
+
         static func recentApps(cutoffDate: Date) -> [SpotlightAppRecord] {
             let sortingAttributes = [
                 lastUsedDateRankingAttribute as CFString,
@@ -421,7 +433,11 @@ enum AppDiscovery {
             var seen: Set<String> = []
             var records: [SpotlightAppRecord] = []
 
-            for index in 0..<MDQueryGetResultCount(query) {
+            // Bound the scan: a pathological Spotlight index must not stall
+            // list_apps. 500 results is far more than the recent-apps catalog
+            // ever needs.
+            let resultCount = min(MDQueryGetResultCount(query), maxSpotlightResults)
+            for index in 0..<resultCount {
                 guard let rawResult = MDQueryGetResultAtIndex(query, index) else {
                     continue
                 }
