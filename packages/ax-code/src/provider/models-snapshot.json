@@ -19886,6 +19886,33 @@
           "output": 65536
         }
       },
+      "google/gemma-4-26b-a4b-uncensored": {
+        "id": "google/gemma-4-26b-a4b-uncensored",
+        "name": "Gemma 4 26B A4B Uncensored",
+        "description": "Gemma 4 26B A4B Uncensored is an NVFP4 open-weight multimodal mixture-of-experts model tuned for fewer refusals across chat, coding, tool use, and long-context work.",
+        "family": "gemma",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-22",
+        "last_updated": "2026-08-22",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "input": 131072,
+          "output": 32768
+        }
+      },
       "google/gemma-4-31b-it:thinking": {
         "id": "google/gemma-4-31b-it:thinking",
         "name": "Gemma 4 31B Thinking",
@@ -60406,6 +60433,53 @@
           "output": 393216
         }
       },
+      "deepinfra/mimo-v2.5": {
+        "id": "deepinfra/mimo-v2.5",
+        "name": "MiMo V2.5 (DeepInfra)",
+        "description": "Open MiMo model for multimodal coding agents and long-context automation",
+        "family": "mimo",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2024-12",
+        "release_date": "2026-04-22",
+        "last_updated": "2026-04-22",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 16384
+        }
+      },
       "deepinfra/nemotron-3-ultra-550b": {
         "id": "deepinfra/nemotron-3-ultra-550b",
         "name": "Nemotron 3 Ultra 550B (DeepInfra)",
@@ -60596,6 +60670,50 @@
         "limit": {
           "context": 262144,
           "output": 32768
+        }
+      },
+      "deepinfra/mimo-v2.5-pro": {
+        "id": "deepinfra/mimo-v2.5-pro",
+        "name": "MiMo V2.5 Pro (DeepInfra)",
+        "description": "Stronger MiMo Pro tier for multimodal reasoning and coding-agent execution",
+        "family": "mimo",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": false,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": false,
+        "temperature": true,
+        "knowledge": "2024-12",
+        "release_date": "2026-04-22",
+        "last_updated": "2026-04-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048576,
+          "output": 16384
         }
       },
       "deepinfra/hy3": {
@@ -61026,6 +61144,50 @@
         "limit": {
           "context": 131072,
           "output": 32768
+        }
+      },
+      "novita/mimo-v2.5": {
+        "id": "novita/mimo-v2.5",
+        "name": "MiMo V2.5 (NovitaAI)",
+        "description": "Open MiMo model for multimodal coding agents and long-context automation",
+        "family": "mimo",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": false,
+        "temperature": true,
+        "knowledge": "2024-12",
+        "release_date": "2026-04-22",
+        "last_updated": "2026-04-22",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048576,
+          "output": 131072
         }
       },
       "novita/llama-3.3-70b-instruct": {
@@ -61651,6 +61813,48 @@
         "limit": {
           "context": 1048576,
           "output": 8192
+        }
+      },
+      "novita/mimo-v2.5-pro": {
+        "id": "novita/mimo-v2.5-pro",
+        "name": "MiMo V2.5 Pro (NovitaAI)",
+        "description": "Stronger MiMo Pro tier for multimodal reasoning and coding-agent execution",
+        "family": "mimo",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": false,
+        "temperature": true,
+        "knowledge": "2024-12",
+        "release_date": "2026-04-22",
+        "last_updated": "2026-04-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048576,
+          "output": 131072
         }
       },
       "novita/ernie-4.5-vl-424b-a47b": {
@@ -154942,9 +155146,12 @@
             "type": "effort",
             "values": [
               "none",
+              "minimal",
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -154969,7 +155176,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1000000,
+          "context": 1048576,
           "output": 131072
         }
       },
@@ -158693,9 +158900,12 @@
             "type": "effort",
             "values": [
               "none",
+              "minimal",
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -158717,7 +158927,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1000000,
+          "context": 1048576,
           "output": 131072
         }
       },

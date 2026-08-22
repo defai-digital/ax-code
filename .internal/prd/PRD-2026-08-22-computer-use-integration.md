@@ -34,8 +34,22 @@ code reviews of both reference implementations (vendored under
 | --------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
 | `ComputerUseProvider` | 100% AX-owned (`packages/ax-computer`)     | Insulates the agent from backend tool names, schemas, and drift                                                                 |
 | Cua (`cua-driver`)    | Pinned dependency / official SDK or MCP    | ~100k+ lines of Rust across 3 OS adapters; actively maintained upstream; ships an explicit embedding SDK (`@trycua/cua-driver`) |
-| OCU                   | Absorb macOS Swift core later (port + fix) | Small (~27 files), closest to Codex semantics; its Linux/Windows Go runtimes are C-grade re-implementations — do not absorb     |
+| OCU                   | Absorbed (Phase 2) — port landed; the upstream `"ocu"` backend option was then retired from user config (see note below) | Small (~27 files), closest to Codex semantics; its Linux/Windows Go runtimes are C-grade re-implementations — do not absorb     |
 | DeepSeek Harness      | Absorb 4 design patterns only, zero code   | Plugin machinery is vendored Cordis; developer preview with breaking changes; no computer-use at all                            |
+
+> **Post-Phase-2 cleanup (2026-08-22).** With the AX-native port landed,
+  live compat green, and the A/B gate passed, the upstream OCU backend
+  (`"ocu"` / `open-computer-use` / `AX_COMPUTER_OCU_COMMAND`) was removed
+  from the user-facing config surface (`computer.provider`,
+  `computer.overrides`, `Computer.BACKENDS`, doctor preflight, and the
+  associated tests). User-selectable backends are now exactly two:
+  `"axnative"` (macOS primary) and `"cua"` (Windows/Linux + macOS
+  fallback). The `OcuProvider` class stays in `packages/ax-computer` —
+  it is the shared MCP implementation `AXNativeProvider` subclasses and
+  the reference arm of the live A/B harness — and the OCU repo stays in
+  `.internal/reference/open-codex-computer-use` for review. Existing
+  configs that still say `"ocu"` fail zod validation with a clear enum
+  error naming the two valid values.
 
 Harness patterns worth absorbing: (1) staged tool-execution pipeline
 (pre-execute waterfall → fail-closed guards → one-shot approval → execute →

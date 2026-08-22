@@ -4,7 +4,6 @@ import {
   ComputerUseError,
   CuaProvider,
   McpClientError,
-  OcuProvider,
   defaultAxnativeCommand,
 } from "@ax-code/computer/index"
 import type {
@@ -48,7 +47,6 @@ export namespace Computer {
   /** default backend commands and their env overrides, for resolution and diagnostics */
   const BACKENDS = {
     cua: { command: "cua-driver", env: "AX_COMPUTER_CUA_COMMAND" },
-    ocu: { command: "open-computer-use", env: "AX_COMPUTER_OCU_COMMAND" },
     // built binary under packages/ax-computer/native (release, then debug), else PATH
     axnative: { command: defaultAxnativeCommand(), env: "AX_COMPUTER_AXNATIVE_COMMAND" },
   } as const
@@ -111,13 +109,13 @@ export namespace Computer {
   /**
    * Test injection shape: a map keyed by provider name. The presence of
    * `default` is required for unscoped scopes; per-app overrides look up
-   * the entry whose key matches the provider name (e.g. `cua` or `ocu`).
+   * the entry whose key matches the provider name (e.g. `cua` or `axnative`).
    * When `default` is absent, unscoped acts throw — tests that only
    * exercise overrides must stub the default or always pass a scope.
    */
   /**
    * Test injection shape, mirrors the runtime config surface. Providers
-   * themselves are keyed by provider name (e.g. "cua", "ocu", or any
+   * themselves are keyed by provider name (e.g. "cua", "axnative", or any
    * arbitrary string); `overrides` is app-keyed routing just like
    * `computer.overrides` in ax-code.json. `default` is the fallback used
    * when no override matches.
@@ -266,7 +264,7 @@ export namespace Computer {
   function createProvider(computer: Config.Info["computer"], target: ProviderName): ComputerUseProvider {
     if (!computer?.provider) {
       throw new Error(
-        'Computer use is not configured. Set computer.provider ("cua", "ocu", or "axnative") in ax-code.json to enable computer tools.',
+        'Computer use is not configured. Set computer.provider ("cua" or "axnative") in ax-code.json to enable computer tools.',
       )
     }
     // command/args fall through to the providers, which apply the
@@ -277,13 +275,11 @@ export namespace Computer {
     switch (target) {
       case "cua":
         return new CuaProvider(options)
-      case "ocu":
-        return new OcuProvider(options)
       case "axnative":
         return new AXNativeProvider(options)
       default:
         throw new Error(
-          `Computer use override "${target}" is not a built-in backend; only "cua", "ocu", and "axnative" are recognized.`,
+          `Computer use override "${target}" is not a built-in backend; only "cua" and "axnative" are recognized.`,
         )
     }
   }
@@ -335,7 +331,7 @@ export namespace Computer {
     const cfg = await Config.get()
     const resolved = resolveBackend(cfg.computer)
     const command = resolved ? `${resolved.command} ${resolved.args.join(" ")}` : "unknown"
-    const env = resolved?.env ?? "AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_OCU_COMMAND / AX_COMPUTER_AXNATIVE_COMMAND"
+    const env = resolved?.env ?? "AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_AXNATIVE_COMMAND"
     const detail = err instanceof Error ? err.message : String(err)
     return new Error(
       `Computer-use backend "${name}" is unavailable (tried "${command}"; override with ${env} or computer.command config). ${detail}`,
@@ -388,7 +384,7 @@ export namespace Computer {
     const name = await resolveObserveProvider(s, scope)
     if (!name) {
       throw new Error(
-        'Computer use is not configured. Set computer.provider ("cua", "ocu", or "axnative") in ax-code.json to enable computer tools.',
+        'Computer use is not configured. Set computer.provider ("cua" or "axnative") in ax-code.json to enable computer tools.',
       )
     }
     const session = await sessionFor(name)
@@ -508,7 +504,7 @@ export namespace Computer {
     const name = await resolveObserveProvider(s, { desktop: true })
     if (!name) {
       throw new Error(
-        'Computer use is not configured. Set computer.provider ("cua", "ocu", or "axnative") in ax-code.json to enable computer tools.',
+        'Computer use is not configured. Set computer.provider ("cua" or "axnative") in ax-code.json to enable computer tools.',
       )
     }
     const session = await sessionFor(name)

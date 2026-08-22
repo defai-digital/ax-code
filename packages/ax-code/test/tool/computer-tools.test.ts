@@ -29,7 +29,7 @@ vi.mock("@/visual/router", () => ({
 // overrides away to keep the test host-independent.
 beforeEach(() => {
   vi.stubEnv("AX_COMPUTER_CUA_COMMAND", undefined)
-  vi.stubEnv("AX_COMPUTER_OCU_COMMAND", undefined)
+  vi.stubEnv("AX_COMPUTER_AXNATIVE_COMMAND", undefined)
 })
 
 afterEach(() => {
@@ -600,55 +600,55 @@ describe("computer routing overrides (Phase 3)", () => {
 
   test("per-app overrides route observations to the named provider", async () => {
     await using tmp = await tmpdir({
-      config: { computer: { provider: "cua", overrides: { Finder: "ocu" } } },
+      config: { computer: { provider: "cua", overrides: { Finder: "axnative" } } },
     })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const cua = new FakeComputerProvider("cua")
-        const ocu = new FakeComputerProvider("ocu")
+        const axnative = new FakeComputerProvider("axnative")
         await Computer.useProvider({
           providers: new Map([
             ["cua", cua],
-            ["ocu", ocu],
+            ["axnative", axnative],
           ]),
           default: "cua",
-          overrides: { Finder: "ocu" },
+          overrides: { Finder: "axnative" },
         })
 
         // TextEdit (default) and desktop go to the default session
         await Computer.observe({ desktop: true })
         await Computer.observe({ app: "TextEdit" })
-        // Finder matches the override → ocu session
+        // Finder matches the override → axnative session
         await Computer.observe({ app: "Finder" })
-        // a second Finder observation reuses the existing ocu session
+        // a second Finder observation reuses the existing axnative session
         await Computer.observe({ app: "Finder" })
 
         expect(cua.scopes).toEqual([{ desktop: true }, { app: "TextEdit" }])
-        expect(ocu.scopes).toEqual([{ app: "Finder" }, { app: "Finder" }])
+        expect(axnative.scopes).toEqual([{ app: "Finder" }, { app: "Finder" }])
         const status = await Computer.status()
         // exactly one default session + one override session; no extras
-        expect(status.activeProviders.sort()).toEqual(["cua", "ocu"])
+        expect(status.activeProviders.sort()).toEqual(["axnative", "cua"])
       },
     })
   })
 
   test("window-scoped observations ignore overrides (only app-scoped does)", async () => {
     await using tmp = await tmpdir({
-      config: { computer: { provider: "cua", overrides: { Finder: "ocu" } } },
+      config: { computer: { provider: "cua", overrides: { Finder: "axnative" } } },
     })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const cua = new FakeComputerProvider("cua")
-        const ocu = new FakeComputerProvider("ocu")
+        const axnative = new FakeComputerProvider("axnative")
         await Computer.useProvider({
           providers: new Map([
             ["cua", cua],
-            ["ocu", ocu],
+            ["axnative", axnative],
           ]),
           default: "cua",
-          overrides: { Finder: "ocu" },
+          overrides: { Finder: "axnative" },
         })
 
         await Computer.observe({ windowId: "101" })
@@ -658,7 +658,7 @@ describe("computer routing overrides (Phase 3)", () => {
         // the windowId and desktop scopes were not in the override map, so
         // they hit the default session regardless of the Finder override
         expect(cua.scopes).toEqual([{ windowId: "101" }, { desktop: true }])
-        expect(ocu.scopes).toEqual([{ app: "Finder" }])
+        expect(axnative.scopes).toEqual([{ app: "Finder" }])
       },
     })
   })
@@ -692,34 +692,34 @@ describe("computer routing overrides (Phase 3)", () => {
     // any element act issued against ids from the override session cannot
     // resolve on the default session (which has no element map for those ids).
     await using tmp = await tmpdir({
-      config: { computer: { provider: "cua", overrides: { Finder: "ocu" } } },
+      config: { computer: { provider: "cua", overrides: { Finder: "axnative" } } },
     })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const cua = new FakeComputerProvider("cua")
-        const ocu = new FakeComputerProvider("ocu")
+        const axnative = new FakeComputerProvider("axnative")
         await Computer.useProvider({
           providers: new Map([
             ["cua", cua],
-            ["ocu", ocu],
+            ["axnative", axnative],
           ]),
           default: "cua",
-          overrides: { Finder: "ocu" },
+          overrides: { Finder: "axnative" },
         })
 
-        // observe Finder on the override (ocu) — produces e1:* ids
+        // observe Finder on the override (axnative) — produces e1:* ids
         await Computer.observe({ app: "Finder" })
-        expect(ocu.acts).toEqual([])
+        expect(axnative.acts).toEqual([])
 
         const tool = await ComputerActionTool.init()
-        // element ids from ocu must be acted on the ocu session; cua has
+        // element ids from axnative must be acted on the axnative session; cua has
         // never seen "e1:save-btn", so its stale_target guard fires.
         // Without the override-aware routing, the act would have hit cua
         // (the desktop default) and silently mis-clicked.
         const result = await tool.execute({ type: "click", target: "e1:save-btn" }, makeCtx([]))
-        // the act landed on the right session (ocu) and recorded ok
-        expect(ocu.acts).toEqual([
+        // the act landed on the right session (axnative) and recorded ok
+        expect(axnative.acts).toEqual([
           { type: "click", target: { kind: "element", id: "save-btn" }, button: undefined, count: undefined },
         ])
         // cua never received the act
