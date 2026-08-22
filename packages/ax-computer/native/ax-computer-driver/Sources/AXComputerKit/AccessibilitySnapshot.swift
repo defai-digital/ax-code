@@ -1860,8 +1860,13 @@ private func splitCamelCase(_ value: String) -> String {
 }
 
 func sanitizeText(_ value: String, textLimit: SnapshotTextLimit = .defaults) -> String {
+    // The rendered tree is line/tab structured: a raw newline, carriage
+    // return, or tab inside an element label would corrupt the framing that
+    // the OCU parser relies on. Escape them before any truncation.
     let collapsed = value
+        .replacingOccurrences(of: "\r", with: "\\r")
         .replacingOccurrences(of: "\n", with: "\\n")
+        .replacingOccurrences(of: "\t", with: "\\t")
         .trimmingCharacters(in: .whitespacesAndNewlines)
 
     if let maxCount = textLimit.maxCount, collapsed.count > maxCount {
