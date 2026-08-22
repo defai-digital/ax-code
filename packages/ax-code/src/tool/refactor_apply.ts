@@ -93,6 +93,16 @@ export const RefactorApplyTool = Tool.define("refactor_apply", {
     const sourceState = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
     const startedAt = new Date()
 
+    // Boundary validation (PRD E3, Phase 2): the engine's branded
+    // `RefactorPlanID` accepts the unbranded string through `.make()`,
+    // but `.make()` is a blind cast — any garbage value sails through.
+    // Validate against `RefactorPlanID.zod` first so a forged or
+    // truncated id never reaches the engine. The shape is "rpl_<base62>"
+    // — exactly what the public `plan_refactor` tool produces.
+    const parsed = RefactorPlanID.zod.safeParse(args.planId)
+    if (!parsed.success) {
+      throw new Error(`refactor_apply: invalid planId ${JSON.stringify(args.planId)} — expected "rpl_<base62>"`)
+    }
     const result = await DebugEngine.applySafeRefactor(projectID, {
       planId: RefactorPlanID.make(args.planId),
       patch: args.patch,

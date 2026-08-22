@@ -16,6 +16,13 @@ import { Process } from "./internal/process"
 // here because refactor_apply still consumes them. A future slice can adapt
 // callers to consume VerificationEnvelope directly via the builder, at
 // which point this runner can shed the legacy shape.
+//
+// Phase 2 P2.4 (council decision 10): long-running entrypoints accept an
+// optional `signal?: AbortSignal`, defaulting to `host.abort()`. The host
+// accessor gives us a single switch to flip the active signal in tests
+// without leaking process-wide AbortControllers. The signal is honored by
+// Process.run (which calls terminate() on abort — see internal/process.ts),
+// so cancellation propagates through every subprocess-level run.
 
 const log = Log.create({ service: "planner.verification.runner" })
 
@@ -183,16 +190,27 @@ export async function resolveCommands(cwd: string, override?: CommandOverride): 
 // conservative enough for large test suites but still bounded.
 export const RUN_COMMAND_TIMEOUT_MS = 5 * 60 * 1000
 
+// Resolve the active AbortSignal. Phase 2 long-running entrypoints accept
+// an optional explicit signal — when the caller omits one we fall back to
+// the host's stable signal so a test fixture can flip cancellation
+// without leaking process-wide AbortControllers.
+function resolveSignal(provided?: AbortSignal): AbortSignal {
+  return provided ?? codeReasonHost().abort()
+}
+
 export async function runCommand(
   cmd: string,
   cwd: string,
   timeoutMs: number = RUN_COMMAND_TIMEOUT_MS,
+  options?: { signal?: AbortSignal },
 ): Promise<{ ok: boolean; stdout: string; stderr: string; code: number; timedOut: boolean }> {
+  const signal = resolveSignal(options?.signal)
   const { code, stdout, stderr } = await Process.run(Process.shellCommand(cmd), {
     cwd,
     env: Env.sanitize(),
     timeout: timeoutMs,
     nothrow: true,
+    abort: signal,
   })
   const stdoutText = stdout.toString()
   const stderrText = stderr.toString()
@@ -216,12 +234,17 @@ export async function runCommand(
   }
 }
 
-export async function runCheck(label: string, cmd: string | null, cwd: string): Promise<TimedCheckResult> {
+export async function runCheck(
+  label: string,
+  cmd: string | null,
+  cwd: string,
+  options?: { signal?: AbortSignal },
+): Promise<TimedCheckResult> {
   if (!cmd) {
     log.info(`${label}: skipped (no command configured)`)
     return { ok: true, errors: [], skipped: true }
   }
-  const result = await runCommand(cmd, cwd)
+  const result = await runCommand(cmd, cwd, RUN_COMMAND_TIMEOUT_MS, options)
   log.info(`${label}: ${result.ok ? "ok" : "failed"}`, { code: result.code })
   if (result.ok) return { ok: true, errors: [], skipped: false, timedOut: false, exitCode: result.code }
   // Surface the first ~20 lines of the error stream. Full output is captured
@@ -237,6 +260,7 @@ export async function runTests(
   affectedFiles: string[],
   projectID: ProjectID,
   scope: "worktree" | "none",
+  options?: { signal?: AbortSignal },
 ): Promise<TimedTestResult> {
   if (!cmd) return { ok: true, errors: [], ran: 0, failed: 0, failures: [], selection: "skipped", skipped: true }
 
@@ -253,7 +277,7 @@ export async function runTests(
   // false greens. If the command itself supports a `--` escape or similar,
   // the caller configures it via the `test` override. Otherwise we run the
   // full suite and record the selection we *would* have used for audit.
-  const result = await runCommand(cmd, cwd)
+  const result = await runCommand(cmd, cwd, RUN_COMMAND_TIMEOUT_MS, options)
   if (result.ok) {
     return {
       ok: true,

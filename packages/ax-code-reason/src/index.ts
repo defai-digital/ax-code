@@ -4,6 +4,7 @@ import { CodeNodeID } from "./id"
 import type { ProjectID } from "./id"
 import { DebugEngineQuery } from "./query"
 import { RefactorPlanID } from "./id"
+import type { PlanRow } from "./repository"
 import type { RefactorPlanKind, RefactorPlanRisk, RefactorPlanStatus } from "./schema.sql"
 import { analyzeBugImpl, type AnalyzeBugInput } from "./analyze-bug"
 import { detectDuplicatesImpl, type DetectDuplicatesInput } from "./detect-duplicates"
@@ -419,7 +420,7 @@ export namespace DebugEngine {
     return DebugEngineQuery.listPlans(projectID, opts).map(planRowToPublic)
   }
 
-  function planRowToPublic(row: ReturnType<typeof DebugEngineQuery.getPlan> & {}): RefactorPlan {
+  function planRowToPublic(row: PlanRow): RefactorPlan {
     return {
       planId: row.id,
       kind: row.kind,

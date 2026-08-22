@@ -1,15 +1,18 @@
 import { beforeEach, describe, expect, test } from "vitest"
 import { DebugEngineQuery } from "../src/query"
 import { RefactorPlanID, EmbeddingCacheID } from "../src/id"
-import { EmbeddingCacheTable, RefactorPlanTable } from "../src/schema.sql"
 import { installTestHost, type TestHost } from "./fixture/host"
+import type { PlanInsert, EmbeddingInsert } from "../src/repository"
 
 // Persistence contract for DebugEngineQuery against the in-memory
-// Map-backed db port: CRUD round-trips, ordering/limit semantics, project
-// scoping, and failure paths (a failing host transaction leaves no partial
-// state).
+// Map-backed repos: CRUD round-trips, ordering/limit semantics, project
+// scoping, and failure paths (a failing host write leaves no partial
+// state). Phase 2 split the old FakeDb into two narrow repositories
+// (plans + embeddings); the assertions below cover them both through the
+// public DebugEngineQuery surface so the repository swap is invisible to
+// callers.
 
-function planRow(id: string, overrides: Partial<DebugEngineQuery.PlanInsert> = {}): DebugEngineQuery.PlanInsert {
+function planRow(id: string, overrides: Partial<PlanInsert> = {}): PlanInsert {
   return {
     id: RefactorPlanID.make(id),
     project_id: "test-project",
@@ -22,15 +25,11 @@ function planRow(id: string, overrides: Partial<DebugEngineQuery.PlanInsert> = {
     status: "pending",
     graph_cursor_at_creation: null,
     time_created: 1000,
-    time_updated: 1000,
     ...overrides,
   }
 }
 
-function embeddingRow(
-  nodeID: string,
-  overrides: Partial<DebugEngineQuery.CacheInsert> = {},
-): DebugEngineQuery.CacheInsert {
+function embeddingRow(nodeID: string, overrides: Partial<EmbeddingInsert> = {}): EmbeddingInsert {
   return {
     id: EmbeddingCacheID.make(`ebc_${nodeID}`),
     project_id: "test-project",
@@ -40,7 +39,6 @@ function embeddingRow(
     embedding: Buffer.from([1, 2, 3, 4]),
     dim: 1,
     time_created: 1000,
-    time_updated: 1000,
     ...overrides,
   }
 }
@@ -114,7 +112,7 @@ describe("DebugEngineQuery", () => {
     DebugEngineQuery.upsertEmbedding(embeddingRow("node-1"))
     DebugEngineQuery.upsertEmbedding(embeddingRow("node-1", { signature_hash: "sig-v2", dim: 3 }))
 
-    const rows = [...testHost.db.storeFor(EmbeddingCacheTable).values()]
+    const rows = [...testHost.stores.embeddings.storeFor("test-project").values()]
     expect(rows).toHaveLength(1)
     const found = DebugEngineQuery.getEmbedding("test-project", "node-1")
     expect(found?.signature_hash).toBe("sig-v2")
@@ -141,13 +139,13 @@ describe("DebugEngineQuery", () => {
     expect(DebugEngineQuery.getEmbedding("other-project", "node-9")).toBeDefined()
   })
 
-  test("a failing transaction leaves no partial state behind", () => {
+  test("a failing store write throws and persists nothing", () => {
     DebugEngineQuery.upsertEmbedding(embeddingRow("node-1"))
     const before = DebugEngineQuery.getEmbedding("test-project", "node-1")
 
-    // upsertEmbedding runs delete+insert inside ONE host transaction; a
-    // commit-time failure must roll back the delete as well.
-    testHost.db.hooks.beforeCommit = () => {
+    // upsertEmbedding writes through the embedding repo directly; a
+    // commit-time failure must throw and the existing row stays intact.
+    testHost.stores.hooks.beforeEmbeddingWrite = () => {
       throw new Error("simulated disk failure")
     }
     expect(() => DebugEngineQuery.upsertEmbedding(embeddingRow("node-1", { signature_hash: "sig-v2" }))).toThrow(
@@ -156,13 +154,13 @@ describe("DebugEngineQuery", () => {
     expect(DebugEngineQuery.getEmbedding("test-project", "node-1")?.signature_hash).toBe(before?.signature_hash)
   })
 
-  test("host db failures propagate out of use() and persist nothing", () => {
-    testHost.db.hooks.beforeUse = () => {
+  test("host repo failures propagate and persist nothing", () => {
+    testHost.stores.hooks.beforePlanWrite = () => {
       throw new Error("database unavailable")
     }
     expect(() => DebugEngineQuery.insertPlan(planRow("rpl_never"))).toThrow("database unavailable")
-    expect(testHost.db.storeFor(RefactorPlanTable).size).toBe(0)
-    testHost.db.hooks.beforeUse = undefined
+    expect(testHost.stores.plans.storeFor("test-project").size).toBe(0)
+    testHost.stores.hooks.beforePlanWrite = undefined
     expect(DebugEngineQuery.getPlan("test-project", RefactorPlanID.make("rpl_never"))).toBeUndefined()
   })
 

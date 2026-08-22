@@ -10,7 +10,15 @@ import path from "path"
 type Subpath = {
   name: string
   load: () => Promise<unknown>
+  /**
+   * Runtime symbols the subpath must expose. Type-only exports (interfaces,
+   * types) are erased by the JS runtime and cannot be inspected through the
+   * module namespace proxy. For type-only subpaths, leave this empty and use
+   * `typeSymbols` to assert the type surface separately.
+   */
   symbols: string[]
+  /** Type names declared in the subpath's namespace — checked at compile time elsewhere. */
+  typeSymbols?: string[]
 }
 
 const SUBPATHS: Subpath[] = [
@@ -33,6 +41,32 @@ const SUBPATHS: Subpath[] = [
     name: "./query",
     load: () => import("@ax-code/ax-code-reason/query"),
     symbols: ["DebugEngineQuery"],
+  },
+  {
+    // Phase 2 (D2): narrow repository contracts. The interfaces themselves
+    // are type-only and erased at runtime; the only runtime export is the
+    // schema-version sentinel. Core's drizzle-backed implementations live
+    // in `packages/ax-code/src/dre/repositories.ts` and consume the
+    // table shapes via `./schema.sql`.
+    name: "./repository",
+    load: () => import("@ax-code/ax-code-reason/repository"),
+    symbols: ["REPOSITORY_SCHEMA_VERSION"],
+    typeSymbols: [
+      "PlanRepository",
+      "EmbeddingRepository",
+      "PlanRow",
+      "PlanInsert",
+      "EmbeddingRow",
+      "EmbeddingInsert",
+      "DebugEngineStores",
+    ],
+  },
+  {
+    name: "./schema.sql",
+    load: () => import("@ax-code/ax-code-reason/schema.sql"),
+    // Runtime values only — types like RefactorPlanStatus are erased
+    // and can't be inspected via the namespace proxy.
+    symbols: ["RefactorPlanTable", "EmbeddingCacheTable", "DebugPatternTable"],
   },
   {
     name: "./runtime-debug",

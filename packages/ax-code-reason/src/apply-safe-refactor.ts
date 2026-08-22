@@ -72,6 +72,11 @@ export type ApplySafeRefactorInput = {
   // Aggressive-mode escape hatches. Require mode="aggressive".
   skipLint?: boolean
   skipTests?: boolean
+  // Phase 2 (council decision 10): optional AbortSignal for long-running
+  // entrypoints. Defaults to `host.abort()` so a single host-level signal
+  // can cancel every in-flight apply. Process.run honors the signal via
+  // its `abort` option — see internal/process.ts.
+  signal?: AbortSignal
 }
 
 function isPlanStale(params: { planCursor: string | null; currentCursor: string | null }): boolean {
@@ -137,6 +142,16 @@ export async function applySafeRefactorImpl(
   })
 
   // Step 1: load plan.
+  // Boundary validation (PRD E3, Phase 2): the public entrypoint receives a
+  // branded `RefactorPlanID`, but blind `.make()` casts at the package boundary
+  // (and at the tool layer in core) let any string pass. Validate against the
+  // existing `RefactorPlanID.zod` pattern so a forged or truncated id fails
+  // closed before we touch storage. The shape is "rpl_<base62>" — exactly
+  // what `RefactorPlanID.ascending()` / `.descending()` produce.
+  const parsed = RefactorPlanID.zod.safeParse(input.planId)
+  if (!parsed.success) {
+    return abort("plan-id-invalid")
+  }
   const row = DebugEngineQuery.getPlan(projectID, input.planId)
   if (!row) return abort("plan-not-found")
   if (row.status !== "pending") {
@@ -227,7 +242,12 @@ export async function applySafeRefactorImpl(
       `cmd:test=${commands.test ? "yes" : "no"}`,
     )
 
-    const typecheckCheck = await runCheck("typecheck", commands.typecheck, shadowHandle.path)
+    // Phase 2 P2.4: propagate the caller's AbortSignal — when omitted,
+    // runCheck/runTests each resolve to `host.abort()` themselves.
+    const checkOptions = { signal: input.signal }
+
+    const typecheckCheck = await runCheck("typecheck", commands.typecheck, shadowHandle.path, checkOptions)
+    if (input.signal?.aborted) return abort("aborted")
     if (!typecheckCheck.ok) {
       return abort("typecheck-failed", {
         typecheck: legacyCheck(typecheckCheck),
@@ -239,7 +259,8 @@ export async function applySafeRefactorImpl(
     const lintCheck =
       mode === "aggressive" && input.skipLint
         ? { ok: true, errors: [], skipped: true }
-        : await runCheck("lint", commands.lint, shadowHandle.path)
+        : await runCheck("lint", commands.lint, shadowHandle.path, checkOptions)
+    if (input.signal?.aborted) return abort("aborted")
     if (!lintCheck.ok) {
       return abort("lint-failed", {
         typecheck: legacyCheck(typecheckCheck),
@@ -259,7 +280,7 @@ export async function applySafeRefactorImpl(
           selection: "skipped" as const,
           skipped: true,
         } satisfies DebugEngine.TestResult & { skipped: boolean })
-      : await runTests(commands.test, shadowHandle.path, row.affected_files, projectID, scope)
+      : await runTests(commands.test, shadowHandle.path, row.affected_files, projectID, scope, checkOptions)
     if (!testResult.ok) {
       return abort("tests-failed", {
         typecheck: legacyCheck(typecheckCheck),

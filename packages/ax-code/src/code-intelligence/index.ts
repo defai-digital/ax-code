@@ -7,6 +7,7 @@ import { CodeSymbolNoteID } from "./id"
 import type { CodeNodeID } from "./id"
 import type { CodeNodeKind, CodeEdgeKind, SymbolNoteKind, NoteOrigin, SymbolSignalType } from "./schema.sql"
 import type { ProjectID } from "../project/schema"
+import { Hash } from "../util/hash"
 
 const log = Log.create({ service: "code-intelligence" })
 
@@ -374,13 +375,40 @@ export namespace CodeIntelligence {
     // in v2.3.9 for the same reason. Every reader of `nodeCount` /
     // `edgeCount` should use live queries, not the cached summary.
     const cursor = CodeGraphQuery.getCursor(projectID)
+    const nodeCount = CodeGraphQuery.countNodes(projectID)
+    const edgeCount = CodeGraphQuery.countEdges(projectID)
     return {
       projectID,
-      nodeCount: CodeGraphQuery.countNodes(projectID),
-      edgeCount: CodeGraphQuery.countEdges(projectID),
+      nodeCount,
+      edgeCount,
       lastCommitSha: cursor?.commit_sha ?? null,
       lastUpdated: cursor?.time_updated ?? null,
+      // Phase 2 (council decision 2): derived migration-free graph
+      // revision. null when the index cursor is missing (fresh project,
+      // interrupted `ax-code index`, or a project that was cleared
+      // without a re-index). Any non-null → null flip (or any hash
+      // change) is the signal the engine falls back to full analysis
+      // from — see ax-code-reason's `apply-safe-refactor.ts` /
+      // `incremental.ts` (Phase 3).
+      revision: computeGraphRevision(cursor?.commit_sha ?? null, cursor?.time_updated ?? null, nodeCount, edgeCount),
     }
+  }
+
+  // Build the derived graph revision hash per council decision 2:
+  // sha256(commit_sha, time_updated, node_count, edge_count). The cursor's
+  // commit_sha + time_updated mark the last successful full-index run;
+  // the live counts catch incremental updates the cursor summary missed.
+  // Any of the four inputs changing ⇒ new hash ⇒ stale-by-definition for
+  // incremental consumers. Null inputs collapse to the documented "no
+  // cursor" signature.
+  function computeGraphRevision(
+    commitSha: string | null,
+    timeUpdated: number | null,
+    nodeCount: number,
+    edgeCount: number,
+  ): string | null {
+    if (commitSha === null || timeUpdated === null) return null
+    return Hash.fast(`${commitSha}|${timeUpdated}|${nodeCount}|${edgeCount}`)
   }
 
   // Test helper. Production code should not need this — the graph is

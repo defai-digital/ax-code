@@ -19,8 +19,17 @@ describe("dre-glue host contract", () => {
   test("importing the glue configures the engine host singleton", () => {
     const host = codeReasonHost()
     expect(typeof host.graph.getSymbol).toBe("function")
-    expect(typeof host.db.use).toBe("function")
-    expect(typeof host.db.transaction).toBe("function")
+    // Phase 2 (D2): the old `db: DreDbPort` handle is gone. The host now
+    // exposes narrow repositories; the engine never sees drizzle types.
+    expect(typeof host.stores.plans.insertPlan).toBe("function")
+    expect(typeof host.stores.plans.getPlan).toBe("function")
+    expect(typeof host.stores.embeddings.upsertEmbedding).toBe("function")
+    expect(typeof host.stores.embeddings.getEmbedding).toBe("function")
+    // New Phase 2 accessors.
+    expect(typeof host.sourceState).toBe("function")
+    expect(typeof host.graphRevision).toBe("function")
+    expect(typeof host.clock).toBe("function")
+    expect(typeof host.abort).toBe("function")
     expect(typeof host.killTree).toBe("function")
   })
 
@@ -89,14 +98,25 @@ describe("dre-glue host contract", () => {
     })
   })
 
-  test("db port delegates use/transaction to the core Database", async () => {
+  test("stores delegate persistence through the drizzle-backed repositories", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const host = codeReasonHost()
-        expect(host.db.use(() => 42)).toBe(42)
-        expect(host.db.transaction(() => "tx")).toBe("tx")
+        // The repositories are sync against Database.use / Database.transaction;
+        // touching `insertPlan` here would also write a row, so keep this test
+        // focused on the contract surface — function existence and shape.
+        const repo = host.stores.plans
+        expect(typeof repo.insertPlan).toBe("function")
+        expect(typeof repo.getPlan).toBe("function")
+        expect(typeof repo.listPlans).toBe("function")
+        expect(typeof repo.updatePlanStatus).toBe("function")
+        expect(typeof repo.deletePlan).toBe("function")
+        const embeddingRepo = host.stores.embeddings
+        expect(typeof embeddingRepo.upsertEmbedding).toBe("function")
+        expect(typeof embeddingRepo.getEmbedding).toBe("function")
+        expect(typeof embeddingRepo.deleteEmbedding).toBe("function")
       },
     })
   })

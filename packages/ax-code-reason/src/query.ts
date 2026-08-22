@@ -1,17 +1,22 @@
-import { eq, and, desc } from "drizzle-orm"
 import { codeReasonHost } from "./host"
-import { RefactorPlanTable, EmbeddingCacheTable, type RefactorPlanStatus } from "./schema.sql"
-import type { RefactorPlanID } from "./id"
+import { RefactorPlanID } from "./id"
 import type { ProjectID } from "./id"
+import type { RefactorPlanStatus } from "./schema.sql"
+import type { PlanRow, PlanInsert, EmbeddingRow, EmbeddingInsert } from "./repository"
 
 // Low-level CRUD for DRE-owned tables. Mirrors the structure of
 // code-intelligence/query.ts — one namespace, one file, every function
 // project-scoped, no ambient state. This is the only file that touches
-// RefactorPlanTable and EmbeddingCacheTable directly.
+// the plan + embedding repositories directly.
 //
 // ADR-002: DRE must never write to code_node / code_edge / code_file /
 // code_index_cursor. This namespace has no imports from
 // code-intelligence/schema.sql — enforced by the file itself.
+//
+// ADR-Phase-2 (D2): persistence flows through `host.stores.*` (a pair of
+// narrow repositories), not a drizzle handle. The host implementation is
+// the drizzle-backed `repositories.ts` shipped from core; the package
+// stays drizzle-free.
 
 function normalizeQueryLimit(limit: number | undefined): number | undefined {
   if (limit === undefined) return undefined
@@ -22,101 +27,56 @@ function normalizeQueryLimit(limit: number | undefined): number | undefined {
 export namespace DebugEngineQuery {
   // ─── Refactor plan CRUD ─────────────────────────────────────────────
 
-  export type PlanRow = typeof RefactorPlanTable.$inferSelect
-  export type PlanInsert = typeof RefactorPlanTable.$inferInsert
-
   export function insertPlan(row: PlanInsert): void {
-    codeReasonHost().db.use((db) => db.insert(RefactorPlanTable).values(row).run())
+    codeReasonHost().stores.plans.insertPlan(row)
   }
 
   export function getPlan(projectID: ProjectID, id: RefactorPlanID): PlanRow | undefined {
-    return codeReasonHost().db.use((db) =>
-      db
-        .select()
-        .from(RefactorPlanTable)
-        .where(and(eq(RefactorPlanTable.project_id, projectID), eq(RefactorPlanTable.id, id)))
-        .limit(1)
-        .all(),
-    )[0]
+    return codeReasonHost().stores.plans.getPlan(projectID, id)
   }
 
   export function listPlans(projectID: ProjectID, opts?: { status?: RefactorPlanStatus; limit?: number }): PlanRow[] {
-    const limit = normalizeQueryLimit(opts?.limit)
-    if (limit === 0) return []
-    const filters = [eq(RefactorPlanTable.project_id, projectID)]
-    if (opts?.status) filters.push(eq(RefactorPlanTable.status, opts.status))
-    return codeReasonHost().db.use((db) => {
-      const q = db
-        .select()
-        .from(RefactorPlanTable)
-        .where(and(...filters))
-        .orderBy(desc(RefactorPlanTable.time_created))
-      return limit === undefined ? q.all() : q.limit(limit).all()
-    })
+    return codeReasonHost().stores.plans.listPlans(projectID, opts)
   }
 
   export function updatePlanStatus(projectID: ProjectID, id: RefactorPlanID, status: RefactorPlanStatus): void {
-    codeReasonHost().db.use((db) =>
-      db
-        .update(RefactorPlanTable)
-        .set({ status })
-        .where(and(eq(RefactorPlanTable.project_id, projectID), eq(RefactorPlanTable.id, id)))
-        .run(),
-    )
+    codeReasonHost().stores.plans.updatePlanStatus(projectID, id, status)
   }
 
   export function deletePlan(projectID: ProjectID, id: RefactorPlanID): void {
-    codeReasonHost().db.use((db) =>
-      db
-        .delete(RefactorPlanTable)
-        .where(and(eq(RefactorPlanTable.project_id, projectID), eq(RefactorPlanTable.id, id)))
-        .run(),
-    )
+    codeReasonHost().stores.plans.deletePlan(projectID, id)
   }
 
   // ─── Embedding cache CRUD ───────────────────────────────────────────
 
-  export type CacheRow = typeof EmbeddingCacheTable.$inferSelect
-  export type CacheInsert = typeof EmbeddingCacheTable.$inferInsert
-
-  export function upsertEmbedding(row: CacheInsert): void {
+  export function upsertEmbedding(row: EmbeddingInsert): void {
     // On node_id collision, replace. We key the cache by (project_id,
     // node_id) rather than the surrogate `id`, so the only sensible
     // conflict policy is "newest wins".
-    codeReasonHost().db.transaction((db) => {
-      db.delete(EmbeddingCacheTable)
-        .where(and(eq(EmbeddingCacheTable.project_id, row.project_id), eq(EmbeddingCacheTable.node_id, row.node_id)))
-        .run()
-      db.insert(EmbeddingCacheTable).values(row).run()
-    })
+    codeReasonHost().stores.embeddings.upsertEmbedding(row)
   }
 
-  export function getEmbedding(projectID: ProjectID, nodeID: string): CacheRow | undefined {
-    return codeReasonHost().db.use((db) =>
-      db
-        .select()
-        .from(EmbeddingCacheTable)
-        .where(and(eq(EmbeddingCacheTable.project_id, projectID), eq(EmbeddingCacheTable.node_id, nodeID)))
-        .limit(1)
-        .all(),
-    )[0]
+  export function getEmbedding(projectID: ProjectID, nodeID: string): EmbeddingRow | undefined {
+    return codeReasonHost().stores.embeddings.getEmbedding(projectID, nodeID)
   }
 
   export function deleteEmbedding(projectID: ProjectID, nodeID: string): void {
-    codeReasonHost().db.use((db) =>
-      db
-        .delete(EmbeddingCacheTable)
-        .where(and(eq(EmbeddingCacheTable.project_id, projectID), eq(EmbeddingCacheTable.node_id, nodeID)))
-        .run(),
-    )
+    codeReasonHost().stores.embeddings.deleteEmbedding(projectID, nodeID)
   }
 
   // Test helper. Clears every DRE row for a project. Production code
   // should not need this — plans and caches live as long as the project.
   export function __clearProject(projectID: ProjectID): void {
-    codeReasonHost().db.use((db) => {
-      db.delete(RefactorPlanTable).where(eq(RefactorPlanTable.project_id, projectID)).run()
-      db.delete(EmbeddingCacheTable).where(eq(EmbeddingCacheTable.project_id, projectID)).run()
-    })
+    const host = codeReasonHost()
+    // Walk the public API so call-sites stay the same whether the host
+    // is drizzle-backed (core) or Map-backed (tests).
+    const plans = host.stores.plans.listPlans(projectID)
+    for (const row of plans) host.stores.plans.deletePlan(projectID, row.id)
+    // Embeddings have no list API — delegate to the repo's optional
+    // project-scoped clear helper (Map-backed fakes + core drizzle impl
+    // both implement it). Bind to the repo instance so a `this.rows`
+    // lookup finds the Map.
+    const embeddings = host.stores.embeddings as { __clearProject?: (this: unknown, id: ProjectID) => void }
+    embeddings.__clearProject?.call(host.stores.embeddings, projectID)
   }
 }

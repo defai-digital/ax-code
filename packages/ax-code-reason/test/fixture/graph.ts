@@ -33,7 +33,9 @@ export type FakeGraph = {
   addCallerEdge(calleeId: string, callerId: string): void
   addReference(symbolId: string, reference: Omit<Graph.Reference, "explain"> & { explain?: Graph.Explain }): void
   addDependent(file: string, dependent: string): void
-  setStatus(overrides: Partial<Omit<Graph.Status, "projectID">>): void
+  setStatus(
+    overrides: Partial<Omit<Graph.Status, "projectID" | "revision">> & { revision?: Graph.Status["revision"] },
+  ): void
 }
 
 let explainCounter = 0
@@ -53,7 +55,7 @@ export function createFakeGraph(): FakeGraph {
   const callers = new Map<string, string[]>()
   const references = new Map<string, Graph.Reference[]>()
   const dependents = new Map<string, string[]>()
-  let statusOverrides: Partial<Omit<Graph.Status, "projectID">> = {}
+  let statusOverrides: Partial<Graph.Status> = {}
 
   const fake: FakeGraph = {
     symbols,
@@ -129,6 +131,10 @@ export function createFakeGraph(): FakeGraph {
           edgeCount: statusOverrides.edgeCount ?? [...callers.values()].reduce((n, list) => n + list.length, 0),
           lastCommitSha: statusOverrides.lastCommitSha ?? null,
           lastUpdated: statusOverrides.lastUpdated ?? null,
+          // Phase 2 (council decision 2): defaults to null when no
+          // statusOverrides.revision is set. Tests can override to simulate
+          // a derived graph revision hash.
+          revision: statusOverrides.revision ?? null,
         }
       },
     },

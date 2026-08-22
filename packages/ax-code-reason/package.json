@@ -10,6 +10,8 @@
     "./host": "./src/host.ts",
     "./id": "./src/id.ts",
     "./query": "./src/query.ts",
+    "./repository": "./src/repository.ts",
+    "./schema.sql": "./src/schema.sql.ts",
     "./runtime-debug": "./src/runtime-debug.ts",
     "./analyze-bug": "./src/analyze-bug.ts",
     "./analyze-impact": "./src/analyze-impact.ts",

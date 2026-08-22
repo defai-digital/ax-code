@@ -2,18 +2,19 @@
 //
 // The package is a deterministic debugging & refactoring reasoning engine on
 // top of a code graph. It must not depend on the ax-code core, so everything
-// environment-specific — the graph implementation, database access, project
-// context, event bus, native scanner addons — is injected through this port.
-// The ax-code core wires a concrete implementation at boot (src/dre-glue.ts);
-// future projects provide their own.
+// environment-specific — the graph implementation, persistence (via narrow
+// repository contracts), source-state fingerprint, graph revision, clock,
+// abort signal, project context, event bus, native scanner addons — is
+// injected through this port. The ax-code core wires a concrete
+// implementation at boot (src/dre-glue.ts); future projects provide their
+// own.
 //
 // configureCodeReasonHost() must be called once before any engine API is used.
 // All members are lazy (getters/functions), so the host can serve multiple
 // workspaces over its lifetime.
 
-import type { NodeSQLiteDatabase } from "drizzle-orm/node-sqlite"
-import type { SQLiteTransaction } from "drizzle-orm/sqlite-core"
-import type { StatementResultingChanges } from "node:sqlite"
+import type { DebugEngineStores } from "./repository"
+import type { SourceState } from "./quality/freshness"
 
 // ─── Graph contract ─────────────────────────────────────────────────────
 //
@@ -83,6 +84,11 @@ export namespace Graph {
     edgeCount: number
     lastCommitSha: string | null
     lastUpdated: number | null
+    // Phase 2 (council decision 2): derived graph revision hash.
+    // sha256(commit_sha, time_updated, node_count, edge_count) — null
+    // when the index cursor is missing. Any change ⇒ engine falls back
+    // to full analysis (Phase 3 incremental equivalence).
+    revision: string | null
   }
 }
 
@@ -103,21 +109,6 @@ export type GraphPort = {
   findReferences(projectID: string, symbolId: string, opts?: Graph.QueryOpts): Graph.Reference[]
   findDependents(projectID: string, file: string, opts?: Graph.QueryOpts): string[]
   status(projectID: string): Graph.Status
-}
-
-// ─── Storage contract ───────────────────────────────────────────────────
-//
-// The engine persists refactor plans, pattern memory, and debug-case state
-// in its own tables (debug_engine_*). The host provides a drizzle handle —
-// typically the core's shard-aware Database.use/transaction.
-
-export type DreDb = NodeSQLiteDatabase
-export type DreTx = SQLiteTransaction<"sync", StatementResultingChanges>
-export type DreTxOrDb = DreTx | DreDb
-
-export type DreDbPort = {
-  use<T>(callback: (trx: DreTxOrDb) => T): T
-  transaction<T>(callback: (trx: DreTxOrDb) => T): T
 }
 
 // ─── Event contract ─────────────────────────────────────────────────────
@@ -184,7 +175,11 @@ export type CodeReasonHost = {
     nativeScan: boolean
   }
   graph: GraphPort
-  db: DreDbPort
+  // Narrow repository contracts for DRE-owned tables. Replace the old
+  // drizzle handle (`db`) so engine modules never see drizzle types
+  // (Phase 2 / D2 / E3). The host implementation (core glue) wires
+  // drizzle-backed repos here.
+  stores: DebugEngineStores
   events: DreEventsPort
   native?: DreNativePort
   killTree(proc: KillableProcess, opts?: { exited?: () => boolean; signal?: NodeJS.Signals | number }): Promise<void>
@@ -196,6 +191,22 @@ export type CodeReasonHost = {
   // Capture the current host context and rebind it inside a callback that
   // fires outside it (timers, event handlers).
   bind<F extends (...args: any[]) => any>(fn: F): F
+  // Phase 2 (council decision 1): the worktree fingerprint used to
+  // classify envelope freshness. Async because git lookup is async.
+  // Returning `SourceState` (declared in quality/freshness.ts) keeps
+  // the freshness contract single-sourced.
+  sourceState(): Promise<SourceState>
+  // Phase 2 (council decision 2): the current graph revision hash
+  // (null when no cursor). Pure read; the host wraps CodeIntelligence.status.
+  graphRevision(): string | null
+  // Monotonic clock for DRE timestamps. Defaults to Date.now — hosts
+  // override only for tests.
+  clock(): number
+  // Long-running engine entrypoints (apply-safe-refactor, verification-
+  // runner) default to this signal when the caller didn't pass one.
+  // Hosts wire a stable per-instance signal so test fixtures can flip it
+  // without leaking process-wide AbortControllers.
+  abort(): AbortSignal
 }
 
 let current: CodeReasonHost | undefined

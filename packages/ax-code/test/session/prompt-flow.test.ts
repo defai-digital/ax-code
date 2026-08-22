@@ -326,6 +326,9 @@ describe("session.prompt flow", () => {
       nodeCount: 0,
       edgeCount: 0,
       lastUpdated: null,
+      // Phase 2 (council decision 2): derived revision hash; null when
+      // the index cursor is missing (fresh project in this test).
+      revision: null,
     })
     startWatcherSpy = vi.spyOn(CodeIntelligence, "startWatcher").mockImplementation(() => {})
 

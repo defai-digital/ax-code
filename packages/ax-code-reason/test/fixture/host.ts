@@ -1,243 +1,207 @@
+// In-memory fake of the CURRENT (post-Phase-2) CodeReasonHost shape.
+//
+// Phase 2 (D2, E3): engine modules no longer touch a drizzle handle
+// directly. Every persistence operation goes through host.stores.* — a
+// pair of `PlanRepository` / `EmbeddingRepository` interfaces. The fake
+// hosts two Map-backed repository implementations plus the new
+// environment accessors (`sourceState` / `graphRevision` / `clock` /
+// `abort`) the engine consults from long-running entrypoints.
+//
+// The host is fully in-process: no core imports, no real database, no
+// real graph. Production wiring (drizzle + Database.use/transaction)
+// lives in core/packages/ax-code/src/dre/repositories.ts; the engine
+// sees only the narrow interfaces.
+
 import path from "path"
 import {
   configureCodeReasonHost,
   type CodeReasonHost,
   type CorrelatedDiagnosticsPayload,
   type DiagnosticEvent,
-  type DreDbPort,
 } from "../../src/host"
+import type { ProjectID } from "../../src/id"
+import { RefactorPlanID, EmbeddingCacheID } from "../../src/id"
+import {
+  type DebugEngineStores,
+  type PlanInsert,
+  type PlanListOptions,
+  type PlanRepository,
+  type PlanRow,
+  type EmbeddingInsert,
+  type EmbeddingRepository,
+  type EmbeddingRow,
+} from "../../src/repository"
+import type { RefactorPlanStatus } from "../../src/schema.sql"
+import type { SourceState } from "../../src/quality/freshness"
 import { setLogSink } from "../../src/log"
 import { createFakeGraph, type FakeGraph } from "./graph"
 
-// In-memory fake of the CURRENT (pre-Phase-2) CodeReasonHost shape.
+// ─── Map-backed plan + embedding repositories ───────────────────────────
 //
-// Everything the engine reads from its environment is served from Maps and
-// plain options here: no core imports, no real database, no real graph.
-// The db port interprets just enough of the drizzle query-builder surface
-// used by src/query.ts (insert / select-where-orderBy-limit / update /
-// delete with eq()+and() conditions and desc() ordering) to run the real
-// query code against Map-backed tables.
+// Each repo exposes a `storeFor(projectID)` accessor for assertions —
+// tests inspect raw rows by primary key (plan id) or node_id
+// (embedding). This keeps test ergonomics close to the previous
+// drizzle-backed FakeDb shape (`testHost.db.storeFor(table)`) so the
+// test surface stays small after the Phase-2 port swap.
 //
-// installTestHost() configures the package singleton
-// (configureCodeReasonHost) and returns handles for inspection and failure
-// injection. resetTestHost() installs a fresh default host — the singleton
-// has no "unconfigure", so resetting means replacing it.
+// `hooks.beforePlanWrite` / `hooks.beforeEmbeddingWrite` are thrown at
+// the same boundary as the old `hooks.beforeCommit` was: the repo
+// installs a one-shot throw that aborts the write before any rows are
+// committed. Tests that exercise transaction-rollback semantics install
+// a hook that throws.
 
 type Row = Record<string, unknown>
 
-type FakeSelectChain = {
-  all(): Row[]
-  limit(n: number): { all(): Row[] }
-  orderBy(...orders: unknown[]): {
-    all(): Row[]
-    limit(n: number): { all(): Row[] }
-  }
-}
+class FakePlanRepository implements PlanRepository {
+  rows: Map<string, Map<string, PlanRow>> = new Map()
+  hooks: { beforePlanWrite?: () => void } = {}
 
-export type FakeTrx = {
-  insert(table: object): { values(row: Row): { run(): void } }
-  select(): { from(table: object): { where(cond: unknown): FakeSelectChain } }
-  update(table: object): { set(patch: Row): { where(cond: unknown): { run(): void } } }
-  delete(table: object): { where(cond: unknown): { run(): void } }
-}
-
-// ─── Drizzle condition interpretation ────────────────────────────────────
-//
-// src/query.ts builds conditions exclusively with eq(column, value) and
-// and(...). Drizzle compiles those into SQL chunk trees where every bound
-// value is a Param node whose `encoder` is the column itself. Walking the
-// tree and ANDing every (encoder.name, value) pair therefore reproduces
-// the exact filter semantics — no SQL parsing needed.
-
-type Predicate = { column: string; value: unknown }
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null
-}
-
-function collectPredicates(node: unknown, out: Predicate[]): void {
-  if (!isRecord(node)) return
-  const ctor = (node.constructor as { name?: string } | undefined)?.name
-  if (ctor === "Param") {
-    const encoder = node.encoder
-    if (isRecord(encoder) && typeof encoder.name === "string") {
-      out.push({ column: encoder.name, value: node.value })
+  private table(projectID: ProjectID): Map<string, PlanRow> {
+    let m = this.rows.get(projectID)
+    if (!m) {
+      m = new Map()
+      this.rows.set(projectID, m)
     }
-    return
+    return m
   }
-  const chunks = node.queryChunks
-  if (Array.isArray(chunks)) {
-    for (const chunk of chunks) collectPredicates(chunk, out)
+
+  insertPlan(row: PlanInsert): void {
+    this.hooks.beforePlanWrite?.()
+    const t = this.table(row.project_id)
+    const now = row.time_updated ?? Date.now()
+    t.set(String(row.id), { ...row, time_updated: now })
+  }
+
+  getPlan(projectID: ProjectID, id: RefactorPlanID): PlanRow | undefined {
+    return this.table(projectID).get(String(id))
+  }
+
+  listPlans(projectID: ProjectID, opts?: PlanListOptions): PlanRow[] {
+    const limit = normalizeQueryLimit(opts?.limit)
+    if (limit === 0) return []
+    const all = [...this.table(projectID).values()]
+    const filtered = opts?.status ? all.filter((r) => r.status === opts.status) : all
+    filtered.sort((a, b) => b.time_created - a.time_created)
+    return limit === undefined ? filtered : filtered.slice(0, limit)
+  }
+
+  updatePlanStatus(projectID: ProjectID, id: RefactorPlanID, status: RefactorPlanStatus): void {
+    this.hooks.beforePlanWrite?.()
+    const t = this.table(projectID)
+    const row = t.get(String(id))
+    if (!row) return
+    t.set(String(id), { ...row, status, time_updated: Date.now() })
+  }
+
+  deletePlan(projectID: ProjectID, id: RefactorPlanID): void {
+    this.hooks.beforePlanWrite?.()
+    this.table(projectID).delete(String(id))
+  }
+
+  /** Raw row accessor (assertions) — keyed by plan id. */
+  storeFor(projectID: ProjectID): Map<string, PlanRow> {
+    return this.table(projectID)
+  }
+
+  /** Drop every row for a project (test helper). */
+  __clearProject(projectID: ProjectID): void {
+    this.rows.delete(projectID)
   }
 }
 
-function matchesCondition(cond: unknown, row: Row): boolean {
-  if (cond === undefined || cond === null) return true
-  const predicates: Predicate[] = []
-  collectPredicates(cond, predicates)
-  return predicates.every((p) => row[p.column] === p.value)
-}
+class FakeEmbeddingRepository implements EmbeddingRepository {
+  rows: Map<string, Map<string, EmbeddingRow>> = new Map()
+  hooks: { beforeEmbeddingWrite?: () => void } = {}
 
-// desc(column) compiles to an SQL chunk tree containing the column node.
-// Drizzle column objects carry a string `name` and a `table` back-reference.
-function collectColumns(node: unknown, out: string[]): void {
-  if (!isRecord(node)) return
-  const ctor = (node.constructor as { name?: string } | undefined)?.name
-  if (ctor !== undefined && ctor.startsWith("SQLite") && typeof node.name === "string" && "table" in node) {
-    out.push(node.name as string)
-    return
-  }
-  const chunks = node.queryChunks
-  if (Array.isArray(chunks)) {
-    for (const chunk of chunks) collectColumns(chunk, out)
-  }
-}
-
-class FakeTables {
-  stores = new Map<object, Map<string, Row>>()
-
-  store(table: object): Map<string, Row> {
-    let store = this.stores.get(table)
-    if (!store) {
-      store = new Map()
-      this.stores.set(table, store)
+  private table(projectID: ProjectID): Map<string, EmbeddingRow> {
+    let m = this.rows.get(projectID)
+    if (!m) {
+      m = new Map()
+      this.rows.set(projectID, m)
     }
-    return store
+    return m
   }
 
-  snapshot(): Map<object, Map<string, Row>> {
-    const snap = new Map<object, Map<string, Row>>()
-    for (const [table, store] of this.stores) snap.set(table, new Map(store))
-    return snap
+  upsertEmbedding(row: EmbeddingInsert): void {
+    this.hooks.beforeEmbeddingWrite?.()
+    const t = this.table(row.project_id)
+    const existing = t.get(row.node_id)
+    if (existing) t.delete(row.node_id)
+    const now = row.time_updated ?? Date.now()
+    t.set(row.node_id, { ...row, time_updated: now })
   }
 
-  restore(snap: Map<object, Map<string, Row>>): void {
-    this.stores = snap
+  getEmbedding(projectID: ProjectID, nodeID: string): EmbeddingRow | undefined {
+    return this.table(projectID).get(nodeID)
+  }
+
+  deleteEmbedding(projectID: ProjectID, nodeID: string): void {
+    this.hooks.beforeEmbeddingWrite?.()
+    this.table(projectID).delete(nodeID)
+  }
+
+  /** Raw row accessor (assertions) — keyed by node_id. */
+  storeFor(projectID: ProjectID): Map<string, EmbeddingRow> {
+    return this.table(projectID)
+  }
+
+  /** Drop every row for a project (test helper). */
+  __clearProject(projectID: ProjectID): void {
+    this.rows.delete(projectID)
   }
 }
 
-export type FakeDbHooks = {
-  /** Runs at the top of use()/transaction(). Throw to simulate an unavailable database. */
-  beforeUse?: () => void
-  /** Runs after a transaction callback succeeds, before the staged writes commit. Throw to simulate a commit-time failure. */
-  beforeCommit?: () => void
+function normalizeQueryLimit(limit: number | undefined): number | undefined {
+  if (limit === undefined) return undefined
+  if (!Number.isFinite(limit)) return 0
+  return Math.max(0, Math.floor(limit))
 }
 
-export type FakeDb = {
-  use<T>(callback: (trx: FakeTrx) => T): T
-  transaction<T>(callback: (trx: FakeTrx) => T): T
-  /** Raw row access for assertions, keyed by the row's `id`. */
-  storeFor(table: object): Map<string, Row>
-  hooks: FakeDbHooks
+export type FakeStoreHooks = {
+  /** Install a one-shot throw on the next plan write (simulates a persistence failure). */
+  beforePlanWrite?: () => void
+  /** Install a one-shot throw on the next embedding write. */
+  beforeEmbeddingWrite?: () => void
 }
 
-function createFakeDb(): FakeDb {
-  const tables = new FakeTables()
-  const hooks: FakeDbHooks = {}
+export type FakePlanRepositoryHandle = FakePlanRepository & {
+  __clearProject(projectID: ProjectID): void
+  storeFor(projectID: ProjectID): Map<string, PlanRow>
+}
 
-  const trx: FakeTrx = {
-    insert(table) {
-      return {
-        values(row: Row) {
-          return {
-            run() {
-              tables.store(table).set(String(row.id), { ...row })
-            },
-          }
-        },
-      }
+export type FakeEmbeddingRepositoryHandle = FakeEmbeddingRepository & {
+  __clearProject(projectID: ProjectID): void
+  storeFor(projectID: ProjectID): Map<string, EmbeddingRow>
+}
+
+export type FakeStores = {
+  plans: FakePlanRepositoryHandle
+  embeddings: FakeEmbeddingRepositoryHandle
+  /** Combined hook surface — tests flip either side without retyping the full shape. */
+  hooks: FakeStoreHooks
+}
+
+function createFakeStores(): FakeStores {
+  const plans = new FakePlanRepository()
+  const embeddings = new FakeEmbeddingRepository()
+  const combined: FakeStoreHooks = {
+    set beforePlanWrite(fn: (() => void) | undefined) {
+      plans.hooks.beforePlanWrite = fn
     },
-    select() {
-      return {
-        from(table) {
-          return {
-            where(cond) {
-              const matched = () =>
-                [...tables.store(table).values()]
-                  .filter((row) => matchesCondition(cond, row))
-                  .map((row) => ({ ...row }))
-              const sorted = (orders: unknown[]) => {
-                const rows = matched()
-                const columns: string[] = []
-                for (const order of orders) collectColumns(order, columns)
-                // Only desc() is used by src/query.ts — sort every extracted
-                // column descending, last column breaking ties.
-                for (const column of columns.reverse()) {
-                  rows.sort((a, b) => {
-                    const av = a[column] as number | string
-                    const bv = b[column] as number | string
-                    return av < bv ? 1 : av > bv ? -1 : 0
-                  })
-                }
-                return rows
-              }
-              return {
-                all: () => matched(),
-                limit: (n: number) => ({ all: () => matched().slice(0, n) }),
-                orderBy: (...orders: unknown[]) => ({
-                  all: () => sorted(orders),
-                  limit: (n: number) => ({ all: () => sorted(orders).slice(0, n) }),
-                }),
-              }
-            },
-          }
-        },
-      }
+    set beforeEmbeddingWrite(fn: (() => void) | undefined) {
+      embeddings.hooks.beforeEmbeddingWrite = fn
     },
-    update(table) {
-      return {
-        set(patch: Row) {
-          return {
-            where(cond) {
-              return {
-                run() {
-                  const store = tables.store(table)
-                  for (const [key, row] of [...store]) {
-                    if (matchesCondition(cond, row)) store.set(key, { ...row, ...patch })
-                  }
-                },
-              }
-            },
-          }
-        },
-      }
+    get beforePlanWrite() {
+      return plans.hooks.beforePlanWrite
     },
-    delete(table) {
-      return {
-        where(cond) {
-          return {
-            run() {
-              const store = tables.store(table)
-              for (const [key, row] of [...store]) {
-                if (matchesCondition(cond, row)) store.delete(key)
-              }
-            },
-          }
-        },
-      }
+    get beforeEmbeddingWrite() {
+      return embeddings.hooks.beforeEmbeddingWrite
     },
   }
-
   return {
-    hooks,
-    storeFor: (table) => tables.store(table),
-    use(callback) {
-      hooks.beforeUse?.()
-      return callback(trx)
-    },
-    transaction(callback) {
-      hooks.beforeUse?.()
-      const snapshot = tables.snapshot()
-      try {
-        const result = callback(trx)
-        hooks.beforeCommit?.()
-        return result
-      } catch (err) {
-        // A transactional host leaves no partial state behind.
-        tables.restore(snapshot)
-        throw err
-      }
-    },
+    plans: plans as unknown as FakePlanRepositoryHandle,
+    embeddings: embeddings as unknown as FakeEmbeddingRepositoryHandle,
+    hooks: combined,
   }
 }
 
@@ -252,12 +216,20 @@ export type TestHostOptions = {
   containsPath?: (path: string) => boolean
   nativeScan?: boolean
   killTree?: CodeReasonHost["killTree"]
+  /** Override the host's AbortSignal — defaults to a never-aborted controller. */
+  signal?: AbortSignal
+  /** Override the host clock — defaults to a deterministic counter. */
+  now?: () => number
+  /** Override the host's source-state implementation. */
+  sourceState?: () => Promise<SourceState> | SourceState
+  /** Override the host's graph-revision implementation. */
+  graphRevision?: () => string | null
 }
 
 export type TestHost = {
   host: CodeReasonHost
   graph: FakeGraph
-  db: FakeDb
+  stores: FakeStores
   /** Mutable environment bag the host closures read from — tests can flip vcs/roots mid-test. */
   env: { projectID: string; projectRoot: string; worktreeRoot: string; vcs: string }
   events: {
@@ -269,16 +241,19 @@ export type TestHost = {
 
 export function installTestHost(opts: TestHostOptions = {}): TestHost {
   const graph = opts.graph ?? createFakeGraph()
-  const db = createFakeDb()
+  const stores = createFakeStores()
   const published: CorrelatedDiagnosticsPayload[] = []
   const subscribers = new Set<(event: DiagnosticEvent) => void>()
   const killTreeCalls: TestHost["killTreeCalls"] = []
+  let clockNow = 1000
+  const clock: () => number = opts.now ?? (() => clockNow)
   const env = {
     projectID: opts.projectID ?? "test-project",
     projectRoot: opts.projectRoot ?? "/repo",
     worktreeRoot: opts.worktreeRoot ?? "/repo",
     vcs: opts.vcs ?? "git",
   }
+  const signal = opts.signal ?? new AbortController().signal
 
   const defaultContainsPath = (candidate: string): boolean => {
     const resolved = path.resolve(candidate)
@@ -297,6 +272,14 @@ export function installTestHost(opts: TestHostOptions = {}): TestHost {
     }
   }
 
+  const defaultSourceState = (): SourceState => ({ available: false, commit: null, dirtyDigest: null })
+  const sourceState: CodeReasonHost["sourceState"] = async () => {
+    const override = opts.sourceState
+    if (override) return Promise.resolve(override())
+    return defaultSourceState()
+  }
+  const graphRevision: CodeReasonHost["graphRevision"] = opts.graphRevision ?? (() => null)
+
   const host: CodeReasonHost = {
     projectID: () => env.projectID,
     projectRoot: () => env.projectRoot,
@@ -305,9 +288,7 @@ export function installTestHost(opts: TestHostOptions = {}): TestHost {
     containsPath: opts.containsPath ?? defaultContainsPath,
     flags: () => ({ nativeScan: opts.nativeScan ?? false }),
     graph: graph.port,
-    // The fake trx is not a real drizzle handle — the cast is contained to
-    // this fixture; engine code only sees the DreDbPort interface.
-    db: db as unknown as DreDbPort,
+    stores,
     events: {
       subscribeClientDiagnostics(callback) {
         subscribers.add(callback)
@@ -318,10 +299,13 @@ export function installTestHost(opts: TestHostOptions = {}): TestHost {
       },
     },
     killTree: opts.killTree ?? defaultKillTree,
-    state: <S>(init: () => S, dispose?: (state: Awaited<S>) => Promise<void>) => {
+    state: <S>(
+      init: () => S,
+      dispose?: (state: Awaited<S>) => Promise<void>,
+    ): (() => S) & { invalidate: () => Promise<void> } => {
       let initialized = false
       let value: S | undefined
-      const get = (() => {
+      const get = ((): S => {
         if (!initialized) {
           value = init()
           initialized = true
@@ -335,7 +319,11 @@ export function installTestHost(opts: TestHostOptions = {}): TestHost {
       }
       return get
     },
-    bind: (fn) => fn,
+    bind: <F extends (...args: any[]) => any>(fn: F): F => fn,
+    sourceState,
+    graphRevision,
+    clock,
+    abort: () => signal,
   }
 
   // Keep engine logs out of test output; tests that care about logging
@@ -346,7 +334,7 @@ export function installTestHost(opts: TestHostOptions = {}): TestHost {
   return {
     host,
     graph,
-    db,
+    stores,
     env,
     events: { published, subscriberCount: () => subscribers.size },
     killTreeCalls,
@@ -354,8 +342,18 @@ export function installTestHost(opts: TestHostOptions = {}): TestHost {
 }
 
 // The host singleton has no "unconfigure" — resetting installs a fresh
-// default host so no state (graph symbols, db rows, published events)
+// default host so no state (graph symbols, repo rows, published events)
 // leaks between tests.
 export function resetTestHost(): TestHost {
   return installTestHost()
 }
+
+// ─── Branded helpers re-exported for tests ───────────────────────────────
+//
+// Kept here so tests don't need to also import schema.sql for trivial
+// branded constructors. The host fixture is the canonical "everything
+// the engine talks to" surface.
+export { RefactorPlanID, EmbeddingCacheID }
+
+// Avoid unused-row warnings when a test only cares about types.
+export type { Row }
