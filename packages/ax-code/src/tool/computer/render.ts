@@ -3,6 +3,7 @@
  * screenshot attachment (base64 data: URL, same convention as visual_snapshot).
  */
 import type { AppInfo, ComputerObservation, WindowInfo } from "@ax-code/computer"
+import type { Computer } from "@/computer/computer"
 
 /** Caps the accessibility-tree text included in tool output. */
 const A11Y_TEXT_CAP = 20_000
@@ -26,6 +27,32 @@ export function renderTargets(targets: { apps: AppInfo[]; windows: WindowInfo[] 
     lines.push(`- [${win.id}] ${win.title}${win.app ? ` (${win.app.name})` : ""}`)
   }
   if (targets.windows.length > TARGET_LIST_CAP) lines.push(`(truncated at ${TARGET_LIST_CAP} windows)`)
+  return lines.join("\n")
+}
+
+/** How many trajectory steps to show inline in tool output. */
+const TRAJECTORY_DISPLAY_CAP = 10
+
+/**
+ * Renders recent computer-use history as a compact numbered narrative, so the
+ * model can reflect on what it already did (and what failed) before choosing
+ * the next action. Oldest first; capped at the most recent steps.
+ */
+export function renderTrajectory(entries: Computer.TrajectoryEntry[]): string {
+  if (entries.length === 0) return "(no prior computer-use steps)"
+  const shown = entries.slice(-TRAJECTORY_DISPLAY_CAP)
+  const skipped = entries.length - shown.length
+  const lines: string[] = []
+  if (skipped > 0) lines.push(`(${skipped} earlier ${skipped === 1 ? "step" : "steps"} omitted)`)
+  shown.forEach((entry, index) => {
+    const outcome =
+      entry.kind === "observe"
+        ? ""
+        : entry.ok === false
+          ? ` → REFUSED${entry.detail ? ` (${entry.detail})` : ""}`
+          : " → ok"
+    lines.push(`${index + 1 + skipped}. ${entry.summary}${outcome}`)
+  })
   return lines.join("\n")
 }
 

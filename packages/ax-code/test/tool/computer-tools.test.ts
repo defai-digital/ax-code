@@ -289,4 +289,39 @@ describe("computer_action tool", () => {
       expect(result.metadata.refusal).toBe("background_unavailable")
     })
   })
+
+  test("records a reflection trajectory across observe and act steps", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async () => {
+      const snapshot = await ComputerSnapshotTool.init()
+      await snapshot.execute({ includeScreenshot: false }, makeCtx([]))
+
+      const tool = await ComputerActionTool.init()
+      const result = await tool.execute({ type: "click", target: { x: 10, y: 20 } }, makeCtx([]))
+
+      expect(result.output).toContain("Recent trajectory:")
+      expect(result.output).toContain("1. observe desktop")
+      expect(result.output).toContain("2. click (10,20) → ok")
+
+      const entries = await Computer.trajectory()
+      expect(entries.map((e) => e.kind)).toEqual(["observe", "act"])
+      expect(entries[1]).toMatchObject({ summary: "click (10,20)", ok: true })
+    })
+  })
+
+  test("trajectory records refusals and caps at 20 entries", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async ({ provider }) => {
+      provider.refusal = "background_unavailable"
+      const tool = await ComputerActionTool.init()
+      const result = await tool.execute({ type: "keypress", keys: ["return"] }, makeCtx([]))
+      expect(result.output).toContain("1. keypress return → REFUSED (background_unavailable)")
+
+      provider.refusal = undefined
+      for (let i = 0; i < 25; i++) {
+        await tool.execute({ type: "keypress", keys: ["a"] }, makeCtx([]))
+      }
+      const entries = await Computer.trajectory()
+      expect(entries).toHaveLength(20)
+      expect(entries.at(-1)).toMatchObject({ summary: "keypress a", ok: true })
+    })
+  })
 })

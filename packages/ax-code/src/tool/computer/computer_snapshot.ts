@@ -42,6 +42,7 @@ export const ComputerSnapshotTool = Tool.define("computer_snapshot", {
     })
 
     const observation = await Computer.observe(scope)
+    await Computer.record({ kind: "observe", summary: `observe ${descriptor}` })
     const rendered = renderObservation(observation, {
       includeScreenshot: params.includeScreenshot,
       screenshotName: "computer-snapshot",

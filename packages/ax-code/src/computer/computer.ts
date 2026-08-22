@@ -60,7 +60,28 @@ export namespace Computer {
     /** test hook: provider substitute, bypasses config and process spawning */
     injected?: ComputerUseProvider
     lastScope?: ObserveScope
+    /** recent observe/act history, oldest first, capped at TRAJECTORY_CAP */
+    trajectory?: TrajectoryEntry[]
   }
+
+  /**
+   * One step of computer-use history. Recorded by the computer_* tools so the
+   * model can see its recent GUI trajectory (reflection aid) and so a future
+   * behavior judge can render a behavior narrative from it.
+   */
+  export interface TrajectoryEntry {
+    /** epoch milliseconds */
+    at: number
+    kind: "observe" | "act"
+    /** e.g. "observe desktop", "click element e1:3" */
+    summary: string
+    /** act outcome; omitted for observes */
+    ok?: boolean
+    /** backend refusal code or error detail */
+    detail?: string
+  }
+
+  const TRAJECTORY_CAP = 20
 
   const state = Instance.state(
     async (): Promise<State> => ({}),
@@ -68,6 +89,19 @@ export namespace Computer {
       await s.session?.dispose()
     },
   )
+
+  /** append one step to the instance's computer-use trajectory (ring buffer) */
+  export async function record(entry: Omit<TrajectoryEntry, "at">) {
+    const s = await state()
+    const trajectory = (s.trajectory ??= [])
+    trajectory.push({ ...entry, at: Date.now() })
+    if (trajectory.length > TRAJECTORY_CAP) trajectory.splice(0, trajectory.length - TRAJECTORY_CAP)
+  }
+
+  /** the recorded trajectory, oldest first (empty when nothing recorded yet) */
+  export async function trajectory(): Promise<TrajectoryEntry[]> {
+    return [...((await state()).trajectory ?? [])]
+  }
 
   /** test-only: substitute a provider (undefined clears session + injection) */
   export async function useProvider(provider: ComputerUseProvider | undefined) {

@@ -6,7 +6,7 @@ import { Computer } from "@/computer/computer"
 import { ComputerUseError } from "@ax-code/computer"
 import { toErrorMessage } from "@/util/error-message"
 import type { ComputerAction, ComputerTarget } from "@ax-code/computer"
-import { renderObservation } from "./render"
+import { renderObservation, renderTrajectory } from "./render"
 
 const target = z
   .union([
@@ -178,9 +178,15 @@ export const ComputerActionTool = Tool.define("computer_action", {
       ? `Fresh observation after the action:\n${rendered.output}`
       : `Re-observation failed (${reobserveError}), so the outcome is unverified. Call computer_snapshot to check the current state before acting again.`
 
+    // Record the step and show recent history: the reflection aid keeps the
+    // model from repeating failed actions, and the same entries are the raw
+    // material for behavior-narrative judging.
+    await Computer.record({ kind: "act", summary, ok: result.ok, detail: result.refusal })
+    const trajectory = renderTrajectory(await Computer.trajectory())
+
     return {
       title: summary,
-      output: `${header}\n\n${body}`,
+      output: `${header}\n\n${body}\n\nRecent trajectory:\n${trajectory}`,
       metadata: {
         action: result.action,
         provider: result.provider,
