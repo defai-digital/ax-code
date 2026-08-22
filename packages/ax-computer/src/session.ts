@@ -64,7 +64,10 @@ export class ComputerSession {
     this.provider = next
     this.epoch += 1
     this.elements = new Map()
-    await previous.dispose()
+    // Dispose is best-effort: routing already switched to `next`, so a teardown
+    // failure on the old provider must not abort the failover and leave the
+    // caller thinking the swap never happened.
+    await previous.dispose().catch(() => {})
     return this.observe(this.lastScope ?? { desktop: true })
   }
 

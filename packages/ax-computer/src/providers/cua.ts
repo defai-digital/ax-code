@@ -99,8 +99,6 @@ function structuredOf(result: McpCallToolResult): Record<string, unknown> | unde
   return undefined
 }
 
-const MODIFIER_KEYS = new Set(["cmd", "command", "meta", "shift", "option", "alt", "ctrl", "control", "fn"])
-
 // input tools whose schema accepts delivery_mode (verified against
 // platform-macos/src/tools/*.rs); set_value and the app/window management
 // tools do not, so they are never escalated
@@ -398,12 +396,14 @@ export class CuaProvider implements ComputerUseProvider {
         // assumption: type_text { text, pid?, window_id? }
         return { tool: "type_text", args: { ...this.routeArgs(), text: action.text } }
       case "keypress": {
-        // assumption: press_key { key } for a single non-modifier key,
-        // hotkey { keys: [...] } (min 2, modifiers first) for combinations
-        const single = action.keys.length === 1 && !MODIFIER_KEYS.has(action.keys[0].toLowerCase())
-        return single
-          ? { tool: "press_key", args: { ...this.routeArgs(), key: action.keys[0] } }
-          : { tool: "hotkey", args: { ...this.routeArgs(), keys: action.keys } }
+        // assumption: press_key { key } for a single key — including a lone
+        // modifier ("cmd" alone is a valid press); hotkey { keys: [...] }
+        // (min 2, modifiers first) for combinations. A lone key must never
+        // reach hotkey, whose schema rejects single-key combos.
+        if (action.keys.length === 1) {
+          return { tool: "press_key", args: { ...this.routeArgs(), key: action.keys[0] } }
+        }
+        return { tool: "hotkey", args: { ...this.routeArgs(), keys: action.keys } }
       }
       case "scroll": {
         // ScrollInput requires x, y (cua-driver-contract). Verified live: for
@@ -499,7 +499,9 @@ export class CuaProvider implements ComputerUseProvider {
         code: "unsupported_target",
       })
     }
-    return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+    // odd-sized elements produce fractional centers; input APIs expect whole
+    // pixels, and rounding here keeps every backend behavior identical
+    return { x: Math.round(bounds.x + bounds.width / 2), y: Math.round(bounds.y + bounds.height / 2) }
   }
 
   private async mcp(): Promise<McpClient> {

@@ -529,6 +529,17 @@ export namespace Computer {
   }
 
   /**
+   * Descriptor of the most recent observation scope (e.g. "desktop",
+   * "app:TextEdit"), without needing a translated action. Lets callers build
+   * permission patterns before an action is translated — so a permission ask
+   * can precede expensive or privacy-sensitive translation work (grounding).
+   */
+  export async function lastScopeDescriptor(): Promise<string | undefined> {
+    const scope = (await state()).lastScope
+    return scope ? descriptorForScope(scope) : undefined
+  }
+
+  /**
    * Cross-provider element-act guard. If the model calls an act that targets
    * element ids issued by a different provider than the currently active one,
    * we throw before the wrong backend ever sees the ids. Returns the provider
