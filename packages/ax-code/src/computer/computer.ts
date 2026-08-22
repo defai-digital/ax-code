@@ -22,11 +22,36 @@ import { Log } from "@/util/log"
 export namespace Computer {
   const log = Log.create({ service: "computer" })
 
-  /** default backend commands and their env overrides, for diagnostics */
+  /** default backend commands and their env overrides, for resolution and diagnostics */
   const BACKENDS = {
-    cua: { command: "cua-driver mcp", env: "AX_COMPUTER_CUA_COMMAND" },
-    ocu: { command: "open-computer-use mcp", env: "AX_COMPUTER_OCU_COMMAND" },
+    cua: { command: "cua-driver", env: "AX_COMPUTER_CUA_COMMAND" },
+    ocu: { command: "open-computer-use", env: "AX_COMPUTER_OCU_COMMAND" },
   } as const
+
+  export interface ResolvedBackend {
+    provider: "cua" | "ocu"
+    command: string
+    args: string[]
+    /** env var that overrides the command */
+    env: string
+  }
+
+  /**
+   * Resolve the backend command for a computer config. Precedence:
+   * config.command > env override > default command name; args default to
+   * ["mcp"]. Shared by the session provider construction and the doctor
+   * preflight so both report the exact command that would be spawned.
+   */
+  export function resolveBackend(computer: Config.Info["computer"]): ResolvedBackend | undefined {
+    if (!computer?.provider) return undefined
+    const backend = BACKENDS[computer.provider]
+    return {
+      provider: computer.provider,
+      command: computer.command ?? process.env[backend.env] ?? backend.command,
+      args: computer.args ?? ["mcp"],
+      env: backend.env,
+    }
+  }
 
   interface State {
     session?: ComputerSession
@@ -88,13 +113,12 @@ export namespace Computer {
   /** backend spawn/transport failures get an actionable diagnostic naming the command tried and the env override */
   async function unavailable(err: unknown): Promise<Error> {
     const cfg = await Config.get()
-    const provider = cfg.computer?.provider
-    const backend = provider ? BACKENDS[provider] : undefined
-    const command = cfg.computer?.command ?? backend?.command ?? "unknown"
-    const env = backend?.env ?? "AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_OCU_COMMAND"
+    const resolved = resolveBackend(cfg.computer)
+    const command = resolved ? `${resolved.command} ${resolved.args.join(" ")}` : "unknown"
+    const env = resolved?.env ?? "AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_OCU_COMMAND"
     const detail = err instanceof Error ? err.message : String(err)
     return new Error(
-      `Computer-use backend "${provider ?? "unknown"}" is unavailable (tried "${command}"; override with ${env} or computer.command config). ${detail}`,
+      `Computer-use backend "${resolved?.provider ?? "unknown"}" is unavailable (tried "${command}"; override with ${env} or computer.command config). ${detail}`,
       { cause: err },
     )
   }

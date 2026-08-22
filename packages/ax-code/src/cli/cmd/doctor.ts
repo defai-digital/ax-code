@@ -22,6 +22,7 @@ import { Locale } from "@/util/locale"
 import { getTuiPreloadCheck } from "./doctor-preload"
 import { getDoctorDatabaseCheck } from "./doctor-storage"
 import { getRecentLogsChecks, getRunningInstancesCheck } from "./doctor-health"
+import { getComputerUseCheck } from "./doctor-computer"
 import path from "path"
 import { realpathSync } from "fs"
 import { access } from "fs/promises"
@@ -509,6 +510,19 @@ export const DoctorCommand: CommandModule = {
         name: "AX Engine local provider",
         status: "warn",
         detail: `Could not inspect ax-engine status: ${toErrorMessage(error)}`,
+      })
+    }
+
+    // 11a. Computer use — preflight the configured desktop-control backend
+    // (spawn + MCP handshake + list_apps, capped by the probe timeout).
+    try {
+      const config = await Config.get().catch(() => Config.global())
+      checks.push(await getComputerUseCheck({ config: config?.computer }))
+    } catch (error) {
+      checks.push({
+        name: "Computer use",
+        status: "warn",
+        detail: `Could not run computer-use preflight: ${toErrorMessage(error)}`,
       })
     }
 
