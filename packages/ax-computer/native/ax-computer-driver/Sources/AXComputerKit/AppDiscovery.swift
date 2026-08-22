@@ -507,6 +507,7 @@ enum AppDiscovery {
 enum AppSafetyPolicy {
     // All entries must be lowercase: matching is case-insensitive (see isBlocked).
     private static let blockedBundleIdentifiers: Set<String> = [
+        // third-party password managers
         "com.1password.1password",
         "com.1password.safari",
         "com.bitwarden.desktop",
@@ -515,6 +516,11 @@ enum AppSafetyPolicy {
         "com.nordsec.nordpass",
         "me.proton.pass.electron",
         "me.proton.pass.catalyst",
+        // Apple credential surfaces: Keychain Access, the macOS Passwords app,
+        // and System Settings (privacy/security and password panes)
+        "com.apple.keychainaccess",
+        "com.apple.passwords",
+        "com.apple.systempreferences",
     ]
 
     static func isBlocked(bundleIdentifier: String?) -> Bool {

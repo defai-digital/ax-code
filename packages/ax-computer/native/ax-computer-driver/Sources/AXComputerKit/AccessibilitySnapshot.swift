@@ -1103,7 +1103,23 @@ private func stringValue(of element: AXUIElement, attribute: String) -> String? 
     return nil
 }
 
+private func isSecureTextElement(_ element: AXUIElement) -> Bool {
+    let subrole = stringValue(of: element, attribute: kAXSubroleAttribute)?.lowercased()
+    let roleDescription = stringValue(of: element, attribute: kAXRoleDescriptionAttribute)?.lowercased()
+    if subrole == "secure text field" || roleDescription == "secure text field" {
+        return true
+    }
+
+    return subrole?.contains("secure") == true || roleDescription?.contains("secure") == true
+}
+
 private func copySelectedText(_ element: AXUIElement, textLimit: SnapshotTextLimit = .defaults) -> String? {
+    // Never surface selected text from a secure field — the value may be the
+    // user's password, and the observation goes straight into model context.
+    guard !isSecureTextElement(element) else {
+        return nil
+    }
+
     guard let value = stringValue(of: element, attribute: kAXSelectedTextAttribute) else {
         return nil
     }
@@ -1133,6 +1149,12 @@ private func isSettable(of element: AXUIElement, attribute: String) -> Bool {
 }
 
 private func sanitizedValue(of element: AXUIElement, textLimit: SnapshotTextLimit = .defaults) -> String? {
+    // Mask secure-field values before they reach the model context; the tree
+    // still shows that the field exists, but never its contents.
+    guard !isSecureTextElement(element) else {
+        return "•••"
+    }
+
     if let string = stringValue(of: element, attribute: kAXValueAttribute) {
         let sanitized = sanitizeText(string, textLimit: textLimit)
         return sanitized.isEmpty ? nil : sanitized
