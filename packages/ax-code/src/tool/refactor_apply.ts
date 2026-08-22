@@ -5,7 +5,12 @@ import { Instance } from "../project/instance"
 import { DebugEngine } from "@ax-code/ax-code-reason"
 import { RefactorPlanID } from "@ax-code/ax-code-reason/id"
 import { extractFilesFromDiff } from "@ax-code/ax-code-reason/analyze-impact"
+import { CodeIntelligence } from "../code-intelligence"
+import { Installation } from "../installation"
+import { currentSourceState } from "../quality/source-state"
 import { fromRefactorApplyResult } from "../quality/verification-envelope-builder"
+import type { VerificationGraph } from "../quality/verification-envelope"
+import { Hash } from "../util/hash"
 import { normalizeToWorkspacePath } from "./file-path"
 import { ToolBoolean } from "./schema"
 
@@ -25,6 +30,21 @@ const CommandOverrides = z
     test: z.string().min(1).nullable().optional(),
   })
   .strict()
+
+// Phase 1 provenance: defensive graph snapshot for the verification
+// envelopes. The graph may not be indexed (no cursor row) or the
+// intelligence store may be unavailable — either way the field is omitted.
+function currentGraphState(): VerificationGraph | undefined {
+  try {
+    const status = CodeIntelligence.status(Instance.project.id)
+    if (status.lastUpdated == null) return undefined
+    // revision is reserved for the derived graph revision hash; the graph
+    // status endpoint does not compute one yet.
+    return { revision: null, lastCommitSha: status.lastCommitSha, indexedAt: status.lastUpdated }
+  } catch {
+    return undefined
+  }
+}
 
 export const RefactorApplyTool = Tool.define("refactor_apply", {
   description: DESCRIPTION,
@@ -67,6 +87,12 @@ export const RefactorApplyTool = Tool.define("refactor_apply", {
 
     if (ctx.abort.aborted) throw new DOMException("Refactor apply aborted", "AbortError")
 
+    // Fingerprint the worktree BEFORE the pipeline runs — the envelopes
+    // claim "these checks passed against this source state". The shadow
+    // worktree is a copy of the real worktree at this moment.
+    const sourceState = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
+    const startedAt = new Date()
+
     const result = await DebugEngine.applySafeRefactor(projectID, {
       planId: RefactorPlanID.make(args.planId),
       patch: args.patch,
@@ -75,6 +101,7 @@ export const RefactorApplyTool = Tool.define("refactor_apply", {
       skipTests: args.skipTests,
       commands: args.commands,
     })
+    const endedAt = new Date()
 
     const lines: string[] = []
     lines.push(`Applied: ${result.applied}`)
@@ -100,6 +127,33 @@ export const RefactorApplyTool = Tool.define("refactor_apply", {
       applyResult: result,
       sessionID: ctx.sessionID,
       cwd: Instance.worktree,
+      sourceState,
+      graph: currentGraphState(),
+      environment: {
+        // The engine resolves the actual commands internally; the
+        // deterministic config surface visible here is the requested
+        // overrides plus the mode/skip flags that select which checks ran.
+        configDigest: Hash.fast(
+          JSON.stringify({
+            commands: args.commands ?? null,
+            mode: args.mode ?? "safe",
+            skipLint: args.skipLint ?? false,
+            skipTests: args.skipTests ?? false,
+          }),
+        ),
+        toolVersions: { "ax-code": Installation.VERSION },
+      },
+      execution: {
+        // applySafeRefactor runs typecheck/lint/tests as one pipeline
+        // without per-check timing — a single window is attached to every
+        // envelope produced from this apply.
+        startedAt: startedAt.toISOString(),
+        endedAt: endedAt.toISOString(),
+        exitCode: null,
+        signal: null,
+        timedOut: false,
+        outputTruncated: false,
+      },
     })
 
     return {

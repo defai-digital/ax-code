@@ -8,7 +8,11 @@ import {
   DEBUG_ID_PATTERN,
 } from "@ax-code/ax-code-reason/runtime-debug"
 import { classifyEnvelopeSet } from "@ax-code/ax-code-reason/verify-after-fix"
+import { classifyEnvelopeFreshness, enforceCitationFreshness } from "@ax-code/ax-code-reason/quality/freshness"
+import type { SourceState } from "@ax-code/ax-code-reason/quality/freshness"
 import { Installation } from "../installation"
+import { Instance } from "../project/instance"
+import { currentSourceState } from "../quality/source-state"
 import { SessionDebug } from "../session/debug"
 import { SessionVerifications } from "../session/verifications"
 import { JsonNumber } from "../util/schema"
@@ -149,6 +153,25 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
       verificationRuns,
     })
 
+    // Phase 1 (PRD D3): confirming a hypothesis is an authoritative
+    // citation of the referenced verification envelopes — the evidence must
+    // still describe the current worktree. Stale or unfingerprintable
+    // evidence fails closed, but non-throwing: the hypothesis is still
+    // proposed with status downgraded to "active" and needs_verification
+    // metadata explains why. Fresh evidence keeps the exact prior behavior.
+    let needsVerification = false
+    let staleEvidence: { envelopeId: string; status: string; reason?: string }[] = []
+    if (args.status === "confirmed") {
+      const current: SourceState = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
+      staleEvidence = verificationRuns
+        .filter((run) => run.envelopes.some((item) => evidenceRefs.includes(item.envelopeId)))
+        .flatMap((run) => run.envelopes)
+        .map((item) => ({ envelopeId: item.envelopeId, ...classifyEnvelopeFreshness(item.envelope, current) }))
+        .filter((item) => !enforceCitationFreshness(item, "authoritative").ok)
+      needsVerification = staleEvidence.length > 0
+    }
+    const status = needsVerification ? "active" : (args.status ?? "active")
+
     const hypothesisId = computeDebugHypothesisId({ caseId: args.caseId, claim: args.claim })
     const confidence = computeConfidence({
       staticAnalysis: args.staticAnalysis,
@@ -163,17 +186,29 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
       confidence,
       staticAnalysis: args.staticAnalysis,
       evidenceRefs,
-      status: args.status ?? "active",
+      status,
       source: { tool: "debug_propose_hypothesis", version: Installation.VERSION, runId: ctx.sessionID },
     })
 
     return {
       title: `debug_propose_hypothesis ${hypothesisId}`,
-      output: `Proposed hypothesis ${hypothesisId} (confidence ${confidence.toFixed(2)}): ${args.claim.slice(0, 80)}${args.claim.length > 80 ? "…" : ""}`,
+      output: [
+        `Proposed hypothesis ${hypothesisId} (confidence ${confidence.toFixed(2)}): ${args.claim.slice(0, 80)}${args.claim.length > 80 ? "…" : ""}`,
+        ...(needsVerification
+          ? [
+              `Needs verification: stale evidence (${staleEvidence
+                .map((item) => `${item.envelopeId}=${item.status}${item.reason ? `/${item.reason}` : ""}`)
+                .join(", ")}) — re-run verify_project against the current worktree; status downgraded to "active"`,
+            ]
+          : []),
+      ].join("\n"),
       metadata: {
         hypothesisId,
         confidence,
         debugHypothesis,
+        // Freshness metadata is only attached on the failure path so fresh
+        // confirmations keep the exact pre-Phase-1 metadata shape.
+        ...(needsVerification ? { needsVerification: true, verificationFreshness: staleEvidence } : {}),
       },
     }
   },

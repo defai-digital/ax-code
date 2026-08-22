@@ -7,7 +7,10 @@ import {
   classifyEnvelopeSet,
   resolveCaseStatus,
 } from "@ax-code/ax-code-reason/verify-after-fix"
+import { classifyEnvelopeFreshness, enforceCitationFreshness } from "@ax-code/ax-code-reason/quality/freshness"
 import { Installation } from "../installation"
+import { Instance } from "../project/instance"
+import { currentSourceState } from "../quality/source-state"
 import { SessionDebug } from "../session/debug"
 import { SessionVerifications } from "../session/verifications"
 import type { SessionID } from "../session/schema"
@@ -48,13 +51,29 @@ export const DebugApplyVerificationTool = Tool.define("debug_apply_verification"
     const verificationSet = verificationRun.envelopes.map((item) => item.envelope)
     const verificationEnvelopeIds = verificationRun.envelopes.map((item) => item.envelopeId)
     const verificationPolicyFailed = SessionVerifications.runPolicyFailed(verificationRun)
-    const verificationOutcome = verificationPolicyFailed ? "inconclusive" : classifyEnvelopeSet(verificationSet)
-    const applied = verificationPolicyFailed
-      ? hypothesis
-      : applyVerificationSetToHypothesis({
-          hypothesis,
-          envelopes: verificationSet,
-        })
+
+    // Phase 1 (PRD D3): applying a verification to a hypothesis is an
+    // authoritative citation — the evidence must still describe the current
+    // worktree. Stale or unfingerprintable evidence fails closed: the call
+    // stays inconclusive (hypothesis untouched, like the policy-failed path)
+    // and reports needs_verification instead of confirming/refuting.
+    const current = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
+    const verificationFreshness = verificationRun.envelopes.map((item) => ({
+      envelopeId: item.envelopeId,
+      ...classifyEnvelopeFreshness(item.envelope, current),
+    }))
+    const staleEvidence = verificationFreshness.filter((item) => !enforceCitationFreshness(item, "authoritative").ok)
+    const needsVerification = staleEvidence.length > 0
+
+    const verificationOutcome =
+      verificationPolicyFailed || needsVerification ? "inconclusive" : classifyEnvelopeSet(verificationSet)
+    const applied =
+      verificationPolicyFailed || needsVerification
+        ? hypothesis
+        : applyVerificationSetToHypothesis({
+            hypothesis,
+            envelopes: verificationSet,
+          })
     const debugHypothesis = DebugHypothesisSchema.parse({
       ...applied,
       source: { tool: "debug_apply_verification", version: Installation.VERSION, runId: ctx.sessionID },
@@ -71,6 +90,13 @@ export const DebugApplyVerificationTool = Tool.define("debug_apply_verification"
         `Selected envelope: ${verification.envelopeId}`,
         `Outcome: ${verificationOutcome}`,
         ...(verificationPolicyFailed ? ["Verification policy: failed"] : []),
+        ...(needsVerification
+          ? [
+              `Needs verification: stale evidence (${staleEvidence
+                .map((item) => `${item.envelopeId}=${item.status}${"reason" in item ? `/${item.reason}` : ""}`)
+                .join(", ")}) — re-run verify_project against the current worktree before confirming`,
+            ]
+          : []),
         `Hypothesis status: ${debugHypothesis.status}`,
         `Case status: ${effectiveCaseStatus}`,
       ].join("\n"),
@@ -82,6 +108,9 @@ export const DebugApplyVerificationTool = Tool.define("debug_apply_verification"
         verificationPolicyFailed,
         effectiveCaseStatus,
         debugHypothesis,
+        // Freshness metadata is only attached on the failure path so fresh
+        // citations keep the exact pre-Phase-1 metadata shape.
+        ...(needsVerification ? { needsVerification: true, verificationFreshness: staleEvidence } : {}),
       },
     }
   },

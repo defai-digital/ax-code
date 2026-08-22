@@ -1,7 +1,15 @@
 import type { DebugEngine } from "@ax-code/ax-code-reason"
 import { Installation } from "../installation"
 import { Process } from "../util/process"
-import { type StructuredFailure, type VerificationEnvelope, VerificationEnvelopeSchema } from "./verification-envelope"
+import {
+  type SourceState,
+  type StructuredFailure,
+  type VerificationEnvelope,
+  type VerificationEnvironment,
+  type VerificationExecution,
+  VerificationEnvelopeSchema,
+  type VerificationGraph,
+} from "./verification-envelope"
 import type { Workflow } from "./finding-registry"
 
 // Pure converter: legacy refactor_apply check shape → VerificationEnvelope[].
@@ -12,11 +20,22 @@ import type { Workflow } from "./finding-registry"
 // converters produce one envelope per check kind, preserve raw output, and
 // parse the failure formats we can recognize without making unsupported
 // formatter assumptions.
+//
+// Phase 1: callers may additionally pass provenance (sourceState / graph /
+// environment / execution). Everything is optional and threaded verbatim —
+// callers that pass nothing get envelopes bit-identical to before.
 
 export type FromRefactorApplyInput = {
   applyResult: DebugEngine.ApplyResult
   sessionID: string
   cwd: string
+  sourceState?: SourceState
+  graph?: VerificationGraph
+  environment?: VerificationEnvironment
+  // The engine runs typecheck/lint/tests inside one applySafeRefactor
+  // pipeline without per-check timing, so a single execution window is
+  // attached to every envelope produced from the apply.
+  execution?: VerificationExecution
 }
 
 export type VerificationCommandCheck = {
@@ -25,6 +44,7 @@ export type VerificationCommandCheck = {
   skipped?: boolean
   timedOut?: boolean
   duration?: number
+  execution?: VerificationExecution
 }
 
 export type VerificationCommandTest = VerificationCommandCheck & {
@@ -49,6 +69,24 @@ export type FromVerificationCommandsInput = {
     typecheck: VerificationCommandCheck
     lint: VerificationCommandCheck
     tests: VerificationCommandTest
+  }
+  sourceState?: SourceState
+  graph?: VerificationGraph
+  environment?: VerificationEnvironment
+}
+
+// Provenance fields that are shared by every envelope built from one input.
+// Undefined fields are omitted entirely so callers that pass nothing produce
+// envelopes identical to the pre-Phase-1 shape.
+function sharedProvenance(input: {
+  sourceState?: SourceState
+  graph?: VerificationGraph
+  environment?: VerificationEnvironment
+}) {
+  return {
+    ...(input.sourceState ? { sourceState: input.sourceState } : {}),
+    ...(input.graph ? { graph: input.graph } : {}),
+    ...(input.environment ? { environment: input.environment } : {}),
   }
 }
 
@@ -232,6 +270,8 @@ function envelopeForTypecheck(input: FromRefactorApplyInput): VerificationEnvelo
     structuredFailures: parseTypecheckFailures(output),
     artifactRefs: [],
     source: source(input.sessionID, "refactor_apply"),
+    ...sharedProvenance(input),
+    ...(input.execution ? { execution: input.execution } : {}),
   })
 }
 
@@ -255,6 +295,8 @@ function envelopeForLint(input: FromRefactorApplyInput): VerificationEnvelope {
     structuredFailures: parseLintFailures(output),
     artifactRefs: [],
     source: source(input.sessionID, "refactor_apply"),
+    ...sharedProvenance(input),
+    ...(input.execution ? { execution: input.execution } : {}),
   })
 }
 
@@ -279,6 +321,8 @@ function testEnvelopeFromRefactorApply(input: FromRefactorApplyInput): Verificat
     structuredFailures: parseTestFailures(output),
     artifactRefs: [],
     source: source(input.sessionID, "refactor_apply"),
+    ...sharedProvenance(input),
+    ...(input.execution ? { execution: input.execution } : {}),
   })
 }
 
@@ -306,6 +350,8 @@ function envelopeForCommandTypecheck(input: FromVerificationCommandsInput): Veri
     structuredFailures: parseTypecheckFailures(output),
     artifactRefs: [],
     source: source(input.sessionID, input.sourceTool),
+    ...sharedProvenance(input),
+    ...(check.execution ? { execution: check.execution } : {}),
   })
 }
 
@@ -329,6 +375,8 @@ function envelopeForCommandLint(input: FromVerificationCommandsInput): Verificat
     structuredFailures: parseLintFailures(output),
     artifactRefs: [],
     source: source(input.sessionID, input.sourceTool),
+    ...sharedProvenance(input),
+    ...(check.execution ? { execution: check.execution } : {}),
   })
 }
 
@@ -352,6 +400,8 @@ function testEnvelopeFromVerificationCommand(input: FromVerificationCommandsInpu
     structuredFailures: parseTestFailures(output),
     artifactRefs: [],
     source: source(input.sessionID, input.sourceTool),
+    ...sharedProvenance(input),
+    ...(tests.execution ? { execution: tests.execution } : {}),
   })
 }
 

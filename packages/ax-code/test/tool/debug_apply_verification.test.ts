@@ -7,7 +7,8 @@ import {
   DebugHypothesisSchema,
 } from "@ax-code/ax-code-reason/runtime-debug"
 import { Installation } from "../../src/installation"
-import { computeEnvelopeId, type VerificationEnvelope } from "../../src/quality/verification-envelope"
+import { computeEnvelopeId, type SourceState, type VerificationEnvelope } from "../../src/quality/verification-envelope"
+import { currentSourceState } from "../../src/quality/source-state"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
 import { SessionDebug } from "../../src/session/debug"
@@ -104,6 +105,7 @@ function verificationEnvelope(
   sessionID: SessionID,
   status: VerificationEnvelope["result"]["status"],
   structuredFailures: VerificationEnvelope["structuredFailures"] = [],
+  sourceState?: SourceState,
 ): VerificationEnvelope {
   return {
     schemaVersion: 1,
@@ -121,6 +123,7 @@ function verificationEnvelope(
     structuredFailures,
     artifactRefs: [],
     source: { tool: "verify_project", version: Installation.VERSION, runId: sessionID },
+    ...(sourceState ? { sourceState } : {}),
   }
 }
 
@@ -196,7 +199,13 @@ describe("DebugApplyVerificationTool", () => {
       fn: async () => {
         const session = await Session.create({})
         const { hypothesisId } = await emitDebugHypothesis(session.id, tmp.path)
-        const envelopeId = await emitVerification(session.id, verificationEnvelope(session.id, "passed"))
+        // Phase 1: authoritative citation requires fresh evidence — stamp
+        // the envelope with the current worktree fingerprint.
+        const sourceState = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
+        const envelopeId = await emitVerification(
+          session.id,
+          verificationEnvelope(session.id, "passed", [], sourceState),
+        )
 
         const tool = await DebugApplyVerificationTool.init()
         const result = await tool.execute({ hypothesisId, envelopeId }, fakeCtx(session.id))
@@ -230,15 +239,21 @@ describe("DebugApplyVerificationTool", () => {
       fn: async () => {
         const session = await Session.create({})
         const { hypothesisId } = await emitDebugHypothesis(session.id, tmp.path)
-        const passedTypecheck = verificationEnvelope(session.id, "passed")
-        const failedTests = verificationEnvelope(session.id, "failed", [
-          {
-            kind: "test",
-            testName: "worker pool recovers",
-            framework: "bun",
-            file: "test/worker.test.ts",
-          },
-        ])
+        const sourceState = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
+        const passedTypecheck = verificationEnvelope(session.id, "passed", [], sourceState)
+        const failedTests = verificationEnvelope(
+          session.id,
+          "failed",
+          [
+            {
+              kind: "test",
+              testName: "worker pool recovers",
+              framework: "bun",
+              file: "test/worker.test.ts",
+            },
+          ],
+          sourceState,
+        )
         const [passedEnvelopeId, failedEnvelopeId] = await emitVerificationSet(session.id, [
           passedTypecheck,
           failedTests,
@@ -311,16 +326,22 @@ describe("DebugApplyVerificationTool", () => {
       fn: async () => {
         const session = await Session.create({})
         const { hypothesisId } = await emitDebugHypothesis(session.id, tmp.path)
+        const sourceState = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
         const envelopeId = await emitVerification(
           session.id,
-          verificationEnvelope(session.id, "failed", [
-            {
-              kind: "test",
-              testName: "worker pool recovers",
-              framework: "bun",
-              file: "test/worker.test.ts",
-            },
-          ]),
+          verificationEnvelope(
+            session.id,
+            "failed",
+            [
+              {
+                kind: "test",
+                testName: "worker pool recovers",
+                framework: "bun",
+                file: "test/worker.test.ts",
+              },
+            ],
+            sourceState,
+          ),
         )
 
         const tool = await DebugApplyVerificationTool.init()
@@ -350,6 +371,59 @@ describe("DebugApplyVerificationTool", () => {
         expect(result.metadata.effectiveCaseStatus).toBe("investigating")
         expect(result.metadata.debugHypothesis.status).toBe("active")
         expect(result.metadata.debugHypothesis.evidenceRefs).not.toContain(envelopeId)
+      },
+    })
+  })
+
+  test("stale evidence stays inconclusive and reports needs_verification instead of confirming", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { hypothesisId } = await emitDebugHypothesis(session.id, tmp.path)
+        // Fingerprint captured against a commit the worktree is no longer on.
+        const staleSourceState: SourceState = {
+          available: true,
+          commit: "0000000000000000000000000000000000000000",
+          dirtyDigest: "stale-digest",
+        }
+        const envelopeId = await emitVerification(
+          session.id,
+          verificationEnvelope(session.id, "passed", [], staleSourceState),
+        )
+
+        const tool = await DebugApplyVerificationTool.init()
+        const result = await tool.execute({ hypothesisId, envelopeId }, fakeCtx(session.id))
+
+        expect(result.metadata.verificationOutcome).toBe("inconclusive")
+        expect(result.metadata.needsVerification).toBe(true)
+        expect(result.metadata.verificationFreshness).toEqual([{ envelopeId, status: "stale", reason: "commit-moved" }])
+        expect(result.metadata.debugHypothesis.status).toBe("active")
+        expect(result.metadata.debugHypothesis.evidenceRefs).not.toContain(envelopeId)
+        expect(result.output).toContain("Needs verification: stale evidence")
+      },
+    })
+  })
+
+  test("unfingerprinted evidence (no sourceState) is unknown and cannot confirm", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { hypothesisId } = await emitDebugHypothesis(session.id, tmp.path)
+        const envelopeId = await emitVerification(session.id, verificationEnvelope(session.id, "passed"))
+
+        const tool = await DebugApplyVerificationTool.init()
+        const result = await tool.execute({ hypothesisId, envelopeId }, fakeCtx(session.id))
+
+        expect(result.metadata.verificationOutcome).toBe("inconclusive")
+        expect(result.metadata.needsVerification).toBe(true)
+        expect(result.metadata.verificationFreshness).toEqual([
+          { envelopeId, status: "unknown", reason: "no-source-state" },
+        ])
+        expect(result.metadata.debugHypothesis.status).toBe("active")
       },
     })
   })

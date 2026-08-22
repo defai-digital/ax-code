@@ -1,5 +1,7 @@
 import z from "zod"
 import { Instance } from "../project/instance"
+import { CodeIntelligence } from "../code-intelligence"
+import { Installation } from "../installation"
 import {
   resolveCommands,
   runCheck,
@@ -10,12 +12,16 @@ import {
 import { briefFromFailure, shouldHandoff } from "../planner/verification/repair-handoff"
 import { WorkflowEnum } from "../quality/finding"
 import { Policy, type PolicyRequiredCheck, type PolicyRules } from "../quality/policy"
+import { currentSourceState } from "../quality/source-state"
 import {
   computeEnvelopeId,
   type VerificationEnvelope,
   VerificationEnvelopeSchema,
+  type VerificationExecution,
+  type VerificationGraph,
 } from "../quality/verification-envelope"
 import { fromVerificationCommandResult } from "../quality/verification-envelope-builder"
+import { Hash } from "../util/hash"
 import { Tool } from "./tool"
 import DESCRIPTION from "./verify_project.txt"
 import { normalizeToWorkspacePath } from "./file-path"
@@ -30,7 +36,7 @@ const CommandOverrides = z
   })
   .strict()
 
-type Timed<T> = T & { duration: number }
+type Timed<T> = T & { duration: number; startedAt: string; endedAt: string }
 
 function normalizePaths(paths: readonly string[] | undefined): string[] {
   return (paths ?? []).map((file) => {
@@ -51,9 +57,53 @@ function scope(paths: readonly string[], description?: string): VerificationEnve
 }
 
 async function timed<T>(fn: () => Promise<T>): Promise<Timed<T>> {
+  const startedAt = new Date()
   const start = Date.now()
   const result = await fn()
-  return { ...result, duration: Date.now() - start }
+  const endedAt = new Date()
+  return { ...result, duration: Date.now() - start, startedAt: startedAt.toISOString(), endedAt: endedAt.toISOString() }
+}
+
+// Phase 1 provenance capture. Graph state is defensive: the code graph may
+// not be indexed (no cursor row) or the intelligence store may be
+// unavailable — either way the envelope simply omits the field.
+function currentGraphState(): VerificationGraph | undefined {
+  try {
+    const status = CodeIntelligence.status(Instance.project.id)
+    if (status.lastUpdated == null) return undefined
+    // revision is reserved for the derived graph revision hash; the graph
+    // status endpoint does not compute one yet.
+    return { revision: null, lastCommitSha: status.lastCommitSha, indexedAt: status.lastUpdated }
+  } catch {
+    return undefined
+  }
+}
+
+// The runner caps captured error output (runCheck keeps the first 20 lines,
+// runTests 30 lines + 5 failure lines). Hitting the cap means the envelope
+// output is a truncated view of the raw stream; below the cap we cannot
+// tell, so we report false. Raw output hashes are omitted because the
+// runner only surfaces the truncated lines to this layer.
+function checkExecution(check: Timed<TimedCheckResult>): VerificationExecution {
+  return {
+    startedAt: check.startedAt,
+    endedAt: check.endedAt,
+    exitCode: check.exitCode ?? null,
+    signal: null,
+    timedOut: check.timedOut ?? false,
+    outputTruncated: check.errors.length >= 20,
+  }
+}
+
+function testExecution(tests: Timed<TimedTestResult>): VerificationExecution {
+  return {
+    startedAt: tests.startedAt,
+    endedAt: tests.endedAt,
+    exitCode: tests.exitCode ?? null,
+    signal: null,
+    timedOut: tests.timedOut ?? false,
+    outputTruncated: tests.errors.length >= 30 || tests.failures.length >= 5,
+  }
 }
 
 function runnableCommands(commands: { typecheck: string | null; lint: string | null; test: string | null }): string[] {
@@ -242,6 +292,10 @@ export const VerifyProjectTool = Tool.define("verify_project", {
 
     if (ctx.abort.aborted) throw new DOMException("verify_project aborted", "AbortError")
 
+    // Fingerprint the worktree BEFORE the checks run — the envelope claims
+    // "this verification passed against this source state".
+    const sourceState = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
+
     const typecheck: Timed<TimedCheckResult> = await timed(() => runCheck("typecheck", commands.typecheck, cwd))
     if (ctx.abort.aborted) throw new DOMException("verify_project aborted", "AbortError")
 
@@ -260,9 +314,17 @@ export const VerifyProjectTool = Tool.define("verify_project", {
       scope: scope(paths, args.scopeDescription),
       commands,
       checks: {
-        typecheck,
-        lint,
-        tests,
+        typecheck: { ...typecheck, execution: checkExecution(typecheck) },
+        lint: { ...lint, execution: checkExecution(lint) },
+        tests: { ...tests, execution: testExecution(tests) },
+      },
+      sourceState,
+      graph: currentGraphState(),
+      environment: {
+        // Deterministic digest of the resolved command selection — the
+        // config surface that changes what "verification" meant for this run.
+        configDigest: Hash.fast(JSON.stringify(commands)),
+        toolVersions: { "ax-code": Installation.VERSION },
       },
     })
     const missingPolicyChecks = missingRequiredChecks(rawVerificationEnvelopes, policyRules)

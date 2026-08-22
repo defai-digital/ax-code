@@ -12,6 +12,7 @@ import { Session } from "../../src/session"
 import { tmpdir } from "../fixture/fixture"
 import { Installation } from "../../src/installation"
 import { computeEnvelopeId } from "../../src/quality/verification-envelope"
+import { currentSourceState } from "../../src/quality/source-state"
 import type { SessionID } from "../../src/session/schema"
 import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
 import { fakeCtx } from "./debug-fixture"
@@ -536,6 +537,9 @@ describe("DebugProposeHypothesisTool", () => {
             name: "tests",
             type: "test",
           },
+          // Phase 1: authoritative confirmation requires fresh evidence —
+          // stamp the current worktree fingerprint.
+          sourceState: await currentSourceState(Instance.worktree, Instance.project.vcs ?? ""),
         }
         const cleanPassedEnvelopeId = computeEnvelopeId(cleanPassedEnvelope)
         Recorder.emit({
@@ -560,6 +564,69 @@ describe("DebugProposeHypothesisTool", () => {
         )
         expect(result.metadata.debugHypothesis.status).toBe("confirmed")
         expect(result.metadata.debugHypothesis.evidenceRefs).toContain(cleanPassedEnvelopeId)
+      },
+    })
+  })
+
+  test("status confirmed with stale evidence is downgraded to active with needs_verification", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { caseId } = await emitCaseAndEvidence(session.id, tmp.path, "p", "log content")
+
+        const stalePassedEnvelope: VerificationEnvelope = {
+          schemaVersion: 1,
+          workflow: "qa",
+          scope: { kind: "file", paths: ["src/foo.ts"] },
+          command: { runner: "typecheck", argv: [], cwd: "/tmp" },
+          result: {
+            name: "typecheck",
+            type: "typecheck",
+            passed: true,
+            status: "passed",
+            issues: [],
+            duration: 0,
+          },
+          structuredFailures: [],
+          artifactRefs: [],
+          source: { tool: "verify_project", version: "4.x.x", runId: session.id },
+          sourceState: {
+            available: true,
+            commit: "0000000000000000000000000000000000000000",
+            dirtyDigest: "stale-digest",
+          },
+        }
+        const stalePassedEnvelopeId = computeEnvelopeId(stalePassedEnvelope)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id as any,
+          tool: "verify_project",
+          callID: "call-verify-stale",
+          status: "completed",
+          metadata: { verificationEnvelopes: [stalePassedEnvelope] },
+          durationMs: 1,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 30))
+
+        const tool = await DebugProposeHypothesisTool.init()
+        const result = await tool.execute(
+          {
+            caseId,
+            claim: "stale verification should not confirm",
+            evidenceRefs: [stalePassedEnvelopeId],
+            status: "confirmed",
+          },
+          fakeCtx(session.id),
+        )
+
+        expect(result.metadata.debugHypothesis.status).toBe("active")
+        expect(result.metadata.needsVerification).toBe(true)
+        expect(result.metadata.verificationFreshness).toEqual([
+          { envelopeId: stalePassedEnvelopeId, status: "stale", reason: "commit-moved" },
+        ])
+        expect(result.output).toContain("Needs verification: stale evidence")
       },
     })
   })
