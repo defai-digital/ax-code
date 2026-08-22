@@ -267,8 +267,9 @@ enum AppDiscovery {
             return
         }
 
-        if AppSafetyPolicy.isBlocked(bundleIdentifier: Bundle(url: appURL)?.bundleIdentifier) {
-            return
+        if let bundleIdentifier = Bundle(url: appURL)?.bundleIdentifier,
+           AppSafetyPolicy.isBlocked(bundleIdentifier: bundleIdentifier) {
+            throw AppSafetyPolicy.permissionDenied(bundleIdentifier: bundleIdentifier)
         }
 
         try openApplication(at: appURL)
