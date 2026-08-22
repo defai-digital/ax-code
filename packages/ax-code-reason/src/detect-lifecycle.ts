@@ -33,6 +33,23 @@ export type DetectLifecycleInput = ScannerInputControls & {
 // Suppression comment pattern
 const SUPPRESS_RE = /\/\/\s*@scan-suppress\s+lifecycle_scan/
 
+// Additive (Phase 4-prep, U4): the audit-scope label every report
+// carries. A clean cross-line heuristic scan is not a resource-lifecycle
+// audit — no cross-function dispose tracking, no control-flow analysis.
+const DETECT_LIFECYCLE_AUDIT_CAVEAT =
+  "Heuristic scan: a clean result does not constitute a full resource-lifecycle audit. " +
+  "No cross-function dispose tracking, no control-flow analysis, no async-cancellation reasoning."
+
+// Build the ruleId for a finding. Resource type AND pattern are the
+// discriminators the scanner exposes (e.g. timer + no_cleanup,
+// map_growth + unbounded_growth).
+function lifecycleRuleId(
+  resourceType: DebugEngine.LifecycleResourceType,
+  pattern: DebugEngine.LifecyclePattern,
+): string {
+  return `axcode:detect-lifecycle-${resourceType.replace(/_/g, "-")}-${pattern.replace(/_/g, "-")}`
+}
+
 // Resource patterns: { create regex, cleanup regex, resource type, description }
 type ResourceRule = {
   type: DebugEngine.LifecycleResourceType
@@ -186,6 +203,7 @@ function detectResourceLeaks(
           severity: rule.severity,
           description: rule.description,
           cleanupLocation: `within function scope (lines ${scope.start}-${scope.end})`,
+          ruleId: lifecycleRuleId(rule.type, "no_cleanup"),
         })
       }
     }
@@ -238,6 +256,7 @@ function detectUnboundedMapGrowth(content: string, file: string, maxPerFile: num
       severity: "medium",
       description: `Map/Set \`${name}\` grows via .set() (lines [${setLines.join(",")}]) but never .delete()/.clear() and has no .size guard. May grow without bounds in a hot path.`,
       cleanupLocation: null,
+      ruleId: lifecycleRuleId("map_growth", "unbounded_growth"),
     })
   }
   return findings
@@ -276,6 +295,7 @@ export async function detectLifecycleImpl(input: DetectLifecycleInput): Promise<
       filesScanned: 0,
       truncated: false,
       explain: DebugEngine.buildExplain("detect-lifecycle", [], ["scope=none"]),
+      auditCaveat: DETECT_LIFECYCLE_AUDIT_CAVEAT,
     }
   }
 
@@ -304,10 +324,15 @@ export async function detectLifecycleImpl(input: DetectLifecycleInput): Promise<
           severity: f.severity as DebugEngine.LifecycleFinding["severity"],
           description: f.description,
           cleanupLocation: f.cleanupLocation,
+          ruleId: lifecycleRuleId(
+            f.resourceType as DebugEngine.LifecycleResourceType,
+            f.pattern as DebugEngine.LifecyclePattern,
+          ),
         })),
         filesScanned: native.filesScanned,
         truncated: native.truncated,
         explain: DebugEngine.buildExplain("detect-lifecycle", [], native.heuristics),
+        auditCaveat: DETECT_LIFECYCLE_AUDIT_CAVEAT,
       }
     }
   }
@@ -331,5 +356,6 @@ export async function detectLifecycleImpl(input: DetectLifecycleInput): Promise<
     filesScanned: fileBatch.files.length,
     truncated: fileBatch.truncated,
     explain: DebugEngine.buildExplain("detect-lifecycle", [], heuristics),
+    auditCaveat: DETECT_LIFECYCLE_AUDIT_CAVEAT,
   }
 }

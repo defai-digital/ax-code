@@ -38,6 +38,20 @@ const DEFAULT_MIN_SIG_LEN = 20
 const DEFAULT_SIMILARITY = 0.85
 const DEFAULT_MAX_CANDIDATES = 2000
 
+// Additive (Phase 4-prep, U4): the audit-scope label every cluster and
+// report carries. A clean heuristic run is not a full duplicate audit —
+// no AST walk, no cross-file embedding similarity yet.
+const DETECT_DUPLICATES_AUDIT_CAVEAT =
+  "Heuristic scan: a clean result does not constitute a full duplicate audit. " +
+  "Phase 2 adds tree-sitter AST walks and embedding-based near-match detection; " +
+  "pair with a parser-backed pass before relying on a clean result for refactor safety."
+
+// Build the ruleId for a cluster. Tier is the only pattern discriminator
+// the duplicates scanner exposes (exact / structural / semantic).
+function duplicatesRuleId(tier: DebugEngine.DuplicateTier): string {
+  return `axcode:detect-duplicates-${tier}`
+}
+
 type DuplicateCandidatePool = {
   pool: Graph.Symbol[]
   ciExplains: Graph.Explain[]
@@ -228,6 +242,7 @@ export async function detectDuplicatesImpl(
         suggestedExtractionTarget: commonDirectory(members.map((m) => m.file)),
         pattern: norm.slice(0, 80),
         tier,
+        ruleId: duplicatesRuleId(tier),
       })
     } else if (members.length === 1) {
       // Skip symbols that lack a signature (generated code, minified
@@ -269,6 +284,7 @@ export async function detectDuplicatesImpl(
         suggestedExtractionTarget: commonDirectory(group.map((m) => m.file)),
         pattern: representativeNorm.slice(0, 80),
         tier: "semantic",
+        ruleId: duplicatesRuleId("semantic"),
       })
     }
   }
@@ -292,5 +308,6 @@ export async function detectDuplicatesImpl(
     totalDuplicateLines,
     truncated,
     explain: DebugEngine.buildExplain("detect-duplicates", ciExplains, heuristics),
+    auditCaveat: DETECT_DUPLICATES_AUDIT_CAVEAT,
   }
 }

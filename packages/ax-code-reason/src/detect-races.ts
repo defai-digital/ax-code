@@ -34,6 +34,21 @@ const MAP_GET_RE = /(\w+)\.get\s*\(/g
 const MAP_SET_RE = /(\w+)\.set\s*\(/g
 const COUNTER_RE = /(\w+)\s*(?:\+\+|--|\+=|\-=)/g
 
+// Additive (Phase 4-prep, U4): the audit-scope label every report
+// carries. A clean async-TS regex pass is not a race-condition audit —
+// no data-flow, no happens-before analysis, no cross-file effect
+// tracking.
+const DETECT_RACES_AUDIT_CAVEAT =
+  "Heuristic scan: a clean result does not constitute a full race-condition audit. " +
+  "No data-flow analysis, no happens-before reasoning, no cross-file effect tracking. " +
+  "Pair with a concurrency-aware analyzer before relying on a clean result."
+
+// Build the ruleId for a finding. RacePattern is the only pattern
+// discriminator the scanner exposes.
+function racesRuleId(pattern: DebugEngine.RacePattern): string {
+  return `axcode:detect-races-${pattern.replace(/_/g, "-")}`
+}
+
 type LineInfo = {
   text: string
   code: string
@@ -210,6 +225,7 @@ function detectToctou(lines: LineInfo[], file: string, max: number): DebugEngine
           description: `TOCTOU: \`${read.name}\` read at line ${read.line}, await at lines [${awaitLines.filter((a) => a > read.line && a < write.line).join(",")}], write at line ${write.line}. Another async task may mutate \`${read.name}\` during the await.`,
           code: lines[read.line - 1]?.trimmed ?? "",
           fix: `Use an atomic operation or add a lock/mutex around the read-await-write sequence on \`${read.name}\`.`,
+          ruleId: racesRuleId("toctou"),
         })
       }
     }
@@ -258,6 +274,7 @@ function detectNonAtomicCounter(lines: LineInfo[], file: string, max: number): D
         description: `Non-atomic counter: \`${counter.name}\` is modified at line ${counter.line} after an await point. Concurrent async calls may read a stale value.`,
         code: lines[counter.line - 1]?.trimmed ?? "",
         fix: `Use an atomic counter pattern or serialize access to \`${counter.name}\`.`,
+        ruleId: racesRuleId("non_atomic_counter"),
       })
     }
   }
@@ -336,6 +353,7 @@ function detectConflictingMutations(lines: LineInfo[], file: string, max: number
         description: `Promise.all with conflicting mutations: \`${name}\` is mutated at lines [${lineNums.join(",")}] inside a concurrent block. These operations may interleave.`,
         code: lines[lineNums[0] - 1]?.trimmed ?? "",
         fix: `Serialize mutations to \`${name}\` or use separate state per promise branch.`,
+        ruleId: racesRuleId("conflicting_mutation"),
       })
     }
   }
@@ -369,6 +387,7 @@ function detectStaleListener(lines: LineInfo[], file: string, max: number): Debu
           description: `Event listener on \`${lMatch[1]}\` registered at line ${line.num} after await at line ${lastAwaitLine}. Events emitted during the await window will be missed.`,
           code: line.trimmed,
           fix: `Register the listener before the await, or verify no events can fire during the await.`,
+          ruleId: racesRuleId("stale_listener"),
         })
       }
     }
@@ -414,6 +433,7 @@ export async function detectRacesImpl(input: DetectRacesInput): Promise<DebugEng
       filesScanned: 0,
       truncated: false,
       explain: DebugEngine.buildExplain("detect-races", [], ["scope=none"]),
+      auditCaveat: DETECT_RACES_AUDIT_CAVEAT,
     }
   }
 
@@ -445,5 +465,6 @@ export async function detectRacesImpl(input: DetectRacesInput): Promise<DebugEng
     filesScanned: fileBatch.files.length,
     truncated: fileBatch.truncated,
     explain: DebugEngine.buildExplain("detect-races", [], heuristics),
+    auditCaveat: DETECT_RACES_AUDIT_CAVEAT,
   }
 }

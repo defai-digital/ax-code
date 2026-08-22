@@ -178,6 +178,10 @@ export namespace DebugEngine {
     suggestedExtractionTarget: string
     pattern: string
     tier: DuplicateTier
+    // Additive (Phase 4-prep, U4): labels the cluster with the rule that
+    // produced it (axcode:detect-duplicates-{exact|structural|semantic}).
+    // Optional so existing callers without U4 keep compiling unchanged.
+    ruleId?: string
   }
 
   export type DuplicateReport = {
@@ -185,6 +189,10 @@ export namespace DebugEngine {
     totalDuplicateLines: number
     truncated: boolean
     explain: Explain
+    // Additive (Phase 4-prep, U4): reminds consumers that a clean
+    // heuristic scan is not a full duplicate audit (no AST walk, no
+    // cross-file embedding similarity yet).
+    auditCaveat?: string
   }
 
   // ─── analyzeImpact output shape ─────────────────────────────────────
@@ -218,6 +226,10 @@ export namespace DebugEngine {
     value: string
     suggestion: string
     severity: "low" | "medium" | "high"
+    // Additive (Phase 4-prep, U4): labels the finding with the rule that
+    // produced it (axcode:detect-hardcodes-{magic-number|inline-url|...}).
+    // Optional so existing callers without U4 keep compiling unchanged.
+    ruleId?: string
   }
 
   export type HardcodeReport = {
@@ -225,6 +237,10 @@ export namespace DebugEngine {
     filesScanned: number
     truncated: boolean
     explain: Explain
+    // Additive (Phase 4-prep, U4): a clean regex scan is not a full
+    // hardcode audit — AST-level constant extraction and cross-file
+    // duplication detection are out of scope for the heuristic pass.
+    auditCaveat?: string
   }
 
   // ─── applySafeRefactor output shape ─────────────────────────────────
@@ -297,6 +313,10 @@ export namespace DebugEngine {
     description: string
     code: string
     fix: string
+    // Additive (Phase 4-prep, U4): labels the finding with the rule that
+    // produced it (axcode:detect-races-{toctou|non-atomic-counter|...}).
+    // Optional so existing callers without U4 keep compiling unchanged.
+    ruleId?: string
   }
 
   export type RaceReport = {
@@ -304,6 +324,10 @@ export namespace DebugEngine {
     filesScanned: number
     truncated: boolean
     explain: Explain
+    // Additive (Phase 4-prep, U4): a clean async-TS regex scan is not
+    // a full race-condition audit — no data-flow / happens-before
+    // analysis, no cross-file effect tracking.
+    auditCaveat?: string
   }
 
   // ─── detectLifecycle output shape ──────────────────────────────────
@@ -326,6 +350,10 @@ export namespace DebugEngine {
     severity: "high" | "medium" | "low"
     description: string
     cleanupLocation: string | null
+    // Additive (Phase 4-prep, U4): labels the finding with the rule that
+    // produced it (axcode:detect-lifecycle-{resource-type}-{pattern}).
+    // Optional so existing callers without U4 keep compiling unchanged.
+    ruleId?: string
   }
 
   export type LifecycleReport = {
@@ -333,6 +361,10 @@ export namespace DebugEngine {
     filesScanned: number
     truncated: boolean
     explain: Explain
+    // Additive (Phase 4-prep, U4): a clean cross-line heuristic scan is
+    // not a full resource-lifecycle audit — no cross-function dispose
+    // tracking, no control-flow analysis.
+    auditCaveat?: string
   }
 
   // ─── detectSecurity output shape ────────────────────────────────────
@@ -345,6 +377,10 @@ export namespace DebugEngine {
     pattern: SecurityPattern
     severity: "high" | "medium" | "low"
     description: string
+    // Additive (Phase 4-prep, U4): labels the finding with the rule that
+    // produced it (axcode:detect-security-{path-traversal|...}). Optional
+    // so existing callers without U4 keep compiling unchanged.
+    ruleId?: string
   }
 
   export type SecurityReport = {
@@ -352,6 +388,11 @@ export namespace DebugEngine {
     filesScanned: number
     truncated: boolean
     explain: Explain
+    // Additive (Phase 4-prep, U4): a clean line-based heuristic scan
+    // is NOT a security audit — no taint tracking, no type-system
+    // reasoning, no runtime input validation. Pair with type-aware
+    // scanners before relying on a clean result.
+    auditCaveat?: string
   }
 
   // ─── Public feature functions ───────────────────────────────────────

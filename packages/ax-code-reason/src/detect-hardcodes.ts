@@ -50,6 +50,20 @@ const TRIVIAL_NUMBERS = new Set(["0", "1", "-1", "2"])
 const SECRET_SHAPE_MIN_LEN = 30
 const SECRET_ENTROPY_THRESHOLD = 3.5
 
+// Additive (Phase 4-prep, U4): the audit-scope label every report
+// carries. A clean regex pass is not a full hardcode audit — AST-level
+// constant extraction and cross-file duplication detection are out of
+// scope for the heuristic pass.
+const DETECT_HARDCODES_AUDIT_CAVEAT =
+  "Heuristic regex scan: a clean result does not constitute a full hardcode audit. " +
+  "AST-level constant extraction, cross-file duplication, and type-aware analysis are out of scope."
+
+// Build the ruleId for a finding. HardcodeKind is the only pattern
+// discriminator the scanner exposes.
+function hardcodesRuleId(kind: DebugEngine.HardcodeKind): string {
+  return `axcode:detect-hardcodes-${kind.replace(/_/g, "-")}`
+}
+
 function shannonEntropy(s: string): number {
   if (s.length === 0) return 0
   const counts = new Map<string, number>()
@@ -327,6 +341,7 @@ async function scanFile(
           value: hit.value.length > 120 ? hit.value.slice(0, 117) + "..." : hit.value,
           suggestion: suggestionFor(kind),
           severity: severityFor(kind, hit.value),
+          ruleId: hardcodesRuleId(kind),
         })
       }
     }
@@ -349,6 +364,7 @@ export async function detectHardcodesImpl(input: DetectHardcodesInput): Promise<
       filesScanned: 0,
       truncated: false,
       explain: DebugEngine.buildExplain("detect-hardcodes", [], ["scope=none"]),
+      auditCaveat: DETECT_HARDCODES_AUDIT_CAVEAT,
     }
   }
 
@@ -370,10 +386,12 @@ export async function detectHardcodesImpl(input: DetectHardcodesInput): Promise<
           value: f.value,
           suggestion: f.suggestion,
           severity: f.severity as DebugEngine.HardcodeFinding["severity"],
+          ruleId: hardcodesRuleId(f.kind as DebugEngine.HardcodeKind),
         })),
         filesScanned: native.filesScanned,
         truncated: native.truncated,
         explain: DebugEngine.buildExplain("detect-hardcodes", [], native.heuristics),
+        auditCaveat: DETECT_HARDCODES_AUDIT_CAVEAT,
       }
     }
   }
@@ -397,5 +415,6 @@ export async function detectHardcodesImpl(input: DetectHardcodesInput): Promise<
     filesScanned: fileBatch.files.length,
     truncated: fileBatch.truncated,
     explain: DebugEngine.buildExplain("detect-hardcodes", [], heuristics),
+    auditCaveat: DETECT_HARDCODES_AUDIT_CAVEAT,
   }
 }

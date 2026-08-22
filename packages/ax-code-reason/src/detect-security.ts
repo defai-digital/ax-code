@@ -31,6 +31,22 @@ export type DetectSecurityInput = ScannerInputControls & {
 
 const SUPPRESS_RE = /\/\/\s*@scan-suppress\s+security_scan/
 
+// Additive (Phase 4-prep, U4): the audit-scope label every report
+// carries. Line-based heuristic scan is NOT a security audit — no
+// taint tracking, no type-system reasoning, no runtime input
+// validation. Always pair with a type-aware or runtime scanner
+// before relying on a clean result.
+const DETECT_SECURITY_AUDIT_CAVEAT =
+  "Heuristic scan: a clean result does NOT constitute a security audit. " +
+  "No taint tracking, no type-system reasoning, no runtime input validation. " +
+  "Pair with a type-aware or runtime scanner before relying on a clean result."
+
+// Build the ruleId for a finding. SecurityPattern is the only pattern
+// discriminator the scanner exposes.
+function securityRuleId(pattern: DebugEngine.SecurityPattern): string {
+  return `axcode:detect-security-${pattern.replace(/_/g, "-")}`
+}
+
 function isTrustedPathTraversalScanTarget(file: string): boolean {
   const normalized = file.split(path.sep).join("/")
   if (normalized.includes("/script/")) return true
@@ -77,6 +93,7 @@ function detectPathTraversal(lines: string[], file: string, max: number): DebugE
       pattern: "path_traversal",
       severity: "high",
       description: `path.join/resolve with variable input at line ${i + 1} without containment check. May allow path traversal to access files outside the intended directory.`,
+      ruleId: securityRuleId("path_traversal"),
     })
   }
   return findings
@@ -159,6 +176,7 @@ function detectCommandInjection(lines: string[], file: string, max: number): Deb
       pattern: "command_injection",
       severity: "high",
       description: `${isExec ? "exec" : "spawn"} with string interpolation/concatenation at line ${i + 1}. Variable input may allow command injection.`,
+      ruleId: securityRuleId("command_injection"),
     })
   }
   return findings
@@ -190,6 +208,7 @@ function detectEnvLeak(lines: string[], file: string, max: number): DebugEngine.
       pattern: "env_leak",
       severity: "medium",
       description: `process.env spread to child process at line ${i + 1} without sanitization. Secrets (API keys, tokens) may leak to subprocesses.`,
+      ruleId: securityRuleId("env_leak"),
     })
   }
   return findings
@@ -223,6 +242,7 @@ function detectMissingValidation(lines: string[], file: string, max: number): De
       pattern: "missing_validation",
       severity: "medium",
       description: `Mutation route "${match[1]}" at line ${i + 1} without schema validation middleware. Unvalidated input may cause unexpected behavior.`,
+      ruleId: securityRuleId("missing_validation"),
     })
   }
   return findings
@@ -257,6 +277,7 @@ function detectSsrf(lines: string[], file: string, max: number): DebugEngine.Sec
       pattern: "ssrf",
       severity: "high",
       description: `fetch/request with variable URL \`${arg}\` at line ${i + 1} without URL validation. May allow SSRF to internal services.`,
+      ruleId: securityRuleId("ssrf"),
     })
   }
   return findings
@@ -300,6 +321,7 @@ export async function detectSecurityImpl(input: DetectSecurityInput): Promise<De
       filesScanned: 0,
       truncated: false,
       explain: DebugEngine.buildExplain("detect-security", [], ["scope=none"]),
+      auditCaveat: DETECT_SECURITY_AUDIT_CAVEAT,
     }
   }
 
@@ -325,10 +347,12 @@ export async function detectSecurityImpl(input: DetectSecurityInput): Promise<De
           pattern: f.pattern as DebugEngine.SecurityPattern,
           severity: f.severity as DebugEngine.SecurityFinding["severity"],
           description: f.description,
+          ruleId: securityRuleId(f.pattern as DebugEngine.SecurityPattern),
         })),
         filesScanned: native.filesScanned,
         truncated: native.truncated,
         explain: DebugEngine.buildExplain("detect-security", [], native.heuristics),
+        auditCaveat: DETECT_SECURITY_AUDIT_CAVEAT,
       }
     }
   }
@@ -352,5 +376,6 @@ export async function detectSecurityImpl(input: DetectSecurityInput): Promise<De
     filesScanned: fileBatch.files.length,
     truncated: fileBatch.truncated,
     explain: DebugEngine.buildExplain("detect-security", [], heuristics),
+    auditCaveat: DETECT_SECURITY_AUDIT_CAVEAT,
   }
 }
