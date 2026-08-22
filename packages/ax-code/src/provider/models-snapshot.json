@@ -13908,7 +13908,7 @@
         "limit": {
           "context": 128000,
           "input": 128000,
-          "output": 16384
+          "output": 8192
         }
       },
       "deepseek-v3-0324": {

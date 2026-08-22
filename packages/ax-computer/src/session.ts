@@ -29,6 +29,11 @@ export class ComputerSession {
     return this.provider
   }
 
+  /** Convenience getter for the active provider's backend name (e.g. "cua", "ocu"). */
+  get activeProviderName(): string {
+    return this.provider.name
+  }
+
   async observe(scope: ObserveScope): Promise<ComputerObservation> {
     const observation = await this.provider.observe(scope)
     this.lastScope = scope

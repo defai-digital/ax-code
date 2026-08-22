@@ -8,6 +8,11 @@ over two external MCP computer-use backends.
   targeted by tree indices valid only for the latest snapshot.
 - **Cua Driver** (`cua-driver mcp`) — cross-platform, window-scoped, with
   structured (`structuredContent`) results and background input delivery.
+  `CuaProvider` also supports `transport: "sdk"`, which embeds the pinned
+  `@trycua/cua-driver` native SDK in-process instead of spawning the MCP
+  server; both transports reach the same Rust tool registry, so tool names,
+  arguments, and refusal semantics are identical. The default transport is
+  `"mcp"`.
 
 Both backends are stdio MCP servers speaking newline-delimited JSON-RPC 2.0;
 `src/mcp/stdio-client.ts` is a minimal self-contained client (no MCP SDK

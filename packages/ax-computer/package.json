@@ -12,6 +12,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@trycua/cua-driver": "catalog:"
+  },
   "devDependencies": {
     "typescript": "catalog:",
     "@types/node": "catalog:",

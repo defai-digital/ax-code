@@ -1,0 +1,121 @@
+{
+  "generatedAt": "2026-08-22T14:46:27.804Z",
+  "primary": {
+    "name": "ocu",
+    "passed": 3,
+    "failed": 3,
+    "totalLatencyMs": 6333
+  },
+  "secondary": {
+    "name": "cua",
+    "passed": 6,
+    "failed": 0,
+    "totalLatencyMs": 14666
+  },
+  "rows": [
+    {
+      "id": "AB-001",
+      "name": "launch app",
+      "primary": {
+        "ok": false,
+        "latencyMs": 1636,
+        "refusal": "Apple event error -10005: cgWindowNotFound"
+      },
+      "secondary": {
+        "ok": true,
+        "latencyMs": 2465
+      },
+      "bothRefused": false,
+      "disagreement": true
+    },
+    {
+      "id": "AB-002",
+      "name": "observe app state",
+      "primary": {
+        "ok": true,
+        "latencyMs": 784
+      },
+      "secondary": {
+        "ok": true,
+        "latencyMs": 1667
+      },
+      "bothRefused": false,
+      "disagreement": false
+    },
+    {
+      "id": "AB-003",
+      "name": "focus the editor (point click at screenshot center)",
+      "primary": {
+        "ok": true,
+        "latencyMs": 783
+      },
+      "secondary": {
+        "ok": true,
+        "latencyMs": 1547
+      },
+      "bothRefused": false,
+      "disagreement": false
+    },
+    {
+      "id": "AB-004",
+      "name": "type a known string",
+      "primary": {
+        "ok": false,
+        "latencyMs": 1555,
+        "refusal": "Apple event error -10005: cgWindowNotFound"
+      },
+      "secondary": {
+        "ok": true,
+        "latencyMs": 4212
+      },
+      "bothRefused": false,
+      "disagreement": true
+    },
+    {
+      "id": "AB-005",
+      "name": "click a button-like element from the observation",
+      "primary": {
+        "ok": true,
+        "latencyMs": 782
+      },
+      "secondary": {
+        "ok": true,
+        "latencyMs": 1553
+      },
+      "bothRefused": false,
+      "disagreement": false
+    },
+    {
+      "id": "AB-006",
+      "name": "scroll down",
+      "primary": {
+        "ok": false,
+        "latencyMs": 786,
+        "refusal": "no scrollable element in last observation"
+      },
+      "secondary": {
+        "ok": true,
+        "latencyMs": 3221
+      },
+      "bothRefused": false,
+      "disagreement": true
+    }
+  ],
+  "discrepancies": [
+    {
+      "id": "AB-001",
+      "name": "launch app",
+      "winner": "secondary"
+    },
+    {
+      "id": "AB-004",
+      "name": "type a known string",
+      "winner": "secondary"
+    },
+    {
+      "id": "AB-006",
+      "name": "scroll down",
+      "winner": "secondary"
+    }
+  ]
+}

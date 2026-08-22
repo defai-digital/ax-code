@@ -7,6 +7,8 @@ import {
   toActionResult,
   type McpCallToolResult,
   type McpClient,
+  type McpContentBlock,
+  type McpToolDefinition,
 } from "../mcp/stdio-client"
 import type { ComputerUseProvider, ObserveScope, ProviderCapabilities } from "../provider"
 import type { AppInfo, Bounds, ComputerElement, ComputerObservation, PixelImage, WindowInfo } from "../types"
@@ -15,8 +17,39 @@ export interface CuaProviderConfig {
   command?: string
   args?: string[]
   requestTimeoutMs?: number
-  /** test hook: inject a connected client instead of spawning the server */
+  /**
+   * Backend transport. "mcp" (default) spawns `cua-driver mcp` over stdio;
+   * "sdk" embeds the pinned @trycua/cua-driver native SDK in-process. Both
+   * reach the same Rust tool registry, so tool names, argument schemas, and
+   * refusal semantics are identical.
+   */
+  transport?: "mcp" | "sdk"
+  /** test hook: inject a connected client instead of spawning the server (mcp transport) */
   client?: McpClient
+  /** test hook: inject a connected driver instead of constructing one from @trycua/cua-driver (sdk transport) */
+  driver?: CuaSdkDriver
+}
+
+/**
+ * The transport-neutral tool envelope returned by the cua SDK
+ * (@trycua/cua-driver `ToolResult`); only the fields the adapter consumes.
+ */
+export interface CuaSdkToolResult {
+  text: string
+  images: Array<{ mimeType: string; dataBase64: string }>
+  structuredJson?: string
+  isError: boolean
+}
+
+/**
+ * Structural surface of the @trycua/cua-driver `CuaDriver` used by the sdk
+ * transport; the concrete class additionally carries `uniffiDestroy`.
+ */
+export interface CuaSdkDriver {
+  callTool(name: string, argumentsJson: string): Promise<CuaSdkToolResult>
+  shutdown(): Promise<void>
+  /** releases the native binding handle */
+  uniffiDestroy?(): void
 }
 
 /** routing context captured from the most recent observation */
@@ -97,9 +130,12 @@ function recommendsForeground(result: McpCallToolResult): boolean {
 }
 
 /**
- * Adapter for the Cua driver (`cua-driver mcp`). Window-scoped: element and
- * pixel actions route through the (pid, window_id) of the most recent
- * observation. Supports background input delivery.
+ * Adapter for the Cua driver. Window-scoped: element and pixel actions route
+ * through the (pid, window_id) of the most recent observation. Supports
+ * background input delivery. The default transport spawns `cua-driver mcp`;
+ * `transport: "sdk"` embeds the pinned @trycua/cua-driver SDK in-process —
+ * both reach the same Rust tool registry, so all argument construction and
+ * result parsing below is shared.
  */
 export class CuaProvider implements ComputerUseProvider {
   readonly name = "cua"
@@ -479,14 +515,77 @@ export class CuaProvider implements ComputerUseProvider {
 
   private async connect(): Promise<McpClient> {
     const client =
-      this.config.client ??
-      (await StdioMcpClient.start({
-        command: this.config.command ?? process.env.AX_COMPUTER_CUA_COMMAND ?? "cua-driver",
-        args: this.config.args ?? ["mcp"],
-        requestTimeoutMs: this.config.requestTimeoutMs,
-      }))
+      this.config.transport === "sdk"
+        ? new SdkMcpAdapter(this.config.driver ?? (await createEmbeddedDriver(this.name)))
+        : (this.config.client ??
+          (await StdioMcpClient.start({
+            command: this.config.command ?? process.env.AX_COMPUTER_CUA_COMMAND ?? "cua-driver",
+            args: this.config.args ?? ["mcp"],
+            requestTimeoutMs: this.config.requestTimeoutMs,
+          })))
     this.client = client
     return client
+  }
+}
+
+/**
+ * Presents the embedded cua SDK driver through the McpClient surface the
+ * provider consumes. The SDK's ToolResult envelope is the MCP result shape
+ * normalized by cua's own runtime (`normalize_result`), so this maps it back:
+ * same tool names, same arguments, same structured payloads as the stdio
+ * server — both are downstream of the same Rust tool registry.
+ */
+class SdkMcpAdapter implements McpClient {
+  constructor(private readonly driver: CuaSdkDriver) {}
+
+  async listTools(): Promise<McpToolDefinition[]> {
+    // the provider never lists tools; the canonical inventory is available
+    // on the driver (listToolsJson) if ever needed
+    return []
+  }
+
+  async callTool(tool: string, args: Record<string, unknown>): Promise<McpCallToolResult> {
+    const result = await this.driver.callTool(tool, JSON.stringify(args))
+    return sdkToMcpResult(result)
+  }
+
+  async close(): Promise<void> {
+    await this.driver.shutdown()
+    this.driver.uniffiDestroy?.()
+  }
+}
+
+/** inverse of cua's normalize_result: SDK envelope -> MCP-shaped result */
+function sdkToMcpResult(result: CuaSdkToolResult): McpCallToolResult {
+  const content: McpContentBlock[] = []
+  if (result.text) content.push({ type: "text", text: result.text })
+  for (const image of result.images) content.push({ type: "image", data: image.dataBase64, mimeType: image.mimeType })
+  let structuredContent: unknown
+  if (result.structuredJson !== undefined) {
+    try {
+      structuredContent = JSON.parse(result.structuredJson)
+    } catch {
+      // a malformed envelope must not break the call; text still carries
+    }
+  }
+  return { content, structuredContent, isError: result.isError }
+}
+
+/**
+ * Construct the embedded @trycua/cua-driver runtime. The import is dynamic:
+ * the SDK loads its platform native library at import time, and the default
+ * mcp transport (and every test that injects a client or driver) must never
+ * pay for it or fail on hosts without the native package.
+ */
+async function createEmbeddedDriver(provider: string): Promise<CuaSdkDriver> {
+  try {
+    const sdk = await import("@trycua/cua-driver")
+    return sdk.CuaDriver.create(undefined)
+  } catch (error) {
+    throw new ComputerUseError(
+      `cua: failed to load the embedded @trycua/cua-driver SDK: ${error instanceof Error ? error.message : String(error)}`,
+      { provider, code: "provider_unavailable", cause: error },
+    )
   }
 }
 

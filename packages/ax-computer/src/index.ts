@@ -18,5 +18,5 @@ export {
   type StdioMcpClientOptions,
 } from "./mcp/stdio-client"
 export { OcuProvider, type OcuProviderConfig } from "./providers/ocu"
-export { CuaProvider, type CuaProviderConfig } from "./providers/cua"
+export { CuaProvider, type CuaProviderConfig, type CuaSdkDriver, type CuaSdkToolResult } from "./providers/cua"
 export { probeProvider, type ProbeReport } from "./probe"
