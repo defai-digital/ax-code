@@ -37,7 +37,7 @@ function handle(line) {
   }
   if (!message.method) return
   if (message.method === "initialize") {
-    const respond = () =>
+    const respond = () => {
       send({
         jsonrpc: "2.0",
         id: message.id,
@@ -47,6 +47,9 @@ function handle(line) {
           serverInfo: { name: "fake-mcp", version: "0.0.0" },
         },
       })
+      // after a successful handshake, flood stdout with one unterminated line
+      if (mode === "huge-line") process.stdout.write("x".repeat(64 * 1024))
+    }
     if (mode === "slow-init") setTimeout(respond, 150)
     else respond()
     return
@@ -63,6 +66,14 @@ function handle(line) {
   }
   if (message.method === "tools/call") {
     if (mode === "crash-on-call") process.exit(1)
+    if (mode === "bad-result") {
+      send({ jsonrpc: "2.0", id: message.id, result: "junk-not-an-object" })
+      return
+    }
+    if (mode === "bad-content") {
+      send({ jsonrpc: "2.0", id: message.id, result: { content: "junk-not-an-array" } })
+      return
+    }
     const params = message.params ?? {}
     if (params.name === "fail") {
       send({ jsonrpc: "2.0", id: message.id, result: { content: [{ type: "text", text: "boom" }], isError: true } })

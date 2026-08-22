@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url"
 import { describe, expect, test } from "vitest"
-import { McpClientError, StdioMcpClient } from "../src/mcp/stdio-client"
+import { McpClientError, StdioMcpClient, assertSpawnableCommand } from "../src/mcp/stdio-client"
 
 const server = fileURLToPath(new URL("./helpers/fake-mcp-server.mjs", import.meta.url))
 
@@ -55,5 +55,63 @@ describe("StdioMcpClient", () => {
 
   test("McpClientError is an Error subclass", () => {
     expect(new McpClientError("timeout", "x")).toBeInstanceOf(Error)
+  })
+})
+
+describe("StdioMcpClient spawn command validation", () => {
+  test("assertSpawnableCommand accepts a plain PATH name and an absolute path", () => {
+    expect(() => assertSpawnableCommand("cua-driver")).not.toThrow()
+    expect(() => assertSpawnableCommand("/usr/local/bin/ax-computer-driver")).not.toThrow()
+  })
+
+  test("assertSpawnableCommand rejects empty and control-character commands", () => {
+    expect(() => assertSpawnableCommand("")).toThrowError(/non-empty/)
+    expect(() => assertSpawnableCommand("   ")).toThrowError(/non-empty/)
+    expect(() => assertSpawnableCommand(undefined)).toThrowError(/non-empty/)
+    expect(() => assertSpawnableCommand("cua\ndriver")).toThrowError(/control characters/)
+    expect(() => assertSpawnableCommand("cua\rdriver")).toThrowError(/control characters/)
+    expect(() => assertSpawnableCommand("cua\0driver")).toThrowError(/control characters/)
+  })
+
+  test("start() rejects an invalid command with spawn_failed before spawning", async () => {
+    await expect(StdioMcpClient.start({ command: "" })).rejects.toMatchObject({ code: "spawn_failed" })
+    await expect(StdioMcpClient.start({ command: "evil\ninjection" })).rejects.toMatchObject({
+      code: "spawn_failed",
+    })
+  })
+})
+
+describe("StdioMcpClient protocol hardening", () => {
+  test("a non-object tools/call result is rejected as a protocol error", async () => {
+    const client = await start("bad-result")
+    try {
+      await expect(client.callTool("echo", {})).rejects.toMatchObject({ code: "protocol" })
+    } finally {
+      await client.close()
+    }
+  })
+
+  test("a non-array content field is rejected as a protocol error", async () => {
+    const client = await start("bad-content")
+    try {
+      await expect(client.callTool("echo", {})).rejects.toMatchObject({ code: "protocol" })
+    } finally {
+      await client.close()
+    }
+  })
+
+  test("an unterminated stdout line beyond the limit drops the connection", async () => {
+    // the fake server floods stdout with one 64KB unterminated line after the
+    // handshake; a small limit trips the cap without moving real megabytes
+    const client = await StdioMcpClient.start({
+      command: process.execPath,
+      args: [server, "huge-line"],
+      stdoutLineLimit: 1024,
+    })
+    try {
+      await expect(client.callTool("echo", {})).rejects.toMatchObject({ code: "protocol" })
+    } finally {
+      await client.close()
+    }
   })
 })

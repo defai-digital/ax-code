@@ -57,9 +57,12 @@ const STDERR_TAIL_LIMIT = 8 * 1024
  * A single newline-delimited JSON-RPC frame must fit under this bound. A
  * misbehaving or hostile backend that emits an unbounded unterminated line
  * would otherwise grow the read buffer without limit; crossing the cap fails
- * the connection instead of exhausting memory.
+ * the connection instead of exhausting memory. The default must stay above
+ * the largest legitimate response: one tools/call result can carry a full
+ * retina screenshot as base64 inside a single line (tens of MB on large or
+ * multi-monitor captures), so this is a runaway guard, not a tight budget.
  */
-const STDOUT_LINE_LIMIT = 16 * 1024 * 1024
+const STDOUT_LINE_LIMIT = 64 * 1024 * 1024
 
 /**
  * Reject command strings that cannot be a legitimate executable path before
@@ -297,7 +300,10 @@ export class StdioMcpClient implements McpClient {
       this.stdoutBuffer = ""
       this.exitError ??= error
       this.rejectAll(error)
+      // SIGTERM first; escalate to SIGKILL when a wedged driver ignores it
       this.child.kill()
+      const force = setTimeout(() => this.child.kill("SIGKILL"), 2_000)
+      void this.exited.finally(() => clearTimeout(force))
     }
   }
 

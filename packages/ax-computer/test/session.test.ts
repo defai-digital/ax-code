@@ -96,6 +96,26 @@ describe("ComputerSession", () => {
     expect(next.observedScopes).toEqual([{ desktop: true }])
   })
 
+  test("failover succeeds even when the old provider's dispose throws", async () => {
+    // routing already switched to `next` by the time dispose runs — a
+    // teardown failure on the old provider must not abort the failover
+    const primary = new FakeProvider("primary", ["a"])
+    primary.dispose = async () => {
+      throw new Error("teardown failed")
+    }
+    const next = new FakeProvider("next", ["x"])
+    const session = new ComputerSession(primary)
+    await session.observe({ app: "TextEdit" })
+
+    const fresh = await session.failover(next)
+    expect(fresh.provider).toBe("next")
+    expect(fresh.elements.map((element) => element.id)).toEqual(["e2:x"])
+    expect(session.activeProvider).toBe(next)
+    await session.act({ type: "click", target: { kind: "point", x: 1, y: 1 } })
+    expect(next.acts).toHaveLength(1)
+    expect(primary.acts).toHaveLength(0)
+  })
+
   test("element ids from before a failover are rejected as stale", async () => {
     const primary = new FakeProvider("primary", ["a"])
     const next = new FakeProvider("next", ["x"])

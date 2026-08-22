@@ -229,6 +229,54 @@ describe("CuaProvider", () => {
     })
   })
 
+  test("odd-sized element bounds round to whole pixel centers", async () => {
+    // odd width/height produce fractional centers (x+40.5, y+12.5); backends
+    // expect whole pixels, so the provider must round deterministically
+    const oddWindowState = {
+      ...cua.windowState,
+      structuredContent: {
+        ...(cua.windowState.structuredContent as Record<string, unknown>),
+        elements: [
+          {
+            element_index: 0,
+            element_token: "snap-1:0",
+            role: "AXButton",
+            label: "Save",
+            frame: { x: 10, y: 20, w: 81, h: 25 },
+            depth: 3,
+          },
+        ],
+      },
+    }
+    const { client, provider } = makeProvider((tool) => {
+      if (tool === "get_window_state") return oddWindowState
+      if (tool === "list_apps") return cua.listApps
+      if (tool === "list_windows") return cua.listWindows
+      return cua.ok
+    })
+    await observeApp(provider)
+    await provider.act({
+      type: "drag",
+      from: { kind: "element", id: "snap-1:0" },
+      to: { kind: "point", x: 1, y: 1 },
+    })
+    expect(client.lastCall()).toEqual({
+      tool: "drag",
+      args: { pid: 4242, window_id: 101, from_x: 51, from_y: 33, to_x: 1, to_y: 1 },
+    })
+  })
+
+  test("a lone modifier key routes to press_key, never to hotkey", async () => {
+    // hotkey requires at least two keys; a single modifier used to fall
+    // through to it and fail backend validation
+    const { client, provider } = makeProvider()
+    await observeApp(provider)
+    await provider.act({ type: "keypress", keys: ["cmd"] })
+    expect(client.lastCall()).toEqual({ tool: "press_key", args: { pid: 4242, window_id: 101, key: "cmd" } })
+    await provider.act({ type: "keypress", keys: ["shift"] })
+    expect(client.lastCall()).toEqual({ tool: "press_key", args: { pid: 4242, window_id: 101, key: "shift" } })
+  })
+
   test("set_value maps element target and value", async () => {
     const { client, provider } = makeProvider()
     await observeApp(provider)

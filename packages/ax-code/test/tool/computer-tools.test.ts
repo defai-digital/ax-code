@@ -145,6 +145,22 @@ describe("computer_snapshot tool", () => {
     })
   })
 
+  test("desktop snapshot survives a transient target-discovery failure", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async ({ provider }) => {
+      // the observation itself succeeds; only the follow-up inventory fails —
+      // the tool must keep the observation instead of discarding it
+      vi.spyOn(provider, "listApps").mockRejectedValue(new Error("backend hiccup"))
+      const tool = await ComputerSnapshotTool.init()
+
+      const result = await tool.execute({ includeScreenshot: false }, makeCtx([]))
+      expect(result.output).toContain('[e1:save-btn] button "Save"')
+      expect(result.output).toContain("discovery temporarily unavailable")
+      expect(result.output).toContain("backend hiccup")
+      expect(result.metadata.elementCount).toBe(2)
+      expect(result.metadata.appCount).toBeUndefined()
+    })
+  })
+
   test("unavailable backend fails with the command tried and the env override", async () => {
     await setup({ config: { computer: { provider: "cua" } } }, async ({ provider }) => {
       vi.spyOn(provider, "observe").mockRejectedValue(new McpClientError("spawn_failed", "command not found"))
@@ -255,6 +271,42 @@ describe("computer_action tool", () => {
       )
       expect(asks).toHaveLength(0)
       expect(provider.acts).toHaveLength(0)
+    })
+  })
+
+  test("non-finite coordinates and amounts are rejected before any ask or act", async () => {
+    // z.number() alone accepts NaN/Infinity; a NaN mouse coordinate would be
+    // an arbitrary click, so the schema must refuse it. The union reports a
+    // schema violation, which the tool framework surfaces as "invalid
+    // arguments" — the point is that nothing reaches ask/act.
+    await setup({ config: { computer: { provider: "cua" } } }, async ({ provider, asks }) => {
+      const tool = await ComputerActionTool.init()
+      await expect(tool.execute({ type: "click", target: { x: Number.NaN, y: 5 } }, makeCtx(asks))).rejects.toThrow(
+        /invalid arguments/,
+      )
+      await expect(
+        tool.execute({ type: "click", target: { x: 1, y: Number.POSITIVE_INFINITY } }, makeCtx(asks)),
+      ).rejects.toThrow(/invalid arguments/)
+      await expect(
+        tool.execute({ type: "scroll", direction: "down", amount: Number.NaN }, makeCtx(asks)),
+      ).rejects.toThrow(/invalid arguments/)
+      expect(provider.acts).toHaveLength(0)
+      expect(asks).toHaveLength(0)
+    })
+  })
+
+  test("oversized text and key inputs are rejected by the schema", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async ({ provider, asks }) => {
+      const tool = await ComputerActionTool.init()
+      await expect(tool.execute({ type: "type", text: "x".repeat(10_001) }, makeCtx(asks))).rejects.toThrow()
+      await expect(
+        tool.execute({ type: "set_value", target: "e1:save-btn", value: "v".repeat(100_001) }, makeCtx(asks)),
+      ).rejects.toThrow()
+      await expect(
+        tool.execute({ type: "keypress", keys: ["a", "b", "c", "d", "e", "f", "g", "h", "i"] }, makeCtx(asks)),
+      ).rejects.toThrow()
+      expect(provider.acts).toHaveLength(0)
+      expect(asks).toHaveLength(0)
     })
   })
 
@@ -523,6 +575,57 @@ describe("computer_action describe targets (grounder)", () => {
       ).rejects.toThrow(/computer\.grounder/)
       expect(provider.acts).toHaveLength(0)
       expect(asks).toHaveLength(0)
+    })
+  })
+
+  test("permission is asked before the grounder sees the screenshot", async () => {
+    await setup(grounded, async ({ provider, asks }) => {
+      const events: string[] = []
+      const ask = vi.fn(async () => {
+        events.push("ground")
+        return '{"x": 1, "y": 1}'
+      })
+      _setGroundDepsForTests({ ask })
+
+      const snapshot = await ComputerSnapshotTool.init()
+      await snapshot.execute({ includeScreenshot: true }, makeCtx(asks))
+
+      const tool = await ComputerActionTool.init()
+      const ctx = {
+        ...makeCtx(asks),
+        ask: vi.fn(async (input: Ask) => {
+          events.push("ask")
+          asks.push(input)
+        }),
+      }
+      await tool.execute({ type: "click", target: { describe: "the Save button" } }, ctx)
+
+      // the screenshot-sending grounder call must only run after consent
+      expect(events).toEqual(["ask", "ground"])
+      expect(provider.acts).toHaveLength(1)
+    })
+  })
+
+  test("a denied action never calls the grounder", async () => {
+    await setup(grounded, async ({ provider }) => {
+      const ask = vi.fn(async () => '{"x": 1, "y": 1}')
+      _setGroundDepsForTests({ ask })
+
+      const snapshot = await ComputerSnapshotTool.init()
+      await snapshot.execute({ includeScreenshot: true }, makeCtx([]))
+
+      const tool = await ComputerActionTool.init()
+      const ctx = {
+        ...makeCtx([]),
+        ask: vi.fn(async () => {
+          throw new Error("user denied the action")
+        }),
+      }
+      await expect(tool.execute({ type: "click", target: { describe: "the Save button" } }, ctx)).rejects.toThrow(
+        /denied/,
+      )
+      expect(ask).not.toHaveBeenCalled()
+      expect(provider.acts).toHaveLength(0)
     })
   })
 
