@@ -941,6 +941,24 @@ export const Info = z
       })
       .optional()
       .describe("Browser integration settings"),
+    computer: z
+      .object({
+        provider: z
+          .enum(["cua", "ocu"])
+          .optional()
+          .describe(
+            'Computer-use backend: "cua" (cua-driver) or "ocu" (open-computer-use). Unset = computer tools unavailable.',
+          ),
+        command: z
+          .string()
+          .optional()
+          .describe(
+            "Backend server command override. Precedence: this config > AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_OCU_COMMAND env > default command name.",
+          ),
+        args: z.array(z.string()).optional().describe('Backend server command arguments (default: ["mcp"])'),
+      })
+      .optional()
+      .describe("Computer-use (desktop control) integration. Disabled unless provider is set."),
     attachment: z
       .object({
         image: z

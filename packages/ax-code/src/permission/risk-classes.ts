@@ -56,6 +56,10 @@ const SAFE_PERMISSIONS: ReadonlySet<string> = new Set([
  *   - `websearch`         — external search network egress; queries can
  *                            contain private repository context.
  *   - `codesearch`        — external code/doc search network egress.
+ *   - `monitor`           — background process watchers.
+ *   - `image_gen`         — generates images (cost).
+ *   - `computer`          — drives the user's real desktop (mouse/keyboard)
+ *                            through a computer-use backend.
  */
 const RISK_PERMISSIONS: ReadonlySet<string> = new Set([
   "edit",
@@ -69,6 +73,7 @@ const RISK_PERMISSIONS: ReadonlySet<string> = new Set([
   "codesearch",
   "monitor",
   "image_gen",
+  "computer",
 ])
 
 export function classify(permission: string): RiskClass {

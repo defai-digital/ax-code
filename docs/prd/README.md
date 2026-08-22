@@ -12,3 +12,4 @@ Canonical index for local-only product requirements. New PRDs use the filename f
 | [Loop Mode & CLI Parity Review](PRD-2026-07-25-loop-mode-and-cli-parity.md)                                       | Active | AX Code runtime                   |
 | [Module-by-Module Quality Audit](PRD-2026-08-11-module-by-module-quality-audit.md)                                | Active | AX Code CLI & Desktop maintainers |
 | [AX Code Intel Stabilization & Targeted Acceleration](PRD-2026-08-21-ax-code-intel-stabilization-acceleration.md) | Active | AX Code CLI maintainers           |
+| [Computer Use Integration (OCU + Cua)](PRD-2026-08-22-computer-use-integration.md)                                | Active | AX Code CLI & Desktop maintainers |

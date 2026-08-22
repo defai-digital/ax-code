@@ -1,0 +1,14 @@
+- Performs an action on the local computer through an external computer-use backend (OCU on macOS, cua-driver elsewhere)
+- Actions: click, type, keypress, scroll, drag, set_value, activate_window, launch_app
+- IMPORTANT: Always call computer_snapshot first and use element ids from its latest result. Ids are epoch-scoped and go stale after any new snapshot or backend failover; a stale id is rejected with re-observe guidance.
+- click: clicks an element id or a screenshot pixel point {x,y} (supports button and count)
+- type: types text into the focused element
+- keypress: presses keys or combinations (e.g. ["cmd", "s"], ["return"])
+- scroll: scrolls at an optional target, direction up/down/left/right, amount in pixels
+- drag: drags from one element/point to another
+- set_value: sets an element's value directly by element id
+- activate_window: brings a window to the front by windowId
+- launch_app: launches or focuses an application by name
+- After the action, the tool automatically re-observes the same scope and returns a fresh screenshot and element list — always verify the result against that observation before acting again
+- If the backend refuses an action, the refusal code and detail are returned; adjust the action instead of retrying blindly
+- On macOS the backend needs Accessibility and Screen Recording permissions for the terminal app

@@ -6,7 +6,11 @@ type Rule = {
   action: "allow" | "deny" | "ask"
 }
 
-/** Relocated to AX Work. AX Code no longer has computer-use permissions. */
+/**
+ * Computer-use tools are back in this repo (superseding the ADR-053 relocation
+ * to AX Work), gated on the `computer.provider` config rather than a flag.
+ * No permission ids currently require exact grants, so this set is empty.
+ */
 export const EXACT_GRANT_ONLY: ReadonlySet<string> = new Set()
 
 export function evaluate(permission: string, pattern: string, ...rulesets: Rule[][]): Rule {

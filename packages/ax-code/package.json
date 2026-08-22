@@ -87,6 +87,7 @@
     "@ax-code/ax-wiki": "workspace:*",
     "@ax-code/ax-code-intel": "workspace:*",
     "@ax-code/ax-code-reason": "workspace:*",
+    "@ax-code/computer": "workspace:*",
     "@ax-code/diff": "workspace:*",
     "@ax-code/fs": "workspace:*",
     "@ax-code/index-core": "workspace:*",
