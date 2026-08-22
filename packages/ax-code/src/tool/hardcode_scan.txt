@@ -6,7 +6,7 @@ Input:
 - patterns: which detectors to run (default: all four)
 - excludeTests: skip test files by default (default true)
 - include: glob patterns to scan (default: TS/JS/JSX/MJS/CJS)
-- maxFiles: hard cap on files scanned (default 500)
+- maxFiles: hard cap on files scanned (default 5000)
 - maxFindingsPerFile: hard cap per file (default 20) — prevents one generated file from dominating the result
 
 Output:

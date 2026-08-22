@@ -30,7 +30,7 @@ describe("debug-engine scanner utils", () => {
   test("resolves shared scanner defaults", () => {
     expect(resolveScannerDefaults({})).toMatchObject({
       excludeTests: true,
-      maxFiles: 500,
+      maxFiles: 5000,
       maxPerFile: 20,
     })
 

@@ -2,6 +2,8 @@ Scan the project for common security anti-patterns: path traversal, command inje
 
 Rust/Python/Ruby coverage note: this scanner is JS/TS-oriented. In Rust, Python, or Ruby workspaces, use it only for JS/TS glue code unless non-JS files are explicitly included, and verify language-native security evidence with bounded source review plus cargo/pytest/ruff/mypy/bundle exec checks where appropriate.
 
+Accuracy: this scanner matches line-based regex + structural proximity heuristics against raw source text. It performs no taint, data-flow, or control-flow analysis and does not know whether any value is actually user-controlled. Findings are heuristic flags, not confirmed vulnerabilities — false positives are expected and common. In particular, path_traversal fires on any path.join/path.resolve whose arguments are not all string literals and that has no containment-check pattern (contains, containsPath, startsWith, Filesystem.contains, isSubpath, within, inside) within +-5 lines, even when the input is trusted or already sanitized. Confirm every finding by reading the code before reporting it as a vulnerability.
+
 Input:
 - patterns: which detectors to run (default: all five)
   - "path_traversal": path.join/resolve with variable input without containment check
@@ -11,7 +13,7 @@ Input:
   - "env_leak": process.env spread to child processes without sanitization
 - excludeTests: skip test files by default (default true)
 - include: glob patterns to scan (default: TS/JS/JSX/MJS/CJS)
-- maxFiles: hard cap on files scanned (default 500)
+- maxFiles: hard cap on files scanned (default 5000)
 - maxFindingsPerFile: hard cap per file (default 20)
 
 Output:
@@ -20,7 +22,6 @@ Output:
   - pattern: the security anti-pattern detected
   - severity: "high" | "medium" | "low"
   - description: human-readable explanation
-  - userControlled: whether the input comes from user/external source
 - filesScanned: count of files inspected
 - truncated: true if maxFiles cap was hit
 - explain: heuristics applied

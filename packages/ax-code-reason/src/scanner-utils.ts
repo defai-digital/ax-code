@@ -11,7 +11,7 @@ import { nativeReadFilesBatch } from "./native-scan"
 const DEFAULT_INCLUDE = ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"]
 const DEFAULT_EXCLUDE_DIRS = ["node_modules", "dist", "build", ".cache", ".git", ".next", "coverage"]
 const SCANNER_READ_CONCURRENCY = 8
-const DEFAULT_MAX_FILES = 500
+const DEFAULT_MAX_FILES = 5000
 const DEFAULT_MAX_PER_FILE = 20
 
 export type ScannerScopeControls = {

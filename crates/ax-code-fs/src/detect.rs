@@ -38,7 +38,6 @@ pub struct SecurityFinding {
     pub pattern: String,
     pub severity: String,
     pub description: String,
-    pub user_controlled: bool,
 }
 
 struct SecurityPatterns {
@@ -121,7 +120,6 @@ fn scan_security(
                     "path.join/resolve with variable input at line {} without containment check",
                     i + 1
                 ),
-                user_controlled: true,
             });
         }
     }
@@ -149,7 +147,6 @@ fn scan_security(
                     if is_exec { "exec" } else { "spawn" },
                     i + 1
                 ),
-                user_controlled: true,
             });
         }
     }
@@ -178,7 +175,6 @@ fn scan_security(
                     "process.env spread to child process at line {} without sanitization",
                     i + 1
                 ),
-                user_controlled: false,
             });
         }
     }
@@ -207,7 +203,6 @@ fn scan_security(
                     "Mutation route at line {} without validator() middleware",
                     i + 1
                 ),
-                user_controlled: true,
             });
         }
     }
@@ -231,12 +226,11 @@ fn scan_security(
                 file: file.to_string(),
                 line: i + 1,
                 pattern: "ssrf".into(),
-                severity: "medium".into(),
+                severity: "high".into(),
                 description: format!(
                     "fetch/axios with variable URL at line {} without SSRF validation",
                     i + 1
                 ),
-                user_controlled: true,
             });
         }
     }

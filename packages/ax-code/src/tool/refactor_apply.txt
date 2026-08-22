@@ -15,9 +15,11 @@ Output:
 - planId: echoed
 - checks: { typecheck, lint, tests } — each with ok + errors + (tests) ran/failed/failures/selection
 - filesChanged: files modified by the apply (empty when applied: false)
-- rolledBack: true if the pipeline had to roll back a partial real-worktree apply (shouldn't happen — git apply is atomic)
 - abortReason: null on success, or one of: plan-not-found, plan-stale, plan-status-*, not-a-git-worktree, shadow-*, patch-apply-failed, typecheck-failed, lint-failed, tests-failed, real-apply-failed, no-patch-supplied
 - explain: heuristics applied
+
+Preconditions:
+- The worktree must be clean (no uncommitted changes) before refactor_apply can open its shadow worktree. If `git status --porcelain` reports any changes, the call aborts with abortReason "shadow-uncommitted-changes" and applies nothing. Commit or stash your changes first, then retry.
 
 Hard guarantees:
 - The real worktree is byte-identical to its pre-call state if any check fails

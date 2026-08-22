@@ -15,7 +15,6 @@ function applyResult(overrides: Partial<DebugEngine.ApplyResult> = {}): DebugEng
       tests: { ok: true, errors: [], ran: 12, failed: 0, failures: [], selection: "targeted" },
     },
     filesChanged: ["src/foo.ts"],
-    rolledBack: false,
     abortReason: null,
     explain: { tool: "refactor_apply", queryId: "q1", graphQueries: [], heuristicsApplied: [] } as any,
     ...overrides,

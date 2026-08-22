@@ -33,9 +33,7 @@ export const RefactorPlanTable = sqliteTable(
   "debug_engine_refactor_plan",
   {
     id: text().$type<RefactorPlanID>().primaryKey(),
-    project_id: text()
-      .$type<ProjectID>()
-      .notNull(),
+    project_id: text().$type<ProjectID>().notNull(),
     kind: text().$type<RefactorPlanKind>().notNull(),
     // Human-readable markdown summary. Never empty; the planner always
     // writes at least a one-line description.
@@ -71,9 +69,7 @@ export const EmbeddingCacheTable = sqliteTable(
   "debug_engine_embedding_cache",
   {
     id: text().$type<EmbeddingCacheID>().primaryKey(),
-    project_id: text()
-      .$type<ProjectID>()
-      .notNull(),
+    project_id: text().$type<ProjectID>().notNull(),
     // References code_node.id but NO foreign key — see ADR-004.
     node_id: text().notNull(),
     // Hash of the normalized function signature/body that produced this
@@ -103,6 +99,10 @@ export const EmbeddingCacheTable = sqliteTable(
 //
 // ADR-002: DRE-owned table, no FK into v3 tables.
 // Cap: 1000 rows per project, LRU eviction when full.
+//
+// NOTE: debug_engine_pattern is currently unused — its only consumer
+// (pattern-memory.ts) was removed as dead code. Keep the table so the
+// schema/migration history stays intact.
 export type DebugPatternCategory =
   | "null_undefined"
   | "race_condition"
@@ -120,9 +120,7 @@ export const DebugPatternTable = sqliteTable(
   "debug_engine_pattern",
   {
     id: text().$type<DebugPatternID>().primaryKey(),
-    project_id: text()
-      .$type<ProjectID>()
-      .notNull(),
+    project_id: text().$type<ProjectID>().notNull(),
     // Short problem description (1-500 chars)
     problem: text().notNull(),
     // Root cause category

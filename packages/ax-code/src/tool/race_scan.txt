@@ -10,7 +10,7 @@ Input:
   - "stale_listener": event listener registered after await
 - excludeTests: skip test files by default (default true)
 - include: glob patterns to scan (default: TS/JS/JSX/MJS/CJS)
-- maxFiles: hard cap on files scanned (default 500)
+- maxFiles: hard cap on files scanned (default 5000)
 - maxFindingsPerFile: hard cap per file (default 20)
 
 Output:
