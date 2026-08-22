@@ -140,6 +140,11 @@ const SUBPATHS: Subpath[] = [
     symbols: ["Severity", "Category", "Workflow", "EvidenceRefKind", "ArtifactRefKind", "SEVERITY_RANK"],
   },
   {
+    name: "./quality/freshness",
+    load: () => import("@ax-code/ax-code-reason/quality/freshness"),
+    symbols: ["SourceStateSchema", "classifyEnvelopeFreshness", "enforceCitationFreshness"],
+  },
+  {
     name: "./quality/verification-envelope",
     load: () => import("@ax-code/ax-code-reason/quality/verification-envelope"),
     symbols: [

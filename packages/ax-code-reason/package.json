@@ -26,6 +26,7 @@
     "./quality/digest": "./src/quality/digest.ts",
     "./quality/finding": "./src/quality/finding.ts",
     "./quality/finding-registry": "./src/quality/finding-registry.ts",
+    "./quality/freshness": "./src/quality/freshness.ts",
     "./quality/verification-envelope": "./src/quality/verification-envelope.ts",
     "./log": "./src/log.ts"
   },
