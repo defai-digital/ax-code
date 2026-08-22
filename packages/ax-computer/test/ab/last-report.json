@@ -1,43 +1,42 @@
 {
-  "generatedAt": "2026-08-22T14:46:27.804Z",
+  "generatedAt": "2026-08-22T17:23:07.136Z",
   "primary": {
     "name": "ocu",
-    "passed": 3,
-    "failed": 3,
-    "totalLatencyMs": 6333
+    "passed": 6,
+    "failed": 0,
+    "totalLatencyMs": 5926
   },
   "secondary": {
     "name": "cua",
     "passed": 6,
     "failed": 0,
-    "totalLatencyMs": 14666
+    "totalLatencyMs": 27540
   },
   "rows": [
     {
       "id": "AB-001",
       "name": "launch app",
       "primary": {
-        "ok": false,
-        "latencyMs": 1636,
-        "refusal": "Apple event error -10005: cgWindowNotFound"
+        "ok": true,
+        "latencyMs": 253
       },
       "secondary": {
         "ok": true,
-        "latencyMs": 2465
+        "latencyMs": 2195
       },
       "bothRefused": false,
-      "disagreement": true
+      "disagreement": false
     },
     {
       "id": "AB-002",
       "name": "observe app state",
       "primary": {
         "ok": true,
-        "latencyMs": 784
+        "latencyMs": 240
       },
       "secondary": {
         "ok": true,
-        "latencyMs": 1667
+        "latencyMs": 2447
       },
       "bothRefused": false,
       "disagreement": false
@@ -47,11 +46,11 @@
       "name": "focus the editor (point click at screenshot center)",
       "primary": {
         "ok": true,
-        "latencyMs": 783
+        "latencyMs": 2146
       },
       "secondary": {
         "ok": true,
-        "latencyMs": 1547
+        "latencyMs": 9200
       },
       "bothRefused": false,
       "disagreement": false
@@ -60,27 +59,26 @@
       "id": "AB-004",
       "name": "type a known string",
       "primary": {
-        "ok": false,
-        "latencyMs": 1555,
-        "refusal": "Apple event error -10005: cgWindowNotFound"
+        "ok": true,
+        "latencyMs": 501
       },
       "secondary": {
         "ok": true,
-        "latencyMs": 4212
+        "latencyMs": 4063
       },
       "bothRefused": false,
-      "disagreement": true
+      "disagreement": false
     },
     {
       "id": "AB-005",
       "name": "click a button-like element from the observation",
       "primary": {
         "ok": true,
-        "latencyMs": 782
+        "latencyMs": 2236
       },
       "secondary": {
         "ok": true,
-        "latencyMs": 1553
+        "latencyMs": 4157
       },
       "bothRefused": false,
       "disagreement": false
@@ -89,33 +87,16 @@
       "id": "AB-006",
       "name": "scroll down",
       "primary": {
-        "ok": false,
-        "latencyMs": 786,
-        "refusal": "no scrollable element in last observation"
+        "ok": true,
+        "latencyMs": 543
       },
       "secondary": {
         "ok": true,
-        "latencyMs": 3221
+        "latencyMs": 5476
       },
       "bothRefused": false,
-      "disagreement": true
+      "disagreement": false
     }
   ],
-  "discrepancies": [
-    {
-      "id": "AB-001",
-      "name": "launch app",
-      "winner": "secondary"
-    },
-    {
-      "id": "AB-004",
-      "name": "type a known string",
-      "winner": "secondary"
-    },
-    {
-      "id": "AB-006",
-      "name": "scroll down",
-      "winner": "secondary"
-    }
-  ]
+  "discrepancies": []
 }
