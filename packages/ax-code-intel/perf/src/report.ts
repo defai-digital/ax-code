@@ -13,6 +13,7 @@ import { round } from "./metrics"
 
 export const ScenarioResultSchema = z.object({
   scenario: z.string(),
+  fixture: z.string(),
   language: z.enum(["ts", "py", "rust"]),
   serverId: z.string(),
   samples: z.number(),
@@ -84,12 +85,12 @@ const cell = (value: number | undefined, suffix = "") => (value === undefined ? 
 
 export function formatMarkdownTable(results: ScenarioResult[]): string {
   const lines = [
-    "| scenario | language | server | samples | p50 (ms) | p95 (ms) | peak RSS (MB) | hit rate | RPCs | total (ms) |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| scenario | fixture | language | server | samples | p50 (ms) | p95 (ms) | peak RSS (MB) | hit rate | RPCs | total (ms) |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   ]
   for (const r of results) {
     lines.push(
-      `| ${r.scenario} | ${r.language} | ${r.serverId} | ${r.samples} | ${round(r.p50)} | ${round(r.p95)} | ` +
+      `| ${r.scenario} | ${r.fixture} | ${r.language} | ${r.serverId} | ${r.samples} | ${round(r.p50)} | ${round(r.p95)} | ` +
         `${cell(r.peakRssKb === undefined ? undefined : round(r.peakRssKb / 1024))} | ${cell(r.hitRate)} | ${cell(r.rpcCount)} | ${round(r.totalMs)} |`,
     )
   }
@@ -98,6 +99,7 @@ export function formatMarkdownTable(results: ScenarioResult[]): string {
 
 export type ComparisonRow = {
   scenario: string
+  fixture: string
   language: string
   serverId: string
   metric: "p50" | "p95" | "peakRssKb" | "hitRate" | "rpcCount" | "totalMs"
@@ -110,15 +112,29 @@ export type ComparisonRow = {
 // Metrics where "up" is bad. hitRate is the only one where down is bad.
 const HIGHER_IS_WORSE = new Set(["p50", "p95", "peakRssKb", "rpcCount", "totalMs"])
 
+// Absolute-delta noise floors. Sub-millisecond timers and small RSS wobbles
+// produce huge *percentage* deltas (0ms → 1ms is "+100%") that mean nothing;
+// a regression must clear both the percentage threshold and the floor.
+const ABSOLUTE_FLOOR: Partial<Record<ComparisonRow["metric"], number>> = {
+  p50: 10, // ms
+  p95: 10, // ms
+  totalMs: 10, // ms
+  peakRssKb: 10 * 1024, // 10 MB
+}
+
 export function compareResults(
   current: ScenarioResult[],
   reference: ScenarioResult[],
   thresholdPct = 20,
 ): ComparisonRow[] {
   const rows: ComparisonRow[] = []
-  const refByKey = new Map(reference.map((r) => [`${r.scenario}|${r.language}|${r.serverId}`, r]))
+  // The key must include the fixture: a synthetic fixture and an external
+  // repo share language+serverId (e.g. rust-workspace vs rust-ripgrep), and
+  // collapsing them made the external row silently replace the synthetic one.
+  const keyOf = (r: ScenarioResult) => `${r.fixture}|${r.scenario}|${r.language}|${r.serverId}`
+  const refByKey = new Map(reference.map((r) => [keyOf(r), r]))
   for (const cur of current) {
-    const ref = refByKey.get(`${cur.scenario}|${cur.language}|${cur.serverId}`)
+    const ref = refByKey.get(keyOf(cur))
     if (!ref) continue
     const metrics = ["p50", "p95", "peakRssKb", "hitRate", "rpcCount", "totalMs"] as const
     for (const metric of metrics) {
@@ -127,9 +143,11 @@ export function compareResults(
       if (refValue === undefined || curValue === undefined) continue
       if (refValue === 0 && curValue === 0) continue
       const deltaPct = refValue === 0 ? 100 : round(((curValue - refValue) / refValue) * 100)
-      const regression = HIGHER_IS_WORSE.has(metric) ? deltaPct > thresholdPct : deltaPct < -thresholdPct
+      const pastFloor = Math.abs(curValue - refValue) >= (ABSOLUTE_FLOOR[metric] ?? 0)
+      const regression = (HIGHER_IS_WORSE.has(metric) ? deltaPct > thresholdPct : deltaPct < -thresholdPct) && pastFloor
       rows.push({
         scenario: cur.scenario,
+        fixture: cur.fixture,
         language: cur.language,
         serverId: cur.serverId,
         metric,
@@ -146,13 +164,13 @@ export function compareResults(
 export function formatComparisonMarkdown(rows: ComparisonRow[]): string {
   if (rows.length === 0) return "no overlapping scenario results to compare"
   const lines = [
-    "| scenario | language | server | metric | reference | current | delta | |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| scenario | fixture | language | server | metric | reference | current | delta | |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   ]
   for (const row of rows) {
     const flag = row.regression ? "REGRESSION" : ""
     lines.push(
-      `| ${row.scenario} | ${row.language} | ${row.serverId} | ${row.metric} | ${row.reference} | ${row.current} | ${row.deltaPct}% | ${flag} |`,
+      `| ${row.scenario} | ${row.fixture} | ${row.language} | ${row.serverId} | ${row.metric} | ${row.reference} | ${row.current} | ${row.deltaPct}% | ${flag} |`,
     )
   }
   return lines.join("\n")

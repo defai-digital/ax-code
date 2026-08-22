@@ -4,6 +4,7 @@
 // harness keeps the process handle for RSS polling and RPC counting.
 import { readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
+import { pathToFileURL } from "node:url"
 import { LSPClient } from "../../src/client"
 import * as LSPPerf from "../../src/perf"
 import * as LSPPoint from "../../src/point"
@@ -13,7 +14,7 @@ import type { LSPServer } from "../../src/server"
 import type { FixtureDescriptor } from "./fixtures"
 import type { ScenarioResult } from "./metrics"
 import { ratio, round, summarizeDurations } from "./metrics"
-import { killTree, pollPeakRss, withDeadline } from "./spawn"
+import { captureStderr, formatError, killTree, pollPeakRss, withDeadline } from "./spawn"
 
 export type ScenarioProfile = {
   coldStarts: number
@@ -58,15 +59,52 @@ export type ScenarioName = (typeof SCENARIO_NAMES)[number]
 const exited = (handle: LSPServer.Handle) => () =>
   handle.process.exitCode !== null || handle.process.signalCode !== null
 
-// LSPClient.create under a ref'd cold-start deadline: a server that spawns
-// but dies before answering initialize (broken proxy, missing component)
-// must surface as a clean scenario failure, not a hung harness.
+// LSPClient.create with two guards the production client deliberately does
+// not have (its internal timeout is unref'd and a dead server can leave a
+// pending initialize unsettled):
+//  1. an early-exit race — a server whose process dies before answering
+//     initialize fails fast instead of hanging until the deadline;
+//  2. a ref'd outer deadline — the harness always finishes deliberately.
+// Every failure is annotated with the server's captured stderr tail, which
+// is where startup failures (broken proxies, missing components) are
+// actually reported.
 function createClient(ctx: ScenarioContext, handle: LSPServer.Handle): Promise<LSPClient.Info> {
-  return withDeadline(
+  const stderr = captureStderr(handle.process)
+  const earlyExit = new Promise<never>((_resolve, reject) => {
+    handle.process.once("exit", (code, signal) => {
+      reject(new Error(`${ctx.server.id} exited during initialize (code=${code} signal=${signal})`))
+    })
+  })
+  const created = Promise.race([
     LSPClient.create({ serverID: ctx.server.id, server: handle, root: ctx.workDir }),
-    ctx.coldStartTimeoutMs,
-    `cold start (${ctx.server.id})`,
-  )
+    earlyExit,
+  ])
+  return withDeadline(created, ctx.coldStartTimeoutMs, `cold start (${ctx.server.id})`).catch((err: unknown) => {
+    const tail = stderr.tail()
+    throw new Error(formatError(err) + (tail ? `\nserver stderr:\n${tail}` : ""))
+  })
+}
+
+export type ProbeResult = { ok: true } | { ok: false; reason: string }
+
+// LSP-handshake preflight: verifies the one thing the harness needs — the
+// server spawns and answers initialize in this workdir. A `--version` flag
+// probe both misfires (pyright-langserver has no such flag and exits
+// non-zero without a transport argument) and says nothing about whether the
+// server actually speaks LSP here.
+export async function probeServer(ctx: ScenarioContext): Promise<ProbeResult> {
+  const handle = await ctx.server.spawn(ctx.workDir).catch(() => undefined)
+  if (!handle) {
+    return { ok: false, reason: "spawn returned no process (binary not on PATH, or the server def declined to spawn)" }
+  }
+  try {
+    const client = await createClient(ctx, handle)
+    await client.shutdown().catch(() => killTree(handle.process, { exited: exited(handle) }))
+    return { ok: true }
+  } catch (err) {
+    await killTree(handle.process, { exited: exited(handle) })
+    return { ok: false, reason: formatError(err) }
+  }
 }
 
 // Spawn → initialize → run → shutdown, with guaranteed teardown on every
@@ -101,8 +139,11 @@ const selectOnly = (client: LSPClient.Info) => async (): Promise<ClientSelection
 const editComment = (language: FixtureDescriptor["language"]) =>
   language === "py" ? "# ax-code-perf edit" : "// ax-code-perf edit"
 
-function base(ctx: ScenarioContext, scenario: string): Pick<ScenarioResult, "scenario" | "language" | "serverId"> {
-  return { scenario, language: ctx.fixture.language, serverId: ctx.server.id }
+function base(
+  ctx: ScenarioContext,
+  scenario: string,
+): Pick<ScenarioResult, "scenario" | "fixture" | "language" | "serverId"> {
+  return { scenario, fixture: ctx.fixture.id, language: ctx.fixture.language, serverId: ctx.server.id }
 }
 
 // S1 — cold start: fresh process, initialize handshake, wall time, teardown.
@@ -160,6 +201,23 @@ export async function warmQuery(ctx: ScenarioContext): Promise<ScenarioResult[]>
     const queryFiles = new Set(methods.flatMap((m) => m.points.map((p) => p.file)))
     for (const file of queryFiles) {
       await client.notify.open({ path: file })
+    }
+
+    // Readiness gate: servers that answer while still loading the workspace
+    // (rust-analyzer returns empty results until its crate graph is up)
+    // would otherwise record fast-but-empty garbage. Poll the pinned queries
+    // until every method returns results or the cold-start budget expires.
+    const readinessDeadline = Date.now() + ctx.coldStartTimeoutMs
+    for (;;) {
+      const counts = await Promise.all(
+        methods.map(async (method) => {
+          const result = await method.run(method.points[0]!).catch(() => [] as unknown[])
+          return result.length
+        }),
+      )
+      if (counts.every((count) => count > 0)) break
+      if (Date.now() >= readinessDeadline) break
+      await new Promise((resolve) => setTimeout(resolve, 250))
     }
 
     const poller = pollPeakRss(handle.process.pid)
@@ -263,25 +321,119 @@ export async function cacheHitRate(ctx: ScenarioContext): Promise<ScenarioResult
   return result ?? []
 }
 
-// S5 — diagnostic latency after an edit: open the file (cold diagnostics,
-// discarded), then alternate a one-line edit and measure the didChange →
-// publishDiagnostics round-trip. The client debounce is a constant additive
-// factor — treat results as relative deltas, not absolutes.
+// S5 — diagnostic latency after an edit, measured two ways depending on
+// server capability:
+//
+//  - Pull mode (LSP 3.17 `textDocument/diagnostic`, what the PRD names):
+//    after each didChange, request the document's diagnostic report and
+//    time the response. Request/response is strictly ordered, so this is
+//    immune to the push channel's async coalescing. Supported servers:
+//    pyright, rust-analyzer.
+//  - Push mode (fallback): poll the client's diagnostics cache until the
+//    published state flips to the expected one. Used for
+//    typescript-language-server, which has no pull support. Polling the
+//    cache instead of subscribing to "textDocument/publishDiagnostics" is
+//    deliberate: vscode-jsonrpc keeps a single handler per method, so a
+//    harness subscription would replace the client's own handler (and leave
+//    none behind after dispose), breaking its diagnostics bookkeeping.
+//
+// Each iteration toggles the fixture's diagnostic edit line, which
+// introduces a severity-1 error. Matching checks for the presence of an
+// *error* — not "any diagnostic" — because real-world files legitimately
+// carry pre-existing warnings/hints (e.g. zod's schemas.ts publishes 16
+// deprecation hints for the unedited file). LSP defaults a missing severity
+// to Error, hence `?? 1`. Edits go through the production notify path. A
+// state that never materializes records the 10 s cap.
+const DIAGNOSTIC_PUBLISH_TIMEOUT_MS = 10_000
+const DIAGNOSTIC_POLL_INTERVAL_MS = 25
+const LSP_METHOD_NOT_FOUND = -32601
+const SEVERITY_ERROR = 1
+
+const hasErrorDiagnostic = (items: readonly { severity?: number }[]) =>
+  items.some((item) => (item.severity ?? SEVERITY_ERROR) === SEVERITY_ERROR)
+
+type DiagnosticReport = { kind?: string; items?: unknown[] }
+
 export async function diagnosticLatency(ctx: ScenarioContext): Promise<ScenarioResult[]> {
   const result = await withServerClient(ctx, async (client) => {
     const file = path.join(ctx.workDir, ctx.fixture.diagnosticFile)
+    const fileUri = pathToFileURL(file).href
     const original = await readFile(file, "utf8")
+    const editLine = ctx.fixture.diagnosticEditLine || editComment(ctx.fixture.language)
+    const broken = `${original}\n${editLine}\n`
     const durations: number[] = []
+
+    // PERF_DEBUG=1 logs per-iteration state transitions — the first thing to
+    // reach for when a server's diagnostic latency looks like a timeout cap.
+    const debug = process.env.PERF_DEBUG === "1"
+
+    // One pull request with retries around transient server-busy
+    // cancellations (rust-analyzer answers -32802 while still loading).
+    const pullReport = async (): Promise<DiagnosticReport> => {
+      let lastError: unknown
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          return (await withDeadline(
+            client.connection.sendRequest("textDocument/diagnostic", { textDocument: { uri: fileUri } }),
+            DIAGNOSTIC_PUBLISH_TIMEOUT_MS,
+            "textDocument/diagnostic",
+          )) as DiagnosticReport
+        } catch (err) {
+          lastError = err
+          if ((err as { code?: number })?.code === LSP_METHOD_NOT_FOUND) break
+          await new Promise((resolve) => setTimeout(resolve, 250))
+        }
+      }
+      throw lastError
+    }
+
+    // Probe pull support once. Method-not-found means push mode; anything
+    // else (busy, cancelled) just retries.
+    let pull = true
     try {
+      await pullReport()
+    } catch (err) {
+      if ((err as { code?: number })?.code === LSP_METHOD_NOT_FOUND) {
+        pull = false
+      } else {
+        throw err
+      }
+    }
+    if (debug) console.log(`    [s5] mode=${pull ? "pull" : "push"}`)
+
+    const awaitDiagnosticFlip = async (expectErrors: boolean): Promise<boolean> => {
+      const deadline = Date.now() + DIAGNOSTIC_PUBLISH_TIMEOUT_MS
+      for (;;) {
+        const diags = client.diagnostics.get(file)
+        if (diags !== undefined && hasErrorDiagnostic(diags) === expectErrors) return true
+        if (Date.now() >= deadline) return false
+        await new Promise((resolve) => setTimeout(resolve, DIAGNOSTIC_POLL_INTERVAL_MS))
+      }
+    }
+
+    try {
+      // Cold open: wait (best-effort, production 3s budget) for the initial
+      // publish so iterations start from a settled state.
       await client.notify.open({ path: file, waitForDiagnostics: true })
       for (let i = 0; i < ctx.profile.diagnosticIterations; i++) {
-        await writeFile(file, `${original}\n${editComment(ctx.fixture.language)} ${i}\n`, "utf8")
+        const expectErrors = i % 2 === 0
         const started = performance.now()
-        const ok = await client.notify
-          .open({ path: file, waitForDiagnostics: true })
-          .then(() => true)
-          .catch(() => false)
+        await writeFile(file, expectErrors ? broken : original, "utf8")
+        await client.notify.open({ path: file })
+        let ok: boolean
+        if (pull) {
+          const report = await pullReport().catch(() => undefined)
+          const items = report?.kind === "full" ? (report.items ?? []) : undefined
+          ok = items !== undefined && hasErrorDiagnostic(items as { severity?: number }[]) === expectErrors
+        } else {
+          ok = await awaitDiagnosticFlip(expectErrors)
+        }
         const durationMs = Math.round(performance.now() - started)
+        if (debug) {
+          console.log(
+            `    [s5] iter ${i} expectErrors=${expectErrors} ${ok ? "matched" : "MISMATCH/TIMEOUT"} ${durationMs}ms`,
+          )
+        }
         durations.push(durationMs)
         LSPPerf.recordSample(`perf.diagnostic-latency.${ctx.server.id}`, durationMs, ok)
       }
@@ -320,15 +472,20 @@ function installRpcCounter(client: LSPClient.Info): { readonly count: number; re
   }
 }
 
-// S6 — graph-builder fan-out: touch every source file the server owns and
-// record per-file wall time plus total LSP round-trips. Stands in for the
-// core graph builder's LSP crawl (which drives the same notify path).
+// S6 — graph-builder fan-out: touch up to 200 source files the server owns
+// (sorted for determinism; the cap matches the PRD's N=200 and bounds the
+// crawl on large external repos) and record per-file wall time plus total
+// LSP round-trips. Stands in for the core graph builder's LSP crawl (which
+// drives the same notify path).
+const GRAPH_BUILDER_MAX_FILES = 200
+
 export async function graphBuilder(ctx: ScenarioContext): Promise<ScenarioResult[]> {
   const result = await withServerClient(ctx, async (client) => {
     const extensions = new Set(ctx.server.extensions)
     const files = Object.keys(ctx.fixture.files)
       .filter((rel) => extensions.has(path.extname(rel)))
       .sort()
+      .slice(0, GRAPH_BUILDER_MAX_FILES)
       .map((rel) => path.join(ctx.workDir, rel))
     const counter = installRpcCounter(client)
     const durations: number[] = []

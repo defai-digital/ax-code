@@ -12,6 +12,7 @@ import {
 
 const result = (overrides: Partial<ScenarioResult> = {}): ScenarioResult => ({
   scenario: "cold-start",
+  fixture: "rust-workspace",
   language: "rust",
   serverId: "rust",
   samples: 5,
@@ -50,8 +51,8 @@ describe("baseline files", () => {
 describe("formatMarkdownTable", () => {
   test("renders one row per result with optional metrics", () => {
     const table = formatMarkdownTable([result({ peakRssKb: 204800, hitRate: 0.75, rpcCount: 12 })])
-    expect(table).toContain("| scenario | language | server |")
-    expect(table).toContain("| cold-start | rust | rust | 5 | 100 | 200 | 200 | 0.75 | 12 | 600 |")
+    expect(table).toContain("| scenario | fixture | language | server |")
+    expect(table).toContain("| cold-start | rust-workspace | rust | rust | 5 | 100 | 200 | 200 | 0.75 | 12 | 600 |")
   })
 
   test("renders a dash for absent optional metrics", () => {
@@ -75,6 +76,13 @@ describe("compareResults", () => {
     expect(rows.find((row) => row.metric === "hitRate")?.regression).toBe(false)
   })
 
+  test("sub-floor deltas never flag as regressions even at huge percentages", () => {
+    const rows = compareResults([result({ p95: 1, totalMs: 4 })], [result({ p95: 0, totalMs: 1 })], 20)
+    expect(rows.find((row) => row.metric === "p95")?.deltaPct).toBe(100)
+    expect(rows.find((row) => row.metric === "p95")?.regression).toBe(false)
+    expect(rows.find((row) => row.metric === "totalMs")?.regression).toBe(false)
+  })
+
   test("flags a hit-rate drop beyond the threshold", () => {
     const rows = compareResults([result({ p95: 100, hitRate: 0.6 })], reference, 20)
     const hitRate = rows.find((row) => row.metric === "hitRate")
@@ -86,6 +94,14 @@ describe("compareResults", () => {
     const rows = compareResults([result({ rpcCount: 10 }), result({ scenario: "graph-builder" })], reference, 20)
     expect(rows.some((row) => row.metric === "rpcCount")).toBe(false) // reference has no rpcCount
     expect(rows.some((row) => row.scenario === "graph-builder")).toBe(false)
+  })
+
+  test("keys comparison rows by fixture, not just language/server", () => {
+    // A synthetic fixture and an external repo share language+serverId; the
+    // external row must not shadow the synthetic one.
+    const reference = [result({ fixture: "rust-ripgrep", rpcCount: 220 }), result({ rpcCount: 10 })]
+    const rows = compareResults([result({ rpcCount: 10 })], reference, 20)
+    expect(rows.find((row) => row.metric === "rpcCount")?.reference).toBe(10)
   })
 
   test("formatComparisonMarkdown marks regressions", () => {

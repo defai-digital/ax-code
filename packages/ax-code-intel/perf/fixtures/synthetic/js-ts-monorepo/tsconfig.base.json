@@ -1,11 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "strict": true,
-    "composite": true,
-    "declaration": true,
     "baseUrl": ".",
     "paths": {
       "@perf/core": ["packages/core/src/index.ts"],

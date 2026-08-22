@@ -91,7 +91,12 @@ export function createPerfHost(root: string): CodeIntelHost {
       executable: () => process.execPath,
       kind: () => "node",
       npmExecutable: () => "npm",
-      toolRunner: () => ({ command: ["npx", "--yes"] }),
+      // "Run a named tool" as the harness means it: resolve the tool from
+      // PATH via env(1). The production default (npx --yes) would silently
+      // download a server mid-benchmark — the harness measures installed
+      // servers, and preflight already proved the binary is on PATH.
+      // POSIX-only; the harness targets macOS/Linux dev machines.
+      toolRunner: () => ({ command: ["/usr/bin/env"] }),
     },
     killTree: (proc, killOpts) => killTree(proc, killOpts),
     listFiles: (input) => walk(input.cwd, input.cwd, { seen: 0, limit: input.limit }),

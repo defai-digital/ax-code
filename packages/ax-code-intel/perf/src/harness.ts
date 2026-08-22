@@ -10,21 +10,21 @@
 // Manual-only by design: not wired into CI, test:scripts, or Turbo. See
 // perf/README.md for interpretation and baseline-refresh policy.
 import { execFile } from "node:child_process"
-import { mkdtemp, readdir, rm } from "node:fs/promises"
-import os from "node:os"
+import { mkdir, readdir } from "node:fs/promises"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { promisify } from "node:util"
 import which from "which"
 import { LSPServer } from "../../src/server"
 import { configurePerfHost } from "./host"
-import type { FixtureDescriptor } from "./fixtures"
+import type { ExternalFixture, FixtureDescriptor } from "./fixtures"
 import {
   baselineDir,
   loadExternalFixtures,
   loadSyntheticFixtures,
   cloneExternalFixture,
   materializeFixture,
+  perfTmpRoot,
 } from "./fixtures"
 import type { ScenarioResult } from "./metrics"
 import {
@@ -37,7 +37,8 @@ import {
   writeBaseline,
 } from "./report"
 import type { ScenarioContext, ScenarioName } from "./scenarios"
-import { FULL_PROFILE, SCENARIO_NAMES, SMOKE_PROFILE, runAllScenarios, runScenario } from "./scenarios"
+import { FULL_PROFILE, SCENARIO_NAMES, SMOKE_PROFILE, probeServer, runAllScenarios, runScenario } from "./scenarios"
+import { formatError } from "./spawn"
 
 const execFileAsync = promisify(execFile)
 
@@ -65,6 +66,9 @@ function parseArgs(argv: string[]): Cli {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     switch (arg) {
+      case "--":
+        // Conventional pnpm/npm argument separator; ignore.
+        break
       case "--scenario": {
         const value = argv[++i]
         if (value !== "smoke" && value !== "full" && !SCENARIO_NAMES.includes(value as ScenarioName)) {
@@ -121,51 +125,31 @@ const SERVER_DEFS: Record<string, { server: LSPServer.Info; language: "ts" | "py
   rust: { server: LSPServer.RustAnalyzer, language: "rust", binary: "rust-analyzer" },
 }
 
-// Preflight: resolve each server binary on PATH *and* probe it with
-// `--version` — a binary that resolves but cannot run (e.g. a rustup proxy
-// whose toolchain lacks the rust-analyzer component) would otherwise hang or
-// crash mid-scenario. Missing/broken servers skip their fixture with a clear
-// line; a machine with zero working servers is a hard error.
-async function preflight(fixtures: FixtureDescriptor[]): Promise<Map<string, string>> {
-  console.log("LSP server preflight:")
-  const available = new Map<string, string>()
-  const seen = new Set<string>()
-  for (const fixture of fixtures) {
-    if (seen.has(fixture.serverId)) continue
-    seen.add(fixture.serverId)
-    const def = SERVER_DEFS[fixture.serverId]
-    if (!def) {
-      console.log(`  ${fixture.language.padEnd(6)} ${fixture.serverId}: no harness server mapping (skipping)`)
-      continue
-    }
-    const label = `${def.language.padEnd(6)} ${def.binary.padEnd(26)}`
-    const resolved = which.sync(def.binary, { nothrow: true })
-    if (!resolved) {
-      console.log(`  ${label} MISSING — skipping ${fixture.id}`)
-      continue
-    }
-    try {
-      const { stdout } = await execFileAsync(resolved, ["--version"], { timeout: 10_000 })
-      const version = stdout.trim().split("\n")[0] ?? "unknown version"
-      console.log(`  ${label} ${resolved} (${version})`)
-      available.set(fixture.serverId, resolved)
-    } catch (err) {
-      const stderr = (err as { stderr?: string } | undefined)?.stderr?.trim().split("\n")[0]
-      console.log(
-        `  ${label} BROKEN (${resolved} failed --version${stderr ? `: ${stderr}` : ""}) — skipping ${fixture.id}`,
-      )
-    }
+// Best-effort version label for preflight output. Display only — some
+// servers (pyright-langserver) have no --version flag and exit non-zero
+// without a transport argument, so this never gates availability. The
+// per-fixture handshake probe (probeServer) is what decides: it verifies
+// exactly what the harness needs — the server spawns and answers initialize
+// in the materialized workdir.
+async function versionLabel(binary: string): Promise<string | undefined> {
+  const resolved = which.sync(binary, { nothrow: true })
+  if (!resolved) return undefined
+  try {
+    const { stdout } = await execFileAsync(resolved, ["--version"], { timeout: 5_000 })
+    return stdout.trim().split("\n")[0] ?? undefined
+  } catch {
+    return undefined
   }
-  return available
 }
 
 // External fixtures have no manifest: build a descriptor from a directory
 // walk (files feed the graph-builder scenario) with no query points — the
 // query-driven scenarios require pinned points and are skipped.
-async function externalDescriptor(
-  fixture: { id: string; language: "ts" | "py" | "rust"; serverId: string; serverBinary: string },
-  dir: string,
-): Promise<FixtureDescriptor> {
+// External fixtures carry pinned query points and a diagnostic edit line in
+// external.json; the descriptor only adds the walked file list (used by the
+// graph-builder scenario). Pinned files were already hash-verified at clone
+// time by cloneExternalFixture.
+async function externalDescriptor(fixture: ExternalFixture, dir: string): Promise<FixtureDescriptor> {
   const files: Record<string, string> = {}
   const walk = async (sub: string): Promise<void> => {
     const entries = await readdir(path.join(dir, sub), { withFileTypes: true }).catch(() => [])
@@ -185,9 +169,10 @@ async function externalDescriptor(
     language: fixture.language,
     serverId: fixture.serverId,
     serverBinary: fixture.serverBinary,
-    diagnosticFile: "",
+    diagnosticFile: fixture.diagnosticFile,
+    diagnosticEditLine: fixture.diagnosticEditLine,
     files,
-    queries: { hover: [], definition: [], references: [] },
+    queries: fixture.queries,
   }
 }
 
@@ -204,36 +189,32 @@ async function main() {
   for (const descriptor of synthetic) {
     fixtures.push({ descriptor })
   }
-  let externalTmp: string | undefined
+  // External clones are cached across runs (repos are large; the cache lives
+  // under the gitignored perf temp root) and reused when HEAD matches the
+  // pinned SHA — see cloneExternalFixture.
   if (cli.external) {
-    externalTmp = await mkdtemp(path.join(os.tmpdir(), "ax-code-perf-external-"))
+    const cacheDir = path.join(perfTmpRoot(), "external-cache")
+    await mkdir(cacheDir, { recursive: true })
     for (const fixture of await loadExternalFixtures()) {
-      const dir = await cloneExternalFixture(fixture, externalTmp)
+      const dir = await cloneExternalFixture(fixture, cacheDir)
       const descriptor = await externalDescriptor(fixture, dir)
       fixtures.push({ descriptor, materialized: { workDir: dir, cleanup: async () => {} } })
     }
   }
 
-  const available = await preflight(fixtures.map((f) => f.descriptor))
-  const runnable = fixtures.filter((f) => available.has(f.descriptor.serverId))
-  if (runnable.length === 0) {
-    console.error(
-      "\nno LSP servers available — install at least one of: " +
-        Object.values(SERVER_DEFS)
-          .map((def) => def.binary)
-          .join(", "),
-    )
-    process.exit(1)
-  }
-
   const profile = cli.scenario === "full" ? FULL_PROFILE : SMOKE_PROFILE
   const results: ScenarioResult[] = []
   let hadErrors = false
+  let probedOk = 0
 
-  for (const entry of runnable) {
+  console.log("LSP server preflight (spawn + initialize handshake per fixture):")
+  for (const entry of fixtures) {
     const { descriptor } = entry
-    const def = SERVER_DEFS[descriptor.serverId]!
-    console.log(`\n▸ ${descriptor.id} (${descriptor.language}, server ${descriptor.serverId})`)
+    const def = SERVER_DEFS[descriptor.serverId]
+    if (!def) {
+      console.log(`  ${descriptor.id}: no harness server mapping for "${descriptor.serverId}" (skipping)`)
+      continue
+    }
     const materialized = entry.materialized ?? (await materializeFixture(descriptor))
     try {
       configurePerfHost(materialized.workDir)
@@ -245,6 +226,18 @@ async function main() {
         queryTimeoutMs: cli.queryTimeoutMs,
         coldStartTimeoutMs: cli.coldStartTimeoutMs,
       }
+      const probe = await probeServer(ctx)
+      if (!probe.ok) {
+        hadErrors = true
+        console.log(`  ✗ ${descriptor.serverBinary} (${descriptor.id}) — handshake failed, skipping fixture`)
+        for (const line of probe.reason.split("\n").slice(0, 8)) console.log(`      ${line}`)
+        continue
+      }
+      probedOk++
+      const version = await versionLabel(descriptor.serverBinary)
+      console.log(`  ✓ ${descriptor.serverBinary} (${descriptor.id})${version ? ` — ${version}` : ""}`)
+
+      console.log(`\n▸ ${descriptor.id} (${descriptor.language}, server ${descriptor.serverId})`)
       const hasQueryPoints = descriptor.queries.references.length > 0
       const report = (name: string, rows: ScenarioResult[], started: number) => {
         results.push(...rows)
@@ -278,12 +271,22 @@ async function main() {
       }
     } catch (err) {
       hadErrors = true
-      console.error(`  scenario failed for ${descriptor.id}:`, err instanceof Error ? err.message : err)
+      console.error(`  scenario failed for ${descriptor.id}:`)
+      for (const line of formatError(err).split("\n").slice(0, 10)) console.error(`      ${line}`)
     } finally {
       await materialized.cleanup()
     }
   }
-  if (externalTmp) await rm(externalTmp, { recursive: true, force: true })
+
+  if (probedOk === 0) {
+    console.error(
+      "\nno usable LSP servers — install at least one of: " +
+        Object.values(SERVER_DEFS)
+          .map((def) => def.binary)
+          .join(", "),
+    )
+    process.exit(1)
+  }
 
   console.log(`\n${formatMarkdownTable(results)}\n`)
 

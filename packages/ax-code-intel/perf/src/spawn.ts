@@ -1,15 +1,53 @@
-// Process helpers for the perf harness: cross-platform peak-RSS polling and
-// SIGTERM-then-SIGKILL teardown. The teardown implementation is also what the
-// harness host exposes as `killTree`, so LSPClient.shutdown() exercises the
-// same escalation path the production host uses.
+// Process helpers for the perf harness: cross-platform peak-RSS polling,
+// SIGTERM-then-SIGKILL teardown, stderr capture, and error formatting. The
+// teardown implementation is also what the harness host exposes as
+// `killTree`, so LSPClient.shutdown() exercises the same escalation path the
+// production host uses.
 import { execFile } from "node:child_process"
 import { readFile } from "node:fs/promises"
 import { promisify } from "node:util"
+import { inspect } from "node:util"
 import type { KillableProcess } from "../../src/host"
 
 const execFileAsync = promisify(execFile)
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+// Ring buffer over a child process's stderr. LSP servers report startup
+// failures on stderr and then die; without capturing it, a failed spawn
+// surfaces as a bare "initialize error" with no hint of the cause.
+export function captureStderr(process: { stderr?: NodeJS.ReadableStream | null }, limit = 4096): { tail(): string } {
+  let buffer = ""
+  process.stderr?.on("data", (chunk) => {
+    buffer = (buffer + String(chunk)).slice(-limit)
+  })
+  return {
+    tail() {
+      return buffer.trim()
+    },
+  }
+}
+
+// Render an unknown error with its full cause chain. NamedError instances
+// (e.g. LSPInitializeError) carry the interesting payload in `cause`, and
+// JSON-serializing them loses it — a bare `{}` in a log line helps nobody.
+export function formatError(err: unknown): string {
+  if (!(err instanceof Error)) return inspect(err, { depth: 4 })
+  const parts = [`${err.name}: ${err.message}`.trim()]
+  let cause: unknown = (err as { cause?: unknown }).cause
+  while (cause !== undefined) {
+    if (cause instanceof Error) {
+      parts.push(`caused by ${cause.name}: ${cause.message}`.trim())
+      const data = (cause as { data?: unknown }).data
+      if (data !== undefined) parts.push(`  data: ${inspect(data, { depth: 4 })}`)
+      cause = (cause as { cause?: unknown }).cause
+    } else {
+      parts.push(`caused by ${inspect(cause, { depth: 4 })}`)
+      cause = undefined
+    }
+  }
+  return parts.join("\n")
+}
 
 // Race a promise against a ref'd deadline. The package's internal
 // withTimeout is unref'd — correct for a long-running process, but in a

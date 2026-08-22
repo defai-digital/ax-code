@@ -1,11 +1,4 @@
 {
   "extends": "../../tsconfig.base.json",
-  "references": [
-    {
-      "path": "../core"
-    },
-    {
-      "path": "../api"
-    }
-  ]
+  "include": ["src"]
 }

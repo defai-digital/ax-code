@@ -1,29 +1,125 @@
 {
-  "$comment": "External fixtures for the recorded baseline (PRD Phase 0). Each entry must be pinned to an exact commit SHA before use; a null sha makes the harness fail fast rather than benchmark a moving target. SHAs are pinned by the maintainer when the first baseline is recorded.",
+  "$comment": "External fixtures for the recorded baseline (PRD Phase 0). Each entry is pinned to an exact commit SHA; verifyFiles pins sha256 of every file the query points / diagnostic edit depend on, verified after cloning. Query points were computed against the pinned trees and validated against the real servers.",
   "fixtures": [
     {
-      "id": "ts-stripe-cli",
-      "url": "https://github.com/stripe/stripe-cli",
-      "sha": null,
+      "id": "ts-zod",
+      "url": "https://github.com/colinhacks/zod",
+      "sha": "e516c3baf22615e20934116abebfed6c000222c2",
       "language": "ts",
       "serverId": "typescript",
-      "serverBinary": "typescript-language-server"
+      "serverBinary": "typescript-language-server",
+      "diagnosticFile": "packages/zod/src/v4/classic/schemas.ts",
+      "diagnosticEditLine": "export const PERF_PROBE: number = \"nope\"",
+      "queries": {
+        "hover": [
+          {
+            "file": "packages/zod/src/v4/classic/schemas.ts",
+            "line": 16,
+            "character": 33,
+            "symbol": "installLazyMethods"
+          }
+        ],
+        "definition": [
+          {
+            "file": "packages/zod/src/v4/classic/schemas.ts",
+            "line": 16,
+            "character": 33,
+            "symbol": "installLazyMethods"
+          }
+        ],
+        "references": [
+          {
+            "file": "packages/zod/src/v4/classic/schemas.ts",
+            "line": 1691,
+            "character": 16,
+            "symbol": "object"
+          }
+        ]
+      },
+      "verifyFiles": {
+        "packages/zod/src/v4/classic/schemas.ts": "90cb80b1761bb1a1e36cfd2817010a0b53d64505aec92bc4bcc145ff76dccff3"
+      }
     },
     {
       "id": "py-pydantic",
       "url": "https://github.com/pydantic/pydantic",
-      "sha": null,
+      "sha": "2151025aa51263f3016502b00010b78e4481eaa1",
       "language": "py",
       "serverId": "pyright",
-      "serverBinary": "pyright-langserver"
+      "serverBinary": "pyright-langserver",
+      "diagnosticFile": "pydantic/alias_generators.py",
+      "diagnosticEditLine": "PERF_PROBE: int = \"nope\"",
+      "queries": {
+        "hover": [
+          {
+            "file": "pydantic/type_adapter.py",
+            "line": 62,
+            "character": 33,
+            "symbol": "BaseModel"
+          }
+        ],
+        "definition": [
+          {
+            "file": "pydantic/type_adapter.py",
+            "line": 62,
+            "character": 33,
+            "symbol": "BaseModel"
+          }
+        ],
+        "references": [
+          {
+            "file": "pydantic/main.py",
+            "line": 132,
+            "character": 6,
+            "symbol": "BaseModel"
+          }
+        ]
+      },
+      "verifyFiles": {
+        "pydantic/alias_generators.py": "28cd67deee097cb48197552e620de1a181f35c90fecaf82b9eaf2ed5c73087f0",
+        "pydantic/main.py": "8fcd77ba5ecdf559afa931ed55fdd482dbba469c61833d483ae35e1f24c65302",
+        "pydantic/type_adapter.py": "06722d645954d2297b314d8095d4f674f68b78da8c87173dfccd83d59f22a8f9"
+      }
     },
     {
       "id": "rust-ripgrep",
       "url": "https://github.com/BurntSushi/ripgrep",
-      "sha": null,
+      "sha": "3fce3b5bb0236da2df6d99672afb8a719642eca7",
       "language": "rust",
       "serverId": "rust",
-      "serverBinary": "rust-analyzer"
+      "serverBinary": "rust-analyzer",
+      "diagnosticFile": "crates/core/main.rs",
+      "diagnosticEditLine": "const PERF_PROBE: i64 = \"nope\";",
+      "queries": {
+        "hover": [
+          {
+            "file": "crates/core/main.rs",
+            "line": 112,
+            "character": 17,
+            "symbol": "HiArgs"
+          }
+        ],
+        "definition": [
+          {
+            "file": "crates/core/main.rs",
+            "line": 112,
+            "character": 17,
+            "symbol": "HiArgs"
+          }
+        ],
+        "references": [
+          {
+            "file": "crates/core/flags/hiargs.rs",
+            "line": 35,
+            "character": 18,
+            "symbol": "HiArgs"
+          }
+        ]
+      },
+      "verifyFiles": {
+        "crates/core/flags/hiargs.rs": "4269c0129575a379a725d4023382d33277e73bc9928e6c81f5e8fa4824019169",
+        "crates/core/main.rs": "21c10c3b35114543b90f38f27fd9102703a099bd504db950e1f10d2739b1444c"
+      }
     }
   ]
 }

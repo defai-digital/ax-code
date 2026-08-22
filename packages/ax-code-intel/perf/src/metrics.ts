@@ -7,6 +7,7 @@ export type MetricLanguage = "ts" | "py" | "rust"
 
 export type ScenarioResult = {
   scenario: string
+  fixture: string
   language: MetricLanguage
   serverId: string
   samples: number

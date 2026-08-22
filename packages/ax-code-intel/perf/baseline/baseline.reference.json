@@ -1,0 +1,512 @@
+{
+  "version": 1,
+  "meta": {
+    "recordedAt": "2026-08-22T14:52:27.991Z",
+    "scenario": "full",
+    "external": true,
+    "host": "df-macbookpro-m3",
+    "platform": "darwin",
+    "arch": "arm64",
+    "node": "v26.5.0"
+  },
+  "results": [
+    {
+      "scenario": "cold-start",
+      "fixture": "js-ts-monorepo",
+      "language": "ts",
+      "serverId": "typescript",
+      "samples": 5,
+      "p50": 62,
+      "p95": 64,
+      "totalMs": 307
+    },
+    {
+      "scenario": "warm-query:hover",
+      "fixture": "js-ts-monorepo",
+      "language": "ts",
+      "serverId": "typescript",
+      "samples": 50,
+      "p50": 0,
+      "p95": 0,
+      "totalMs": 1
+    },
+    {
+      "scenario": "warm-query:definition",
+      "fixture": "js-ts-monorepo",
+      "language": "ts",
+      "serverId": "typescript",
+      "samples": 50,
+      "p50": 0,
+      "p95": 0,
+      "totalMs": 0
+    },
+    {
+      "scenario": "warm-query:references",
+      "fixture": "js-ts-monorepo",
+      "language": "ts",
+      "serverId": "typescript",
+      "samples": 50,
+      "p50": 0,
+      "p95": 1,
+      "totalMs": 23
+    },
+    {
+      "scenario": "peak-rss",
+      "fixture": "js-ts-monorepo",
+      "language": "ts",
+      "serverId": "typescript",
+      "samples": 150,
+      "p50": 0,
+      "p95": 0,
+      "peakRssKb": 75456,
+      "totalMs": 24
+    },
+    {
+      "scenario": "cache-hit-rate",
+      "fixture": "js-ts-monorepo",
+      "language": "ts",
+      "serverId": "typescript",
+      "samples": 150,
+      "p50": 0,
+      "p95": 0,
+      "hitRate": 0.99,
+      "totalMs": 215
+    },
+    {
+      "scenario": "diagnostic-latency",
+      "fixture": "js-ts-monorepo",
+      "language": "ts",
+      "serverId": "typescript",
+      "samples": 10,
+      "p50": 376,
+      "p95": 378,
+      "totalMs": 3756
+    },
+    {
+      "scenario": "graph-builder",
+      "fixture": "js-ts-monorepo",
+      "language": "ts",
+      "serverId": "typescript",
+      "samples": 22,
+      "p50": 0,
+      "p95": 0,
+      "totalMs": 0,
+      "rpcCount": 44
+    },
+    {
+      "scenario": "cold-start",
+      "fixture": "python-project",
+      "language": "py",
+      "serverId": "pyright",
+      "samples": 5,
+      "p50": 91,
+      "p95": 92,
+      "totalMs": 454
+    },
+    {
+      "scenario": "warm-query:hover",
+      "fixture": "python-project",
+      "language": "py",
+      "serverId": "pyright",
+      "samples": 50,
+      "p50": 0,
+      "p95": 0,
+      "totalMs": 1
+    },
+    {
+      "scenario": "warm-query:definition",
+      "fixture": "python-project",
+      "language": "py",
+      "serverId": "pyright",
+      "samples": 50,
+      "p50": 0,
+      "p95": 0,
+      "totalMs": 0
+    },
+    {
+      "scenario": "warm-query:references",
+      "fixture": "python-project",
+      "language": "py",
+      "serverId": "pyright",
+      "samples": 50,
+      "p50": 1,
+      "p95": 1,
+      "totalMs": 50
+    },
+    {
+      "scenario": "peak-rss",
+      "fixture": "python-project",
+      "language": "py",
+      "serverId": "pyright",
+      "samples": 150,
+      "p50": 0,
+      "p95": 0,
+      "peakRssKb": 158320,
+      "totalMs": 51
+    },
+    {
+      "scenario": "cache-hit-rate",
+      "fixture": "python-project",
+      "language": "py",
+      "serverId": "pyright",
+      "samples": 150,
+      "p50": 0,
+      "p95": 0,
+      "hitRate": 0.99,
+      "totalMs": 272
+    },
+    {
+      "scenario": "diagnostic-latency",
+      "fixture": "python-project",
+      "language": "py",
+      "serverId": "pyright",
+      "samples": 10,
+      "p50": 6,
+      "p95": 13,
+      "totalMs": 68
+    },
+    {
+      "scenario": "graph-builder",
+      "fixture": "python-project",
+      "language": "py",
+      "serverId": "pyright",
+      "samples": 25,
+      "p50": 0,
+      "p95": 0,
+      "totalMs": 0,
+      "rpcCount": 50
+    },
+    {
+      "scenario": "cold-start",
+      "fixture": "rust-workspace",
+      "language": "rust",
+      "serverId": "rust",
+      "samples": 5,
+      "p50": 18,
+      "p95": 18,
+      "totalMs": 89
+    },
+    {
+      "scenario": "warm-query:hover",
+      "fixture": "rust-workspace",
+      "language": "rust",
+      "serverId": "rust",
+      "samples": 50,
+      "p50": 1,
+      "p95": 1,
+      "totalMs": 49
+    },
+    {
+      "scenario": "warm-query:definition",
+      "fixture": "rust-workspace",
+      "language": "rust",
+      "serverId": "rust",
+      "samples": 50,
+      "p50": 1,
+      "p95": 1,
+      "totalMs": 50
+    },
+    {
+      "scenario": "warm-query:references",
+      "fixture": "rust-workspace",
+      "language": "rust",
+      "serverId": "rust",
+      "samples": 50,
+      "p50": 1,
+      "p95": 1,
+      "totalMs": 51
+    },
+    {
+      "scenario": "peak-rss",
+      "fixture": "rust-workspace",
+      "language": "rust",
+      "serverId": "rust",
+      "samples": 150,
+      "p50": 0,
+      "p95": 0,
+      "peakRssKb": 633248,
+      "totalMs": 150
+    },
+    {
+      "scenario": "cache-hit-rate",
+      "fixture": "rust-workspace",
+      "language": "rust",
+      "serverId": "rust",
+      "samples": 150,
+      "p50": 0,
+      "p95": 0,
+      "hitRate": 0.99,
+      "totalMs": 12
+    },
+    {
+      "scenario": "diagnostic-latency",
+      "fixture": "rust-workspace",
+      "language": "rust",
+      "serverId": "rust",
+      "samples": 10,
+      "p50": 3,
+      "p95": 1213,
+      "totalMs": 1237
+    },
+    {
+      "scenario": "graph-builder",
+      "fixture": "rust-workspace",
+      "language": "rust",
+      "serverId": "rust",
+      "samples": 5,
+      "p50": 0,
+      "p95": 0,
+      "totalMs": 0,
+      "rpcCount": 10
+    },
+    {
+      "scenario": "cold-start",
+      "fixture": "ts-zod",
+      "language": "ts",
+      "serverId": "typescript",
+      "samples": 5,
+      "p50": 59,
+      "p95": 62,
+      "totalMs": 298
+    },
+    {
+      "scenario": "warm-query:hover",
+      "fixture": "ts-zod",
+      "language": "ts",
+      "serverId": "typescript",
+      "samples": 50,
+      "p50": 1,
+      "p95": 15,
+      "totalMs": 86
+    },
+    {
+      "scenario": "warm-query:definition",
+      "fixture": "ts-zod",
+      "language": "ts",
+      "serverId": "typescript",
+      "samples": 50,
+      "p50": 0,
+      "p95": 1,
+      "totalMs": 3
+    },
+    {
+      "scenario": "warm-query:references",
+      "fixture": "ts-zod",
+      "language": "ts",
+      "serverId": "typescript",
+      "samples": 50,
+      "p50": 14,
+      "p95": 44,
+      "totalMs": 802
+    },
+    {
+      "scenario": "peak-rss",
+      "fixture": "ts-zod",
+      "language": "ts",
+      "serverId": "typescript",
+      "samples": 150,
+      "p50": 0,
+      "p95": 0,
+      "peakRssKb": 88112,
+      "totalMs": 891
+    },
+    {
+      "scenario": "cache-hit-rate",
+      "fixture": "ts-zod",
+      "language": "ts",
+      "serverId": "typescript",
+      "samples": 150,
+      "p50": 0,
+      "p95": 0,
+      "hitRate": 0.99,
+      "totalMs": 245
+    },
+    {
+      "scenario": "diagnostic-latency",
+      "fixture": "ts-zod",
+      "language": "ts",
+      "serverId": "typescript",
+      "samples": 10,
+      "p50": 861,
+      "p95": 947,
+      "totalMs": 8606
+    },
+    {
+      "scenario": "graph-builder",
+      "fixture": "ts-zod",
+      "language": "ts",
+      "serverId": "typescript",
+      "samples": 200,
+      "p50": 0,
+      "p95": 0,
+      "totalMs": 0,
+      "rpcCount": 400
+    },
+    {
+      "scenario": "cold-start",
+      "fixture": "py-pydantic",
+      "language": "py",
+      "serverId": "pyright",
+      "samples": 5,
+      "p50": 92,
+      "p95": 93,
+      "totalMs": 458
+    },
+    {
+      "scenario": "warm-query:hover",
+      "fixture": "py-pydantic",
+      "language": "py",
+      "serverId": "pyright",
+      "samples": 50,
+      "p50": 0,
+      "p95": 0,
+      "totalMs": 0
+    },
+    {
+      "scenario": "warm-query:definition",
+      "fixture": "py-pydantic",
+      "language": "py",
+      "serverId": "pyright",
+      "samples": 50,
+      "p50": 0,
+      "p95": 0,
+      "totalMs": 0
+    },
+    {
+      "scenario": "warm-query:references",
+      "fixture": "py-pydantic",
+      "language": "py",
+      "serverId": "pyright",
+      "samples": 50,
+      "p50": 13,
+      "p95": 14,
+      "totalMs": 667
+    },
+    {
+      "scenario": "peak-rss",
+      "fixture": "py-pydantic",
+      "language": "py",
+      "serverId": "pyright",
+      "samples": 150,
+      "p50": 0,
+      "p95": 0,
+      "peakRssKb": 575840,
+      "totalMs": 667
+    },
+    {
+      "scenario": "cache-hit-rate",
+      "fixture": "py-pydantic",
+      "language": "py",
+      "serverId": "pyright",
+      "samples": 150,
+      "p50": 0,
+      "p95": 0,
+      "hitRate": 0.99,
+      "totalMs": 665
+    },
+    {
+      "scenario": "diagnostic-latency",
+      "fixture": "py-pydantic",
+      "language": "py",
+      "serverId": "pyright",
+      "samples": 10,
+      "p50": 9,
+      "p95": 18,
+      "totalMs": 96
+    },
+    {
+      "scenario": "graph-builder",
+      "fixture": "py-pydantic",
+      "language": "py",
+      "serverId": "pyright",
+      "samples": 200,
+      "p50": 0,
+      "p95": 1,
+      "totalMs": 164,
+      "rpcCount": 400
+    },
+    {
+      "scenario": "cold-start",
+      "fixture": "rust-ripgrep",
+      "language": "rust",
+      "serverId": "rust",
+      "samples": 5,
+      "p50": 18,
+      "p95": 19,
+      "totalMs": 90
+    },
+    {
+      "scenario": "warm-query:hover",
+      "fixture": "rust-ripgrep",
+      "language": "rust",
+      "serverId": "rust",
+      "samples": 50,
+      "p50": 2,
+      "p95": 2,
+      "totalMs": 67
+    },
+    {
+      "scenario": "warm-query:definition",
+      "fixture": "rust-ripgrep",
+      "language": "rust",
+      "serverId": "rust",
+      "samples": 50,
+      "p50": 2,
+      "p95": 3,
+      "totalMs": 69
+    },
+    {
+      "scenario": "warm-query:references",
+      "fixture": "rust-ripgrep",
+      "language": "rust",
+      "serverId": "rust",
+      "samples": 50,
+      "p50": 2,
+      "p95": 3,
+      "totalMs": 78
+    },
+    {
+      "scenario": "peak-rss",
+      "fixture": "rust-ripgrep",
+      "language": "rust",
+      "serverId": "rust",
+      "samples": 150,
+      "p50": 0,
+      "p95": 0,
+      "peakRssKb": 1054624,
+      "totalMs": 214
+    },
+    {
+      "scenario": "cache-hit-rate",
+      "fixture": "rust-ripgrep",
+      "language": "rust",
+      "serverId": "rust",
+      "samples": 150,
+      "p50": 0,
+      "p95": 0,
+      "hitRate": 0.99,
+      "totalMs": 26
+    },
+    {
+      "scenario": "diagnostic-latency",
+      "fixture": "rust-ripgrep",
+      "language": "rust",
+      "serverId": "rust",
+      "samples": 10,
+      "p50": 31,
+      "p95": 398,
+      "totalMs": 673
+    },
+    {
+      "scenario": "graph-builder",
+      "fixture": "rust-ripgrep",
+      "language": "rust",
+      "serverId": "rust",
+      "samples": 110,
+      "p50": 0,
+      "p95": 0,
+      "totalMs": 1,
+      "rpcCount": 220
+    }
+  ]
+}

@@ -7,6 +7,7 @@
       "serverId": "typescript",
       "serverBinary": "typescript-language-server",
       "diagnosticFile": "packages/api/src/handler.ts",
+      "diagnosticEditLine": "export const PERF_PROBE: number = \"nope\"",
       "files": {
         "package.json": "fb5f435cf961880331b9529d6797d2e1cdc4d1478b88db4ee56300596271d8e3",
         "packages/api/package.json": "b02366f65050b6b5c7f05ba19a428c8acaae213fa62df64515730b766b70f54c",
@@ -18,14 +19,14 @@
         "packages/api/src/router.ts": "e58454347ba68e984fb36c56dd9cf3dfe734d12b131f9153615579e732f08f6e",
         "packages/api/src/server.ts": "3ddfeee0b3fa7423458aaaf1afbcd385f8fa7805a68e07d4e2dc1a48ede0fc25",
         "packages/api/src/types.ts": "7820dd8e3ede9b6be8638b5d3464cb2e3e587f74263be047fa88a212324139c7",
-        "packages/api/tsconfig.json": "ac2f53c7b409834fdc155c477a7d5df0dbe98c2e05fff987fde534fc253959d1",
+        "packages/api/tsconfig.json": "8f6e85eeaa8025fe7b2f01763e03f32540d3e2869ae857490d685098460f4e3a",
         "packages/cli/package.json": "fffca035a6637afee278f8ebc67d210964c43b9589b2fa6390c5b08a1ad8f307",
         "packages/cli/src/args.ts": "70769c851c258631432f4e9331292319cc8216bd78d03a5b284899168b4d13b1",
         "packages/cli/src/commands.ts": "34bdd736a55880558f08825ebdc3ea6a3c7c8c9ab5cdea4cc037a1739ec580e4",
         "packages/cli/src/help.ts": "ef5eb5d76f3a7d06afa630d71831968cf1628a13b679dc61408f9b959082254c",
         "packages/cli/src/index.ts": "91e7882cc43abc575512efc99cdab224f178b842bb1dac6aeb7e66173e88eaf2",
         "packages/cli/src/main.ts": "2b8bc0e2088b8051964982b899b288b0705c577f7999dc44a4966cb9fbabe94b",
-        "packages/cli/tsconfig.json": "1117ec46f8268ffe34b37e6ae1a0cbfc237d90e58779835071170eff88f75fc8",
+        "packages/cli/tsconfig.json": "8f6e85eeaa8025fe7b2f01763e03f32540d3e2869ae857490d685098460f4e3a",
         "packages/core/package.json": "d4de4457eefb56850071257a0d8fb60df8eef8a8128f7202e9826b42a382480b",
         "packages/core/src/collections.ts": "b40b6f8644b7fb977e790a64925da0995febf7f7bfec51f57274e9da6427b8c5",
         "packages/core/src/constants.ts": "f9dcbdbaf0bda4611ac1572a293867db747a327c5a00ed7ff9c6bb2ed6f01e52",
@@ -36,9 +37,9 @@
         "packages/core/src/series.ts": "06777b9d12eb0bfa12c36d0ba173aa6d8b1203ad753c5403f00bc3a49c4405c7",
         "packages/core/src/text.ts": "6fdfd50b216179afadae8c7d91dc073c628da4b5f5cef788a02c7b228acd5a81",
         "packages/core/src/validators.ts": "af906456663ceccdd00e471ae2ed3ca2e25bbec7208c1f951c461f501737982a",
-        "packages/core/tsconfig.json": "a72bbe6e73230b1150b95ba4fcf4ff135b7b886d2b6ed6271e888c9aa63dc061",
-        "tsconfig.base.json": "21a073bb1f24d4f6e14aa55e8d868d1a5b275c5b97200e1ef22e0ccd2cee4f6f",
-        "tsconfig.json": "2f38e2adce676995f6384cd1e7f52c0338886af1be84c8a509479b938d9812a8"
+        "packages/core/tsconfig.json": "8f6e85eeaa8025fe7b2f01763e03f32540d3e2869ae857490d685098460f4e3a",
+        "tsconfig.base.json": "312ddcb0e6ada2902c9b8b0da410507c23f16c44970fb18c15a2677493d43ff0",
+        "tsconfig.json": "2aac615001ff3bfb25794f927ba7f249447b8ad3dc42fb2a1855ce30a4b78a28"
       },
       "queries": {
         "hover": [
@@ -73,6 +74,7 @@
       "serverId": "pyright",
       "serverBinary": "pyright-langserver",
       "diagnosticFile": "src/perf_pyproj/cli.py",
+      "diagnosticEditLine": "PERF_PROBE: int = \"nope\"",
       "files": {
         "pyproject.toml": "d81299b9179a70e1f62ef8babbf615bf486b25964ac725af50be132c0a2887fa",
         "src/perf_pyproj/__init__.py": "71c92ae4633df9a3ccb8fcb017babfd44b137e2b65fb698692e7e562a3a21c43",
@@ -134,6 +136,7 @@
       "serverId": "rust",
       "serverBinary": "rust-analyzer",
       "diagnosticFile": "crate_b/src/lib.rs",
+      "diagnosticEditLine": "const PERF_PROBE: i64 = \"nope\";",
       "files": {
         "Cargo.toml": "0c22a811181636b3f5928d5cce455ef0c21dc62a0e7f5e18edac8ca72a3dcf37",
         "crate_a/Cargo.toml": "49a6ca47fd9b7b173790c219ee8d3f6e838728d532c32e791d4584e1479d5fe8",

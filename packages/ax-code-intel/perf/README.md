@@ -17,13 +17,22 @@ The harness measures real language servers; install at least one:
 | Python   | `pyright-langserver`         | `python-project` |
 | Rust     | `rust-analyzer`              | `rust-workspace` |
 
-A preflight at startup reports availability per language — resolving the
-binary on PATH and probing it with `--version`, so a binary that exists but
-cannot run (e.g. a rustup proxy whose toolchain lacks the rust-analyzer
-component) is reported as BROKEN rather than found — and skips fixtures whose
-server is unavailable. With zero working servers the harness exits non-zero.
-The harness never downloads servers (`disableLspDownload` is forced on in its
-host).
+Preflight is a real LSP handshake, not a version-flag probe: for each
+fixture the harness materializes a copy, spawns the server through the
+production server def, and answers `initialize`. A binary that exists but
+cannot run here (e.g. a rustup proxy whose default toolchain lacks the
+rust-analyzer component) is reported with its captured stderr, and its
+fixture is skipped. With zero working servers the harness exits non-zero.
+`--version` output is shown best-effort for display only — it never gates
+availability (pyright-langserver has no such flag). The harness never
+downloads servers: `disableLspDownload` is forced on and the host's tool
+runner resolves named tools from PATH via `env(1)` instead of `npx`.
+
+Fixtures are materialized under the repo's gitignored `.tmp/perf/` by
+default (override with `AX_CODE_PERF_TMP`). Running servers with a cwd
+inside the repo matters: the rust-analyzer rustup proxy resolves the repo's
+`rust-toolchain.toml`, and the typescript server def resolves
+`typescript/lib/tsserver.js` by walking up to the repo's `node_modules`.
 
 ## Running
 
@@ -51,14 +60,14 @@ initialize timeout so a silently dying server fails cleanly).
 
 ## What each scenario measures
 
-| Scenario              | Metric                                                        | How                                                                                                         |
-| --------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `cold-start`          | p50/p95 of spawn + `initialize` wall time                     | Fresh server process per launch, N launches, teardown between                                               |
-| `warm-query:<method>` | Steady-state p50/p95 for hover / definition / references      | One server lifetime; warmup queries discarded, then N measured per method                                   |
-| `peak-rss`            | Peak RSS (KB) of the server process during the warm-query run | 100 ms poller (`/proc` on Linux, `ps` on macOS)                                                             |
-| `cache-hit-rate`      | Post-warmup hit share of the cache-probe path                 | Warm pass, repeat pass (hits), one-line edit (miss), repeat (re-hit); counts come from the perf ring buffer |
-| `diagnostic-latency`  | didChange → publishDiagnostics round-trip p50/p95             | One-line edit per iteration against the fixture's diagnostic file                                           |
-| `graph-builder`       | Wall time + LSP RPC count of a touch-driven file crawl        | `notify.open` across every source file, counting connection messages                                        |
+| Scenario              | Metric                                                                                                                 | How                                                                                                                                |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `cold-start`          | p50/p95 of spawn + `initialize` wall time                                                                              | Fresh server process per launch, N launches, teardown between                                                                      |
+| `warm-query:<method>` | Steady-state p50/p95 for hover / definition / references                                                               | One server lifetime; warmup queries discarded, then N measured per method                                                          |
+| `peak-rss`            | Peak RSS (KB) of the server process during the warm-query run                                                          | 100 ms poller (`/proc` on Linux, `ps` on macOS)                                                                                    |
+| `cache-hit-rate`      | Post-warmup hit share of the cache-probe path                                                                          | Warm pass, repeat pass (hits), one-line edit (miss), repeat (re-hit); counts come from the perf ring buffer                        |
+| `diagnostic-latency`  | `textDocument/diagnostic` round-trip after an edit (pull mode), or didChange → publishDiagnostics flip (push fallback) | Toggles a fixture line that introduces a real type error; pull mode for pyright/rust-analyzer, push for typescript-language-server |
+| `graph-builder`       | Wall time + LSP RPC count of a touch-driven file crawl                                                                 | `notify.open` across every source file, counting connection messages                                                               |
 
 All scenarios drive the real production path: server defs spawn the process,
 `LSPClient` handles the protocol, and queries go through the same
@@ -81,9 +90,14 @@ against the reference baseline, not absolute truths.
   (`AX_CODE_PERF_TMP` overrides the temp root) before running, so servers
   never dirty the source tree.
 - **External** (`fixtures/external.json`): real-world repos pinned by commit
-  SHA, used only with `--external`. A `null` SHA fails fast — pin a commit
-  first. External fixtures have no pinned query points, so they run
-  `cold-start` and `graph-builder` only.
+  SHA — `colinhacks/zod` (TS), `pydantic/pydantic` (Python),
+  `BurntSushi/ripgrep` (Rust) — used only with `--external`. Each entry pins
+  query points and a diagnostic edit line, plus sha256 (`verifyFiles`) of
+  every file those depend on; the clone is verified against the pins before
+  any scenario runs. Clones are cached under the gitignored perf temp root
+  and reused while HEAD matches the pin. All six scenarios run against
+  external fixtures. Re-pinning = new SHA + regenerated query points/hashes +
+  revalidation against the real servers, in one PR.
 
 ## Recording and refreshing the baseline
 
@@ -92,6 +106,12 @@ The directory is gitignored except `*.reference.json`: to promote a run to
 the reference, rename/copy it to `baseline.reference.json` and commit it in a
 PR with one reviewer. The reference is always the most recent recorded
 baseline; Phase 3 exit criteria quote deltas against it.
+
+The current reference was recorded with `--external`: its headline numbers
+come from the pinned real-world repos (zod / pydantic / ripgrep), with the
+synthetic fixtures alongside as a smoke-scale cross-check. Synthetic-only
+runs (no `--external`) remain the fast local smoke; their rows compare
+against the synthetic rows of the reference.
 
 `--compare <file>` prints a delta table (p50/p95/peakRSS/hitRate/RPC/total).
 Exit code is non-zero only with `--fail-on-regression` and a metric degraded
