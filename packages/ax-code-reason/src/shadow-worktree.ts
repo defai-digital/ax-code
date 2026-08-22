@@ -118,12 +118,17 @@ export namespace ShadowWorktree {
     // list of files with uncommitted changes.
     const status = await git(["status", "--porcelain", "--no-renames"], { cwd: codeReasonHost().worktreeRoot() })
     if (status.exitCode !== 0) return { ok: false, reason: "not-git" }
-    const text = status.text().trim()
-    if (text.length > 0) {
-      const files = text
-        .split("\n")
-        .map((line) => line.slice(3).trim())
-        .filter(Boolean)
+    // Split into lines FIRST, then parse each line individually. Trimming
+    // the whole output up front would eat the leading status column of
+    // the first line (e.g. " M file.txt" → "M file.txt"), corrupting the
+    // path produced by slice(3).
+    const files = status
+      .text()
+      .split("\n")
+      .map((line) => line.replace(/\r$/, ""))
+      .filter(Boolean)
+      .map((line) => line.slice(3))
+    if (files.length > 0) {
       return { ok: false, reason: "uncommitted-changes", files }
     }
     return { ok: true }
@@ -262,7 +267,10 @@ export namespace ShadowWorktree {
         .text()
         .trim()
         .split("\n")
-        .map((line) => line.trim().replace(/^\*\s*/, ""))
+        // Strip both "* " (current branch) and "+ " (checked out in a
+        // linked worktree) decorations. Orphan shadow branches are always
+        // worktree-checked-out, so they carry the "+ " prefix.
+        .map((line) => line.trim().replace(/^[*+]\s*/, ""))
         .filter(Boolean)
       for (const name of names) {
         // Force-remove the worktree first (if it still exists), then the branch
