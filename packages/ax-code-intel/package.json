@@ -38,7 +38,7 @@
     "./semantic-results": "./src/semantic-results.ts",
     "./oxlint": "./src/oxlint.ts",
     "./jdtls-data-dir": "./src/jdtls-data-dir.ts",
-    "./internal/log": "./src/internal/log.ts"
+    "./log": "./src/log.ts"
   },
   "scripts": {
     "typecheck": "tsgo --noEmit",

@@ -11,7 +11,7 @@
 
 import z from "zod"
 import { configureCodeIntelHost, type LspCacheOperation } from "@ax-code/ax-code-intel/host"
-import { Log as PackageLog } from "@ax-code/ax-code-intel/internal/log"
+import { setLogSink } from "@ax-code/ax-code-intel/log"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Config } from "@/config/config"
@@ -40,7 +40,7 @@ export const LspEvent = {
 
 // Route package log output into the core log stack.
 const loggerCache = new Map<string, ReturnType<typeof Log.create>>()
-PackageLog.setSink((level, service, message, extra) => {
+setLogSink((level, service, message, extra) => {
   let logger = loggerCache.get(service)
   if (!logger) {
     logger = Log.create({ service })

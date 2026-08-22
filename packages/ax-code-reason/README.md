@@ -40,6 +40,7 @@ there is not importable.
 | `quality/finding`               | finding model                                          | evolving  |
 | `quality/finding-registry`      | finding registry                                       | evolving  |
 | `quality/verification-envelope` | verification envelope model                            | evolving  |
+| `log`                           | `setLogSink` / `createLogger` host logging facade      | evolving  |
 
 Stability tiers:
 
@@ -49,21 +50,13 @@ Stability tiers:
 - **internal-only** — everything under `src/internal/`. Not part of the API
   surface, not exported, and may change without notice.
 
-> Temporary exceptions: `./internal/log` and `./internal/process` are
-> currently exported for the AX Code core glue
-> (`packages/ax-code/src/dre-glue.ts`) and one legacy core test
-> (`packages/ax-code/test/planner/verification-runner.test.ts`). These are
-> migration seams, not API — unsupported for any other consumer and tracked
-> for removal. Do not take a dependency on them.
-
 ## Lifecycle guarantees
 
 - The public API follows semver. The package is at `0.x`, so breaking changes
   are permitted in minor versions; from `1.0.0` they require a major bump
   plus a migration note in the CHANGELOG.
-- `internal/*` is **not** API. Importing it from outside the package is
-  unsupported and may break without notice (the temporary exceptions are
-  listed above).
+- `internal/*` is **not** API. It is not exported; importing it from outside
+  the package is unsupported and may break without notice.
 - This package depends on `@ax-code/ax-code-intel` (workspace). Any breaking
   change in intel's public API propagates here as a reason major bump (minor
   while both are `0.x`).

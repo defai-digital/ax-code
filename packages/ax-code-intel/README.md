@@ -54,6 +54,7 @@ there is not importable.
 | `semantic-results` | semantic result normalization/validation                          | evolving  |
 | `oxlint`           | oxlint auxiliary-server support                                   | evolving  |
 | `jdtls-data-dir`   | jdtls data-directory resolution                                   | evolving  |
+| `log`              | `setLogSink` / `createLogger` host logging facade                 | evolving  |
 
 Stability tiers:
 
@@ -63,20 +64,13 @@ Stability tiers:
 - **internal-only** — everything under `src/internal/`. Not part of the API
   surface, not exported, and may change without notice.
 
-> Temporary exception: `./internal/log` is currently exported so the AX Code
-> core glue (`packages/ax-code/src/lsp-glue.ts`) can route package log output
-> into the core log stack. This is a migration seam, not API — it is
-> unsupported for any other consumer and is tracked for removal once the core
-> glue stops importing it. Do not take a dependency on it.
-
 ## Lifecycle guarantees
 
 - The public API follows semver. The package is at `0.x`, so breaking changes
   are permitted in minor versions; from `1.0.0` they require a major bump
   plus a migration note in the CHANGELOG.
-- `internal/*` is **not** API. Importing it from outside the package is
-  unsupported and may break without notice (the one temporary exception is
-  listed above).
+- `internal/*` is **not** API. It is not exported; importing it from outside
+  the package is unsupported and may break without notice.
 - Performance characteristics are recorded in
   `perf/baseline/baseline.reference.json` (see below); Phase 3 tuning deltas
   reference that file.

@@ -27,8 +27,7 @@
     "./quality/finding": "./src/quality/finding.ts",
     "./quality/finding-registry": "./src/quality/finding-registry.ts",
     "./quality/verification-envelope": "./src/quality/verification-envelope.ts",
-    "./internal/log": "./src/internal/log.ts",
-    "./internal/process": "./src/internal/process.ts"
+    "./log": "./src/log.ts"
   },
   "scripts": {
     "typecheck": "tsgo --noEmit",

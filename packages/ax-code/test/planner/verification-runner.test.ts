@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest"
+import { describe, expect, test } from "vitest"
 import * as fs from "fs/promises"
 import path from "path"
 import {
@@ -7,10 +7,6 @@ import {
   resolveCommands,
   runCommand,
 } from "../../src/planner/verification/runner"
-// The runner implementation lives in @ax-code/ax-code-reason and uses its own
-// vendored Process module — spy on that copy so the spy observes the same
-// namespace object the runner calls (both packages are inlined by vitest).
-import { Process } from "@ax-code/ax-code-reason/internal/process"
 import { tmpdir } from "../fixture/fixture"
 
 async function writePackageJson(dir: string, scripts: Record<string, string>) {
@@ -205,16 +201,11 @@ describe("resolveCommands", () => {
 
   test("runCommand runs through the platform shell (cmd /c on win32, sh -c elsewhere)", async () => {
     await using tmp = await tmpdir({ git: true })
-    const spy = vi
-      .spyOn(Process, "run")
-      .mockResolvedValue({ code: 0, stdout: Buffer.from(""), stderr: Buffer.from("") })
-    try {
-      const result = await runCommand("echo hi", tmp.path)
-      expect(result.ok).toBe(true)
-      expect(spy).toHaveBeenCalledWith(Process.shellCommand("echo hi"), expect.objectContaining({ cwd: tmp.path }))
-    } finally {
-      spy.mockRestore()
-    }
+    // Behavioural check through the public surface: a shell builtin only
+    // resolves if the command really went through the platform shell.
+    const result = await runCommand("echo hi", tmp.path)
+    expect(result.ok).toBe(true)
+    expect(result.stdout.trim()).toBe("hi")
   })
 
   test("runCommand sanitizes secret-like parent environment variables", async () => {
