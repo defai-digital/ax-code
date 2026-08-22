@@ -123,6 +123,15 @@ discipline is useful here without requiring its full plugin container.
 No blocking finding remains. Deferred improvements are recorded in the phase plan rather than expanding this change
 into a plugin-container or session rewrite.
 
+## Post-review acceptance audit
+
+On 2026-08-22, a requirement-by-requirement audit added explicit coverage for direct attachment mapping and
+interactive isolation escalation, successful Batch child permissions and hooks, Batch's complete final-visible
+exclusion set, MCP permission preservation, provider-option/tool-argument redaction, manifest material-change
+sensitivity, fail-closed manifest fallback, and legacy replay parsing. The resulting seven focused files passed
+111/111 tests, core typecheck passed, and the full deterministic suite passed 845/845 files with 7,896 tests passed
+and 2 skipped. This audit did not alter the production design approved by the four-model review.
+
 ## Delivery map
 
 The requirements are in `PRD-2026-08-21-tool-execution-integrity.md`, the durable decisions in ADR-060, the exact

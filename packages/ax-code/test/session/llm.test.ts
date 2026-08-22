@@ -409,6 +409,33 @@ describe("session.llm.stream", () => {
             provenanceErrorCode: "manifest_unavailable",
           }),
         )
+        const unavailable = fallbackEvents.find(
+          (event) => event.type === "llm.request" && event.provenanceErrorCode === "manifest_unavailable",
+        )
+        for (const field of [
+          "provenanceVersion",
+          "provenanceBoundary",
+          "hashAlgorithm",
+          "providerID",
+          "modelID",
+          "assembledMessageCount",
+          "systemMessageCount",
+          "toolCount",
+          "toolNames",
+          "systemHash",
+          "messagesHash",
+          "toolDefinitionsHash",
+          "optionsHash",
+          "requestHash",
+          "toolChoice",
+          "maxOutputTokens",
+          "topP",
+          "topK",
+          "reasoningDepth",
+          "variant",
+        ] as const) {
+          expect(unavailable).not.toHaveProperty(field)
+        }
       },
     })
   })

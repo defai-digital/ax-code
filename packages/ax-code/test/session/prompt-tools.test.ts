@@ -270,6 +270,109 @@ describe("session.prompt-tools", () => {
     expect(plugin.mock.calls.map(([name]) => name)).toEqual(["tool.execute.before"])
   })
 
+  test("preserves direct lifecycle, attachments, and interactive isolation escalation", async () => {
+    await using tmp = await tmpdir()
+    const events: string[] = []
+    const deniedPath = `${tmp.path}-outside/direct-probe.txt`
+    let attempts = 0
+    let afterPayload: unknown
+    const execute = vi.fn(async (_args: unknown, ctx: any) => {
+      attempts++
+      events.push(`execute:${attempts}`)
+      if (!ctx.extra?.isolation?.bypass?.includes(deniedPath)) {
+        throw new Isolation.DeniedError("write", "outside workspace", deniedPath)
+      }
+      return {
+        title: "Direct probe",
+        output: "ok",
+        metadata: {},
+        attachments: [
+          {
+            type: "file" as const,
+            mime: "text/plain",
+            filename: "probe.txt",
+            url: "data:text/plain,ok",
+          },
+        ],
+      }
+    })
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([
+      {
+        id: "direct_probe",
+        description: "direct probe",
+        parameters: z.object({}),
+        execute,
+      },
+    ] as any)
+    vi.spyOn(MCP, "tools").mockResolvedValue({})
+    vi.spyOn(Plugin, "trigger").mockImplementation((async (name: string, _input: unknown, output: unknown) => {
+      if (name === "tool.execute.before") events.push("plugin:before")
+      if (name === "tool.execute.after") {
+        events.push("plugin:after")
+        afterPayload = output
+      }
+      return output
+    }) as any)
+    vi.spyOn(LifecycleHooks, "runForWorkspace").mockImplementation(async ({ event }) => {
+      events.push(`lifecycle:${event}`)
+      return { ok: true, blocked: false, outputs: [] }
+    })
+    const ask = vi.spyOn(Permission, "ask").mockImplementation(async (request) => {
+      events.push(`permission:${request.permission}`)
+    })
+
+    const result = await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tools = await resolveTools({
+          agent: { name: "build", permission: [{ permission: "*", pattern: "*", action: "allow" }] } as any,
+          session: { id: "ses_direct", permission: [] } as any,
+          model: {
+            providerID: "test-provider",
+            api: { id: "test-model", npm: "@ai-sdk/openai-compatible" },
+          } as any,
+          tools: {},
+          bypassAgentCheck: false,
+          messages: [],
+          isolation: { mode: "workspace-write", network: true, protected: [] },
+          processor: { message: { id: "msg_direct" }, partFromToolCall: () => undefined } as any,
+        })
+        return (tools.direct_probe.execute as any)(
+          {},
+          { toolCallId: "call_direct", abortSignal: new AbortController().signal },
+        )
+      },
+    })
+
+    expect(execute).toHaveBeenCalledTimes(2)
+    expect(events).toEqual([
+      "plugin:before",
+      "lifecycle:PreToolUse",
+      "execute:1",
+      "permission:isolation_escalation",
+      "execute:2",
+      "plugin:after",
+      "lifecycle:PostToolUse",
+    ])
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        permission: "isolation_escalation",
+        patterns: ["outside workspace"],
+        metadata: expect.objectContaining({ path: deniedPath, requireInteractive: true }),
+      }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+    expect(result.attachments).toEqual([
+      expect.objectContaining({
+        id: expect.any(String),
+        sessionID: "ses_direct",
+        messageID: "msg_direct",
+        filename: "probe.txt",
+      }),
+    ])
+    expect(afterPayload).toMatchObject({ attachments: result.attachments })
+  })
+
   test("applies canonical lifecycle hooks to MCP execution", async () => {
     await using tmp = await tmpdir()
     const events: string[] = []
@@ -296,6 +399,7 @@ describe("session.prompt-tools", () => {
       events.push(event)
       return { ok: true, blocked: false, outputs: [] }
     })
+    const ask = vi.spyOn(Permission, "ask").mockResolvedValue(undefined)
 
     await Instance.provide({
       directory: tmp.path,
@@ -330,16 +434,50 @@ describe("session.prompt-tools", () => {
     expect(events).toEqual(["tool.execute.before", "PreToolUse", "tool.execute.after", "PostToolUse"])
     expect(afterPayload).toEqual({ content: [{ type: "text", text: "hello" }] })
     expect(afterCallID).toBe("call_mcp")
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        permission: "remote_echo",
+        sessionID: "ses_mcp",
+        tool: { messageID: "msg_mcp", callID: "call_mcp" },
+      }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
   })
 
-  test("gives Batch only final-visible tools and keeps nested isolation fail-closed", async () => {
+  test("gives Batch only final-visible registry tools with lifecycle, permissions, and fail-closed isolation", async () => {
     await using tmp = await tmpdir()
+    const events: Array<{ tool: string; phase: string }> = []
+    const batch = await BatchTool.init()
+    let batchDispatcherIDs: string[] | undefined
+    const permittedExecute = vi.fn(async (_args: unknown, ctx: any) => {
+      await ctx.ask({ permission: "read", patterns: ["visible"], always: [], metadata: {} })
+      return { title: "Permitted", output: "ok", metadata: {} }
+    })
     const deniedExecute = vi.fn(async () => {
       throw new Isolation.DeniedError("write", "blocked", "/outside")
     })
     const hiddenBashExecute = vi.fn(async () => ({ title: "", output: "unsafe", metadata: {} }))
+    const isolationHiddenExecute = vi.fn(async () => ({ title: "", output: "isolation bypass", metadata: {} }))
+    const configHiddenExecute = vi.fn(async () => ({ title: "", output: "config bypass", metadata: {} }))
+    const permissionHiddenExecute = vi.fn(async () => ({ title: "", output: "permission bypass", metadata: {} }))
+    const taskExecute = vi.fn(async () => ({ title: "", output: "task bypass", metadata: {} }))
+    const mcpExecute = vi.fn(async () => ({ content: [{ type: "text", text: "mcp bypass" }] }))
+    const isolationDisabledIDs = ["edit", "write", "apply_patch", "multiedit", "webfetch", "websearch", "codesearch"]
     vi.spyOn(ToolRegistry, "tools").mockResolvedValue([
-      { id: "batch", ...(await BatchTool.init()) },
+      {
+        id: "batch",
+        ...batch,
+        execute: async (args: any, ctx: any) => {
+          batchDispatcherIDs = [...ctx.extra.toolDispatcher.ids]
+          return batch.execute(args, ctx)
+        },
+      },
+      {
+        id: "permitted",
+        description: "permitted child",
+        parameters: z.object({}),
+        execute: permittedExecute,
+      },
       {
         id: "denied",
         description: "always denied",
@@ -352,29 +490,70 @@ describe("session.prompt-tools", () => {
         parameters: z.object({ command: z.string() }),
         execute: hiddenBashExecute,
       },
+      ...isolationDisabledIDs.map((id) => ({
+        id,
+        description: "hidden by isolation policy",
+        parameters: z.object({}),
+        execute: isolationHiddenExecute,
+      })),
+      {
+        id: "config_hidden",
+        description: "disabled by turn config",
+        parameters: z.object({}),
+        execute: configHiddenExecute,
+      },
+      {
+        id: "permission_hidden",
+        description: "disabled by permission ruleset",
+        parameters: z.object({}),
+        execute: permissionHiddenExecute,
+      },
+      {
+        id: "task",
+        description: "task stays direct-only",
+        parameters: z.object({}),
+        execute: taskExecute,
+      },
     ] as any)
-    vi.spyOn(MCP, "tools").mockResolvedValue({})
+    vi.spyOn(MCP, "tools").mockResolvedValue({
+      remote_echo: {
+        description: "MCP stays direct-only",
+        inputSchema: z.object({}),
+        execute: mcpExecute,
+      } as any,
+    })
     vi.spyOn(Session, "updatePart").mockImplementation(async (part) => part as any)
     const ask = vi.spyOn(Permission, "ask").mockResolvedValue(undefined)
-    vi.spyOn(Plugin, "trigger").mockImplementation(
-      (async (_name: string, _input: unknown, output: unknown) => output) as any,
-    )
-    vi.spyOn(LifecycleHooks, "runForWorkspace").mockResolvedValue({ ok: true, blocked: false, outputs: [] })
+    vi.spyOn(Plugin, "trigger").mockImplementation((async (name: string, hookInput: any, output: unknown) => {
+      if (name === "tool.execute.before") events.push({ tool: hookInput.tool, phase: "plugin:before" })
+      if (name === "tool.execute.after") events.push({ tool: hookInput.tool, phase: "plugin:after" })
+      return output
+    }) as any)
+    vi.spyOn(LifecycleHooks, "runForWorkspace").mockImplementation(async ({ event, tool }) => {
+      events.push({ tool: tool!, phase: event! })
+      return { ok: true, blocked: false, outputs: [] }
+    })
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const tools = await resolveTools({
-          agent: { name: "build", permission: [{ permission: "*", pattern: "*", action: "allow" }] } as any,
+          agent: {
+            name: "build",
+            permission: [
+              { permission: "*", pattern: "*", action: "allow" },
+              { permission: "permission_hidden", pattern: "*", action: "deny" },
+            ],
+          } as any,
           session: { id: "ses_batch_policy", permission: [] } as any,
           model: {
             providerID: "test-provider",
             api: { id: "test-model", npm: "@ai-sdk/openai-compatible" },
           } as any,
-          tools: {},
+          tools: { config_hidden: false },
           bypassAgentCheck: false,
           messages: [],
-          isolation: { mode: "read-only", network: true, protected: [] },
+          isolation: { mode: "read-only", network: false, protected: [] },
           processor: {
             message: { id: "msg_batch_policy" },
             partFromToolCall: () => undefined,
@@ -382,22 +561,60 @@ describe("session.prompt-tools", () => {
         })
 
         expect(tools.bash).toBeUndefined()
+        for (const id of isolationDisabledIDs) expect(tools[id]).toBeUndefined()
+        expect(tools.config_hidden).toBeUndefined()
+        expect(tools.permission_hidden).toBeUndefined()
+        expect(tools.task).toBeDefined()
+        expect(tools.remote_echo).toBeDefined()
         const result = await (tools.batch.execute as any)(
           {
             tool_calls: [
+              { tool: "permitted", parameters: {} },
               { tool: "denied", parameters: {} },
               { tool: "bash", parameters: { command: "pwd" } },
+              ...isolationDisabledIDs.map((tool) => ({ tool, parameters: {} })),
+              { tool: "config_hidden", parameters: {} },
+              { tool: "permission_hidden", parameters: {} },
+              { tool: "task", parameters: {} },
+              { tool: "remote_echo", parameters: {} },
+              { tool: "batch", parameters: { tool_calls: [{ tool: "permitted", parameters: {} }] } },
             ],
           },
           { toolCallId: "call_batch_policy", abortSignal: new AbortController().signal },
         )
-        expect(result.metadata).toMatchObject({ totalCalls: 2, successful: 0, failed: 2 })
+        expect(result.metadata).toMatchObject({ totalCalls: 15, successful: 1, failed: 14 })
       },
     })
 
+    expect(batchDispatcherIDs).toEqual(["permitted", "denied"])
+    const phases = (tool: string) => events.filter((event) => event.tool === tool).map((event) => event.phase)
+    expect(phases("batch")).toEqual(["plugin:before", "PreToolUse", "plugin:after", "PostToolUse"])
+    expect(phases("permitted")).toEqual(["plugin:before", "PreToolUse", "plugin:after", "PostToolUse"])
+    expect(phases("denied")).toEqual(["plugin:before", "PreToolUse"])
+    for (const hidden of [
+      "bash",
+      ...isolationDisabledIDs,
+      "config_hidden",
+      "permission_hidden",
+      "task",
+      "remote_echo",
+    ]) {
+      expect(phases(hidden)).toEqual([])
+    }
+    expect(permittedExecute).toHaveBeenCalledOnce()
     expect(deniedExecute).toHaveBeenCalledOnce()
     expect(hiddenBashExecute).not.toHaveBeenCalled()
-    expect(ask).not.toHaveBeenCalled()
+    expect(isolationHiddenExecute).not.toHaveBeenCalled()
+    expect(configHiddenExecute).not.toHaveBeenCalled()
+    expect(permissionHiddenExecute).not.toHaveBeenCalled()
+    expect(taskExecute).not.toHaveBeenCalled()
+    expect(mcpExecute).not.toHaveBeenCalled()
+    expect(ask).toHaveBeenCalledTimes(1)
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({ permission: "read", patterns: ["visible"] }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+    expect(ask.mock.calls.some(([request]) => request.permission === "isolation_escalation")).toBe(false)
   })
 
   test("does not expose the Batch dispatcher capability to ordinary tools", async () => {

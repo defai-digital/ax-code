@@ -32,18 +32,28 @@
 
 ## Phase 3 — verification and delivery
 
-- [x] Run targeted tests and core typecheck (7 files, 109 tests).
-- [x] Run deterministic, script, and structure gates (845 files / 7,894 passed / 2 skipped; 113 script tests).
+- [x] Run targeted tests and core typecheck (7 files, 111 tests in the final acceptance audit).
+- [x] Run deterministic, script, and structure gates (845 files / 7,896 passed / 2 skipped; 113 script tests).
 - [x] Re-run multi-model review over the implementation diff.
 - [x] Commit only task-owned files and push the current branch.
 - Exit: all relevant gates pass, review findings are resolved or documented, and the remote branch contains the
   reviewed commit.
 
+## Phase 4 — PRD completion audit
+
+- [x] Trace every functional requirement to production code and named regression tests.
+- [x] Prove direct attachment mapping, lifecycle parity, and interactive isolation escalation.
+- [x] Prove Batch final-visible exclusions, child permissions/hooks, and fail-closed isolation.
+- [x] Prove MCP retains permission/plugin behavior while adding lifecycle hooks.
+- [x] Prove manifest redaction, complete fallback, material-change sensitivity, and legacy replay compatibility.
+- [x] Re-run the seven focused files, core typecheck, and full deterministic suite.
+- Exit: the PRD may move from Active to Completed only after repository gates pass and the acceptance commit is
+  present on the remote branch.
+
 ## Deferred follow-ups
 
 - Optional encrypted/full provider-request capture under an explicit retention policy.
 - Benchmark fingerprint CPU and memory cost for unusually large prompts and tool catalogs.
-- Add a legacy `llm.request` parser regression beyond the additive event-schema coverage.
 - Consider explicit cancellation/quiescence for in-flight MCP connection and discovery work beyond the current
   disposed-state and client-identity guards.
 - Graduation criteria for the experimental browser agent.

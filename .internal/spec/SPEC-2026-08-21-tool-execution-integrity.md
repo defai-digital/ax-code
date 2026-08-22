@@ -178,6 +178,22 @@ The pre-commit hook subsequently refreshed `models-snapshot.json` from the repos
 source, as required by repository policy. That generated twenty-fifth file passed the focused provider/model subset
 shown above.
 
+Final PRD acceptance audit on 2026-08-22:
+
+| Gate                           | Result                                           |
+| ------------------------------ | ------------------------------------------------ |
+| Core typecheck                 | Passed                                           |
+| Seven focused test files       | 111 passed                                       |
+| Deterministic suite            | 845/845 files passed; 7,896 passed and 2 skipped |
+| Root script suite              | 21/21 files passed; 113 passed                   |
+| Repository structure           | Passed                                           |
+| Formatting and diff whitespace | Passed                                           |
+
+The added acceptance coverage proves direct attachment mapping and interactive escalation, successful Batch child
+permissions and lifecycle, final-visible Batch exclusions, MCP permission preservation, provider-option and tool-
+argument redaction, complete material-change sensitivity, fail-closed manifest fallback, and legacy additive replay
+compatibility. These assertions close the remaining evidence gaps without changing the shipped runtime behavior.
+
 ## 7. Rollout
 
 - P0 may ship independently and has no user-visible API change.

@@ -1,7 +1,8 @@
 # PRD: Tool Execution Integrity and Request Provenance
 
-**Status:** Active
+**Status:** Completed
 **Date:** 2026-08-21
+**Completion audit:** 2026-08-22
 **Owner:** AX Code runtime
 **Related:** ADR-060, SPEC-2026-08-21-tool-execution-integrity
 
@@ -110,3 +111,31 @@ format.
 The work ships in three independently testable phases. P0 changes ownership of caches, P1 changes the internal call
 path while retaining user-facing contracts, and P2 adds evidence fields and scoped registration. No database
 migration is required because replay payloads are JSON and new fields are additive. Rollback is phase-local.
+
+## Completion audit
+
+The final audit traced every requirement to implementation and executable acceptance evidence:
+
+| Requirement                 | Implementation evidence                                                                                                                                       | Acceptance evidence                                                                                                                                                                                                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-1 instance-scoped caches | `tool/registry.ts`, `mcp/impl.ts`, and `session/prompt-tools.ts` own caches, in-flight work, subscriptions, generations, and queues through `Instance.state`. | Two-live-instance registry, MCP discovery/disposal, and transformed-schema tests; MCP shutdown, stale callback, queue-admission, and schema-identity regressions.                                                                                                                   |
+| FR-2 canonical invocation   | `session/prompt-tools.ts` builds the final-visible dispatcher and shared lifecycle boundary; `tool/batch.ts` consumes only that dispatcher.                   | Direct lifecycle/attachment/escalation test; Batch visibility, permissions, hooks, attachment-ID, and fail-closed isolation tests; MCP permission/plugin/lifecycle test.                                                                                                            |
+| FR-3 scoped registration    | `tool/registry.ts` stores tokenized registration layers and returns an instance-bound idempotent disposer.                                                    | Stacked, out-of-order, cross-instance-owner, and built-in restoration tests.                                                                                                                                                                                                        |
+| FR-4 request manifest       | `session/request-provenance.ts` builds the bounded pre-adapter manifest used by `session/llm-impl.ts`; `replay/event.ts` accepts additive evidence fields.    | Determinism and material-change tests cover system, messages, tool descriptions/schemas, provider/model identity, common options, and provider options; raw prompt, tool argument, and credential values are absent; fallback exposes no partial hashes; legacy events still parse. |
+
+The two-instance tests directly encode the defects present in parent commit `f6bc63ab7`: its registry cache and MCP
+cache/promise/generation/subscription/queue were module-global, so the tests' distinct A/B values and post-A-disposal
+B assertions could not hold. They pass against the instance-owned implementation.
+
+Final acceptance results:
+
+| Gate                           | Result                                           |
+| ------------------------------ | ------------------------------------------------ |
+| Core typecheck                 | Passed                                           |
+| Seven focused test files       | 111 passed                                       |
+| Full deterministic suite       | 845/845 files passed; 7,896 passed and 2 skipped |
+| Root script suite              | 21/21 files passed; 113 passed                   |
+| Repository structure           | Passed                                           |
+| Formatting and diff whitespace | Passed                                           |
+
+Remote delivery proof is recorded in the phase plan and acceptance commit.
