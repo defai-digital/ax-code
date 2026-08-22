@@ -4,6 +4,54 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.7.7] - 2026-08-21
+
+### Added
+
+- Harden scheduled-task engine with run history and safe concurrency.
+- Configurable reasoning scale and per-member timeout overrides.
+
+### Changed
+
+- Restore the exact safety-contract wording in the README.
+- Assert the auth lock poll keeps its timer referenced.
+- Seed the scoped cache key and enable the LSP cache flag.
+- Distinguish integration from derivation in provenance.
+- Reposition README and docs around execution evidence.
+- Remove deprecated legacy entry point.
+- Rename ax-codeintel/ax-codereason to ax-code-intel/ax-code-reason.
+- Drop dead createOpencode aliases from v1 internals.
+- Note OpenCode provenance in verbatim-derived files.
+- Correct action usage path in README.
+- Extract src/debug-engine into reusable @ax-code/ax-codereason package.
+- Remove opencode leftovers and harden contracts.
+- Clean opencode leftovers and harden contracts.
+- Extract src/lsp into reusable @ax-code/ax-codeintel package.
+- Remove dead opencode leftovers and add package tests.
+- Keep package publishable ahead of planned extraction.
+- Mark package private and add path-containment tests.
+- Add v7.7.6 CLI/TUI release notes.
+- Move pure bash/search unit tests into deterministic CI.
+
+### Fixed
+
+- Harden protocol handling and package gates.
+- Share one file-watcher subscriber and refresh self-scan baseline.
+- Keep sleep timers referenced so awaited lock polls settle.
+- Correct LSP cache key scoping and sync capability negotiation.
+- Complete AxCodeClient codegen migration.
+- Regenerate client class under the AxCodeClient name.
+- Lazy shard rollout flag, abortable service tasks, and reason log routing.
+- Harden extracted engine integration.
+- Cover extracted engine tables in drizzle schema glob.
+- Correct workflow run-row transition, coalesce timestamp, and once-skip zombie.
+- Harden release metadata derivation.
+- Harden terminal teardown with stdin drain and protocol-first reset.
+- Drop unreleased workspace importers from lockfile.
+- Correct bash-flake root cause record and relax ax-engine readiness races.
+- Preserve stack and cause in formatTuiLogError.
+- Deflake LSP client handshake and tighten test groups.
+
 ## [7.7.6] - 2026-08-20
 
 ### Added
