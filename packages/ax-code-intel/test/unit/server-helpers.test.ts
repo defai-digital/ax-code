@@ -2,9 +2,9 @@ import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { gzipSync } from "zlib"
-import { Global } from "../../src/global"
-import { Instance } from "../../src/project/instance"
-import { tmpdir } from "../fixture/fixture"
+// The harness import configures the package host port; it must stay ahead of
+// the src imports below (ES modules evaluate in import order).
+import { Global, Instance, tmpdir } from "../harness"
 import {
   NearestRoot,
   bunServer,
@@ -26,7 +26,7 @@ import {
   venvPaths,
   venvPython,
   pathExists,
-} from "@ax-code/ax-code-intel/server-helpers"
+} from "../../src/server-helpers"
 import {
   PINNED_CHECKSUM_LSP_RELEASES,
   PINNED_DIRECT_LSP_RELEASES,
@@ -55,10 +55,10 @@ import {
   tinymistAsset,
   zlsAsset,
   zlsReleaseForZig,
-} from "@ax-code/ax-code-intel/server-releases"
-import { codeIntelHost } from "@ax-code/ax-code-intel/host"
-import { Filesystem } from "@ax-code/ax-code-intel/internal/filesystem"
-import { Process } from "@ax-code/ax-code-intel/internal/process"
+} from "../../src/server-releases"
+import { codeIntelHost } from "../../src/host"
+import { Filesystem } from "../../src/internal/filesystem"
+import { Process } from "../../src/internal/process"
 
 describe("lsp server helpers", () => {
   test("pathExists returns false only for missing paths", async () => {

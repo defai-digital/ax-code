@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, test, beforeEach, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
-import { pathToFileURL } from "node:url"
-import { tmpdir } from "../fixture/fixture"
-import { LSPClient } from "@ax-code/ax-code-intel/client"
-import { LSPServer } from "@ax-code/ax-code-intel/server"
-import { Instance } from "../../src/project/instance"
-import { Log } from "../../src/util/log"
-import { Filesystem } from "@ax-code/ax-code-intel/internal/filesystem"
+import { spawn } from "node:child_process"
+import { fileURLToPath, pathToFileURL } from "node:url"
+// The harness import configures the package host port; it must stay ahead of
+// the src imports below (ES modules evaluate in import order).
+import { Instance, Log, tmpdir } from "../harness"
+import { LSPClient } from "../../src/client"
+import { LSPServer } from "../../src/server"
+import { Filesystem } from "../../src/internal/filesystem"
 
 // Minimal fake LSP server that speaks JSON-RPC over stdio
 function spawnFakeServer(env?: Record<string, string>) {
-  const { spawn } = require("child_process")
-  const serverPath = path.join(__dirname, "../fixture/lsp/fake-lsp-server.js")
+  const serverPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "../fixture/fake-lsp-server.js")
   const proc = spawn(process.execPath, [serverPath], {
     stdio: "pipe",
     env: {
