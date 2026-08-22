@@ -10,7 +10,8 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsgo --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@ax-code/util": "workspace:*",
@@ -30,6 +31,7 @@
     "@types/node": "catalog:",
     "@types/which": "3.0.4",
     "@typescript/native-preview": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "^4.1.9"
   }
 }

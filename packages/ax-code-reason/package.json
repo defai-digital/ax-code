@@ -10,7 +10,8 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsgo --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@ax-code/ax-code-intel": "workspace:*",
@@ -25,6 +26,7 @@
     "@types/cross-spawn": "6.0.6",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "^4.1.9"
   }
 }
