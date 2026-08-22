@@ -54,6 +54,38 @@ describe("tool.registry", () => {
     }
   })
 
+  test("does not reuse initialized tools when same-named agent permissions change", async () => {
+    await using tmp = await tmpdir()
+    const model = { providerID: ProviderID.make("test"), modelID: ModelID.make("agent-sensitive-model") }
+    const agent = (action: "allow" | "deny") =>
+      ({
+        name: "same-agent",
+        mode: "primary",
+        options: {},
+        permission: [{ permission: "task", pattern: "*", action }],
+      }) as any
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await ToolRegistry.register({
+          id: "agent-sensitive",
+          init: async (ctx) => ({
+            description: `task:${ctx?.agent?.permission.at(-1)?.action}`,
+            parameters: z.object({}),
+            execute: async () => ({ title: "", output: "", metadata: {} }),
+          }),
+        })
+
+        const description = async (action: "allow" | "deny") =>
+          (await ToolRegistry.tools(model, agent(action))).find((tool) => tool.id === "agent-sensitive")?.description
+
+        expect(await description("allow")).toBe("task:allow")
+        expect(await description("deny")).toBe("task:deny")
+      },
+    })
+  })
+
   test("keeps initialized tool caches isolated between live instances", async () => {
     const project = (tool: string) =>
       tmpdir({

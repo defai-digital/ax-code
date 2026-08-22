@@ -79,6 +79,7 @@ import { DebugApplyVerificationTool } from "./debug_apply_verification"
 import { DebugRepairFromEnvelopeTool } from "./debug_repair_from_envelope"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
+import { createHash } from "node:crypto"
 import { Instance } from "@/project/instance"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import AX_ENGINE_BASH_DESCRIPTION from "./bash-ax-engine.txt"
@@ -191,27 +192,32 @@ export namespace ToolRegistry {
     agent?: Agent.Info
     cfg: ToolConfig
   }) {
-    // Hash the whole `experimental` map rather than pinning specific
-    // flags. The previous hand-rolled list missed any new experimental
-    // tool flag added to `all()` and silently served stale cache
-    // entries when the flag flipped at runtime. Including
-    // `JSON.stringify(experimental)` makes the key self-maintaining.
-    const experimental = JSON.stringify(input.cfg.experimental ?? {})
-    return [
-      input.agent?.name ?? "",
-      input.model.providerID,
-      input.model.modelID,
-      Flag.AX_CODE_CLIENT,
-      Flag.AX_CODE_ENABLE_QUESTION_TOOL,
-      Flag.AX_CODE_ENABLE_EXA,
-      Flag.AX_CODE_EXPERIMENTAL_LSP_TOOL,
-      Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE,
-      Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
-      Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE,
-      Flag.AX_CODE_EXPERIMENTAL_BROWSER_AGENT,
-      input.cfg.provider?.[AX_ENGINE_PROVIDER_ID]?.options?.toolProfile ?? "core",
-      experimental,
-    ].join(":")
+    // Tool initializers receive the full agent and may depend on permissions,
+    // options, or other fields. Keying only by agent name reused stale Skill,
+    // Task, truncation, and custom-tool definitions after same-named agent
+    // policy changes. Keep the whole initializer input in a JSON tuple, which
+    // also avoids delimiter collisions between arbitrary string fields.
+    return createHash("sha256")
+      .update(
+        JSON.stringify([
+          input.agent ?? null,
+          input.model.providerID,
+          input.model.modelID,
+          Flag.AX_CODE_CLIENT,
+          Flag.AX_CODE_ENABLE_QUESTION_TOOL,
+          Flag.AX_CODE_ENABLE_EXA,
+          Flag.AX_CODE_EXPERIMENTAL_LSP_TOOL,
+          Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE,
+          Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+          Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE,
+          Flag.AX_CODE_EXPERIMENTAL_BROWSER_AGENT,
+          input.cfg.provider?.[AX_ENGINE_PROVIDER_ID]?.options?.toolProfile ?? "core",
+          // Include the whole map so future experimental tool flags cannot silently
+          // reuse an entry produced before a config change.
+          input.cfg.experimental ?? {},
+        ]),
+      )
+      .digest("base64url")
   }
 
   async function all(custom: Tool.Info[], cfg?: ToolConfig, providerID?: ProviderID): Promise<Tool.Info[]> {
