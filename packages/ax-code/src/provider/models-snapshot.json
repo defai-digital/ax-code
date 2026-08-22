@@ -165793,8 +165793,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1048576,
-          "output": 393216
+          "context": 1024000,
+          "output": 384000
         }
       },
       "deepseek/deepseek-v3.2": {
@@ -165830,7 +165830,7 @@
         "open_weights": true,
         "limit": {
           "context": 163840,
-          "output": 65536
+          "output": 163840
         }
       },
       "deepseek/deepseek-chat-v3.1": {
@@ -165864,8 +165864,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 163840,
-          "output": 32768
+          "context": 161000,
+          "output": 161000
         }
       },
       "deepseek/deepseek-r1-0528": {
@@ -172630,7 +172630,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 65536
         }
       },
       "qwen/qwen3-coder-plus": {
@@ -175653,8 +175653,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 198000,
-          "output": 32768
+          "context": 200000,
+          "output": 128000
         }
       },
       "minimax/minimax-m2.1": {

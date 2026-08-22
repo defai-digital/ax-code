@@ -1,5 +1,6 @@
 import { type NodeSQLiteDatabase } from "drizzle-orm/node-sqlite"
 import { migrate } from "./migrate-journal"
+import { MigrationLock } from "./migrate-lock"
 import { type SQLiteTransaction } from "drizzle-orm/sqlite-core"
 import type { StatementResultingChanges } from "node:sqlite"
 import type { DrizzleTypeError } from "drizzle-orm"
@@ -145,7 +146,16 @@ export namespace Database {
         )
       }
       const journal = Flag.AX_CODE_SKIP_MIGRATIONS ? entries.map((item) => ({ ...item, sql: "select 1;" })) : entries
-      migrate(db, journal)
+      // Serialize against sibling processes booting at the same time: drizzle
+      // reads the journal before its transaction, so without a cross-process
+      // lock two processes can both run the same non-idempotent DDL and the
+      // loser crashes on "table already exists" (see migrate-lock.ts).
+      const release = MigrationLock.acquire(Path)
+      try {
+        migrate(db, journal)
+      } finally {
+        release()
+      }
     }
 
     return db
