@@ -13,8 +13,8 @@ for, and what it deliberately does not claim.
 The root [README](../README.md) is the shortest path to install and launch AX Code. Use this hub when you need to
 configure a workflow, understand a runtime boundary, or integrate AX Code with another system.
 
-`module-quality-audit/`, `planning/`, and `prd/` under `docs/` are internal process records kept in Git for
-traceability. They are not product documentation; the public pages are the ones linked below.
+Internal process records (PRDs, planning trees, audit working files) live under `.internal/`, not in this public
+tree — see "Documentation boundaries" below. The public pages are the ones linked here.
 
 ## Choose by task
 

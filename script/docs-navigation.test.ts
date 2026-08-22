@@ -5,10 +5,11 @@ import path from "node:path"
 const repoRoot = path.resolve(import.meta.dirname, "..")
 const docsRoot = path.join(repoRoot, "docs")
 
-// Working / planning trees under docs/ that are not the public product hub
-// (docs/README.md). Exclude them from link reachability and lifecycle-metadata
-// gates so large audit corpora do not block CI.
-const PUBLIC_DOCS_EXCLUDED_TOP_LEVEL = new Set(["module-quality-audit", "planning", "prd"])
+// docs/ is public-only: the former working trees (module-quality-audit,
+// planning, prd) moved to .internal/ (see docs/README.md "Documentation
+// boundaries"). No top-level exclusions remain; the set is kept so the
+// walk/skip machinery stays available if a non-public tree ever returns.
+const PUBLIC_DOCS_EXCLUDED_TOP_LEVEL = new Set<string>()
 
 function isPublicDocsPage(file: string): boolean {
   const rel = path.relative(docsRoot, file).split(path.sep).join("/")
