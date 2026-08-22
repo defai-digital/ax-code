@@ -6,6 +6,7 @@ import { Instance } from "../../src/project/instance"
 import { ToolRegistry } from "../../src/tool/registry"
 import { ComputerSnapshotTool } from "../../src/tool/computer/computer_snapshot"
 import { ComputerActionTool } from "../../src/tool/computer/computer_action"
+import { ComputerWatchTool } from "../../src/tool/computer/computer_watch"
 import { checkVisualRouting } from "../../src/visual/router"
 import { tmpdir } from "../fixture/fixture"
 import { FakeComputerProvider } from "./computer-fixture"
@@ -67,6 +68,7 @@ describe("computer tools gating", () => {
         const ids = await ToolRegistry.ids()
         expect(ids).not.toContain("computer_snapshot")
         expect(ids).not.toContain("computer_action")
+        expect(ids).not.toContain("computer_watch")
         expect(await Computer.configured()).toBe(false)
         await expect(Computer.observe({ desktop: true })).rejects.toThrow(/not configured/)
       },
@@ -81,6 +83,7 @@ describe("computer tools gating", () => {
         const ids = await ToolRegistry.ids()
         expect(ids).toContain("computer_snapshot")
         expect(ids).toContain("computer_action")
+        expect(ids).toContain("computer_watch")
         // lazy: status must not construct the backend provider
         expect(await Computer.status()).toMatchObject({ configured: true, provider: "cua", activeProvider: undefined })
       },
@@ -322,6 +325,54 @@ describe("computer_action tool", () => {
       const entries = await Computer.trajectory()
       expect(entries).toHaveLength(20)
       expect(entries.at(-1)).toMatchObject({ summary: "keypress a", ok: true })
+    })
+  })
+})
+
+describe("computer_watch tool", () => {
+  test("reports a change timeline and the final observation", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async ({ provider, asks }) => {
+      let calls = 0
+      const original = provider.observe.bind(provider)
+      vi.spyOn(provider, "observe").mockImplementation(async (scope) => {
+        calls++
+        const observation = await original(scope)
+        if (calls >= 2) {
+          observation.elements = [...observation.elements, { id: `extra-${calls}`, role: "button", name: "New" }]
+        }
+        return observation
+      })
+
+      const tool = await ComputerWatchTool.init()
+      const result = await tool.execute({ durationMs: 600, intervalMs: 200, includeScreenshot: false }, makeCtx(asks))
+
+      expect(asks[0]).toMatchObject({ permission: "computer", patterns: ["watch:desktop"] })
+      expect(result.metadata.changes).toBeGreaterThan(0)
+      expect(result.output).toContain("Watched desktop")
+      expect(result.output).toContain("elements 2 → 3")
+      expect(result.output).toContain("Final observation:")
+      expect(provider.scopes.length).toBeGreaterThanOrEqual(2)
+    })
+  })
+
+  test("no-change watch reports a clean timeline", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async () => {
+      const tool = await ComputerWatchTool.init()
+      const result = await tool.execute({ durationMs: 500, intervalMs: 200, includeScreenshot: false }, makeCtx([]))
+
+      expect(result.metadata.changes).toBe(0)
+      expect(result.output).toContain("No changes detected.")
+    })
+  })
+
+  test("aborted watch returns the partial result", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async () => {
+      const tool = await ComputerWatchTool.init()
+      const ctx = { ...makeCtx([]), abort: AbortSignal.abort() }
+      const result = await tool.execute({ durationMs: 5000, intervalMs: 200, includeScreenshot: false }, ctx)
+
+      expect(result.metadata.aborted).toBe(true)
+      expect(result.metadata.polls).toBe(1)
     })
   })
 })
