@@ -17,7 +17,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, test } from "vitest"
 import { CuaProvider } from "../../src/providers/cua"
-import { AXNativeProvider } from "../../src/providers/axnative"
+import { AXNativeProvider, defaultAxnativeCommand } from "../../src/providers/axnative"
 import type { ComputerUseProvider } from "../../src/provider"
 import { UpstreamOcuReferenceProvider } from "../helpers/upstream-ocu"
 import { compareAbRuns, formatAbReport, runAbSuite, type AbSuiteRunResult } from "./suite"
@@ -26,6 +26,35 @@ const live = process.env.AX_COMPUTER_LIVE === "1"
 const liveApp = process.env.AX_COMPUTER_LIVE_APP ?? "TextEdit"
 
 const REPORT_PATH = fileURLToPath(new URL("./last-report.json", import.meta.url))
+
+/**
+ * Best-effort backend version probe: `<command> version`, falling back to
+ * `--version` (cua-driver only supports the flag). Never throws — provenance
+ * is informational and must not block a run.
+ */
+async function probeBackendVersion(command: string): Promise<string | undefined> {
+  const { execFile } = await import("node:child_process")
+  for (const flag of ["version", "--version"]) {
+    try {
+      const out = await new Promise<string>((resolve, reject) => {
+        execFile(command, [flag], { timeout: 10_000 }, (error, stdout, stderr) =>
+          error ? reject(error) : resolve((stdout || stderr).trim()),
+        )
+      })
+      const firstLine = out.split("\n")[0]?.trim()
+      if (firstLine) return firstLine
+    } catch {
+      // try the next flag shape
+    }
+  }
+  return undefined
+}
+
+/** provenance for one arm: the resolved command plus its reported version */
+async function armProvenance(command: string | undefined, fallback: string) {
+  const resolved = command ?? fallback
+  return { command: resolved, version: await probeBackendVersion(resolved) }
+}
 
 /**
  * Best-effort restore between providers: observe TextEdit to load a
@@ -59,7 +88,7 @@ describe.skipIf(!live)("live A/B: ocu vs cua on TextEdit", () => {
   test("AB-001..AB-006 run on both providers; report written to last-report.json", { timeout: 240_000 }, async () => {
     const ocuRun: AbSuiteRunResult = await runAbSuite(
       async () => new UpstreamOcuReferenceProvider({ command: process.env.AX_COMPUTER_OCU_COMMAND }),
-      { app: liveApp },
+      { app: liveApp, provenance: await armProvenance(process.env.AX_COMPUTER_OCU_COMMAND, "open-computer-use") },
     )
 
     // restore TextEdit between providers so the cua run starts from a
@@ -82,7 +111,7 @@ describe.skipIf(!live)("live A/B: ocu vs cua on TextEdit", () => {
 
     const cuaRun: AbSuiteRunResult = await runAbSuite(
       async () => new CuaProvider({ command: process.env.AX_COMPUTER_CUA_COMMAND }),
-      { app: liveApp },
+      { app: liveApp, provenance: await armProvenance(process.env.AX_COMPUTER_CUA_COMMAND, "cua-driver") },
     )
 
     const report = compareAbRuns(ocuRun, cuaRun)
@@ -130,7 +159,7 @@ describe.skipIf(!live)("live A/B: ocu vs axnative on TextEdit", () => {
 
     const axnativeRun: AbSuiteRunResult = await runAbSuite(
       async () => new AXNativeProvider({ command: process.env.AX_COMPUTER_AXNATIVE_COMMAND }),
-      { app: liveApp },
+      { app: liveApp, provenance: await armProvenance(process.env.AX_COMPUTER_AXNATIVE_COMMAND, defaultAxnativeCommand()) },
     )
 
     const report = compareAbRuns(ocuRun, axnativeRun)

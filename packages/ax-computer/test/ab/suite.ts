@@ -51,6 +51,12 @@ export interface AbSuiteOptions {
   app?: string
   /** typed string used by AB-004 — short, deterministic, easy to spot in logs */
   typedText?: string
+  /**
+   * Backend provenance recorded into the run result and comparison report:
+   * the exact command spawned and its reported version, so a historical
+   * report can be traced back to the binary that produced it.
+   */
+  provenance?: { command?: string; version?: string }
 }
 
 /** Fixed, deterministic typed marker for AB-004. Plain ASCII so cua's
@@ -162,6 +168,8 @@ export interface AbSuiteRunResult {
   cases: AbCaseResult[]
   /** wall-clock latency for the entire suite, not the sum of per-task latencies */
   totalLatencyMs: number
+  /** backend command/version that produced this run, when the caller supplied it */
+  provenance?: { command?: string; version?: string }
 }
 
 /**
@@ -225,6 +233,7 @@ export async function runAbSuite(
     provider: provider.name,
     cases,
     totalLatencyMs: Date.now() - started,
+    provenance: options.provenance,
   }
 }
 
@@ -241,8 +250,20 @@ export interface AbComparisonRow {
 
 export interface AbComparisonReport {
   generatedAt: string
-  primary: { name: string; passed: number; failed: number; totalLatencyMs: number }
-  secondary: { name: string; passed: number; failed: number; totalLatencyMs: number }
+  primary: {
+    name: string
+    passed: number
+    failed: number
+    totalLatencyMs: number
+    provenance?: { command?: string; version?: string }
+  }
+  secondary: {
+    name: string
+    passed: number
+    failed: number
+    totalLatencyMs: number
+    provenance?: { command?: string; version?: string }
+  }
   rows: AbComparisonRow[]
   /** rows where the primary refused but the secondary succeeded, or vice versa — high-signal disagreements */
   discrepancies: { id: AbTaskId; name: string; winner: "primary" | "secondary" }[]
@@ -281,12 +302,14 @@ export function compareAbRuns(primary: AbSuiteRunResult, secondary: AbSuiteRunRe
       passed: passed(primary),
       failed: failed(primary),
       totalLatencyMs: primary.totalLatencyMs,
+      provenance: primary.provenance,
     },
     secondary: {
       name: secondary.provider,
       passed: passed(secondary),
       failed: failed(secondary),
       totalLatencyMs: secondary.totalLatencyMs,
+      provenance: secondary.provenance,
     },
     rows,
     discrepancies,
@@ -305,6 +328,13 @@ export function formatAbReport(report: AbComparisonReport): string {
   lines.push(sep)
   lines.push(`A/B comparison — primary=${report.primary.name} secondary=${report.secondary.name}`)
   lines.push(`generatedAt: ${report.generatedAt}`)
+  for (const arm of [report.primary, report.secondary]) {
+    if (arm.provenance?.command || arm.provenance?.version) {
+      lines.push(
+        `${arm.name} backend: ${arm.provenance.command ?? "unknown command"}${arm.provenance.version ? ` (version ${arm.provenance.version})` : ""}`,
+      )
+    }
+  }
   lines.push(sep)
   lines.push(header)
   lines.push(sep)

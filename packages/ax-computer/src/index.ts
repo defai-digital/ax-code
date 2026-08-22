@@ -21,3 +21,9 @@ export type { OcuProtocolProviderConfig } from "./providers/ocu-protocol"
 export { AXNativeProvider, defaultAxnativeCommand } from "./providers/axnative"
 export { CuaProvider, type CuaProviderConfig, type CuaSdkDriver, type CuaSdkToolResult } from "./providers/cua"
 export { probeProvider, type ProbeReport } from "./probe"
+export {
+  OCU_DIALECT_REQUIRED_TOOLS,
+  checkDialectContract,
+  probeDialectContract,
+  type DialectContractReport,
+} from "./protocol-contract"
