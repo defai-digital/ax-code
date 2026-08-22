@@ -7,6 +7,7 @@ export const APPROVED_TRACKED_INTERNAL_FILES = [
   ".internal/adr/ADR-060-instance-scoped-tool-execution.md",
   ".internal/prd/PRD-2026-08-20-ax-code-tui.md",
   ".internal/prd/PRD-2026-08-21-tool-execution-integrity.md",
+  ".internal/prd/PRD-2026-08-22-computer-use-integration.md",
   ".internal/reports/planning/ax-code-tui/REFERENCE-REVIEW.md",
   ".internal/reports/planning/ax-code-tui/TECH-SPEC.md",
   ".internal/reports/planning/ax-code-tui/reviews/minimax-m3-review.md",
