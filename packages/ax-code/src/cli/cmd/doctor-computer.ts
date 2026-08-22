@@ -1,5 +1,5 @@
 import fs from "node:fs"
-import { AXNativeProvider, CuaProvider, OcuProvider, probeProvider } from "@ax-code/computer"
+import { AXNativeProvider, CuaProvider, probeProvider } from "@ax-code/computer"
 import type { ComputerUseProvider, ProbeReport } from "@ax-code/computer"
 import { Computer } from "@/computer/computer"
 import type { Config } from "@/config/config"
@@ -8,7 +8,6 @@ import type { DoctorCheck } from "./doctor-health"
 
 const INSTALL_HINTS = {
   cua: "cua-driver",
-  ocu: "open-computer-use",
   axnative: "ax-computer-driver (build with `pnpm --dir packages/ax-computer run build:native`)",
 } as const
 
@@ -31,9 +30,8 @@ export async function getComputerUseCheck(
   }
 
   const platform = input.platform ?? process.platform
-  if ((resolved.provider === "ocu" || resolved.provider === "axnative") && platform !== "darwin") {
-    const label = resolved.provider === "ocu" ? "OCU" : "ax-computer-driver"
-    return { name, status: "warn", detail: `${label} is macOS-only; use provider cua on this platform` }
+  if (resolved.provider === "axnative" && platform !== "darwin") {
+    return { name, status: "warn", detail: "ax-computer-driver is macOS-only; use provider cua on this platform" }
   }
 
   const command = `${resolved.command} ${resolved.args.join(" ")}`
@@ -55,12 +53,7 @@ export async function getComputerUseCheck(
 
   try {
     const options = { command: resolved.command, args: resolved.args }
-    const provider =
-      resolved.provider === "cua"
-        ? new CuaProvider(options)
-        : resolved.provider === "ocu"
-          ? new OcuProvider(options)
-          : new AXNativeProvider(options)
+    const provider = resolved.provider === "cua" ? new CuaProvider(options) : new AXNativeProvider(options)
     const report = await probe(provider)
     if (report.ok) {
       let detail = `provider ${resolved.provider} via ${command} — handshake ok in ${report.latencyMs}ms, ${report.apps ?? 0} apps visible`

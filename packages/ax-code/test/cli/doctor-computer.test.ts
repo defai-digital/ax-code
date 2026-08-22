@@ -7,7 +7,7 @@ import { getComputerUseCheck } from "../../src/cli/cmd/doctor-computer"
 // them. Pin them away so the check output is host-independent.
 beforeEach(() => {
   vi.stubEnv("AX_COMPUTER_CUA_COMMAND", undefined)
-  vi.stubEnv("AX_COMPUTER_OCU_COMMAND", undefined)
+  vi.stubEnv("AX_COMPUTER_AXNATIVE_COMMAND", undefined)
 })
 
 afterEach(() => {
@@ -47,12 +47,12 @@ describe("doctor computer use check", () => {
 
   test("probe ok on darwin appends the TCC host-process reminder", async () => {
     const check = await getComputerUseCheck({
-      config: { provider: "ocu" },
+      config: { provider: "axnative", command: "ax-computer-driver" },
       platform: "darwin",
-      probe: probeReturning({ ok: true, provider: "ocu", latencyMs: 30, apps: 3 }),
+      probe: probeReturning({ ok: true, provider: "axnative", latencyMs: 30, apps: 3 }),
     })
     expect(check.status).toBe("ok")
-    expect(check.detail).toContain("provider ocu via open-computer-use mcp")
+    expect(check.detail).toContain("provider axnative via ax-computer-driver mcp")
     expect(check.detail).toContain("Accessibility/Screen Recording")
   })
 
@@ -75,23 +75,11 @@ describe("doctor computer use check", () => {
 
   test("config command override is reflected in the reported command", async () => {
     const check = await getComputerUseCheck({
-      config: { provider: "ocu", command: "/opt/ocu/bin/ocu", args: ["serve"] },
+      config: { provider: "cua", command: "/opt/cua/bin/cua-driver", args: ["serve"] },
       platform: "darwin",
-      probe: probeReturning({ ok: true, provider: "ocu", latencyMs: 5, apps: 1 }),
+      probe: probeReturning({ ok: true, provider: "cua", latencyMs: 5, apps: 1 }),
     })
-    expect(check.detail).toContain("via /opt/ocu/bin/ocu serve")
-  })
-
-  test("ocu on non-darwin → warn, no probe spawned", async () => {
-    const probe = probeReturning({ ok: true })
-    const check = await getComputerUseCheck({
-      config: { provider: "ocu" },
-      platform: "linux",
-      probe,
-    })
-    expect(check.status).toBe("warn")
-    expect(check.detail).toContain("OCU is macOS-only")
-    expect(probe).not.toHaveBeenCalled()
+    expect(check.detail).toContain("via /opt/cua/bin/cua-driver serve")
   })
 
   test("unexpected throw becomes a warn, never a crash", async () => {
