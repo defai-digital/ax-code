@@ -69114,6 +69114,45 @@
           "output": 65536
         }
       },
+      "vertex-openai/grok-4-6": {
+        "id": "vertex-openai/grok-4-6",
+        "name": "Grok 4.6 (Vertex AI (OpenAI-compatible))",
+        "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 500000
+        }
+      },
       "vertex-openai/glm-5": {
         "id": "vertex-openai/glm-5",
         "name": "GLM-5 (Vertex AI (OpenAI-compatible))",
@@ -155718,6 +155757,7 @@
           {
             "type": "effort",
             "values": [
+              "minimal",
               "low",
               "medium",
               "high",
@@ -164509,41 +164549,6 @@
     "name": "Kilo Gateway",
     "doc": "https://kilo.ai",
     "models": {
-      "deepcogito/cogito-v2.1-671b": {
-        "id": "deepcogito/cogito-v2.1-671b",
-        "name": "Deep Cogito: Cogito v2.1 671B",
-        "description": "Reasoning model for deliberate analysis, multi-step problem solving, and tool use",
-        "family": "cogito",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": false,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2025-11-13",
-        "last_updated": "2025-11-13",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 128000,
-          "output": 32768
-        }
-      },
       "tencent/hy-mt2-30b-a3b": {
         "id": "tencent/hy-mt2-30b-a3b",
         "name": "Tencent: Hy-MT2-30B-A3B",
@@ -167098,6 +167103,48 @@
         "temperature": true,
         "release_date": "2026-04-08",
         "last_updated": "2026-07-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        }
+      },
+      "meta/muse-spark-1.2-contributor": {
+        "id": "meta/muse-spark-1.2-contributor",
+        "name": "Meta: Muse Spark 1.2 Contributor",
+        "description": "Muse Spark 1.2 contributor tier is a reasoning model from Meta designed for developers who want to start building at an even lower cost. It’s meaningfully cheaper than Muse Spark...",
+        "family": "muse",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-21",
+        "last_updated": "2026-08-21",
         "modalities": {
           "input": [
             "text",
@@ -174347,7 +174394,7 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 256000,
+          "context": 128000,
           "output": 16384
         }
       },

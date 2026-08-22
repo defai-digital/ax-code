@@ -6,6 +6,7 @@ import { withTimeout } from "./internal/timeout"
 import { isMethodNotFound } from "./envelope-runner"
 import * as LSPPerf from "./perf"
 import type { ClientOptions, ClientSelection } from "./selection"
+import { isResolvedWorkspaceSymbol, isWorkspaceSymbol, normalizeWorkspaceSymbols } from "./semantic-results"
 
 const log = Log.create({ service: "lsp" })
 
@@ -64,15 +65,17 @@ function dedupKey(symbol: Symbol): string {
 }
 
 export function dedupeAndLimit(symbols: Array<Symbol | undefined | null>, limit: number): Symbol[] {
+  const normalizedLimit = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0
+  if (normalizedLimit === 0) return []
   const seen = new Set<string>()
   const result: Symbol[] = []
   for (const symbol of symbols) {
-    if (!symbol) continue
+    if (!isResolvedWorkspaceSymbol(symbol)) continue
     const key = dedupKey(symbol)
     if (seen.has(key)) continue
     seen.add(key)
     result.push(symbol)
-    if (result.length >= limit) break
+    if (result.length >= normalizedLimit) break
   }
   return result
 }
@@ -108,32 +111,84 @@ export async function queryClients(input: {
     }
   }
 
+  const normalizedLimit = Number.isFinite(input.limit) ? Math.max(0, Math.floor(input.limit)) : 0
+  const outcomes = await Promise.all(
+    input.clients.map(async (client) => {
+      let response: unknown
+      try {
+        response = await withTimeout(
+          client.connection.sendRequest("workspace/symbol", {
+            query: input.query,
+          }),
+          input.timeoutMs,
+        )
+      } catch (err) {
+        // A linter LSP attached to the same file type may not implement
+        // workspace/symbol. Treat MethodNotFound as "not participating",
+        // not as a partial-completeness downgrade.
+        if (isMethodNotFound(err)) {
+          return { serverID: client.serverID, participates: false, failed: false, symbols: [] as Symbol[] }
+        }
+        log.warn("LSP client failed in workspaceSymbol", { serverID: client.serverID, err })
+        return { serverID: client.serverID, participates: false, failed: true, symbols: [] as Symbol[] }
+      }
+
+      const rawItems =
+        response === null || response === undefined ? [] : Array.isArray(response) ? response : [response]
+      const parsed = normalizeWorkspaceSymbols(response)
+      const candidates = parsed.filter(isRelevant).slice(0, normalizedLimit)
+      let failed =
+        (response !== null && response !== undefined && !Array.isArray(response)) ||
+        rawItems.some((item) => !isWorkspaceSymbol(item))
+
+      const resolved = await Promise.all(
+        candidates.map(async (symbol): Promise<Symbol | undefined> => {
+          if (isResolvedWorkspaceSymbol(symbol)) return symbol
+          try {
+            const value = await withTimeout(
+              client.connection.sendRequest("workspaceSymbol/resolve", symbol),
+              input.timeoutMs,
+            )
+            if (isResolvedWorkspaceSymbol(value)) return value
+            failed = true
+            log.warn("LSP client returned an unresolved workspace symbol", { serverID: client.serverID })
+            return undefined
+          } catch (err) {
+            failed = true
+            log.warn("LSP client failed to resolve a workspace symbol", { serverID: client.serverID, err })
+            return undefined
+          }
+        }),
+      )
+
+      if (
+        (response !== null && response !== undefined && !Array.isArray(response)) ||
+        rawItems.length !== parsed.length
+      ) {
+        log.warn("LSP client returned malformed workspace symbols", {
+          serverID: client.serverID,
+          invalid: rawItems.length - parsed.length,
+        })
+      }
+
+      return {
+        serverID: client.serverID,
+        participates: true,
+        failed,
+        symbols: resolved.filter((symbol): symbol is Symbol => symbol !== undefined),
+      }
+    }),
+  )
+
   let failures = 0
   const participatingServerIDs: string[] = []
-  const result = await Promise.all(
-    input.clients.map((client) =>
-      withTimeout(
-        client.connection.sendRequest("workspace/symbol", {
-          query: input.query,
-        }),
-        input.timeoutMs,
-      )
-        .then((result) => {
-          participatingServerIDs.push(client.serverID)
-          return (result as Symbol[]).filter(isRelevant)
-        })
-        .catch((err) => {
-          // A linter LSP attached to the same file type may not implement
-          // workspace/symbol. Treat MethodNotFound as "not participating",
-          // not as a partial-completeness downgrade.
-          if (!isMethodNotFound(err)) {
-            failures++
-            log.warn("LSP client failed in workspaceSymbol", { serverID: client.serverID, err })
-          }
-          return [] as Symbol[]
-        }),
-    ),
-  )
+  const result: Symbol[][] = []
+  for (const outcome of outcomes) {
+    if (outcome.failed) failures++
+    if (!outcome.participates) continue
+    participatingServerIDs.push(outcome.serverID)
+    result.push(outcome.symbols)
+  }
 
   const status = completeness({ participatingServerIDs, failures })
   return {

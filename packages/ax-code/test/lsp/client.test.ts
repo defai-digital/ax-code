@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, beforeEach, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
+import { pathToFileURL } from "node:url"
 import { tmpdir } from "../fixture/fixture"
 import { LSPClient } from "@ax-code/ax-code-intel/client"
 import { LSPServer } from "@ax-code/ax-code-intel/server"
@@ -461,6 +462,64 @@ describe("LSPClient interop", () => {
         const didChange = sent.find((entry) => entry.method === "textDocument/didChange")
         expect(didChange).toBeDefined()
         expect(didChange?.params?.contentChanges).toEqual([{ text: updated }])
+
+        await client.shutdown()
+      },
+    })
+  })
+
+  test("notify honors None, openClose, and save synchronization options", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "index.ts")
+    await fs.writeFile(file, "export const x = 1\n")
+
+    const handle = spawnFakeServer({
+      FAKE_LSP_CAPABILITIES_JSON: JSON.stringify({
+        textDocumentSync: {
+          openClose: false,
+          change: 0,
+          save: { includeText: true },
+        },
+      }),
+    }) as any
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const client = await LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        })
+
+        const sent: { method: string; params: any }[] = []
+        const conn = client.connection as typeof client.connection & {
+          sendNotification: (method: string, params: any) => Promise<void>
+        }
+        const originalSendNotification = conn.sendNotification.bind(conn)
+        conn.sendNotification = ((method: string, params: any) => {
+          sent.push({ method, params })
+          return originalSendNotification(method, params)
+        }) as typeof conn.sendNotification
+
+        const started = performance.now()
+        await expect(client.notify.open({ path: file, waitForDiagnostics: true })).resolves.toBe(true)
+        expect(performance.now() - started).toBeLessThan(1_000)
+        expect(sent.some((entry) => entry.method === "textDocument/didOpen")).toBe(false)
+
+        sent.length = 0
+        const updated = "export const x = 2\n"
+        await fs.writeFile(file, updated)
+        await expect(client.notify.open({ path: file })).resolves.toBe(true)
+
+        expect(sent.some((entry) => entry.method === "textDocument/didChange")).toBe(false)
+        expect(sent.find((entry) => entry.method === "textDocument/didSave")?.params).toEqual({
+          textDocument: { uri: pathToFileURL(file).href },
+          text: updated,
+        })
+
+        sent.length = 0
+        await expect(client.notify.close({ path: file })).resolves.toBe(true)
+        expect(sent.some((entry) => entry.method === "textDocument/didClose")).toBe(false)
 
         await client.shutdown()
       },

@@ -52,6 +52,7 @@
     "winget:generate": "tsx tools/winget/generate-manifests.ts",
     "prepare": "husky",
     "postinstall": "node desktop/scripts/fix-node-pty-permissions.mjs",
+    "test:extracted-packages": "pnpm --dir packages/ax-code-intel typecheck && pnpm --dir packages/ax-code-intel test && pnpm --dir packages/ax-code-reason typecheck && pnpm --dir packages/ax-code-reason test",
     "test:scripts": "vitest run",
     "test": "echo 'do not run tests from root (use test:scripts for root script suites)' && exit 1"
   },

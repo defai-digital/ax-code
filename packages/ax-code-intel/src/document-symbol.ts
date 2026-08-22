@@ -6,6 +6,7 @@ import * as LSPEnvelopeRunner from "./envelope-runner"
 import * as LSPPerf from "./perf"
 import type { DocumentSymbol, Symbol } from "./protocol"
 import type { ClientOptions, ClientSelection } from "./selection"
+import { normalizeDocumentSymbols } from "./semantic-results"
 
 export type DocumentSymbolPayload = Array<DocumentSymbol | Symbol>
 
@@ -13,13 +14,18 @@ type SelectClients = (file: string, opts: ClientOptions) => Promise<ClientSelect
 
 export async function cachedEnvelope(uri: string): Promise<SemanticEnvelope<DocumentSymbolPayload> | undefined> {
   const file = fileURLToPath(uri)
-  return LSPCacheProbe.hashAndRead<DocumentSymbolPayload>({
+  const cached = await LSPCacheProbe.hashAndRead<unknown[]>({
     operation: "documentSymbol",
     filePath: file,
     line: -1,
     character: -1,
     metric: "documentSymbol.cached",
   })
+  if (!cached) return undefined
+  return {
+    ...cached,
+    data: normalizeDocumentSymbols(cached.data) as DocumentSymbolPayload,
+  }
 }
 
 export async function envelope(
@@ -40,6 +46,7 @@ export async function envelope(
       cache: opts.cache,
       cachedMetric: "documentSymbol.cached",
       liveMetric: "documentSymbol.live",
+      normalize: (value) => normalizeDocumentSymbols(value) as DocumentSymbolPayload,
       execute: (dedupKey) =>
         LSPEnvelopeRunner.runWithEnvelope({
           file,
@@ -49,8 +56,8 @@ export async function envelope(
                 textDocument: { uri },
               }),
               opts.timeoutMs,
-            ) as Promise<DocumentSymbolPayload>,
-          reduce: (results) => results.flat().filter(Boolean) as DocumentSymbolPayload,
+            ) as Promise<unknown>,
+          reduce: (results) => results.flatMap(normalizeDocumentSymbols) as DocumentSymbolPayload,
           empty: [] as DocumentSymbolPayload,
           operation: "documentSymbol",
           dedupKey,

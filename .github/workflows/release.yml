@@ -58,6 +58,9 @@ jobs:
       - name: Typecheck
         run: pnpm --dir packages/ax-code run typecheck
 
+      - name: Test extracted core packages
+        run: pnpm run test:extracted-packages
+
       - name: Test
         run: pnpm --dir packages/ax-code run test:ci -- deterministic --rerun-on-fail 1
         env:

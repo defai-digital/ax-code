@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
-import { LSPClient, textDocumentSyncKind } from "@ax-code/ax-code-intel/client"
+import { LSPClient, textDocumentSyncKind, textDocumentSyncSettings } from "@ax-code/ax-code-intel/client"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
@@ -25,6 +25,29 @@ describe("textDocumentSyncKind", () => {
     expect(textDocumentSyncKind({})).toBeUndefined()
     expect(textDocumentSyncKind({ textDocumentSync: { openClose: true } })).toBeUndefined()
     expect(textDocumentSyncKind({ textDocumentSync: "incremental" })).toBeUndefined()
+    expect(textDocumentSyncKind({ textDocumentSync: 99 })).toBeUndefined()
+  })
+})
+
+describe("textDocumentSyncSettings", () => {
+  test("honors explicit None", () => {
+    expect(textDocumentSyncSettings({ textDocumentSync: 0 })).toEqual({
+      openClose: false,
+      change: 0,
+      save: { enabled: false, includeText: false },
+    })
+  })
+
+  test("honors open/close and save options", () => {
+    expect(
+      textDocumentSyncSettings({
+        textDocumentSync: { openClose: false, change: 1, save: { includeText: true } },
+      }),
+    ).toEqual({
+      openClose: false,
+      change: 1,
+      save: { enabled: true, includeText: true },
+    })
   })
 })
 describe("LSPClient unit", () => {

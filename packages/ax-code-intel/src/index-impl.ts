@@ -33,6 +33,12 @@ export namespace LSP {
   export const envelopeFreshness = LSPEnvelope.freshness
   export type NormalizedSeverity = LSPDiagnostics.NormalizedSeverity
   export type NormalizedDiagnostic = LSPDiagnostics.NormalizedDiagnostic
+  export type Hover = import("./semantic-results").Hover
+  export type Location = import("./semantic-results").Location
+  export type NavigationLocation = import("./semantic-results").NavigationLocation
+  export type CallHierarchyItem = import("./semantic-results").CallHierarchyItem
+  export type CallHierarchyIncomingCall = import("./semantic-results").CallHierarchyIncomingCall
+  export type CallHierarchyOutgoingCall = import("./semantic-results").CallHierarchyOutgoingCall
 
   // Bound LSP RPC calls so a hung language server cannot block tool execution.
   // Pointwise queries get a short budget; workspace-wide queries get a longer
@@ -865,7 +871,7 @@ export namespace LSP {
     file: string
     line: number
     character: number
-  }): Promise<SemanticEnvelope<unknown[]>> {
+  }): Promise<SemanticEnvelope<Hover[]>> {
     return LSPPoint.hoverEnvelope(input, semanticRuntime)
   }
 
@@ -930,7 +936,7 @@ export namespace LSP {
     file: string
     line: number
     character: number
-  }): Promise<SemanticEnvelope<unknown[]>> {
+  }): Promise<SemanticEnvelope<NavigationLocation[]>> {
     return LSPPoint.definitionEnvelope(input, semanticRuntime)
   }
 
@@ -942,7 +948,7 @@ export namespace LSP {
     file: string
     line: number
     character: number
-  }): Promise<SemanticEnvelope<unknown[]> | undefined> {
+  }): Promise<SemanticEnvelope<Location[]> | undefined> {
     return LSPReferences.cachedEnvelope(input)
   }
 
@@ -951,7 +957,7 @@ export namespace LSP {
     line: number
     character: number
     cache?: boolean
-  }): Promise<SemanticEnvelope<unknown[]>> {
+  }): Promise<SemanticEnvelope<Location[]>> {
     return LSPReferences.envelope(input, semanticRuntime)
   }
 
@@ -967,7 +973,7 @@ export namespace LSP {
     file: string
     line: number
     character: number
-  }): Promise<SemanticEnvelope<unknown[]>> {
+  }): Promise<SemanticEnvelope<NavigationLocation[]>> {
     return LSPPoint.implementationEnvelope(input, semanticRuntime)
   }
 
@@ -979,7 +985,7 @@ export namespace LSP {
     file: string
     line: number
     character: number
-  }): Promise<SemanticEnvelope<unknown[]>> {
+  }): Promise<SemanticEnvelope<CallHierarchyItem[]>> {
     return LSPPoint.prepareCallHierarchyEnvelope(input, semanticRuntime)
   }
 
@@ -991,7 +997,7 @@ export namespace LSP {
     file: string
     line: number
     character: number
-  }): Promise<SemanticEnvelope<unknown[]>> {
+  }): Promise<SemanticEnvelope<CallHierarchyIncomingCall[]>> {
     return LSPPoint.incomingCallsEnvelope(input, semanticRuntime)
   }
 
@@ -1003,7 +1009,7 @@ export namespace LSP {
     file: string
     line: number
     character: number
-  }): Promise<SemanticEnvelope<unknown[]>> {
+  }): Promise<SemanticEnvelope<CallHierarchyOutgoingCall[]>> {
     return LSPPoint.outgoingCallsEnvelope(input, semanticRuntime)
   }
 

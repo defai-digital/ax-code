@@ -236,7 +236,7 @@ describe("cli smoke", () => {
       fn: async () => Session.create({ title: "CLI Delete Session" }),
     })
 
-    const out = await Process.run(cmd("session", "delete", session.id), {
+    const out = await Process.run(cmd("session", "delete", session.id, "--force"), {
       cwd: tmp.path,
     })
 
@@ -269,9 +269,9 @@ describe("cli smoke", () => {
     await using tmp = await tmpdir({ git: true })
 
     for (const args of [
-      ["rollback", "session_missing"],
-      ["compare", "session_missing_a", "session_missing_b"],
-      ["branch", "session_missing"],
+      ["rollback", "ses_missing"],
+      ["compare", "ses_missing_a", "ses_missing_b"],
+      ["branch", "ses_missing"],
     ]) {
       const out = await Process.run(cmd(...args), {
         cwd: tmp.path,

@@ -4,7 +4,13 @@ import { writeFile } from "node:fs/promises"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { LSP } from "@ax-code/ax-code-intel"
-import { completeness, dedupeAndLimit, envelope, isRelevant, queryClients } from "@ax-code/ax-code-intel/workspace-symbol"
+import {
+  completeness,
+  dedupeAndLimit,
+  envelope,
+  isRelevant,
+  queryClients,
+} from "@ax-code/ax-code-intel/workspace-symbol"
 import { tmpdir } from "../fixture/fixture"
 import { Log } from "../../src/util/log"
 
@@ -49,6 +55,69 @@ describe("LSP.workspaceSymbol", () => {
 
     expect(dedupeAndLimit([first, duplicate, second], 10)).toEqual([first, second])
     expect(dedupeAndLimit([first, second], 1)).toEqual([first])
+    expect(dedupeAndLimit([first, second], 0)).toEqual([])
+  })
+
+  test("workspace symbol query resolves range-less symbols and rejects malformed entries", async () => {
+    const unresolved = {
+      name: "Thing",
+      kind: 5,
+      location: { uri: "file:///repo/a.ts" },
+      data: { id: 1 },
+    }
+    const resolved = symbol({ name: "Thing", kind: 5, line: 4 })
+    const requests: string[] = []
+
+    const result = await queryClients({
+      clients: [
+        {
+          serverID: "typescript",
+          connection: {
+            sendRequest: async (method: string) => {
+              requests.push(method)
+              if (method === "workspace/symbol") return [unresolved, { name: "missing-kind" }]
+              if (method === "workspaceSymbol/resolve") return resolved
+              throw new Error(`unexpected method: ${method}`)
+            },
+          },
+        } as never,
+      ],
+      query: "Thing",
+      timeoutMs: 100,
+      limit: 10,
+    })
+
+    expect(requests).toEqual(["workspace/symbol", "workspaceSymbol/resolve"])
+    expect(result.envelope.symbols).toEqual([resolved])
+    expect(result.envelope.completeness).toBe("partial")
+    expect(result.envelope.degraded).toBe(true)
+    expect(result.ok).toBe(false)
+  })
+
+  test("workspace symbol query skips an unresolved result when resolution fails", async () => {
+    const result = await queryClients({
+      clients: [
+        {
+          serverID: "typescript",
+          connection: {
+            sendRequest: async (method: string) => {
+              if (method === "workspace/symbol") {
+                return [{ name: "Thing", kind: 5, location: { uri: "file:///repo/a.ts" } }]
+              }
+              throw { code: -32601 }
+            },
+          },
+        } as never,
+      ],
+      query: "Thing",
+      timeoutMs: 100,
+      limit: 10,
+    })
+
+    expect(result.envelope.symbols).toEqual([])
+    expect(result.envelope.completeness).toBe("partial")
+    expect(result.envelope.degraded).toBe(true)
+    expect(result.ok).toBe(false)
   })
 
   test("workspace symbol helpers derive completeness and degraded status", () => {

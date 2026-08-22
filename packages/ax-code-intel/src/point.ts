@@ -5,6 +5,21 @@ import type { SemanticEnvelope } from "./envelope"
 import * as LSPEnvelopeRunner from "./envelope-runner"
 import * as LSPPerf from "./perf"
 import type { ClientOptions, ClientSelection } from "./selection"
+import {
+  normalizeCallHierarchyItems,
+  normalizeHoverResults,
+  normalizeIncomingCalls,
+  normalizeNavigationLocations,
+  normalizeOutgoingCalls,
+} from "./semantic-results"
+import type {
+  CallHierarchyCall,
+  CallHierarchyIncomingCall,
+  CallHierarchyItem,
+  CallHierarchyOutgoingCall,
+  Hover,
+  NavigationLocation,
+} from "./semantic-results"
 
 export interface PointInput {
   file: string
@@ -50,27 +65,34 @@ export async function prepareCallHierarchyItems(
   client: LSPClient.Info,
   input: PointInput,
   timeoutMs: number,
-): Promise<unknown[]> {
-  return (await requestAtPoint(client, "textDocument/prepareCallHierarchy", input, timeoutMs)) as unknown[]
+): Promise<CallHierarchyItem[]> {
+  const result = await requestAtPoint(client, "textDocument/prepareCallHierarchy", input, timeoutMs)
+  return normalizeCallHierarchyItems(result)
 }
 
-export async function callHierarchyCallsForClient(
+export async function callHierarchyCallsForClient<TCall extends CallHierarchyCall = CallHierarchyCall>(
   client: LSPClient.Info,
   input: PointInput,
   opts: {
     request: string
     timeoutMs: number
+    normalize?: (value: unknown) => TCall[]
   },
-): Promise<unknown[]> {
+): Promise<TCall[]> {
   const items = await prepareCallHierarchyItems(client, input, opts.timeoutMs)
   if (!items?.length) return []
 
+  const normalize =
+    opts.normalize ??
+    ((opts.request === "callHierarchy/incomingCalls" ? normalizeIncomingCalls : normalizeOutgoingCalls) as (
+      value: unknown,
+    ) => TCall[])
   const calls = await Promise.all(
     items.map((item) =>
-      withTimeout(client.connection.sendRequest(opts.request, { item }), opts.timeoutMs).catch(() => [] as unknown[]),
+      withTimeout(client.connection.sendRequest(opts.request, { item }), opts.timeoutMs).catch(() => undefined),
     ),
   )
-  return calls.flat()
+  return calls.flatMap((result) => (result === undefined ? [] : normalize(result)))
 }
 
 export async function requestEnvelope<TPayload>(
@@ -104,7 +126,7 @@ export async function requestEnvelope<TPayload>(
   return LSPPerf.metered(opts.metric, { file: input.file }, execute)
 }
 
-export async function requestSemanticArrayEnvelope(
+export async function requestSemanticArrayEnvelope<T>(
   input: PointInput,
   opts: {
     metric?: string
@@ -113,17 +135,18 @@ export async function requestSemanticArrayEnvelope(
     method: NonNullable<ClientOptions["method"]>
     dedupKey?: string
     extraParams?: Record<string, unknown>
-    reduce?: (results: unknown[]) => unknown[]
+    normalize: (value: unknown) => T[]
+    reduce?: (results: unknown[]) => T[]
     timeoutMs: number
     selectClients: SelectClients
   },
-): Promise<SemanticEnvelope<unknown[]>> {
+): Promise<SemanticEnvelope<T[]>> {
   return requestEnvelope(input, {
     metric: opts.metric,
     request: opts.request,
     operation: opts.operation,
-    reduce: opts.reduce ?? ((results) => results.flat().filter(Boolean)),
-    empty: [] as unknown[],
+    reduce: opts.reduce ?? ((results) => results.flatMap(opts.normalize)),
+    empty: [] as T[],
     clientOptions: { mode: "semantic", method: opts.method },
     dedupKey: opts.dedupKey,
     extraParams: opts.extraParams,
@@ -132,16 +155,17 @@ export async function requestSemanticArrayEnvelope(
   })
 }
 
-export async function callHierarchyCallsEnvelope(
+export async function callHierarchyCallsEnvelope<TCall extends CallHierarchyCall>(
   input: PointInput,
   opts: {
     metric: string
     request: string
     operation: string
+    normalize: (value: unknown) => TCall[]
     timeoutMs: number
     selectClients: SelectClients
   },
-): Promise<SemanticEnvelope<unknown[]>> {
+): Promise<SemanticEnvelope<TCall[]>> {
   return LSPPerf.metered(opts.metric, { file: input.file }, async () =>
     LSPEnvelopeRunner.runWithEnvelope({
       file: input.file,
@@ -149,9 +173,10 @@ export async function callHierarchyCallsEnvelope(
         callHierarchyCallsForClient(client, input, {
           request: opts.request,
           timeoutMs: opts.timeoutMs,
+          normalize: opts.normalize,
         }),
-      reduce: (results) => (results as unknown[]).flat().filter(Boolean),
-      empty: [] as unknown[],
+      reduce: (results) => results.flat(),
+      empty: [] as TCall[],
       operation: opts.operation,
       opts: { mode: "semantic", method: "callHierarchy" },
       selectClients: opts.selectClients,
@@ -159,12 +184,12 @@ export async function callHierarchyCallsEnvelope(
   )
 }
 
-export function hoverEnvelope(input: PointInput, runtime: PointEnvelopeRuntime): Promise<SemanticEnvelope<unknown[]>> {
+export function hoverEnvelope(input: PointInput, runtime: PointEnvelopeRuntime): Promise<SemanticEnvelope<Hover[]>> {
   return requestSemanticArrayEnvelope(input, {
     metric: "hover",
     request: "textDocument/hover",
     operation: "hover",
-    reduce: (results) => results.filter((r) => r !== null && r !== undefined),
+    normalize: normalizeHoverResults,
     method: "hover",
     timeoutMs: runtime.timeoutMs,
     selectClients: runtime.selectClients,
@@ -175,94 +200,99 @@ async function envelopeData<T>(envelope: Promise<SemanticEnvelope<T>>): Promise<
   return (await envelope).data
 }
 
-export function hover(input: PointInput, runtime: PointEnvelopeRuntime): Promise<unknown[]> {
+export function hover(input: PointInput, runtime: PointEnvelopeRuntime): Promise<Hover[]> {
   return envelopeData(hoverEnvelope(input, runtime))
 }
 
 export function definitionEnvelope(
   input: PointInput,
   runtime: PointEnvelopeRuntime,
-): Promise<SemanticEnvelope<unknown[]>> {
+): Promise<SemanticEnvelope<NavigationLocation[]>> {
   return requestSemanticArrayEnvelope(input, {
     metric: "definition",
     request: "textDocument/definition",
     operation: "definition",
     method: "definition",
+    normalize: normalizeNavigationLocations,
     timeoutMs: runtime.timeoutMs,
     selectClients: runtime.selectClients,
   })
 }
 
-export function definition(input: PointInput, runtime: PointEnvelopeRuntime): Promise<unknown[]> {
+export function definition(input: PointInput, runtime: PointEnvelopeRuntime): Promise<NavigationLocation[]> {
   return envelopeData(definitionEnvelope(input, runtime))
 }
 
 export function implementationEnvelope(
   input: PointInput,
   runtime: PointEnvelopeRuntime,
-): Promise<SemanticEnvelope<unknown[]>> {
+): Promise<SemanticEnvelope<NavigationLocation[]>> {
   return requestSemanticArrayEnvelope(input, {
     metric: "implementation",
     request: "textDocument/implementation",
     operation: "implementation",
     method: "implementation",
+    normalize: normalizeNavigationLocations,
     timeoutMs: runtime.timeoutMs,
     selectClients: runtime.selectClients,
   })
 }
 
-export function implementation(input: PointInput, runtime: PointEnvelopeRuntime): Promise<unknown[]> {
+export function implementation(input: PointInput, runtime: PointEnvelopeRuntime): Promise<NavigationLocation[]> {
   return envelopeData(implementationEnvelope(input, runtime))
 }
 
 export function prepareCallHierarchyEnvelope(
   input: PointInput,
   runtime: PointEnvelopeRuntime,
-): Promise<SemanticEnvelope<unknown[]>> {
+): Promise<SemanticEnvelope<CallHierarchyItem[]>> {
   return requestSemanticArrayEnvelope(input, {
     metric: "prepareCallHierarchy",
     request: "textDocument/prepareCallHierarchy",
     operation: "prepareCallHierarchy",
     method: "callHierarchy",
+    normalize: normalizeCallHierarchyItems,
     timeoutMs: runtime.timeoutMs,
     selectClients: runtime.selectClients,
   })
 }
 
-export function prepareCallHierarchy(input: PointInput, runtime: PointEnvelopeRuntime): Promise<unknown[]> {
+export function prepareCallHierarchy(input: PointInput, runtime: PointEnvelopeRuntime): Promise<CallHierarchyItem[]> {
   return envelopeData(prepareCallHierarchyEnvelope(input, runtime))
 }
 
 export function incomingCallsEnvelope(
   input: PointInput,
   runtime: PointEnvelopeRuntime,
-): Promise<SemanticEnvelope<unknown[]>> {
+): Promise<SemanticEnvelope<CallHierarchyIncomingCall[]>> {
   return callHierarchyCallsEnvelope(input, {
     metric: "incomingCalls",
     request: "callHierarchy/incomingCalls",
     operation: "incomingCalls",
+    normalize: normalizeIncomingCalls,
     timeoutMs: runtime.timeoutMs,
     selectClients: runtime.selectClients,
   })
 }
 
-export function incomingCalls(input: PointInput, runtime: PointEnvelopeRuntime): Promise<unknown[]> {
+export function incomingCalls(input: PointInput, runtime: PointEnvelopeRuntime): Promise<CallHierarchyIncomingCall[]> {
   return envelopeData(incomingCallsEnvelope(input, runtime))
 }
 
 export function outgoingCallsEnvelope(
   input: PointInput,
   runtime: PointEnvelopeRuntime,
-): Promise<SemanticEnvelope<unknown[]>> {
+): Promise<SemanticEnvelope<CallHierarchyOutgoingCall[]>> {
   return callHierarchyCallsEnvelope(input, {
     metric: "outgoingCalls",
     request: "callHierarchy/outgoingCalls",
     operation: "outgoingCalls",
+    normalize: normalizeOutgoingCalls,
     timeoutMs: runtime.timeoutMs,
     selectClients: runtime.selectClients,
   })
 }
 
-export function outgoingCalls(input: PointInput, runtime: PointEnvelopeRuntime): Promise<unknown[]> {
+export function outgoingCalls(input: PointInput, runtime: PointEnvelopeRuntime): Promise<CallHierarchyOutgoingCall[]> {
   return envelopeData(outgoingCallsEnvelope(input, runtime))
 }

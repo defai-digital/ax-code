@@ -11,6 +11,29 @@ import {
   textDocumentPositionParams,
 } from "@ax-code/ax-code-intel/point"
 import type { LSPClient } from "@ax-code/ax-code-intel/client"
+import { normalizeIncomingCalls, normalizeNavigationLocations } from "@ax-code/ax-code-intel/semantic-results"
+
+const range = {
+  start: { line: 0, character: 0 },
+  end: { line: 0, character: 3 },
+}
+
+function hierarchyItem(name: string) {
+  return {
+    name,
+    kind: 12,
+    uri: `file:///tmp/project/src/${name}.ts`,
+    range,
+    selectionRange: range,
+  }
+}
+
+function incomingCall(name: string) {
+  return {
+    from: hierarchyItem(name),
+    fromRanges: [range],
+  }
+}
 
 function clientWithResponses(responses: Record<string, unknown>): LSPClient.Info {
   return {
@@ -45,8 +68,8 @@ test("pointRequestParams merges extra request params after position params", () 
 
 test("callHierarchyCallsForClient prepares items then flattens call results", async () => {
   const client = clientWithResponses({
-    "textDocument/prepareCallHierarchy": [{ name: "caller" }, { name: "callee" }],
-    "callHierarchy/incomingCalls": (params: { item: { name: string } }) => [{ from: params.item.name }],
+    "textDocument/prepareCallHierarchy": [hierarchyItem("caller"), hierarchyItem("callee")],
+    "callHierarchy/incomingCalls": (params: { item: { name: string } }) => [incomingCall(params.item.name)],
   })
 
   await expect(
@@ -58,7 +81,7 @@ test("callHierarchyCallsForClient prepares items then flattens call results", as
         timeoutMs: 1_000,
       },
     ),
-  ).resolves.toEqual([{ from: "caller" }, { from: "callee" }])
+  ).resolves.toEqual([incomingCall("caller"), incomingCall("callee")])
 })
 
 test("callHierarchyCallsForClient returns empty when prepare has no items", async () => {
@@ -104,7 +127,7 @@ test("requestEnvelope returns empty metadata when no client matches", async () =
 test("requestSemanticArrayEnvelope applies semantic method defaults and flattens results", async () => {
   const client = {
     ...clientWithResponses({
-      "textDocument/definition": [{ uri: "file:///tmp/project/src/target.ts" }, null],
+      "textDocument/definition": [{ uri: "file:///tmp/project/src/target.ts", range }, null],
     }),
     serverID: "fake",
   }
@@ -117,6 +140,7 @@ test("requestSemanticArrayEnvelope applies semantic method defaults and flattens
       request: "textDocument/definition",
       operation: "definition",
       method: "definition",
+      normalize: normalizeNavigationLocations,
       timeoutMs: 1_000,
       selectClients: async (_file, opts) => {
         selectedOptions = opts
@@ -126,7 +150,7 @@ test("requestSemanticArrayEnvelope applies semantic method defaults and flattens
   )
 
   expect(selectedOptions).toEqual({ mode: "semantic", method: "definition" })
-  expect(envelope.data).toEqual([{ uri: "file:///tmp/project/src/target.ts" }])
+  expect(envelope.data).toEqual([{ uri: "file:///tmp/project/src/target.ts", range }])
   expect(envelope.completeness).toBe("full")
   expect(envelope.serverIDs).toEqual(["fake"])
 })
@@ -178,8 +202,8 @@ test("hover returns only hover envelope data", async () => {
 test("callHierarchyCallsEnvelope delegates through selected clients", async () => {
   const client = {
     ...clientWithResponses({
-      "textDocument/prepareCallHierarchy": [{ name: "caller" }],
-      "callHierarchy/incomingCalls": (params: { item: { name: string } }) => [{ from: params.item.name }],
+      "textDocument/prepareCallHierarchy": [hierarchyItem("caller")],
+      "callHierarchy/incomingCalls": (params: { item: { name: string } }) => [incomingCall(params.item.name)],
     }),
     serverID: "fake",
   }
@@ -190,12 +214,13 @@ test("callHierarchyCallsEnvelope delegates through selected clients", async () =
       metric: "incomingCalls",
       request: "callHierarchy/incomingCalls",
       operation: "incomingCalls",
+      normalize: normalizeIncomingCalls,
       timeoutMs: 1_000,
       selectClients: async () => ({ clients: [client], freshSpawnCount: 0 }),
     },
   )
 
-  expect(envelope.data).toEqual([{ from: "caller" }])
+  expect(envelope.data).toEqual([incomingCall("caller")])
   expect(envelope.completeness).toBe("full")
   expect(envelope.serverIDs).toEqual(["fake"])
 })
@@ -203,8 +228,8 @@ test("callHierarchyCallsEnvelope delegates through selected clients", async () =
 test("incomingCallsEnvelope owns incoming call hierarchy defaults", async () => {
   const client = {
     ...clientWithResponses({
-      "textDocument/prepareCallHierarchy": [{ name: "caller" }],
-      "callHierarchy/incomingCalls": (params: { item: { name: string } }) => [{ from: params.item.name }],
+      "textDocument/prepareCallHierarchy": [hierarchyItem("caller")],
+      "callHierarchy/incomingCalls": (params: { item: { name: string } }) => [incomingCall(params.item.name)],
     }),
     serverID: "fake",
   }
@@ -222,5 +247,5 @@ test("incomingCallsEnvelope owns incoming call hierarchy defaults", async () => 
   )
 
   expect(selectedOptions).toEqual({ mode: "semantic", method: "callHierarchy" })
-  expect(envelope.data).toEqual([{ from: "caller" }])
+  expect(envelope.data).toEqual([incomingCall("caller")])
 })

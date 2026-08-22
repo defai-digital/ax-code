@@ -33,10 +33,20 @@ export function defineBrandedIdentifier<const Tag extends string, const Prefix e
       return id as ID
     },
     ascending(id?: string): ID {
-      return (id ?? `${prefix}_${Identifier.ascending()}`) as ID
+      if (id !== undefined) {
+        const parsed = schema.safeParse(id)
+        if (!parsed.success) throw new Error(`ID ${id} does not start with ${prefix}_`)
+        return parsed.data
+      }
+      return `${prefix}_${Identifier.ascending()}` as ID
     },
     descending(id?: string): ID {
-      return (id ?? `${prefix}_${Identifier.descending()}`) as ID
+      if (id !== undefined) {
+        const parsed = schema.safeParse(id)
+        if (!parsed.success) throw new Error(`ID ${id} does not start with ${prefix}_`)
+        return parsed.data
+      }
+      return `${prefix}_${Identifier.descending()}` as ID
     },
     zod: schema,
     tag,

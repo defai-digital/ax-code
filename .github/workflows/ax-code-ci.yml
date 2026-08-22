@@ -9,6 +9,8 @@ on:
       - "pnpm-workspace.yaml"
       - "turbo.json"
       - "packages/ax-code/**"
+      - "packages/ax-code-intel/**"
+      - "packages/ax-code-reason/**"
       - "packages/ax-code-tui/**"
       - "packages/ax-code-tui/solid/**"
       - "packages/ax-code-tui/spinner/**"
@@ -30,6 +32,8 @@ on:
       - "pnpm-workspace.yaml"
       - "turbo.json"
       - "packages/ax-code/**"
+      - "packages/ax-code-intel/**"
+      - "packages/ax-code-reason/**"
       - "packages/ax-code-tui/**"
       - "packages/ax-code-tui/solid/**"
       - "packages/ax-code-tui/spinner/**"
@@ -113,6 +117,9 @@ jobs:
 
       - name: Test repository scripts
         run: pnpm run test:scripts
+
+      - name: Test extracted core packages
+        run: pnpm run test:extracted-packages
 
       - name: Check AX Code TUI package
         run: pnpm run check:tui-package

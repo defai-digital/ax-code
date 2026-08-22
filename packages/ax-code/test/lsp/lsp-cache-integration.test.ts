@@ -128,7 +128,12 @@ describe("LSP cache integration", () => {
           contentHash: await scopedHash("references", contentHash!),
           line: 5,
           character: 2,
-          payload: [{ uri: pathToFileURL(file).href, range: { start: { line: 5, character: 2 } } }],
+          payload: [
+            {
+              uri: pathToFileURL(file).href,
+              range: { start: { line: 5, character: 2 }, end: { line: 5, character: 8 } },
+            },
+          ],
           serverIDs: ["fake"],
           completeness: "full",
           expiresAt: Date.now() + 60_000,

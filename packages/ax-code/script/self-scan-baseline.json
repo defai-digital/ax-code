@@ -457,7 +457,7 @@
       ]
     },
     "lifecycle_scan": {
-      "count": 188,
+      "count": 187,
       "findings": [
         {
           "fingerprint": "5e669e96cecbb54dd6aa558bf9f99c8c79d6d172210ad08cda98b84e207f3c4c",
@@ -786,14 +786,6 @@
           "severity": "high",
           "kind": "child_process:no_cleanup",
           "summary": "child_process:no_cleanup"
-        },
-        {
-          "fingerprint": "672a2032b54b5023298f5c4a3eb3f35075dc47a2e082d63c01f34766fd6e5dd6",
-          "file": "src/util/timeout.ts",
-          "line": 5,
-          "severity": "high",
-          "kind": "timer:no_cleanup",
-          "summary": "timer:no_cleanup"
         },
         {
           "fingerprint": "fc818425e129ab82500fb2fdb583fadb873a8ec592662e14585d857824e30a12",
@@ -1971,7 +1963,7 @@
         {
           "fingerprint": "ea3dee262816ea739342fb280c91744acc40329996b1a5005203d3624b544f0d",
           "file": "../ax-code-intel/src/client.ts",
-          "line": 542,
+          "line": 605,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -1979,7 +1971,7 @@
         {
           "fingerprint": "45478769f1aad20aacea7cbb72cbf518fa3bb9a89e0026b86ef0dd4a143501ef",
           "file": "../ax-code-intel/src/client.ts",
-          "line": 678,
+          "line": 761,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -1987,7 +1979,7 @@
         {
           "fingerprint": "fd594fc1b0f281986e8cd5630f9fe83695d078c5e7bde3d4348c9c137514fc1f",
           "file": "../ax-code-intel/src/client.ts",
-          "line": 687,
+          "line": 770,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -1995,7 +1987,7 @@
         {
           "fingerprint": "3fb2af64ccf46f3fdc77e363a136b71b5eda45f9864fff5dcbe705df16da79e0",
           "file": "../ax-code-intel/src/index-impl.ts",
-          "line": 562,
+          "line": 568,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"
@@ -2003,7 +1995,7 @@
         {
           "fingerprint": "1cd32308a15cb0e82c3b23c10c0b130bfd8716619ef9247799713bd0c8ebdef1",
           "file": "../ax-code-intel/src/index-impl.ts",
-          "line": 771,
+          "line": 777,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal user-controlled"

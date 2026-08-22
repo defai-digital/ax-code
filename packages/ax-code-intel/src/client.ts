@@ -130,12 +130,68 @@ export function computeIncrementalChanges(oldText: string, newText: string): Lsp
  */
 export function textDocumentSyncKind(capabilities: Record<string, unknown> | undefined): number | undefined {
   const value = capabilities?.["textDocumentSync"]
-  if (typeof value === "number") return value
+  if (value === 0 || value === 1 || value === 2) return value
   if (value && typeof value === "object") {
     const change = (value as { change?: unknown }).change
-    if (typeof change === "number") return change
+    if (change === 0 || change === 1 || change === 2) return change
   }
   return undefined
+}
+
+export type TextDocumentSyncSettings = {
+  openClose: boolean
+  change: 0 | 1 | 2
+  save: {
+    enabled: boolean
+    includeText: boolean
+  }
+}
+
+/**
+ * Normalize the two protocol forms of ServerCapabilities.textDocumentSync.
+ *
+ * A missing or malformed declaration keeps the historical full-sync fallback
+ * because a few otherwise-compatible servers omit the capability. Explicit
+ * declarations are honored exactly: None disables didChange, options-object
+ * booleans default to false, and SaveOptions.includeText controls didSave.
+ */
+export function textDocumentSyncSettings(capabilities: Record<string, unknown> | undefined): TextDocumentSyncSettings {
+  const value = capabilities?.["textDocumentSync"]
+  if (value === 0) {
+    return {
+      openClose: false,
+      change: 0,
+      save: { enabled: false, includeText: false },
+    }
+  }
+  if (value === 1 || value === 2) {
+    return {
+      openClose: true,
+      change: value,
+      save: { enabled: false, includeText: false },
+    }
+  }
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const options = value as { openClose?: unknown; change?: unknown; save?: unknown }
+    const change = options.change === 0 || options.change === 1 || options.change === 2 ? options.change : 0
+    const saveEnabled =
+      options.save === true ||
+      (options.save !== null && typeof options.save === "object" && !Array.isArray(options.save))
+    const includeText =
+      saveEnabled &&
+      typeof options.save === "object" &&
+      (options.save as { includeText?: unknown }).includeText === true
+    return {
+      openClose: options.openClose === true,
+      change,
+      save: { enabled: saveEnabled, includeText },
+    }
+  }
+  return {
+    openClose: true,
+    change: 1,
+    save: { enabled: false, includeText: false },
+  }
 }
 
 export namespace LSPClient {
@@ -326,6 +382,11 @@ export namespace LSPClient {
           },
           workspace: {
             configuration: true,
+            symbol: {
+              resolveSupport: {
+                properties: ["location.range"],
+              },
+            },
             didChangeWatchedFiles: {
               // No dynamic registration: the client/registerCapability
               // handler is a deliberate no-op, so claiming support here
@@ -336,8 +397,10 @@ export namespace LSPClient {
           },
           textDocument: {
             synchronization: {
-              didOpen: true,
-              didChange: true,
+              dynamicRegistration: false,
+              willSave: false,
+              willSaveWaitUntil: false,
+              didSave: true,
             },
             publishDiagnostics: {
               versionSupport: true,
@@ -359,7 +422,7 @@ export namespace LSPClient {
     const runtimeCapabilityHints = capabilityHintsFromInitialize(initializeResult?.capabilities)
     // Negotiated document sync mode. Ranged (incremental) didChange payloads
     // are only protocol-legal when this is TextDocumentSyncKind.Incremental.
-    const syncKind = textDocumentSyncKind(initializeResult?.capabilities)
+    const documentSync = textDocumentSyncSettings(initializeResult?.capabilities)
 
     await connection.sendNotification("initialized", {})
 
@@ -476,17 +539,19 @@ export namespace LSPClient {
     async function closeUnlocked(input: { path: string; deleted?: boolean }): Promise<boolean> {
       const normalized = input.path
       if (files[normalized] === undefined) return false
-      log.info("textDocument/didClose", { path: normalized })
-      await connection
-        .sendNotification("textDocument/didClose", {
-          textDocument: {
-            uri: pathToFileURL(normalized).href,
-          },
-        })
-        .catch(() => {
-          // Server may be dead or unresponsive. We still want to
-          // clean up local state.
-        })
+      if (documentSync.openClose) {
+        log.info("textDocument/didClose", { path: normalized })
+        await connection
+          .sendNotification("textDocument/didClose", {
+            textDocument: {
+              uri: pathToFileURL(normalized).href,
+            },
+          })
+          .catch(() => {
+            // Server may be dead or unresponsive. We still want to
+            // clean up local state.
+          })
+      }
       if (input.deleted) {
         noteWorkspaceChange()
         await connection
@@ -585,50 +650,67 @@ export namespace LSPClient {
                   },
                 ],
               })
-              const wait = input.waitForDiagnostics ? diagnosticsWait({ path: normalized }) : undefined
+              const sendsTextDocumentNotification = documentSync.change !== 0 || documentSync.save.enabled
+              const wait =
+                input.waitForDiagnostics && sendsTextDocumentNotification
+                  ? diagnosticsWait({ path: normalized })
+                  : undefined
 
               const next = version + 1
               files[normalized] = next
               noteWorkspaceChange()
 
-              // Ranged incremental changes are only protocol-legal when the
-              // server negotiated TextDocumentSyncKind.Incremental. For Full,
-              // undeclared, or None servers send a single range-less change —
-              // LSP treats that as "replace the whole document", the only
-              // change payload a Full-sync server accepts. Also fall back to
-              // full when no previously-sent text is cached or the diff is
-              // pathological.
-              let contentChanges: Array<
-                | { text: string }
-                | {
-                    range: { start: { line: number; character: number }; end: { line: number; character: number } }
-                    text: string
-                  }
-              >
-              const prevText = lastContent.get(normalized)?.text
-              const incremental = syncKind === 2 && prevText ? computeIncrementalChanges(prevText, text) : null
-              if (incremental && incremental.length > 0) {
-                contentChanges = incremental
-                log.info("textDocument/didChange (incremental)", {
-                  path: normalized,
-                  version: next,
-                  hunks: incremental.length,
-                })
-              } else {
-                contentChanges = [{ text }]
-                log.info("textDocument/didChange (full)", {
-                  path: normalized,
-                  version: next,
-                })
-              }
               try {
-                await connection.sendNotification("textDocument/didChange", {
-                  textDocument: {
-                    uri: pathToFileURL(normalized).href,
-                    version: next,
-                  },
-                  contentChanges,
-                })
+                if (documentSync.change !== 0) {
+                  // Ranged incremental changes are only protocol-legal when
+                  // the server negotiated TextDocumentSyncKind.Incremental.
+                  // Full servers receive one range-less replacement. Also
+                  // fall back to full when the diff is unavailable or
+                  // pathological.
+                  let contentChanges: Array<
+                    | { text: string }
+                    | {
+                        range: {
+                          start: { line: number; character: number }
+                          end: { line: number; character: number }
+                        }
+                        text: string
+                      }
+                  >
+                  const prevText = lastContent.get(normalized)?.text
+                  const incremental =
+                    documentSync.change === 2 && prevText ? computeIncrementalChanges(prevText, text) : null
+                  if (incremental && incremental.length > 0) {
+                    contentChanges = incremental
+                    log.info("textDocument/didChange (incremental)", {
+                      path: normalized,
+                      version: next,
+                      hunks: incremental.length,
+                    })
+                  } else {
+                    contentChanges = [{ text }]
+                    log.info("textDocument/didChange (full)", {
+                      path: normalized,
+                      version: next,
+                    })
+                  }
+                  await connection.sendNotification("textDocument/didChange", {
+                    textDocument: {
+                      uri: pathToFileURL(normalized).href,
+                      version: next,
+                    },
+                    contentChanges,
+                  })
+                }
+                if (documentSync.save.enabled) {
+                  log.info("textDocument/didSave", { path: normalized, includeText: documentSync.save.includeText })
+                  await connection.sendNotification("textDocument/didSave", {
+                    textDocument: {
+                      uri: pathToFileURL(normalized).href,
+                    },
+                    ...(documentSync.save.includeText ? { text } : {}),
+                  })
+                }
               } catch (error) {
                 wait?.cancel()
                 throw error
@@ -648,22 +730,25 @@ export namespace LSPClient {
                 },
               ],
             })
-            const wait = input.waitForDiagnostics ? diagnosticsWait({ path: normalized }) : undefined
+            const wait =
+              input.waitForDiagnostics && documentSync.openClose ? diagnosticsWait({ path: normalized }) : undefined
 
-            log.info("textDocument/didOpen", { ...input, path: normalized })
             diagnostics.delete(normalized)
-            try {
-              await connection.sendNotification("textDocument/didOpen", {
-                textDocument: {
-                  uri: pathToFileURL(normalized).href,
-                  languageId,
-                  version: 0,
-                  text,
-                },
-              })
-            } catch (error) {
-              wait?.cancel()
-              throw error
+            if (documentSync.openClose) {
+              log.info("textDocument/didOpen", { ...input, path: normalized })
+              try {
+                await connection.sendNotification("textDocument/didOpen", {
+                  textDocument: {
+                    uri: pathToFileURL(normalized).href,
+                    languageId,
+                    version: 0,
+                    text,
+                  },
+                })
+              } catch (error) {
+                wait?.cancel()
+                throw error
+              }
             }
             wait?.start()
             files[normalized] = 0

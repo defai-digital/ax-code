@@ -16,6 +16,29 @@ afterEach(() => {
   configSpy = undefined
 })
 
+const range = {
+  start: { line: 0, character: 0 },
+  end: { line: 0, character: 3 },
+}
+
+function hierarchyItem(name: string) {
+  return {
+    name,
+    kind: 12,
+    uri: `file:///workspace/${name}.ts`,
+    range,
+    selectionRange: range,
+  }
+}
+
+function incomingCall(name: string) {
+  return { from: hierarchyItem(name), fromRanges: [range] }
+}
+
+function outgoingCall(name: string) {
+  return { to: hierarchyItem(name), fromRanges: [range] }
+}
+
 describe("LSP call hierarchy aggregation", () => {
   test("incomingCalls aggregates every prepared hierarchy item", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -37,12 +60,12 @@ describe("LSP call hierarchy aggregation", () => {
               command: [process.execPath, serverPath],
               extensions: [".ts"],
               env: {
-                FAKE_LSP_PREPARE_CALL_HIERARCHY: JSON.stringify([{ name: "a" }, { name: "b" }]),
+                FAKE_LSP_PREPARE_CALL_HIERARCHY: JSON.stringify([hierarchyItem("a"), hierarchyItem("b")]),
                 FAKE_LSP_INCOMING_CALLS: JSON.stringify({
-                  a: [{ from: "caller-1" }],
-                  b: [{ from: "caller-2" }],
+                  a: [incomingCall("caller-1")],
+                  b: [incomingCall("caller-2")],
                 }),
-                FAKE_LSP_OUTGOING_CALLS: JSON.stringify([{ to: "ignored-incoming-only" }]),
+                FAKE_LSP_OUTGOING_CALLS: JSON.stringify([outgoingCall("ignored-incoming-only")]),
               },
             },
           },
@@ -50,7 +73,7 @@ describe("LSP call hierarchy aggregation", () => {
 
         const calls = await LSP.incomingCalls(input)
         expect(calls).toHaveLength(2)
-        expect(calls).toEqual(expect.arrayContaining([{ from: "caller-1" }, { from: "caller-2" }]))
+        expect(calls).toEqual(expect.arrayContaining([incomingCall("caller-1"), incomingCall("caller-2")]))
       },
     })
   })
@@ -75,12 +98,12 @@ describe("LSP call hierarchy aggregation", () => {
               command: [process.execPath, serverPath],
               extensions: [".ts"],
               env: {
-                FAKE_LSP_PREPARE_CALL_HIERARCHY: JSON.stringify([{ name: "a" }, { name: "b" }]),
+                FAKE_LSP_PREPARE_CALL_HIERARCHY: JSON.stringify([hierarchyItem("a"), hierarchyItem("b")]),
                 FAKE_LSP_OUTGOING_CALLS: JSON.stringify({
-                  a: [{ to: "callee-1" }],
-                  b: [{ to: "callee-2" }],
+                  a: [outgoingCall("callee-1")],
+                  b: [outgoingCall("callee-2")],
                 }),
-                FAKE_LSP_INCOMING_CALLS: JSON.stringify([{ from: "ignored-outgoing-only" }]),
+                FAKE_LSP_INCOMING_CALLS: JSON.stringify([incomingCall("ignored-outgoing-only")]),
               },
             },
           },
@@ -88,7 +111,7 @@ describe("LSP call hierarchy aggregation", () => {
 
         const calls = await LSP.outgoingCalls(input)
         expect(calls).toHaveLength(2)
-        expect(calls).toEqual(expect.arrayContaining([{ to: "callee-1" }, { to: "callee-2" }]))
+        expect(calls).toEqual(expect.arrayContaining([outgoingCall("callee-1"), outgoingCall("callee-2")]))
       },
     })
   })

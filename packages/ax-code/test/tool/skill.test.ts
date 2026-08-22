@@ -285,7 +285,8 @@ description: Skill for escaping.
         fn: async () => {
           const tool = await SkillTool.init()
           const schema = JSON.stringify(z.toJSONSchema(tool.parameters))
-          expect(schema).toContain("evil&quot;&gt;&lt;tag&gt;")
+          expect(tool.description).toContain("evil&quot;&gt;&lt;tag&gt;")
+          expect(tool.description).not.toContain(`evil"><tag>`)
           expect(schema).not.toContain(`evil"><tag>`)
 
           const ctx: Tool.Context = {

@@ -96,6 +96,7 @@ export async function run<T>(input: {
   cachedMetric: string
   liveMetric: string
   execute: (dedupKey?: string) => Promise<SemanticEnvelope<T>>
+  normalize?: (value: unknown) => T
 }): Promise<SemanticEnvelope<T>> {
   const store = cacheStore()
   const enabled = store ? store.enabled(input.cache) : false
@@ -115,10 +116,17 @@ export async function run<T>(input: {
       },
       enabled,
     )
-    if (hit) return hit
+    if (hit) {
+      return input.normalize
+        ? {
+            ...hit,
+            data: input.normalize(hit.data),
+          }
+        : hit
+    }
   }
 
-  const envelope = await input.execute(
+  const executed = await input.execute(
     contentHash
       ? inflightKey({
           operation: input.operation,
@@ -132,6 +140,12 @@ export async function run<T>(input: {
         // them onto a stale result.
         await statDedupKey(input),
   )
+  const envelope = input.normalize
+    ? {
+        ...executed,
+        data: input.normalize(executed.data),
+      }
+    : executed
 
   LSPPerf.recordSample(input.liveMetric, 0, true)
   if (store && contentHash) {
