@@ -82,13 +82,10 @@ describe("ShadowWorktree", () => {
       throw new Error(`expected uncommitted-changes rejection, got ${JSON.stringify(result)}`)
     }
     expect(result.files).toContain("untracked.txt")
-    // CURRENT-BEHAVIOR QUIRK: precheck trims the whole porcelain output
-    // before splitting, which eats the leading status column of the FIRST
-    // line when that line's status starts with a space (" M file.txt" →
-    // "M file.txt" → slice(3) drops a filename character). Codified here;
-    // a later phase fixes the parse.
-    expect(result.files).toContain("ile.txt")
-    expect(result.files).not.toContain("file.txt")
+    // Porcelain format is "XY<space>path"; the first dirty file must keep
+    // its full name even when its status column starts with a space.
+    expect(result.files).toContain("file.txt")
+    expect(result.files).not.toContain("ile.txt")
   })
 
   test("precheck reports not-git for a non-git project or a non-repo directory", async () => {
@@ -211,16 +208,13 @@ describe("ShadowWorktree", () => {
     expect(await pathExists(orphanDir)).toBe(true)
 
     const cleaned = await ShadowWorktree.cleanupOrphans()
-    // CURRENT-BEHAVIOR QUIRK: `git branch --list` decorates worktree-checked-out
-    // branches with a "+ " prefix, but cleanupOrphans only strips "*". Orphan
-    // shadow branches are always checked out in their (dead) worktree, so the
-    // branch-removal path derives a mangled planId ("+ plan-orphan"), targets a
-    // nonexistent worktree dir and branch name, and silently fails — the orphan
-    // BRANCH survives cleanup. The directory sweep works because readdir names
-    // carry no decoration.
-    expect(cleaned).toEqual({ branches: 0, directories: 1 })
+    // `git branch --list` decorates worktree-checked-out branches with a
+    // "+ " prefix; cleanup strips it, so the worktree remove now targets
+    // the right directory (removing it before the readdir sweep runs) and
+    // the orphan branch is deleted too.
+    expect(cleaned).toEqual({ branches: 1, directories: 0 })
     expect(await pathExists(orphanDir)).toBe(false)
-    expect(await branchExists(ctx, "ax-code/dre/shadow/plan-orphan")).toBe(true)
+    expect(await branchExists(ctx, "ax-code/dre/shadow/plan-orphan")).toBe(false)
 
     // The active shadow's directory is skipped via the concurrency-gate guard
     // and the worktree remains usable.
