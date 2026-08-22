@@ -964,6 +964,12 @@ export const Info = z
             "Backend server command override. Precedence: this config > AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_OCU_COMMAND env > default command name.",
           ),
         args: z.array(z.string()).optional().describe('Backend server command arguments (default: ["mcp"])'),
+        overrides: z
+          .record(z.string(), z.enum(["cua", "ocu"]))
+          .optional()
+          .describe(
+            'Per-app provider overrides: map an application name (as observed by computer_snapshot) to "cua" or "ocu". Observations and element acts against a matching app route to the named provider; everything else uses `provider`. Element ids are only valid against the provider that issued them — crossing providers requires a fresh observation.',
+          ),
         grounder: z
           .object({
             model: z

@@ -49,7 +49,7 @@ export async function getComputerUseCheck(
       status: "fail",
       detail:
         `provider ${resolved.provider} unavailable via "${command}" (override with ${resolved.env} or computer.command). ` +
-        `Install ${INSTALL_HINTS[resolved.provider]} and retry. ${report.error ?? "unknown error"}`,
+        `Install ${INSTALL_HINTS[resolved.provider as keyof typeof INSTALL_HINTS] ?? resolved.provider} and retry. ${report.error ?? "unknown error"}`,
     }
   } catch (error) {
     // doctor must never crash on a preflight

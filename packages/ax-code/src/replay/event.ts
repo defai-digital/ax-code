@@ -314,6 +314,37 @@ export const AgentSafetyDecidedEvent = Base.extend({
   shadow: z.boolean().optional(),
 })
 
+/**
+ * Computer-use observations, actions, and watches. Emitted by the Computer
+ * namespace alongside the regular tool.call/tool.result trail so AX-Trust
+ * reviewers see the GUI trajectory (scope, backend, outcome) without
+ * needing to re-derive it from rendered tool output.
+ */
+export const ComputerObserveEvent = Base.extend({
+  type: z.literal("computer.observe"),
+  tool: z.enum(["computer_snapshot", "computer_watch"]),
+  provider: z.string(),
+  scope: z.string(),
+  elementCount: z.number().int().optional(),
+  polls: z.number().int().optional(),
+  durationMs: z.number().int().optional(),
+  ok: z.boolean(),
+  error: z.string().optional(),
+})
+
+export const ComputerActionEvent = Base.extend({
+  type: z.literal("computer.action"),
+  actionType: z.string(),
+  provider: z.string(),
+  scope: z.string(),
+  summary: z.string(),
+  ok: z.boolean(),
+  refusal: z.string().optional(),
+  detail: z.string().optional(),
+  reobserveError: z.string().optional(),
+  durationMs: z.number().int().optional(),
+})
+
 export const ReplayEvent = z.discriminatedUnion("type", [
   SessionStartEvent,
   SessionEndEvent,
@@ -345,5 +376,7 @@ export const ReplayEvent = z.discriminatedUnion("type", [
   AgentCompletionGateDecidedEvent,
   AgentCompletedEvent,
   AgentSafetyDecidedEvent,
+  ComputerObserveEvent,
+  ComputerActionEvent,
 ])
 export type ReplayEvent = z.infer<typeof ReplayEvent>

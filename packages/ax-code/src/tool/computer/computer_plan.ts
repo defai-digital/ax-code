@@ -47,7 +47,9 @@ export const ComputerPlanTool = Tool.define("computer_plan", {
       metadata: { scope: descriptor, task: params.task, candidates: params.candidates },
     })
 
-    const observation = await Computer.observe(scope)
+    const observation = await Computer.observe(scope, {
+      audit: { sessionID: ctx.sessionID, messageID: ctx.messageID, tool: "computer_plan" },
+    })
     const observationText = renderObservation(observation, {
       includeScreenshot: false,
       screenshotName: "computer-plan",

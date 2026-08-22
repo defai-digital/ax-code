@@ -111,6 +111,26 @@ function toAuditRecord(sessionID: string, event: ReplayEvent, timestamp: number,
         target: event.projectID,
         result: `nodes=${event.nodeCount} edges=${event.edgeCount}${event.commitSha ? ` sha=${event.commitSha}` : ""}`,
       }
+    case "computer.observe":
+      return {
+        ...base,
+        action: event.tool,
+        target: event.provider,
+        result: event.ok
+          ? `scope=${event.scope}${event.elementCount !== undefined ? ` elements=${event.elementCount}` : ""}${
+              event.polls !== undefined ? ` polls=${event.polls}` : ""
+            }`
+          : `scope=${event.scope} error=${event.error ?? "unknown"}`,
+      }
+    case "computer.action":
+      return {
+        ...base,
+        action: `computer.${event.actionType}`,
+        target: event.provider,
+        result: event.ok
+          ? `scope=${event.scope}${event.refusal ? ` refusal=${event.refusal}` : ""}`
+          : `scope=${event.scope} refusal=${event.refusal ?? event.detail ?? "error"}`,
+      }
     default:
       return base
   }

@@ -41,7 +41,9 @@ export const ComputerSnapshotTool = Tool.define("computer_snapshot", {
       metadata: { scope: descriptor },
     })
 
-    const observation = await Computer.observe(scope)
+    const observation = await Computer.observe(scope, {
+      audit: { sessionID: ctx.sessionID, messageID: ctx.messageID, tool: "computer_snapshot" },
+    })
     await Computer.record({ kind: "observe", summary: `observe ${descriptor}` })
     const rendered = renderObservation(observation, {
       includeScreenshot: params.includeScreenshot,

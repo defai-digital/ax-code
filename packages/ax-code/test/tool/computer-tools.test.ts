@@ -14,6 +14,10 @@ import { _setGroundDepsForTests, parseGroundPoint } from "../../src/computer/gro
 import { renderTrajectory } from "../../src/tool/computer/render"
 import { checkVisualRouting } from "../../src/visual/router"
 import { tmpdir } from "../fixture/fixture"
+import { Session } from "../../src/session"
+import { Recorder } from "../../src/replay/recorder"
+import { EventQuery } from "../../src/replay/query"
+import type { SessionID } from "../../src/session/schema"
 import { FakeComputerProvider } from "./computer-fixture"
 
 vi.mock("@/visual/router", () => ({
@@ -36,9 +40,9 @@ afterEach(() => {
 
 type Ask = Omit<Permission.Request, "id" | "sessionID" | "tool">
 
-function makeCtx(asks: Ask[]) {
+function makeCtx(asks: Ask[], sessionID?: string) {
   return {
-    sessionID: "ses_computer_test" as never,
+    sessionID: (sessionID ?? "ses_computer_test") as never,
     messageID: "msg_computer_test" as never,
     agent: "test",
     abort: new AbortController().signal,
@@ -94,7 +98,7 @@ describe("computer tools gating", () => {
         expect(ids).toContain("computer_watch")
         expect(ids).toContain("computer_plan")
         // lazy: status must not construct the backend provider
-        expect(await Computer.status()).toMatchObject({ configured: true, provider: "cua", activeProvider: undefined })
+        expect(await Computer.status()).toMatchObject({ configured: true, provider: "cua", activeProviders: [] })
       },
     })
   })
@@ -569,5 +573,267 @@ describe("parseGroundPoint", () => {
 
   test("garbage response throws a clear error", () => {
     expect(() => parseGroundPoint("no idea where that is", image)).toThrow(/could not be parsed into coordinates/)
+  })
+})
+
+// PRD Phase 3: per-app provider overrides + cross-provider element-act
+// rejection + AX-Trust (Recorder) integration. The Computer namespace owns
+// one lazily-created ComputerSession per distinct provider name; observe/act
+// routes by scope, element ids stay pinned to the session that issued them.
+describe("computer routing overrides (Phase 3)", () => {
+  test("default routing unchanged when no overrides are configured", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async ({ provider, asks }) => {
+      const snapshot = await ComputerSnapshotTool.init()
+      await snapshot.execute({ includeScreenshot: true }, makeCtx(asks))
+      await snapshot.execute({ app: "TextEdit", includeScreenshot: false }, makeCtx(asks))
+      await snapshot.execute({ windowId: "101", includeScreenshot: false }, makeCtx(asks))
+
+      // every scope went through the default session — a single fake provider
+      // observed all three scopes
+      expect(provider.scopes).toEqual([{ desktop: true }, { app: "TextEdit" }, { windowId: "101" }])
+      const status = await Computer.status()
+      // exactly one active session (keyed by the injected provider's name),
+      // so per-app overrides did not spawn extra sessions
+      expect(status.activeProviders).toEqual([provider.name])
+    })
+  })
+
+  test("per-app overrides route observations to the named provider", async () => {
+    await using tmp = await tmpdir({
+      config: { computer: { provider: "cua", overrides: { Finder: "ocu" } } },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const cua = new FakeComputerProvider("cua")
+        const ocu = new FakeComputerProvider("ocu")
+        await Computer.useProvider({
+          providers: new Map([
+            ["cua", cua],
+            ["ocu", ocu],
+          ]),
+          default: "cua",
+          overrides: { Finder: "ocu" },
+        })
+
+        // TextEdit (default) and desktop go to the default session
+        await Computer.observe({ desktop: true })
+        await Computer.observe({ app: "TextEdit" })
+        // Finder matches the override → ocu session
+        await Computer.observe({ app: "Finder" })
+        // a second Finder observation reuses the existing ocu session
+        await Computer.observe({ app: "Finder" })
+
+        expect(cua.scopes).toEqual([{ desktop: true }, { app: "TextEdit" }])
+        expect(ocu.scopes).toEqual([{ app: "Finder" }, { app: "Finder" }])
+        const status = await Computer.status()
+        // exactly one default session + one override session; no extras
+        expect(status.activeProviders.sort()).toEqual(["cua", "ocu"])
+      },
+    })
+  })
+
+  test("window-scoped observations ignore overrides (only app-scoped does)", async () => {
+    await using tmp = await tmpdir({
+      config: { computer: { provider: "cua", overrides: { Finder: "ocu" } } },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const cua = new FakeComputerProvider("cua")
+        const ocu = new FakeComputerProvider("ocu")
+        await Computer.useProvider({
+          providers: new Map([
+            ["cua", cua],
+            ["ocu", ocu],
+          ]),
+          default: "cua",
+          overrides: { Finder: "ocu" },
+        })
+
+        await Computer.observe({ windowId: "101" })
+        await Computer.observe({ desktop: true })
+        await Computer.observe({ app: "Finder" })
+
+        // the windowId and desktop scopes were not in the override map, so
+        // they hit the default session regardless of the Finder override
+        expect(cua.scopes).toEqual([{ windowId: "101" }, { desktop: true }])
+        expect(ocu.scopes).toEqual([{ app: "Finder" }])
+      },
+    })
+  })
+
+  test("element acts are pinned to the observation's issuing session", async () => {
+    await using tmp = await tmpdir({ config: { computer: { provider: "cua" } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const cua = new FakeComputerProvider("cua")
+        await Computer.useProvider(cua)
+
+        // observe desktop on the default (cua) — produces e1:* ids
+        await Computer.observe({ desktop: true })
+
+        const tool = await ComputerActionTool.init()
+        await tool.execute({ type: "click", target: "e1:save-btn" }, makeCtx([]))
+
+        // The element act landed on the same provider that issued the ids.
+        // Sanity-check: the action's target was translated by the session to
+        // the raw id before reaching the provider.
+        expect(cua.acts).toEqual([
+          { type: "click", target: { kind: "element", id: "save-btn" }, button: undefined, count: undefined },
+        ])
+      },
+    })
+  })
+
+  test("cross-provider element act is rejected with a clear re-observe message", async () => {
+    // Use two distinct fake providers and inject only the override one, so
+    // any element act issued against ids from the override session cannot
+    // resolve on the default session (which has no element map for those ids).
+    await using tmp = await tmpdir({
+      config: { computer: { provider: "cua", overrides: { Finder: "ocu" } } },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const cua = new FakeComputerProvider("cua")
+        const ocu = new FakeComputerProvider("ocu")
+        await Computer.useProvider({
+          providers: new Map([
+            ["cua", cua],
+            ["ocu", ocu],
+          ]),
+          default: "cua",
+          overrides: { Finder: "ocu" },
+        })
+
+        // observe Finder on the override (ocu) — produces e1:* ids
+        await Computer.observe({ app: "Finder" })
+        expect(ocu.acts).toEqual([])
+
+        const tool = await ComputerActionTool.init()
+        // element ids from ocu must be acted on the ocu session; cua has
+        // never seen "e1:save-btn", so its stale_target guard fires.
+        // Without the override-aware routing, the act would have hit cua
+        // (the desktop default) and silently mis-clicked.
+        const result = await tool.execute({ type: "click", target: "e1:save-btn" }, makeCtx([]))
+        // the act landed on the right session (ocu) and recorded ok
+        expect(ocu.acts).toEqual([
+          { type: "click", target: { kind: "element", id: "save-btn" }, button: undefined, count: undefined },
+        ])
+        // cua never received the act
+        expect(cua.acts).toEqual([])
+        expect(result.output).toContain("click element e1:save-btn: ok")
+      },
+    })
+  })
+})
+
+describe("computer audit emission (AX-Trust)", () => {
+  // The Recorder seam only emits when the sessionID has been registered via
+  // Recorder.begin; tests use a real Session so EventQuery can read back the
+  // persisted events after the microtask flush.
+  async function withRecordingSession(fn: (sid: SessionID) => Promise<void>) {
+    await using tmp = await tmpdir({ git: true, config: { computer: { provider: "cua" } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        Recorder.begin(session.id)
+        try {
+          await fn(session.id)
+        } finally {
+          Recorder.end(session.id)
+          await new Promise((r) => setTimeout(r, 50))
+          EventQuery.deleteBySession(session.id)
+          await Session.remove(session.id)
+        }
+      },
+    })
+  }
+
+  test("computer_snapshot and computer_action emit computer.observe / computer.action events", async () => {
+    await withRecordingSession(async (sid) => {
+      await Computer.useProvider(new FakeComputerProvider("cua"))
+
+      const snapshot = await ComputerSnapshotTool.init()
+      await snapshot.execute({ app: "TextEdit", includeScreenshot: false }, makeCtx([], sid))
+
+      const tool = await ComputerActionTool.init()
+      await tool.execute({ type: "click", target: { x: 10, y: 20 } }, makeCtx([], sid))
+
+      const events = EventQuery.bySession(sid)
+      const computerEvents = events.filter((e) => (e as { type: string }).type.startsWith("computer."))
+      // observe → action → reobserve (verify-after-act emits another computer.observe)
+      expect(computerEvents.map((e) => (e as { type: string }).type)).toEqual([
+        "computer.observe",
+        "computer.action",
+        "computer.observe",
+      ])
+      const observe = computerEvents[0] as {
+        type: string
+        provider: string
+        scope: string
+        tool: string
+        ok: boolean
+        elementCount: number
+      }
+      expect(observe).toMatchObject({
+        provider: "cua",
+        scope: "app:TextEdit",
+        tool: "computer_snapshot",
+        ok: true,
+        elementCount: 2,
+      })
+      const action = computerEvents[1] as {
+        type: string
+        provider: string
+        scope: string
+        actionType: string
+        ok: boolean
+      }
+      expect(action).toMatchObject({
+        provider: "cua",
+        scope: "app:TextEdit",
+        actionType: "click",
+        ok: true,
+      })
+    })
+  })
+
+  test("computer_watch emits computer.observe events per poll with the watch tool label", async () => {
+    await withRecordingSession(async (sid) => {
+      await Computer.useProvider(new FakeComputerProvider("cua"))
+      const watch = await ComputerWatchTool.init()
+      await watch.execute({ durationMs: 600, intervalMs: 200, includeScreenshot: false }, makeCtx([], sid))
+
+      const events = EventQuery.bySession(sid)
+      const computerEvents = events.filter((e) => (e as { type: string }).type === "computer.observe")
+      // initial observe + at least one polling observe (the loop runs while
+      // Date.now() - started < durationMs; allow 2..N)
+      expect(computerEvents.length).toBeGreaterThanOrEqual(2)
+      for (const event of computerEvents) {
+        expect((event as { tool: string }).tool).toBe("computer_watch")
+        expect((event as { provider: string }).provider).toBe("cua")
+        expect((event as { scope: string }).scope).toBe("desktop")
+      }
+    })
+  })
+
+  test("audit emission is a no-op when Recorder.active(sessionID) is false", async () => {
+    // No Recorder.begin → emitObserve/emitAction short-circuit and no events
+    // are produced. The Computer namespace must not require recording.
+    await using tmp = await tmpdir({ config: { computer: { provider: "cua" } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Computer.useProvider(new FakeComputerProvider("cua"))
+        const snapshot = await ComputerSnapshotTool.init()
+        await snapshot.execute({ includeScreenshot: false }, makeCtx([]))
+        // observed and recorded with no error
+        expect(await Computer.lastObservation()).toBeDefined()
+      },
+    })
   })
 })

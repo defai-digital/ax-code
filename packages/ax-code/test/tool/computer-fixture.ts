@@ -15,11 +15,15 @@ const PNG_BASE64 =
 
 /** in-memory ComputerUseProvider for tool tests; no processes spawned */
 export class FakeComputerProvider implements ComputerUseProvider {
-  readonly name = "fake"
+  readonly name: string
   disposed = false
   refusal: string | undefined
   readonly acts: ComputerAction[] = []
   readonly scopes: ObserveScope[] = []
+
+  constructor(name: string = "fake") {
+    this.name = name
+  }
 
   capabilities(): ProviderCapabilities {
     return {

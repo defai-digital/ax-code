@@ -62,7 +62,9 @@ export const ComputerWatchTool = Tool.define("computer_watch", {
     const started = Date.now()
     const changes: WatchChange[] = []
     let polls = 0
-    let observation = await Computer.observe(scope)
+    let observation = await Computer.observe(scope, {
+      audit: { sessionID: ctx.sessionID, messageID: ctx.messageID, tool: "computer_watch" },
+    })
     polls++
     let signature = signatureOf(observation)
     let elementCount = observation.elements.length
@@ -74,7 +76,9 @@ export const ComputerWatchTool = Tool.define("computer_watch", {
       await sleep(Math.min(params.intervalMs, remaining), undefined, { signal: ctx.abort }).catch(() => {})
       if (ctx.abort.aborted) break
 
-      observation = await Computer.observe(scope)
+      observation = await Computer.observe(scope, {
+        audit: { sessionID: ctx.sessionID, messageID: ctx.messageID, tool: "computer_watch" },
+      })
       polls++
       const next = signatureOf(observation)
       if (next === signature) continue

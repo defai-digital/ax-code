@@ -169,7 +169,9 @@ export const ComputerActionTool = Tool.define("computer_action", {
 
     let result
     try {
-      result = await Computer.act(action)
+      result = await Computer.act(action, {
+        audit: { sessionID: ctx.sessionID, messageID: ctx.messageID, tool: "computer_action" },
+      })
     } catch (err) {
       if (err instanceof ComputerUseError && err.code === "stale_target") {
         throw new Error(
@@ -187,7 +189,9 @@ export const ComputerActionTool = Tool.define("computer_action", {
     let rendered: ReturnType<typeof renderObservation> | undefined
     let reobserveError: string | undefined
     try {
-      observation = await Computer.reobserve()
+      observation = await Computer.reobserve({
+        audit: { sessionID: ctx.sessionID, messageID: ctx.messageID, tool: "computer_action" },
+      })
       rendered = renderObservation(observation, {
         includeScreenshot: true,
         screenshotName: "computer-action",
