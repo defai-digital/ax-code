@@ -17,9 +17,9 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, test } from "vitest"
 import { CuaProvider } from "../../src/providers/cua"
-import { OcuProvider } from "../../src/providers/ocu"
 import { AXNativeProvider } from "../../src/providers/axnative"
 import type { ComputerUseProvider } from "../../src/provider"
+import { UpstreamOcuReferenceProvider } from "../helpers/upstream-ocu"
 import { compareAbRuns, formatAbReport, runAbSuite, type AbSuiteRunResult } from "./suite"
 
 const live = process.env.AX_COMPUTER_LIVE === "1"
@@ -58,7 +58,7 @@ async function restoreTextEdit(provider: ComputerUseProvider) {
 describe.skipIf(!live)("live A/B: ocu vs cua on TextEdit", () => {
   test("AB-001..AB-006 run on both providers; report written to last-report.json", { timeout: 240_000 }, async () => {
     const ocuRun: AbSuiteRunResult = await runAbSuite(
-      async () => new OcuProvider({ command: process.env.AX_COMPUTER_OCU_COMMAND }),
+      async () => new UpstreamOcuReferenceProvider({ command: process.env.AX_COMPUTER_OCU_COMMAND }),
       { app: liveApp },
     )
 
@@ -67,7 +67,7 @@ describe.skipIf(!live)("live A/B: ocu vs cua on TextEdit", () => {
     // restore failure abort the test
     await new Promise((r) => setTimeout(r, 500))
     try {
-      const restoreProvider = new OcuProvider({ command: process.env.AX_COMPUTER_OCU_COMMAND })
+      const restoreProvider = new UpstreamOcuReferenceProvider({ command: process.env.AX_COMPUTER_OCU_COMMAND })
       try {
         await restoreTextEdit(restoreProvider)
       } finally {
@@ -110,13 +110,13 @@ describe.skipIf(!live)("live A/B: ocu vs cua on TextEdit", () => {
 describe.skipIf(!live)("live A/B: ocu vs axnative on TextEdit", () => {
   test("AB-001..AB-006 run on both providers", { timeout: 240_000 }, async () => {
     const ocuRun: AbSuiteRunResult = await runAbSuite(
-      async () => new OcuProvider({ command: process.env.AX_COMPUTER_OCU_COMMAND }),
+      async () => new UpstreamOcuReferenceProvider({ command: process.env.AX_COMPUTER_OCU_COMMAND }),
       { app: liveApp },
     )
 
     await new Promise((r) => setTimeout(r, 500))
     try {
-      const restoreProvider = new OcuProvider({ command: process.env.AX_COMPUTER_OCU_COMMAND })
+      const restoreProvider = new UpstreamOcuReferenceProvider({ command: process.env.AX_COMPUTER_OCU_COMMAND })
       try {
         await restoreTextEdit(restoreProvider)
       } finally {

@@ -2,11 +2,11 @@ import { describe, expect, test } from "vitest"
 import type { ActionResult, ComputerAction } from "../../src/action"
 import type { ComputerUseProvider, ObserveScope, ProviderCapabilities } from "../../src/provider"
 import { CuaProvider } from "../../src/providers/cua"
-import { OcuProvider } from "../../src/providers/ocu"
 import { AXNativeProvider } from "../../src/providers/axnative"
 import type { AppInfo, ComputerObservation, WindowInfo } from "../../src/types"
 import { runCompatSuite } from "./suite"
 import { PNG_BASE64 } from "../fixtures"
+import { UpstreamOcuReferenceProvider } from "../helpers/upstream-ocu"
 
 /** in-memory provider implementing the full canonical surface */
 class MockProvider implements ComputerUseProvider {
@@ -222,7 +222,7 @@ const liveApp = process.env.AX_COMPUTER_LIVE_APP ?? "TextEdit"
 describe.skipIf(!live)("compat suite: live ocu", () => {
   test("CU-001..CU-010 all pass", { timeout: 180_000 }, async () => {
     const results = await runCompatSuite(
-      async () => new OcuProvider({ command: process.env.AX_COMPUTER_OCU_COMMAND }),
+      async () => new UpstreamOcuReferenceProvider({ command: process.env.AX_COMPUTER_OCU_COMMAND }),
       {
         app: liveApp,
       },

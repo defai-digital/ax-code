@@ -5,8 +5,9 @@ import { fileURLToPath } from "node:url"
 import { describe, expect, test } from "vitest"
 import { ComputerUseError } from "../src/errors"
 import type { McpCallToolResult } from "../src/mcp/stdio-client"
-import { OcuProvider, parseA11yTree } from "../src/providers/ocu"
+import { parseA11yTree } from "../src/providers/ocu-protocol"
 import { FakeMcpClient, PNG_BASE64, ocu } from "./fixtures"
+import { UpstreamOcuReferenceProvider } from "./helpers/upstream-ocu"
 
 const server = fileURLToPath(new URL("./helpers/fake-mcp-server.mjs", import.meta.url))
 
@@ -14,10 +15,11 @@ function makeProvider(handler?: (tool: string) => McpCallToolResult) {
   const client = new FakeMcpClient((tool) =>
     handler ? handler(tool) : tool === "get_app_state" ? ocu.appState : ocu.clickOk,
   )
-  return { client, provider: new OcuProvider({ client }) }
+  return { client, provider: new UpstreamOcuReferenceProvider({ client }) }
 }
 
-describe("OcuProvider", () => {
+// shared dialect logic, exercised through the test-only upstream reference arm
+describe("OcuProtocolProvider", () => {
   test("observe({ app }) calls get_app_state and maps content blocks", async () => {
     const { client, provider } = makeProvider(() => ocu.appState)
     const observation = await provider.observe({ app: "TextEdit" })
@@ -193,7 +195,7 @@ describe("OcuProvider", () => {
     const countFile = path.join(dir, "spawns.txt")
     process.env.AX_FAKE_MCP_COUNT_FILE = countFile
     try {
-      const provider = new OcuProvider({ command: process.execPath, args: [server, "slow-init"] })
+      const provider = new UpstreamOcuReferenceProvider({ command: process.execPath, args: [server, "slow-init"] })
       await Promise.all([provider.listApps(), provider.listApps()])
       await provider.dispose()
       const spawns = fs.readFileSync(countFile, "utf8").trim().split("\n")

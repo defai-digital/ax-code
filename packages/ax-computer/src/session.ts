@@ -29,7 +29,7 @@ export class ComputerSession {
     return this.provider
   }
 
-  /** Convenience getter for the active provider's backend name (e.g. "cua", "ocu"). */
+  /** Convenience getter for the active provider's backend name (e.g. "axnative", "cua"). */
   get activeProviderName(): string {
     return this.provider.name
   }

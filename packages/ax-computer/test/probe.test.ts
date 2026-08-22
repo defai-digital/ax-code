@@ -2,14 +2,14 @@ import { fileURLToPath } from "node:url"
 import { describe, expect, test, vi } from "vitest"
 import type { ActionResult, ComputerAction } from "../src/action"
 import { probeProvider } from "../src/probe"
-import { OcuProvider } from "../src/providers/ocu"
 import type { ComputerUseProvider, ObserveScope, ProviderCapabilities } from "../src/provider"
 import type { AppInfo, ComputerObservation } from "../src/types"
+import { UpstreamOcuReferenceProvider } from "./helpers/upstream-ocu"
 
 const server = fileURLToPath(new URL("./helpers/fake-mcp-server.mjs", import.meta.url))
 
 function ocuOnFakeServer(mode: string) {
-  return new OcuProvider({ command: process.execPath, args: [server, mode] })
+  return new UpstreamOcuReferenceProvider({ command: process.execPath, args: [server, mode] })
 }
 
 /** never answers listApps; records dispose so timeout cleanup is observable */
@@ -53,7 +53,7 @@ describe("probeProvider", () => {
   })
 
   test("spawn failure: ok:false, error names the command", async () => {
-    const provider = new OcuProvider({ command: "ax-code-definitely-not-a-real-binary" })
+    const provider = new UpstreamOcuReferenceProvider({ command: "ax-code-definitely-not-a-real-binary" })
     const dispose = vi.spyOn(provider, "dispose")
     const report = await probeProvider(provider)
 
