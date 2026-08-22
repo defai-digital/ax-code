@@ -550,6 +550,10 @@ public final class ComputerUseService {
 
             pulseVisualCursor(at: cursorTarget, clickCount: clickCount, mouseButton: button)
         } else if let x, let y {
+            guard snapshot.screenshotPNGData != nil else {
+                throw ComputerUseError.stateUnavailable("click with x/y requires a screenshot; run get_app_state again")
+            }
+
             let screenshotPoint = CGPoint(x: x, y: y)
             let point = screenshotPixelToWindowPointInSnapshot(snapshot: snapshot, point: screenshotPoint)
             let targetPoint = try windowPointToGlobalPoint(snapshot: snapshot, point: point)
@@ -699,6 +703,10 @@ public final class ComputerUseService {
             try FixtureBridge.post(FixtureCommand(kind: "drag", identifier: "fixture-drag-pad", x: fromX, y: fromY, toX: toX, toY: toY))
             Thread.sleep(forTimeInterval: 0.15)
             return snapshotResult(for: try refreshSnapshot(for: query), style: .actionResult)
+        }
+
+        guard snapshot.screenshotPNGData != nil else {
+            throw ComputerUseError.stateUnavailable("drag with x/y requires a screenshot; run get_app_state again")
         }
 
         let start = try screenshotToGlobalPoint(snapshot: snapshot, x: fromX, y: fromY)
@@ -1374,7 +1382,14 @@ public final class ComputerUseService {
         }
 
         let baseValue = editableBaseValue(for: element)
-        let result = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, (baseValue + text) as CFString)
+        // Only use AX value setting when the field appears empty. If it already
+        // contains text, fall back to keyboard events so we respect the cursor
+        // and do not force-append to the end of the existing value.
+        guard baseValue.isEmpty else {
+            return false
+        }
+
+        let result = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, text as CFString)
         switch result {
         case .success:
             return true

@@ -180,8 +180,6 @@ export abstract class OcuProtocolProvider implements ComputerUseProvider {
   private connecting: Promise<McpClient> | undefined
   /** app of the most recent observe/launch; dialect tools require it */
   private currentApp: string | undefined
-  /** elements of the most recent observation (raw provider ids) */
-  private lastElements: ComputerElement[] = []
 
   constructor(protected readonly config: OcuProtocolProviderConfig = {}) {}
 
@@ -217,14 +215,14 @@ export abstract class OcuProtocolProvider implements ComputerUseProvider {
     const a11yText = mcpText(result)
     // element indices come from the rendered tree text; the dialect exposes no
     // geometry in it, so elements carry no bounds
-    this.lastElements = parseA11yTree(a11yText)
+    const elements = parseA11yTree(a11yText)
     return {
       platform: "darwin", // the OCU dialect is macOS-only
       provider: this.name,
       timestamp: Date.now(),
       app: { name: scope.app },
       screenshot: mcpImage(result),
-      elements: this.lastElements,
+      elements,
       a11yText: a11yText || undefined,
       raw: result,
     }
@@ -269,23 +267,17 @@ export abstract class OcuProtocolProvider implements ComputerUseProvider {
             code: "unsupported_target",
           })
         }
-        // the dialect's scroll schema requires element_index; without an
-        // explicit target, anchor on the first scrollable element of the last
-        // observation rather than calling the tool with a missing argument
-        let elementIndex = action.target?.kind === "element" ? action.target.id : undefined
+        // Require an explicit element target. Auto-anchoring to the first
+        // scrollable element of a stale observation has caused the wrong area
+        // to scroll when the UI changed between observe and act.
+        const elementIndex = action.target?.kind === "element" ? action.target.id : undefined
         if (!elementIndex) {
-          const scrollable =
-            this.lastElements.find((element) => element.role?.includes("scroll area")) ??
-            this.lastElements.find((element) => element.role?.includes("scroll"))
-          if (!scrollable) {
-            return {
-              ok: false,
-              provider: this.name,
-              action: action.type,
-              refusal: "no scrollable element in last observation",
-            }
+          return {
+            ok: false,
+            provider: this.name,
+            action: action.type,
+            refusal: "scroll requires an explicit element target; re-observe and pass an element id",
           }
-          elementIndex = scrollable.id
         }
         return this.call(action, "scroll", {
           app,

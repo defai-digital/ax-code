@@ -85,42 +85,27 @@ describe("OcuProtocolProvider", () => {
     expect(client.lastCall()).toEqual({ tool: "press_key", args: { app: "TextEdit", key: "super+shift+F5" } })
   })
 
-  test("scroll maps amount to fractional pages and falls back to the scroll area", async () => {
+  test("scroll requires an explicit element target", async () => {
     const { client, provider } = makeProvider()
     await provider.observe({ app: "TextEdit" })
 
-    // no explicit target: the tree's scroll area (index 2) is used because
-    // OCU's scroll schema requires element_index
-    await provider.act({ type: "scroll", direction: "down", amount: 0.5 })
-    expect(client.lastCall()).toEqual({
-      tool: "scroll",
-      args: { app: "TextEdit", direction: "down", pages: 0.5, element_index: "2" },
+    // no explicit target: the stale last-observation fallback is removed; the
+    // model must re-observe and pass an element id
+    const callsBefore = client.calls.length
+    const refused = await provider.act({ type: "scroll", direction: "down", amount: 0.5 })
+    expect(refused).toEqual({
+      ok: false,
+      provider: "ocu",
+      action: "scroll",
+      refusal: "scroll requires an explicit element target; re-observe and pass an element id",
     })
+    expect(client.calls.length).toBe(callsBefore)
 
     await provider.act({ type: "scroll", direction: "up", target: { kind: "element", id: "1" } })
     expect(client.lastCall()).toEqual({
       tool: "scroll",
       args: { app: "TextEdit", direction: "up", pages: 1, element_index: "1" },
     })
-  })
-
-  test("scroll refuses cleanly when the last observation has no scrollable element", async () => {
-    const noScroll: McpCallToolResult = {
-      content: [{ type: "text", text: "App=com.example.App (pid 1)\n0 button OK" }],
-    }
-    const { client, provider } = makeProvider(() => noScroll)
-    await provider.observe({ app: "TextEdit" })
-    const callsBefore = client.calls.length
-
-    const result = await provider.act({ type: "scroll", direction: "down" })
-    expect(result).toEqual({
-      ok: false,
-      provider: "ocu",
-      action: "scroll",
-      refusal: "no scrollable element in last observation",
-    })
-    // the tool must not be called without the required element_index
-    expect(client.calls.length).toBe(callsBefore)
   })
 
   test("scroll rejects point targets", async () => {

@@ -3104,7 +3104,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -3113,7 +3113,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048576,
           "output": 393215
@@ -3704,7 +3704,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -3713,7 +3713,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048576,
           "output": 1048576
@@ -8773,6 +8773,46 @@
         "limit": {
           "context": 1048576,
           "output": 393216
+        }
+      },
+      "deepseek-ai/deepseek-v4-flash-0731": {
+        "id": "deepseek-ai/deepseek-v4-flash-0731",
+        "name": "DeepSeek V4 Flash 0731",
+        "description": "Official DeepSeek V4 Flash release with enhanced agentic capabilities and integrated DSpark speculative decoding",
+        "family": "deepseek-flash",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-07-31",
+        "last_updated": "2026-07-31",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 384000
         }
       },
       "stepfun-ai/step-3.5-flash": {
@@ -18912,7 +18952,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -18921,7 +18961,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048576,
           "input": 1048576,
@@ -19264,7 +19304,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -19273,7 +19313,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048576,
           "input": 1048576,
@@ -30171,7 +30211,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -30180,7 +30220,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1000000,
           "output": 384000
@@ -36761,7 +36801,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -36770,7 +36810,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048576,
           "output": 384000
@@ -38444,7 +38484,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -75694,7 +75734,7 @@
         "structured_output": false,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -75703,7 +75743,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1000000,
           "output": 384000
@@ -85052,7 +85092,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -85061,7 +85101,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048576,
           "output": 1048576
@@ -95228,7 +95268,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -95237,7 +95277,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048576,
           "output": 393215
@@ -97144,7 +97184,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -97153,7 +97193,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048576,
           "output": 384000
@@ -98903,7 +98943,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -98912,7 +98952,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048576,
           "output": 384000
@@ -99568,7 +99608,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -99577,7 +99617,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1000000,
           "output": 384000
@@ -99652,6 +99692,46 @@
         "limit": {
           "context": 128000,
           "output": 32000
+        }
+      },
+      "deepseek/deepseek-v4-flash-0731": {
+        "id": "deepseek/deepseek-v4-flash-0731",
+        "name": "DeepSeek V4 Flash 0731",
+        "description": "Official DeepSeek V4 Flash release with enhanced agentic capabilities and integrated DSpark speculative decoding",
+        "family": "deepseek-flash",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-07-31",
+        "last_updated": "2026-07-31",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 384000
         }
       },
       "deepseek/deepseek-v4-pro-0423": {
@@ -114401,7 +114481,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -114410,7 +114490,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1000000,
           "output": 131072
@@ -119604,7 +119684,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048576,
           "output": 262144
@@ -121935,7 +122015,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -121944,7 +122024,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048576,
           "output": 262144
@@ -130908,7 +130988,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -130917,7 +130997,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1000000,
           "output": 393216
@@ -135246,6 +135326,42 @@
           "output": 262144
         }
       },
+      "nvidia/nemotron-3.5-lightning-free": {
+        "id": "nvidia/nemotron-3.5-lightning-free",
+        "name": "Nemotron 3.5 Lightning 30B (Free)",
+        "description": "Fast NVIDIA Nemotron MoE for reliable agentic tasks across enterprise workloads",
+        "family": "nemotron",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "budget_tokens",
+            "min": 1,
+            "max": 32768
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-11",
+        "last_updated": "2026-08-11",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 32768
+        }
+      },
       "nvidia/nemotron-nano-12b-v2-vl": {
         "id": "nvidia/nemotron-nano-12b-v2-vl",
         "name": "Nvidia Nemotron Nano 12B V2 VL",
@@ -135317,6 +135433,11 @@
         "reasoning_options": [
           {
             "type": "toggle"
+          },
+          {
+            "type": "budget_tokens",
+            "min": 1,
+            "max": 32768
           }
         ],
         "tool_call": true,
@@ -135334,8 +135455,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 262144,
-          "output": 131072
+          "context": 1000000,
+          "output": 32768
         }
       },
       "nvidia/nemotron-3-ultra-550b-a55b": {
@@ -135491,7 +135612,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -135500,7 +135621,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1000000,
           "output": 384000
@@ -145293,7 +145414,7 @@
         "structured_output": false,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -145302,7 +145423,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048576,
           "output": 384000
@@ -146544,7 +146665,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -146553,7 +146674,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048576,
           "output": 384000
@@ -149183,7 +149304,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -149192,7 +149313,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1000000,
           "output": 384000
@@ -150584,7 +150705,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -150593,7 +150714,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048576,
           "output": 384000
@@ -150757,7 +150878,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -150766,7 +150887,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048576,
           "output": 384000
@@ -160295,38 +160416,6 @@
           "output": 229376
         }
       },
-      "glm-5": {
-        "id": "glm-5",
-        "name": "GLM-5",
-        "description": "General GLM flagship for coding, analysis, and tool-heavy engineering workflows",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "temperature": true,
-        "release_date": "2026-02-12",
-        "last_updated": "2026-02-12",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 202752,
-          "output": 202752
-        },
-        "provider": {
-          "npm": "@ai-sdk/openai-compatible"
-        }
-      },
       "greg-rp": {
         "id": "greg-rp",
         "name": "Greg (Roleplay)",
@@ -160419,35 +160508,6 @@
           "npm": "@ai-sdk/openai-compatible"
         }
       },
-      "minimax-m2.5": {
-        "id": "minimax-m2.5",
-        "name": "MiniMax-M2.5",
-        "description": "Prior MiniMax coding model for agent workflows, office edits, and automation",
-        "family": "minimax",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-02-12",
-        "last_updated": "2026-02-12",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 204800,
-          "output": 131072
-        },
-        "provider": {
-          "npm": "@ai-sdk/openai-compatible"
-        }
-      },
       "qwen3.6-27b": {
         "id": "qwen3.6-27b",
         "name": "Qwen3.6 27B",
@@ -160477,6 +160537,48 @@
             "image",
             "video",
             "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai-compatible"
+        }
+      },
+      "qwen3.8-27b": {
+        "id": "qwen3.8-27b",
+        "name": "Qwen3.8 27B",
+        "description": "Dense 27B vision-language model for coding, agent tasks, and image and video understanding",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
           ],
           "output": [
             "text"
@@ -160966,7 +161068,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -160975,7 +161077,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048576,
           "output": 32768
@@ -166051,7 +166153,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -166060,7 +166162,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1048575,
           "output": 384000
@@ -182718,7 +182820,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
-        "last_updated": "2026-08-12",
+        "last_updated": "2026-08-22",
         "modalities": {
           "input": [
             "text"
@@ -182727,7 +182829,7 @@
             "text"
           ]
         },
-        "open_weights": false,
+        "open_weights": true,
         "limit": {
           "context": 1000000,
           "output": 384000

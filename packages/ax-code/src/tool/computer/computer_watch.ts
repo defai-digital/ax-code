@@ -1,3 +1,4 @@
+import crypto from "node:crypto"
 import { setTimeout as sleep } from "node:timers/promises"
 import z from "zod"
 import { Tool } from "../tool"
@@ -10,7 +11,12 @@ import { renderObservation } from "./render"
 /** Content signature used for change detection between polls. */
 function signatureOf(observation: ComputerObservation): string {
   const elements = observation.elements.map((e) => `${e.id}|${e.role ?? ""}|${e.name ?? ""}|${e.value ?? ""}`)
-  return `${elements.join("\n")}\n---\n${observation.a11yText ?? ""}`
+  const screenshotHash = observation.screenshot?.data ? hashData(observation.screenshot.data) : ""
+  return `${elements.join("\n")}\n---\n${observation.a11yText ?? ""}\n---\n${screenshotHash}`
+}
+
+function hashData(data: string): string {
+  return crypto.createHash("sha256").update(data).digest("hex")
 }
 
 interface WatchChange {

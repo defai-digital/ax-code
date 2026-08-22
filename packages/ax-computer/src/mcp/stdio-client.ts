@@ -73,6 +73,9 @@ export class StdioMcpClient implements McpClient {
   private stderrTail = ""
   private exitError: McpClientError | undefined
   private readonly exited: Promise<void>
+  /** serializes writes so we respect stream backpressure */
+  private writePromise: Promise<void> = Promise.resolve()
+  private writeError: Error | undefined
 
   /** spawn the server and run the initialize/initialized handshake */
   static async start(options: StdioMcpClientOptions): Promise<StdioMcpClient> {
@@ -123,9 +126,12 @@ export class StdioMcpClient implements McpClient {
     if (!stdout || !stderr || !stdin) {
       throw new McpClientError("spawn_failed", `MCP server "${options.command}" did not expose piped stdio`)
     }
-    // writes to a dead child's stdin raise EPIPE asynchronously; the pending
-    // requests are already rejected by the exit path, so just swallow it
-    stdin.on("error", () => {})
+    // Surface stdin errors instead of swallowing them; the exit path also
+    // rejects pending requests, but an EPIPE on a live stream should fail fast.
+    stdin.on("error", (error) => {
+      this.writeError = error instanceof Error ? error : new Error(String(error))
+      this.rejectAll(new McpClientError("protocol", `MCP server stdin error: ${this.writeError.message}`))
+    })
     stdout.setEncoding("utf8")
     stdout.on("data", (chunk: string) => this.onStdout(chunk))
     stderr.setEncoding("utf8")
@@ -168,27 +174,54 @@ export class StdioMcpClient implements McpClient {
         reject(new McpClientError("timeout", `MCP request "${method}" timed out after ${this.requestTimeoutMs}ms`))
       }, this.requestTimeoutMs)
       this.pending.set(id, { resolve, reject, timer })
-      try {
-        this.write({ jsonrpc: "2.0", id, method, params })
-      } catch (error) {
+      this.write({ jsonrpc: "2.0", id, method, params }).catch((error) => {
         this.pending.delete(id)
         clearTimeout(timer)
         reject(error instanceof Error ? error : new McpClientError("protocol", String(error)))
-      }
+      })
     })
   }
 
   private notify(method: string): void {
     if (this.exitError) return
-    try {
-      this.write({ jsonrpc: "2.0", method })
-    } catch {
+    void this.write({ jsonrpc: "2.0", method }).catch(() => {
       // best effort; a dead child surfaces through the exit path
-    }
+    })
   }
 
-  private write(message: Record<string, unknown>): void {
-    this.child.stdin?.write(JSON.stringify(message) + "\n")
+  private write(message: Record<string, unknown>): Promise<void> {
+    if (this.exitError) return Promise.reject(this.exitError)
+    if (this.writeError) return Promise.reject(this.writeError)
+
+    this.writePromise = this.writePromise.then(async () => {
+      if (this.exitError) throw this.exitError
+      const stdin = this.child.stdin
+      if (!stdin || stdin.destroyed) {
+        throw new McpClientError("protocol", "MCP server stdin is closed")
+      }
+      const line = JSON.stringify(message) + "\n"
+      const ready = stdin.write(line)
+      if (!ready) {
+        await new Promise<void>((resolve, reject) => {
+          const onDrain = () => cleanupAndResolve()
+          const onError = (err: Error) => cleanupAndReject(err)
+          const cleanupAndResolve = () => {
+            stdin.off("drain", onDrain)
+            stdin.off("error", onError)
+            resolve()
+          }
+          const cleanupAndReject = (err: Error) => {
+            stdin.off("drain", onDrain)
+            stdin.off("error", onError)
+            reject(err)
+          }
+          stdin.once("drain", onDrain)
+          stdin.once("error", onError)
+        })
+      }
+    })
+
+    return this.writePromise
   }
 
   private onStdout(chunk: string): void {
