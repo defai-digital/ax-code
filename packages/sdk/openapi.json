@@ -44762,6 +44762,62 @@
               "interceptOpen": {
                 "description": "Intercept browser-open commands (open/xdg-open/start) targeting local HTML files or localhost URLs to prevent unexpected focus-steals during HTML development. Defaults to true.",
                 "type": "boolean"
+              },
+              "cdpUrl": {
+                "description": "Attach to a running Chrome/Edge via CDP (e.g. http://localhost:9222, started with --remote-debugging-port) instead of launching a headless browser. browser_* tools then observe and act in the real browser.",
+                "type": "string"
+              }
+            }
+          },
+          "computer": {
+            "description": "Computer-use (desktop control) integration. Disabled unless provider is set.",
+            "type": "object",
+            "properties": {
+              "provider": {
+                "description": "Computer-use backend: \"axnative\" (AX-owned ax-computer-driver, macOS) or \"cua\" (cua-driver, cross-platform). Unset = computer tools unavailable.",
+                "type": "string",
+                "enum": [
+                  "cua",
+                  "axnative"
+                ]
+              },
+              "command": {
+                "description": "Backend server command override. Precedence: this config > AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_AXNATIVE_COMMAND env > default command name.",
+                "type": "string"
+              },
+              "args": {
+                "description": "Backend server command arguments (default: [\"mcp\"])",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "overrides": {
+                "description": "Per-app provider overrides: map an application name (as observed by computer_snapshot) to \"cua\" or \"axnative\". Observations and element acts against a matching app route to the named provider; everything else uses `provider`. Element ids are only valid against the provider that issued them — crossing providers requires a fresh observation.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "enum": [
+                    "cua",
+                    "axnative"
+                  ]
+                }
+              },
+              "grounder": {
+                "description": "Grounder fallback for natural-language computer_action targets. Optional; unset = describe targets unavailable.",
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "description": "Vision model used to resolve natural-language action targets to screenshot coordinates (e.g. a UI-TARS endpoint), as \"provider/model\""
+                  }
+                },
+                "required": [
+                  "model"
+                ]
               }
             }
           },
@@ -47913,7 +47969,8 @@
                         "failed",
                         "skipped",
                         "timeout",
-                        "error"
+                        "error",
+                        "unavailable"
                       ]
                     },
                     "issues": {
@@ -48154,6 +48211,156 @@
                     "tool",
                     "version",
                     "runId"
+                  ]
+                },
+                "sourceState": {
+                  "type": "object",
+                  "properties": {
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "commit": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "dirtyDigest": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "available",
+                    "commit",
+                    "dirtyDigest"
+                  ]
+                },
+                "graph": {
+                  "type": "object",
+                  "properties": {
+                    "revision": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lastCommitSha": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "indexedAt": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "revision",
+                    "lastCommitSha",
+                    "indexedAt"
+                  ]
+                },
+                "environment": {
+                  "type": "object",
+                  "properties": {
+                    "configDigest": {
+                      "type": "string"
+                    },
+                    "toolVersions": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "commandSelectionRationale": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "configDigest",
+                    "toolVersions"
+                  ]
+                },
+                "execution": {
+                  "type": "object",
+                  "properties": {
+                    "startedAt": {
+                      "type": "string"
+                    },
+                    "endedAt": {
+                      "type": "string"
+                    },
+                    "exitCode": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "signal": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "timedOut": {
+                      "type": "boolean"
+                    },
+                    "outputHashes": {
+                      "type": "object",
+                      "properties": {
+                        "stdout": {
+                          "type": "string"
+                        },
+                        "stderr": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "stdout",
+                        "stderr"
+                      ]
+                    },
+                    "outputTruncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "startedAt",
+                    "endedAt",
+                    "exitCode",
+                    "signal",
+                    "timedOut",
+                    "outputTruncated"
                   ]
                 }
               },

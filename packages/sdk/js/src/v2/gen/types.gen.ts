@@ -2858,6 +2858,42 @@ export type Config = {
      * Intercept browser-open commands (open/xdg-open/start) targeting local HTML files or localhost URLs to prevent unexpected focus-steals during HTML development. Defaults to true.
      */
     interceptOpen?: boolean
+    /**
+     * Attach to a running Chrome/Edge via CDP (e.g. http://localhost:9222, started with --remote-debugging-port) instead of launching a headless browser. browser_* tools then observe and act in the real browser.
+     */
+    cdpUrl?: string
+  }
+  /**
+   * Computer-use (desktop control) integration. Disabled unless provider is set.
+   */
+  computer?: {
+    /**
+     * Computer-use backend: "axnative" (AX-owned ax-computer-driver, macOS) or "cua" (cua-driver, cross-platform). Unset = computer tools unavailable.
+     */
+    provider?: "cua" | "axnative"
+    /**
+     * Backend server command override. Precedence: this config > AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_AXNATIVE_COMMAND env > default command name.
+     */
+    command?: string
+    /**
+     * Backend server command arguments (default: ["mcp"])
+     */
+    args?: Array<string>
+    /**
+     * Per-app provider overrides: map an application name (as observed by computer_snapshot) to "cua" or "axnative". Observations and element acts against a matching app route to the named provider; everything else uses `provider`. Element ids are only valid against the provider that issued them — crossing providers requires a fresh observation.
+     */
+    overrides?: {
+      [key: string]: "cua" | "axnative"
+    }
+    /**
+     * Grounder fallback for natural-language computer_action targets. Optional; unset = describe targets unavailable.
+     */
+    grounder?: {
+      /**
+       * Vision model used to resolve natural-language action targets to screenshot coordinates (e.g. a UI-TARS endpoint), as "provider/model"
+       */
+      model: string
+    }
   }
   /**
    * File attachment settings
@@ -3746,7 +3782,7 @@ export type SessionRiskDetail = {
       name: string
       type: "typecheck" | "lint" | "test" | "custom"
       passed: boolean
-      status: "passed" | "failed" | "skipped" | "timeout" | "error"
+      status: "passed" | "failed" | "skipped" | "timeout" | "error" | "unavailable"
       issues: Array<{
         file: string
         line?: number
@@ -3797,6 +3833,35 @@ export type SessionRiskDetail = {
       tool: string
       version: string
       runId: string
+    }
+    sourceState?: {
+      available: boolean
+      commit: string | null
+      dirtyDigest: string | null
+    }
+    graph?: {
+      revision: string | null
+      lastCommitSha: string | null
+      indexedAt: number
+    }
+    environment?: {
+      configDigest: string
+      toolVersions: {
+        [key: string]: string
+      }
+      commandSelectionRationale?: string
+    }
+    execution?: {
+      startedAt: string
+      endedAt: string
+      exitCode: number | null
+      signal: string | null
+      timedOut: boolean
+      outputHashes?: {
+        stdout: string
+        stderr: string
+      }
+      outputTruncated: boolean
     }
   }>
   reviewResults?: Array<{
