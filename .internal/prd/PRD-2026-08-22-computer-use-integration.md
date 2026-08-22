@@ -69,7 +69,15 @@ code reviews of both reference implementations (vendored under
   backend produced them — they now interpolate `this.name`. One
   `protected call()` hook was exposed (connection state stays private)
   so future AX-only tools land in the subclass without touching the
-  dialect base.
+  dialect base. Two follow-ups from the same reviews landed with it:
+  (1) a protocol-contract manifest (`src/protocol-contract.ts`,
+  `OCU_DIALECT_REQUIRED_TOOLS` + `checkDialectContract`) with a live
+  test (`test/contract.live.test.ts`) that verifies both dialect
+  backends' `tools/list` inventories — upstream drift now fails at
+  preflight time instead of mid-task; (2) A/B harness provenance —
+  `runAbSuite` records each arm's resolved command and reported
+  version into `last-report.json`, so historical evidence is traceable
+  to the exact binary that produced it.
 
 Harness patterns worth absorbing: (1) staged tool-execution pipeline
 (pre-execute waterfall → fail-closed guards → one-shot approval → execute →
