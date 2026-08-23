@@ -165,6 +165,14 @@ export namespace BackgroundShell {
     input.proc.stdout?.on("data", (chunk: Buffer) => appendText("stdout", stdoutDecoder.write(chunk)))
     input.proc.stderr?.on("data", (chunk: Buffer) => appendText("stderr", stderrDecoder.write(chunk)))
 
+    // bash_input writes can race with process exit: EPIPE then arrives
+    // asynchronously on the stdin stream. Log-and-swallow here so a stray
+    // EPIPE never becomes an uncaught exception; write() reports failures
+    // to its own caller through a dedicated one-shot listener.
+    input.proc.stdin?.on("error", (error) => {
+      log.warn("background shell stdin error", { id, error: error instanceof Error ? error.message : error })
+    })
+
     input.proc.once("exit", () => {
       entry.exited = true
       // Grandchildren spawned by the command inherit the pipe FDs and can
@@ -354,6 +362,57 @@ export namespace BackgroundShell {
     // forgotten — nothing else will ever be written to it.
     if (entry.status !== "running") shells.delete(id)
     return { info: toInfo(entry), output, dropped }
+  }
+
+  /**
+   * Write to a running shell's stdin (bash_input). Throws on unknown or
+   * cross-session shells, on shells that are no longer running, and on the
+   * EPIPE/write-after-exit race (the process may exit between lookup and
+   * write). When `eof` is set, stdin is closed after the write so commands
+   * that read until end-of-input (e.g. `cat`) can finish.
+   */
+  export async function write(id: string, sessionID: string, data: string, opts: { eof?: boolean }): Promise<Info> {
+    const entry = shells.get(id)
+    if (!entry || entry.sessionID !== sessionID) {
+      throw new Error(
+        `No background shell with ID "${id}" in this session. Call bash_output without shell_id to list available shells.`,
+      )
+    }
+    if (entry.status !== "running" || entry.exited) {
+      throw new Error(
+        `Background shell "${id}" is ${entry.status} — stdin is closed. Its output remains readable via bash_output.`,
+      )
+    }
+    const stdin = entry.proc.stdin
+    if (!stdin || stdin.destroyed || stdin.writableEnded || !stdin.writable) {
+      throw new Error(`Background shell "${id}" stdin is no longer writable (the process may have just exited).`)
+    }
+    await new Promise<void>((resolve, reject) => {
+      const fail = (error: unknown) =>
+        reject(
+          new Error(
+            `Failed to write to background shell "${id}" — the process exited while writing: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          ),
+        )
+      const onError = (error: Error) => fail(error)
+      stdin.once("error", onError)
+      const done = (error?: Error | null) => {
+        stdin.removeListener("error", onError)
+        if (error) fail(error)
+        else resolve()
+      }
+      try {
+        if (opts.eof) stdin.end(data, done)
+        else stdin.write(data, done)
+      } catch (error) {
+        // Write-after-exit can also fail synchronously (ERR_STREAM_DESTROYED).
+        stdin.removeListener("error", onError)
+        fail(error)
+      }
+    })
+    return toInfo(entry)
   }
 
   export async function kill(id: string, sessionID?: string): Promise<Info | undefined> {

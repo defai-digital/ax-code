@@ -1,0 +1,8 @@
+Writes text to the standard input of a running shell started with bash run_in_background.
+
+- Session-scoped: you can only write to background shells started in this session. Call bash_output without shell_id to list them.
+- Works only on shells started with bash run_in_background that are still running; finished or killed shells reject writes.
+- Stdin writes stay inside the permission grant made when the shell was spawned — no new approval is requested.
+- Set eof: true to close stdin after writing, signaling end-of-input; commands that read until EOF (such as cat) will then finish. input may be empty only when eof is true.
+- Use this to answer interactive prompts, drive REPLs, or feed multi-line input to a running command.
+- After writing, follow up with bash_output to read the shell's reaction.

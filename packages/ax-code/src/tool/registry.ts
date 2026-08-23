@@ -2,6 +2,7 @@ import { PlanExitTool } from "./plan"
 import { QuestionTool } from "./question"
 import { BashTool } from "./bash"
 import { BashOutputTool } from "./bash_output"
+import { BashInputTool } from "./bash_input"
 import { KillShellTool } from "./kill_shell"
 import { MonitorTool } from "./monitor"
 import { NotebookEditTool } from "./notebook_edit"
@@ -16,6 +17,8 @@ import { ReadTool } from "./read"
 import { TaskTool } from "./task"
 import { TaskParallelTool } from "./task_parallel"
 import { WaitForTool } from "./waitfor"
+import { ListBackgroundTasksTool } from "./list_background_tasks"
+import { MessageBackgroundTaskTool } from "./message_background_task"
 import { CouncilTool } from "./council"
 import { ArenaTool } from "./arena"
 import { TodoWriteTool } from "./todo"
@@ -243,6 +246,7 @@ export namespace ToolRegistry {
         ...(question ? [QuestionTool] : []),
         BashTool,
         BashOutputTool,
+        BashInputTool,
         KillShellTool,
         ListTool,
         ReadTool,
@@ -262,6 +266,7 @@ export namespace ToolRegistry {
       ...(question ? [QuestionTool] : []),
       BashTool,
       BashOutputTool,
+      BashInputTool,
       KillShellTool,
       MonitorTool,
       ListTool,
@@ -274,6 +279,8 @@ export namespace ToolRegistry {
       TaskTool,
       TaskParallelTool,
       WaitForTool,
+      ListBackgroundTasksTool,
+      MessageBackgroundTaskTool,
       CouncilTool,
       ArenaTool,
       WebFetchTool,

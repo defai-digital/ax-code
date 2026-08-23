@@ -412,7 +412,9 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
         todoread: false,
         // Agents that cannot fan out cannot start background tasks either, so
         // they have nothing to wait on — hide waitfor alongside task.
-        ...(canFanOut ? {} : { task: false, waitfor: false }),
+        ...(canFanOut
+          ? {}
+          : { task: false, waitfor: false, list_background_tasks: false, message_background_task: false }),
         ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
       }
       let result: Awaited<ReturnType<typeof SessionPrompt.prompt>>

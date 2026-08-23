@@ -23,6 +23,7 @@ import { isLocalHostname } from "@/util/local-host"
 import { uniqueStrings } from "@/util/string-list"
 
 import { BashArity } from "@/permission/arity"
+import { Permission } from "@/permission"
 import { Config } from "@/config/config"
 import { Bus } from "@/bus"
 import { NotificationEvent } from "@/notification/events"
@@ -33,6 +34,7 @@ import { OsSandbox } from "@/isolation/os-sandbox"
 import { BlastRadius } from "@/session/blast-radius"
 import { assertSymlinkInsideProject } from "./external-directory"
 import { classifyDestructiveCommand } from "./bash-destructive"
+import { detectSandboxDenial } from "./bash-sandbox-escalation"
 import { BackgroundShell } from "./bash-background"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 import {
@@ -857,304 +859,365 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         ...process.env,
         ...shellEnv.env,
       })
-      const proc =
-        osWrap?.active === true
-          ? spawn(osWrap.file, osWrap.args, {
-              cwd,
-              env: {
-                ...sanitizedEnv,
-              },
-              stdio: ["ignore", "pipe", "pipe"],
-              detached: process.platform !== "win32",
-              windowsHide: process.platform === "win32",
-            })
-          : useSetsidProcessGroup
-            ? spawn("setsid", [shell, "-c", params.command], {
+      // Background shells keep stdin open ("pipe") so bash_input can write
+      // to them later. Trade-off: a background command that reads stdin to
+      // EOF now blocks until bash_input sends input/EOF or the shell exits,
+      // instead of getting immediate EOF at spawn. Foreground commands stay
+      // on "ignore" — they are bounded and non-interactive by design.
+      const stdinMode = params.run_in_background ? "pipe" : "ignore"
+      // Sandbox-denial escalation ladder (PRD phase-2 R3). Attempt 0 runs
+      // under the OS sandbox wrap; if the sandbox itself denies an operation
+      // (detectSandboxDenial below), the user is asked once and the command
+      // retries exactly once with the wrap relaxed. Background shells return
+      // before any failure is observable, so they never reach the retry.
+      for (let attempt = 0; ; attempt++) {
+        // undefined on the escalated retry: spawn the command unsandboxed.
+        const activeWrap = attempt === 0 ? osWrap : undefined
+        const proc =
+          activeWrap?.active === true
+            ? spawn(activeWrap.file, activeWrap.args, {
                 cwd,
                 env: {
                   ...sanitizedEnv,
                 },
-                stdio: ["ignore", "pipe", "pipe"],
-                detached: false,
-                windowsHide: process.platform === "win32",
-              })
-            : spawn(params.command, {
-                shell,
-                cwd,
-                env: {
-                  ...sanitizedEnv,
-                },
-                stdio: ["ignore", "pipe", "pipe"],
+                stdio: [stdinMode, "pipe", "pipe"],
                 detached: process.platform !== "win32",
                 windowsHide: process.platform === "win32",
               })
-      const seatbeltProfile = osWrap?.active === true ? osWrap.profilePath : undefined
-      const cleanupSeatbelt = () => OsSandbox.cleanupProfile(seatbeltProfile)
-      if (proc.pid) {
-        trackedPIDs.add(proc.pid)
-      } else {
-        log.warn("spawned bash process has no pid and cannot be tracked for cleanup", {
-          command: params.command,
-          cwd,
-        })
-        cleanupSeatbelt()
-      }
-      proc.on("close", cleanupSeatbelt)
-      proc.on("error", cleanupSeatbelt)
-
-      if (params.run_in_background) {
-        // Background shells outlive this tool call: no timeout timer, and the
-        // turn's abort signal must not kill them. They stay in trackedPIDs so
-        // process exit still reaps them; BackgroundShell forgets the PID on
-        // its own exit via onExited.
-        let info: ReturnType<typeof BackgroundShell.register>
-        try {
-          info = BackgroundShell.register({
-            sessionID: ctx.sessionID,
+            : useSetsidProcessGroup
+              ? spawn("setsid", [shell, "-c", params.command], {
+                  cwd,
+                  env: {
+                    ...sanitizedEnv,
+                  },
+                  stdio: [stdinMode, "pipe", "pipe"],
+                  detached: false,
+                  windowsHide: process.platform === "win32",
+                })
+              : spawn(params.command, {
+                  shell,
+                  cwd,
+                  env: {
+                    ...sanitizedEnv,
+                  },
+                  stdio: [stdinMode, "pipe", "pipe"],
+                  detached: process.platform !== "win32",
+                  windowsHide: process.platform === "win32",
+                })
+        const seatbeltProfile = activeWrap?.active === true ? activeWrap.profilePath : undefined
+        const cleanupSeatbelt = () => OsSandbox.cleanupProfile(seatbeltProfile)
+        if (proc.pid) {
+          trackedPIDs.add(proc.pid)
+        } else {
+          log.warn("spawned bash process has no pid and cannot be tracked for cleanup", {
             command: params.command,
-            description,
-            proc,
-            onExited: () => {
-              if (proc.pid) forgetTrackedPID(proc.pid)
-            },
+            cwd,
           })
-        } catch (error) {
-          // Capacity can fill while this call waited on its permission
-          // prompt (the pre-spawn check passed earlier). An unregistered
-          // process would be invisible to bash_output/kill_shell and run
-          // until app exit — kill it before surfacing the error.
-          void Shell.killTree(proc, { exited: () => proc.exitCode !== null })
-            .then(() => {
-              if (proc.pid) forgetTrackedPID(proc.pid)
-            })
-            .catch((killError) => {
-              log.warn("failed to kill unregistered background shell", { pid: proc.pid, error: killError })
-            })
-          throw error
+          cleanupSeatbelt()
         }
-        const msg =
-          `Command running in background with shell ID: ${info.id}\n` +
-          `Use the bash_output tool with shell_id "${info.id}" to read its output, and kill_shell to terminate it.`
-        // Record cast: this branch's metadata carries a `background` key the
-        // foreground branches lack, and the shared inferred metadata type
-        // must accommodate both shapes.
-        const backgroundMetadata: Record<string, any> = {
-          output: msg,
-          exit: null,
-          description,
-          background: { shellID: info.id, pid: proc.pid ?? null },
-          truncated: false as const,
-        }
-        return {
-          title: description,
-          metadata: backgroundMetadata,
-          output: msg,
-        }
-      }
+        proc.on("close", cleanupSeatbelt)
+        proc.on("error", cleanupSeatbelt)
 
-      let output = ""
-      // Hard cap on raw output to protect process memory against
-      // commands that produce gigabytes of stdout/stderr. Previously
-      // only the metadata snapshot was truncated; the `output` string
-      // itself grew unbounded and accumulated the full stream in RAM
-      // until the process was killed by the OOM killer. 10MB matches
-      // the size at which we should surface a clear "output too large"
-      // signal rather than silently truncating forever.
-      const OUTPUT_HARD_CAP = 10 * 1024 * 1024
-      let truncated = false
-      let timedOut = false
-      let aborted = false
-      let exited = false
-      let outputBytes = 0
-      let lastOutputAt: number | undefined
-      let killStartedAt: number | undefined
-      let killCompletedAt: number | undefined
-
-      const hangMetadata = () => ({
-        processId: proc.pid ?? null,
-        signal: proc.signalCode ?? null,
-        timeoutMs: timeout,
-        timedOut,
-        aborted,
-        outputBytes,
-        outputTruncated: truncated,
-        lastOutputAt: lastOutputAt ?? null,
-        killStartedAt: killStartedAt ?? null,
-        killCompletedAt: killCompletedAt ?? null,
-        killDurationMs:
-          killStartedAt !== undefined && killCompletedAt !== undefined ? killCompletedAt - killStartedAt : null,
-      })
-
-      const publishMetadata = (outputSnapshot: string) => {
-        try {
-          ctx.metadata({
-            metadata: {
-              output: outputSnapshot,
+        if (params.run_in_background) {
+          // Background shells outlive this tool call: no timeout timer, and the
+          // turn's abort signal must not kill them. They stay in trackedPIDs so
+          // process exit still reaps them; BackgroundShell forgets the PID on
+          // its own exit via onExited.
+          let info: ReturnType<typeof BackgroundShell.register>
+          try {
+            info = BackgroundShell.register({
+              sessionID: ctx.sessionID,
+              command: params.command,
               description,
-              hang: hangMetadata(),
-            },
-          })
-        } catch (error) {
-          log.warn("bash metadata publish failed", {
-            pid: proc.pid,
-            error: toErrorMessage(error),
-          })
-        }
-      }
-
-      // Initialize metadata with empty output
-      publishMetadata("")
-
-      // Once output has crossed the metadata-length cap, every subsequent
-      // append() call would publish a byte-identical truncated snapshot
-      // (the first MAX_METADATA_LENGTH bytes never change once we've seen
-      // them). Skip those duplicate publishes to avoid flooding the bus
-      // and the TUI on high-volume streams (e.g. `find /`).
-      let lastPublishedBytes = -1
-
-      const append = (chunk: Buffer) => {
-        const priorOutputBytes = outputBytes
-        outputBytes += chunk.byteLength
-        lastOutputAt = Date.now()
-        if (priorOutputBytes < OUTPUT_HARD_CAP) {
-          const remaining = OUTPUT_HARD_CAP - priorOutputBytes
-          if (chunk.byteLength <= remaining) {
-            const text = chunk.toString()
-            output += text
-          } else {
-            const safeRemaining = safeUtf8PrefixLength(chunk, remaining)
-            output += chunk.subarray(0, safeRemaining).toString() + "\n\n[output truncated at 10MB]"
-            truncated = true
+              proc,
+              onExited: () => {
+                if (proc.pid) forgetTrackedPID(proc.pid)
+              },
+            })
+          } catch (error) {
+            // Capacity can fill while this call waited on its permission
+            // prompt (the pre-spawn check passed earlier). An unregistered
+            // process would be invisible to bash_output/kill_shell and run
+            // until app exit — kill it before surfacing the error.
+            void Shell.killTree(proc, { exited: () => proc.exitCode !== null })
+              .then(() => {
+                if (proc.pid) forgetTrackedPID(proc.pid)
+              })
+              .catch((killError) => {
+                log.warn("failed to kill unregistered background shell", { pid: proc.pid, error: killError })
+              })
+            throw error
+          }
+          const msg =
+            `Command running in background with shell ID: ${info.id}\n` +
+            `Use the bash_output tool with shell_id "${info.id}" to read its output, and kill_shell to terminate it.`
+          // Record cast: this branch's metadata carries a `background` key the
+          // foreground branches lack, and the shared inferred metadata type
+          // must accommodate both shapes.
+          const backgroundMetadata: Record<string, any> = {
+            output: msg,
+            exit: null,
+            description,
+            background: { shellID: info.id, pid: proc.pid ?? null },
+            truncated: false as const,
+          }
+          return {
+            title: description,
+            metadata: backgroundMetadata,
+            output: msg,
           }
         }
-        const outputMetadataBytes = Buffer.byteLength(output, "utf8")
-        const isPastCap = outputMetadataBytes > MAX_METADATA_LENGTH
-        if (isPastCap && lastPublishedBytes > MAX_METADATA_LENGTH) return
-        publishMetadata(isPastCap ? truncateBashMetadata(output, MAX_METADATA_LENGTH) : output)
-        lastPublishedBytes = outputMetadataBytes
-      }
 
-      proc.stdout?.on("data", append)
-      proc.stderr?.on("data", append)
+        let output = ""
+        // Hard cap on raw output to protect process memory against
+        // commands that produce gigabytes of stdout/stderr. Previously
+        // only the metadata snapshot was truncated; the `output` string
+        // itself grew unbounded and accumulated the full stream in RAM
+        // until the process was killed by the OOM killer. 10MB matches
+        // the size at which we should surface a clear "output too large"
+        // signal rather than silently truncating forever.
+        const OUTPUT_HARD_CAP = 10 * 1024 * 1024
+        let truncated = false
+        let timedOut = false
+        let aborted = false
+        let exited = false
+        let outputBytes = 0
+        let lastOutputAt: number | undefined
+        let killStartedAt: number | undefined
+        let killCompletedAt: number | undefined
 
-      const kill = async () => {
-        if (killStartedAt !== undefined) return
-        killStartedAt = Date.now()
-        await Shell.killTree(proc, { exited: () => exited })
-        killCompletedAt = Date.now()
-      }
-
-      const abortHandler = () => {
-        aborted = true
-        void kill().catch((error) => {
-          log.warn("bash abort kill failed", {
-            error,
-          })
+        const hangMetadata = () => ({
+          processId: proc.pid ?? null,
+          signal: proc.signalCode ?? null,
+          timeoutMs: timeout,
+          timedOut,
+          aborted,
+          outputBytes,
+          outputTruncated: truncated,
+          lastOutputAt: lastOutputAt ?? null,
+          killStartedAt: killStartedAt ?? null,
+          killCompletedAt: killCompletedAt ?? null,
+          killDurationMs:
+            killStartedAt !== undefined && killCompletedAt !== undefined ? killCompletedAt - killStartedAt : null,
         })
-      }
 
-      ctx.abort.addEventListener("abort", abortHandler, { once: true })
-
-      const timeoutTimer = setTimeout(() => {
-        timedOut = true
-        void kill().catch((error) => {
-          log.warn("bash timeout kill failed", {
-            timeout,
-            error,
-          })
-        })
-      }, timeout)
-
-      let procExitCode: number | null = null
-
-      await new Promise<void>((resolve, reject) => {
-        const cleanup = () => {
-          clearTimeout(timeoutTimer)
-          ctx.abort.removeEventListener("abort", abortHandler)
-          proc.stdout?.off("data", append)
-          proc.stderr?.off("data", append)
-          if (proc.pid) forgetTrackedPID(proc.pid)
+        const publishMetadata = (outputSnapshot: string) => {
+          try {
+            ctx.metadata({
+              metadata: {
+                output: outputSnapshot,
+                description,
+                hang: hangMetadata(),
+              },
+            })
+          } catch (error) {
+            log.warn("bash metadata publish failed", {
+              pid: proc.pid,
+              error: toErrorMessage(error),
+            })
+          }
         }
 
-        proc.once("exit", () => {
-          exited = true
-          procExitCode = proc.exitCode
-          // Background processes spawned by the command (e.g. `cmd &`) inherit
-          // the pipe FDs and keep them open, so the 'close' event never fires.
-          // Destroy the streams after one I/O cycle — giving Node.js a chance
-          // to drain any data already in the kernel buffer — then 'close' fires
-          // regardless of what background processes are still running.
-          setImmediate(() => {
-            proc.stdout?.destroy()
-            proc.stderr?.destroy()
-          })
-        })
+        // Initialize metadata with empty output
+        publishMetadata("")
 
-        proc.once("close", () => {
-          cleanup()
-          resolve()
-        })
+        // Once output has crossed the metadata-length cap, every subsequent
+        // append() call would publish a byte-identical truncated snapshot
+        // (the first MAX_METADATA_LENGTH bytes never change once we've seen
+        // them). Skip those duplicate publishes to avoid flooding the bus
+        // and the TUI on high-volume streams (e.g. `find /`).
+        let lastPublishedBytes = -1
 
-        proc.once("error", (error) => {
-          exited = true
-          cleanup()
-          reject(error)
-        })
+        const append = (chunk: Buffer) => {
+          const priorOutputBytes = outputBytes
+          outputBytes += chunk.byteLength
+          lastOutputAt = Date.now()
+          if (priorOutputBytes < OUTPUT_HARD_CAP) {
+            const remaining = OUTPUT_HARD_CAP - priorOutputBytes
+            if (chunk.byteLength <= remaining) {
+              const text = chunk.toString()
+              output += text
+            } else {
+              const safeRemaining = safeUtf8PrefixLength(chunk, remaining)
+              output += chunk.subarray(0, safeRemaining).toString() + "\n\n[output truncated at 10MB]"
+              truncated = true
+            }
+          }
+          const outputMetadataBytes = Buffer.byteLength(output, "utf8")
+          const isPastCap = outputMetadataBytes > MAX_METADATA_LENGTH
+          if (isPastCap && lastPublishedBytes > MAX_METADATA_LENGTH) return
+          publishMetadata(isPastCap ? truncateBashMetadata(output, MAX_METADATA_LENGTH) : output)
+          lastPublishedBytes = outputMetadataBytes
+        }
 
-        if (ctx.abort.aborted) {
+        proc.stdout?.on("data", append)
+        proc.stderr?.on("data", append)
+
+        const kill = async () => {
+          if (killStartedAt !== undefined) return
+          killStartedAt = Date.now()
+          await Shell.killTree(proc, { exited: () => exited })
+          killCompletedAt = Date.now()
+        }
+
+        const abortHandler = () => {
           aborted = true
           void kill().catch((error) => {
-            log.warn("bash pre-aborted kill failed", {
+            log.warn("bash abort kill failed", {
               error,
             })
           })
         }
-      })
 
-      const resultMetadata: string[] = []
+        ctx.abort.addEventListener("abort", abortHandler, { once: true })
 
-      if (timedOut) {
-        resultMetadata.push(`bash tool terminated command after exceeding timeout ${timeout} ms`)
-      }
+        const timeoutTimer = setTimeout(() => {
+          timedOut = true
+          void kill().catch((error) => {
+            log.warn("bash timeout kill failed", {
+              timeout,
+              error,
+            })
+          })
+        }, timeout)
 
-      if (aborted) {
-        resultMetadata.push("User aborted the command")
-      }
+        let procExitCode: number | null = null
 
-      if (resultMetadata.length > 0) {
-        output += "\n\n<bash_metadata>\n" + resultMetadata.join("\n") + "\n</bash_metadata>"
-      }
+        await new Promise<void>((resolve, reject) => {
+          const cleanup = () => {
+            clearTimeout(timeoutTimer)
+            ctx.abort.removeEventListener("abort", abortHandler)
+            proc.stdout?.off("data", append)
+            proc.stderr?.off("data", append)
+            if (proc.pid) forgetTrackedPID(proc.pid)
+          }
 
-      if (proc.exitCode === 0) {
-        for (const filePath of redirectWritePaths) {
-          if (Filesystem.contains(Instance.worktree, filePath)) {
-            BlastRadius.recordWriteAndAssert(ctx.sessionID, filePath, await estimateFileLineDelta(filePath))
+          proc.once("exit", () => {
+            exited = true
+            procExitCode = proc.exitCode
+            // Background processes spawned by the command (e.g. `cmd &`) inherit
+            // the pipe FDs and keep them open, so the 'close' event never fires.
+            // Destroy the streams after one I/O cycle — giving Node.js a chance
+            // to drain any data already in the kernel buffer — then 'close' fires
+            // regardless of what background processes are still running.
+            setImmediate(() => {
+              proc.stdout?.destroy()
+              proc.stderr?.destroy()
+            })
+          })
+
+          proc.once("close", () => {
+            cleanup()
+            resolve()
+          })
+
+          proc.once("error", (error) => {
+            exited = true
+            cleanup()
+            reject(error)
+          })
+
+          if (ctx.abort.aborted) {
+            aborted = true
+            void kill().catch((error) => {
+              log.warn("bash pre-aborted kill failed", {
+                error,
+              })
+            })
+          }
+        })
+
+        const resultMetadata: string[] = []
+
+        if (timedOut) {
+          resultMetadata.push(`bash tool terminated command after exceeding timeout ${timeout} ms`)
+        }
+
+        if (aborted) {
+          resultMetadata.push("User aborted the command")
+        }
+
+        if (resultMetadata.length > 0) {
+          output += "\n\n<bash_metadata>\n" + resultMetadata.join("\n") + "\n</bash_metadata>"
+        }
+
+        if (proc.exitCode === 0) {
+          for (const filePath of redirectWritePaths) {
+            if (Filesystem.contains(Instance.worktree, filePath)) {
+              BlastRadius.recordWriteAndAssert(ctx.sessionID, filePath, await estimateFileLineDelta(filePath))
+            }
           }
         }
-      }
 
-      const truncateResult = await Truncate.output(output)
-      const truncateMeta = truncateResult.truncated
-        ? {
-            truncated: true as const,
-            outputPath: truncateResult.outputPath,
-            fullOutputPath: truncateResult.fullOutputPath,
-            originalSize: truncateResult.originalSize,
-            truncatedTo: truncateResult.truncatedTo,
-            contentHint: truncateResult.contentHint,
+        const truncateResult = await Truncate.output(output)
+        const truncateMeta = truncateResult.truncated
+          ? {
+              truncated: true as const,
+              outputPath: truncateResult.outputPath,
+              fullOutputPath: truncateResult.fullOutputPath,
+              originalSize: truncateResult.originalSize,
+              truncatedTo: truncateResult.truncatedTo,
+              contentHint: truncateResult.contentHint,
+            }
+          : { truncated: false as const }
+
+        // Sandbox-denial escalation: only the first (wrapped) attempt can be
+        // denied by the OS sandbox. On approval, retry once with the wrap
+        // relaxed; on denial (including headless auto-deny of the
+        // INTERACTIVE_ONLY isolation_escalation permission) fall through and
+        // return the original failure unchanged.
+        if (attempt === 0) {
+          const denial = detectSandboxDenial({
+            wrap: osWrap,
+            isolation: ctx.extra?.isolation,
+            exit: procExitCode ?? proc.exitCode,
+            timedOut,
+            aborted,
+            output,
+          })
+          if (denial) {
+            log.info("os sandbox denial detected; requesting escalation", {
+              command: params.command,
+              mechanism: denial.mechanism,
+              evidence: denial.evidence,
+            })
+            try {
+              await ctx.ask({
+                permission: "isolation_escalation",
+                patterns: [params.command],
+                always: [],
+                metadata: {
+                  reason: "os_sandbox_denial",
+                  mechanism: denial.mechanism,
+                  evidence: denial.evidence,
+                  requireInteractive: true,
+                },
+              })
+              log.info("os sandbox escalation approved; retrying without OS sandbox", { command: params.command })
+              continue
+            } catch (error) {
+              // CorrectedError (reject-with-feedback) and aborts propagate so
+              // the model sees the feedback; plain rejections and ruleset
+              // denials keep today's behavior — return the original failure.
+              if (!(error instanceof Permission.RejectedError) && !(error instanceof Permission.DeniedError)) {
+                throw error
+              }
+              log.info("os sandbox escalation denied; returning original failure", { command: params.command })
+            }
           }
-        : { truncated: false as const }
+        }
 
-      return {
-        title: description,
-        metadata: {
-          output: truncateBashMetadata(output, MAX_METADATA_LENGTH),
-          exit: procExitCode ?? proc.exitCode,
-          description,
-          hang: hangMetadata(),
-          ...truncateMeta,
-        },
-        output: truncateResult.content,
+        return {
+          title: description,
+          metadata: {
+            output: truncateBashMetadata(output, MAX_METADATA_LENGTH),
+            exit: procExitCode ?? proc.exitCode,
+            description,
+            hang: hangMetadata(),
+            ...truncateMeta,
+          },
+          output: truncateResult.content,
+        }
       }
     },
   }

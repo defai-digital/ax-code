@@ -60,7 +60,9 @@ function sleep(ms: number, abort: AbortSignal) {
   })
 }
 
-async function resolveTarget(taskID: string): Promise<TaskQueue.Info | undefined> {
+// Exported for the background-task control tools (message_background_task),
+// which resolve and scope targets the same way.
+export async function resolveTarget(taskID: string): Promise<TaskQueue.Info | undefined> {
   if (taskID.startsWith("tsk_")) {
     return TaskQueue.get(TaskQueueID.make(taskID)).catch((e) => {
       if (NotFoundError.isInstance(e)) return undefined
@@ -106,7 +108,7 @@ async function belongsToSessionTree(item: TaskQueue.Info, sessionID: SessionID) 
   return false
 }
 
-async function childResultText(item: TaskQueue.Info) {
+export async function childResultText(item: TaskQueue.Info) {
   if (!item.sessionID) return ""
   const messages = await Session.messages({ sessionID: item.sessionID }).catch((e) => {
     if (NotFoundError.isInstance(e)) return [] as Awaited<ReturnType<typeof Session.messages>>

@@ -1,0 +1,17 @@
+Send a follow-up message to a running background task started from this session.
+
+Parameters:
+- task_id: the task_id (ses_...) or queue_id (tsk_...) returned when the background task was started.
+- message: the text to deliver to the task. It appears as user input in the task's session.
+
+When to use message_background_task:
+- A background task you launched is running and you need to steer it: extra context, a correction, a narrowed scope, or a "stop after the current step" instruction.
+
+When NOT to use message_background_task:
+- Do not use it to ask for progress or results — the task delivers its result automatically when it finishes; use waitfor only if you need the result NOW, in this turn.
+- Do not send the same instruction repeatedly. Delivery is exactly-once per call; duplicates just add noise to the task's context.
+
+Notes:
+- Only the session that started a background task may message it.
+- If the task is mid-turn, the message queues as follow-up input for its next step — the running turn is never interrupted.
+- Messaging a finished/failed/cancelled task injects nothing; the tool returns the task's terminal status and result instead.

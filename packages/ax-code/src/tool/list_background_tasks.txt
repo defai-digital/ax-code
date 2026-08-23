@@ -1,0 +1,15 @@
+List the background tasks started from this session and their current status.
+
+Shows each task's task_id (child session id, ses_...), queue_id (tsk_...), agent, description, status, delivery state, and timestamps. Statuses: queued, waiting_for_idle, running, blocked_permission, blocked_question, paused are live; completed, failed, cancelled are terminal.
+
+When to use list_background_tasks:
+- You launched one or more background tasks (task with background=true) and lost track of their ids or need to see which are still running before starting more.
+
+When NOT to use list_background_tasks:
+- Do not poll. Background tasks deliver their result automatically — you will be notified when they finish. Listing does not make them finish faster.
+- Do not use this to re-run or duplicate work a listed task is already doing.
+
+Notes:
+- Read-only: listing never changes any task's state.
+- Only tasks started from THIS session are listed; other sessions' tasks are not visible here.
+- To read a finished task's full result inline, use waitfor with its task_id or queue_id. To steer a running task, use message_background_task.

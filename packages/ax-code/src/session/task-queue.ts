@@ -444,6 +444,74 @@ export namespace TaskQueue {
     return item
   }
 
+  // Parent→child control-message delivery ledger (ADR-057 D3 pattern, same
+  // payload store as the result-delivery guard above but a separate key so the
+  // handoff guard is never clobbered). message_background_task records a
+  // "pending" entry BEFORE injecting into the child session and flips it to
+  // "delivered" after; a crash mid-flight is redelivered by re-persisting with
+  // the recorded message/part ids (upsert = idempotent), never by appending a
+  // second copy.
+  export const ControlDeliveryStatus = z.enum(["pending", "delivered"])
+  export type ControlDeliveryStatus = z.infer<typeof ControlDeliveryStatus>
+
+  export const ControlDelivery = z.object({
+    messageID: z.string(),
+    partID: z.string(),
+    text: z.string(),
+    status: ControlDeliveryStatus,
+    time: z.number(),
+  })
+  export type ControlDelivery = z.infer<typeof ControlDelivery>
+
+  // Bound the ledger so a chatty parent cannot grow the payload row without
+  // limit. Entries are appended in time order, so the tail is the newest.
+  const MAX_CONTROL_DELIVERIES = 50
+
+  export function controlDeliveries(item: Info): ControlDelivery[] {
+    const raw = item.payload["controlDeliveries"]
+    if (!Array.isArray(raw)) return []
+    return raw.flatMap((entry) => {
+      const parsed = ControlDelivery.safeParse(entry)
+      return parsed.success ? [parsed.data] : []
+    })
+  }
+
+  export async function setControlDelivery(input: {
+    id: TaskQueueID
+    messageID: string
+    partID: string
+    text: string
+    status: ControlDeliveryStatus
+  }): Promise<Info> {
+    const current = await get(input.id)
+    const now = Date.now()
+    const entries = controlDeliveries(current).filter((entry) => entry.messageID !== input.messageID)
+    entries.push({
+      messageID: input.messageID,
+      partID: input.partID,
+      text: input.text,
+      status: input.status,
+      time: now,
+    })
+    const payload: Payload = {
+      ...current.payload,
+      controlDeliveries: entries.slice(-MAX_CONTROL_DELIVERIES),
+    }
+    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const row = db
+        .update(TaskQueueTable)
+        .set({ payload, time_updated: now })
+        .where(eq(TaskQueueTable.id, input.id))
+        .returning()
+        .get()
+      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      return fromRow(row)
+    })
+    assertProjectItem(item)
+    publishUpdated(item)
+    return item
+  }
+
   export async function claimForExecution(id: TaskQueueID): Promise<Info | undefined> {
     const current = await get(id)
     if (current.status !== "queued" && current.status !== "waiting_for_idle") return undefined
