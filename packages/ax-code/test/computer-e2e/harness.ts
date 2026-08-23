@@ -36,6 +36,12 @@ export interface AgentTaskSpec {
 
 export interface AgentRunMetrics {
   sessionID?: string
+  /** syntactically valid NDJSON event objects parsed from stdout */
+  parsedEvents: number
+  /** every tool_use event, including non-computer tools */
+  toolEvents: number
+  /** computer_* tool_use events used by the task-level counters below */
+  computerToolEvents: number
   /** computer_action tool calls (completed + errored) — the "steps" the report counts */
   steps: number
   /** computer_snapshot + computer_watch calls */
@@ -59,6 +65,14 @@ export interface AgentCaseResult {
   verify: "ok" | "no-match" | "skipped" | "error"
   detail?: string
   metrics: AgentRunMetrics
+  diagnostics: {
+    exitCode: number
+    timedOut: boolean
+    stdoutBytes: number
+    stderrBytes: number
+    /** bounded tail only; enough to distinguish startup/config/provider failures */
+    stderrTail?: string
+  }
 }
 
 export interface AgentRunOptions {
@@ -120,6 +134,9 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
  */
 export function parseEvents(stdout: string, stderr: string): AgentRunMetrics {
   const metrics: AgentRunMetrics = {
+    parsedEvents: 0,
+    toolEvents: 0,
+    computerToolEvents: 0,
     steps: 0,
     observes: 0,
     plans: 0,
@@ -141,6 +158,7 @@ export function parseEvents(stdout: string, stderr: string): AgentRunMetrics {
     }
     const record = asRecord(event)
     if (!record) continue
+    metrics.parsedEvents += 1
     if (typeof record.sessionID === "string" && !metrics.sessionID) metrics.sessionID = record.sessionID
     if (typeof record.timestamp === "number") {
       if (firstTs === undefined || record.timestamp < firstTs) firstTs = record.timestamp
@@ -151,9 +169,11 @@ export function parseEvents(stdout: string, stderr: string): AgentRunMetrics {
       if (typeof text?.text === "string") metrics.finalText = text.text
     }
     if (record.type !== "tool_use") continue
+    metrics.toolEvents += 1
     const part = asRecord(record.part)
     const tool = part?.tool
     if (typeof tool !== "string" || !tool.startsWith("computer_")) continue
+    metrics.computerToolEvents += 1
     const state = asRecord(part?.state)
     if (tool === "computer_action") {
       metrics.steps += 1
@@ -175,6 +195,13 @@ export function parseEvents(stdout: string, stderr: string): AgentRunMetrics {
 // ---- runner ----
 
 const DEFAULT_TIMEOUT_MS = 600_000
+const STDERR_TAIL_CAP = 4_000
+
+function diagnosticTail(stderr: string): string | undefined {
+  const normalized = stderr.replaceAll(/\u001b\[[0-9;]*m/g, "").trim()
+  if (!normalized) return undefined
+  return normalized.slice(-STDERR_TAIL_CAP)
+}
 
 /** default spawn: headless `ax-code run`, capturing stdout/stderr separately */
 const defaultSpawn: SpawnFn = (cli, args, options) =>
@@ -221,11 +248,27 @@ export async function runAgentTask(
     timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
   })
   const metrics = parseEvents(spawnResult.stdout, spawnResult.stderr)
+  const diagnostics: AgentCaseResult["diagnostics"] = {
+    exitCode: spawnResult.exitCode,
+    timedOut: spawnResult.timedOut,
+    stdoutBytes: Buffer.byteLength(spawnResult.stdout),
+    stderrBytes: Buffer.byteLength(spawnResult.stderr),
+    stderrTail: diagnosticTail(spawnResult.stderr),
+  }
 
   let ok = spawnResult.exitCode === 0 && !spawnResult.timedOut
   let detail: string | undefined
   if (spawnResult.timedOut) detail = `timeout after ${options.timeoutMs ?? DEFAULT_TIMEOUT_MS}ms`
   else if (spawnResult.exitCode !== 0) detail = `ax-code run exited ${spawnResult.exitCode}`
+  else if (metrics.computerToolEvents === 0) {
+    ok = false
+    detail =
+      metrics.parsedEvents === 0
+        ? "session produced no parseable NDJSON events"
+        : metrics.toolEvents === 0
+          ? `session produced ${metrics.parsedEvents} event(s) but no tool events`
+          : `session produced ${metrics.toolEvents} tool event(s) but no computer tool events`
+  }
 
   let verify: AgentCaseResult["verify"] = "skipped"
   if (task.verify) {
@@ -234,7 +277,7 @@ export async function runAgentTask(
       verify = verdict === undefined ? "skipped" : verdict ? "ok" : "no-match"
       if (verdict === false) {
         ok = false
-        detail = "verify: post-condition not met"
+        detail ??= "verify: post-condition not met"
       }
     } catch (error) {
       verify = "error"
@@ -242,7 +285,7 @@ export async function runAgentTask(
     }
   }
 
-  return { id: task.id, name: task.name, ok, verify, detail, metrics }
+  return { id: task.id, name: task.name, ok, verify, detail, metrics, diagnostics }
 }
 
 // ---- report ----

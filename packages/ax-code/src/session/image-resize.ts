@@ -65,7 +65,9 @@ export async function maybeResizeImage(input: {
       command: "image-resize",
       status: "skipped",
     })
-    return { resized: false }
+    // The original is still over the configured limit. Mark it too_large so
+    // safety-sensitive callers (computer screenshots) can fail closed.
+    return { resized: false, error: "too_large" }
   }
 
   try {
@@ -123,6 +125,6 @@ export async function maybeResizeImage(input: {
     return { resized: false, error: "too_large" }
   } catch (error) {
     log.warn("image resize failed", { command: "image-resize", status: "error", error })
-    return { resized: false }
+    return { resized: false, error: "too_large" }
   }
 }

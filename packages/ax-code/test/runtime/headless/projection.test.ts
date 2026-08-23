@@ -77,8 +77,8 @@ describe("headless projection", () => {
     ])
   })
 
-  test("never auto-replies interactive-only permissions under autonomous mode", () => {
-    for (const permission of ["isolation_escalation", "bash_destructive"] as const) {
+  test("never auto-replies human-confirmation permissions under autonomous mode", () => {
+    for (const permission of ["isolation_escalation", "bash_destructive", "computer"] as const) {
       const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
       const request = {
         id: `perm_${permission}`,
@@ -98,7 +98,7 @@ describe("headless projection", () => {
         { autonomous: true },
       )
 
-      // Isolation escalation / destructive bash must stay pending — never
+      // Critical escalation and real-desktop control stay pending — never
       // auto-approved, even in headless autonomous mode.
       expect(result.effects).toEqual([])
       expect(state.permission).toEqual({ ses_1: [request] })

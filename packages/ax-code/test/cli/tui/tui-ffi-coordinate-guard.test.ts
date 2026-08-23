@@ -60,7 +60,7 @@ function loadFillRectSanitizer(): (
   height: number,
 ) => { x: number; y: number; width: number; height: number } | null {
   const match = SRC.match(
-    /bufferFillRect\(buffer, x, y, width, height, color\) \{\n([\s\S]*?)\n {4}const bg2 = rgbaPtr\(color\);/,
+    /bufferFillRect\(buffer, x, y, width, height, color\) \{\n([\s\S]*?)\n {4}const bg2 = rgbaPtr\(color\);?/,
   )
   if (!match) throw new Error("AX Code TUI guard missing: bufferFillRect sanitization not found in @ax-code/tui")
   const body = `${match[1]}\nreturn { x, y, width, height };`

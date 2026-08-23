@@ -24,9 +24,15 @@ export namespace ProviderError {
     /context window exceeds limit/i, // MiniMax
     /exceeded model token limit/i, // OpenAI-compatible generic
     /context[_ ]length[_ ]exceeded/i, // Generic fallback
-    /request entity too large/i, // HTTP 413
     /context length is only \d+ tokens/i, // vLLM
     /input length.*exceeds.*context length/i, // vLLM
+  ]
+
+  const REQUEST_TOO_LARGE_PATTERNS = [
+    /request entity too large/i,
+    /request body.*too large/i,
+    /payload too large/i,
+    /^413\s*(status code)?\s*\(no body\)/i,
   ]
 
   // Providers not reliably handled in this function:
@@ -34,9 +40,52 @@ export namespace ProviderError {
   function isOverflow(message: string) {
     if (OVERFLOW_PATTERNS.some((p) => p.test(message))) return true
 
-    // Providers/status patterns handled outside of regex list:
-    // - Mistral: often returns "400 (no body)" / "413 (no body)"
-    return /^4(00|13)\s*(status code)?\s*\(no body\)/i.test(message)
+    // Mistral can report a context overflow as a bare 400. A bare 413 is
+    // classified separately as request-body overflow below.
+    return /^400\s*(status code)?\s*\(no body\)/i.test(message)
+  }
+
+  function isRequestTooLargeMessage(message: string) {
+    return REQUEST_TOO_LARGE_PATTERNS.some((pattern) => pattern.test(message))
+  }
+
+  function isHttp413(value: unknown) {
+    return value === 413 || value === "413"
+  }
+
+  /** Classifies context overflow shapes outside the standard APICallError. */
+  export function isContextOverflow(input: unknown) {
+    if (typeof input === "string") return isOverflow(input)
+    if (input instanceof Error) return isOverflow(input.message)
+    if (!isRecord(input)) return false
+    const nested = isRecord(input.error) ? input.error : undefined
+    if (nested?.code === "context_length_exceeded") return true
+    const message =
+      typeof nested?.message === "string" ? nested.message : typeof input.message === "string" ? input.message : ""
+    return isOverflow(message)
+  }
+
+  /** Classifies non-standard SDK errors that did not arrive as APICallError. */
+  export function isRequestTooLarge(input: unknown) {
+    if (typeof input === "string") return isRequestTooLargeMessage(input)
+    if (input instanceof Error) {
+      if (isOverflow(input.message)) return false
+      const error = input as Error & { status?: unknown; statusCode?: unknown }
+      return isHttp413(error.statusCode) || isHttp413(error.status) || isRequestTooLargeMessage(input.message)
+    }
+    if (!isRecord(input)) return false
+    const nested = isRecord(input.error) ? input.error : undefined
+    const message =
+      typeof nested?.message === "string" ? nested.message : typeof input.message === "string" ? input.message : ""
+    if (isOverflow(message)) return false
+    return (
+      isHttp413(input.statusCode) ||
+      isHttp413(input.status) ||
+      isHttp413(nested?.statusCode) ||
+      isHttp413(nested?.status) ||
+      nested?.code === "request_too_large" ||
+      isRequestTooLargeMessage(message)
+    )
   }
 
   function message(e: APICallError) {
@@ -158,6 +207,11 @@ export namespace ProviderError {
         responseBody: string
       }
     | {
+        type: "request_too_large"
+        message: string
+        responseBody: string
+      }
+    | {
         type: "api_error"
         message: string
         isRetryable: false
@@ -201,12 +255,34 @@ export namespace ProviderError {
           responseBody,
         }
     }
+
+    const bodyMessage = typeof bodyError?.message === "string" ? bodyError.message : ""
+    if (isContextOverflow(body)) {
+      return {
+        type: "context_overflow",
+        message: bodyMessage || "Input exceeds context window of this model",
+        responseBody,
+      }
+    }
+    if (isRequestTooLarge(body)) {
+      return {
+        type: "request_too_large",
+        message: bodyMessage || "Provider rejected the request body as too large",
+        responseBody,
+      }
+    }
   }
 
   export type ParsedAPICallError =
     | {
         type: "context_overflow"
         message: string
+        responseBody?: string
+      }
+    | {
+        type: "request_too_large"
+        message: string
+        statusCode?: number
         responseBody?: string
       }
     | {
@@ -223,10 +299,22 @@ export namespace ProviderError {
     const m = message(input.error)
     const body = parseJsonRecord(input.error.responseBody)
     const bodyError = isRecord(body?.error) ? body.error : undefined
-    if (isOverflow(m) || input.error.statusCode === 413 || bodyError?.code === "context_length_exceeded") {
+    // Prefer explicit token/context evidence even when a gateway happens to
+    // use HTTP 413. Generic 413/request-entity errors are request-body limits
+    // (commonly accumulated base64 media) and need a media projection before
+    // token-driven compaction.
+    if (isOverflow(m) || bodyError?.code === "context_length_exceeded") {
       return {
         type: "context_overflow",
         message: m,
+        responseBody: input.error.responseBody,
+      }
+    }
+    if (input.error.statusCode === 413 || isRequestTooLargeMessage(m)) {
+      return {
+        type: "request_too_large",
+        message: m,
+        statusCode: input.error.statusCode,
         responseBody: input.error.responseBody,
       }
     }

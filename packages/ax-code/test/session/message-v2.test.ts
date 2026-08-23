@@ -188,6 +188,82 @@ describe("session.message-v2.toModelMessage", () => {
     ])
   })
 
+  test("degraded media projection keeps the newest two files without mutating durable history", async () => {
+    const input: MessageV2.WithParts[] = Array.from({ length: 4 }, (_, index) => {
+      const id = `m-media-${index + 1}`
+      return {
+        info: userInfo(id),
+        parts: [
+          {
+            ...basePart(id, `p-media-${index + 1}`),
+            type: "file",
+            mime: "image/png",
+            filename: `screen-${index + 1}.png`,
+            url: `data:image/png;base64,aW1hZ2Ut${index + 1}`,
+          },
+        ] as MessageV2.Part[],
+      }
+    })
+    const durableUrls = input.map((message) => (message.parts[0] as MessageV2.FilePart).url)
+
+    const projected = await MessageV2.toModelMessages(input, model, { mediaProjection: "degraded" })
+    const wire = JSON.stringify(projected)
+
+    expect(wire).not.toContain("aW1hZ2Ut1")
+    expect(wire).not.toContain("aW1hZ2Ut2")
+    expect(wire).toContain("aW1hZ2Ut3")
+    expect(wire).toContain("aW1hZ2Ut4")
+    expect(wire.match(/media omitted from this request/g)).toHaveLength(2)
+    expect(input.map((message) => (message.parts[0] as MessageV2.FilePart).url)).toEqual(durableUrls)
+  })
+
+  test("stripped media projection replaces every file with deterministic text", async () => {
+    const id = "m-media-stripped"
+    const input: MessageV2.WithParts[] = [
+      {
+        info: userInfo(id),
+        parts: [
+          {
+            ...basePart(id, "p-media-stripped"),
+            type: "file",
+            mime: "image/png",
+            filename: "screen.png",
+            url: "data:image/png;base64,c2NyZWVu",
+          },
+        ] as MessageV2.Part[],
+      },
+    ]
+
+    const projected = await MessageV2.toModelMessages(input, model, { mediaProjection: "stripped" })
+    const wire = JSON.stringify(projected)
+    expect(wire).not.toContain("c2NyZWVu")
+    expect(wire).toContain("media omitted from this request")
+    expect(wire).toContain("screen.png")
+  })
+
+  test("legacy compaction media stripping keeps a cause-neutral attachment placeholder", async () => {
+    const id = "m-media-compaction-strip"
+    const input: MessageV2.WithParts[] = [
+      {
+        info: userInfo(id),
+        parts: [
+          {
+            ...basePart(id, "p-media-compaction-strip"),
+            type: "file",
+            mime: "image/png",
+            filename: "screen.png",
+            url: "data:image/png;base64,c2NyZWVu",
+          },
+        ] as MessageV2.Part[],
+      },
+    ]
+
+    const projected = await MessageV2.toModelMessages(input, model, { stripMedia: true })
+    const wire = JSON.stringify(projected)
+    expect(wire).toContain("[Attached image/png: screen.png]")
+    expect(wire).not.toContain("provider request-size limit")
+  })
+
   test("filters out messages with only ignored parts", async () => {
     const messageID = "m-user"
 
@@ -987,7 +1063,6 @@ describe("session.message-v2.fromError", () => {
       "The input token count (1196265) exceeds the maximum number of tokens allowed (1048575)",
       "Please reduce the length of the messages or completion",
       "400 status code (no body)",
-      "413 status code (no body)",
     ]
 
     cases.forEach((message) => {
@@ -1002,6 +1077,36 @@ describe("session.message-v2.fromError", () => {
       const result = MessageV2.fromError(error, { providerID })
       expect(MessageV2.ContextOverflowError.isInstance(result)).toBe(true)
     })
+  })
+
+  test("serializes HTTP 413 request-body overflow separately from context overflow", () => {
+    const error = new APICallError({
+      message: "413 status code (no body)",
+      url: "https://example.com",
+      requestBodyValues: {},
+      statusCode: 413,
+      responseHeaders: { "content-type": "application/json" },
+      isRetryable: false,
+    })
+    const result = MessageV2.fromError(error, { providerID })
+
+    expect(MessageV2.RequestTooLargeError.isInstance(result)).toBe(true)
+    expect(MessageV2.ContextOverflowError.isInstance(result)).toBe(false)
+  })
+
+  test("serializes a non-standard SDK Error carrying HTTP 413", () => {
+    const error = Object.assign(new Error("413 status code (no body)"), { statusCode: 413 })
+    const result = MessageV2.fromError(error, { providerID })
+
+    expect(MessageV2.RequestTooLargeError.isInstance(result)).toBe(true)
+    expect(result.data.message).toContain("413")
+  })
+
+  test("serializes a non-standard SDK context-overflow Error", () => {
+    const result = MessageV2.fromError(new Error("Prompt is too long for this model"), { providerID })
+
+    expect(MessageV2.ContextOverflowError.isInstance(result)).toBe(true)
+    expect(result.data.message).toContain("Prompt is too long")
   })
 
   test("detects context overflow from context_length_exceeded code in response body", () => {

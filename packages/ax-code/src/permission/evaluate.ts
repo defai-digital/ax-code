@@ -7,11 +7,13 @@ type Rule = {
 }
 
 /**
- * Computer-use tools are back in this repo (superseding the ADR-053 relocation
- * to AX Work), gated on the `computer.provider` config rather than a flag.
- * No permission ids currently require exact grants, so this set is empty.
+ * Permissions whose allow rules must name the permission and requested pattern
+ * exactly. Computer use controls the real desktop, so a broad agent/default
+ * rule such as `{ permission: "*", pattern: "*", action: "allow" }` must not
+ * silently grant it. An explicit computer-wide config remains possible through
+ * `{ permission: "computer", pattern: "*", action: "allow" }`.
  */
-export const EXACT_GRANT_ONLY: ReadonlySet<string> = new Set()
+export const EXACT_GRANT_ONLY: ReadonlySet<string> = new Set(["computer"])
 
 export function evaluate(permission: string, pattern: string, ...rulesets: Rule[][]): Rule {
   const rules = rulesets.flat()
@@ -21,10 +23,12 @@ export function evaluate(permission: string, pattern: string, ...rulesets: Rule[
 
 function matches(permission: string, pattern: string, rule: Rule) {
   if (EXACT_GRANT_ONLY.has(permission)) {
-    if (rule.action === "deny") {
+    if (rule.action !== "allow") {
       return Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern)
     }
-    return rule.permission === permission && rule.pattern === pattern
+    if (rule.permission !== permission) return false
+    if (rule.pattern === "*") return true
+    return rule.pattern === pattern
   }
   return Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern)
 }

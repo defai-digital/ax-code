@@ -4,6 +4,7 @@ import { Plugin } from "../plugin"
 import type { Provider } from "../provider/provider"
 import MAX_STEPS from "./prompt/max-steps.txt"
 import { MessageV2 } from "./message-v2"
+import type { MediaProjection } from "./media-projection"
 import { remindQueuedMessages } from "./prompt-loop-messages"
 import { systemPrompt as getSystemPrompt } from "./prompt-system"
 import type { SessionID } from "./schema"
@@ -24,6 +25,7 @@ export async function preparePromptRequest(input: {
   requestMessagesSource?: MessageV2.WithParts[]
   systemOverride?: string[]
   ephemeralSystem?: string[]
+  mediaProjection?: MediaProjection.Mode
 }) {
   return NativePerf.runAsync(
     "session.preparePromptRequest",
@@ -53,7 +55,25 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
   // Build system prompt and convert messages to model format in parallel.
   // Both walk the same messages/model independently with no side effects.
   const format = input.lastUser.format ?? { type: "text" }
-  const [baseSystem, modelMessages] = await Promise.all([
+  const convertMessages = async (mediaProjection: MediaProjection.Mode) => {
+    const modelMessages = await MessageV2.toModelMessages(requestMessagesSource, input.model, {
+      cache: !hasTransformPlugin,
+      mediaProjection,
+    })
+    return [
+      ...modelMessages,
+      ...(input.isLastStep
+        ? [
+            {
+              role: "assistant" as const,
+              content: MAX_STEPS,
+            },
+          ]
+        : []),
+    ]
+  }
+  const mediaProjection = input.mediaProjection ?? "normal"
+  const [baseSystem, requestMessages] = await Promise.all([
     input.systemOverride
       ? Promise.resolve(input.systemOverride)
       : getSystemPrompt({
@@ -64,20 +84,9 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
           messages: requestMessagesSource,
           structuredPrompt: input.structuredPrompt,
         }),
-    MessageV2.toModelMessages(requestMessagesSource, input.model, { cache: !hasTransformPlugin }),
+    convertMessages(mediaProjection),
   ])
   const system = [...baseSystem, ...(input.ephemeralSystem ?? [])]
-  const requestMessages = [
-    ...modelMessages,
-    ...(input.isLastStep
-      ? [
-          {
-            role: "assistant" as const,
-            content: MAX_STEPS,
-          },
-        ]
-      : []),
-  ]
 
   return {
     messages,
@@ -85,5 +94,7 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
     format,
     system,
     requestMessages,
+    mediaCount: MessageV2.requestMediaCount(requestMessagesSource),
+    projectMessages: convertMessages,
   }
 }

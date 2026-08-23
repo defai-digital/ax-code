@@ -220,7 +220,10 @@ export namespace Permission {
 
   export const EXACT_GRANT_ONLY_PERMISSIONS: ReadonlySet<string> = EXACT_GRANT_ONLY
 
-  export const NEVER_AUTONOMOUS_AUTOAPPROVE: ReadonlySet<string> = new Set()
+  // Filesystem sandbox posture and real-desktop authorization are independent.
+  // `full-access` may auto-approve established filesystem/network risk classes,
+  // but it must never silently grant mouse/keyboard control of the host desktop.
+  export const NEVER_AUTONOMOUS_AUTOAPPROVE: ReadonlySet<string> = new Set(["computer"])
 
   export function isInteractiveOnly(permission: string): boolean {
     return INTERACTIVE_ONLY.has(permission)

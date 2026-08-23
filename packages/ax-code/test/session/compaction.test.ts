@@ -861,6 +861,10 @@ describe("session.compaction observability", () => {
             auto: true,
             triggerReason: "prompt_preflight",
           })
+          const task = (await Session.messages({ sessionID: session.id }))
+            .flatMap((message) => message.parts)
+            .find((part): part is MessageV2.CompactionPart => part.type === "compaction")
+          expect(task?.triggerReason).toBe("prompt_preflight")
         },
       })
 
@@ -870,6 +874,42 @@ describe("session.compaction observability", () => {
       expect(output).not.toContain("secret prompt")
     } finally {
       await Log.init({ print: false })
+    }
+  })
+})
+
+describe("session.compaction overflow replay", () => {
+  test("replaces media with a deterministic placeholder instead of dropping an image-only turn", () => {
+    const messageID = MessageID.make("msg_replay")
+    const sessionID = "ses_replay" as never
+    const input: MessageV2.Part[] = [
+      {
+        id: PartID.make("prt_image"),
+        messageID,
+        sessionID,
+        type: "file",
+        mime: "image/png",
+        filename: "screen.png",
+        url: "data:image/png;base64,AAAA",
+      },
+    ]
+    const parts = SessionCompaction.projectReplayParts(input, "request_too_large")
+
+    expect(parts).toHaveLength(1)
+    expect(parts[0]).toMatchObject({
+      type: "text",
+      synthetic: true,
+    })
+    if (parts[0]?.type === "text") {
+      expect(parts[0].text).toContain("media omitted from this request")
+      expect(parts[0].text).toContain("screen.png")
+    }
+
+    const contextParts = SessionCompaction.projectReplayParts(input, "context_overflow_error")
+    expect(contextParts[0]).toMatchObject({ type: "text" })
+    if (contextParts[0]?.type === "text") {
+      expect(contextParts[0].text).toContain("media omitted from compacted replay")
+      expect(contextParts[0].text).not.toContain("provider request-size limit")
     }
   })
 })

@@ -113,7 +113,7 @@ export const ComputerWatchTool = Tool.define("computer_watch", {
       elementCount = nextCount
     }
 
-    const rendered = renderObservation(observation, {
+    const rendered = await renderObservation(observation, {
       includeScreenshot: params.includeScreenshot,
       screenshotName: "computer-watch",
     })

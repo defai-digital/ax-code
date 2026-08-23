@@ -36,6 +36,7 @@ import { longAgentProfileForModel } from "@/provider/agent-optimization-profile"
 import { LongAgentContextPacker } from "@/context/long-agent-packer"
 import { createDeltaBatcher } from "./delta-batcher"
 import { createPartWriteBatcher } from "./part-write-batcher"
+import { MediaProjection } from "./media-projection"
 
 export namespace SessionProcessor {
   const log = Log.create({ service: "session.processor" })
@@ -47,6 +48,12 @@ export namespace SessionProcessor {
 
   export type Info = Awaited<ReturnType<typeof create>>
   export type Result = Awaited<ReturnType<Info["process"]>>
+  export type MediaRecovery = {
+    projection: MediaProjection.Mode
+    mediaCount: number
+    project: (projection: MediaProjection.Mode) => Promise<LLM.StreamInput["messages"]>
+    onProjection?: (projection: MediaProjection.Mode) => void
+  }
 
   export function create(input: {
     assistantMessage: MessageV2.Assistant
@@ -193,6 +200,7 @@ export namespace SessionProcessor {
     let blocked = false
     let attempt = 0
     let needsCompaction = false
+    let requestTooLargeCompaction = false
     // Underlying provider/stream error captured when a turn finishes with no
     // usage (an "empty model turn"). Surfaced via `result.streamError` so the
     // prompt loop can attribute the stall to its real cause.
@@ -248,11 +256,14 @@ export namespace SessionProcessor {
       partFromToolCall(toolCallID: string) {
         return toolcalls[toolCallID]
       },
-      async process(streamInput: LLM.StreamInput) {
+      async process(streamInput: LLM.StreamInput, options?: { mediaRecovery?: MediaRecovery }) {
         log.info("process started", { sessionId: input.sessionID, command: "session.process", status: "started" })
         attempt = 0
         needsCompaction = false
+        requestTooLargeCompaction = false
         lastStreamError = undefined
+        let activeStreamInput = streamInput
+        let activeMediaProjection = options?.mediaRecovery?.projection ?? "normal"
         const autonomous = ScopedFlag.autonomous()
         const shouldBreak = autonomous ? false : (await Config.get()).experimental?.continue_loop_on_deny !== true
         if (autonomous) {
@@ -307,8 +318,9 @@ export namespace SessionProcessor {
               | { type: "reasoning"; text: string }
               | { type: "tool_call"; callID: string; tool: string; input: Record<string, unknown> }
             > = []
+            lastStreamError = undefined
             const stream = await LLM.stream({
-              ...streamInput,
+              ...activeStreamInput,
               replay: {
                 messageID: input.assistantMessage.id,
                 stepIndex: attempt,
@@ -941,6 +953,17 @@ export namespace SessionProcessor {
                       ...usageLog,
                       streamError: lastStreamError === undefined ? undefined : toErrorMessage(lastStreamError),
                     })
+                    if (lastStreamError !== undefined) {
+                      const normalizedStreamError = MessageV2.fromError(lastStreamError, {
+                        providerID: input.model.providerID,
+                      })
+                      if (
+                        MessageV2.RequestTooLargeError.isInstance(normalizedStreamError) ||
+                        MessageV2.ContextOverflowError.isInstance(normalizedStreamError)
+                      ) {
+                        throw lastStreamError
+                      }
+                    }
                   } else log.info("provider usage normalized", usageLog)
                   const finishReason =
                     typeof value.finishReason === "string"
@@ -1236,7 +1259,36 @@ export namespace SessionProcessor {
               }
               if (currentText) currentText.text = StreamRepetition.truncateLoopedText(currentText.text)
             }
-            if (MessageV2.ContextOverflowError.isInstance(error)) {
+            if (MessageV2.RequestTooLargeError.isInstance(error)) {
+              const recovery = options?.mediaRecovery
+              const nextProjection = recovery?.mediaCount ? MediaProjection.next(activeMediaProjection) : undefined
+              if (recovery && nextProjection) {
+                activeStreamInput = {
+                  ...activeStreamInput,
+                  messages: await recovery.project(nextProjection),
+                }
+                activeMediaProjection = nextProjection
+                recovery.onProjection?.(nextProjection)
+                attempt++
+                log.warn("provider request too large; retrying with reduced media", {
+                  command: "session.process.media-recovery",
+                  status: "retry",
+                  sessionID: input.sessionID,
+                  providerID: input.model.providerID,
+                  modelID: input.model.id,
+                  mediaCount: recovery.mediaCount,
+                  projection: nextProjection,
+                  attempt,
+                })
+                continue
+              }
+              requestTooLargeCompaction = true
+              needsCompaction = true
+              Session.publishError({
+                sessionID: input.assistantMessage.sessionID,
+                error,
+              })
+            } else if (MessageV2.ContextOverflowError.isInstance(error)) {
               needsCompaction = true
               Session.publishError({
                 sessionID: input.assistantMessage.sessionID,
@@ -1351,7 +1403,7 @@ export namespace SessionProcessor {
           // Compaction can rewrite this message immediately after return, so
           // all detached deltas must be delivered first.
           await deltaBatcher.flush()
-          if (needsCompaction) return "compact"
+          if (needsCompaction) return requestTooLargeCompaction ? "compact_request_too_large" : "compact"
           if (blocked) return "stop"
           if (input.assistantMessage.error) return "stop"
           return "continue"

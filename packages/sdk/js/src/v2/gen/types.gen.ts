@@ -231,6 +231,14 @@ export type ContextOverflowError = {
   }
 }
 
+export type RequestTooLargeError = {
+  name: "RequestTooLargeError"
+  data: {
+    message: string
+    responseBody?: string
+  }
+}
+
 export type ApiError = {
   name: "APIError"
   data: {
@@ -273,6 +281,7 @@ export type AssistantMessage = {
     | MessageAbortedError
     | StructuredOutputError
     | ContextOverflowError
+    | RequestTooLargeError
     | ApiError
     | AutonomousLimitExceededError
   parentID: string
@@ -563,6 +572,7 @@ export type CompactionPart = {
   type: "compaction"
   auto: boolean
   overflow?: boolean
+  triggerReason?: "provider_usage" | "context_overflow_error" | "request_too_large" | "prompt_preflight" | "manual"
 }
 
 export type Part =
@@ -2010,6 +2020,7 @@ export type EventSessionError = {
       | MessageAbortedError
       | StructuredOutputError
       | ContextOverflowError
+      | RequestTooLargeError
       | ApiError
       | AutonomousLimitExceededError
   }

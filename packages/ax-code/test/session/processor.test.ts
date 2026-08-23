@@ -47,15 +47,199 @@ const model: Provider.Model = {
 
 let streamSpy: MockInstance | undefined
 let sleepSpy: MockInstance | undefined
+let lastStreamErrorSpy: MockInstance | undefined
 
 afterEach(() => {
   streamSpy?.mockRestore()
   streamSpy = undefined
   sleepSpy?.mockRestore()
   sleepSpy = undefined
+  lastStreamErrorSpy?.mockRestore()
+  lastStreamErrorSpy = undefined
 })
 
+async function createProcessorFixture(root: string) {
+  const session = await Session.create({})
+  const user = await Session.updateMessage({
+    id: MessageID.ascending(),
+    sessionID: session.id,
+    role: "user",
+    time: { created: Date.now() },
+    agent: "build",
+    model: { providerID: model.providerID, modelID: model.id },
+    tools: {},
+    mode: "build",
+  } as MessageV2.User)
+  const assistant = await Session.updateMessage({
+    id: MessageID.ascending(),
+    parentID: user.id,
+    sessionID: session.id,
+    role: "assistant",
+    mode: "build",
+    agent: "build",
+    path: { cwd: root, root },
+    tokens: {
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      cache: { read: 0, write: 0 },
+    },
+    modelID: model.id,
+    providerID: model.providerID,
+    time: { created: Date.now() },
+  } as MessageV2.Assistant)
+  const processor = SessionProcessor.create({
+    assistantMessage: assistant as MessageV2.Assistant,
+    sessionID: session.id,
+    model,
+    abort: AbortSignal.any([]),
+  })
+  const streamInput: LLM.StreamInput = {
+    user: user as MessageV2.User,
+    agent: await Agent.get("build"),
+    abort: AbortSignal.any([]),
+    sessionID: session.id,
+    system: [],
+    messages: [{ role: "user", content: "normal" }],
+    tools: {},
+    model,
+  }
+  return { processor, streamInput }
+}
+
+function successfulTextStream(text = "done") {
+  return {
+    fullStream: (async function* () {
+      yield { type: "start" }
+      yield { type: "start-step" }
+      yield { type: "text-start", id: "text_1" }
+      yield { type: "text-delta", id: "text_1", text }
+      yield { type: "text-end", id: "text_1" }
+      yield {
+        type: "finish-step",
+        finishReason: "stop",
+        usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+      }
+      yield { type: "finish" }
+    })(),
+  } as any
+}
+
 describe("session.processor", () => {
+  test("recovers request-too-large failures through the bounded media projection ladder", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { processor, streamInput } = await createProcessorFixture(tmp.path)
+        const requestTooLarge = () =>
+          new MessageV2.RequestTooLargeError({ message: "request entity too large" }).toObject()
+        streamSpy = vi
+          .spyOn(LLM, "stream")
+          .mockRejectedValueOnce(requestTooLarge())
+          .mockRejectedValueOnce(requestTooLarge())
+          .mockResolvedValueOnce(successfulTextStream())
+        const project = vi.fn(async (projection: "normal" | "degraded" | "stripped") => [
+          { role: "user" as const, content: projection },
+        ])
+        const projections: string[] = []
+
+        const result = await processor.process(streamInput, {
+          mediaRecovery: {
+            projection: "normal",
+            mediaCount: 4,
+            project,
+            onProjection: (projection) => projections.push(projection),
+          },
+        })
+
+        expect(result).toBe("continue")
+        expect(streamSpy).toHaveBeenCalledTimes(3)
+        expect(streamSpy.mock.calls.map((call) => call[0].messages)).toEqual([
+          [{ role: "user", content: "normal" }],
+          [{ role: "user", content: "degraded" }],
+          [{ role: "user", content: "stripped" }],
+        ])
+        expect(project.mock.calls.map((call) => call[0])).toEqual(["degraded", "stripped"])
+        expect(projections).toEqual(["degraded", "stripped"])
+        expect(processor.message.error).toBeUndefined()
+      },
+    })
+  })
+
+  test("recognizes nonthrowing stream 413 errors and compacts only after media is stripped", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { processor, streamInput } = await createProcessorFixture(tmp.path)
+        const requestTooLarge = Object.assign(new Error("413 status code (no body)"), { statusCode: 413 })
+        streamSpy = vi
+          .spyOn(LLM, "stream")
+          .mockResolvedValueOnce({
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield { type: "finish-step", finishReason: "error", usage: undefined }
+              yield { type: "finish" }
+            })(),
+          } as any)
+          .mockRejectedValue(requestTooLarge)
+        lastStreamErrorSpy = vi.spyOn(LLM, "lastStreamError").mockReturnValue(requestTooLarge)
+        const project = vi.fn(async (projection: "normal" | "degraded" | "stripped") => [
+          { role: "user" as const, content: projection },
+        ])
+
+        const result = await processor.process(streamInput, {
+          mediaRecovery: {
+            projection: "normal",
+            mediaCount: 1,
+            project,
+          },
+        })
+
+        expect(result).toBe("compact_request_too_large")
+        expect(streamSpy).toHaveBeenCalledTimes(3)
+        expect(project.mock.calls.map((call) => call[0])).toEqual(["degraded", "stripped"])
+        expect(lastStreamErrorSpy).toHaveBeenCalledTimes(1)
+        expect(processor.message.error).toBeUndefined()
+      },
+    })
+  })
+
+  test("compacts on a nonthrowing stream context-overflow error", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { processor, streamInput } = await createProcessorFixture(tmp.path)
+        const contextOverflow = {
+          type: "error",
+          error: { code: "context_length_exceeded" },
+        }
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValueOnce({
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            yield { type: "finish-step", finishReason: "error", usage: undefined }
+            yield { type: "finish" }
+          })(),
+        } as any)
+        lastStreamErrorSpy = vi.spyOn(LLM, "lastStreamError").mockReturnValue(contextOverflow)
+
+        const result = await processor.process(streamInput)
+
+        expect(result).toBe("compact")
+        expect(streamSpy).toHaveBeenCalledTimes(1)
+        expect(lastStreamErrorSpy).toHaveBeenCalledTimes(1)
+        expect(processor.message.error).toBeUndefined()
+      },
+    })
+  })
+
   test("flushes pending deltas before breaking for compaction", async () => {
     const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
     const start = src.indexOf("if (needsCompaction) {")

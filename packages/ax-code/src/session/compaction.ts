@@ -29,13 +29,14 @@ import {
   calculateCompactionBudget,
   effectiveTokenTotal,
 } from "./compaction-budget"
+import { MediaProjection } from "./media-projection"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
   const inFlight = new Set<string>()
 
-  export const TriggerReason = z.enum(["provider_usage", "context_overflow_error", "prompt_preflight", "manual"])
-  export type TriggerReason = z.infer<typeof TriggerReason>
+  export const TriggerReason = MessageV2.CompactionTriggerReason
+  export type TriggerReason = MessageV2.CompactionTriggerReason
 
   export const Event = {
     Compacted: BusEvent.define(
@@ -302,6 +303,7 @@ export namespace SessionCompaction {
     abort: AbortSignal
     auto: boolean
     overflow?: boolean
+    triggerReason?: TriggerReason
   }) {
     if (inFlight.has(input.sessionID)) {
       log.info("compaction already in-flight", {
@@ -362,7 +364,7 @@ export namespace SessionCompaction {
       for (let i = idx - 1; i >= 0; i--) {
         const msg = input.messages[i]
         if (msg.info.role === "user" && !msg.parts.some((p) => p.type === "compaction")) {
-          const parts = msg.parts.filter((part) => part.type !== "file")
+          const parts = projectReplayParts(msg.parts, input.triggerReason)
           if (parts.length === 0) continue
           replay = {
             ...msg,
@@ -432,6 +434,13 @@ export namespace SessionCompaction {
         // The pre-flight rejection below returns before processor.process runs,
         // which is the only other place time.completed gets set. Without it the
         // message looks in-flight forever and the TUI queues every later turn.
+        processor.message.time.completed = Date.now()
+        await Session.updateMessage(processor.message)
+        return "stop" as const
+      }
+      const stopForRequestTooLarge = async (message: string) => {
+        processor.message.error = new MessageV2.RequestTooLargeError({ message }).toObject()
+        processor.message.finish = "error"
         processor.message.time.completed = Date.now()
         await Session.updateMessage(processor.message)
         return "stop" as const
@@ -569,6 +578,12 @@ When constructing the summary, try to stick to this template:
                 "Start a new session, or switch to a model with a larger context window.",
         )
       }
+      if (result === "compact_request_too_large") {
+        return stopForRequestTooLarge(
+          "The provider rejected the compaction request body as too large even after trimming history and stripping media. " +
+            "Reduce custom instructions or the provider tool surface, or switch providers.",
+        )
+      }
       if (result === "stop") {
         const error = processor.message.error
         // Aborts and blocked turns carry no provider error — nothing to classify.
@@ -635,12 +650,8 @@ When constructing the summary, try to stick to this template:
             Database.effect(() => Bus.publishDetached(MessageV2.Event.Updated, { info: replayMsg }))
             for (const item of replay.parts) {
               if (item.type === "compaction") continue
-              const replayPart =
-                item.type === "file" && MessageV2.isMedia(item.mime)
-                  ? { type: "text" as const, text: `[Attached ${item.mime}: ${item.filename ?? "file"}]` }
-                  : item
               const part = {
-                ...replayPart,
+                ...item,
                 id: PartID.ascending(),
                 messageID: replayMsg.id,
                 sessionID: input.sessionID,
@@ -667,10 +678,14 @@ When constructing the summary, try to stick to this template:
             agent: userMessage.agent,
             model: userMessage.model,
           }
+          const overflowNotice =
+            input.triggerReason === "request_too_large"
+              ? "The previous request exceeded the provider's request-body size limit. The conversation was compacted and media files were removed from context. If the user was asking about attached images or files, explain that the attachments were too large to process and suggest they try again with smaller or fewer files.\n\n"
+              : input.overflow
+                ? "The previous request exceeded the model's context window. The conversation was compacted and media files were removed from context. Continue from the compacted summary without claiming that media size caused the failure.\n\n"
+                : ""
           const text =
-            (input.overflow
-              ? "The previous request exceeded the provider's size limit due to large media attachments. The conversation was compacted and media files were removed from context. If the user was asking about attached images or files, explain that the attachments were too large to process and suggest they try again with smaller or fewer files.\n\n"
-              : "") +
+            overflowNotice +
             "Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed."
           const part: MessageV2.TextPart = {
             id: PartID.ascending(),
@@ -718,6 +733,27 @@ When constructing the summary, try to stick to this template:
     return "stop"
   }
 
+  /** Remove request-body media while preserving enough context to replay an overflowed user turn safely. */
+  export function projectReplayParts(parts: MessageV2.Part[], triggerReason?: TriggerReason): MessageV2.Part[] {
+    return parts.flatMap((part): MessageV2.Part[] => {
+      if (part.type !== "file") return [part]
+      if (!MessageV2.isMedia(part.mime)) return []
+      return [
+        {
+          id: part.id,
+          messageID: part.messageID,
+          sessionID: part.sessionID,
+          type: "text",
+          synthetic: true,
+          text:
+            triggerReason === "request_too_large"
+              ? `${MediaProjection.OMITTED_TEXT} (${part.filename ?? part.mime})`
+              : `[media omitted from compacted replay] (${part.filename ?? part.mime})`,
+        },
+      ]
+    })
+  }
+
   export const create = fn(
     z.object({
       sessionID: SessionID.zod,
@@ -731,11 +767,12 @@ When constructing the summary, try to stick to this template:
       triggerReason: TriggerReason.optional(),
     }),
     async (input) => {
+      const triggerReason = input.triggerReason ?? (input.auto ? "provider_usage" : "manual")
       log.info("compaction scheduled", {
         command: "session.compaction.create",
         status: "ok",
         sessionID: input.sessionID,
-        triggerReason: input.triggerReason ?? (input.auto ? "provider_usage" : "manual"),
+        triggerReason,
         auto: input.auto,
         overflow: input.overflow,
         agent: input.agent,
@@ -759,6 +796,7 @@ When constructing the summary, try to stick to this template:
         type: "compaction",
         auto: input.auto,
         overflow: input.overflow,
+        triggerReason,
       })
     },
   )

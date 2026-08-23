@@ -40,6 +40,41 @@ describe("provider error decoding", () => {
     })
   })
 
+  test("classifies generic HTTP 413 as request-body overflow", () => {
+    const parsed = ProviderError.parseAPICallError({
+      providerID: ProviderID.make("openai"),
+      error: new APICallError({
+        message: "Request Entity Too Large",
+        url: "https://example.com",
+        requestBodyValues: {},
+        statusCode: 413,
+        responseHeaders: {},
+        isRetryable: false,
+      }),
+    })
+
+    expect(parsed).toMatchObject({
+      type: "request_too_large",
+      statusCode: 413,
+    })
+  })
+
+  test("explicit context evidence wins over an HTTP 413 status", () => {
+    const parsed = ProviderError.parseAPICallError({
+      providerID: ProviderID.make("openai"),
+      error: new APICallError({
+        message: "Input exceeds the context window of this model",
+        url: "https://example.com",
+        requestBodyValues: {},
+        statusCode: 413,
+        responseHeaders: {},
+        isRetryable: false,
+      }),
+    })
+
+    expect(parsed.type).toBe("context_overflow")
+  })
+
   test("only treats Alibaba quota URLs as Alibaba hosts", () => {
     const body = JSON.stringify({ error: { message: "allocated quota exceeded" } })
     const safe = ProviderError.parseAPICallError({
@@ -92,6 +127,40 @@ describe("provider error decoding", () => {
     expect(parsed).toMatchObject({
       type: "context_overflow",
       responseBody: '{"type":"error","error":{"code":"context_length_exceeded","sequence":"1"},"self":"[Circular]"}',
+    })
+  })
+
+  test("classifies a stream record carrying nested HTTP 413", () => {
+    const parsed = ProviderError.parseStreamError({
+      type: "error",
+      error: { statusCode: 413 },
+    })
+
+    expect(parsed).toMatchObject({
+      type: "request_too_large",
+      message: "Provider rejected the request body as too large",
+    })
+  })
+
+  test("classifies non-standard status fields carrying HTTP 413", () => {
+    expect(ProviderError.isRequestTooLarge(Object.assign(new Error("request failed"), { status: 413 }))).toBe(true)
+    expect(
+      ProviderError.parseStreamError({
+        type: "error",
+        error: { status: "413" },
+      }),
+    ).toMatchObject({ type: "request_too_large" })
+  })
+
+  test("classifies a stream context-overflow message without an error code", () => {
+    const parsed = ProviderError.parseStreamError({
+      type: "error",
+      error: { message: "Prompt is too long for this model" },
+    })
+
+    expect(parsed).toMatchObject({
+      type: "context_overflow",
+      message: "Prompt is too long for this model",
     })
   })
 

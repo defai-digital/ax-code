@@ -108,10 +108,15 @@ export function applyHeadlessProjectionEvent<
       return { handled: true, effects }
 
     case "permission.asked":
-      // Isolation escalation and destructive bash always need a human decision
-      // — never auto-approve them in headless autonomous mode. Leave the
-      // request pending so a connected UI (or explicit reply) can answer.
-      if (options.autonomous && !Permission.isInteractiveOnly(event.properties.permission)) {
+      // Interactive-only permissions and permissions that explicitly forbid
+      // autonomous approval (such as real-desktop control) need a human
+      // decision. Leave them pending so a connected UI or explicit reply can
+      // answer; the headless event projection must not bypass Permission.ask.
+      if (
+        options.autonomous &&
+        !Permission.isInteractiveOnly(event.properties.permission) &&
+        !Permission.isNeverAutonomousAutoApprove(event.properties.permission)
+      ) {
         effects.push({ type: "permission.auto_reply", requestID: event.properties.id })
         return { handled: true, effects }
       }

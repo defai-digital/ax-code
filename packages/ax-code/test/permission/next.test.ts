@@ -274,6 +274,50 @@ test("evaluate - no matching pattern returns ask", () => {
   expect(result.action).toBe("ask")
 })
 
+test("evaluate - broad wildcard allow does not authorize computer use", () => {
+  const result = Permission.evaluate("computer", "click:app:TextEdit", [
+    { permission: "*", pattern: "*", action: "allow" },
+  ])
+  expect(result.action).toBe("ask")
+})
+
+test("evaluate - explicit computer-wide config remains an opt-in", () => {
+  const result = Permission.evaluate("computer", "click:app:TextEdit", [
+    { permission: "computer", pattern: "*", action: "allow" },
+  ])
+  expect(result.action).toBe("allow")
+})
+
+test("evaluate - persisted computer action wildcards no longer authorize new scopes", () => {
+  const result = Permission.evaluate("computer", "type:app:Notes", [
+    { permission: "computer", pattern: "type:*", action: "allow" },
+  ])
+  expect(result.action).toBe("ask")
+})
+
+test("evaluate - computer deny rules retain wildcard matching", () => {
+  const result = Permission.evaluate("computer", "click:app:Password Manager", [
+    { permission: "computer", pattern: "click:*", action: "deny" },
+  ])
+  expect(result.action).toBe("deny")
+})
+
+test("evaluate - explicit computer ask wildcard can tighten an earlier allow", () => {
+  const result = Permission.evaluate("computer", "click:app:TextEdit", [
+    { permission: "computer", pattern: "*", action: "allow" },
+    { permission: "computer", pattern: "*", action: "ask" },
+  ])
+  expect(result.action).toBe("ask")
+})
+
+test("evaluate - broad ask rules can tighten an earlier explicit computer allow", () => {
+  const result = Permission.evaluate("computer", "click:app:TextEdit", [
+    { permission: "computer", pattern: "*", action: "allow" },
+    { permission: "*", pattern: "*", action: "ask" },
+  ])
+  expect(result.action).toBe("ask")
+})
+
 test("ask - interactive-only permissions still honor explicit deny rules", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
@@ -858,6 +902,55 @@ test("ask - autonomous network search permissions require ruleset approval", asy
     if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
     else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
   }
+})
+
+test("ask - autonomous full-access never implicitly approves computer use", async () => {
+  await using tmp = await tmpdir({ git: true })
+  vi.stubEnv("AX_CODE_AUTONOMOUS", "true")
+  vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const id = PermissionID.make("per_autonomous_full_access_computer")
+      const ask = Permission.ask({
+        id,
+        sessionID: SessionID.make("session_autonomous_full_access_computer"),
+        permission: "computer",
+        patterns: ["click:app:TextEdit"],
+        metadata: {},
+        always: ["click:app:TextEdit"],
+        ruleset: [],
+      })
+
+      const pending = await waitForPending(1)
+      expect(pending[0]).toMatchObject({ id, permission: "computer" })
+      await Permission.reply({ requestID: id, reply: "reject" })
+      await expect(ask).rejects.toBeInstanceOf(Permission.RejectedError)
+
+      await expect(
+        Permission.ask({
+          sessionID: SessionID.make("session_autonomous_full_access_bash"),
+          permission: "bash",
+          patterns: ["echo ok"],
+          metadata: {},
+          always: ["echo ok"],
+          ruleset: [],
+        }),
+      ).resolves.toBeUndefined()
+
+      await expect(
+        Permission.ask({
+          sessionID: SessionID.make("session_explicit_full_access_computer"),
+          permission: "computer",
+          patterns: ["click:app:TextEdit"],
+          metadata: {},
+          always: ["click:app:TextEdit"],
+          ruleset: [{ permission: "computer", pattern: "*", action: "allow" }],
+        }),
+      ).resolves.toBeUndefined()
+    },
+  })
 })
 
 // reply tests

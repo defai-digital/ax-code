@@ -40,7 +40,10 @@ function createModel(opts: { providerID: string; modelID: string }): Provider.Mo
   } as Provider.Model
 }
 
-type AttemptScript = { type: "fail"; error: () => NonNullable<MessageV2.Assistant["error"]> } | { type: "succeed" }
+type AttemptScript =
+  | { type: "fail"; error: () => NonNullable<MessageV2.Assistant["error"]> }
+  | { type: "request_too_large" }
+  | { type: "succeed" }
 
 function apiError(input: { message: string; statusCode?: number; isRetryable: boolean }) {
   return () => new MessageV2.APIError(input).toObject()
@@ -67,6 +70,7 @@ function mockProcessor(script: AttemptScript[]) {
           input.assistantMessage.error = step.error()
           return "stop"
         }
+        if (step.type === "request_too_large") return "compact_request_too_large"
         return "continue"
       },
     }
@@ -198,6 +202,47 @@ describe("session.compaction model fallback (C9)", () => {
             expect(failed.error.data.metadata?.failureClass).toBe("invalid_request")
           } else {
             throw new Error("expected an APIError on the failed attempt")
+          }
+        } finally {
+          processor.spy.mockRestore()
+          smallSpy.mockRestore()
+          getModel.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("a request-too-large compaction failure keeps its error taxonomy and does not retry", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const small = createModel({ providerID: "test", modelID: "test-small" })
+        const session = createModel({ providerID: "test", modelID: "test-model" })
+        const smallSpy = vi.spyOn(Provider, "getSmallModel").mockResolvedValue(small)
+        const { getModel } = mockProviders({ "test/test-model": session, "test/test-small": small })
+        const processor = mockProcessor([{ type: "request_too_large" }, { type: "succeed" }])
+        try {
+          const { session: s, user } = await seedSession()
+          const result = await SessionCompaction.process({
+            parentID: user.id,
+            messages: await Session.messages({ sessionID: s.id }),
+            sessionID: s.id,
+            abort: new AbortController().signal,
+            auto: true,
+            triggerReason: "request_too_large",
+          })
+
+          expect(result).toBe("stop")
+          expect(processor.models).toEqual([{ providerID: "test", modelID: "test-small" }])
+          const assistants = await compactionAssistantMessages(s.id)
+          expect(assistants).toHaveLength(1)
+          const failed = assistants[0]
+          expect(MessageV2.RequestTooLargeError.isInstance(failed?.error)).toBe(true)
+          expect(failed?.finish).toBe("error")
+          expect(failed?.time.completed).toBeTypeOf("number")
+          if (MessageV2.RequestTooLargeError.isInstance(failed?.error)) {
+            expect(failed.error.data.message).toContain("compaction request body as too large")
           }
         } finally {
           processor.spy.mockRestore()

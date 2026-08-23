@@ -4,6 +4,8 @@
  */
 import type { AppInfo, ComputerObservation, WindowInfo } from "@ax-code/computer"
 import type { Computer } from "@/computer/computer"
+import { Config } from "@/config/config"
+import { maybeResizeImage } from "@/session/image-resize"
 
 /** Caps the accessibility-tree text included in tool output. */
 const A11Y_TEXT_CAP = 20_000
@@ -53,13 +55,13 @@ export function renderTrajectory(entries: Computer.TrajectoryEntry[]): string {
   return lines.join("\n")
 }
 
-export function renderObservation(
+export async function renderObservation(
   observation: ComputerObservation,
   options: { includeScreenshot: boolean; screenshotName: string },
-): {
+): Promise<{
   output: string
   attachments?: { type: "file"; filename: string; mime: string; url: string }[]
-} {
+}> {
   const lines: string[] = []
   lines.push(`Provider: ${observation.provider} (${observation.platform})`)
   if (observation.app) lines.push(`App: ${observation.app.name}`)
@@ -91,14 +93,27 @@ export function renderObservation(
   let attachments: { type: "file"; filename: string; mime: string; url: string }[] | undefined
   const screenshot = observation.screenshot
   if (screenshot && options.includeScreenshot) {
-    const mime = screenshot.mimeType || "image/png"
+    let mime = screenshot.mimeType || "image/png"
+    let data = screenshot.data
+    const resized = await maybeResizeImage({
+      buffer: Buffer.from(data, "base64"),
+      mime,
+      config: (await Config.get()).attachment?.image,
+    })
+    if (resized.resized) {
+      mime = resized.mime
+      data = resized.data
+    } else if ("error" in resized && resized.error === "too_large") {
+      lines.push("", "Screenshot omitted because it exceeds the configured image-size limit.")
+      return { output: lines.join("\n") }
+    }
     const ext = mime === "image/jpeg" ? "jpg" : "png"
     attachments = [
       {
         type: "file",
         filename: `${options.screenshotName}.${ext}`,
         mime,
-        url: `data:${mime};base64,${screenshot.data}`,
+        url: `data:${mime};base64,${data}`,
       },
     ]
   }

@@ -233,7 +233,10 @@ export const ComputerActionTool = Tool.define("computer_action", {
     await ctx.ask({
       permission: "computer",
       patterns: [pattern],
-      always: label ? [pattern, `${params.type}:*`] : [pattern],
+      // A persistent reply is scoped to the exact permission pattern shown to
+      // the user. Never synthesize an action-class wildcard such as `type:*`:
+      // approving one app must not authorize that action across the desktop.
+      always: [pattern],
       metadata: { params },
     })
 
@@ -258,13 +261,13 @@ export const ComputerActionTool = Tool.define("computer_action", {
     // happened at this point, so a failed re-observation must not mask its
     // result — report the outcome and note that verification is unavailable.
     let observation: Awaited<ReturnType<typeof Computer.reobserve>> | undefined
-    let rendered: ReturnType<typeof renderObservation> | undefined
+    let rendered: Awaited<ReturnType<typeof renderObservation>> | undefined
     let reobserveError: string | undefined
     try {
       observation = await Computer.reobserve({
         audit: { sessionID: ctx.sessionID, messageID: ctx.messageID, tool: "computer_action" },
       })
-      rendered = renderObservation(observation, {
+      rendered = await renderObservation(observation, {
         includeScreenshot: true,
         screenshotName: "computer-action",
       })

@@ -123,6 +123,42 @@ describe("computer_snapshot tool", () => {
     })
   })
 
+  test("omits a screenshot that exceeds an explicit image-size limit", async () => {
+    await setup(
+      {
+        config: {
+          computer: { provider: "cua" },
+          attachment: { image: { auto_resize: false, max_base64_bytes: 1 } },
+        },
+      },
+      async ({ asks }) => {
+        const tool = await ComputerSnapshotTool.init()
+        const result = await tool.execute({ includeScreenshot: true }, makeCtx(asks))
+
+        expect(result.attachments).toBeUndefined()
+        expect(result.output).toContain("Screenshot omitted because it exceeds the configured image-size limit.")
+      },
+    )
+  })
+
+  test("fails closed when automatic screenshot resizing cannot meet the byte cap", async () => {
+    await setup(
+      {
+        config: {
+          computer: { provider: "cua" },
+          attachment: { image: { auto_resize: true, max_base64_bytes: 1 } },
+        },
+      },
+      async ({ asks }) => {
+        const tool = await ComputerSnapshotTool.init()
+        const result = await tool.execute({ includeScreenshot: true }, makeCtx(asks))
+
+        expect(result.attachments).toBeUndefined()
+        expect(result.output).toContain("Screenshot omitted because it exceeds the configured image-size limit.")
+      },
+    )
+  })
+
   test("scopes the observation and permission to the requested app", async () => {
     await setup({ config: { computer: { provider: "cua" } } }, async ({ provider, asks }) => {
       const tool = await ComputerSnapshotTool.init()
@@ -230,7 +266,7 @@ describe("computer_action tool", () => {
       expect(asks[1]).toMatchObject({
         permission: "computer",
         patterns: ["click:desktop"],
-        always: ["click:desktop", "click:*"],
+        always: ["click:desktop"],
       })
       expect(provider.acts).toEqual([
         { type: "click", target: { kind: "point", x: 10, y: 20 }, button: undefined, count: undefined },

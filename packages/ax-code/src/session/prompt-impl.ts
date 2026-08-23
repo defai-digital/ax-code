@@ -1,4 +1,4 @@
-import { SessionID } from "./schema"
+import { SessionID, type MessageID } from "./schema"
 import { MessageV2 } from "./message-v2"
 import { Log } from "../util/log"
 import { SessionRevert } from "./revert"
@@ -48,6 +48,7 @@ import { markPromptLoopBusy } from "./prompt-loop-status"
 import { handlePromptLoopGlobalStepLimit } from "./prompt-loop-step-limit"
 import { handlePromptLoopTotalStepLimit } from "./prompt-loop-total-step-limit"
 import { preparePromptRequest, type PromptRequestCache } from "./prompt-request-build"
+import type { MediaProjection } from "./media-projection"
 import { createStructuredOutputTurn } from "./prompt-structured-output"
 import { publishPromptFailure, createSyntheticFailureAssistant } from "./prompt-loop-failure"
 import { executeSubtask } from "./prompt-subtask"
@@ -541,6 +542,9 @@ export namespace SessionPrompt {
     // accumulated busy events across unrelated turns.
     let compactionBusyRetries = 0
     let consecutiveContextOverflowCompactions = 0
+    let consecutiveRequestTooLargeCompactions = 0
+    let mediaProjection: MediaProjection.Mode = "normal"
+    let mediaProjectionUserID: MessageID | undefined
     while (true) {
       await markPromptLoopBusy({ sessionID, step, maxSteps: sessionStepLimit, consecutiveErrors })
       if (abort.aborted) {
@@ -564,6 +568,10 @@ export namespace SessionPrompt {
       let { lastUser, lastUserParts, lastAssistant, lastFinished, tasks } = scanLoopMessages(msgs)
 
       if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
+      if (mediaProjectionUserID !== lastUser.id) {
+        mediaProjectionUserID = lastUser.id
+        mediaProjection = "normal"
+      }
       if (fallbackModelOverride) {
         lastUser = {
           ...lastUser,
@@ -948,6 +956,7 @@ export namespace SessionPrompt {
         requestMessagesSource: responseOnlyProfile?.requestMessages,
         systemOverride: responseOnlyProfile ? [RESPONSE_ONLY_SYSTEM_PROMPT] : undefined,
         ephemeralSystem: pendingInstructionForRequest ? [pendingInstructionForRequest] : undefined,
+        mediaProjection,
       })
       msgs = request.messages
       // Text-only recovery / response-only rewrite / last finite agent step
@@ -1075,21 +1084,33 @@ export namespace SessionPrompt {
       if (needsTools) structuredOutput.attachTool(tools)
 
       const maxOutputTokensForRequest = pendingMaxOutputTokens
-      const result = await processor.process({
-        user: lastUser,
-        agent,
-        permission: session.permission,
-        abort,
-        sessionID,
-        system: request.system,
-        messages: request.requestMessages,
-        tools,
-        model,
-        toolChoice,
-        small: responseOnlyFastReasoning,
-        config: cfg,
-        maxOutputTokens: maxOutputTokensForRequest,
-      })
+      const result = await processor.process(
+        {
+          user: lastUser,
+          agent,
+          permission: session.permission,
+          abort,
+          sessionID,
+          system: request.system,
+          messages: request.requestMessages,
+          tools,
+          model,
+          toolChoice,
+          small: responseOnlyFastReasoning,
+          config: cfg,
+          maxOutputTokens: maxOutputTokensForRequest,
+        },
+        {
+          mediaRecovery: {
+            projection: mediaProjection,
+            mediaCount: request.mediaCount,
+            project: request.projectMessages,
+            onProjection: (projection) => {
+              mediaProjection = projection
+            },
+          },
+        },
+      )
 
       if (
         shouldRestoreForcedTextOnlyTurn({
@@ -1778,6 +1799,7 @@ export namespace SessionPrompt {
         messageFinish: processor.message.finish,
         hasError: false,
         priorContextOverflowCompactions: consecutiveContextOverflowCompactions,
+        priorRequestTooLargeCompactions: consecutiveRequestTooLargeCompactions,
       })
       if (processorDecision.action === "stop") {
         if (processorDecision.message) {
@@ -1792,12 +1814,14 @@ export namespace SessionPrompt {
       }
       if (processorDecision.action === "continue") {
         consecutiveContextOverflowCompactions = 0
+        consecutiveRequestTooLargeCompactions = 0
       }
 
       if (processorDecision.action === "compact") {
-        consecutiveContextOverflowCompactions = processorDecision.overflow
-          ? consecutiveContextOverflowCompactions + 1
-          : 0
+        consecutiveContextOverflowCompactions =
+          processorDecision.triggerReason === "context_overflow_error" ? consecutiveContextOverflowCompactions + 1 : 0
+        consecutiveRequestTooLargeCompactions =
+          processorDecision.triggerReason === "request_too_large" ? consecutiveRequestTooLargeCompactions + 1 : 0
         await SessionCompaction.create({
           sessionID,
           agent: lastUser.agent,

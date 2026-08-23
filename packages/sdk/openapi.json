@@ -35861,6 +35861,33 @@
           "data"
         ]
       },
+      "RequestTooLargeError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "const": "RequestTooLargeError"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "responseBody": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "data"
+        ]
+      },
       "APIError": {
         "type": "object",
         "properties": {
@@ -36007,6 +36034,9 @@
               },
               {
                 "$ref": "#/components/schemas/ContextOverflowError"
+              },
+              {
+                "$ref": "#/components/schemas/RequestTooLargeError"
               },
               {
                 "$ref": "#/components/schemas/APIError"
@@ -37076,6 +37106,16 @@
           },
           "overflow": {
             "type": "boolean"
+          },
+          "triggerReason": {
+            "type": "string",
+            "enum": [
+              "provider_usage",
+              "context_overflow_error",
+              "request_too_large",
+              "prompt_preflight",
+              "manual"
+            ]
           }
         },
         "required": [
@@ -42798,6 +42838,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ContextOverflowError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RequestTooLargeError"
                   },
                   {
                     "$ref": "#/components/schemas/APIError"

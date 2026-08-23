@@ -41,6 +41,7 @@ export async function processPendingCompaction(input: {
     sessionID: input.sessionID,
     auto: input.task.auto,
     overflow: input.task.overflow,
+    triggerReason: input.task.triggerReason,
   })
   const decision = pendingCompactionDecision({
     result,

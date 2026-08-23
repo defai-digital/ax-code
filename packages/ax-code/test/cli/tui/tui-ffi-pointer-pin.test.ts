@@ -67,7 +67,7 @@ describe("AX Code TUI FFI pointer pinning", () => {
     expect(rawSites.length).toBeGreaterThan(0)
     // A pointer source must be pinned in the same branch that takes its raw
     // address, immediately before the address leaves JS-managed liveness.
-    const pinnedSites = SRC.match(/pinNodePointerSource\(value\);\s*return nodeFfi\.getRawPointer\(/g) ?? []
+    const pinnedSites = SRC.match(/pinNodePointerSource\(value\);?\s*return nodeFfi\.getRawPointer\(/g) ?? []
     expect(pinnedSites.length, "unpinned nodeFfi.getRawPointer() call site in AX Code TUI").toBe(rawSites.length)
   })
 

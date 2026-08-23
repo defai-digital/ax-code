@@ -22,6 +22,7 @@ import { providerModelKey } from "@/provider/model-key"
 import { toErrorMessage } from "../util/error-message"
 import { PromptIsolationPolicy } from "./prompt-runtime-policy"
 import { BlastRadius } from "./blast-radius"
+import { MediaProjection } from "./media-projection"
 
 export namespace MessageV2 {
   const log = Log.create({ service: "session.message" })
@@ -69,6 +70,10 @@ export namespace MessageV2 {
   export type APIError = z.infer<typeof APIError.Schema>
   export const ContextOverflowError = NamedError.create(
     "ContextOverflowError",
+    z.object({ message: z.string(), responseBody: z.string().optional() }),
+  )
+  export const RequestTooLargeError = NamedError.create(
+    "RequestTooLargeError",
     z.object({ message: z.string(), responseBody: z.string().optional() }),
   )
 
@@ -215,10 +220,20 @@ export namespace MessageV2 {
   })
   export type AgentPart = z.infer<typeof AgentPart>
 
+  export const CompactionTriggerReason = z.enum([
+    "provider_usage",
+    "context_overflow_error",
+    "request_too_large",
+    "prompt_preflight",
+    "manual",
+  ])
+  export type CompactionTriggerReason = z.infer<typeof CompactionTriggerReason>
+
   export const CompactionPart = PartBase.extend({
     type: z.literal("compaction"),
     auto: z.boolean(),
     overflow: z.boolean().optional(),
+    triggerReason: CompactionTriggerReason.optional(),
   }).meta({
     ref: "CompactionPart",
   })
@@ -427,6 +442,7 @@ export namespace MessageV2 {
         AbortedError.Schema,
         StructuredOutputError.Schema,
         ContextOverflowError.Schema,
+        RequestTooLargeError.Schema,
         APIError.Schema,
         BlastRadius.LimitExceededError.Schema,
       ])
@@ -670,10 +686,43 @@ export namespace MessageV2 {
     }
   }
 
+  function assistantMessageSuppressed(msg: WithParts) {
+    if (msg.info.role !== "assistant" || !msg.info.error) return false
+    return !(
+      MessageV2.AbortedError.isInstance(msg.info.error) &&
+      msg.parts.some((part) => part.type !== "step-start" && part.type !== "reasoning")
+    )
+  }
+
+  export function requestMediaCount(input: WithParts[]) {
+    let count = 0
+    for (const msg of input) {
+      if (msg.info.role === "user") {
+        for (const part of msg.parts) {
+          if (
+            part.type === "file" &&
+            part.mime !== "text/plain" &&
+            part.mime !== "application/x-directory" &&
+            isMedia(part.mime)
+          ) {
+            count++
+          }
+        }
+        continue
+      }
+      if (assistantMessageSuppressed(msg)) continue
+      for (const part of msg.parts) {
+        if (part.type !== "tool" || part.state.status !== "completed" || part.state.time.compacted) continue
+        count += (part.state.attachments ?? []).filter((attachment) => isMedia(attachment.mime)).length
+      }
+    }
+    return count
+  }
+
   export async function toModelMessages(
     input: WithParts[],
     model: Provider.Model,
-    options?: { stripMedia?: boolean; cache?: boolean },
+    options?: { stripMedia?: boolean; cache?: boolean; mediaProjection?: MediaProjection.Mode },
   ): Promise<ModelMessage[]> {
     // Track media from tool results that need to be injected as user messages
     // for providers that don't support media in tool results.
@@ -692,21 +741,26 @@ export namespace MessageV2 {
       return false
     })()
 
-    const cacheKey = [model.providerID, model.id, model.api.npm, model.api.id, options?.stripMedia ? "strip" : ""].join(
-      "|",
-    )
+    const projection = options?.stripMedia ? "stripped" : (options?.mediaProjection ?? "normal")
+    const mediaCount = requestMediaCount(input)
+    const mediaSelector = MediaProjection.create({ mode: projection, total: mediaCount })
+    const cacheKey = [model.providerID, model.id, model.api.npm, model.api.id, projection].join("|")
+    // A degraded projection depends on each media occurrence's position in the
+    // complete request, so per-message cache hits cannot safely advance the
+    // shared selector. Normal conversion retains the existing hot-path cache.
+    const useCache = options?.cache === true && projection === "normal"
     const result: ModelMessage[] = []
     for (const msg of input) {
       if (msg.parts.length === 0) continue
-      if (options?.cache) {
+      if (useCache) {
         const hit = modelMessageCache.get(msg)?.get(cacheKey)
         if (hit) {
           result.push(...hit)
           continue
         }
       }
-      const converted = await convertMessage(msg, model, options, supportsMediaInToolResults)
-      if (options?.cache && conversionStable(msg)) {
+      const converted = await convertMessage(msg, model, options, supportsMediaInToolResults, mediaSelector)
+      if (useCache && conversionStable(msg)) {
         setModelMessageCache(msg, cacheKey, converted)
       }
       result.push(...converted)
@@ -717,8 +771,9 @@ export namespace MessageV2 {
   async function convertMessage(
     msg: WithParts,
     model: Provider.Model,
-    options: { stripMedia?: boolean; cache?: boolean } | undefined,
+    options: { stripMedia?: boolean; cache?: boolean; mediaProjection?: MediaProjection.Mode } | undefined,
     supportsMediaInToolResults: boolean,
+    mediaSelector: MediaProjection.Selector,
   ): Promise<ModelMessage[]> {
     const result: UIMessage[] = []
     const toolNames = new Set<string>()
@@ -792,10 +847,12 @@ export namespace MessageV2 {
             })
           // text/plain and directory files are converted into text parts, ignore them
           if (part.type === "file" && part.mime !== "text/plain" && part.mime !== "application/x-directory") {
-            if (options?.stripMedia && isMedia(part.mime)) {
+            if (isMedia(part.mime) && !mediaSelector.keep()) {
               userMessage.parts.push({
                 type: "text",
-                text: `[Attached ${part.mime}: ${part.filename ?? "file"}]`,
+                text: options?.stripMedia
+                  ? `[Attached ${part.mime}: ${part.filename ?? "file"}]`
+                  : `${MediaProjection.OMITTED_TEXT} (${part.filename ?? part.mime})`,
               })
             } else {
               userMessage.parts.push({
@@ -827,13 +884,7 @@ export namespace MessageV2 {
           providerModelKey({ providerID: model.providerID, modelID: model.id }) !== providerModelKey(msg.info)
         const media: Array<{ mime: string; url: string }> = []
 
-        if (
-          msg.info.error &&
-          !(
-            MessageV2.AbortedError.isInstance(msg.info.error) &&
-            msg.parts.some((part) => part.type !== "step-start" && part.type !== "reasoning")
-          )
-        ) {
+        if (assistantMessageSuppressed(msg)) {
           return []
         }
         const assistantMessage: UIMessage = {
@@ -855,8 +906,20 @@ export namespace MessageV2 {
           if (part.type === "tool") {
             toolNames.add(part.tool)
             if (part.state.status === "completed") {
-              const outputText = part.state.time.compacted ? "[Old tool result content cleared]" : part.state.output
-              const attachments = part.state.time.compacted || options?.stripMedia ? [] : (part.state.attachments ?? [])
+              const sourceAttachments = part.state.time.compacted ? [] : (part.state.attachments ?? [])
+              let omittedMedia = 0
+              const projectedAttachments = sourceAttachments.filter((attachment) => {
+                if (!isMedia(attachment.mime)) return true
+                const keep = mediaSelector.keep()
+                if (!keep) omittedMedia++
+                return keep
+              })
+              const attachments = options?.stripMedia ? [] : projectedAttachments
+              const baseOutputText = part.state.time.compacted ? "[Old tool result content cleared]" : part.state.output
+              const outputText =
+                omittedMedia > 0 && options?.mediaProjection
+                  ? `${baseOutputText}\n${MediaProjection.OMITTED_TEXT} (${omittedMedia} tool attachment${omittedMedia === 1 ? "" : "s"})`
+                  : baseOutputText
 
               // For providers that don't support media in tool results, extract media files
               // (images, PDFs) to be sent as a separate user message
@@ -1186,6 +1249,8 @@ export namespace MessageV2 {
         return normalizeToPlain(e) as ReturnType<typeof fromError>
       case MessageV2.ContextOverflowError.isInstance(e):
         return normalizeToPlain(e) as ReturnType<typeof fromError>
+      case MessageV2.RequestTooLargeError.isInstance(e):
+        return normalizeToPlain(e) as ReturnType<typeof fromError>
       case MessageV2.AbortedError.isInstance(e):
         return normalizeToPlain(e) as ReturnType<typeof fromError>
       case MessageV2.OutputLengthError.isInstance(e):
@@ -1214,6 +1279,15 @@ export namespace MessageV2 {
             { cause: e },
           ).toObject()
         }
+        if (parsed.type === "request_too_large") {
+          return new MessageV2.RequestTooLargeError(
+            {
+              message: parsed.message,
+              responseBody: parsed.responseBody,
+            },
+            { cause: e },
+          ).toObject()
+        }
 
         return new MessageV2.APIError(
           {
@@ -1223,6 +1297,20 @@ export namespace MessageV2 {
             responseHeaders: parsed.responseHeaders,
             responseBody: parsed.responseBody,
             metadata: parsed.metadata,
+          },
+          { cause: e },
+        ).toObject()
+      case (e instanceof Error || typeof e === "string") && ProviderError.isContextOverflow(e):
+        return new MessageV2.ContextOverflowError(
+          {
+            message: toErrorMessage(e, "Input exceeds context window of this model"),
+          },
+          { cause: e },
+        ).toObject()
+      case (e instanceof Error || typeof e === "string") && ProviderError.isRequestTooLarge(e):
+        return new MessageV2.RequestTooLargeError(
+          {
+            message: toErrorMessage(e, "Provider rejected the request body as too large"),
           },
           { cause: e },
         ).toObject()
@@ -1265,6 +1353,15 @@ export namespace MessageV2 {
           if (parsed) {
             if (parsed.type === "context_overflow") {
               return new MessageV2.ContextOverflowError(
+                {
+                  message: parsed.message,
+                  responseBody: parsed.responseBody,
+                },
+                { cause: e },
+              ).toObject()
+            }
+            if (parsed.type === "request_too_large") {
+              return new MessageV2.RequestTooLargeError(
                 {
                   message: parsed.message,
                   responseBody: parsed.responseBody,

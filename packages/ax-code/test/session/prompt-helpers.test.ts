@@ -778,6 +778,13 @@ describe("session.prompt helpers", () => {
       overflow: true,
       triggerReason: "context_overflow_error",
     })
+    expect(
+      processorLoopDecision({ result: "compact_request_too_large", messageFinish: undefined, hasError: false }),
+    ).toEqual({
+      action: "compact",
+      overflow: true,
+      triggerReason: "request_too_large",
+    })
     const repeatedOverflow = processorLoopDecision({
       result: "compact",
       messageFinish: undefined,
@@ -790,6 +797,18 @@ describe("session.prompt helpers", () => {
     })
     if (repeatedOverflow.action === "stop") {
       expect(repeatedOverflow.message).toContain("still exceeds the model context window after compaction")
+    }
+    const repeatedRequestTooLarge = processorLoopDecision({
+      result: "compact_request_too_large",
+      messageFinish: undefined,
+      hasError: false,
+      priorRequestTooLargeCompactions: 1,
+    })
+    expect(repeatedRequestTooLarge.action).toBe("stop")
+    if (repeatedRequestTooLarge.action === "stop") {
+      expect(repeatedRequestTooLarge.message).toContain(
+        "request body as too large after media stripping and compaction",
+      )
     }
   })
 

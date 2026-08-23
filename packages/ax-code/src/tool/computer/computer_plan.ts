@@ -50,10 +50,12 @@ export const ComputerPlanTool = Tool.define("computer_plan", {
     const observation = await Computer.observe(scope, {
       audit: { sessionID: ctx.sessionID, messageID: ctx.messageID, tool: "computer_plan" },
     })
-    const observationText = renderObservation(observation, {
-      includeScreenshot: false,
-      screenshotName: "computer-plan",
-    }).output
+    const observationText = (
+      await renderObservation(observation, {
+        includeScreenshot: false,
+        screenshotName: "computer-plan",
+      })
+    ).output
     const trajectory = await Computer.trajectory()
 
     const result = await planWithJudge({

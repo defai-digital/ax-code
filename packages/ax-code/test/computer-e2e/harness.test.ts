@@ -33,6 +33,9 @@ describe("parseEvents", () => {
   test("counts computer tool usage, grounder targets, errors, and wall-clock", () => {
     const metrics = parseEvents(NDJSON, "")
     expect(metrics.sessionID).toBe("ses_bench")
+    expect(metrics.parsedEvents).toBe(8)
+    expect(metrics.toolEvents).toBe(6)
+    expect(metrics.computerToolEvents).toBe(5)
     expect(metrics.steps).toBe(3)
     expect(metrics.observes).toBe(1)
     expect(metrics.plans).toBe(1)
@@ -56,6 +59,9 @@ describe("parseEvents", () => {
   test("tolerates empty and partial streams", () => {
     const metrics = parseEvents("", "")
     expect(metrics.steps).toBe(0)
+    expect(metrics.parsedEvents).toBe(0)
+    expect(metrics.toolEvents).toBe(0)
+    expect(metrics.computerToolEvents).toBe(0)
     expect(metrics.wallMs).toBe(0)
     expect(metrics.sessionID).toBeUndefined()
   })
@@ -115,6 +121,36 @@ describe("runAgentTask", () => {
     expect(result.detail).toContain("post-condition")
   })
 
+  test("diagnoses a successful process that emits no parseable events", async () => {
+    const result = await runAgentTask(
+      task,
+      { model: "test/model" },
+      { readClipboard: async () => "wrong" },
+      fakeSpawn({ stdout: "not-json\n", stderr: "provider startup failed" }),
+    )
+    expect(result.ok).toBe(false)
+    expect(result.detail).toBe("session produced no parseable NDJSON events")
+    expect(result.metrics.parsedEvents).toBe(0)
+    expect(result.diagnostics).toMatchObject({ exitCode: 0, timedOut: false })
+    expect(result.diagnostics.stderrTail).toBe("provider startup failed")
+  })
+
+  test("distinguishes non-computer tool activity from an empty event stream", async () => {
+    const stdout = [
+      JSON.stringify({ type: "step_start", timestamp: 1_000, sessionID: "ses_non_computer" }),
+      toolUse("bash", "completed", { command: "ls" }, 1_100),
+    ].join("\n")
+    const result = await runAgentTask(
+      task,
+      { model: "test/model" },
+      { readClipboard: async () => "marker" },
+      fakeSpawn({ stdout }),
+    )
+    expect(result.ok).toBe(false)
+    expect(result.detail).toBe("session produced 1 tool event(s) but no computer tool events")
+    expect(result.metrics).toMatchObject({ parsedEvents: 2, toolEvents: 1, computerToolEvents: 0 })
+  })
+
   test("fails on non-zero exit and on timeout", async () => {
     const exited = await runAgentTask(
       task,
@@ -168,6 +204,9 @@ describe("formatAgentReport", () => {
       ok,
       verify: ok ? "ok" : "no-match",
       metrics: {
+        parsedEvents: 8,
+        toolEvents: 5,
+        computerToolEvents: 4,
         steps: 5,
         observes: 2,
         plans: 0,
@@ -175,6 +214,12 @@ describe("formatAgentReport", () => {
         toolErrors: 0,
         permissionAutoRejects: 0,
         wallMs: 1234,
+      },
+      diagnostics: {
+        exitCode: 0,
+        timedOut: false,
+        stdoutBytes: 100,
+        stderrBytes: 0,
       },
     })
     const out = formatAgentReport("openai/gpt-4o", [mk("AG-001", true), mk("AG-002", false)])

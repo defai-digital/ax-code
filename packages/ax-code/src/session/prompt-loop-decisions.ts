@@ -57,7 +57,7 @@ type ProviderFallbackSwitchState = {
 
 type ProcessorCompactionTriggerReason = Extract<
   SessionCompaction.TriggerReason,
-  "provider_usage" | "context_overflow_error"
+  "provider_usage" | "context_overflow_error" | "request_too_large"
 >
 
 type ProcessorLoopDecision =
@@ -334,9 +334,26 @@ export function processorLoopDecision(input: {
   messageFinish: string | undefined
   hasError: boolean
   priorContextOverflowCompactions?: number
+  priorRequestTooLargeCompactions?: number
 }): ProcessorLoopDecision {
   if (input.result === "stop") {
     return { action: "stop", reason: input.hasError ? "error" : "completed" }
+  }
+  if (input.result === "compact_request_too_large") {
+    if ((input.priorRequestTooLargeCompactions ?? 0) > 0) {
+      return {
+        action: "stop",
+        reason: "error",
+        message:
+          "The provider still rejects the request body as too large after media stripping and compaction. " +
+          "Reduce attachment count or size, reduce the provider tool surface, or switch providers.",
+      }
+    }
+    return {
+      action: "compact",
+      overflow: true,
+      triggerReason: "request_too_large",
+    }
   }
   if (input.result !== "compact") return { action: "continue" }
   const overflow = !input.messageFinish
