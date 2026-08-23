@@ -81,6 +81,7 @@ export const ReadTool = Tool.define("read", {
         .optional(),
     }),
   ),
+  concurrencySafe: () => true,
   async execute(params, ctx) {
     if (params.filePath.includes("\x00")) throw readError("ReadInvalidPathError", NULL_BYTE_PATH_ERROR)
     if (params.offset !== undefined && params.offset < 1) {

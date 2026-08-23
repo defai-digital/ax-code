@@ -17,6 +17,8 @@ import { Database } from "@/storage/db"
 import { MessageTable, PartTable } from "./session.sql"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { ContextTier } from "./context-tier"
+import { CompactionFallback } from "./compaction-fallback"
+import { isLocalProvider } from "./prompt-provider-fallback"
 import { sessionAssistantPath, zeroTokenUsage } from "./prompt-message-builders"
 import { estimateRequestTokens } from "./prompt-request"
 import { SystemPrompt } from "./system"
@@ -377,50 +379,70 @@ export namespace SessionCompaction {
     // Compaction is an aux call: explicit agent pin first, then the
     // provider's small tier, and only bill the session's main model as the
     // fallback (providers without a small-model mapping).
-    const model = agent?.model
+    let model = agent?.model
       ? await Provider.getModel(agent.model.providerID, agent.model.modelID)
       : ((await Provider.getSmallModel(userMessage.model.providerID)) ??
         (await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)))
-    const msg = (await Session.updateMessage({
-      id: MessageID.ascending(),
-      role: "assistant",
-      parentID: input.parentID,
-      sessionID: input.sessionID,
-      mode: "compaction",
-      agent: "compaction",
-      variant: userMessage.variant,
-      summary: true,
-      path: sessionAssistantPath(),
-      tokens: zeroTokenUsage(),
-      modelID: model.id,
-      providerID: model.providerID,
-      time: {
-        created: Date.now(),
-      },
-    })) as MessageV2.Assistant
-    const processor = SessionProcessor.create({
-      assistantMessage: msg,
-      sessionID: input.sessionID,
-      model,
-      abort: input.abort,
-    })
-    const stopForContextOverflow = async (message: string) => {
-      processor.message.error = new MessageV2.ContextOverflowError({ message }).toObject()
-      processor.message.finish = "error"
-      // The pre-flight rejection below returns before processor.process runs,
-      // which is the only other place time.completed gets set. Without it the
-      // message looks in-flight forever and the TUI queues every later turn.
-      processor.message.time.completed = Date.now()
-      await Session.updateMessage(processor.message)
-      return "stop" as const
+    // C9: resolve the next ladder rung lazily — only on a transient failure —
+    // so the happy path performs no extra provider lookups. Order mirrors the
+    // primary selection: the provider's small tier first (when an agent pin
+    // skipped it), then the session's main model.
+    const resolveNextRung = async (current: Provider.Model): Promise<Provider.Model | undefined> => {
+      const candidates: Array<Provider.Model | undefined> = []
+      if (agent.model) {
+        candidates.push(await Provider.getSmallModel(userMessage.model.providerID).catch(() => undefined))
+      }
+      candidates.push(
+        await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID).catch(() => undefined),
+      )
+      return candidates.find(
+        (candidate) => candidate && (candidate.providerID !== current.providerID || candidate.id !== current.id),
+      )
     }
-    // Allow plugins to inject context or replace compaction prompt
-    const compacting = await Plugin.trigger(
-      "experimental.session.compacting",
-      { sessionID: input.sessionID },
-      { context: [], prompt: undefined },
-    )
-    const defaultPrompt = `Provide a detailed prompt for continuing our conversation above.
+    // C9: a transient provider error retries once against the next ladder
+    // rung (max CompactionFallback.MAX_ATTEMPTS total attempts). Non-transient
+    // classes (invalid request, context-window-exceeded) never retry.
+    for (let attempt = 1; attempt <= CompactionFallback.MAX_ATTEMPTS; attempt++) {
+      const msg = (await Session.updateMessage({
+        id: MessageID.ascending(),
+        role: "assistant",
+        parentID: input.parentID,
+        sessionID: input.sessionID,
+        mode: "compaction",
+        agent: "compaction",
+        variant: userMessage.variant,
+        summary: true,
+        path: sessionAssistantPath(),
+        tokens: zeroTokenUsage(),
+        modelID: model.id,
+        providerID: model.providerID,
+        time: {
+          created: Date.now(),
+        },
+      })) as MessageV2.Assistant
+      const processor = SessionProcessor.create({
+        assistantMessage: msg,
+        sessionID: input.sessionID,
+        model,
+        abort: input.abort,
+      })
+      const stopForContextOverflow = async (message: string) => {
+        processor.message.error = new MessageV2.ContextOverflowError({ message }).toObject()
+        processor.message.finish = "error"
+        // The pre-flight rejection below returns before processor.process runs,
+        // which is the only other place time.completed gets set. Without it the
+        // message looks in-flight forever and the TUI queues every later turn.
+        processor.message.time.completed = Date.now()
+        await Session.updateMessage(processor.message)
+        return "stop" as const
+      }
+      // Allow plugins to inject context or replace compaction prompt
+      const compacting = await Plugin.trigger(
+        "experimental.session.compacting",
+        { sessionID: input.sessionID },
+        { context: [], prompt: undefined },
+      )
+      const defaultPrompt = `Provide a detailed prompt for continuing our conversation above.
 Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next.
 The summary that you construct will be used so that another agent can read it and continue the work.
 
@@ -451,208 +473,249 @@ When constructing the summary, try to stick to this template:
 [Construct a structured list of relevant files that have been read, edited, or created that pertain to the task at hand, each with a one-line note. If all the files in a directory are relevant, include the path to the directory.]
 ---`
 
-    const promptText = compacting.prompt ?? [defaultPrompt, ...compacting.context].join("\n\n")
-    const msgs = [...messages]
-    await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
-    // If the history to summarize exceeds the compaction model's own window,
-    // the summarization request itself overflows and compaction hard-fails,
-    // which bricks the session for small-context models (observed: a
-    // ~100k-token session switched to a 32k local model could never compact
-    // and every prompt failed with ContextOverflowError). Drop the oldest
-    // messages until the request fits — losing old detail beats never
-    // compacting. The prompt notes the omission so the summary stays honest.
-    const historyGroups: Array<{ modelMessages: ModelMessage[] }> = []
-    for (const message of msgs) {
-      historyGroups.push({
-        modelMessages: await MessageV2.toModelMessages([message], model, { stripMedia: true }),
-      })
-    }
-    let selectedGroups = historyGroups
-    let finalPromptText = promptText
-    const tokenBudget = await requestBudget(model)
-    if (tokenBudget) {
-      const system = SystemPrompt.request({ agent, model, system: [], userSystem: userMessage.system })
-      const historyModelMessages = historyGroups.flatMap((group) => group.modelMessages)
-      const untrimmedTokens =
-        estimateRequestTokens({
-          system,
-          messages: [...historyModelMessages, compactionPromptMessage(promptText)],
-        }) + COMPACTION_REQUEST_HEADROOM_TOKENS
-
-      if (untrimmedTokens > tokenBudget.usable) {
-        // Budget the longest possible omission notice up front. The actual
-        // omitted count can only use the same or fewer digits, so the final
-        // request remains within the estimate after selection.
-        const promptWithNotice = promptText + omittedHistoryNotice(historyGroups.length)
-        const fixedTokens =
-          estimateRequestTokens({ system, messages: [compactionPromptMessage(promptWithNotice)] }) +
-          COMPACTION_REQUEST_HEADROOM_TOKENS
-        const trimmed = trimMessagesForCompaction({
-          messages: historyGroups,
-          estimate: (group) => estimateRequestTokens({ system: [], messages: group.modelMessages }),
-          budgetTokens: tokenBudget.usable - fixedTokens,
-          // Starting with an assistant/tool-result fragment can be rejected by
-          // strict providers and separates tool results from their user turn.
-          canStartWith: (group) => group.modelMessages[0]?.role === "user",
+      const promptText = compacting.prompt ?? [defaultPrompt, ...compacting.context].join("\n\n")
+      const msgs = [...messages]
+      await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
+      // If the history to summarize exceeds the compaction model's own window,
+      // the summarization request itself overflows and compaction hard-fails,
+      // which bricks the session for small-context models (observed: a
+      // ~100k-token session switched to a 32k local model could never compact
+      // and every prompt failed with ContextOverflowError). Drop the oldest
+      // messages until the request fits — losing old detail beats never
+      // compacting. The prompt notes the omission so the summary stays honest.
+      const historyGroups: Array<{ modelMessages: ModelMessage[] }> = []
+      for (const message of msgs) {
+        historyGroups.push({
+          modelMessages: await MessageV2.toModelMessages([message], model, { stripMedia: true }),
         })
-        selectedGroups = trimmed.messages
-        if (trimmed.omitted > 0) {
-          log.info("trimmed oldest messages so compaction fits the model window", {
+      }
+      let selectedGroups = historyGroups
+      let finalPromptText = promptText
+      const tokenBudget = await requestBudget(model)
+      if (tokenBudget) {
+        const system = SystemPrompt.request({ agent, model, system: [], userSystem: userMessage.system })
+        const historyModelMessages = historyGroups.flatMap((group) => group.modelMessages)
+        const untrimmedTokens =
+          estimateRequestTokens({
+            system,
+            messages: [...historyModelMessages, compactionPromptMessage(promptText)],
+          }) + COMPACTION_REQUEST_HEADROOM_TOKENS
+
+        if (untrimmedTokens > tokenBudget.usable) {
+          // Budget the longest possible omission notice up front. The actual
+          // omitted count can only use the same or fewer digits, so the final
+          // request remains within the estimate after selection.
+          const promptWithNotice = promptText + omittedHistoryNotice(historyGroups.length)
+          const fixedTokens =
+            estimateRequestTokens({ system, messages: [compactionPromptMessage(promptWithNotice)] }) +
+            COMPACTION_REQUEST_HEADROOM_TOKENS
+          const trimmed = trimMessagesForCompaction({
+            messages: historyGroups,
+            estimate: (group) => estimateRequestTokens({ system: [], messages: group.modelMessages }),
+            budgetTokens: tokenBudget.usable - fixedTokens,
+            // Starting with an assistant/tool-result fragment can be rejected by
+            // strict providers and separates tool results from their user turn.
+            canStartWith: (group) => group.modelMessages[0]?.role === "user",
+          })
+          selectedGroups = trimmed.messages
+          if (trimmed.omitted > 0) {
+            log.info("trimmed oldest messages so compaction fits the model window", {
+              sessionID: input.sessionID,
+              omitted: trimmed.omitted,
+              kept: trimmed.messages.length,
+              budgetUsable: tokenBudget.usable,
+            })
+            finalPromptText = promptText + omittedHistoryNotice(trimmed.omitted)
+          }
+        }
+
+        const finalModelMessages = selectedGroups.flatMap((group) => group.modelMessages)
+        const finalTokens =
+          estimateRequestTokens({
+            system,
+            messages: [...finalModelMessages, compactionPromptMessage(finalPromptText)],
+          }) + COMPACTION_REQUEST_HEADROOM_TOKENS
+        if (finalTokens > tokenBudget.usable) {
+          log.warn("compaction instructions exceed model window after omitting history", {
             sessionID: input.sessionID,
-            omitted: trimmed.omitted,
-            kept: trimmed.messages.length,
+            estimatedTokens: finalTokens,
             budgetUsable: tokenBudget.usable,
           })
-          finalPromptText = promptText + omittedHistoryNotice(trimmed.omitted)
+          return stopForContextOverflow(
+            "Compaction instructions exceed this model's context window even with conversation history omitted. " +
+              "Reduce custom compaction or system instructions, or switch to a model with a larger context window.",
+          )
         }
       }
+      const historyModelMessages = selectedGroups.flatMap((group) => group.modelMessages)
+      const result = await processor.process({
+        user: userMessage,
+        agent,
+        abort: input.abort,
+        sessionID: input.sessionID,
+        tools: {},
+        system: [],
+        messages: [...historyModelMessages, compactionPromptMessage(finalPromptText)],
+        model,
+      })
 
-      const finalModelMessages = selectedGroups.flatMap((group) => group.modelMessages)
-      const finalTokens =
-        estimateRequestTokens({
-          system,
-          messages: [...finalModelMessages, compactionPromptMessage(finalPromptText)],
-        }) + COMPACTION_REQUEST_HEADROOM_TOKENS
-      if (finalTokens > tokenBudget.usable) {
-        log.warn("compaction instructions exceed model window after omitting history", {
-          sessionID: input.sessionID,
-          estimatedTokens: finalTokens,
-          budgetUsable: tokenBudget.usable,
-        })
+      if (result === "compact") {
+        // Context-window-exceeded is never retried down the ladder (C9).
         return stopForContextOverflow(
-          "Compaction instructions exceed this model's context window even with conversation history omitted. " +
-            "Reduce custom compaction or system instructions, or switch to a model with a larger context window.",
+          replay
+            ? "Session too large to compact - context exceeds model limit even after trimming and stripping media. " +
+                "Start a new session, or switch to a model with a larger context window."
+            : "Conversation history is too large for this model's context window even after trimming. " +
+                "Start a new session, or switch to a model with a larger context window.",
         )
       }
-    }
-    const historyModelMessages = selectedGroups.flatMap((group) => group.modelMessages)
-    const result = await processor.process({
-      user: userMessage,
-      agent,
-      abort: input.abort,
-      sessionID: input.sessionID,
-      tools: {},
-      system: [],
-      messages: [...historyModelMessages, compactionPromptMessage(finalPromptText)],
-      model,
-    })
-
-    if (result === "compact") {
-      return stopForContextOverflow(
-        replay
-          ? "Session too large to compact - context exceeds model limit even after trimming and stripping media. " +
-              "Start a new session, or switch to a model with a larger context window."
-          : "Conversation history is too large for this model's context window even after trimming. " +
-              "Start a new session, or switch to a model with a larger context window.",
-      )
-    }
-    if (result === "stop") return "stop"
-
-    if (result === "continue" && input.auto) {
-      if (replay) {
-        const original = replay.info as MessageV2.User
-        const replayMsg: MessageV2.User = {
-          id: MessageID.ascending(),
-          role: "user",
-          sessionID: input.sessionID,
-          time: { created: Date.now() },
-          agent: original.agent,
-          model: original.model,
-          format: original.format,
-          tools: original.tools,
-          system: original.system,
-          variant: original.variant,
-        }
-        Database.transaction((db) => {
-          const { id, sessionID, ...data } = replayMsg
-          db.insert(MessageTable)
-            .values({
-              id,
-              session_id: sessionID,
-              time_created: replayMsg.time.created,
-              data,
-            })
-            .run()
-          Database.effect(() => Bus.publishDetached(MessageV2.Event.Updated, { info: replayMsg }))
-          for (const item of replay.parts) {
-            if (item.type === "compaction") continue
-            const replayPart =
-              item.type === "file" && MessageV2.isMedia(item.mime)
-                ? { type: "text" as const, text: `[Attached ${item.mime}: ${item.filename ?? "file"}]` }
-                : item
-            const part = {
-              ...replayPart,
-              id: PartID.ascending(),
-              messageID: replayMsg.id,
-              sessionID: input.sessionID,
+      if (result === "stop") {
+        const error = processor.message.error
+        // Aborts and blocked turns carry no provider error — nothing to classify.
+        if (!error) return "stop"
+        const failure = CompactionFallback.classify(error)
+        CompactionFallback.annotate(error, { retryAttempt: attempt, failureClass: failure.class })
+        await Session.updateMessage(processor.message)
+        if (failure.retryable && attempt < CompactionFallback.MAX_ATTEMPTS) {
+          const next = await resolveNextRung(model)
+          if (next) {
+            // Privacy guard (same rule as the prompt loop's provider
+            // fallback): a session on a local provider must never silently
+            // migrate to a remote one — that would leak prompts and code off
+            // this machine.
+            const refused = next.providerID !== model.providerID && (await isLocalProvider(model.providerID))
+            if (refused) {
+              log.warn("compaction fallback refused: would migrate off a local provider", {
+                sessionID: input.sessionID,
+                providerID: model.providerID,
+                candidateProviderID: next.providerID,
+                failureClass: failure.class,
+              })
+            } else {
+              log.warn("compaction failed with a transient error, retrying with the next fallback model", {
+                sessionID: input.sessionID,
+                attempt,
+                failureClass: failure.class,
+                from: `${model.providerID}/${model.id}`,
+                to: `${next.providerID}/${next.id}`,
+              })
+              model = next
+              continue
             }
-            const { id, messageID, sessionID, ...data } = part
-            db.insert(PartTable)
+          }
+        }
+        return "stop"
+      }
+
+      if (input.auto) {
+        if (replay) {
+          const original = replay.info as MessageV2.User
+          const replayMsg: MessageV2.User = {
+            id: MessageID.ascending(),
+            role: "user",
+            sessionID: input.sessionID,
+            time: { created: Date.now() },
+            agent: original.agent,
+            model: original.model,
+            format: original.format,
+            tools: original.tools,
+            system: original.system,
+            variant: original.variant,
+          }
+          Database.transaction((db) => {
+            const { id, sessionID, ...data } = replayMsg
+            db.insert(MessageTable)
               .values({
                 id,
-                message_id: messageID,
                 session_id: sessionID,
-                time_created: Date.now(),
+                time_created: replayMsg.time.created,
                 data,
               })
               .run()
-            Database.effect(() => Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } }))
+            Database.effect(() => Bus.publishDetached(MessageV2.Event.Updated, { info: replayMsg }))
+            for (const item of replay.parts) {
+              if (item.type === "compaction") continue
+              const replayPart =
+                item.type === "file" && MessageV2.isMedia(item.mime)
+                  ? { type: "text" as const, text: `[Attached ${item.mime}: ${item.filename ?? "file"}]` }
+                  : item
+              const part = {
+                ...replayPart,
+                id: PartID.ascending(),
+                messageID: replayMsg.id,
+                sessionID: input.sessionID,
+              }
+              const { id, messageID, sessionID, ...data } = part
+              db.insert(PartTable)
+                .values({
+                  id,
+                  message_id: messageID,
+                  session_id: sessionID,
+                  time_created: Date.now(),
+                  data,
+                })
+                .run()
+              Database.effect(() => Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } }))
+            }
+          })
+        } else {
+          const continueMsg: MessageV2.User = {
+            id: MessageID.ascending(),
+            role: "user",
+            sessionID: input.sessionID,
+            time: { created: Date.now() },
+            agent: userMessage.agent,
+            model: userMessage.model,
           }
-        })
-      } else {
-        const continueMsg: MessageV2.User = {
-          id: MessageID.ascending(),
-          role: "user",
-          sessionID: input.sessionID,
-          time: { created: Date.now() },
-          agent: userMessage.agent,
-          model: userMessage.model,
+          const text =
+            (input.overflow
+              ? "The previous request exceeded the provider's size limit due to large media attachments. The conversation was compacted and media files were removed from context. If the user was asking about attached images or files, explain that the attachments were too large to process and suggest they try again with smaller or fewer files.\n\n"
+              : "") +
+            "Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed."
+          const part: MessageV2.TextPart = {
+            id: PartID.ascending(),
+            messageID: continueMsg.id,
+            sessionID: input.sessionID,
+            type: "text",
+            synthetic: true,
+            text,
+            time: {
+              start: Date.now(),
+              end: Date.now(),
+            },
+          }
+          Database.transaction((db) => {
+            const { id, sessionID, ...data } = continueMsg
+            db.insert(MessageTable)
+              .values({
+                id,
+                session_id: sessionID,
+                time_created: continueMsg.time.created,
+                data,
+              })
+              .run()
+            Database.effect(() => Bus.publishDetached(MessageV2.Event.Updated, { info: continueMsg }))
+            const { id: partID, messageID, sessionID: partSessionID, ...partData } = part
+            db.insert(PartTable)
+              .values({
+                id: partID,
+                message_id: messageID,
+                session_id: partSessionID,
+                time_created: Date.now(),
+                data: partData,
+              })
+              .run()
+            Database.effect(() => Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } }))
+          })
         }
-        const text =
-          (input.overflow
-            ? "The previous request exceeded the provider's size limit due to large media attachments. The conversation was compacted and media files were removed from context. If the user was asking about attached images or files, explain that the attachments were too large to process and suggest they try again with smaller or fewer files.\n\n"
-            : "") +
-          "Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed."
-        const part: MessageV2.TextPart = {
-          id: PartID.ascending(),
-          messageID: continueMsg.id,
-          sessionID: input.sessionID,
-          type: "text",
-          synthetic: true,
-          text,
-          time: {
-            start: Date.now(),
-            end: Date.now(),
-          },
-        }
-        Database.transaction((db) => {
-          const { id, sessionID, ...data } = continueMsg
-          db.insert(MessageTable)
-            .values({
-              id,
-              session_id: sessionID,
-              time_created: continueMsg.time.created,
-              data,
-            })
-            .run()
-          Database.effect(() => Bus.publishDetached(MessageV2.Event.Updated, { info: continueMsg }))
-          const { id: partID, messageID, sessionID: partSessionID, ...partData } = part
-          db.insert(PartTable)
-            .values({
-              id: partID,
-              message_id: messageID,
-              session_id: partSessionID,
-              time_created: Date.now(),
-              data: partData,
-            })
-            .run()
-          Database.effect(() => Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } }))
-        })
       }
+      if (processor.message.error) return "stop"
+      await Bus.publish(Event.Compacted, { sessionID: input.sessionID })
+      return "continue"
     }
-    if (processor.message.error) return "stop"
-    await Bus.publish(Event.Compacted, { sessionID: input.sessionID })
-    return "continue"
+    // Unreachable: every loop path returns, and the retry `continue` only runs
+    // below MAX_ATTEMPTS. Keeps the function's return type total for TS.
+    return "stop"
   }
 
   export const create = fn(

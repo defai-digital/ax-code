@@ -195,10 +195,12 @@ export namespace SessionPrompt {
         })
         if (submit.blocked) {
           blockedDetail =
-            submit.outputs
+            submit.blockReason ??
+            (submit.outputs
               .filter((o) => o.exit !== 0)
               .map((o) => o.stderr || o.stdout || `exit ${o.exit}`)
-              .join("\n") || "hook failed"
+              .join("\n") ||
+              "hook failed")
         }
       } catch (error) {
         // Hook load/run failures must not brick prompting.

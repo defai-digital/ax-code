@@ -173,6 +173,168 @@ describe("LifecycleHooks matcher and run", () => {
   })
 })
 
+describe("LifecycleHooks claude-code wire protocol", () => {
+  test("exit 2 with permissionDecision deny blocks with the structured reason", async () => {
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PreToolUse",
+          protocol: "claude-code",
+          command: `node -e "console.log(JSON.stringify({permissionDecision:'deny',reason:'no force pushes'}));process.exit(2)"`,
+        },
+      ],
+      { event: "PreToolUse", tool: "bash", args: { command: "git push --force" }, cwd: process.cwd() },
+    )
+    expect(result.blocked).toBe(true)
+    expect(result.ok).toBe(false)
+    expect(result.blockReason).toBe("no force pushes")
+  })
+
+  test("exit 2 with plain stderr blocks and surfaces stderr as the reason", async () => {
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PreToolUse",
+          protocol: "claude-code",
+          command: `node -e "console.error('blocked by policy');process.exit(2)"`,
+        },
+      ],
+      { event: "PreToolUse", tool: "bash", args: {}, cwd: process.cwd() },
+    )
+    expect(result.blocked).toBe(true)
+    expect(result.blockReason).toBe("blocked by policy")
+  })
+
+  test("exit 2 with malformed stdout JSON still blocks (fail-safe)", async () => {
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PreToolUse",
+          protocol: "claude-code",
+          command: `node -e "console.log('{not json');console.error('boom');process.exit(2)"`,
+        },
+      ],
+      { event: "PreToolUse", tool: "bash", args: {}, cwd: process.cwd() },
+    )
+    expect(result.blocked).toBe(true)
+    expect(result.blockReason).toBe("boom")
+  })
+
+  test("exit 0 with permissionDecision allow proceeds", async () => {
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PreToolUse",
+          protocol: "claude-code",
+          command: `node -e "console.log(JSON.stringify({permissionDecision:'allow'}))"`,
+        },
+      ],
+      { event: "PreToolUse", tool: "bash", args: {}, cwd: process.cwd() },
+    )
+    expect(result.blocked).toBe(false)
+    expect(result.ok).toBe(true)
+  })
+
+  test("exit 0 with permissionDecision deny blocks with reason", async () => {
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "UserPromptSubmit",
+          protocol: "claude-code",
+          command: `node -e "console.log(JSON.stringify({permissionDecision:'deny',reason:'prompt rejected'}))"`,
+        },
+      ],
+      { event: "UserPromptSubmit", args: { prompt: "hi" }, cwd: process.cwd() },
+    )
+    expect(result.blocked).toBe(true)
+    expect(result.blockReason).toBe("prompt rejected")
+  })
+
+  test("permissionDecision ask degrades to a fail-safe block", async () => {
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PreToolUse",
+          protocol: "claude-code",
+          command: `node -e "console.log(JSON.stringify({permissionDecision:'ask'}))"`,
+        },
+      ],
+      { event: "PreToolUse", tool: "bash", args: {}, cwd: process.cwd() },
+    )
+    expect(result.blocked).toBe(true)
+    expect(result.blockReason).toBe("hook requested user confirmation")
+  })
+
+  test("exit 1 is a non-blocking error for protocol entries", async () => {
+    const result = await LifecycleHooks.runHooks(
+      [{ event: "PreToolUse", protocol: "claude-code", command: "exit 1" }],
+      { event: "PreToolUse", tool: "bash", args: {}, cwd: process.cwd() },
+    )
+    expect(result.blocked).toBe(false)
+  })
+
+  test("protocol unset keeps legacy behavior byte-identical", async () => {
+    // Exit 2 without blockOnFailure must not block (legacy fail-open).
+    const legacy = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PreToolUse",
+          command: `node -e "console.log(JSON.stringify({permissionDecision:'deny',reason:'x'}));process.exit(2)"`,
+        },
+      ],
+      { event: "PreToolUse", tool: "bash", args: {}, cwd: process.cwd() },
+    )
+    expect(legacy.blocked).toBe(false)
+    expect(legacy.blockReason).toBeUndefined()
+
+    // Exit 2 with blockOnFailure still blocks, with no decoder reason.
+    const blocking = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PreToolUse",
+          blockOnFailure: true,
+          command: `node -e "console.error('legacy block');process.exit(2)"`,
+        },
+      ],
+      { event: "PreToolUse", tool: "bash", args: {}, cwd: process.cwd() },
+    )
+    expect(blocking.blocked).toBe(true)
+    expect(blocking.blockReason).toBeUndefined()
+  })
+
+  test("observation-only events ignore the decoder even with exit 2", async () => {
+    for (const event of ["PostToolUse", "Stop", "SessionStart", "Interrupt"] as const) {
+      const result = await LifecycleHooks.runHooks(
+        [
+          {
+            event,
+            protocol: "claude-code",
+            command: `node -e "console.log(JSON.stringify({permissionDecision:'deny',reason:'x'}));process.exit(2)"`,
+          },
+        ],
+        { event, cwd: process.cwd() },
+      )
+      expect(result.blocked).toBe(false)
+      expect(result.ok).toBe(true)
+    }
+  })
+
+  test("loads protocol entries from .ax-code/hooks.json", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-hooks-proto-"))
+    await fs.mkdir(path.join(dir, ".ax-code"), { recursive: true })
+    await fs.writeFile(
+      path.join(dir, ".ax-code", "hooks.json"),
+      JSON.stringify({
+        hooks: [{ event: "PreToolUse", matcher: "bash", command: "true", protocol: "claude-code" }],
+      }),
+      "utf8",
+    )
+    const hooks = await LifecycleHooks.loadProjectHooks(dir, true)
+    expect(hooks).toHaveLength(1)
+    expect(hooks[0]?.protocol).toBe("claude-code")
+  })
+})
+
 describe("LifecycleHooks session lifecycle firing sites", () => {
   afterEach(() => {
     vi.restoreAllMocks()

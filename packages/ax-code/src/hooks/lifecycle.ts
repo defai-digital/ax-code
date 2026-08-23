@@ -12,6 +12,20 @@
  * Interrupt. They are NOT in BLOCKABLE_EVENTS, so a non-zero exit can never
  * veto anything — `runHooks` logs the failure and continues.
  *
+ * Claude Code wire protocol (ADR-048 D4, opt-in per entry): a hook entry may
+ * declare `"protocol": "claude-code"`. For blockable events (PreToolUse,
+ * UserPromptSubmit) the process output is then decoded with Claude Code
+ * semantics INSTEAD of the legacy `blockOnFailure` check:
+ * - exit 2 blocks and surfaces stderr as the reason (a structured stdout
+ *   `reason` wins when present; malformed stdout still blocks — fail-safe)
+ * - exit 0 with stdout JSON `{"permissionDecision": "allow"|"deny"|"ask",
+ *   "reason"?}` maps to proceed / block with reason / block fail-safe
+ *   ("ask" has no Permission.ask channel at this layer — no ruleset or
+ *   tool-call context — so it degrades to a block; documented deviation)
+ * - any other exit is a non-blocking error
+ * Observation-only events ignore the decoder entirely (fail-open preserved),
+ * and entries without the field behave byte-identically to the legacy path.
+ *
  * Security note: hook child processes receive the FULL `process.env`
  * (see the env spread in `runHookProcess` below). Hook commands must be
  * treated as trusted code — they can read every secret in the environment.
@@ -23,7 +37,7 @@ import fs from "fs/promises"
 import path from "path"
 import z from "zod"
 import { Log } from "@/util/log"
-import { parseJsonResult } from "@/util/json-value"
+import { parseJsonResult, parseJsonPayload } from "@/util/json-value"
 import { Global } from "@/global"
 import { Instance } from "@/project/instance"
 import { ProjectConfigTrust } from "@/config/project-config-trust"
@@ -73,8 +87,45 @@ export namespace LifecycleHooks {
     matcher: z.string().max(500).optional(),
     /** When true, non-zero exit blocks the action (PreToolUse and UserPromptSubmit only). */
     blockOnFailure: z.boolean().optional(),
+    /**
+     * Opt-in wire protocol decoder. "claude-code" decodes process output with
+     * Claude Code hook semantics (exit 2 blocks; stdout permissionDecision
+     * JSON) for blockable events, replacing the blockOnFailure check.
+     */
+    protocol: z.literal("claude-code").optional(),
     pack: z.string().max(500).optional(),
   })
+
+  /** Structured stdout contract for `protocol: "claude-code"` entries. */
+  const ClaudeCodeDecisionSchema = z.object({
+    permissionDecision: z.enum(["allow", "deny", "ask"]),
+    reason: z.string().optional(),
+  })
+
+  /**
+   * Decode a finished hook process under Claude Code wire semantics. Only
+   * consulted for blockable events on entries that opted in via `protocol`.
+   * Exit 2 always blocks (structured `reason` beats raw stderr; malformed
+   * stdout still blocks). On exit 0 a `permissionDecision` of `deny` blocks
+   * with its reason, and `ask` degrades to a fail-safe block because the hook
+   * layer has no Permission.ask channel (no ruleset / tool-call context).
+   */
+  function decodeClaudeCodeDecision(output: RunResult["outputs"][number]): { block: boolean; reason?: string } {
+    const stderr = output.stderr.trim()
+    const text = output.stdout.trim()
+    const parsed = text.startsWith("{") ? parseJsonPayload(text) : undefined
+    const decision = parsed === undefined ? undefined : ClaudeCodeDecisionSchema.safeParse(parsed)
+    const structured = decision?.success ? decision.data : undefined
+    if (output.exit === 2) {
+      return { block: true, reason: structured?.reason ?? (stderr || undefined) }
+    }
+    if (output.exit !== 0 || !structured) return { block: false }
+    if (structured.permissionDecision === "allow") return { block: false }
+    if (structured.permissionDecision === "deny") {
+      return { block: true, reason: structured.reason ?? (stderr || undefined) }
+    }
+    return { block: true, reason: structured.reason ?? "hook requested user confirmation" }
+  }
 
   /** Events where a blockOnFailure hook with non-zero exit vetoes the action. */
   const BLOCKABLE_EVENTS: ReadonlySet<z.infer<typeof EventNameSchema>> = new Set(["PreToolUse", "UserPromptSubmit"])
@@ -104,6 +155,8 @@ export namespace LifecycleHooks {
   export type RunResult = {
     ok: boolean
     blocked: boolean
+    /** Block reason surfaced by the claude-code protocol decoder, when set. */
+    blockReason?: string
     outputs: Array<{ command: string; exit: number; stdout: string; stderr: string }>
   }
 
@@ -316,9 +369,29 @@ export namespace LifecycleHooks {
     const selected = selectHooks(hooks, input.event, input.tool)
     const outputs: RunResult["outputs"] = []
     let blocked = false
+    let blockReason: string | undefined
     for (const hook of selected) {
       const result = await runHook(hook, input)
       outputs.push(result)
+      if (hook.protocol === "claude-code" && BLOCKABLE_EVENTS.has(input.event)) {
+        // Opted-in entries follow Claude Code wire semantics instead of the
+        // legacy blockOnFailure check.
+        const decoded = decodeClaudeCodeDecision(result)
+        if (decoded.block) {
+          log.warn("lifecycle hook blocked (claude-code protocol)", {
+            event: input.event,
+            tool: input.tool,
+            exit: result.exit,
+          })
+          blocked = true
+          blockReason = decoded.reason
+          break
+        }
+        if (result.exit !== 0) {
+          log.warn("lifecycle hook non-zero", { event: input.event, tool: input.tool, exit: result.exit })
+        }
+        continue
+      }
       if (result.exit !== 0) {
         log.warn("lifecycle hook non-zero", { event: input.event, tool: input.tool, exit: result.exit })
         if (hook.blockOnFailure && BLOCKABLE_EVENTS.has(input.event)) {
@@ -327,7 +400,7 @@ export namespace LifecycleHooks {
         }
       }
     }
-    return { ok: !blocked, blocked, outputs }
+    return { ok: !blocked, blocked, ...(blockReason === undefined ? {} : { blockReason }), outputs }
   }
 
   export async function runForWorkspace(input: RunInput & { packNames?: string[] }): Promise<RunResult> {

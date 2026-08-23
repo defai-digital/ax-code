@@ -1007,6 +1007,10 @@ export const Info = z
       .object({
         disable_paste_summary: z.boolean().optional(),
         batch_tool: z.boolean().optional().describe("Enable the batch tool"),
+        context_tools: z
+          .boolean()
+          .optional()
+          .describe("Enable experimental context-introspection tools (context_status)"),
         openTelemetry: z
           .boolean()
           .optional()

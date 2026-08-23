@@ -11,6 +11,7 @@ import { GlobTool } from "./glob"
 import { GrepTool } from "./grep"
 import { ListTool } from "./ls"
 import { BatchTool } from "./batch"
+import { ContextStatusTool } from "./context_status"
 import { ReadTool } from "./read"
 import { TaskTool } from "./task"
 import { TaskParallelTool } from "./task_parallel"
@@ -304,6 +305,7 @@ export namespace ToolRegistry {
       ...(Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE ? [CodeIntelligenceTool, SymbolNoteTool] : []),
       ...(debugEngineEnabled ? [...DEBUG_ENGINE_TOOLS] : []),
       ...(cfg.experimental?.batch_tool === true ? [BatchTool] : []),
+      ...(cfg.experimental?.context_tools === true ? [ContextStatusTool] : []),
       // computer-use tools require an explicit backend configuration
       ...(cfg.computer?.provider
         ? [ComputerSnapshotTool, ComputerActionTool, ComputerWatchTool, ComputerPlanTool]

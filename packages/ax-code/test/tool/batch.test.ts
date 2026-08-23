@@ -144,4 +144,166 @@ describe("tool.batch", () => {
     expect(execute).not.toHaveBeenCalled()
     expect(result.metadata).toMatchObject({ totalCalls: 1, successful: 0, failed: 1 })
   })
+
+  describe("concurrency classification (D7)", () => {
+    function batchCtx(dispatcher: {
+      ids: string[]
+      execute: unknown
+      concurrencySafe?: (input: { tool: string; parameters: unknown }) => boolean
+    }) {
+      return {
+        sessionID: "ses_batch",
+        messageID: "msg_batch",
+        agent: "build",
+        abort: new AbortController().signal,
+        callID: "call_batch",
+        messages: [],
+        extra: { toolDispatcher: dispatcher },
+        metadata() {},
+        async ask() {},
+      } as any
+    }
+
+    test("pools consecutive calls whose tools declare concurrency safety", async () => {
+      vi.spyOn(Session, "updatePart").mockImplementation(async (part) => part as any)
+      const events: string[] = []
+      let releaseA!: () => void
+      let releaseB!: () => void
+      const gateA = new Promise<void>((resolve) => (releaseA = resolve))
+      const gateB = new Promise<void>((resolve) => (releaseB = resolve))
+      const execute = vi.fn((input: { tool: string }) => {
+        events.push(`start:${input.tool}`)
+        const gate = input.tool === "probe_a" ? gateA : gateB
+        return gate.then(() => {
+          events.push(`end:${input.tool}`)
+          return { title: input.tool, output: "ok", metadata: {} }
+        })
+      })
+      const batch = await BatchTool.init()
+
+      const pending = batch.execute(
+        {
+          tool_calls: [
+            { tool: "probe_a", parameters: {} },
+            { tool: "probe_b", parameters: {} },
+          ],
+        },
+        batchCtx({ ids: ["probe_a", "probe_b"], execute, concurrencySafe: () => true }),
+      )
+
+      // Both calls must start before either resolves — proof they share the pool.
+      await vi.waitFor(() => expect(events).toEqual(["start:probe_a", "start:probe_b"]))
+      releaseA()
+      releaseB()
+      const result = await pending
+      expect(result.metadata).toMatchObject({ totalCalls: 2, successful: 2, failed: 0 })
+    })
+
+    test("serializes undeclared tools as barriers between pooled safe calls", async () => {
+      vi.spyOn(Session, "updatePart").mockImplementation(async (part) => part as any)
+      const events: string[] = []
+      let releaseSafe!: () => void
+      const safeGate = new Promise<void>((resolve) => (releaseSafe = resolve))
+      const execute = vi.fn(async (input: { tool: string }) => {
+        events.push(`start:${input.tool}`)
+        if (input.tool === "safe_a") await safeGate
+        events.push(`end:${input.tool}`)
+        return { title: input.tool, output: "ok", metadata: {} }
+      })
+      const batch = await BatchTool.init()
+
+      const pending = batch.execute(
+        {
+          tool_calls: [
+            { tool: "safe_a", parameters: {} },
+            { tool: "unsafe_b", parameters: {} },
+            { tool: "safe_c", parameters: {} },
+          ],
+        },
+        batchCtx({
+          ids: ["safe_a", "unsafe_b", "safe_c"],
+          execute,
+          concurrencySafe: ({ tool }) => tool.startsWith("safe"),
+        }),
+      )
+
+      // The barrier must not start while the pooled safe call is still blocked.
+      await vi.waitFor(() => expect(events).toEqual(["start:safe_a"]))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(events).toEqual(["start:safe_a"])
+
+      releaseSafe()
+      const result = await pending
+      expect(events).toEqual([
+        "start:safe_a",
+        "end:safe_a",
+        "start:unsafe_b",
+        "end:unsafe_b",
+        "start:safe_c",
+        "end:safe_c",
+      ])
+      expect(result.metadata).toMatchObject({ totalCalls: 3, successful: 3, failed: 0 })
+    })
+
+    test("serializes two edit calls to the same file (regression: no concurrent writes)", async () => {
+      vi.spyOn(Session, "updatePart").mockImplementation(async (part) => part as any)
+      let releaseFirst!: () => void
+      const firstGate = new Promise<void>((resolve) => (releaseFirst = resolve))
+      let calls = 0
+      let active = 0
+      let concurrent = false
+      // The real `edit` tool declares no concurrencySafe predicate, which the
+      // dispatcher surfaces as `false` — same classification used here.
+      const execute = vi.fn(async () => {
+        calls++
+        const mine = calls
+        active++
+        if (active > 1) concurrent = true
+        if (mine === 1) await firstGate
+        active--
+        return { title: "edit", output: "ok", metadata: {} }
+      })
+      const batch = await BatchTool.init()
+
+      const pending = batch.execute(
+        {
+          tool_calls: [
+            { tool: "edit", parameters: { filePath: "/tmp/same.txt", oldString: "a", newString: "b" } },
+            { tool: "edit", parameters: { filePath: "/tmp/same.txt", oldString: "c", newString: "d" } },
+          ],
+        },
+        batchCtx({ ids: ["edit"], execute, concurrencySafe: () => false }),
+      )
+
+      // The second edit must not start while the first is still blocked.
+      await vi.waitFor(() => expect(calls).toBe(1))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(calls).toBe(1)
+
+      releaseFirst()
+      const result = await pending
+      expect(result.metadata).toMatchObject({ totalCalls: 2, successful: 2, failed: 0 })
+      expect(concurrent).toBe(false)
+    })
+
+    test("still rejects batch and task subcalls even when the dispatcher lists them", async () => {
+      vi.spyOn(Session, "updatePart").mockImplementation(async (part) => part as any)
+      const execute = vi.fn(async () => ({ title: "", output: "ok", metadata: {} }))
+      const batch = await BatchTool.init()
+
+      const result = await batch.execute(
+        {
+          tool_calls: [
+            { tool: "batch", parameters: {} },
+            { tool: "task", parameters: {} },
+          ],
+        },
+        batchCtx({ ids: ["batch", "task"], execute, concurrencySafe: () => true }),
+      )
+
+      expect(execute).not.toHaveBeenCalled()
+      expect(result.metadata).toMatchObject({ totalCalls: 2, successful: 0, failed: 2 })
+      expect(result.output).toContain("2 failed")
+    })
+  })
 })

@@ -161,10 +161,12 @@ export async function runToolLifecycle<T>(input: {
       cwd: input.cwd,
     })
     if (pre.blocked) {
-      const detail = pre.outputs
-        .filter((output) => output.exit !== 0)
-        .map((output) => output.stderr || output.stdout || `exit ${output.exit}`)
-        .join("\n")
+      const detail =
+        pre.blockReason ??
+        pre.outputs
+          .filter((output) => output.exit !== 0)
+          .map((output) => output.stderr || output.stdout || `exit ${output.exit}`)
+          .join("\n")
       throw new Error(`PreToolUse hook blocked tool ${input.toolID}: ${detail || "hook failed"}`)
     }
   } catch (error) {
@@ -510,6 +512,16 @@ export async function resolveTools(input: ResolveToolsInput) {
 
   registryDispatcher = {
     ids: [...batchableRegistryTools.keys()],
+    concurrencySafe(dispatch) {
+      const item = batchableRegistryTools.get(dispatch.tool)
+      if (!item?.concurrencySafe) return false
+      try {
+        return item.concurrencySafe(dispatch.parameters) === true
+      } catch {
+        // Fail closed: a throwing classifier means the call is a barrier.
+        return false
+      }
+    },
     async execute(dispatch) {
       const item = batchableRegistryTools.get(dispatch.tool)
       if (!item) throw new Error(`Tool '${dispatch.tool}' is not enabled for Batch execution`)

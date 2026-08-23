@@ -32,13 +32,20 @@ export namespace MessageV2 {
   }
 
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
-  export const OutputLoopError = NamedError.create("MessageOutputLoopError", z.object({ message: z.string() }))
-  export const AbortedError = NamedError.create("MessageAbortedError", z.object({ message: z.string() }))
+  export const OutputLoopError = NamedError.create(
+    "MessageOutputLoopError",
+    z.object({ message: z.string(), metadata: z.record(z.string(), z.string()).optional() }),
+  )
+  export const AbortedError = NamedError.create(
+    "MessageAbortedError",
+    z.object({ message: z.string(), metadata: z.record(z.string(), z.string()).optional() }),
+  )
   export const StructuredOutputError = NamedError.create(
     "StructuredOutputError",
     z.object({
       message: z.string(),
       retries: z.number(),
+      metadata: z.record(z.string(), z.string()).optional(),
     }),
   )
   export const AuthError = NamedError.create(

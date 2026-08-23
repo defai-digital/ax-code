@@ -67,6 +67,39 @@ Custom hooks:
 }
 ```
 
+## Claude Code wire protocol (opt-in)
+
+If you already have hooks written for Claude Code, an entry can opt into the
+Claude Code wire protocol with `"protocol": "claude-code"`:
+
+```json
+{
+  "hooks": [
+    {
+      "event": "PreToolUse",
+      "matcher": "bash",
+      "command": "my-claude-code-hook.sh",
+      "protocol": "claude-code"
+    }
+  ]
+}
+```
+
+For the blockable events (`PreToolUse`, `UserPromptSubmit`), opted-in entries
+are decoded with Claude Code semantics **instead of** the `blockOnFailure`
+check:
+
+- **Exit 2** blocks the action; the hook's stderr is surfaced as the reason.
+  Malformed stdout still blocks (fail-safe).
+- **Exit 0** with stdout JSON `{"permissionDecision": "allow"|"deny"|"ask", "reason"?}`:
+  `allow` proceeds; `deny` blocks with `reason`; `ask` currently also blocks
+  fail-safe with the reason (default `"hook requested user confirmation"`)
+  because the hook layer has no interactive permission prompt channel.
+- **Any other exit** is a non-blocking error (logged, action proceeds).
+
+Observation-only events ignore the decoder entirely — they can never block.
+Entries without the `protocol` field behave exactly as before.
+
 Environment variables available to hook commands:
 
 - `HOOK_EVENT` — PreToolUse | PostToolUse | Stop | UserPromptSubmit | PreCompact | SubagentStop | SessionStart | SessionEnd | PostCompact | Interrupt

@@ -213,17 +213,54 @@ export const BatchTool = Tool.define("batch", async () => {
         }
       }
 
-      const results = await Promise.allSettled(toolCalls.map((call, idx) => executeCall(call, idx))).then((settled) =>
-        settled.map((r, idx) =>
-          r.status === "fulfilled"
-            ? r.value
-            : {
-                success: false as const,
-                tool: toolCalls[idx].tool,
-                error: toError(r.reason),
-              },
-        ),
-      )
+      // Per-call concurrency classification (D7): only calls whose tool
+      // declares `concurrencySafe(args) === true` may share the parallel
+      // pool. Undeclared or unsafe tools act as ordering barriers — they run
+      // serially after all prior pooled work settles and before any later
+      // work starts. Unknown/disallowed tools classify as unsafe; a throwing
+      // predicate fails closed to unsafe as well.
+      const isConcurrencySafe = (call: (typeof toolCalls)[0]) => {
+        if (DISALLOWED.has(call.tool) || !availableTools.has(call.tool)) return false
+        try {
+          return dispatcher.concurrencySafe?.({ tool: call.tool, parameters: call.parameters }) === true
+        } catch {
+          return false
+        }
+      }
+
+      type SettledCall = Awaited<ReturnType<typeof executeCall>>
+      const results: SettledCall[] = new Array(toolCalls.length)
+      const runPooled = async (indexes: number[]) => {
+        const settled = await Promise.allSettled(indexes.map((idx) => executeCall(toolCalls[idx], idx)))
+        settled.forEach((r, i) => {
+          const idx = indexes[i]
+          results[idx] =
+            r.status === "fulfilled"
+              ? r.value
+              : {
+                  success: false as const,
+                  tool: toolCalls[idx].tool,
+                  error: toError(r.reason),
+                }
+        })
+      }
+
+      let pool: number[] = []
+      const flushPool = async () => {
+        if (pool.length === 0) return
+        const pending = pool
+        pool = []
+        await runPooled(pending)
+      }
+      for (let idx = 0; idx < toolCalls.length; idx++) {
+        if (isConcurrencySafe(toolCalls[idx])) {
+          pool.push(idx)
+          continue
+        }
+        await flushPool()
+        await runPooled([idx])
+      }
+      await flushPool()
 
       // Add discarded calls as errors
       const now = Date.now()

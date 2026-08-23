@@ -179,6 +179,9 @@ export type UnknownError = {
   name: "UnknownError"
   data: {
     message: string
+    metadata?: {
+      [key: string]: string
+    }
   }
 }
 
@@ -193,6 +196,9 @@ export type MessageOutputLoopError = {
   name: "MessageOutputLoopError"
   data: {
     message: string
+    metadata?: {
+      [key: string]: string
+    }
   }
 }
 
@@ -200,6 +206,9 @@ export type MessageAbortedError = {
   name: "MessageAbortedError"
   data: {
     message: string
+    metadata?: {
+      [key: string]: string
+    }
   }
 }
 
@@ -208,6 +217,9 @@ export type StructuredOutputError = {
   data: {
     message: string
     retries: number
+    metadata?: {
+      [key: string]: string
+    }
   }
 }
 
@@ -2868,22 +2880,22 @@ export type Config = {
    */
   computer?: {
     /**
-     * Computer-use backend: "axnative" (AX-owned ax-computer-driver, macOS) or "cua" (cua-driver, cross-platform). Unset = computer tools unavailable.
+     * Computer-use backend: "axnative" (AX-owned ax-computer-driver, macOS), "cua" (cua-driver, cross-platform), or "external" (any MCP stdio server speaking the canonical AX Computer protocol; requires computer.command). Unset = computer tools unavailable.
      */
-    provider?: "cua" | "axnative"
+    provider?: "cua" | "axnative" | "external"
     /**
-     * Backend server command override. Precedence: this config > AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_AXNATIVE_COMMAND env > default command name.
+     * Backend server command override. Precedence: this config > AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_AXNATIVE_COMMAND env > default command name. Required when provider is "external" (or set AX_COMPUTER_COMMAND) — external has no default command.
      */
     command?: string
     /**
-     * Backend server command arguments (default: ["mcp"])
+     * Backend server command arguments (default: ["mcp"] for cua/axnative, [] for external)
      */
     args?: Array<string>
     /**
-     * Per-app provider overrides: map an application name (as observed by computer_snapshot) to "cua" or "axnative". Observations and element acts against a matching app route to the named provider; everything else uses `provider`. Element ids are only valid against the provider that issued them — crossing providers requires a fresh observation.
+     * Per-app provider overrides: map an application name (as observed by computer_snapshot) to "cua", "axnative", or "external". Observations and element acts against a matching app route to the named provider; everything else uses `provider`. Element ids are only valid against the provider that issued them — crossing providers requires a fresh observation.
      */
     overrides?: {
-      [key: string]: "cua" | "axnative"
+      [key: string]: "cua" | "axnative" | "external"
     }
     /**
      * Grounder fallback for natural-language computer_action targets. Optional; unset = describe targets unavailable.
@@ -2924,6 +2936,10 @@ export type Config = {
      * Enable the batch tool
      */
     batch_tool?: boolean
+    /**
+     * Enable experimental context-introspection tools (context_status)
+     */
+    context_tools?: boolean
     /**
      * Enable OpenTelemetry spans for AI SDK calls (using the 'experimental_telemetry' flag)
      */

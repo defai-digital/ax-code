@@ -65,6 +65,13 @@ export namespace Tool {
   export type Dispatcher = {
     readonly ids: readonly string[]
     execute(input: { tool: string; parameters: unknown; callID: string; abort: AbortSignal }): Promise<InvocationResult>
+    /**
+     * Per-call concurrency classification (D7). Returns true only when the
+     * named tool declared `concurrencySafe` and the predicate holds for these
+     * parameters. A missing method, an unknown tool, or a throwing predicate
+     * must all be treated as unsafe by the caller (ordering barrier).
+     */
+    concurrencySafe?(input: { tool: string; parameters: unknown }): boolean
   }
 
   export interface Info<Parameters extends z.ZodType = z.ZodType, M extends Metadata = Metadata> {
@@ -72,6 +79,13 @@ export namespace Tool {
     init: (ctx?: InitContext) => Promise<{
       description: string
       parameters: Parameters
+      /**
+       * Optional per-call concurrency classification (D7). Returning true
+       * declares that executing with these args cannot conflict with other
+       * concurrently executing tool calls (e.g. read-only tools). Absence
+       * means unsafe: Batch treats the call as an ordering barrier.
+       */
+      concurrencySafe?(args: z.infer<Parameters>): boolean
       execute(
         args: z.infer<Parameters>,
         ctx: Context,

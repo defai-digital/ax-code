@@ -1,0 +1,15 @@
+Report the context-window status of this session: the token cap, the usable budget after reserved headroom, the tokens used so far, and the remaining headroom before auto-compaction would trigger.
+
+Returns a JSON object: { cap, usable, used, headroom } (token counts), where:
+- cap: the model's input token limit.
+- usable: cap minus the headroom reserved for the next response (the budget auto-compaction is measured against).
+- used: the latest measured token total for this session (0 when no assistant response has reported usage yet).
+- headroom: usable - used, clamped at 0.
+
+When to use context_status:
+- Before a large read, scan, or generation step, to check whether the result will still fit.
+- When you suspect the conversation is nearing auto-compaction and want to decide whether to wrap up or continue.
+
+Notes:
+- Read-only: it never triggers compaction and never changes session state.
+- The numbers come from the same budget math the compactor uses, so headroom reaching 0 means the next step would trigger auto-compaction (when auto-compaction is enabled).

@@ -45,6 +45,7 @@ export const GrepTool = Tool.define("grep", {
     path: z.string().optional().describe("The directory to search in. Defaults to the current working directory."),
     include: z.string().optional().describe('File pattern to include in the search (e.g. "*.js", "*.{ts,tsx}")'),
   }),
+  concurrencySafe: () => true,
   async execute(params, ctx) {
     if (!params.pattern) {
       throw new Error("pattern is required")

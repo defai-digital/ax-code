@@ -60,6 +60,9 @@ export abstract class NamedError extends Error {
     "UnknownError",
     z.object({
       message: z.string(),
+      // Optional bag for post-hoc annotations (e.g. compaction-fallback retry
+      // metadata) so they survive schema re-validation on persistence.
+      metadata: z.record(z.string(), z.string()).optional(),
     }),
   )
 }
