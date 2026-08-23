@@ -64,6 +64,12 @@ export class ComputerSession {
   }
 
   async act(action: ComputerAction): Promise<ActionResult> {
+    // Acts mutate the UI, so an observation still in flight right now is a
+    // snapshot of a UI that is about to change. Bump the revision so it
+    // rejects with superseded_observation instead of committing as the
+    // current epoch. Sequential observe -> act -> observe flows are
+    // unaffected; only observes already in flight are superseded.
+    this.revision += 1
     return this.provider.act(this.resolveAction(action))
   }
 
@@ -75,6 +81,13 @@ export class ComputerSession {
   async failover(next: ComputerUseProvider): Promise<ComputerObservation> {
     const previous = this.provider
     const scope: ObserveScope = this.lastScope ?? { desktop: true }
+    if (next === previous) {
+      // Self-swap must not dispose the live provider. Invalidate in-flight
+      // observations and the current element map, then re-observe.
+      this.revision += 1
+      this.elements = new Map()
+      return this.observe(scope)
+    }
     // Swap first: from here on acts route to `next`, old element ids reject,
     // and observations still in flight on `previous` cannot commit.
     this.provider = next

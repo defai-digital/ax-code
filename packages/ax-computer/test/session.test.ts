@@ -267,6 +267,51 @@ describe("ComputerSession", () => {
     expect(primary.acts).toEqual([{ type: "click", target: { kind: "element", id: "b" } }])
   })
 
+  test("an observation in flight across an act is superseded", async () => {
+    const primary = new FakeProvider("primary", ["a"])
+    const session = new ComputerSession(primary)
+    const first = await session.observe({ desktop: true })
+
+    const pendingResult = deferred<ComputerObservation>()
+    primary.observe = async (scope) => {
+      primary.observedScopes.push(scope)
+      return pendingResult.promise
+    }
+    const pending = session.observe({ desktop: true })
+    const pendingRejection = expect(pending).rejects.toMatchObject({ code: "superseded_observation" })
+
+    // The act mutates the UI while the observation is in flight; the
+    // pre-action snapshot must not commit as the current epoch.
+    await session.act({ type: "click", target: { kind: "element", id: first.elements[0]!.id } })
+    pendingResult.resolve(observation("primary", ["a"]))
+    await pendingRejection
+
+    primary.observe = FakeProvider.prototype.observe.bind(primary)
+    const fresh = await session.observe({ desktop: true })
+    expect(fresh.elements[0]!.id).toBe("e2:a")
+    await session.act({ type: "click", target: { kind: "element", id: fresh.elements[0]!.id } })
+    expect(primary.acts).toHaveLength(2)
+  })
+
+  test("failover to the active provider re-observes without disposing it", async () => {
+    const primary = new FakeProvider("primary", ["a"])
+    const session = new ComputerSession(primary)
+    const first = await session.observe({ app: "TextEdit" })
+    const staleId = first.elements[0]!.id
+
+    const fresh = await session.failover(primary)
+
+    expect(primary.disposed).toBe(false)
+    expect(fresh.provider).toBe("primary")
+    expect(fresh.elements[0]!.id).toBe("e2:a")
+    expect(primary.observedScopes).toEqual([{ app: "TextEdit" }, { app: "TextEdit" }])
+    await expect(session.act({ type: "click", target: { kind: "element", id: staleId } })).rejects.toMatchObject({
+      code: "stale_target",
+    })
+    await session.act({ type: "click", target: { kind: "element", id: fresh.elements[0]!.id } })
+    expect(primary.acts).toHaveLength(1)
+  })
+
   test("a late observation from the old provider cannot overwrite failover state", async () => {
     const primary = new FakeProvider("primary", ["a"])
     const next = new FakeProvider("next", ["x"])

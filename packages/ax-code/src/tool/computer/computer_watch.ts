@@ -6,6 +6,7 @@ import DESCRIPTION from "./computer-watch.txt"
 import { checkVisualRouting, sessionModelFromMessages } from "@/visual/router"
 import { Computer } from "@/computer/computer"
 import type { ComputerObservation, ObserveScope } from "@ax-code/computer"
+import { ComputerUseError } from "@ax-code/computer"
 import { renderObservation } from "./render"
 
 /** Content signature used for change detection between polls. */
@@ -87,9 +88,19 @@ export const ComputerWatchTool = Tool.define("computer_watch", {
       await sleep(Math.min(params.intervalMs, remaining), undefined, { signal: ctx.abort }).catch(() => {})
       if (ctx.abort.aborted) break
 
-      observation = await Computer.observe(scope, {
-        audit: { sessionID: ctx.sessionID, messageID: ctx.messageID, tool: "computer_watch" },
-      })
+      let polled: ComputerObservation
+      try {
+        polled = await Computer.observe(scope, {
+          audit: { sessionID: ctx.sessionID, messageID: ctx.messageID, tool: "computer_watch" },
+        })
+      } catch (err) {
+        // An act committed while this poll was in flight, so the session
+        // superseded the observation. Skip the poll; the next interval
+        // re-observes the post-action UI.
+        if (err instanceof ComputerUseError && err.code === "superseded_observation") continue
+        throw err
+      }
+      observation = polled
       polls++
       const next = signatureOf(observation)
       if (next === signature) continue

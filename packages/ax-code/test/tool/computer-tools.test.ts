@@ -436,6 +436,27 @@ describe("computer_watch tool", () => {
     })
   })
 
+  test("a poll superseded by a concurrent act is skipped, not fatal", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async ({ provider }) => {
+      let calls = 0
+      const original = provider.observe.bind(provider)
+      vi.spyOn(provider, "observe").mockImplementation(async (scope) => {
+        calls++
+        if (calls === 2) {
+          // Simulates an act committing while this poll is in flight.
+          throw new ComputerUseError("observation superseded", { provider: "cua", code: "superseded_observation" })
+        }
+        return original(scope)
+      })
+
+      const tool = await ComputerWatchTool.init()
+      const result = await tool.execute({ durationMs: 600, intervalMs: 200, includeScreenshot: false }, makeCtx([]))
+
+      expect(result.output).toContain("Watched desktop")
+      expect(provider.scopes.length).toBeGreaterThanOrEqual(2)
+    })
+  })
+
   test("aborted watch returns the partial result", async () => {
     await setup({ config: { computer: { provider: "cua" } } }, async () => {
       const tool = await ComputerWatchTool.init()
