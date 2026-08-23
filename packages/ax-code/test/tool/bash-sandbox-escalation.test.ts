@@ -284,4 +284,37 @@ describe("tool.bash sandbox-denial escalation", () => {
       },
     })
   })
+
+  test("synchronous spawn throw still cleans up the seatbelt profile", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        // A non-string file makes child_process.spawn throw synchronously
+        // (ERR_INVALID_ARG_TYPE), bypassing the async close/error listeners
+        // that normally run cleanupProfile.
+        const throwingWrap: OsSandbox.WrapResult = {
+          active: true,
+          mechanism: "seatbelt",
+          file: 123 as unknown as string,
+          args: [],
+          shell: false,
+          profilePath: "/tmp/ax-code-test-sync-throw-profile.sb",
+        }
+        vi.spyOn(OsSandbox, "wrapCommand").mockReturnValue(throwingWrap)
+        const cleanup = vi.spyOn(OsSandbox, "cleanupProfile").mockImplementation(() => {})
+
+        await expect(
+          bash.execute(
+            { command: "echo never-runs", description: "Synchronous spawn throw" },
+            { ...ctx, extra: { isolation } },
+          ),
+        ).rejects.toThrow()
+
+        expect(cleanup).toHaveBeenCalledWith("/tmp/ax-code-test-sync-throw-profile.sb")
+      },
+    })
+  })
 })

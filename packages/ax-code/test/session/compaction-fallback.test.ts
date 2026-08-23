@@ -359,6 +359,34 @@ describe("session.compaction-fallback classifier", () => {
     expect(CompactionFallback.classify(overflow)).toEqual({ class: "context_window_exceeded", retryable: false })
   })
 
+  test("permanent quota/billing errors and explicit non-retryable verdicts never retry", () => {
+    // The AI SDK blanket-marks 429s isRetryable; quota exhaustion is permanent
+    // and switching models does not refill the account (session/retry.ts
+    // taxonomy).
+    const quota = new MessageV2.APIError({
+      message: "429 Quota exceeded for this account",
+      statusCode: 429,
+      isRetryable: true,
+    }).toObject()
+    expect(CompactionFallback.classify(quota)).toEqual({ class: "invalid_request", retryable: false })
+
+    const billing = new MessageV2.APIError({
+      message: "Too Many Requests",
+      statusCode: 429,
+      isRetryable: true,
+      responseBody: "payment required",
+    }).toObject()
+    expect(CompactionFallback.classify(billing)).toEqual({ class: "invalid_request", retryable: false })
+
+    // Explicit non-retryable verdict from the SDK, no permanent pattern needed.
+    const sdkVerdict = new MessageV2.APIError({
+      message: "rate limit",
+      statusCode: 429,
+      isRetryable: false,
+    }).toObject()
+    expect(CompactionFallback.classify(sdkVerdict)).toEqual({ class: "invalid_request", retryable: false })
+  })
+
   test("annotate persists retry metadata on non-APIError transient shapes", () => {
     const unknown = new NamedError.Unknown({ message: "socket hang up" }).toObject()
     expect(CompactionFallback.classify(unknown)).toEqual({ class: "stream_disconnect", retryable: true })

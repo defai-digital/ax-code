@@ -50,6 +50,26 @@ export namespace CompactionFallback {
 
   const OVERLOAD_PATTERNS = ["overloaded", "too many requests", "rate limit"]
 
+  // Permanent billing/quota exhaustion — mirrors NON_RETRYABLE_PATTERNS in
+  // session/retry.ts. The AI SDK blanket-marks all 429s isRetryable, but a
+  // quota-429 is not transient and switching models does not refill the
+  // account, so these never retry down the ladder.
+  const PERMANENT_PATTERNS = [
+    "allocated quota exceeded",
+    "insufficient balance",
+    "increase your quota limit",
+    "no resource package",
+    "quota exceeded",
+    "quota has been exhausted",
+    "token-limit",
+    "insufficient quota",
+    "insufficient_quota",
+    "billing",
+    "payment required",
+    "account suspended",
+    "subscription",
+  ]
+
   function matches(text: string | undefined, patterns: string[]) {
     if (!text) return false
     const lower = text.toLowerCase()
@@ -76,6 +96,19 @@ export namespace CompactionFallback {
       const statusCode = error.data?.statusCode
       const message = error.data?.message
       const responseBody = error.data?.responseBody
+      // Honor the AI SDK's explicit non-retryable verdict and the permanent
+      // billing/quota taxonomy before any transient check: retrying those
+      // wastes the single ladder attempt on an error no model switch fixes.
+      if (
+        error.data?.isRetryable === false ||
+        matches(message, PERMANENT_PATTERNS) ||
+        matches(responseBody, PERMANENT_PATTERNS)
+      ) {
+        if (statusCode !== undefined && statusCode >= 400) {
+          return { class: "invalid_request", retryable: false }
+        }
+        return { class: "unknown", retryable: false }
+      }
       if (statusCode === 429 || matches(message, OVERLOAD_PATTERNS) || matches(responseBody, OVERLOAD_PATTERNS)) {
         return { class: "server_overloaded", retryable: true }
       }

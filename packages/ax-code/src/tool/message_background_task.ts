@@ -98,11 +98,20 @@ async function persistControlMessage(input: {
 }) {
   const messages = await Session.messages({ sessionID: input.sessionID })
   const lastUser = [...messages].reverse().find((message) => message.info.role === "user")
+  // Redelivery rewrites the same row via upsert; keep the original
+  // time.created so the message's recorded send time does not drift to the
+  // last retry.
+  const existing = await MessageV2.get({ sessionID: input.sessionID, messageID: input.messageID }).catch(
+    (e: unknown) => {
+      if (NotFoundError.isInstance(e)) return undefined
+      throw e
+    },
+  )
   const user = (await Session.updateMessage({
     id: input.messageID,
     sessionID: input.sessionID,
     role: "user",
-    time: { created: Date.now() },
+    time: { created: existing?.info.role === "user" ? existing.info.time.created : Date.now() },
     agent: lastUser?.info.role === "user" ? lastUser.info.agent : (input.item.agent ?? "build"),
     model: lastUser?.info.role === "user" ? lastUser.info.model : queueModel(input.item.model),
   })) as MessageV2.User
@@ -170,28 +179,23 @@ export const MessageBackgroundTaskTool = Tool.define("message_background_task", 
     const childSessionID = item.sessionID
 
     // Exactly-once via the ADR-055 ledger (ADR-057 D3 guard pattern):
-    // 1. record a "pending" control delivery with the message/part ids,
+    // 1. atomically claim a "pending" control delivery slot (a same-text
+    //    redelivery or concurrent duplicate reuses the recorded ids),
     // 2. persist the user message (upsert keyed on those ids),
     // 3. flip the entry to "delivered".
     // A crash between any two steps is retried by the model re-calling this
     // tool with the same text: the pending entry is found, its ids are
     // reused, and the idempotent upsert converges to exactly one message.
-    const pending = TaskQueue.controlDeliveries(item)
-      .filter((entry) => entry.status === "pending" && entry.text === params.message)
-      .sort((a, b) => a.time - b.time)[0]
-    const redelivered = pending !== undefined
-    const messageID = pending ? MessageID.make(pending.messageID) : MessageID.ascending()
-    const partID = pending ? PartID.make(pending.partID) : PartID.ascending()
+    const claim = await TaskQueue.claimControlDelivery({
+      id: item.id,
+      messageID: MessageID.ascending(),
+      partID: PartID.ascending(),
+      text: params.message,
+    })
+    const redelivered = !claim.claimed
+    const messageID = MessageID.make(claim.entry.messageID)
+    const partID = PartID.make(claim.entry.partID)
 
-    if (!pending) {
-      await TaskQueue.setControlDelivery({
-        id: item.id,
-        messageID,
-        partID,
-        text: params.message,
-        status: "pending",
-      })
-    }
     await persistControlMessage({ item, sessionID: childSessionID, messageID, partID, text: params.message })
     await TaskQueue.setControlDelivery({
       id: item.id,

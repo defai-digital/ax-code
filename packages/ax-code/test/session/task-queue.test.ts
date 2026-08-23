@@ -1159,3 +1159,87 @@ function setTaskQueueStartedAt(id: TaskQueue.Info["id"], startedAt: number) {
     db.update(TaskQueueTable).set({ time_started: startedAt }).where(eq(TaskQueueTable.id, id)).run()
   })
 }
+
+describe("TaskQueue payload write atomicity", () => {
+  test("concurrent payload writers preserve each other's keys", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const created = await TaskQueue.enqueue({
+          sessionID: session.id,
+          kind: "subagent",
+          title: "background task",
+          agent: "general",
+          model: { providerID: "test", modelID: "test-model" },
+          payload: { source: "task", deliveryStatus: "pending" },
+        })
+
+        // The result-handoff writer and the control-message ledger writer
+        // race on the same payload row; neither may clobber the other's keys.
+        await Promise.all([
+          TaskQueue.setDelivery({ id: created.id, status: "delivered" }),
+          TaskQueue.setControlDelivery({
+            id: created.id,
+            messageID: "msg_control_race",
+            partID: "prt_control_race",
+            text: "steer the child",
+            status: "pending",
+          }),
+        ])
+
+        const item = await TaskQueue.get(created.id)
+        expect(item.payload["deliveryStatus"]).toBe("delivered")
+        const entries = TaskQueue.controlDeliveries(item)
+        expect(entries).toHaveLength(1)
+        expect(entries[0]?.messageID).toBe("msg_control_race")
+        expect(entries[0]?.status).toBe("pending")
+      },
+    })
+  })
+
+  test("claimControlDelivery is atomic for concurrent same-text claims", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const created = await TaskQueue.enqueue({
+          sessionID: session.id,
+          kind: "subagent",
+          title: "background task",
+          agent: "general",
+          model: { providerID: "test", modelID: "test-model" },
+          payload: { source: "task" },
+        })
+
+        const [a, b] = await Promise.all([
+          TaskQueue.claimControlDelivery({ id: created.id, messageID: "msg_a", partID: "prt_a", text: "same steer" }),
+          TaskQueue.claimControlDelivery({ id: created.id, messageID: "msg_b", partID: "prt_b", text: "same steer" }),
+        ])
+
+        // Exactly one caller claims; the other reuses the winner's ids.
+        expect(a.claimed).not.toBe(b.claimed)
+        expect(a.entry.messageID).toBe(b.entry.messageID)
+        expect(a.entry.partID).toBe(b.entry.partID)
+
+        const entries = TaskQueue.controlDeliveries(await TaskQueue.get(created.id))
+        expect(entries).toHaveLength(1)
+        expect(entries[0]?.status).toBe("pending")
+
+        // A sequential crash-redelivery with the same text also reuses ids.
+        const retry = await TaskQueue.claimControlDelivery({
+          id: created.id,
+          messageID: "msg_c",
+          partID: "prt_c",
+          text: "same steer",
+        })
+        expect(retry.claimed).toBe(false)
+        expect(retry.entry.messageID).toBe(a.entry.messageID)
+      },
+    })
+  })
+})

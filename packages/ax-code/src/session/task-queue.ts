@@ -420,16 +420,22 @@ export namespace TaskQueue {
     error?: string
     resultEmpty?: boolean
   }): Promise<Info> {
-    const current = await get(input.id)
     const now = Date.now()
-    const payload: Payload = {
-      ...current.payload,
-      deliveryStatus: input.status,
-    }
-    if (input.error !== undefined) payload["deliveryError"] = input.error
-    else delete payload["deliveryError"]
-    if (input.resultEmpty !== undefined) payload["deliveryEmpty"] = input.resultEmpty
+    // Read-modify-write inside one synchronous critical section: with a
+    // separate awaited get() above the write, two concurrent payload writers
+    // (result handoff vs the control-message ledger) can each read a stale
+    // snapshot and the later write clobbers the earlier one's keys.
     const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
+      if (!currentRow) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const current = fromRow(currentRow)
+      const payload: Payload = {
+        ...current.payload,
+        deliveryStatus: input.status,
+      }
+      if (input.error !== undefined) payload["deliveryError"] = input.error
+      else delete payload["deliveryError"]
+      if (input.resultEmpty !== undefined) payload["deliveryEmpty"] = input.resultEmpty
       const row = db
         .update(TaskQueueTable)
         .set({ payload, time_updated: now })
@@ -483,21 +489,27 @@ export namespace TaskQueue {
     text: string
     status: ControlDeliveryStatus
   }): Promise<Info> {
-    const current = await get(input.id)
     const now = Date.now()
-    const entries = controlDeliveries(current).filter((entry) => entry.messageID !== input.messageID)
-    entries.push({
-      messageID: input.messageID,
-      partID: input.partID,
-      text: input.text,
-      status: input.status,
-      time: now,
-    })
-    const payload: Payload = {
-      ...current.payload,
-      controlDeliveries: entries.slice(-MAX_CONTROL_DELIVERIES),
-    }
+    // Same synchronous-critical-section rule as setDelivery: the pending →
+    // delivered ledger flip must not interleave with a concurrent payload
+    // writer, or a redelivery after crash allocates fresh message/part ids
+    // and the child sees the control message twice (ADR-057 exactly-once).
     const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
+      if (!currentRow) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const current = fromRow(currentRow)
+      const entries = controlDeliveries(current).filter((entry) => entry.messageID !== input.messageID)
+      entries.push({
+        messageID: input.messageID,
+        partID: input.partID,
+        text: input.text,
+        status: input.status,
+        time: now,
+      })
+      const payload: Payload = {
+        ...current.payload,
+        controlDeliveries: entries.slice(-MAX_CONTROL_DELIVERIES),
+      }
       const row = db
         .update(TaskQueueTable)
         .set({ payload, time_updated: now })
@@ -510,6 +522,58 @@ export namespace TaskQueue {
     assertProjectItem(item)
     publishUpdated(item)
     return item
+  }
+
+  /**
+   * Atomically claim a "pending" control-delivery slot for (id, text). If a
+   * pending entry with the same text already exists, it is returned unchanged
+   * (`claimed: false`) so a crash-redelivery — or a concurrent duplicate call
+   * — reuses its message/part ids instead of allocating fresh ones. The
+   * check-and-append happens in one synchronous critical section, so two
+   * concurrent callers cannot both miss the other's entry (ADR-057
+   * exactly-once).
+   */
+  export async function claimControlDelivery(input: {
+    id: TaskQueueID
+    messageID: string
+    partID: string
+    text: string
+  }): Promise<{ item: Info; entry: ControlDelivery; claimed: boolean }> {
+    const now = Date.now()
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
+      if (!currentRow) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const current = fromRow(currentRow)
+      const existing = controlDeliveries(current)
+        .filter((entry) => entry.status === "pending" && entry.text === input.text)
+        .sort((a, b) => a.time - b.time)[0]
+      if (existing) return { item: current, entry: existing, claimed: false }
+      const entry: ControlDelivery = {
+        messageID: input.messageID,
+        partID: input.partID,
+        text: input.text,
+        status: "pending",
+        time: now,
+      }
+      const entries = [...controlDeliveries(current).filter((e) => e.messageID !== input.messageID), entry].slice(
+        -MAX_CONTROL_DELIVERIES,
+      )
+      const payload: Payload = {
+        ...current.payload,
+        controlDeliveries: entries,
+      }
+      const row = db
+        .update(TaskQueueTable)
+        .set({ payload, time_updated: now })
+        .where(eq(TaskQueueTable.id, input.id))
+        .returning()
+        .get()
+      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      return { item: fromRow(row), entry, claimed: true }
+    })
+    assertProjectItem(result.item)
+    if (result.claimed) publishUpdated(result.item)
+    return result
   }
 
   export async function claimForExecution(id: TaskQueueID): Promise<Info | undefined> {

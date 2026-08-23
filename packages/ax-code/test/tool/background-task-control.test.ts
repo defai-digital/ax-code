@@ -232,7 +232,9 @@ describe("tool.message_background_task", () => {
         let latest = await TaskQueue.get(TaskQueueID.make(item.id))
         const pendingEntry = TaskQueue.controlDeliveries(latest)[0]
         expect(pendingEntry.status).toBe("pending")
-        expect(controlTexts(await Session.messages({ sessionID: child.id }), "also cover the tests")).toHaveLength(1)
+        const afterCrash = controlTexts(await Session.messages({ sessionID: child.id }), "also cover the tests")
+        expect(afterCrash).toHaveLength(1)
+        const originalCreated = afterCrash[0]?.info.time.created
 
         vi.restoreAllMocks()
         // Restore the nudge stub cleared by restoreAllMocks (it was assigned,
@@ -247,7 +249,10 @@ describe("tool.message_background_task", () => {
         expect(retry.metadata.redelivered).toBe(true)
         // Same message id reused — the upsert converged, no duplicate.
         expect(retry.metadata.messageID).toBe(pendingEntry.messageID)
-        expect(controlTexts(await Session.messages({ sessionID: child.id }), "also cover the tests")).toHaveLength(1)
+        const afterRetry = controlTexts(await Session.messages({ sessionID: child.id }), "also cover the tests")
+        expect(afterRetry).toHaveLength(1)
+        // Redelivery must not drift the recorded send time.
+        expect(afterRetry[0]?.info.time.created).toBe(originalCreated)
 
         latest = await TaskQueue.get(TaskQueueID.make(item.id))
         expect(TaskQueue.controlDeliveries(latest)).toHaveLength(1)

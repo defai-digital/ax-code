@@ -1,5 +1,5 @@
 import z from "zod"
-import { spawn } from "child_process"
+import { spawn, type ChildProcess } from "child_process"
 import { Tool } from "./tool"
 import path from "path"
 import DESCRIPTION from "./bash.txt"
@@ -873,29 +873,11 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       for (let attempt = 0; ; attempt++) {
         // undefined on the escalated retry: spawn the command unsandboxed.
         const activeWrap = attempt === 0 ? osWrap : undefined
-        const proc =
-          activeWrap?.active === true
-            ? spawn(activeWrap.file, activeWrap.args, {
-                cwd,
-                env: {
-                  ...sanitizedEnv,
-                },
-                stdio: [stdinMode, "pipe", "pipe"],
-                detached: process.platform !== "win32",
-                windowsHide: process.platform === "win32",
-              })
-            : useSetsidProcessGroup
-              ? spawn("setsid", [shell, "-c", params.command], {
-                  cwd,
-                  env: {
-                    ...sanitizedEnv,
-                  },
-                  stdio: [stdinMode, "pipe", "pipe"],
-                  detached: false,
-                  windowsHide: process.platform === "win32",
-                })
-              : spawn(params.command, {
-                  shell,
+        let proc: ChildProcess
+        try {
+          proc =
+            activeWrap?.active === true
+              ? spawn(activeWrap.file, activeWrap.args, {
                   cwd,
                   env: {
                     ...sanitizedEnv,
@@ -904,6 +886,33 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                   detached: process.platform !== "win32",
                   windowsHide: process.platform === "win32",
                 })
+              : useSetsidProcessGroup
+                ? spawn("setsid", [shell, "-c", params.command], {
+                    cwd,
+                    env: {
+                      ...sanitizedEnv,
+                    },
+                    stdio: [stdinMode, "pipe", "pipe"],
+                    detached: false,
+                    windowsHide: process.platform === "win32",
+                  })
+                : spawn(params.command, {
+                    shell,
+                    cwd,
+                    env: {
+                      ...sanitizedEnv,
+                    },
+                    stdio: [stdinMode, "pipe", "pipe"],
+                    detached: process.platform !== "win32",
+                    windowsHide: process.platform === "win32",
+                  })
+        } catch (error) {
+          // A synchronous spawn throw (invalid arguments, resource limits)
+          // never reaches the close/error listeners below — clean up the
+          // seatbelt profile here or it leaks in os.tmpdir().
+          OsSandbox.cleanupProfile(activeWrap?.active === true ? activeWrap.profilePath : undefined)
+          throw error
+        }
         const seatbeltProfile = activeWrap?.active === true ? activeWrap.profilePath : undefined
         const cleanupSeatbelt = () => OsSandbox.cleanupProfile(seatbeltProfile)
         if (proc.pid) {
