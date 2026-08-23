@@ -6,7 +6,14 @@ export namespace Env {
   // process. Defaults to a strict keyword match so non-standard secret-like
   // names are filtered too (for example OPENAI_APIKEY or AWS_ACCESSKEY).
   const SECRET_PATTERN = /KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|AUTH/i
+  // "PAT" as a whole word: catches AZURE_DEVOPS_EXT_PAT and GH_PAT without
+  // matching PATH/PATHEXT (which contain PAT only as a substring).
+  const PAT_NAME = /(^|_)PAT(_|$)/i
+  // Webhook URLs are write credentials regardless of host.
+  const WEBHOOK_NAME = /WEBHOOK/i
   const CREDENTIAL_URL_NAME = /(?:DATABASE|REDIS|AMQP|MONGODB|POSTGRES|MYSQL|ELASTIC|BROKER)_?(?:URL|URI)/i
+  // Paths to files that themselves hold credentials.
+  const CREDENTIAL_FILE_NAMES = new Set(["KUBECONFIG"])
   const CREDENTIAL_HELPER_NAMES = new Set(["SSH_AUTH_SOCK", "GIT_ASKPASS", "SUDO_ASKPASS"])
   // Variables that rewrite process startup/load behavior. Never forward these
   // to untrusted child processes (MCP servers, shells, formatters, etc.).
@@ -70,7 +77,10 @@ export namespace Env {
       if (
         PROCESS_INJECTION_NAMES.has(k) ||
         CREDENTIAL_HELPER_NAMES.has(k) ||
+        CREDENTIAL_FILE_NAMES.has(k) ||
         isSensitiveName(k) ||
+        PAT_NAME.test(k) ||
+        WEBHOOK_NAME.test(k) ||
         CREDENTIAL_URL_NAME.test(k) ||
         containsUrlCredential(v)
       ) {
@@ -106,11 +116,17 @@ export namespace Env {
     return PROCESS_INJECTION_NAMES.has(name)
   }
 
+  // Presigned URLs and webhook-style links often carry credentials in the
+  // query string rather than as userinfo. Treat common credential parameter
+  // names as sensitive so an innocently named variable cannot forward them.
+  const CREDENTIAL_URL_QUERY = /(signature|credential|token|secret|password|passwd|api[_-]?key|access[_-]?key)=/i
+
   function containsUrlCredential(value: string | undefined): boolean {
     if (!value || !value.includes("://")) return false
     try {
       const parsed = new URL(value)
-      return parsed.username.length > 0 || parsed.password.length > 0
+      if (parsed.username.length > 0 || parsed.password.length > 0) return true
+      return CREDENTIAL_URL_QUERY.test(parsed.search)
     } catch {
       return false
     }

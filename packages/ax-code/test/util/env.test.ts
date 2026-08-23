@@ -72,6 +72,38 @@ describe("Env.sanitize", () => {
     expect(sanitized.PRIVATE_REGISTRY).toBeUndefined()
   })
 
+  test("strips kubeconfig, webhook, and PAT-named variables but not PATH-like names", () => {
+    const sanitized = Env.sanitize({
+      KUBECONFIG: "/home/user/.kube/config",
+      SLACK_WEBHOOK_URL: "https://hooks.slack.com/services/T000/B000/XXXX",
+      DISCORD_WEBHOOK: "https://discord.com/api/webhooks/123/abc",
+      AZURE_DEVOPS_EXT_PAT: "azure-pat",
+      GH_PAT: "gh-pat",
+      PATH: "/usr/bin",
+      PATHEXT: ".COM;.EXE",
+    })
+
+    expect(sanitized.KUBECONFIG).toBeUndefined()
+    expect(sanitized.SLACK_WEBHOOK_URL).toBeUndefined()
+    expect(sanitized.DISCORD_WEBHOOK).toBeUndefined()
+    expect(sanitized.AZURE_DEVOPS_EXT_PAT).toBeUndefined()
+    expect(sanitized.GH_PAT).toBeUndefined()
+    expect(sanitized.PATH).toBe("/usr/bin")
+    expect(sanitized.PATHEXT).toBe(".COM;.EXE")
+  })
+
+  test("strips URLs carrying credentials in the query string", () => {
+    const sanitized = Env.sanitize({
+      PRESIGNED: "https://s3.example.com/object?X-Amz-Credential=AKID&X-Amz-Signature=abc",
+      CALLBACK: "https://example.com/hook?access_token=abc123",
+      PLAIN_DOWNLOAD: "https://example.com/file?format=raw",
+    })
+
+    expect(sanitized.PRESIGNED).toBeUndefined()
+    expect(sanitized.CALLBACK).toBeUndefined()
+    expect(sanitized.PLAIN_DOWNLOAD).toBe("https://example.com/file?format=raw")
+  })
+
   test("strips process-injection variables from sanitized environments", () => {
     const sanitized = Env.sanitize({
       PATH: "/usr/bin",
