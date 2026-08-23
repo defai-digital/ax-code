@@ -116,6 +116,12 @@ export class ComputerSession {
         return action.target ? { ...action, target: this.resolveTarget(action.target) } : action
       case "set_value":
         return { ...action, target: this.resolveTarget(action.target) }
+      case "move":
+        return { ...action, target: this.resolveTarget(action.target) }
+      case "wait":
+        return action.condition.type === "screen_stable"
+          ? action
+          : { ...action, condition: { ...action.condition, target: this.resolveTarget(action.condition.target) } }
       case "drag":
         return { ...action, from: this.resolveTarget(action.from), to: this.resolveTarget(action.to) }
       default:

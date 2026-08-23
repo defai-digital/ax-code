@@ -1,13 +1,14 @@
 import type { ActionResult, ComputerAction } from "../action"
 import { ComputerUseError } from "../errors"
 import { StdioMcpClient, mcpRefusal, mcpText, type McpCallToolResult, type McpClient } from "../mcp/stdio-client"
-import type { ComputerUseProvider, ObserveScope, ProviderCapabilities } from "../provider"
+import type { ActBatchOptions, ComputerUseProvider, ObserveScope, ProviderCapabilities } from "../provider"
 import {
   AX_ACT_TOOL,
   AX_CAPABILITIES_TOOL,
   AX_LIST_APPS_TOOL,
   AX_LIST_WINDOWS_TOOL,
   AX_OBSERVE_TOOL,
+  ActArgsSchema,
   ActionResultSchema,
   ComputerActionSchema,
   ListAppsResultSchema,
@@ -40,7 +41,7 @@ export interface ExternalComputerProviderConfig {
  * cannot do.
  */
 const DEFAULT_CAPABILITIES: ProviderCapabilities = {
-  actions: ["click", "type", "keypress", "scroll", "drag", "set_value", "activate_window", "launch_app"],
+  actions: ["click", "type", "keypress", "scroll", "drag", "set_value", "activate_window", "launch_app", "move", "wait"],
   backgroundDelivery: true,
   elementTargeting: true,
   windowActivation: true,
@@ -94,6 +95,18 @@ export class ExternalComputerProvider implements ComputerUseProvider {
     // backend refusals are results, not protocol failures
     if (result.isError) {
       return { ok: false, provider: this.name, action: action.type, refusal: mcpRefusal(result) }
+    }
+    return validatePayload(ActionResultSchema, this.structured(result, AX_ACT_TOOL), AX_ACT_TOOL)
+  }
+
+  async actBatch(actions: ComputerAction[], options: ActBatchOptions = {}): Promise<ActionResult> {
+    // validate the batch envelope before it goes on the wire: the exactly-one
+    // rule and the batch bound must fail here, not as a server-side rejection
+    const args = validatePayload(ActArgsSchema, { actions, stopOnError: options.stopOnError }, "act batch args")
+    const result = await this.callCanonical(AX_ACT_TOOL, args)
+    // backend refusals are results, not protocol failures
+    if (result.isError) {
+      return { ok: false, provider: this.name, action: actions[0]!.type, refusal: mcpRefusal(result) }
     }
     return validatePayload(ActionResultSchema, this.structured(result, AX_ACT_TOOL), AX_ACT_TOOL)
   }

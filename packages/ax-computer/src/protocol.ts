@@ -93,6 +93,33 @@ export const ComputerTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("point"), x: z.number(), y: z.number() }),
 ])
 
+/** default wait timeout when timeoutMs is omitted */
+export const WAIT_DEFAULT_TIMEOUT_MS = 10_000
+/** default wait poll interval when pollMs is omitted */
+export const WAIT_DEFAULT_POLL_MS = 250
+/** pollMs floor — faster polling hammers the accessibility backend */
+export const WAIT_MIN_POLL_MS = 100
+
+const ELEMENT_TARGET_ONLY_MESSAGE = "wait condition target must be an element (a point has no pollable state)"
+
+/**
+ * Wait conditions are element-only except `screen_stable`: visibility,
+ * enabled state, and value are element properties, so point targets are
+ * rejected by refinement rather than failing deep in the backend.
+ */
+export const WaitConditionSchema = z.union([
+  z
+    .object({ type: z.literal("element_visible"), target: ComputerTargetSchema })
+    .refine((condition) => condition.target.kind === "element", { message: ELEMENT_TARGET_ONLY_MESSAGE }),
+  z
+    .object({ type: z.literal("element_enabled"), target: ComputerTargetSchema })
+    .refine((condition) => condition.target.kind === "element", { message: ELEMENT_TARGET_ONLY_MESSAGE }),
+  z
+    .object({ type: z.literal("value_matches"), target: ComputerTargetSchema, value: z.string() })
+    .refine((condition) => condition.target.kind === "element", { message: ELEMENT_TARGET_ONLY_MESSAGE }),
+  z.object({ type: z.literal("screen_stable") }),
+])
+
 export const COMPUTER_ACTION_TYPES = [
   "click",
   "type",
@@ -102,6 +129,8 @@ export const COMPUTER_ACTION_TYPES = [
   "set_value",
   "activate_window",
   "launch_app",
+  "move",
+  "wait",
 ] as const
 
 export const ComputerActionTypeSchema = z.enum(COMPUTER_ACTION_TYPES)
@@ -125,7 +154,46 @@ export const ComputerActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("set_value"), target: ComputerTargetSchema, value: z.string() }),
   z.object({ type: z.literal("activate_window"), windowId: z.string() }),
   z.object({ type: z.literal("launch_app"), app: z.string() }),
+  // pointer hover without clicking; same targeting model as click
+  z.object({ type: z.literal("move"), target: ComputerTargetSchema }),
+  z.object({
+    type: z.literal("wait"),
+    condition: WaitConditionSchema,
+    /** ms before an unmet condition fails the wait (default WAIT_DEFAULT_TIMEOUT_MS) */
+    timeoutMs: z.number().positive().optional(),
+    /** poll interval in ms (default WAIT_DEFAULT_POLL_MS) */
+    pollMs: z.number().min(WAIT_MIN_POLL_MS).optional(),
+  }),
 ])
+
+/** max steps in one ax_act batch — keeps a single tool call bounded */
+export const ACT_BATCH_MAX_STEPS = 25
+
+/**
+ * ax_act arguments: exactly one of `action` (single) or `actions` (batch).
+ * Batches are ordered and bounded (ACT_BATCH_MAX_STEPS) but NOT atomic — UI
+ * effects cannot be rolled back. Unless stopOnError is false, the first
+ * refused step aborts the remaining steps.
+ */
+export const ActArgsSchema = z
+  .object({
+    action: ComputerActionSchema.optional(),
+    actions: z.array(ComputerActionSchema).min(1).max(ACT_BATCH_MAX_STEPS).optional(),
+    /** abort the remaining steps on the first refusal; default true */
+    stopOnError: z.boolean().optional(),
+  })
+  .refine((args) => (args.action === undefined) !== (args.actions === undefined), {
+    message: "provide exactly one of action (single) or actions (batch)",
+  })
+
+/** per-step outcome of a batch ax_act call; flat on purpose (no recursion into ActionResult) */
+export const ActStepResultSchema = z.object({
+  index: z.number().int().nonnegative(),
+  ok: z.boolean(),
+  /** backend refusal code carried verbatim */
+  refusal: z.string().optional(),
+  detail: z.string().optional(),
+})
 
 export const ActionResultSchema = z.object({
   ok: z.boolean(),
@@ -134,6 +202,8 @@ export const ActionResultSchema = z.object({
   detail: z.string().optional(),
   /** backend refusal code carried verbatim */
   refusal: z.string().optional(),
+  /** per-step outcomes, present only for batch calls; steps after an aborted refusal are absent */
+  results: z.array(ActStepResultSchema).optional(),
 })
 
 export const ObserveScopeSchema = z.union([
@@ -183,18 +253,49 @@ const SCOPE_JSON_SCHEMA: Record<string, unknown> = {
   ],
 }
 
+const ELEMENT_TARGET_JSON_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: { kind: { const: "element" }, id: { type: "string" } },
+  required: ["kind", "id"],
+  additionalProperties: false,
+}
+
 const TARGET_JSON_SCHEMA: Record<string, unknown> = {
   oneOf: [
-    {
-      type: "object",
-      properties: { kind: { const: "element" }, id: { type: "string" } },
-      required: ["kind", "id"],
-      additionalProperties: false,
-    },
+    ELEMENT_TARGET_JSON_SCHEMA,
     {
       type: "object",
       properties: { kind: { const: "point" }, x: { type: "number" }, y: { type: "number" } },
       required: ["kind", "x", "y"],
+      additionalProperties: false,
+    },
+  ],
+}
+
+const WAIT_CONDITION_JSON_SCHEMA: Record<string, unknown> = {
+  oneOf: [
+    {
+      type: "object",
+      properties: { type: { const: "element_visible" }, target: ELEMENT_TARGET_JSON_SCHEMA },
+      required: ["type", "target"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: { type: { const: "element_enabled" }, target: ELEMENT_TARGET_JSON_SCHEMA },
+      required: ["type", "target"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: { type: { const: "value_matches" }, target: ELEMENT_TARGET_JSON_SCHEMA, value: { type: "string" } },
+      required: ["type", "target", "value"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: { type: { const: "screen_stable" } },
+      required: ["type"],
       additionalProperties: false,
     },
   ],
@@ -260,6 +361,23 @@ const ACTION_JSON_SCHEMA: Record<string, unknown> = {
       required: ["type", "app"],
       additionalProperties: false,
     },
+    {
+      type: "object",
+      properties: { type: { const: "move" }, target: TARGET_JSON_SCHEMA },
+      required: ["type", "target"],
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      properties: {
+        type: { const: "wait" },
+        condition: WAIT_CONDITION_JSON_SCHEMA,
+        timeoutMs: { type: "number" },
+        pollMs: { type: "number", minimum: WAIT_MIN_POLL_MS },
+      },
+      required: ["type", "condition"],
+      additionalProperties: false,
+    },
   ],
 }
 
@@ -301,11 +419,15 @@ export const AX_COMPUTER_TOOLS: readonly CanonicalToolDefinition[] = [
   {
     name: AX_ACT_TOOL,
     description:
-      "Execute one ComputerAction against the backend; returns an ActionResult in structuredContent. Refusals are reported as { ok: false, refusal } results, not transport errors.",
+      "Execute one ComputerAction (`action`) or an ordered batch (`actions`, max 25) against the backend; returns an ActionResult in structuredContent. Batches are NOT atomic — steps that already ran keep their UI effects — and the remaining steps abort on the first refusal unless stopOnError is false; per-step outcomes are reported in `results`. Refusals are reported as { ok: false, refusal } results, not transport errors.",
     inputSchema: {
       type: "object",
-      properties: { action: ACTION_JSON_SCHEMA },
-      required: ["action"],
+      properties: {
+        action: ACTION_JSON_SCHEMA,
+        actions: { type: "array", items: ACTION_JSON_SCHEMA, minItems: 1, maxItems: ACT_BATCH_MAX_STEPS },
+        stopOnError: { type: "boolean" },
+      },
+      // exactly one of action/actions is required; enforced by ActArgsSchema
       additionalProperties: false,
     },
   },
