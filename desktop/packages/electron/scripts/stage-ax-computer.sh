@@ -14,7 +14,14 @@ set -euo pipefail
 electron_dir="$(cd "$(dirname "$0")/.." && pwd)"
 src="${AX_COMPUTER_DIST:-$HOME/code/ax-computer/dist/ax-computer-0.1.0-darwin-arm64}"
 dest="$electron_dir/resources/ax-computer"
-version="$(node -p "require('$electron_dir/package.json').version")"
+# Git Bash on Windows reports POSIX paths (/c/...), which node.exe cannot
+# resolve. cygpath -m converts to a mixed Windows path (C:/...) that stays
+# valid inside the JS string literal below.
+node_dir="$electron_dir"
+if command -v cygpath >/dev/null 2>&1; then
+  node_dir="$(cygpath -m "$electron_dir")"
+fi
+version="$(node -p "require('$node_dir/package.json').version")"
 major="${version%%.*}"
 
 if [[ ! "$major" =~ ^[0-9]+$ ]]; then
