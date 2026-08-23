@@ -140,6 +140,13 @@ async function serveNode(opts: ServeOptions): Promise<ServerHandle> {
             if (closeActiveConnections) {
               const closeAllConnections = (httpServer as { closeAllConnections?: () => void }).closeAllConnections
               closeAllConnections?.call(httpServer)
+            } else {
+              // Bun's graceful stop also closes idle keep-alive connections
+              // and only waits for in-flight requests. Node's close() waits
+              // for idle sockets too, so without this a connected keep-alive
+              // client would hang the graceful stop indefinitely.
+              const closeIdleConnections = (httpServer as { closeIdleConnections?: () => void }).closeIdleConnections
+              closeIdleConnections?.call(httpServer)
             }
           }),
       })
