@@ -9,6 +9,7 @@ import {
   getInstallBinDir,
   isHomebrewManagedBinary,
   preferredBundledTarget,
+  removeExistingLauncherSymlink,
   setupCli,
   setupCliPathNotes,
   sourceLauncherScript,
@@ -72,6 +73,37 @@ describe("setup-cli helpers", () => {
     expect(bundledLauncherScript({ binaryPath: "C:\\\\ax-code.cmd", windows: true })).toBe(
       '@echo off\nset AX_CODE_ORIGINAL_CWD=%CD%\n"C:\\\\ax-code.cmd" %*\n',
     )
+  })
+
+  test("removes only an existing launcher symlink before replacement", () => {
+    const operations: string[] = []
+    const lstat = (target: string) => {
+      operations.push(`lstat:${target}`)
+      return { isSymbolicLink: () => true }
+    }
+    const unlink = (target: string) => operations.push(`unlink:${target}`)
+
+    expect(removeExistingLauncherSymlink("/home/user/.local/bin/ax-code", lstat, unlink)).toBe(true)
+    expect(operations).toEqual(["lstat:/home/user/.local/bin/ax-code", "unlink:/home/user/.local/bin/ax-code"])
+  })
+
+  test("leaves regular and missing launcher paths untouched", () => {
+    const unlinks: string[] = []
+    const unlink = (target: string) => unlinks.push(target)
+
+    expect(removeExistingLauncherSymlink("/regular/ax-code", () => ({ isSymbolicLink: () => false }), unlink)).toBe(
+      false,
+    )
+    expect(
+      removeExistingLauncherSymlink(
+        "/missing/ax-code",
+        () => {
+          throw Object.assign(new Error("missing"), { code: "ENOENT" })
+        },
+        unlink,
+      ),
+    ).toBe(false)
+    expect(unlinks).toEqual([])
   })
 
   test("creates source launchers for source mode", () => {
@@ -337,6 +369,33 @@ describe("setup-cli helpers", () => {
 
     expect(writes.map(([target]) => target)).toEqual(["/pnpm/home/ax-code"])
     expect(logs.some((line) => line.includes("brew unlink ax-code"))).toBe(true)
+  })
+
+  test("setupCli replaces a fallback launcher symlink instead of following it into Homebrew", () => {
+    const operations: string[] = []
+    const launcherPath = "/pnpm/home/ax-code"
+    const binary = bundledBinaryPath({ root: "/repo", platform: "darwin", arch: "arm64" })
+    const marker = bundledBuildMarkerPath(binary)
+    setupCli({
+      root: "/repo",
+      env: { PNPM_HOME: "/pnpm/home" },
+      platform: "darwin",
+      arch: "arm64",
+      exists: (target) => target === "/pnpm/home" || target === binary || target === marker,
+      mkdirSync: () => undefined,
+      readFileSync: (p) => (p === marker ? "/repo\n" : ""),
+      lstatSync: (target) => {
+        operations.push(`lstat:${target}`)
+        return { isSymbolicLink: () => target === launcherPath }
+      },
+      unlinkSync: (target) => operations.push(`unlink:${target}`),
+      writeFileSync: (target) => operations.push(`write:${target}`),
+      which: () => "/opt/homebrew/bin/ax-code",
+      realpathSync: () => "/opt/homebrew/Cellar/ax-code/7.7.8/bin/ax-code",
+      log: () => undefined,
+    })
+
+    expect(operations).toEqual([`lstat:${launcherPath}`, `unlink:${launcherPath}`, `write:${launcherPath}`])
   })
 
   test("setupCli warns when the new launcher will shadow Homebrew on PATH", () => {

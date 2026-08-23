@@ -20,6 +20,8 @@ export const ROOT = path.resolve(import.meta.dirname, "..")
 
 type WhichFn = (command: string) => string | null | undefined
 type WhichAllFn = (command: string) => string[]
+type LstatFn = (target: string) => { isSymbolicLink(): boolean }
+type UnlinkFn = (target: string) => void
 
 type SetupCliOptions = {
   args?: string[]
@@ -34,6 +36,8 @@ type SetupCliOptions = {
   mkdirSync?: typeof fs.mkdirSync
   readFileSync?: (p: string) => string
   writeFileSync?: typeof fs.writeFileSync
+  lstatSync?: LstatFn
+  unlinkSync?: UnlinkFn
   spawnSync?: typeof childProcess.spawnSync
   log?: (msg: string) => void
   which?: WhichFn
@@ -137,6 +141,21 @@ export function bundledLauncherScript(input: { binaryPath: string; windows?: boo
     return `@echo off\nset AX_CODE_ORIGINAL_CWD=%CD%\n"${input.binaryPath}" %*\n`
   }
   return `#!/bin/sh\nAX_CODE_ORIGINAL_CWD="\$(pwd)" exec "${input.binaryPath.replace(/\\/g, "/")}" "$@"\n`
+}
+
+export function removeExistingLauncherSymlink(
+  launcherPath: string,
+  lstatSync: LstatFn = (target) => fs.lstatSync(target),
+  unlinkSync: UnlinkFn = (target) => fs.unlinkSync(target),
+): boolean {
+  try {
+    if (!lstatSync(launcherPath).isSymbolicLink()) return false
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false
+    throw err
+  }
+  unlinkSync(launcherPath)
+  return true
 }
 
 export function setupCliPathNotes(input: {
@@ -264,6 +283,8 @@ export function setupCli(input: SetupCliOptions = {}) {
   const mkdirSync = input.mkdirSync ?? fs.mkdirSync
   const readFileSync = input.readFileSync ?? ((p: string) => fs.readFileSync(p, "utf8"))
   const writeFileSync = input.writeFileSync ?? fs.writeFileSync
+  const lstatSync = input.lstatSync ?? ((target: string) => fs.lstatSync(target))
+  const unlinkSync = input.unlinkSync ?? ((target: string) => fs.unlinkSync(target))
   const spawnSync = input.spawnSync ?? childProcess.spawnSync
   const log = input.log ?? console.log
   const which = input.which ?? whichSync
@@ -332,11 +353,12 @@ export function setupCli(input: SetupCliOptions = {}) {
   } else {
     const shPath = path.join(binDir, "ax-code")
     try {
+      removeExistingLauncherSymlink(shPath, lstatSync, unlinkSync)
       writeFileSync(shPath, launcher.unix, { mode: 0o755 })
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "EACCES") {
         throw new Error(
-          `Permission denied writing ${shPath}. Set AX_CODE_BIN_DIR to a writable directory ` +
+          `Permission denied installing the launcher at ${shPath}. Set AX_CODE_BIN_DIR to a writable directory ` +
             `(e.g. AX_CODE_BIN_DIR="$HOME/.local/bin") or fix the directory's permissions.`,
         )
       }
