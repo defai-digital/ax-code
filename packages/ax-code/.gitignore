@@ -10,3 +10,4 @@ ax-code-log/
 *.heapsnapshot
 debug-312/
 debug-log/
+test/computer-e2e/last-report.json
