@@ -132,9 +132,27 @@ export async function runCompatSuite(
     })
 
     await run("CU-008", async () => {
-      await provider.observe({ app })
-      const result = await provider.act({ type: "scroll", direction: "down", amount: 1 })
-      assert(result.ok, `scroll refused: ${result.refusal ?? result.detail ?? "?"}`)
+      const observation = await provider.observe({ app })
+      const untargeted = await provider.act({ type: "scroll", direction: "down", amount: 1 })
+      if (untargeted.ok) return
+      // The app-scoped OCU dialect refuses untargeted scroll by design (see
+      // "Known intentional gaps"): retry against a scrollable element from
+      // the observation instead of treating the refusal as a failure.
+      const refusal = untargeted.refusal ?? untargeted.detail ?? "?"
+      assert(/element target/.test(refusal), `scroll refused: ${refusal}`)
+      const element =
+        observation.elements.find((el) => /scroll\s*area/i.test(el.role ?? "")) ??
+        observation.elements.find((el) => /(text\s*area|web\s*area|table|outline|list)/i.test(el.role ?? "")) ??
+        observation.elements[0]
+      assert(element, "scroll requires an element target but the observation exposes no elements")
+      const targeted = await provider.act({
+        type: "scroll",
+        target: { kind: "element", id: element.id },
+        direction: "down",
+        amount: 1,
+      })
+      assert(targeted.ok, `element-targeted scroll refused: ${targeted.refusal ?? targeted.detail ?? "?"}`)
+      return `element-targeted scroll via ${element.role ?? "?"} "${element.name ?? element.id}"`
     })
 
     await run("CU-009", async () => {

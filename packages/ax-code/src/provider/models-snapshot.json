@@ -19697,8 +19697,8 @@
             ]
           }
         ],
-        "tool_call": false,
-        "structured_output": false,
+        "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "knowledge": "2026-03",
         "release_date": "2026-08-13",
@@ -19707,7 +19707,9 @@
           "input": [
             "text",
             "image",
-            "audio"
+            "video",
+            "audio",
+            "pdf"
           ],
           "output": [
             "text"
@@ -19715,8 +19717,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 1048756,
-          "input": 1048756,
+          "context": 1048576,
+          "input": 1048576,
           "output": 65536
         }
       },
