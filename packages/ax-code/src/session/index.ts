@@ -423,12 +423,18 @@ export namespace Session {
         // session's project is already known from `session` (no registry lookup
         // needed). Best-effort — a cleanup failure must not mask the original
         // error.
+        let removed = false
         try {
           SessionShard.deleteSessions(session.projectID, [session.id])
-          Database.use((db) => db.delete(SessionTable).where(eq(SessionTable.id, session.id)).run())
+          removed =
+            Database.use((db) => db.delete(SessionTable).where(eq(SessionTable.id, session.id)).run()).changes > 0
         } catch {
           // Swallow: the original fork error is what the caller must see.
         }
+        // createNext already published session.created. Mirror the successful
+        // compensating delete so event-driven clients do not retain a ghost
+        // session that no longer exists in the registry.
+        if (removed) Bus.publishDetached(Event.Deleted, { info: session })
         throw error
       }
 
@@ -820,35 +826,63 @@ export namespace Session {
     })
   })
 
-  export const remove = fn(SessionID.zod, async (sessionID) => {
+  async function removeInternal(sessionID: SessionID, options: { updatedBefore?: number } = {}): Promise<number> {
     const session = await get(sessionID)
     // Collect descendants and delete them inside the same transaction to
     // avoid a TOCTOU window where a new child session created between
     // collection and deletion becomes an orphan.
     const allDescendants: Info[] = []
     const allDescendantIDs = new Set<SessionID>()
+    let protectedByRecentSession = false
     Database.transaction((db) => {
+      const root = db
+        .select({ timeUpdated: SessionTable.time_updated })
+        .from(SessionTable)
+        .where(and(eq(SessionTable.id, sessionID), eq(SessionTable.project_id, session.projectID)))
+        .get()
+      if (!root) {
+        protectedByRecentSession = true
+        return
+      }
+      if (options.updatedBefore !== undefined && root.timeUpdated >= options.updatedBefore) {
+        protectedByRecentSession = true
+        return
+      }
+
       const ids = [sessionID]
       while (ids.length > 0) {
         const parentID = ids.pop()!
         const rows = db
           .select()
           .from(SessionTable)
-          .where(and(eq(SessionTable.project_id, Instance.project.id), eq(SessionTable.parent_id, parentID)))
+          .where(and(eq(SessionTable.project_id, session.projectID), eq(SessionTable.parent_id, parentID)))
           .all()
         for (const row of rows) {
+          if (allDescendantIDs.has(row.id)) continue
           allDescendantIDs.add(row.id)
+          // Automatic retention must treat a recent descendant as protection
+          // for its whole ancestor chain. Otherwise pruning an expired parent
+          // calls the normal cascading remove path and deletes an active child.
+          // This check shares the delete transaction, so a concurrent child
+          // creation/update cannot slip into the tree after validation.
+          if (options.updatedBefore !== undefined && row.time_updated >= options.updatedBefore) {
+            protectedByRecentSession = true
+            return
+          }
           const next = parseRow(row)
-          if (!next) continue
-          allDescendants.push(next)
-          ids.push(next.id)
+          if (next) allDescendants.push(next)
+          // Traverse by the raw branded row id even when schema recovery
+          // cannot parse the row, so its descendants are not orphaned.
+          ids.push(row.id)
         }
       }
+      if (protectedByRecentSession) return
       for (const id of allDescendantIDs) {
         db.delete(SessionTable).where(eq(SessionTable.id, id)).run()
       }
       db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
     })
+    if (protectedByRecentSession) return 0
     // Shard-side cascade (Slice 5): the registry FK cascade only covers the
     // global copies of message/part/todo/session_goal/event_log/task_queue.
     // Their `session_id` FKs were dropped in the shard (§5 of the plan), so
@@ -916,6 +950,11 @@ export namespace Session {
     // User lifecycle hooks (SessionEnd, reason "remove") — observation-only,
     // fire-and-forget; fired once for the removed session after deletion.
     fireLifecycleHook("SessionEnd", sessionID, { sessionID, reason: "remove" })
+    return allDescendantIDs.size + 1
+  }
+
+  export const remove = fn(SessionID.zod, async (sessionID) => {
+    await removeInternal(sessionID)
   })
 
   /**
@@ -941,11 +980,18 @@ export namespace Session {
         .where(and(eq(SessionTable.project_id, project.id), lt(SessionTable.time_updated, cutoff)))
         .all(),
     )
+    let pruned = 0
     for (const row of rows) {
-      await remove(row.id as SessionID).catch((err) => log.warn("prune remove failed", { id: row.id, err }))
+      try {
+        pruned += await removeInternal(row.id as SessionID, { updatedBefore: cutoff })
+      } catch (err) {
+        // An expired descendant may already have been removed by an earlier
+        // cascading parent deletion in this pass.
+        if (!NotFoundError.isInstance(err)) log.warn("prune remove failed", { id: row.id, err })
+      }
     }
-    if (rows.length > 0) log.info("session prune completed", { pruned: rows.length, ttlDays })
-    return rows.length
+    if (pruned > 0) log.info("session prune completed", { pruned, ttlDays })
+    return pruned
   }
 
   export const updateMessage = fn(MessageV2.Info, async (msg) => {

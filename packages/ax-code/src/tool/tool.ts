@@ -109,8 +109,12 @@ export namespace Tool {
     return {
       id,
       init: async (initCtx) => {
-        const toolInfo = init instanceof Function ? await init(initCtx) : init
-        const execute = toolInfo.execute
+        const base = init instanceof Function ? await init(initCtx) : init
+        // Object-form definitions are module-level singletons. Mutating one
+        // here wraps the previous wrapper again on every registry init, so
+        // validation/logging grows without bound. Wrap a fresh shallow copy.
+        const toolInfo = { ...base }
+        const execute = base.execute
         toolInfo.execute = async (args, ctx) => {
           let validated: typeof args
           try {

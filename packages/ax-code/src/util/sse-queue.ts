@@ -42,14 +42,18 @@ export function pushSseFrame(
 }
 
 export function encodeSsePayload(payload: unknown): string {
-  const seen = new WeakSet<object>()
+  const ancestors: object[] = []
   try {
     return (
-      JSON.stringify(payload, (_key, value) => {
+      JSON.stringify(payload, function (this: unknown, _key, value) {
         if (typeof value === "bigint") return value.toString()
         if (typeof value === "object" && value !== null) {
-          if (seen.has(value)) return "[Circular]"
-          seen.add(value)
+          // JSON.stringify revisits shared DAG nodes legitimately. Keep only
+          // the active ancestor chain so a repeated sibling reference is
+          // serialized normally and only a true cycle is replaced.
+          while (ancestors.length > 0 && ancestors.at(-1) !== this) ancestors.pop()
+          if (ancestors.includes(value)) return "[Circular]"
+          ancestors.push(value)
         }
         return value
       }) ?? "null"

@@ -3167,4 +3167,17 @@ describe("project config {file:} substitution is sandboxed", () => {
       else process.env["AX_TEST_ENDPOINT"] = original
     }
   })
+
+  test("escapes JSON metacharacters in {env:} substitutions", async () => {
+    const original = process.env["AX_TEST_JSON_META"]
+    const value = 'C:\\Users\\me\\path "quoted"'
+    process.env["AX_TEST_JSON_META"] = value
+    try {
+      const parsed = await ConfigPaths.parseText('{"username":"{env:AX_TEST_JSON_META}"}', "/tmp/ax-code.json")
+      expect(parsed.username).toBe(value)
+    } finally {
+      if (original === undefined) delete process.env["AX_TEST_JSON_META"]
+      else process.env["AX_TEST_JSON_META"] = original
+    }
+  })
 })

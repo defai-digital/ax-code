@@ -61,7 +61,7 @@ export const DreGraphCommand = cmd({
     const shutdown = async () => {
       if (stopping) return
       stopping = true
-      await server.stop()
+      await server.stop(true)
       process.exit(0)
     }
     process.on("SIGINT", shutdown)

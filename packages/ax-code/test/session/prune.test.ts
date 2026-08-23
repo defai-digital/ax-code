@@ -38,3 +38,28 @@ test("does not cascade-prune a fresh descendant through an expired parent", asyn
     },
   })
 })
+
+test("counts and removes every session in a fully expired tree", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const parent = await Session.create({ title: "Expired parent" })
+      const child = await Session.create({ parentID: parent.id, title: "Expired child" })
+      const expired = Date.now() - 2 * 24 * 60 * 60 * 1000
+
+      Database.use((db) =>
+        db
+          .update(SessionTable)
+          .set({ time_updated: expired })
+          .where(eq(SessionTable.project_id, parent.projectID))
+          .run(),
+      )
+
+      expect(await Session.pruneExpired(1)).toBe(2)
+      await expect(Session.get(parent.id)).rejects.toThrow()
+      await expect(Session.get(child.id)).rejects.toThrow()
+    },
+  })
+})

@@ -124,14 +124,23 @@ async function serveNode(opts: ServeOptions): Promise<ServerHandle> {
         port: info.port,
         hostname,
         url: new URL(`http://${hostname}:${info.port}`),
-        stop: (_closeActiveConnections?: boolean) =>
+        stop: (closeActiveConnections?: boolean) =>
           new Promise<void>((res) => {
             for (const client of nodeWs?.wss.clients ?? []) {
               try {
-                client.close()
+                if (closeActiveConnections) client.terminate()
+                else client.close()
               } catch {}
             }
             httpServer.close(() => res())
+            // Node's close() waits for active HTTP responses indefinitely;
+            // event streams are intentionally long-lived. Honor the Bun
+            // Server.stop(true) contract after initiating close so no new
+            // connection can race into the forced teardown window.
+            if (closeActiveConnections) {
+              const closeAllConnections = (httpServer as { closeAllConnections?: () => void }).closeAllConnections
+              closeAllConnections?.call(httpServer)
+            }
           }),
       })
     })

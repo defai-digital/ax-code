@@ -54,7 +54,7 @@ export const ServeCommand = cmd({
 
     const shutdown = async () => {
       await ipcServer?.stop(true)
-      await server.stop()
+      await server.stop(true)
       process.exit(0)
     }
     registerShutdownSignals(shutdown)

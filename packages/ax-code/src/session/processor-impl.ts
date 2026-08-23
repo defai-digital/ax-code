@@ -957,18 +957,22 @@ export namespace SessionProcessor {
                       write: usage.tokens.cache.write + input.assistantMessage.tokens.cache.write,
                     },
                   }
+                  // Preserve the start-step baseline before advancing to the
+                  // post-tool snapshot. patch() must compare against this old
+                  // hash; comparing against the newly tracked hash makes a
+                  // successful tool turn look unchanged, so revert has no
+                  // file ledger to restore.
+                  const stepBaseline = snapshot
                   if (usedTools) snapshot = await Snapshot.track()
-                  // Save the current snapshot for the step-finish part.
-                  // Do NOT reset `snapshot` here — it must carry forward as
-                  // the baseline for the next step-start so that per-step
-                  // diffs and computeDiff always have valid from/to pairs.
-                  // Previously `snapshot = undefined` here caused step 2+
-                  // step-starts to lose their baseline (related to #301).
+                  // Save the post-tool snapshot for step-finish and carry it
+                  // forward as the next step-start baseline. This preserves
+                  // computeDiff's from/to pair while patchData retains the
+                  // pre-tool hash needed for revert.
                   const stepSnapshot = snapshot
                   let patchData: { hash: string; files: string[] } | undefined
-                  if (snapshot) {
+                  if (stepBaseline) {
                     try {
-                      const patch = await Snapshot.patch(snapshot)
+                      const patch = await Snapshot.patch(stepBaseline)
                       if (patch.files.length) patchData = patch
                     } catch (err) {
                       log.warn("snapshot patch failed", { error: err })

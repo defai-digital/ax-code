@@ -79,6 +79,22 @@ describe("server/sse-queue", () => {
     })
   })
 
+  test("preserves repeated references that are not circular", () => {
+    const patterns = ["/tmp/outside/*"]
+    const encoded = encodeSsePayload({
+      type: "permission.asked",
+      properties: { patterns, always: patterns },
+    })
+
+    expect(JSON.parse(encoded)).toEqual({
+      type: "permission.asked",
+      properties: {
+        patterns: ["/tmp/outside/*"],
+        always: ["/tmp/outside/*"],
+      },
+    })
+  })
+
   test("encodes a serialization error frame when JSON conversion throws", () => {
     const encoded = encodeSsePayload({
       toJSON() {

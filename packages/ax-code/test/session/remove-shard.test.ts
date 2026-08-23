@@ -10,6 +10,7 @@ afterAll(() => {
 })
 
 import { Session } from "../../src/session/index"
+import { Bus } from "../../src/bus"
 import { SessionShard } from "../../src/session/shard"
 import { Instance } from "../../src/project/instance"
 import { Project } from "../../src/project/project"
@@ -289,6 +290,11 @@ describe("AX_CODE_SHARD_SESSIONS=1 lifecycle cleanup", () => {
         const projectID = Instance.project.id
         expect(shardMessageCount(projectID, session.id)).toBe(1)
 
+        const created: Session.Info[] = []
+        const deleted: Session.Info[] = []
+        const unsubscribeCreated = Bus.subscribe(Session.Event.Created, (event) => created.push(event.properties.info))
+        const unsubscribeDeleted = Bus.subscribe(Session.Event.Deleted, (event) => deleted.push(event.properties.info))
+
         // Force the fork's child shard write to fail: storeFor returns a store
         // whose transaction throws. Session.fork's catch block must then run the
         // compensating delete (SessionShard.deleteSessions) for the child's
@@ -307,13 +313,19 @@ describe("AX_CODE_SHARD_SESSIONS=1 lifecycle cleanup", () => {
           return real(sid, opts)
         }) as any)
 
-        await expect(Session.fork({ sessionID: session.id })).rejects.toThrow()
-
-        spy.mockRestore()
+        try {
+          await expect(Session.fork({ sessionID: session.id })).rejects.toThrow()
+        } finally {
+          spy.mockRestore()
+          unsubscribeCreated()
+          unsubscribeDeleted()
+        }
 
         // Parent shard rows are intact; the child registry row was cleaned up.
         expect(shardMessageCount(projectID, session.id)).toBe(1)
         expect(registrySessionCount(projectID)).toBe(1)
+        expect(created).toHaveLength(1)
+        expect(deleted.map((info) => info.id)).toEqual(created.map((info) => info.id))
       },
     })
   })

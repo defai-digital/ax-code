@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { Hono } from "hono"
+import { streamSSE } from "hono/streaming"
 import { serve, upgradeWebSocket } from "../../src/server/runtime-adapter"
 
 // Covers the runtime adapter on the test runtime (Bun: Bun.serve + hono/bun).
@@ -48,6 +49,39 @@ describe("server/runtime-adapter", () => {
       expect(await res.text()).toBe("pong:/cb")
     } finally {
       await server.stop()
+    }
+  })
+
+  test("force-stops while an SSE response is still open", async () => {
+    const app = new Hono().get("/stream", (c) =>
+      streamSSE(c, async (stream) => {
+        await stream.writeSSE({ data: "ready" })
+        await new Promise<void>((resolve) => stream.onAbort(resolve))
+      }),
+    )
+    const server = await serve({ app, hostname: "127.0.0.1", port: 0 })
+    const request = new AbortController()
+    let stopping: Promise<void> | undefined
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/stream`, { signal: request.signal })
+      const reader = response.body?.getReader()
+      expect(reader).toBeDefined()
+      expect((await reader!.read()).done).toBe(false)
+
+      stopping = server.stop(true)
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const stopped = await Promise.race([
+        stopping.then(() => true),
+        new Promise<false>((resolve) => {
+          timer = setTimeout(() => resolve(false), 500)
+        }),
+      ])
+      if (timer) clearTimeout(timer)
+      expect(stopped).toBe(true)
+    } finally {
+      request.abort()
+      await (stopping ?? server.stop(true))
     }
   })
 

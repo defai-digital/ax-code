@@ -639,10 +639,7 @@ describe("session.prompt flow", () => {
 
     modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
     summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
-    trackSpy = vi
-      .spyOn(Snapshot, "track")
-      .mockResolvedValueOnce("snap-before")
-      .mockResolvedValue("snap-after")
+    trackSpy = vi.spyOn(Snapshot, "track").mockResolvedValueOnce("snap-before").mockResolvedValue("snap-after")
     patchSpy = vi.spyOn(Snapshot, "patch").mockImplementation(async (hash) => ({
       hash,
       files: hash === "snap-before" ? [path.join(tmp.path, "src/file.ts")] : [],
@@ -718,9 +715,7 @@ describe("session.prompt flow", () => {
             message.parts.some((part) => part.type === "tool" && part.state.status === "completed"),
         )
         expect(toolStep).toBeDefined()
-        expect(toolStep?.parts.some((part) => part.type === "step-start" && part.snapshot === "snap-before")).toBe(
-          true,
-        )
+        expect(toolStep?.parts.some((part) => part.type === "step-start" && part.snapshot === "snap-before")).toBe(true)
         expect(
           toolStep?.parts.some(
             (part) => part.type === "step-finish" && part.reason === "tool-calls" && part.snapshot === "snap-after",

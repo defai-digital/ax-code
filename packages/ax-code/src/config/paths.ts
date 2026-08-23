@@ -138,7 +138,10 @@ export namespace ConfigPaths {
     const envSource = trusted ? process.env : Env.sanitize(process.env)
     text = text.replace(/\{env:([^}]+)\}/g, (_, varName) => {
       const value = envSource[varName]
-      if (value !== undefined) return value
+      // Tokens appear inside JSONC strings, so splice the escaped string
+      // contents rather than raw environment bytes. This mirrors {file:}
+      // substitution below and preserves quotes, backslashes, and controls.
+      if (value !== undefined) return JSON.stringify(value).slice(1, -1)
       log.warn("config references an unavailable environment variable", {
         source: source(input),
         variable: varName,
