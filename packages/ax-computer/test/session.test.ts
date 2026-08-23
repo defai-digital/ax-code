@@ -5,6 +5,25 @@ import type { ComputerUseProvider, ObserveScope, ProviderCapabilities } from "..
 import { ComputerSession } from "../src/session"
 import type { AppInfo, ComputerObservation } from "../src/types"
 
+function observation(provider: string, elementIds: string[]): ComputerObservation {
+  return {
+    platform: "test",
+    provider,
+    timestamp: Date.now(),
+    elements: elementIds.map((id) => ({ id })),
+  }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
 class FakeProvider implements ComputerUseProvider {
   disposed = false
   readonly acts: ComputerAction[] = []
@@ -25,12 +44,7 @@ class FakeProvider implements ComputerUseProvider {
 
   async observe(scope: ObserveScope): Promise<ComputerObservation> {
     this.observedScopes.push(scope)
-    return {
-      platform: "test",
-      provider: this.name,
-      timestamp: Date.now(),
-      elements: this.elementIds.map((id) => ({ id })),
-    }
+    return observation(this.name, this.elementIds)
   }
 
   async act(action: ComputerAction): Promise<ActionResult> {
@@ -168,10 +182,184 @@ describe("ComputerSession", () => {
     primary.elementIds.push("b")
     const second = await session.observe({ desktop: true })
 
+    expect(first.elements[0]!.id).toBe("e1:a")
+    expect(second.elements[0]!.id).toBe("e2:b")
+
     await expect(
       session.act({ type: "click", target: { kind: "element", id: first.elements[0]!.id } }),
     ).rejects.toMatchObject({ code: "stale_target" })
     await session.act({ type: "click", target: { kind: "element", id: second.elements[0]!.id } })
     expect(primary.acts[0]).toEqual({ type: "click", target: { kind: "element", id: "b" } })
+  })
+
+  test("a new observation invalidates a reused raw element id", async () => {
+    const primary = new FakeProvider("primary", ["a"])
+    const session = new ComputerSession(primary)
+
+    const first = await session.observe({ desktop: true })
+    const second = await session.observe({ desktop: true })
+
+    expect(first.elements[0]!.id).toBe("e1:a")
+    expect(second.elements[0]!.id).toBe("e2:a")
+    await expect(
+      session.act({ type: "click", target: { kind: "element", id: first.elements[0]!.id } }),
+    ).rejects.toMatchObject({ code: "stale_target" })
+    await session.act({ type: "click", target: { kind: "element", id: second.elements[0]!.id } })
+    expect(primary.acts).toEqual([{ type: "click", target: { kind: "element", id: "a" } }])
+  })
+
+  test("a failed observation preserves the current epoch and element map", async () => {
+    const primary = new FakeProvider("primary", ["a"])
+    const session = new ComputerSession(primary)
+    const first = await session.observe({ desktop: true })
+    const observe = primary.observe.bind(primary)
+    primary.observe = async () => {
+      throw new Error("observe failed")
+    }
+
+    await expect(session.observe({ app: "Broken" })).rejects.toThrow("observe failed")
+    await session.act({ type: "click", target: { kind: "element", id: first.elements[0]!.id } })
+
+    primary.observe = observe
+    const second = await session.observe({ desktop: true })
+    expect(second.elements[0]!.id).toBe("e2:a")
+    expect(primary.acts).toEqual([{ type: "click", target: { kind: "element", id: "a" } }])
+  })
+
+  test("an empty observation still invalidates ids from the prior observation", async () => {
+    const primary = new FakeProvider("primary", ["a"])
+    const session = new ComputerSession(primary)
+    const first = await session.observe({ desktop: true })
+
+    primary.elementIds.length = 0
+    const empty = await session.observe({ desktop: true })
+    expect(empty.elements).toEqual([])
+    await expect(
+      session.act({ type: "click", target: { kind: "element", id: first.elements[0]!.id } }),
+    ).rejects.toMatchObject({ code: "stale_target" })
+
+    primary.elementIds.push("a")
+    const third = await session.observe({ desktop: true })
+    expect(third.elements[0]!.id).toBe("e3:a")
+  })
+
+  test("only the first completing overlapping observation can commit", async () => {
+    const primary = new FakeProvider("primary")
+    const firstResult = deferred<ComputerObservation>()
+    const secondResult = deferred<ComputerObservation>()
+    let call = 0
+    primary.observe = async (scope) => {
+      primary.observedScopes.push(scope)
+      return [firstResult, secondResult][call++]!.promise
+    }
+    const session = new ComputerSession(primary)
+
+    const first = session.observe({ app: "First" })
+    const firstRejection = expect(first).rejects.toMatchObject({ code: "superseded_observation" })
+    const second = session.observe({ app: "Second" })
+    secondResult.resolve(observation("primary", ["b"]))
+    const current = await second
+    firstResult.resolve(observation("primary", ["a"]))
+    await firstRejection
+
+    expect(current.elements[0]!.id).toBe("e1:b")
+    await session.act({ type: "click", target: { kind: "element", id: current.elements[0]!.id } })
+    expect(primary.acts).toEqual([{ type: "click", target: { kind: "element", id: "b" } }])
+  })
+
+  test("a late observation from the old provider cannot overwrite failover state", async () => {
+    const primary = new FakeProvider("primary", ["a"])
+    const next = new FakeProvider("next", ["x"])
+    const session = new ComputerSession(primary)
+    const first = await session.observe({ desktop: true })
+    const lateResult = deferred<ComputerObservation>()
+    primary.observe = async (scope) => {
+      primary.observedScopes.push(scope)
+      return lateResult.promise
+    }
+
+    const late = session.observe({ app: "Stale" })
+    const lateRejection = expect(late).rejects.toMatchObject({
+      code: "superseded_observation",
+      provider: "primary",
+    })
+    const fresh = await session.failover(next)
+    lateResult.resolve(observation("primary", ["late"]))
+    await lateRejection
+
+    expect(fresh.elements[0]!.id).toBe("e2:x")
+    await expect(
+      session.act({ type: "click", target: { kind: "element", id: first.elements[0]!.id } }),
+    ).rejects.toMatchObject({ code: "stale_target", provider: "next" })
+    await session.act({ type: "click", target: { kind: "element", id: fresh.elements[0]!.id } })
+    expect(next.acts).toEqual([{ type: "click", target: { kind: "element", id: "x" } }])
+  })
+
+  test("a failed replacement observation keeps pre-failover ids invalid", async () => {
+    const primary = new FakeProvider("primary", ["a"])
+    const next = new FakeProvider("next", ["x"])
+    const session = new ComputerSession(primary)
+    const first = await session.observe({ desktop: true })
+    const observe = next.observe.bind(next)
+    next.observe = async () => {
+      throw new Error("replacement observe failed")
+    }
+
+    await expect(session.failover(next)).rejects.toThrow("replacement observe failed")
+    expect(session.activeProvider).toBe(next)
+    await expect(
+      session.act({ type: "click", target: { kind: "element", id: first.elements[0]!.id } }),
+    ).rejects.toMatchObject({ code: "stale_target", provider: "next" })
+
+    next.observe = observe
+    const recovered = await session.observe({ desktop: true })
+    expect(recovered.elements[0]!.id).toBe("e2:x")
+  })
+
+  test("a failover superseded during disposal cannot observe the newer provider", async () => {
+    const primary = new FakeProvider("primary")
+    const middle = new FakeProvider("middle", ["m"])
+    const current = new FakeProvider("current", ["c"])
+    const releaseDispose = deferred<void>()
+    primary.dispose = () => releaseDispose.promise
+    const session = new ComputerSession(primary)
+
+    const superseded = session.failover(middle)
+    const supersededRejection = expect(superseded).rejects.toMatchObject({
+      code: "superseded_observation",
+      provider: "middle",
+    })
+    const fresh = await session.failover(current)
+    releaseDispose.resolve(undefined)
+    await supersededRejection
+
+    expect(session.activeProvider).toBe(current)
+    expect(middle.observedScopes).toEqual([])
+    expect(fresh.elements[0]!.id).toBe("e1:c")
+    await session.act({ type: "click", target: { kind: "element", id: fresh.elements[0]!.id } })
+    expect(current.acts).toEqual([{ type: "click", target: { kind: "element", id: "c" } }])
+  })
+
+  test("an observation committed during disposal supersedes the pending failover result", async () => {
+    const primary = new FakeProvider("primary")
+    const next = new FakeProvider("next", ["x"])
+    const releaseDispose = deferred<void>()
+    primary.dispose = () => releaseDispose.promise
+    const session = new ComputerSession(primary)
+
+    const failover = session.failover(next)
+    const failoverRejection = expect(failover).rejects.toMatchObject({
+      code: "superseded_observation",
+      provider: "next",
+    })
+    const fresh = await session.observe({ app: "Concurrent" })
+    releaseDispose.resolve(undefined)
+    await failoverRejection
+
+    expect(session.activeProvider).toBe(next)
+    expect(next.observedScopes).toEqual([{ app: "Concurrent" }])
+    expect(fresh.elements[0]!.id).toBe("e1:x")
+    await session.act({ type: "click", target: { kind: "element", id: fresh.elements[0]!.id } })
+    expect(next.acts).toEqual([{ type: "click", target: { kind: "element", id: "x" } }])
   })
 })

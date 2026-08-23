@@ -1,5 +1,6 @@
 export type ComputerUseErrorCode =
   | "stale_target"
+  | "superseded_observation"
   | "no_active_observation"
   | "unsupported_scope"
   | "unsupported_action"

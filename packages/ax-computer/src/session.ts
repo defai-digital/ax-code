@@ -9,14 +9,17 @@ import type { ComputerObservation } from "./types"
  *
  * Element ids are only valid against the observation that issued them, so the
  * session namespaces them with an observation epoch (`e<epoch>:<raw id>`).
- * The epoch increments on every failover, which makes element ids captured
- * from the previous provider unresolvable — `act` rejects them with a
- * `stale_target` ComputerUseError instead of sending a dangling index to the
- * new backend (which may legitimately reuse the same raw indices).
+ * Every successfully committed observation advances the epoch. Failover and
+ * overlapping observations invalidate in-flight work before it can commit,
+ * so `act` rejects stale ids instead of sending a dangling index to a changed
+ * UI or a different backend (which may reuse the same raw indices).
  */
 export class ComputerSession {
   private provider: ComputerUseProvider
-  private epoch = 1
+  /** Epochs are issued only by successful observation commits; the first is e1. */
+  private epoch = 0
+  /** Changes on every observation commit or provider swap to reject overlapping work. */
+  private revision = 0
   private lastScope: ObserveScope | undefined
   /** session-scoped element id -> raw provider element id, current epoch only */
   private elements = new Map<string, string>()
@@ -35,16 +38,27 @@ export class ComputerSession {
   }
 
   async observe(scope: ObserveScope): Promise<ComputerObservation> {
-    const observation = await this.provider.observe(scope)
-    this.lastScope = scope
+    const provider = this.provider
+    const revision = this.revision
+    const observation = await provider.observe(scope)
+    if (provider !== this.provider || revision !== this.revision) {
+      throw this.supersededObservation(provider)
+    }
+
+    const epoch = this.epoch + 1
     const elements = new Map<string, string>()
     const stamped = observation.elements.map((element) => {
-      const id = `e${this.epoch}:${element.id}`
+      const id = `e${epoch}:${element.id}`
       elements.set(id, element.id)
       return { ...element, id }
     })
-    // assign only after the map is fully built, so a provider error never
-    // leaves half-registered ids behind
+
+    // Commit only after the complete stamped result and map are ready. There
+    // is no await in this block, so an observation is either current in full
+    // or rejected without changing the prior epoch, scope, or element map.
+    this.epoch = epoch
+    this.revision += 1
+    this.lastScope = scope
     this.elements = elements
     return { ...observation, elements: stamped }
   }
@@ -54,21 +68,27 @@ export class ComputerSession {
   }
 
   /**
-   * Stops routing acts to the current provider, disposes it, swaps in `next`,
-   * and returns a fresh observation under the same scope as the last one
-   * (desktop when nothing was observed yet).
+   * Stops routing acts to the current provider, swaps in `next`, disposes the
+   * previous provider, and returns a fresh observation under the same scope as
+   * the last one (desktop when nothing was observed yet).
    */
   async failover(next: ComputerUseProvider): Promise<ComputerObservation> {
     const previous = this.provider
-    // Swap first: from here on acts route to `next` and old epoch ids reject.
+    const scope: ObserveScope = this.lastScope ?? { desktop: true }
+    // Swap first: from here on acts route to `next`, old element ids reject,
+    // and observations still in flight on `previous` cannot commit.
     this.provider = next
-    this.epoch += 1
+    this.revision += 1
+    const revision = this.revision
     this.elements = new Map()
     // Dispose is best-effort: routing already switched to `next`, so a teardown
     // failure on the old provider must not abort the failover and leave the
     // caller thinking the swap never happened.
     await previous.dispose().catch(() => {})
-    return this.observe(this.lastScope ?? { desktop: true })
+    if (next !== this.provider || revision !== this.revision) {
+      throw this.supersededObservation(next)
+    }
+    return this.observe(scope)
   }
 
   async dispose(): Promise<void> {
@@ -100,5 +120,12 @@ export class ComputerSession {
       )
     }
     return { kind: "element", id: raw }
+  }
+
+  private supersededObservation(provider: ComputerUseProvider): ComputerUseError {
+    return new ComputerUseError(
+      `observation from provider "${provider.name}" was superseded before it could become current; observe again`,
+      { provider: provider.name, code: "superseded_observation" },
+    )
   }
 }

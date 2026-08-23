@@ -10,7 +10,12 @@ import { renderObservation } from "./render"
 
 /** Content signature used for change detection between polls. */
 function signatureOf(observation: ComputerObservation): string {
-  const elements = observation.elements.map((e) => `${e.id}|${e.role ?? ""}|${e.name ?? ""}|${e.value ?? ""}`)
+  // Observation epochs intentionally change on every poll. Compare the raw
+  // provider identity beneath the single session prefix so freshness tokens
+  // do not masquerade as visible UI changes.
+  const elements = observation.elements.map(
+    (e) => `${e.id.replace(/^e\d+:/, "")}|${e.role ?? ""}|${e.name ?? ""}|${e.value ?? ""}`,
+  )
   const screenshotHash = observation.screenshot?.data ? hashData(observation.screenshot.data) : ""
   return `${elements.join("\n")}\n---\n${observation.a11yText ?? ""}\n---\n${screenshotHash}`
 }

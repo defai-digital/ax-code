@@ -239,7 +239,7 @@ describe("computer_action tool", () => {
       expect(provider.scopes).toEqual([{ desktop: true }, { desktop: true }])
       expect(result.output).toContain("click (10,20): ok")
       expect(result.output).toContain("Fresh observation after the action:")
-      expect(result.output).toContain('[e1:save-btn] button "Save"')
+      expect(result.output).toContain('[e2:save-btn] button "Save"')
       expect(result.attachments).toHaveLength(1)
     })
   })
