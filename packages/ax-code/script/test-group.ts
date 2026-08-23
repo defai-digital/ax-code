@@ -3,7 +3,7 @@ import { scan } from "./fs-compat"
 
 export const root = path.join(import.meta.dirname, "..")
 
-const live = new Set(["test/session/structured-output-integration.test.ts"])
+const live = new Set(["test/session/structured-output-integration.test.ts", "test/computer-e2e/agent-e2e.live.test.ts"])
 
 const e2e = new Set([
   "test/cli/smoke.test.ts",

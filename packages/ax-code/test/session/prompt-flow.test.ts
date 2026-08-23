@@ -639,11 +639,14 @@ describe("session.prompt flow", () => {
 
     modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
     summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
-    trackSpy = vi.spyOn(Snapshot, "track").mockResolvedValue("snap-1")
-    patchSpy = vi.spyOn(Snapshot, "patch").mockResolvedValue({
-      hash: "snap-1",
-      files: [path.join(tmp.path, "src/file.ts")],
-    })
+    trackSpy = vi
+      .spyOn(Snapshot, "track")
+      .mockResolvedValueOnce("snap-before")
+      .mockResolvedValue("snap-after")
+    patchSpy = vi.spyOn(Snapshot, "patch").mockImplementation(async (hash) => ({
+      hash,
+      files: hash === "snap-before" ? [path.join(tmp.path, "src/file.ts")] : [],
+    }))
     let call = 0
     streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
       call++
@@ -715,9 +718,15 @@ describe("session.prompt flow", () => {
             message.parts.some((part) => part.type === "tool" && part.state.status === "completed"),
         )
         expect(toolStep).toBeDefined()
-        expect(toolStep?.parts.some((part) => part.type === "step-start")).toBe(true)
-        expect(toolStep?.parts.some((part) => part.type === "step-finish" && part.reason === "tool-calls")).toBe(true)
-        expect(toolStep?.parts.some((part) => part.type === "patch" && part.hash === "snap-1")).toBe(true)
+        expect(toolStep?.parts.some((part) => part.type === "step-start" && part.snapshot === "snap-before")).toBe(
+          true,
+        )
+        expect(
+          toolStep?.parts.some(
+            (part) => part.type === "step-finish" && part.reason === "tool-calls" && part.snapshot === "snap-after",
+          ),
+        ).toBe(true)
+        expect(toolStep?.parts.some((part) => part.type === "patch" && part.hash === "snap-before")).toBe(true)
 
         await Session.remove(session.id)
       },
