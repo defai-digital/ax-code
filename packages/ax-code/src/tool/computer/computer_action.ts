@@ -1,7 +1,7 @@
 import z from "zod"
 import { Tool } from "../tool"
 import DESCRIPTION from "./computer-action.txt"
-import { checkVisualRouting } from "@/visual/router"
+import { checkVisualRouting, sessionModelFromMessages } from "@/visual/router"
 import { Computer } from "@/computer/computer"
 import { ground } from "@/computer/ground"
 import { Config } from "@/config/config"
@@ -209,8 +209,8 @@ export const ComputerActionTool = Tool.define("computer_action", {
   description: DESCRIPTION,
   parameters,
   async execute(params, ctx) {
-    // Check that the current model supports vision input
-    const routing = await checkVisualRouting({ visionInput: true })
+    // Check that the session's model supports vision input
+    const routing = await checkVisualRouting({ visionInput: true }, { model: sessionModelFromMessages(ctx.messages) })
     if (!routing.ok) {
       throw new Error(routing.diagnostic)
     }

@@ -236,10 +236,3 @@ local-only policy. Keep `/doc` limited to the loopback server.
 The HTTP compatibility bridge rejects cross-origin WebSocket upgrades by default. Add an origin to the explicit server CORS allowlist only when that browser origin is part of the trusted app shell.
 
 Do not expose the full HTTP API, PTY WebSocket, or OpenAPI docs to arbitrary WebViews. If a WebView is used, keep it as a renderer and route privileged operations through the native host using the gRPC/native facade.
-
-## Implementation Policy
-
-- Keep gRPC optional. The CLI, TUI, headless SDK, gRPC SDK, and OpenAPI snapshot must continue to work.
-- Do not duplicate every HTTP route in proto. Promote routes into gRPC only when the GUI needs them.
-- Keep generated gRPC code out of handwritten SDK folders. Handwritten code belongs in `packages/sdk/js/src/grpc.ts`; generated code should live in a generated folder if added later.
-- Treat HTTP as compatibility and observability infrastructure. Deprecate individual HTTP routes only after the GUI and integrations have a replacement and tests.

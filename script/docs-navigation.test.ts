@@ -5,6 +5,26 @@ import path from "node:path"
 const repoRoot = path.resolve(import.meta.dirname, "..")
 const docsRoot = path.join(repoRoot, "docs")
 
+const INTERNAL_ARTIFACT_DIRECTORIES = new Set([
+  "adr",
+  "adrs",
+  "development",
+  "plan",
+  "planning",
+  "plans",
+  "prd",
+  "prds",
+  "proposal",
+  "proposals",
+  "roadmap",
+  "roadmaps",
+  "spec",
+  "specs",
+])
+const INTERNAL_ARTIFACT_BASENAME = /^(?:adr|plan|prd|proposal|roadmap|spec)(?:[-_.]|$)/i
+const DEVELOPMENT_ONLY_HEADING =
+  /^#{1,6}\s+(?:delivery plan|future code improvements|implementation plan|implementation policy|phase plan|project plan|recommended investment|roadmap)\s*$/im
+
 // docs/ is public-only: the former working trees (module-quality-audit,
 // planning, prd) moved to .internal/ (see docs/README.md "Documentation
 // boundaries"). No top-level exclusions remain; the set is kept so the
@@ -101,6 +121,34 @@ describe("public documentation navigation", () => {
         (field) => !new RegExp(`^${field}:\\s*\\S`, "m").test(header),
       )
       return missing.length === 0 ? [] : [`${path.relative(repoRoot, file)}: ${missing.join(", ")}`]
+    })
+
+    expect(invalid).toEqual([])
+  })
+
+  test("project-development artifacts stay under .internal", () => {
+    const invalid = markdown.flatMap((file) => {
+      const relative = path.relative(docsRoot, file).split(path.sep).join("/")
+      const directories = relative.toLowerCase().split("/").slice(0, -1)
+      const basename = path.basename(file)
+      const source = fs.readFileSync(file, "utf8")
+      const header = source.split("\n").slice(0, 10).join("\n")
+      const reasons: string[] = []
+
+      if (directories.some((directory) => INTERNAL_ARTIFACT_DIRECTORIES.has(directory))) {
+        reasons.push("internal artifact directory")
+      }
+      if (INTERNAL_ARTIFACT_BASENAME.test(basename)) reasons.push("internal artifact filename")
+      if (/^Status:\s*(?:Draft|Planned|Proposed)\b/im.test(header)) reasons.push("non-public lifecycle status")
+      if (/^Scope:.*\b(?:draft|internal|planning|project development|proposal)\b/im.test(header)) {
+        reasons.push("non-public scope")
+      }
+      if (DEVELOPMENT_ONLY_HEADING.test(source)) reasons.push("development-only heading")
+      if (file !== path.join(docsRoot, "README.md") && source.includes(".internal/")) {
+        reasons.push("reference to local-only .internal content")
+      }
+
+      return reasons.length === 0 ? [] : [`docs/${relative}: ${reasons.join(", ")}`]
     })
 
     expect(invalid).toEqual([])

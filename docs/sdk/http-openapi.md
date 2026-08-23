@@ -106,7 +106,3 @@ pnpm --dir packages/sdk/js run validate:openapi
 ```
 
 This validates that `packages/sdk/openapi.json` is parseable JSON, declares OpenAPI 3.x, and contains the core routes needed by generated clients.
-
-## Recommended Investment
-
-The high-value path is to make the OpenAPI contract reliable, documented, and easy to generate from before adding official packages for more languages. Promote a Python or Go SDK only after there is concrete user demand and the generated-client workflow has contract tests.

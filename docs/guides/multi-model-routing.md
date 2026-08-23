@@ -54,12 +54,3 @@ The last group should stay on the session model unless the user explicitly pins 
 
 - `Provider.getSmallModel()` returns `undefined` for providers whose catalog neither tags a tier-bearing `family` nor matches the hardcoded priority lists; aux calls then fall back to the session model (logged as "no small model for provider").
 - There is no mid-run escalation from a stuck worker to a stronger model.
-
-## Future code improvements
-
-These are the minimal, low-risk changes that would make the above config automatic:
-
-1. Add `routing.auto_small_model` (default `false`) to opt into same-provider cheap-model routing for unpinned read-only lanes.
-2. Surface every automatic model swap via the existing `Recorder.emit({type: "agent.route"})` + toast path.
-
-Landed already: small-model derivation from catalog `family` metadata, `compaction` falling back to `getSmallModel()` before the session model, and the runtime honoring the persisted `routing.llm` toggle. Explicit `small_model` and per-agent `model` pins (as shown in `ax-code.json.example`) still take precedence everywhere.

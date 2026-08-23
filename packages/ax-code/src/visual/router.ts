@@ -9,6 +9,8 @@
 import { Provider } from "@/provider/provider-impl"
 import type { ProviderModel } from "@/provider/model-info"
 import type { ProviderInfo } from "@/provider/model-info"
+import type { ProviderID, ModelID } from "@/provider/schema"
+import type { MessageV2 } from "@/session/message-v2"
 import {
   toVisualCapabilities,
   hasVisualCapabilities,
@@ -20,6 +22,21 @@ export type VisionCapableModel = {
   providerID: string
   modelID: string
   name: string
+}
+
+/**
+ * Resolve the model a tool-call's session is actually running on: the last
+ * user message carries the model selection for the turn (the prompt loop
+ * reads the same field). Returns undefined when no user message is present
+ * (e.g. sub-agent or synthetic contexts) — callers fall back to the default
+ * model in that case.
+ */
+export function sessionModelFromMessages(
+  messages: MessageV2.WithParts[],
+): { providerID: ProviderID; modelID: ModelID } | undefined {
+  const lastUser = messages.findLast((m) => m.info.role === "user")
+  if (!lastUser || lastUser.info.role !== "user") return undefined
+  return lastUser.info.model
 }
 
 /**
@@ -76,27 +93,30 @@ export async function visualRoutingDiagnostic(input: {
 }
 
 /**
- * Check whether the current default model supports the required visual
- * capabilities. Returns the model and its visual capabilities on success,
- * or a diagnostic message on failure.
+ * Check whether the session's model supports the required visual
+ * capabilities. Pass `options.model` (see `sessionModelFromMessages`) to gate
+ * on the model the session is actually running; when omitted, the provider
+ * default model is checked. Returns the model and its visual capabilities on
+ * success, or a diagnostic message on failure.
  */
 export async function checkVisualRouting(
   required: Partial<ModelVisualCapabilities>,
+  options?: { model?: { providerID: ProviderID; modelID: ModelID } },
 ): Promise<
   | { ok: true; model: ProviderModel; providerID: string; caps: ModelVisualCapabilities }
   | { ok: false; diagnostic: string }
 > {
-  const defaultModel = await Provider.defaultModel()
-  const model = await Provider.getModel(defaultModel.providerID, defaultModel.modelID)
+  const target = options?.model ?? (await Provider.defaultModel())
+  const model = await Provider.getModel(target.providerID, target.modelID)
   const caps = toVisualCapabilities(model)
 
   if (hasVisualCapabilities(caps, required)) {
-    return { ok: true, model, providerID: defaultModel.providerID, caps }
+    return { ok: true, model, providerID: target.providerID, caps }
   }
 
   const diagnostic = await visualRoutingDiagnostic({
     model,
-    providerID: defaultModel.providerID,
+    providerID: target.providerID,
     required,
   })
 

@@ -90,7 +90,12 @@ vi.mock("@/provider/provider-impl", () => ({
 }))
 
 import { Provider } from "@/provider/provider-impl"
-import { findVisionCapableModels, visualRoutingDiagnostic, checkVisualRouting } from "../../src/visual/router"
+import {
+  findVisionCapableModels,
+  visualRoutingDiagnostic,
+  checkVisualRouting,
+  sessionModelFromMessages,
+} from "../../src/visual/router"
 
 const mockedProvider = vi.mocked(Provider)
 
@@ -206,6 +211,68 @@ describe("visual.router", () => {
         expect(result.diagnostic).toContain("vision_input")
         expect(result.diagnostic).toContain("Suggested")
       }
+    })
+
+    test("gates on the explicit session model, not the default model", async () => {
+      // default model is text-only, but the session runs a vision model
+      const textModel = mockProviders["alibaba-token-plan"].models["qwen3-max-preview"]
+      const visionModel = mockProviders["openai"].models["gpt-4o"]
+      mockedProvider.defaultModel.mockResolvedValue({
+        providerID: "alibaba-token-plan" as any,
+        modelID: "qwen3-max-preview" as any,
+      })
+      mockedProvider.getModel.mockImplementation(async (providerID: any, modelID: any) =>
+        modelID === "gpt-4o" ? visionModel : textModel,
+      )
+
+      const result = await checkVisualRouting(
+        { visionInput: true },
+        { model: { providerID: "openai" as any, modelID: "gpt-4o" as any } },
+      )
+      expect(result.ok).toBe(true)
+      expect(mockedProvider.getModel).toHaveBeenCalledWith("openai", "gpt-4o")
+      expect(mockedProvider.defaultModel).not.toHaveBeenCalled()
+    })
+
+    test("fails with a diagnostic when the session model lacks vision even though the default has it", async () => {
+      const textModel = mockProviders["alibaba-token-plan"].models["qwen3-max-preview"]
+      const visionModel = mockProviders["openai"].models["gpt-4o"]
+      mockedProvider.defaultModel.mockResolvedValue({
+        providerID: "openai" as any,
+        modelID: "gpt-4o" as any,
+      })
+      mockedProvider.getModel.mockImplementation(async (_providerID: any, modelID: any) =>
+        modelID === "gpt-4o" ? visionModel : textModel,
+      )
+
+      const result = await checkVisualRouting(
+        { visionInput: true },
+        { model: { providerID: "alibaba-token-plan" as any, modelID: "qwen3-max-preview" as any } },
+      )
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.diagnostic).toContain("vision_input")
+      }
+    })
+  })
+
+  describe("sessionModelFromMessages", () => {
+    test("returns the model from the last user message", () => {
+      const messages = [
+        { info: { role: "user", model: { providerID: "openai", modelID: "gpt-4o" } }, parts: [] },
+        { info: { role: "assistant" }, parts: [] },
+        { info: { role: "user", model: { providerID: "alibaba-token-plan", modelID: "qwen3.5-122b" } }, parts: [] },
+      ] as any
+      expect(sessionModelFromMessages(messages)).toEqual({
+        providerID: "alibaba-token-plan",
+        modelID: "qwen3.5-122b",
+      })
+    })
+
+    test("returns undefined when no user message is present", () => {
+      const messages = [{ info: { role: "assistant" }, parts: [] }] as any
+      expect(sessionModelFromMessages(messages)).toBeUndefined()
+      expect(sessionModelFromMessages([])).toBeUndefined()
     })
   })
 })

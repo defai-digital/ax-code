@@ -8,32 +8,18 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Canonical protocol, external provider, dual-stack bridge.
 - Harness parity phase 2 — bash_input, background-task control tools, sandbox-denial escalation.
 - Harness parity phase 1 — context_status, batch concurrency classes, compaction fallback, claude-code hook decoder, guardian hardening.
 - RuleId and audit-scope labeling on scanner outputs.
 - Lifecycle state machines, incremental equivalence, plan rigor.
 - Capture and enforce envelope freshness on authoritative citation.
 - Envelope provenance fields + freshness classifier with stable IDs.
-- Port OCU macOS Swift core as AX-native backend (Phase 2).
-- Per-app provider overrides and audit events.
-- A/B harness and embedded SDK transport for cua.
-- Add phase-0 perf baseline harness.
-- Grounder fallback for natural-language action targets.
 - Modularize compiler into injectable core with neutral evidence contracts.
-- Add computer_plan with plan-level best-of-N behavior judge.
-- Add computer_watch tool for monitoring apps and windows.
-- Record a reflection trajectory for computer-use steps.
-- List discoverable apps/windows on desktop-scope snapshot.
-- Add computer-use preflight to ax-code doctor.
 - Attach browser\_\* tools to a real browser via browser.cdpUrl.
-- Wire computer-use tools into core behind computer.provider config.
 
 ### Changed
 
 - Commit in-flight parallel-session work ahead of v7.7.9.
-- Feat(computer)!: remove in-repo engine; computer-use requires the ax-computer server.
-- CU-008 retries scroll with an element target.
 - Regenerate contract from committed source.
 - Refresh models snapshot.
 - Track completed ax-code-reason stabilization PRD.
@@ -42,13 +28,6 @@ All notable changes to this project will be documented in this file.
 - Track completed ax-code-intel stabilization PRD.
 - Regenerate after envelope schema extension.
 - Style(ax-code-reason): prettier formatting for freshness test.
-- Add OCU-dialect protocol contract and A/B provenance.
-- Extract OcuProtocolProvider base; upstream OCU adapter becomes test-only.
-- Package-owned contract test matrix.
-- Record ocu-vs-axnative A/B evidence (6/6, 0 discrepancies, ~2.2x faster).
-- Retire the upstream ocu backend from user config.
-- Record Agent-S3-derived follow-on capabilities and open items in computer-use PRD.
-- Validate perf harness against real servers, record external baseline.
 - Close internal export seams with public log facades.
 - Refactor(packages)!: replace wildcard exports with explicit subpath maps.
 - Add gate tests for purity, injected build, fingerprint, UTF-8, and locking.
@@ -60,19 +39,8 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Harness parity follow-ups from MiniMax-M3/GLM-5.3 adversarial review.
-- Raise stdio line cap, force-kill wedged backends, add hardening tests.
-- Bound app launch wait and Spotlight scan.
-- Ask permission before grounding and harden snapshot discovery.
-- Fail fast when launching a denied app by name.
-- Escape control characters in a11y tree text.
-- Scrub secure fields and expand app denylist.
-- Validate computer_action input boundaries.
-- Cua keypress/rounding, session failover, and policy test.
-- Tighten MCP transport validation and scroll docs.
-- Harden computer-use driver and transport.
 - Correct porcelain parsing in shadow-worktree precheck and orphan branch cleanup.
 - Restore test scripts and vitest to extracted packages.
-- Harden computer-use tools, providers, and browser CDP attach.
 - Key tool cache by agent policy.
 - Harden tool execution integrity.
 - Drop the fake userControlled field from security findings.

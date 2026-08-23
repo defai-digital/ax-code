@@ -13,8 +13,9 @@ for, and what it deliberately does not claim.
 The root [README](../README.md) is the shortest path to install and launch AX Code. Use this hub when you need to
 configure a workflow, understand a runtime boundary, or integrate AX Code with another system.
 
-Internal process records (PRDs, planning trees, audit working files) live under `.internal/`, not in this public
-tree — see "Documentation boundaries" below. The public pages are the ones linked here.
+Internal process records (PRDs, ADRs, specifications, roadmaps, implementation plans, competitive reviews, and audit
+working files) live under `.internal/`, not in this public tree — see "Documentation boundaries" below. The public
+pages are the ones linked here.
 
 ## Choose by task
 
@@ -89,7 +90,6 @@ tree — see "Documentation boundaries" below. The public pages are the ones lin
 - [Semantic Layer](architecture/semantic-layer.md) — graph and LSP provenance, audit, and replay boundaries.
 - [Local Engine Architecture](architecture/local-engine.md) — why AX Code uses an AX Engine sidecar.
 - [Runtime Stability](architecture/stability.md) — cancellation, crash, stream, timeout, and TUI reliability contracts.
-- [AX Work](architecture/ax-work.md) — Work is a separate product; AX Code stays code-only.
 
 ## Reference
 
@@ -100,15 +100,15 @@ tree — see "Documentation boundaries" below. The public pages are the ones lin
 
 ## Documentation boundaries
 
-`docs/` contains public guidance for behavior that exists in the current runtime. Planning material and temporary
-analysis do not belong here:
+`docs/` contains public guidance for behavior that exists in a released runtime. Planning material, release targets,
+implementation policy, and temporary analysis do not belong here:
 
-| Content                                             | Location             |
-| --------------------------------------------------- | -------------------- |
-| Architecture decisions                              | `.internal/adr/`     |
-| Product requirements                                | `.internal/prd/`     |
-| Internal plans, test/QA output, audits, and reports | `.internal/reports/` |
-| Shipped behavior and public integration guidance    | `docs/`              |
+| Content                                                              | Location                               |
+| -------------------------------------------------------------------- | -------------------------------------- |
+| Architecture decisions                                               | `.internal/adr/`                       |
+| Product requirements and technical specifications                    | `.internal/prd/` and `.internal/spec/` |
+| Roadmaps, implementation plans, release targets, reviews, and audits | `.internal/reports/`                   |
+| Released behavior and public integration guidance                    | `docs/`                                |
 
 Every public Markdown page should declare its status, scope, last-reviewed date, and owner near the top. Prefer links to
 generated contracts or implementation sources over copied route lists and other high-drift snapshots.
@@ -120,4 +120,5 @@ Before a release or a substantial documentation change:
 1. Verify commands, defaults, flags, provider IDs, and runtime labels against their implementation.
 2. Update the narrowest authoritative guide instead of repeating the same behavior in several front-door pages.
 3. Run `pnpm run test:scripts` to catch broken local links, orphaned pages, and missing page metadata.
-4. Keep proposals and historical decision records under `.internal/`, not in the public navigation.
+4. Keep proposals, project-development notes, release targets, and historical decision records under `.internal/`,
+   not in the public navigation.

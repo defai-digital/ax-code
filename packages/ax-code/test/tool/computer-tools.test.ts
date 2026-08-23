@@ -25,6 +25,7 @@ import { FakeComputerProvider } from "./computer-fixture"
 
 vi.mock("@/visual/router", () => ({
   checkVisualRouting: vi.fn(async () => ({ ok: true, model: { id: "test-model" }, providerID: "test", caps: {} })),
+  sessionModelFromMessages: vi.fn(() => undefined),
 }))
 
 // Computer.resolveBackend honors the AX_COMPUTER_COMMAND host env override;

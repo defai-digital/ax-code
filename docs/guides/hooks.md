@@ -109,7 +109,7 @@ Environment variables available to hook commands:
 - `HOOK_ARGS_STDIN=1` — the complete JSON arguments are always available on stdin; `HOOK_ARGS_JSON` is empty for payloads larger than 32 KiB
 - `HOOK_PACK` — pack name when applicable
 
-> **Security note:** hook child processes inherit the full `process.env` of the AX Code process, including any API keys and secrets present in the environment. Treat hook commands as trusted code — only enable hooks and packs you have reviewed. Scoping the environment exposed to hooks is planned hardening (ADR-057 D4).
+> **Security note:** hook child processes inherit the full `process.env` of the AX Code process, including any API keys and secrets present in the environment. Treat hook commands as trusted code, review every enabled hook and pack, and start AX Code with only the environment those commands should receive.
 
 ## Relationship to isolation
 

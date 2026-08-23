@@ -1,7 +1,7 @@
 import z from "zod"
 import { Tool } from "../tool"
 import DESCRIPTION from "./computer-snapshot.txt"
-import { checkVisualRouting } from "@/visual/router"
+import { checkVisualRouting, sessionModelFromMessages } from "@/visual/router"
 import { Computer } from "@/computer/computer"
 import { toErrorMessage } from "@/util/error-message"
 import { renderObservation, renderTargets } from "./render"
@@ -22,8 +22,8 @@ export const ComputerSnapshotTool = Tool.define("computer_snapshot", {
       message: "Provide at most one of app or windowId",
     }),
   async execute(params, ctx) {
-    // Check that the current model supports vision input
-    const routing = await checkVisualRouting({ visionInput: true })
+    // Check that the session's model supports vision input
+    const routing = await checkVisualRouting({ visionInput: true }, { model: sessionModelFromMessages(ctx.messages) })
     if (!routing.ok) {
       throw new Error(routing.diagnostic)
     }

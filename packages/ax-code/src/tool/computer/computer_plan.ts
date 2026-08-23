@@ -1,7 +1,7 @@
 import z from "zod"
 import { Tool } from "../tool"
 import DESCRIPTION from "./computer-plan.txt"
-import { checkVisualRouting } from "@/visual/router"
+import { checkVisualRouting, sessionModelFromMessages } from "@/visual/router"
 import { Computer } from "@/computer/computer"
 import type { ObserveScope } from "@ax-code/computer"
 import { renderObservation } from "./render"
@@ -26,9 +26,9 @@ export const ComputerPlanTool = Tool.define("computer_plan", {
       message: "Provide at most one of app or windowId",
     }),
   async execute(params, ctx) {
-    // Check that the current model supports vision input — candidates and the
+    // Check that the session's model supports vision input — candidates and the
     // judge run on that same session model
-    const routing = await checkVisualRouting({ visionInput: true })
+    const routing = await checkVisualRouting({ visionInput: true }, { model: sessionModelFromMessages(ctx.messages) })
     if (!routing.ok) {
       throw new Error(routing.diagnostic)
     }

@@ -150,7 +150,7 @@ AX Code then resolves the binary in this order:
 
 It first checks `--version` and falls back to the structured `doctor --json` install version used by the wrapper. AX Code owns server startup and normally launches `ax-engine serve` on `127.0.0.1:31418`; installing the formula does not require a separate Homebrew service.
 
-The built-in managed downloader is temporarily disabled because the current raw release archive does not include its matching MLX dylibs and metallib. The Homebrew formula is the supported clean-Mac installation path. A future self-contained archive can re-enable the managed **Install** action without changing provider behavior.
+The built-in managed downloader is disabled because the current raw release archive does not include its matching MLX dylibs and metallib. The Homebrew formula is the supported clean-Mac installation path.
 
 Installing the engine does not download a model. Pick and download a model afterward from the Desktop **Models** page or with `ax-code providers ax-engine prepare`. A complete compatible base snapshot already in the Hugging Face cache is accepted for direct decode; `prepare --download` uses the catalog's preferred MTP package when available.
 
@@ -167,7 +167,5 @@ To use an already-running local server instead of AX Code-owned lifecycle, confi
   }
 }
 ```
-
-For development validation of a future self-contained build, set `AX_ENGINE_INSTALL_URL`, `AX_ENGINE_INSTALL_SHA256`, and `AX_ENGINE_INSTALL_VERSION` before starting AX Code.
 
 The engine ships for Apple Silicon macOS only. On other hosts, use a hosted provider or an OpenAI-compatible provider gateway; AX Code servers are local-only.

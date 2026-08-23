@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 
 vi.mock("@/visual/router", () => ({
   checkVisualRouting: vi.fn(async () => ({ ok: true, model: { id: "test-model" } })),
+  sessionModelFromMessages: vi.fn(() => undefined),
 }))
 
 vi.mock("@/project/instance", () => ({

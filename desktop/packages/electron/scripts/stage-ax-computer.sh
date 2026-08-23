@@ -4,20 +4,35 @@
 # packages/electron/resources/ax-computer so electron-builder can bundle it as
 # an extraResource (see electron-builder.yml).
 #
-# Source: AX_COMPUTER_DIST, defaulting to the local ax-computer build output.
-# When the artifact is absent (OSS/dev builds), stages a README.txt placeholder
-# instead so the extraResources "from" path always exists and packaging never
-# fails on a missing directory.
+# Computer use is intentionally unreleased throughout v7.x. The signed server
+# may be staged only for v8+ package versions, using AX_COMPUTER_DIST or the
+# default local ax-computer build output. Ineligible versions and builds with no
+# artifact receive a README.txt placeholder so electron-builder's
+# extraResources path always exists.
 set -euo pipefail
 
 electron_dir="$(cd "$(dirname "$0")/.." && pwd)"
 src="${AX_COMPUTER_DIST:-$HOME/code/ax-computer/dist/ax-computer-0.1.0-darwin-arm64}"
 dest="$electron_dir/resources/ax-computer"
+version="$(node -p "require('$electron_dir/package.json').version")"
+major="${version%%.*}"
+
+if [[ ! "$major" =~ ^[0-9]+$ ]]; then
+  echo "[electron] invalid package version for ax-computer release policy: $version" >&2
+  exit 1
+fi
 
 rm -rf "$dest"
 mkdir -p "$dest"
 
-if [ -d "$src" ]; then
+if (( major < 8 )); then
+  cat > "$dest/README.txt" <<EOF
+The AX Computer computer-use server is intentionally not bundled in AX Code
+Desktop v$version. Computer use is unreleased throughout v7.x; v8.0.0 is the
+earliest eligible release and still requires an explicit go/no-go decision.
+EOF
+  echo "[electron] ax-computer release deferred until v8.0.0 — staged README.txt placeholder"
+elif [ -d "$src" ]; then
   cp -R "$src"/. "$dest"/
   echo "[electron] ax-computer server → resources/ax-computer (from $src)"
 else

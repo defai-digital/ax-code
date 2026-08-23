@@ -4,7 +4,7 @@ import DESCRIPTION from "./visual-snapshot.txt"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { captureSnapshot } from "@/visual/snapshot"
-import { checkVisualRouting } from "@/visual/router"
+import { checkVisualRouting, sessionModelFromMessages } from "@/visual/router"
 
 const log = Log.create({ service: "tool.visual_snapshot" })
 
@@ -39,8 +39,8 @@ export const VisualSnapshotTool = Tool.define("visual_snapshot", {
       },
     ),
   async execute(params, ctx) {
-    // Check that the current model supports vision input
-    const routing = await checkVisualRouting({ visionInput: true })
+    // Check that the session's model supports vision input
+    const routing = await checkVisualRouting({ visionInput: true }, { model: sessionModelFromMessages(ctx.messages) })
     if (!routing.ok) {
       throw new Error(routing.diagnostic)
     }

@@ -2,7 +2,7 @@
 
 | Field    | Value                                                                                                                        |
 | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Status   | Complete — all phases landed and live-validated; AX Native is the recommended primary macOS backend (Phase 2 A/B gate passed)         |
+| Status   | Implementation complete; public release deferred until v8.0.0; frozen during v7.x except for safety, correctness, and conformance fixes |
 | Owner    | AX Code CLI & Desktop maintainers                                                                                            |
 | Created  | 2026-08-22                                                                                                                   |
 | Updated  | 2026-08-22                                                                                                                   |
@@ -10,6 +10,19 @@
 | Location | `.internal/prd/PRD-2026-08-22-computer-use-integration.md`                                                                        |
 
 ---
+
+## Release decision (2026-08-22)
+
+Implementation completion is not release authorization. Computer use and the
+private `ax-computer` server must not be published, bundled, promoted in public
+documentation or release notes, or presented as a supported v7.x feature.
+v8.0.0 is the earliest eligible release, and still requires an explicit
+release-readiness decision.
+
+Until then, active product work is bug fixing, runtime reliability, and the
+selectively adopted Codex/DeepSeek harness improvements. Computer-use work is
+limited to safety, correctness, protocol/conformance maintenance, and keeping
+the dormant integration buildable.
 
 ## 1. Problem statement
 

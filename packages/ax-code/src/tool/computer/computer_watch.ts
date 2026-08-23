@@ -3,7 +3,7 @@ import { setTimeout as sleep } from "node:timers/promises"
 import z from "zod"
 import { Tool } from "../tool"
 import DESCRIPTION from "./computer-watch.txt"
-import { checkVisualRouting } from "@/visual/router"
+import { checkVisualRouting, sessionModelFromMessages } from "@/visual/router"
 import { Computer } from "@/computer/computer"
 import type { ComputerObservation, ObserveScope } from "@ax-code/computer"
 import { renderObservation } from "./render"
@@ -45,8 +45,8 @@ export const ComputerWatchTool = Tool.define("computer_watch", {
       message: "Provide at most one of app or windowId",
     }),
   async execute(params, ctx) {
-    // Check that the current model supports vision input
-    const routing = await checkVisualRouting({ visionInput: true })
+    // Check that the session's model supports vision input
+    const routing = await checkVisualRouting({ visionInput: true }, { model: sessionModelFromMessages(ctx.messages) })
     if (!routing.ok) {
       throw new Error(routing.diagnostic)
     }

@@ -1,5 +1,10 @@
 # @ax-code/computer
 
+> **Unreleased:** this private workspace package and the computer-use feature
+> are not part of any v7.x release. v8.0.0 is the earliest eligible public
+> release, subject to a separate readiness decision. The implementation is
+> retained for internal development, safety fixes, and protocol conformance.
+
 The **open client SDK and canonical protocol home** for AX computer use
 (desktop control). This package carries everything a client needs to drive a
 computer-use server; it contains **no engine** — the backend adapters, the

@@ -4,7 +4,7 @@ import DESCRIPTION from "./visual-critique.txt"
 import { VisualArtifactStore } from "@/visual/artifact"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
-import { checkVisualRouting } from "@/visual/router"
+import { checkVisualRouting, sessionModelFromMessages } from "@/visual/router"
 
 const log = Log.create({ service: "tool.visual_critique" })
 
@@ -17,9 +17,9 @@ export const VisualCritiqueTool = Tool.define("visual_critique", {
       .optional()
       .describe("Focus area to guide the critique"),
   }),
-  async execute(params) {
-    // Check that the current model supports vision input
-    const routing = await checkVisualRouting({ visionInput: true })
+  async execute(params, ctx) {
+    // Check that the session's model supports vision input
+    const routing = await checkVisualRouting({ visionInput: true }, { model: sessionModelFromMessages(ctx.messages) })
     if (!routing.ok) {
       throw new Error(routing.diagnostic)
     }
