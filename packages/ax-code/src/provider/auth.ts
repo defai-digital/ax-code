@@ -4,6 +4,7 @@ import { Auth } from "@/auth"
 import { Instance } from "@/project/instance"
 import { Plugin } from "../plugin"
 import { ProviderID } from "./schema"
+import { isRetiredProviderID } from "./retired-providers"
 import z from "zod"
 
 export namespace ProviderAuth {
@@ -102,7 +103,7 @@ export namespace ProviderAuth {
     return {
       hooks: Object.fromEntries(
         plugins
-          .filter((plugin) => plugin.auth?.provider !== undefined)
+          .filter((plugin) => plugin.auth?.provider !== undefined && !isRetiredProviderID(plugin.auth.provider))
           .map((plugin) => [ProviderID.make(plugin.auth!.provider), plugin.auth!] as const),
       ) as Record<ProviderID, Hook>,
       pending: new Map<ProviderID, AuthOAuthResult>(),

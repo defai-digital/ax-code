@@ -15,6 +15,7 @@ import { AX_ENGINE_MODEL_IDS, AX_ENGINE_QUANTIZATION_IDS } from "@/provider/ax-e
 import { Filesystem } from "@/util/filesystem"
 import { DEFAULT_SETUP_PROVIDER_IDS } from "@/provider/default-setup-providers"
 import { disableProviderPatch, enableProviderPatch } from "@/provider/enablement"
+import { isRetiredProviderID } from "@/provider/retired-providers"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -216,6 +217,7 @@ export function resolvePluginProviders(input: {
     const id = hook.auth.provider
     if (seen.has(id)) continue
     seen.add(id)
+    if (isRetiredProviderID(id)) continue
     if (Object.hasOwn(input.existingProviders, id)) continue
     if (input.disabled.has(id)) continue
     if (input.enabled && !input.enabled.has(id)) continue
@@ -441,7 +443,9 @@ export const ProvidersListCommand = cmd({
     const homedir = os.homedir()
     const displayPath = Filesystem.contains(homedir, authPath) ? Filesystem.shortenHome(authPath, homedir) : authPath
     prompts.intro(`Credentials ${UI.Style.TEXT_DIM}${displayPath}`)
-    const results = Object.entries(await Auth.all())
+    const authEntries = Object.entries(await Auth.all())
+    const results = authEntries.filter(([providerID]) => !isRetiredProviderID(providerID))
+    const retiredCredentials = authEntries.filter(([providerID]) => isRetiredProviderID(providerID))
     const database = await ModelsDev.get()
     const disabledProviders = await Instance.provide({
       directory: process.cwd(),
@@ -460,13 +464,31 @@ export const ProvidersListCommand = cmd({
 
     // Auth.all() drops entries whose keys no longer decrypt; surface them so a
     // bare "0 credentials" doesn't hide credentials that need re-entry (#392).
-    const undecryptable = (await Auth.decryptionFailures()).filter((id) => !results.some(([key]) => key === id))
+    const decryptionFailures = (await Auth.decryptionFailures()).filter(
+      (id) => !authEntries.some(([key]) => key === id),
+    )
+    const undecryptable = decryptionFailures.filter((id) => !isRetiredProviderID(id))
     for (const providerID of undecryptable) {
       const name = database[providerID]?.name || providerID
       prompts.log.warn(`${name} ${UI.Style.TEXT_DIM}(undecryptable — \`providers login ${providerID}\` to re-enter)`)
     }
 
-    prompts.outro(`${results.length} credentials`)
+    const retiredProviderIDs = [
+      ...new Set([
+        ...retiredCredentials.map(([providerID]) => providerID),
+        ...decryptionFailures.filter(isRetiredProviderID),
+      ]),
+    ]
+    for (const providerID of retiredProviderIDs) {
+      prompts.log.warn(
+        `${providerID} ${UI.Style.TEXT_DIM}(retired — ignored; \`providers logout ${providerID}\` removes the saved credential)`,
+      )
+    }
+
+    const retiredSummary = retiredProviderIDs.length
+      ? ` (${retiredProviderIDs.length} retired credential${retiredProviderIDs.length === 1 ? "" : "s"} ignored)`
+      : ""
+    prompts.outro(`${results.length} credentials${retiredSummary}`)
 
     const activeEnvVars: Array<{ provider: string; envVar: string }> = []
 
@@ -522,6 +544,15 @@ export const ProvidersLoginCommand = cmd({
     UI.empty()
     prompts.intro("Add credential")
 
+    const directProvider = args.url && !isHttpProviderUrl(args.url) ? args.url : undefined
+    const requestedProvider = args.provider ?? directProvider
+    if (requestedProvider && isRetiredProviderID(requestedProvider)) {
+      prompts.log.error(`Provider "${requestedProvider}" has been retired and is no longer supported.`)
+      prompts.log.info(`Remove any saved credential with \`ax-code providers logout ${requestedProvider}\`.`)
+      prompts.outro("Done")
+      return
+    }
+
     // Every path below ends in an interactive prompt (provider/method picker
     // or API key entry) — even with --provider/--method the key prompt still
     // needs a real TTY. With piped stdin the prompt never settles and the
@@ -535,7 +566,6 @@ export const ProvidersLoginCommand = cmd({
     }
 
     // Fast path: positional arg used as provider name (not a URL)
-    const directProvider = args.url && !isHttpProviderUrl(args.url) ? args.url : undefined
     if (directProvider) {
       const provider = directProvider
       // Guard against typos ("huggleface"): an unknown id happily stores a
@@ -719,6 +749,11 @@ export const ProvidersLoginCommand = cmd({
           })
           if (prompts.isCancel(custom)) throw new UI.CancelledError()
           provider = custom.replace(/^@ai-sdk\//, "")
+          if (isRetiredProviderID(provider)) {
+            prompts.log.error(`Provider "${provider}" has been retired and is no longer supported.`)
+            prompts.outro("Done")
+            return
+          }
 
           const customPlugin = plugins.findLast((x) => x.auth?.provider === provider)
           if (customPlugin && customPlugin.auth) {
@@ -826,11 +861,17 @@ export const ProvidersLogoutCommand = cmd({
         message: "Select provider",
         options: [
           ...credentials.map(([key, value]) => ({
-            label: (database[key]?.name || key) + UI.Style.TEXT_DIM + " (" + value.type + ")",
+            label:
+              (database[key]?.name || key) +
+              UI.Style.TEXT_DIM +
+              (isRetiredProviderID(key) ? " (retired — remove)" : " (" + value.type + ")"),
             value: key,
           })),
           ...undecryptable.map((key) => ({
-            label: (database[key]?.name || key) + UI.Style.TEXT_DIM + " (undecryptable)",
+            label:
+              (database[key]?.name || key) +
+              UI.Style.TEXT_DIM +
+              (isRetiredProviderID(key) ? " (retired — remove)" : " (undecryptable)"),
             value: key,
           })),
         ],
@@ -856,6 +897,11 @@ export const ProvidersDisableCommand = cmd({
     const { ModelsDev } = await import("../../provider/models")
     UI.empty()
     prompts.intro("Disable provider")
+    if (args.provider && isRetiredProviderID(args.provider)) {
+      prompts.log.error(`Provider "${args.provider}" has been retired and cannot be disabled.`)
+      prompts.outro("Done")
+      return
+    }
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -863,7 +909,9 @@ export const ProvidersDisableCommand = cmd({
         const disabled = new Set(config.disabled_providers ?? [])
         const credentials = Object.keys(await Auth.all())
         const configured = Object.keys(config.provider ?? {})
-        const candidates = [...new Set([...credentials, ...configured])].filter((id) => !disabled.has(id))
+        const candidates = [...new Set([...credentials, ...configured])].filter(
+          (id) => !disabled.has(id) && !isRetiredProviderID(id),
+        )
 
         let providerID = args.provider
         if (!providerID) {
@@ -917,11 +965,18 @@ export const ProvidersEnableCommand = cmd({
     const { ModelsDev } = await import("../../provider/models")
     UI.empty()
     prompts.intro("Enable provider")
+    if (args.provider && isRetiredProviderID(args.provider)) {
+      prompts.log.error(`Provider "${args.provider}" has been retired and cannot be enabled.`)
+      prompts.log.info(`Remove any saved credential with \`ax-code providers logout ${args.provider}\`.`)
+      prompts.outro("Done")
+      return
+    }
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
         const config = await Config.get()
         const disabled = config.disabled_providers ?? []
+        const supportedDisabled = disabled.filter((providerID) => !isRetiredProviderID(providerID))
 
         let providerID = args.provider
         if (!providerID) {
@@ -929,14 +984,14 @@ export const ProvidersEnableCommand = cmd({
             prompts.log.error("Provider is required in non-interactive mode. Use `ax-code providers enable <id>`.")
             return
           }
-          if (disabled.length === 0) {
+          if (supportedDisabled.length === 0) {
             prompts.log.info("No disabled providers")
             return
           }
           const database = await ModelsDev.get()
           const selected = await prompts.select({
             message: "Select provider to re-enable",
-            options: disabled.map((id) => ({
+            options: supportedDisabled.map((id) => ({
               label: database[id]?.name || id,
               value: id,
             })),

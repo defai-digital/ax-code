@@ -62,6 +62,35 @@ describe("provider routes", () => {
     expect(await del.json()).toBe(true)
   })
 
+  test("rejects retired provider auth writes while allowing stale credential removal", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const directory = encodeURIComponent(tmp.path)
+    const providerID = "qoder-cli"
+    await Auth.set(providerID, { type: "api", key: "stale-key" })
+
+    try {
+      const put = await Server.Default().request(`/auth/${providerID}?directory=${directory}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "api", key: "replacement-key" }),
+      })
+      const body = (await put.json()) as { name: string; details?: { resource?: string } }
+
+      expect(put.status).toBe(400)
+      expect(body.name).toBe("InvalidRequestError")
+      expect(body.details?.resource).toBe("providerAuth")
+      expect(await Auth.get(providerID)).toEqual({ type: "api", key: "stale-key" })
+
+      const del = await Server.Default().request(`/auth/${providerID}?directory=${directory}`, {
+        method: "DELETE",
+      })
+      expect(del.status).toBe(200)
+      expect(await Auth.get(providerID)).toBeUndefined()
+    } finally {
+      await Auth.remove(providerID).catch(() => undefined)
+    }
+  })
+
   test("shows default API and CLI providers while excluding retired providers", async () => {
     await using tmp = await tmpdir({ git: true })
     const directory = encodeURIComponent(tmp.path)
@@ -201,6 +230,13 @@ describe("provider routes", () => {
         key: "xai",
         disabled: new Set(),
         enabled: new Set(["xai"]),
+      }),
+    ).toBe(false)
+    expect(
+      shouldShowProviderInList({
+        key: "QODER-CLI",
+        disabled: new Set(),
+        enabled: new Set(["QODER-CLI"]),
       }),
     ).toBe(false)
   })

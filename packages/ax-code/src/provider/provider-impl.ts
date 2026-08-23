@@ -481,6 +481,7 @@ export namespace Provider {
     // load apikeys
     for (const [id, provider] of Object.entries(authEntries)) {
       const providerID = ProviderID.make(id)
+      if (isRetiredProviderID(providerID)) continue
       if (disabled.has(providerID)) continue
       if (provider.type === "api") {
         mergeProvider(providerID, {
@@ -495,6 +496,7 @@ export namespace Provider {
     for (const plugin of plugins) {
       if (!plugin.auth) continue
       const providerID = ProviderID.make(plugin.auth.provider)
+      if (isRetiredProviderID(providerID)) continue
       if (disabled.has(providerID)) continue
       const group = authGroups.get(plugin.auth.provider) ?? []
       group.push(plugin)
@@ -574,6 +576,7 @@ export namespace Provider {
     // load config
     for (const [id, provider] of configProviders) {
       const providerID = ProviderID.make(id)
+      if (isRetiredProviderID(providerID)) continue
       const partial: Partial<Info> = { source: "config" }
       if (provider.env) partial.env = provider.env
       if (provider.name) partial.name = provider.name

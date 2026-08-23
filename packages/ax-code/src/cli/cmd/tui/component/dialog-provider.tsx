@@ -45,6 +45,7 @@ import {
 import { providerConnectCategoryMeta } from "@/mode/provider-category"
 import { requireDedicatedPrivateGpuVendor } from "@/provider/private-gpu/presets"
 import { disableProviderPatch, enableProviderPatch } from "@/provider/enablement"
+import { isRetiredProviderID } from "@/provider/retired-providers"
 
 const OFFLINE_PROVIDER_HOSTS: Record<string, { envVar: string; defaultHost: string }> = {
   "ax-studio": { envVar: "AX_STUDIO_HOST", defaultHost: "http://localhost:18080" },
@@ -1092,7 +1093,9 @@ export function DialogProvider() {
   // Disabled providers are filtered out of provider.list server-side, so they
   // never appear in the category lists. Surface them from config here, since
   // this dialog is the only way back without hand-editing ax-code.json.
-  const disabledProviders = createMemo(() => sync.data.config?.disabled_providers ?? [])
+  const disabledProviders = createMemo(() =>
+    (sync.data.config?.disabled_providers ?? []).filter((providerID) => !isRetiredProviderID(providerID)),
+  )
 
   const typeOptions = createMemo(() => {
     // Widened from the providerDialogTypeOptions return type so the synthetic

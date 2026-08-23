@@ -34,6 +34,7 @@ import { Locale } from "@/util/locale"
 import type { McpStatus } from "@ax-code/sdk/v2"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
 import { countByWorkflow as countFindingsByWorkflow } from "@/quality/finding-counts"
+import { isRetiredProviderID } from "@/provider/retired-providers"
 import {
   hasSidebarSignal,
   renderSessionChecksSummary,
@@ -331,7 +332,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
       disabled: false,
     }))
     const disabledProviders = (sync.data.config?.disabled_providers ?? [])
-      .filter((id) => !sync.data.provider.some((provider) => provider.id === id))
+      .filter((id) => !isRetiredProviderID(id) && !sync.data.provider.some((provider) => provider.id === id))
       .map((id) => ({ id, name: id, disabled: true }))
     return [...connectedProviders, ...disabledProviders]
   })

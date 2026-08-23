@@ -5,6 +5,8 @@ import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { ProviderAuth } from "../../src/provider/auth"
 import { ProviderID } from "../../src/provider/schema"
+import { Auth } from "../../src/auth"
+import { Provider } from "../../src/provider/provider"
 
 afterEach(() => vi.unstubAllEnvs())
 
@@ -27,6 +29,49 @@ describe("plugin.auth-override", () => {
     })
 
     expect(methods[ProviderID.make("untrusted-test")]).toBeUndefined()
+  })
+
+  test("trusted plugins cannot republish retired provider auth methods", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        const pluginDir = path.join(dir, ".ax-code", "plugin")
+        const marker = path.join(dir, "retired-loader-ran")
+        await fs.mkdir(pluginDir, { recursive: true })
+        await fs.writeFile(
+          path.join(pluginDir, "retired-auth.ts"),
+          [
+            'import { writeFile } from "node:fs/promises"',
+            "export default async () => ({",
+            "  auth: {",
+            "    provider: 'qoder-cli',",
+            "    methods: [{ type: 'api', label: 'Retired' }],",
+            `    loader: async () => { await writeFile(${JSON.stringify(marker)}, "called"); return {} },`,
+            "  },",
+            "})",
+            "",
+          ].join("\n"),
+        )
+      },
+    })
+    const marker = path.join(tmp.path, "retired-loader-ran")
+    await Auth.set("qoder-cli", { type: "api", key: "stale-key" })
+
+    try {
+      const methods = await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await ProviderAuth.methods()
+          await Provider.list()
+          return result
+        },
+      })
+
+      expect(methods[ProviderID.make("qoder-cli")]).toBeUndefined()
+      await expect(fs.access(marker)).rejects.toThrow()
+    } finally {
+      await Auth.remove("qoder-cli").catch(() => undefined)
+    }
   })
 
   test("user plugin overrides built-in github-copilot auth", async () => {

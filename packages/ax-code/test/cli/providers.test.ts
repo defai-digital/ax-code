@@ -197,6 +197,61 @@ describe("providers command", () => {
     }
   })
 
+  test("providers list marks retired credentials as ignored instead of available", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const infoSpy = vi.spyOn(prompts.log, "info").mockImplementation(() => {})
+    const warnSpy = vi.spyOn(prompts.log, "warn").mockImplementation(() => {})
+
+    try {
+      await Auth.set("qoder-cli", { type: "api", key: "cli" })
+      await ProvidersListCommand.handler({} as any)
+
+      expect(infoSpy.mock.calls.some(([message]) => String(message).includes("qoder-cli"))).toBe(false)
+      expect(
+        warnSpy.mock.calls.some(([message]) => {
+          const text = String(message)
+          return text.includes("qoder-cli") && text.includes("retired") && text.includes("providers logout qoder-cli")
+        }),
+      ).toBe(true)
+      expect(outroSpy).toHaveBeenCalledWith("0 credentials (1 retired credential ignored)")
+    } finally {
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      infoSpy.mockRestore()
+      warnSpy.mockRestore()
+    }
+  })
+
+  test("providers login refuses retired provider ids case-insensitively before prompting", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
+    const infoSpy = vi.spyOn(prompts.log, "info").mockImplementation(() => {})
+    const passwordSpy = vi.spyOn(prompts, "password")
+    const confirmSpy = vi.spyOn(prompts, "confirm")
+
+    try {
+      await ProvidersLoginCommand.handler({ url: "qoder-cli" } as any)
+      await ProvidersLoginCommand.handler({ url: "QODER-CLI" } as any)
+
+      expect(errorSpy).toHaveBeenCalledWith('Provider "qoder-cli" has been retired and is no longer supported.')
+      expect(errorSpy).toHaveBeenCalledWith('Provider "QODER-CLI" has been retired and is no longer supported.')
+      expect(passwordSpy).not.toHaveBeenCalled()
+      expect(confirmSpy).not.toHaveBeenCalled()
+      expect(await Auth.get("qoder-cli")).toBeUndefined()
+      expect(await Auth.get("QODER-CLI")).toBeUndefined()
+      expect(outroSpy).toHaveBeenCalledWith("Done")
+    } finally {
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      errorSpy.mockRestore()
+      infoSpy.mockRestore()
+      passwordSpy.mockRestore()
+      confirmSpy.mockRestore()
+    }
+  })
+
   test("providers logout removes a credential whose key no longer decrypts", async () => {
     const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
     const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
@@ -346,6 +401,31 @@ describe("providers command", () => {
       await Config.updateGlobal({ disabled_providers: [] }).catch(() => undefined)
       introSpy.mockRestore()
       outroSpy.mockRestore()
+      infoSpy.mockRestore()
+    }
+  })
+
+  test("providers disable and enable refuse retired provider ids", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
+    const infoSpy = vi.spyOn(prompts.log, "info").mockImplementation(() => {})
+
+    try {
+      await Config.updateGlobal({ disabled_providers: ["qoder-cli"] })
+
+      await ProvidersDisableCommand.handler({ provider: "qoder-cli" } as any)
+      await ProvidersEnableCommand.handler({ provider: "qoder-cli" } as any)
+
+      expect(errorSpy).toHaveBeenCalledWith('Provider "qoder-cli" has been retired and cannot be disabled.')
+      expect(errorSpy).toHaveBeenCalledWith('Provider "qoder-cli" has been retired and cannot be enabled.')
+      expect((await Config.getGlobal()).disabled_providers).toEqual(["qoder-cli"])
+      expect(outroSpy).toHaveBeenCalledWith("Done")
+    } finally {
+      await Config.updateGlobal({ disabled_providers: [] }).catch(() => undefined)
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      errorSpy.mockRestore()
       infoSpy.mockRestore()
     }
   })

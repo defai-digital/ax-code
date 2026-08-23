@@ -46,6 +46,17 @@ describe("resolvePluginProviders", () => {
     expect(result).toEqual([{ id: "portkey", name: "portkey" }])
   })
 
+  test("does not let plugins resurrect retired providers", () => {
+    const result = resolvePluginProviders({
+      hooks: [hookWithAuth("qoder-cli")],
+      existingProviders: {},
+      disabled: new Set(),
+      enabled: new Set(["qoder-cli"]),
+      providerNames: { "qoder-cli": "Qoder CLI" },
+    })
+    expect(result).toEqual([])
+  })
+
   test("respects disabled_providers", () => {
     const result = resolvePluginProviders({
       hooks: [hookWithAuth("portkey")],

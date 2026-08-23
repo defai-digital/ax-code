@@ -6,5 +6,5 @@ export const RETIRED_PROVIDER_IDS = ["gemini-cli", "antigravity-cli", "qoder-cli
 const RETIRED_PROVIDER_ID_SET = new Set<string>(RETIRED_PROVIDER_IDS)
 
 export function isRetiredProviderID(providerID: string): boolean {
-  return RETIRED_PROVIDER_ID_SET.has(providerID)
+  return RETIRED_PROVIDER_ID_SET.has(providerID.toLowerCase())
 }
