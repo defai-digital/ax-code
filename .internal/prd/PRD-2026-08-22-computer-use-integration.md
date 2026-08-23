@@ -1,13 +1,13 @@
 # PRD: Computer Use Integration (OCU + Cua)
 
-| Field    | Value                                                                                                                        |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Field    | Value                                                                                                                                   |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Status   | Implementation complete; public release deferred until v8.0.0; frozen during v7.x except for safety, correctness, and conformance fixes |
-| Owner    | AX Code CLI & Desktop maintainers                                                                                            |
-| Created  | 2026-08-22                                                                                                                   |
-| Updated  | 2026-08-22                                                                                                                   |
-| Related  | `.internal/reference/open-codex-computer-use` (OCU), `.internal/reference/cua` (Cua), `.internal/reference/deepseek-harness` |
-| Location | `.internal/prd/PRD-2026-08-22-computer-use-integration.md`                                                                        |
+| Owner    | AX Code CLI & Desktop maintainers                                                                                                       |
+| Created  | 2026-08-22                                                                                                                              |
+| Updated  | 2026-08-22                                                                                                                              |
+| Related  | `.internal/reference/open-codex-computer-use` (OCU), `.internal/reference/cua` (Cua), `.internal/reference/deepseek-harness`            |
+| Location | `.internal/prd/PRD-2026-08-22-computer-use-integration.md`                                                                              |
 
 ---
 
@@ -43,54 +43,54 @@ code reviews of both reference implementations (vendored under
 > is absorbed later as the AX-native backend. Neither upstream repo is vendored
 > wholesale.**
 
-| Component             | Strategy                                   | Rationale (from code review)                                                                                                    |
-| --------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `ComputerUseProvider` | 100% AX-owned (`packages/ax-computer`)     | Insulates the agent from backend tool names, schemas, and drift                                                                 |
-| Cua (`cua-driver`)    | Pinned dependency / official SDK or MCP    | ~100k+ lines of Rust across 3 OS adapters; actively maintained upstream; ships an explicit embedding SDK (`@trycua/cua-driver`) |
+| Component             | Strategy                                                                                                                 | Rationale (from code review)                                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `ComputerUseProvider` | 100% AX-owned (`packages/ax-computer`)                                                                                   | Insulates the agent from backend tool names, schemas, and drift                                                                 |
+| Cua (`cua-driver`)    | Pinned dependency / official SDK or MCP                                                                                  | ~100k+ lines of Rust across 3 OS adapters; actively maintained upstream; ships an explicit embedding SDK (`@trycua/cua-driver`) |
 | OCU                   | Absorbed (Phase 2) — port landed; the upstream `"ocu"` backend option was then retired from user config (see note below) | Small (~27 files), closest to Codex semantics; its Linux/Windows Go runtimes are C-grade re-implementations — do not absorb     |
-| DeepSeek Harness      | Absorb 4 design patterns only, zero code   | Plugin machinery is vendored Cordis; developer preview with breaking changes; no computer-use at all                            |
+| DeepSeek Harness      | Absorb 4 design patterns only, zero code                                                                                 | Plugin machinery is vendored Cordis; developer preview with breaking changes; no computer-use at all                            |
 
 > **Post-Phase-2 cleanup (2026-08-22).** With the AX-native port landed,
-  live compat green, and the A/B gate passed, the upstream OCU backend
-  (`"ocu"` / `open-computer-use` / `AX_COMPUTER_OCU_COMMAND`) was removed
-  from the user-facing config surface (`computer.provider`,
-  `computer.overrides`, `Computer.BACKENDS`, doctor preflight, and the
-  associated tests). User-selectable backends are now exactly two:
-  `"axnative"` (macOS primary) and `"cua"` (Windows/Linux + macOS
-  fallback). The `OcuProvider` class stays in `packages/ax-computer` —
-  it is the shared MCP implementation `AXNativeProvider` subclasses and
-  the reference arm of the live A/B harness — and the OCU repo stays in
-  `.internal/reference/open-codex-computer-use` for review. Existing
-  configs that still say `"ocu"` fail zod validation with a clear enum
-  error naming the two valid values.
+> live compat green, and the A/B gate passed, the upstream OCU backend
+> (`"ocu"` / `open-computer-use` / `AX_COMPUTER_OCU_COMMAND`) was removed
+> from the user-facing config surface (`computer.provider`,
+> `computer.overrides`, `Computer.BACKENDS`, doctor preflight, and the
+> associated tests). User-selectable backends are now exactly two:
+> `"axnative"` (macOS primary) and `"cua"` (Windows/Linux + macOS
+> fallback). The `OcuProvider` class stays in `packages/ax-computer` —
+> it is the shared MCP implementation `AXNativeProvider` subclasses and
+> the reference arm of the live A/B harness — and the OCU repo stays in
+> `.internal/reference/open-codex-computer-use` for review. Existing
+> configs that still say `"ocu"` fail zod validation with a clear enum
+> error naming the two valid values.
 
 > **Provider-class refactor (2026-08-22, same day).** Two independent
-  design reviews (Codex gpt-5.6-sol, Qwen3.8-Max) both rejected merging
-  into a single `AXNativeProvider` (option B) — the merged class cannot
-  serve as the upstream reference arm once axnative gains AX-only tools,
-  and both A/B arms would report the same `provider.name`, breaking
-  evidence comparability (plus a silent self-comparison hazard via the
-  command-resolution chain). Both recommended option C, which landed:
-  the shared implementation is now `OcuProtocolProvider` (abstract,
-  `src/providers/ocu-protocol.ts`) with abstract `name` /
-  `commandEnvVar()` / `defaultCommand()`; `AXNativeProvider` extends it;
-  the upstream OCU adapter is test-only (`test/helpers/upstream-ocu.ts`,
-  `UpstreamOcuReferenceProvider`, `name = "ocu"` preserved for report
-  continuity) and is no longer exported from the package root. The
-  refactor also fixed a real defect both reviews caught: model-visible
-  error messages hardcoded "OcuProvider"/"OCU" even when the AX-native
-  backend produced them — they now interpolate `this.name`. One
-  `protected call()` hook was exposed (connection state stays private)
-  so future AX-only tools land in the subclass without touching the
-  dialect base. Two follow-ups from the same reviews landed with it:
-  (1) a protocol-contract manifest (`src/protocol-contract.ts`,
-  `OCU_DIALECT_REQUIRED_TOOLS` + `checkDialectContract`) with a live
-  test (`test/contract.live.test.ts`) that verifies both dialect
-  backends' `tools/list` inventories — upstream drift now fails at
-  preflight time instead of mid-task; (2) A/B harness provenance —
-  `runAbSuite` records each arm's resolved command and reported
-  version into `last-report.json`, so historical evidence is traceable
-  to the exact binary that produced it.
+> design reviews (Codex gpt-5.6-sol, Qwen3.8-Max) both rejected merging
+> into a single `AXNativeProvider` (option B) — the merged class cannot
+> serve as the upstream reference arm once axnative gains AX-only tools,
+> and both A/B arms would report the same `provider.name`, breaking
+> evidence comparability (plus a silent self-comparison hazard via the
+> command-resolution chain). Both recommended option C, which landed:
+> the shared implementation is now `OcuProtocolProvider` (abstract,
+> `src/providers/ocu-protocol.ts`) with abstract `name` /
+> `commandEnvVar()` / `defaultCommand()`; `AXNativeProvider` extends it;
+> the upstream OCU adapter is test-only (`test/helpers/upstream-ocu.ts`,
+> `UpstreamOcuReferenceProvider`, `name = "ocu"` preserved for report
+> continuity) and is no longer exported from the package root. The
+> refactor also fixed a real defect both reviews caught: model-visible
+> error messages hardcoded "OcuProvider"/"OCU" even when the AX-native
+> backend produced them — they now interpolate `this.name`. One
+> `protected call()` hook was exposed (connection state stays private)
+> so future AX-only tools land in the subclass without touching the
+> dialect base. Two follow-ups from the same reviews landed with it:
+> (1) a protocol-contract manifest (`src/protocol-contract.ts`,
+> `OCU_DIALECT_REQUIRED_TOOLS` + `checkDialectContract`) with a live
+> test (`test/contract.live.test.ts`) that verifies both dialect
+> backends' `tools/list` inventories — upstream drift now fails at
+> preflight time instead of mid-task; (2) A/B harness provenance —
+> `runAbSuite` records each arm's resolved command and reported
+> version into `last-report.json`, so historical evidence is traceable
+> to the exact binary that produced it.
 
 Harness patterns worth absorbing: (1) staged tool-execution pipeline
 (pre-execute waterfall → fail-closed guards → one-shot approval → execute →
@@ -180,7 +180,6 @@ directly).
   stdio only, MIT attribution preserved in `LICENSE` /
   `THIRD_PARTY_NOTICES.md` and per-file headers). All five known OCU
   defects were fixed during the port, not copied:
-
   1. Password-manager denylist case bypass — bundle-id matching is now
      lowercased on both sides (`AppDiscovery.swift` `AppSafetyPolicy`).
   2. Force-cast crashes on malformed AX replies — every `as!` on AX/CF
@@ -222,6 +221,7 @@ directly).
   fallback. The `computer.provider` default remains unset (computer
   tools stay config-gated); "primary" here is the documented
   recommendation and doctor hint ordering, not an auto-routing change.
+
 - **Phase 3 — routing & policy. Done (2026-08-22).** Manual provider
   selection (`computer.provider` config) was the first slice and shipped
   earlier (the tool wiring — `computer_snapshot` / `computer_action` /
@@ -230,7 +230,6 @@ directly).
   delegate to the `Computer` namespace in
   `packages/ax-code/src/computer/`). The remaining two Phase 3 items
   landed today:
-
   - **Per-app provider overrides.** New config knob
     `computer.overrides: { [appName]: "cua" | "ocu" }` (zod-validated,
     referenced in `packages/ax-code/src/config/schema-impl.ts`). The
@@ -433,21 +432,21 @@ act(action: ComputerAction): Promise<ActionResult>
 that via the MCP tools below; each row records whether the SDK has an
 equivalent and the gap if not:
 
-| Contract method          | MCP tool used today             | SDK equivalent                          | Gap                                                                                          |
-| ------------------------ | ------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `listApps()`             | `list_apps`                     | **none** (`listSessions` lists SDK sessions, not OS apps; pid/bundleId are not in its output) | Cannot enumerate running applications. `observe({ app })` cannot resolve a pid.               |
-| `listWindows()`          | `list_windows`                  | **none**                                | Cannot enumerate windows of an app; cannot resolve `observe({ windowId })`.                  |
-| `observe({ desktop })`   | `get_desktop_state`             | `getDesktopState`                       | Covered (desktop screenshot only — no elements/a11y, matching today's `get_desktop_state`).   |
-| `observe({ app })`       | `list_apps` + `list_windows` + `get_window_state` | partial: `getDesktopState` exists, but no list_windows / get_window_state | No per-window screenshot, no elements, no a11y tree for a specific (pid, window_id).          |
-| `observe({ windowId })`  | `list_windows` + `get_window_state` | none                                   | Same as above; no window enumeration, no window-scoped state.                                |
-| `act({ click })`         | `click` / `double_click` / `right_click` | `ClickInput`                       | Covered for primitive shape; element-token + element_index routing and `delivery_mode` escalation are MCP-tool-specific concerns. |
-| `act({ type })`          | `type_text`                     | `TypeTextInput`                         | Covered; no `delivery_mode` parameter (SDK has no background-input refusal contract today).   |
-| `act({ keypress })`      | `press_key` / `hotkey`          | `PressKeyInput` / `HotkeyInput`         | Covered.                                                                                     |
-| `act({ scroll })`        | `scroll`                        | `ScrollInput`                           | Covered.                                                                                     |
-| `act({ drag })`          | `drag`                          | `DragInput`                             | Covered.                                                                                     |
-| `act({ set_value })`     | `set_value`                     | **none**                                | No element-value setter; the SDK has no `set_value` primitive at all.                        |
-| `act({ activate_window })`| `bring_to_front`                | **none** (`setWindowFrame` moves/resizes but does not raise) | Cannot bring a window to front without raising it programmatically.                          |
-| `act({ launch_app })`    | `launch_app`                    | **none** (`invokeMenu` activates a menu item, not an application) | Cannot launch an app from the SDK surface.                                                  |
+| Contract method            | MCP tool used today                               | SDK equivalent                                                                                | Gap                                                                                                                               |
+| -------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `listApps()`               | `list_apps`                                       | **none** (`listSessions` lists SDK sessions, not OS apps; pid/bundleId are not in its output) | Cannot enumerate running applications. `observe({ app })` cannot resolve a pid.                                                   |
+| `listWindows()`            | `list_windows`                                    | **none**                                                                                      | Cannot enumerate windows of an app; cannot resolve `observe({ windowId })`.                                                       |
+| `observe({ desktop })`     | `get_desktop_state`                               | `getDesktopState`                                                                             | Covered (desktop screenshot only — no elements/a11y, matching today's `get_desktop_state`).                                       |
+| `observe({ app })`         | `list_apps` + `list_windows` + `get_window_state` | partial: `getDesktopState` exists, but no list_windows / get_window_state                     | No per-window screenshot, no elements, no a11y tree for a specific (pid, window_id).                                              |
+| `observe({ windowId })`    | `list_windows` + `get_window_state`               | none                                                                                          | Same as above; no window enumeration, no window-scoped state.                                                                     |
+| `act({ click })`           | `click` / `double_click` / `right_click`          | `ClickInput`                                                                                  | Covered for primitive shape; element-token + element_index routing and `delivery_mode` escalation are MCP-tool-specific concerns. |
+| `act({ type })`            | `type_text`                                       | `TypeTextInput`                                                                               | Covered; no `delivery_mode` parameter (SDK has no background-input refusal contract today).                                       |
+| `act({ keypress })`        | `press_key` / `hotkey`                            | `PressKeyInput` / `HotkeyInput`                                                               | Covered.                                                                                                                          |
+| `act({ scroll })`          | `scroll`                                          | `ScrollInput`                                                                                 | Covered.                                                                                                                          |
+| `act({ drag })`            | `drag`                                            | `DragInput`                                                                                   | Covered.                                                                                                                          |
+| `act({ set_value })`       | `set_value`                                       | **none**                                                                                      | No element-value setter; the SDK has no `set_value` primitive at all.                                                             |
+| `act({ activate_window })` | `bring_to_front`                                  | **none** (`setWindowFrame` moves/resizes but does not raise)                                  | Cannot bring a window to front without raising it programmatically.                                                               |
+| `act({ launch_app })`      | `launch_app`                                      | **none** (`invokeMenu` activates a menu item, not an application)                             | Cannot launch an app from the SDK surface.                                                                                        |
 
 Six hard gaps: `listApps`, `listWindows`, `get_window_state`,
 `set_value`, `bring_to_front` (activate_window), and `launch_app`. The
@@ -645,7 +644,7 @@ because arguments and results traverse the identical registry.
 After Phase 3, a review against Codex computer-use and the Agent S3
 architecture (observe → reason → ground → act → reflect → recover)
 identified capability gaps in the shipped tooling. These are now closed
-with AX-owned implementations that absorb Agent S3's *concepts* only —
+with AX-owned implementations that absorb Agent S3's _concepts_ only —
 no Agent S3 code, and specifically not its model-generated-Python
 `exec()` action model; every action still flows through structured
 `ComputerAction` → permission → provider. All items are committed and
@@ -666,7 +665,7 @@ pushed (`97d6b2c0d` … `62df4c2f9`).
 - **Plan-level Best-of-N with behavior judge** (`computer_plan` tool,
   `packages/ax-code/src/tool/computer/computer_plan.ts` + `plan.ts`,
   commit `09232c9b9`). Inspired by Agent S3's Behavior Best-of-N but
-  applied at *plan* level instead of running N real GUI trajectories:
+  applied at _plan_ level instead of running N real GUI trajectories:
   the tool asks the model for N candidate next-step plans against the
   current observation, then a judge pass selects the best one; only the
   winning plan is executed (once) via normal `computer_action`. Cheap
