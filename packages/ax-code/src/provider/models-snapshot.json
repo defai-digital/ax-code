@@ -165044,6 +165044,32 @@
           "output": 128000
         }
       },
+      "tencent/hy-mt2-7b": {
+        "id": "tencent/hy-mt2-7b",
+        "name": "Tencent: Hy-MT2-7B",
+        "description": "Hy-MT2-7B is a 7B-parameter translation model from Tencent. It supports 33 language pairs and five Chinese dialect and minority-language pairs, with workflows for structured, delimiter-based, contextual, glossary-based, and style-guided translation.",
+        "family": "Hy",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-19",
+        "last_updated": "2026-08-19",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 4096
+        }
+      },
       "~anthropic/claude-haiku-latest": {
         "id": "~anthropic/claude-haiku-latest",
         "name": "Anthropic Claude Haiku Latest",
@@ -171915,8 +171941,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "output": 8192
+          "context": 40960,
+          "output": 16384
         }
       },
       "qwen/qwen3.5-397b-a17b": {
@@ -172930,7 +172956,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 65536
+          "output": 262144
         }
       },
       "qwen/qwen3-coder-plus": {
@@ -174150,8 +174176,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 1048576,
-          "output": 1048576
+          "context": 262144,
+          "output": 262144
         }
       },
       "inclusionai/ring-2.6-1t": {
