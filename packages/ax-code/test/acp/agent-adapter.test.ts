@@ -52,8 +52,8 @@ describe("ACP agent adapter", () => {
     const model = await defaultModel(
       configWithProviders([
         {
-          id: "qoder-cli",
-          models: { "qwen3.8-max": { id: "qwen3.8-max", providerID: "qoder-cli" } },
+          id: "alibaba-token-plan",
+          models: { "qwen3.8-max": { id: "qwen3.8-max", providerID: "alibaba-token-plan" } },
         },
         {
           id: "openai",
@@ -62,7 +62,7 @@ describe("ACP agent adapter", () => {
       ]),
     )
 
-    expect(model).toEqual({ providerID: "qoder-cli", modelID: "qwen3.8-max" })
+    expect(model).toEqual({ providerID: "alibaba-token-plan", modelID: "qwen3.8-max" })
   })
 
   test("fails clearly instead of inventing a stale fallback when no provider is connected", async () => {

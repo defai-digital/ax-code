@@ -80,7 +80,6 @@ export const CLI_BINARIES: Record<string, string> = {
   "claude-code": "claude",
   "codex-cli": "codex",
   "grok-build-cli": "grok",
-  "qoder-cli": "qodercli",
   "kimi-cli": "kimi",
 }
 

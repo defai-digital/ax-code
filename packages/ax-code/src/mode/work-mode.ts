@@ -1,5 +1,5 @@
 /**
- * Work mode: Agent (default) | Council | Arena — Qoder-style send routing.
+ * Work mode: Agent (default) | Council | Arena — multi-model send routing.
  * Pure helpers shared by TUI (and mirrored on Desktop).
  */
 

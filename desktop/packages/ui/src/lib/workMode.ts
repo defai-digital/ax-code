@@ -1,5 +1,5 @@
 /**
- * Work mode: Agent (default) | Council | Arena — Qoder-style send routing.
+ * Work mode: Agent (default) | Council | Arena — multi-model send routing.
  *
  * Re-exports from core `ax-code/mode/work-mode` with desktop-friendly flat names.
  * Desktop-specific helpers (resolveWorkModeSend, workModeFallbackPrompt) live here.

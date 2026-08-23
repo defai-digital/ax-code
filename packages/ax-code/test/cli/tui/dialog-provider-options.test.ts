@@ -144,9 +144,9 @@ describe("provider dialog options", () => {
     expect(CLI_BINARIES["grok-build-cli"]).toBe("grok")
   })
 
-  test("includes Qoder CLI as a CLI provider", () => {
-    expect(CLI_PROVIDERS.has("qoder-cli")).toBe(true)
-    expect(CLI_BINARIES["qoder-cli"]).toBe("qodercli")
+  test("excludes retired CLI providers", () => {
+    expect(CLI_PROVIDERS.has("qoder-cli")).toBe(false)
+    expect(CLI_BINARIES["qoder-cli"]).toBeUndefined()
   })
 
   test("includes Kimi Code CLI as a CLI provider", () => {
@@ -170,7 +170,7 @@ describe("provider dialog options", () => {
   test("separates API, CLI, local, and private GPU provider categories", () => {
     expect(providerDialogCategory("groq")).toBe("API plan")
     expect(providerDialogCategory("grok-build-cli")).toBe("CLI plan")
-    expect(providerDialogCategory("qoder-cli")).toBe("CLI plan")
+    expect(providerDialogCategory("qoder-cli")).not.toBe("CLI plan")
     expect(providerDialogCategory("kimi-cli")).toBe("CLI plan")
     expect(providerDialogCategory("ollama")).toBe("Local runtime")
     expect(providerDialogCategory("alibaba-pai")).toBe("Private GPU cloud")
@@ -233,7 +233,7 @@ describe("provider dialog options", () => {
   test("requires normal tool-call capability for local runtime models", () => {
     expect(providerModelSelectable({ providerID: "ax-engine", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "grok-build-cli", toolcall: false })).toBe(true)
-    expect(providerModelSelectable({ providerID: "qoder-cli", toolcall: false })).toBe(true)
+    expect(providerModelSelectable({ providerID: "qoder-cli", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "kimi-cli", toolcall: false })).toBe(true)
     // Retired CLI providers no longer get the non-toolcall exemption.
     expect(providerModelSelectable({ providerID: "antigravity-cli", toolcall: false })).toBe(false)

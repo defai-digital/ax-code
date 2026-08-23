@@ -41,6 +41,7 @@ import { resolvePromptIsolationPolicy } from "./prompt-runtime-policy"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { attachThinkTagStream } from "@/provider/think-tags"
 import { isKnownCliProviderID } from "@/provider/cli/ids"
+import { isRetiredProviderID } from "@/provider/retired-providers"
 
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 import { RequestProvenance } from "./request-provenance"
@@ -682,14 +683,14 @@ export namespace LLM {
   // slot occupied briefly while an automatic replay receives 429s. Keep a
   // watchdog, but give local inference enough time to produce its first chunk.
   const AX_ENGINE_STREAM_IDLE_TIMEOUT_MS = 900_000
-  // CLI providers (qoder-cli, claude-code, …) often start long-running local
+  // CLI providers (claude-code, codex-cli, …) often start long-running local
   // commands (dev servers) and go quiet on the model stream while the child
   // is still healthy. Use a longer default idle window so live-runs are not
   // aborted as "stalled" mid-server-start (#382). Env override still wins.
   const CLI_STREAM_IDLE_TIMEOUT_MS = 900_000
 
   export function isCliProviderID(providerID: string | undefined): boolean {
-    if (!providerID) return false
+    if (!providerID || isRetiredProviderID(providerID)) return false
     return providerID.endsWith("-cli") || isKnownCliProviderID(providerID)
   }
 

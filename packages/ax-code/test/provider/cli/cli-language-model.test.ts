@@ -1,12 +1,7 @@
 import { test, expect, describe, vi } from "vitest"
-import {
-  buildCliCommand,
-  cliEnv,
-  CliLanguageModel,
-  extractJsonPayload,
-} from "../../../src/provider/cli/cli-language-model"
+import { buildCliCommand, CliLanguageModel, extractJsonPayload } from "../../../src/provider/cli/cli-language-model"
 import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
-import { claudeCodeParser, grokBuildCliParser, qoderCliParser } from "../../../src/provider/cli/parser"
+import { claudeCodeParser, grokBuildCliParser } from "../../../src/provider/cli/parser"
 import { usageSource } from "../../../src/provider/usage"
 import { Process } from "../../../src/util/process"
 import { Shell } from "../../../src/shell/shell"
@@ -882,7 +877,7 @@ describe("CliLanguageModel", () => {
         // it as an unknown flag ("bad option: --model") and exits before writing.
         "--",
       ],
-      parser: qoderCliParser,
+      parser: grokBuildCliParser,
       promptMode: "stdin",
     })
 
@@ -1072,34 +1067,6 @@ describe("CliLanguageModel", () => {
     }
   })
 
-  test("adds Qoder's automatic permission mode in autonomous mode", () => {
-    process.env.AX_CODE_AUTONOMOUS = "true"
-    try {
-      const cmd = buildCliCommand(
-        {
-          providerID: "qoder-cli",
-          modelID: "qoder-cli",
-          binary: "qodercli",
-          args: ["--output-format", "stream-json"],
-          parser: claudeCodeParser,
-          promptMode: "arg",
-          promptFlag: "-p",
-        },
-        "write file",
-      )
-      expect(cmd).toContain("--permission-mode")
-      expect(cmd).toContain("auto")
-    } finally {
-      restoreAutonomous()
-    }
-  })
-
-  test("runs Qoder commands through a non-login POSIX shell", () => {
-    const env = cliEnv([], "qoder-cli")
-    if (process.platform === "win32") expect(env.SHELL).not.toBe("/bin/sh")
-    else expect(env.SHELL).toBe("/bin/sh")
-  })
-
   test("passes Claude Code prompt as a positional argument", () => {
     const definition = CLI_PROVIDER_DEFINITIONS["claude-code"]
     expect(definition).toBeDefined()
@@ -1118,6 +1085,10 @@ describe("CliLanguageModel", () => {
 
     expect(cmd).not.toContain("-p")
     expect(cmd.at(-1)).toBe("write file")
+  })
+
+  test("does not define the retired qoder-cli bridge", () => {
+    expect(CLI_PROVIDER_DEFINITIONS["qoder-cli"]).toBeUndefined()
   })
 
   test("adds autonomous-only flags by default", () => {
@@ -1163,11 +1134,11 @@ describe("CliLanguageModel", () => {
   test("omits --model when using a CLI provider default model", () => {
     const cmd = buildCliCommand(
       {
-        providerID: "qoder-cli",
-        modelID: "qoder-cli",
-        binary: "qodercli",
-        args: ["--output-format", "stream-json"],
-        parser: claudeCodeParser,
+        providerID: "grok-build-cli",
+        modelID: "grok-build-cli",
+        binary: "grok",
+        args: [],
+        parser: grokBuildCliParser,
         promptMode: "arg",
         promptFlag: "-p",
       },

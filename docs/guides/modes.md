@@ -20,7 +20,7 @@ When behavior changes, verify against:
 
 ## Work mode selector (Agent | Council | Arena)
 
-TUI and Desktop expose a **work mode** control (Qoder-style). Default is **Agent**.
+TUI and Desktop expose a **work mode** control for multi-model routing. Default is **Agent**.
 
 | UI selection        | Free-text send becomes                          |
 | ------------------- | ----------------------------------------------- |

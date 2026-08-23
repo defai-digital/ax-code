@@ -138,7 +138,7 @@ export function routeMessage(params: {
         .then(() => {})
     }
 
-    // Work mode (Agent | Council | Arena) — Qoder-style send routing.
+    // Work mode (Agent | Council | Arena) — multi-model send routing.
     // Explicit slash commands stay unchanged; free-text is remapped when mode ≠ agent.
     // Note: shell mode returns above, so this path is never shell.
     // Prefer explicit directory, else current project directory so mode selection sticks.

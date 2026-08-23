@@ -326,7 +326,6 @@ const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
   "claude-code": "Claude Code default",
   "codex-cli": "Codex CLI default",
   "grok-build-cli": "Grok Build CLI default",
-  "qoder-cli": "Qoder CLI default",
   "kimi-cli": "Kimi Code CLI default",
 }
 
@@ -696,7 +695,6 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
 const claudeCode = getCliProviderDefinition("claude-code")!
 const codexCli = getCliProviderDefinition("codex-cli")!
 const grokBuildCli = getCliProviderDefinition("grok-build-cli")!
-const qoderCli = getCliProviderDefinition("qoder-cli")!
 const kimiCli = getCliProviderDefinition("kimi-cli")!
 
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
@@ -754,14 +752,6 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     parser: grokBuildCli.parser,
     promptMode: grokBuildCli.promptMode,
     promptFlag: grokBuildCli.promptFlag,
-  }),
-  "qoder-cli": cliLoader({
-    providerID: "qoder-cli",
-    binary: qoderCli.binary,
-    args: qoderCli.args,
-    parser: qoderCli.parser,
-    promptMode: qoderCli.promptMode,
-    promptFlag: qoderCli.promptFlag,
   }),
   "kimi-cli": cliLoader({
     providerID: "kimi-cli",

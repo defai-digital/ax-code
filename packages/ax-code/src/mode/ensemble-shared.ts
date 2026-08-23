@@ -35,8 +35,6 @@ const PROVIDER_ALIASES: Record<string, string[]> = {
   kimi: ["kimi-cli"],
   "kimi-code": ["kimi-cli"],
   "kimi-code-cli": ["kimi-cli"],
-  qoder: ["qoder-cli"],
-  qodercli: ["qoder-cli"],
 }
 
 function normalizeProviderName(value: string): string {

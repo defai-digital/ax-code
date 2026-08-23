@@ -2440,7 +2440,6 @@ test("provider.sort does not prioritize removed model families", () => {
 test.each([
   ["grok-build-cli", "grok-4.5"],
   ["kimi-cli", "kimi-code/k3"],
-  ["qoder-cli", "glm-5"],
 ])("provider.sort prefers the resolved %s model over its generic CLI fallback", (providerID, resolvedModelID) => {
   const models = [
     { id: providerID, providerID, name: "CLI fallback" },

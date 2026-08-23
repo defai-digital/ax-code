@@ -102,15 +102,6 @@ describe("CLI provider loaders", () => {
     })
   })
 
-  test("qoder-cli configured provider does not discover runnable variants when binary missing", async () => {
-    await expectMissingCliProvider({
-      providerID: "qoder-cli",
-      binary: "qodercli",
-      baseModelID: "qoder-cli",
-      discoveredModelIDs: [],
-    })
-  })
-
   test("kimi-cli configured provider does not discover runnable variants when binary missing", async () => {
     await expectMissingCliProvider({
       providerID: "kimi-cli",
@@ -122,6 +113,28 @@ describe("CLI provider loaders", () => {
 })
 
 describe("online provider loaders", () => {
+  test("retired qoder-cli provider is not loaded from project config", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeFile(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            provider: { "qoder-cli": {} },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(providers[ProviderID.make("qoder-cli")]).toBeUndefined()
+      },
+    })
+  })
+
   test("retired xai provider is not loaded from an API key", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

@@ -62,7 +62,7 @@ describe("provider routes", () => {
     expect(await del.json()).toBe(true)
   })
 
-  test("shows default API and CLI providers while excluding the retired xai provider", async () => {
+  test("shows default API and CLI providers while excluding retired providers", async () => {
     await using tmp = await tmpdir({ git: true })
     const directory = encodeURIComponent(tmp.path)
 
@@ -97,7 +97,7 @@ describe("provider routes", () => {
     expect(ids).toContain("tencent-ti")
     expect(ids).toContain("sagemaker")
     expect(ids).toContain("grok-build-cli")
-    expect(ids).toContain("qoder-cli")
+    expect(ids).not.toContain("qoder-cli")
     expect(ids).not.toContain("gemini-cli")
     expect(ids).not.toContain("antigravity-cli")
     expect(ids).toContain("kimi-cli")

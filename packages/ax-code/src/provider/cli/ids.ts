@@ -1,4 +1,4 @@
-export const CLI_PROVIDER_IDS = ["claude-code", "codex-cli", "grok-build-cli", "qoder-cli", "kimi-cli"] as const
+export const CLI_PROVIDER_IDS = ["claude-code", "codex-cli", "grok-build-cli", "kimi-cli"] as const
 
 export type CliProviderID = (typeof CLI_PROVIDER_IDS)[number]
 

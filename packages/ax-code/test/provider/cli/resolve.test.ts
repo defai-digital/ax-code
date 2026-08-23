@@ -188,35 +188,8 @@ describe("resolveCliModel", () => {
     expect(info.source).toBe("default")
   })
 
-  test("returns default for qoder-cli when no config", async () => {
-    const info = await resolveCliModel("qoder-cli")
-    if (info.source === "default") {
-      expect(info.model).toBe("qoder-cli")
-    }
-  })
-
-  test("qoder-cli reads settings from isolated test home", async () => {
-    await using tmp = await tmpdir()
-    const originalHome = process.env.AX_CODE_TEST_HOME
-    const originalModel = process.env.QODER_MODEL
-    process.env.AX_CODE_TEST_HOME = tmp.path
-    delete process.env.QODER_MODEL
-    try {
-      const settingsDir = path.join(tmp.path, ".qoder")
-      await fs.mkdir(settingsDir, { recursive: true })
-      await fs.writeFile(path.join(settingsDir, "settings.json"), JSON.stringify({ model: "qwen3-coder-next" }))
-
-      const info = await resolveCliModel("qoder-cli")
-      expect(info).toEqual({
-        model: "qwen3-coder-next",
-        source: "~/.qoder/settings.json",
-      })
-    } finally {
-      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
-      else delete process.env.AX_CODE_TEST_HOME
-      if (originalModel !== undefined) process.env.QODER_MODEL = originalModel
-      else delete process.env.QODER_MODEL
-    }
+  test("does not resolve retired qoder-cli settings", async () => {
+    expect(await resolveCliModel("qoder-cli")).toEqual({ model: "unknown", source: "none" })
   })
 
   async function withKimiEnv(

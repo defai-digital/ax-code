@@ -188571,39 +188571,6 @@
       }
     }
   },
-  "qoder-cli": {
-    "id": "qoder-cli",
-    "name": "Qoder CLI",
-    "env": [],
-    "npm": "cli",
-    "models": {
-      "qoder-cli": {
-        "id": "qoder-cli",
-        "name": "Qoder CLI",
-        "family": "qoder",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": false,
-        "release_date": "2026-06-01",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 200000,
-          "output": 16384
-        },
-        "options": {},
-        "status": "active"
-      }
-    }
-  },
   "kimi-cli": {
     "id": "kimi-cli",
     "name": "Kimi Code CLI",

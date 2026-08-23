@@ -13,7 +13,6 @@ const DEFAULTS: Record<string, string> = {
   "claude-code": "claude-code",
   "codex-cli": "codex-cli",
   "grok-build-cli": "grok-build-cli",
-  "qoder-cli": "qoder-cli",
   "kimi-cli": "kimi-cli",
 }
 
@@ -106,16 +105,6 @@ async function resolveCodexModel(): Promise<CliModelInfo> {
   return { model: DEFAULTS["codex-cli"]!, source: "default" }
 }
 
-async function resolveQoderModel(): Promise<CliModelInfo> {
-  return resolveModelFromJsonSettings({
-    envVar: "QODER_MODEL",
-    settingsPath: ".qoder/settings.json",
-    sourceLabel: "~/.qoder/settings.json",
-    defaultModel: DEFAULTS["qoder-cli"]!,
-    read: resolveModelFromObject,
-  })
-}
-
 function resolveTomlDefaultModel(toml: string): string | undefined {
   // Allow optional indentation / single- or double-quoted TOML strings.
   const match = toml.match(/^\s*default_model\s*=\s*(?:"([^"]+)"|'([^']+)')/m)
@@ -162,7 +151,6 @@ const RESOLVERS: Record<string, () => Promise<CliModelInfo>> = {
   "claude-code": resolveClaudeModel,
   "codex-cli": resolveCodexModel,
   "grok-build-cli": async () => ({ model: DEFAULTS["grok-build-cli"]!, source: "default" }),
-  "qoder-cli": resolveQoderModel,
   "kimi-cli": resolveKimiModel,
 }
 

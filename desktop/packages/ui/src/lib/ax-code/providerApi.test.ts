@@ -94,7 +94,7 @@ describe("isCliProvider", () => {
     expect(isCliProvider("claude-code")).toBe(true)
     expect(isCliProvider("codex-cli")).toBe(true)
     expect(isCliProvider("grok-build-cli")).toBe(true)
-    expect(isCliProvider("qoder-cli")).toBe(true)
+    expect(isCliProvider("qoder-cli")).toBe(false)
     expect(isCliProvider("kimi-cli")).toBe(true)
     expect(isCliProvider("gemini-cli")).toBe(false)
     expect(isCliProvider("antigravity-cli")).toBe(false)

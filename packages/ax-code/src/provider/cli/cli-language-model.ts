@@ -73,9 +73,6 @@ export function cliEnv(providerEnvKeys: readonly string[] = [], providerID?: str
     TERM: "dumb",
     NO_COLOR: "1",
   }
-  // Qoder runs its command tool through $SHELL. A login Bash shell can load
-  // unrelated user profile scripts or fail before the requested command runs.
-  if (providerID === "qoder-cli" && process.platform !== "win32") env.SHELL = "/bin/sh"
   // Provider metadata may name additional non-secret runtime variables, but
   // it must not punch through the sanitizer. In particular, project config
   // can override provider metadata and must not be able to request arbitrary
@@ -187,7 +184,6 @@ export function extractJsonPayload(text: string): string {
 function autonomousCliArgs(providerID: string): string[] {
   if (!ScopedFlag.autonomous()) return []
   if (providerID === "claude-code") return ["--dangerously-skip-permissions"]
-  if (providerID === "qoder-cli") return ["--permission-mode", "auto"]
   // Kimi -p/--prompt mode already auto-approves tools; other providers need no override here.
   return []
 }

@@ -6,7 +6,6 @@ import {
   grokBuildCliParser,
   kimiCliParser,
   parseCliJsonEventLine,
-  qoderCliParser,
 } from "../../../src/provider/cli/parser"
 
 describe("claudeCodeParser", () => {
@@ -71,8 +70,7 @@ describe("provider CLI parser nested content", () => {
 })
 
 describe("provider CLI raw stream text", () => {
-  test("qoder, grok, and kimi parsers preserve whitespace in non-JSON stream lines", () => {
-    expect(qoderCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
+  test("grok and kimi parsers preserve whitespace in non-JSON stream lines", () => {
     expect(grokBuildCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
     expect(kimiCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
   })
@@ -80,7 +78,6 @@ describe("provider CLI raw stream text", () => {
   test("raw complete fallback preserves model whitespace", () => {
     expect(claudeCodeParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(codexCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
-    expect(qoderCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(grokBuildCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(kimiCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
   })

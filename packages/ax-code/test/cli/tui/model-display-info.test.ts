@@ -3,7 +3,7 @@ import { modelDisplayInfo, supportsWebSearch } from "../../../src/cli/cmd/tui/co
 
 describe("modelDisplayInfo", () => {
   test("adds web search marker for CLI providers with built-in web search", () => {
-    for (const providerID of ["claude-code", "codex-cli", "grok-build-cli", "qoder-cli", "kimi-cli"]) {
+    for (const providerID of ["claude-code", "codex-cli", "grok-build-cli", "kimi-cli"]) {
       const display = modelDisplayInfo(providerID, {
         providerID,
         name: providerID,
@@ -16,7 +16,7 @@ describe("modelDisplayInfo", () => {
   })
 
   test("shows vision marker for CLI providers with image input", () => {
-    for (const providerID of ["claude-code", "codex-cli", "grok-build-cli", "qoder-cli"]) {
+    for (const providerID of ["claude-code", "codex-cli", "grok-build-cli"]) {
       const display = modelDisplayInfo(providerID, {
         providerID,
         name: `${providerID} default`,
@@ -26,6 +26,10 @@ describe("modelDisplayInfo", () => {
       expect(display.label).toContain("👀")
       expect(display.vision).toBe(true)
     }
+  })
+
+  test("does not advertise web search for retired CLI providers", () => {
+    expect(supportsWebSearch({ providerID: "qoder-cli" })).toBe(false)
   })
 
   test("does not duplicate markers already present in the model name", () => {

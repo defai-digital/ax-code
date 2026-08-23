@@ -4,7 +4,6 @@ export const LOCAL_PROVIDER_IDS = [
   "claude-code",
   "codex-cli",
   "grok-build-cli",
-  "qoder-cli",
   "kimi-cli",
   "ollama",
   "ax-studio",

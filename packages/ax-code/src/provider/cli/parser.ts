@@ -153,37 +153,6 @@ export const codexCliParser: CliOutputParser = {
   },
 }
 
-export const qoderCliParser: CliOutputParser = {
-  parseComplete(output: string) {
-    const lines = output.split("\n")
-    const parts: string[] = []
-    for (const line of lines) {
-      const event = parseCliJsonEventLine(line)
-      if (!event) continue
-      if (event.type === "result") {
-        if (typeof event.text === "string") return { text: event.text }
-        if (typeof event.content === "string") return { text: event.content }
-        if (typeof event.result === "string") return { text: event.result }
-      }
-      if (typeof event.content === "string") parts.push(event.content)
-      if (typeof event.text === "string") parts.push(event.text)
-    }
-    return { text: parts.join("\n") || rawCompleteText(output) }
-  },
-  parseStreamLine(line: string) {
-    const event = parseCliJsonEventLine(line)
-    if (!event) return rawTextLine(line)
-    if (event.type === "result") {
-      if (typeof event.content === "string") return event.content
-      if (typeof event.text === "string") return event.text
-      if (typeof event.result === "string") return event.result
-    }
-    if (typeof event.content === "string") return event.content
-    if (typeof event.text === "string") return event.text
-    return null
-  },
-}
-
 export const grokBuildCliParser: CliOutputParser = {
   parseComplete(output: string) {
     const lines = output.split("\n")

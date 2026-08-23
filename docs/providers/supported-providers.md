@@ -109,7 +109,6 @@ CLI providers reuse a local vendor CLI and its login/session instead of storing 
 | `claude-code`    | Anthropic (Claude Code) | `claude`               | `claude-code`      |
 | `codex-cli`      | OpenAI (Codex CLI)      | `codex`                | `codex-cli`        |
 | `grok-build-cli` | Grok Build CLI          | `grok`                 | `grok-build-cli`   |
-| `qoder-cli`      | Qoder CLI               | `qodercli`             | `qoder-cli`        |
 | `kimi-cli`       | Kimi Code CLI           | `kimi`                 | `kimi-cli`         |
 
 Run the vendor CLI login first when required, then run `ax-code providers login <provider-id>`. AX Code probes the CLI command and stores a local marker credential after the probe succeeds.
