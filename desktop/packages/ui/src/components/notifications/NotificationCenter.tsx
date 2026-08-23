@@ -173,9 +173,7 @@ export const NotificationCenter: React.FC = React.memo(function NotificationCent
         <ScrollableOverlay outerClassName="max-h-96 min-h-[120px]">
           <div className="flex flex-col gap-0.5 p-2">
             {hasNotifications ? (
-              notifications.map((item) => (
-                <NotificationEntry key={item.id} item={item} onRemove={removeNotification} />
-              ))
+              notifications.map((item) => <NotificationEntry key={item.id} item={item} onRemove={removeNotification} />)
             ) : (
               <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
                 <Icon name="checkbox-circle" className="h-8 w-8 text-muted-foreground" />

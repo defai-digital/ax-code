@@ -53,14 +53,21 @@ export function generateBranchName(type: "issue" | "pr" | "schedule" | "dispatch
   return `ax-code/${type}${issueId}-${timestamp}`
 }
 
-export async function checkoutNewBranch(gitRun: GitRunner, type: "issue" | "schedule" | "dispatch", issueId: number | undefined) {
+export async function checkoutNewBranch(
+  gitRun: GitRunner,
+  type: "issue" | "schedule" | "dispatch",
+  issueId: number | undefined,
+) {
   console.log("Checking out new branch...")
   const branch = generateBranchName(type, issueId)
   await gitRun(["checkout", "-b", branch])
   return branch
 }
 
-export async function checkoutLocalBranch(gitRun: GitRunner, pr: { headRefName: string; commits: { totalCount: number } }) {
+export async function checkoutLocalBranch(
+  gitRun: GitRunner,
+  pr: { headRefName: string; commits: { totalCount: number } },
+) {
   console.log("Checking out local branch...")
   const branch = pr.headRefName
   const depth = Math.max(pr.commits.totalCount, 20)
@@ -161,7 +168,11 @@ export async function configureGit(
   gitStatus: (args: string[]) => Promise<GitResult>,
   appToken: string,
   isMock: boolean,
-): Promise<{ savedUserName: string | undefined; savedUserEmail: string | undefined; savedGitConfig: string | undefined }> {
+): Promise<{
+  savedUserName: string | undefined
+  savedUserEmail: string | undefined
+  savedGitConfig: string | undefined
+}> {
   if (isMock) return { savedUserName: undefined, savedUserEmail: undefined, savedGitConfig: undefined }
 
   console.log("Configuring git...")

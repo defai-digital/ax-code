@@ -336,7 +336,9 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({ group, class
           )
         ) : (
           <div className="h-full flex items-center justify-center">
-            <p className="typography-markdown text-muted-foreground">{t("agentManager.detail.state.noSessionsInGroup")}</p>
+            <p className="typography-markdown text-muted-foreground">
+              {t("agentManager.detail.state.noSessionsInGroup")}
+            </p>
           </div>
         )}
       </div>

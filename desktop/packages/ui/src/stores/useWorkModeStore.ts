@@ -1,10 +1,6 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
-import {
-  DEFAULT_WORK_MODE,
-  parseWorkMode,
-  type WorkModeId,
-} from "@/lib/workMode"
+import { DEFAULT_WORK_MODE, parseWorkMode, type WorkModeId } from "@/lib/workMode"
 import { normalizeDirectoryKey } from "@/stores/utils/directoryKey"
 
 type WorkModeState = {

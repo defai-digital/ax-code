@@ -157,7 +157,8 @@ export const useSkillsStore = create<SkillsStore>()(
 
           const requestId = ++skillsLoadSequence
           skillsLoadRequestIds.set(cacheKey, requestId)
-          const isCurrentLoad = () => skillsLoadSequence === requestId && skillsLoadRequestIds.get(cacheKey) === requestId
+          const isCurrentLoad = () =>
+            skillsLoadSequence === requestId && skillsLoadRequestIds.get(cacheKey) === requestId
 
           const request = (async () => {
             set({ isLoading: true })

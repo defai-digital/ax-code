@@ -23,13 +23,7 @@ export type DesktopHostsConfigInput = {
   initialHostChoiceCompleted?: boolean
 }
 
-export type HostProbeStatus =
-  | "ok"
-  | "auth"
-  | "wrong-service"
-  | "unreachable"
-  | "incompatible"
-  | "update-recommended"
+export type HostProbeStatus = "ok" | "auth" | "wrong-service" | "unreachable" | "incompatible" | "update-recommended"
 
 export type HostProbeResult = {
   status: HostProbeStatus

@@ -26,11 +26,7 @@ import { isNonEmptyRecord } from "../../../util/record"
 import { parseJsonResult } from "../../../util/json-value"
 import { Process } from "../../../util/process"
 import { UI } from "../../ui"
-import {
-  SUPPORTED_EVENTS,
-  USER_EVENTS,
-  REPO_EVENTS,
-} from "./types"
+import { SUPPORTED_EVENTS, USER_EVENTS, REPO_EVENTS } from "./types"
 import type { UserEvent, RepoEvent } from "./types"
 import { extractResponseText, formatPromptTooLargeError } from "./types"
 import {
@@ -57,13 +53,7 @@ import {
   createPR,
   fetchRepo,
 } from "./github-api"
-import {
-  getUserPrompt,
-  buildPromptDataForIssue,
-  buildPromptDataForPR,
-  fetchIssueData,
-  fetchPRData,
-} from "./prompts"
+import { getUserPrompt, buildPromptDataForIssue, buildPromptDataForPR, fetchIssueData, fetchPRData } from "./prompts"
 import type { PromptFile } from "./prompts"
 
 function requireOidcBaseUrl(): string {
@@ -114,7 +104,13 @@ export function parseGitHubRunContextText(text: string): Context {
 }
 
 function isIssueCommentEvent(
-  event: IssueCommentEvent | IssuesEvent | PullRequestReviewCommentEvent | WorkflowDispatchEvent | WorkflowRunEvent | PullRequestEvent,
+  event:
+    | IssueCommentEvent
+    | IssuesEvent
+    | PullRequestReviewCommentEvent
+    | WorkflowDispatchEvent
+    | WorkflowRunEvent
+    | PullRequestEvent,
 ): event is IssueCommentEvent {
   return "issue" in event && "comment" in event
 }
@@ -197,7 +193,8 @@ export const GithubRunCommand = cmd({
         : undefined
 
       const { gitText, gitRun, gitStatus } = createGitHelpers(Instance.worktree)
-      const doCommitChanges = async (summary: string, commitActor?: string) => commitChanges(gitRun, summary, commitActor)
+      const doCommitChanges = async (summary: string, commitActor?: string) =>
+        commitChanges(gitRun, summary, commitActor)
 
       let savedUserName: string | undefined
       let savedUserEmail: string | undefined
@@ -267,8 +264,12 @@ export const GithubRunCommand = cmd({
             await pushToNewBranch(gitRun, doCommit, branch, uncommittedChanges)
             const triggerType = isWorkflowDispatchEvent ? "workflow_dispatch" : "scheduled workflow"
             const pr = await createPR(
-              octoRest, owner, repo,
-              repoData.data.default_branch, branch, summary,
+              octoRest,
+              owner,
+              repo,
+              repoData.data.default_branch,
+              branch,
+              summary,
               `${response}\n\nTriggered by ${triggerType}${footer()}`,
               gitStatus,
             )
@@ -287,7 +288,12 @@ export const GithubRunCommand = cmd({
             const head = await gitText(["rev-parse", "HEAD"])
             const dataPrompt = buildPromptDataForPR(prData)
             const response = await chat(`${userPrompt}\n\n${dataPrompt}`, promptFiles)
-            const { dirty, uncommittedChanges, switched } = await branchIsDirty(gitText, gitStatus, head, prData.headRefName)
+            const { dirty, uncommittedChanges, switched } = await branchIsDirty(
+              gitText,
+              gitStatus,
+              head,
+              prData.headRefName,
+            )
             if (switched) console.log("Agent managed its own branch, skipping infrastructure push")
             if (dirty && !switched) {
               const summary = await summarize(response)
@@ -304,7 +310,12 @@ export const GithubRunCommand = cmd({
             if (switched) console.log("Agent managed its own branch, skipping infrastructure push")
             if (dirty && !switched) {
               const summary = await summarize(response)
-              await pushToForkBranch(gitRun, () => doCommitChanges(summary, actor), prData.headRefName, uncommittedChanges)
+              await pushToForkBranch(
+                gitRun,
+                () => doCommitChanges(summary, actor),
+                prData.headRefName,
+                uncommittedChanges,
+              )
             }
             await createComment(octoRest, owner, repo, issueId!, `${response}${footer()}`)
             await removeReaction(octoRest, owner, repo, triggerCommentId, issueId, commentType)
@@ -324,8 +335,12 @@ export const GithubRunCommand = cmd({
             const doCommit = () => doCommitChanges(summary, actor)
             await pushToNewBranch(gitRun, doCommit, branch, uncommittedChanges)
             const pr = await createPR(
-              octoRest, owner, repo,
-              repoData.data.default_branch, branch, summary,
+              octoRest,
+              owner,
+              repo,
+              repoData.data.default_branch,
+              branch,
+              summary,
               `${response}\n\nCloses #${issueId}${footer()}`,
               gitStatus,
             )

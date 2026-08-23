@@ -95,7 +95,6 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
 
     let cancelled = false
     setIsLoadingSetupCommands(true)
-
     ;(async () => {
       try {
         const commands = await getWorktreeSetupCommands(projectRef)
@@ -450,9 +449,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
                 {t("agentManager.empty.setupCommands.description")}
               </p>
               {isLoadingSetupCommands ? (
-                <p className="typography-meta text-muted-foreground">
-                  {t("agentManager.empty.setupCommands.loading")}
-                </p>
+                <p className="typography-meta text-muted-foreground">{t("agentManager.empty.setupCommands.loading")}</p>
               ) : (
                 <div className="space-y-1.5">
                   {setupCommands.map((command, index) => (

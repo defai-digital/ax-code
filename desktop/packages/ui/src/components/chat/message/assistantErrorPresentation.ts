@@ -66,7 +66,7 @@ export const getAssistantErrorPresentation = (input: {
   }
   if (errorName === "AutonomousLimitExceededError" || detail.includes("AutonomousLimitExceededError")) {
     return {
-      text: "Autonomous mode reached its built-in safety limit for a single run and stopped. Any changes made so far have been kept. To keep going, send a follow-up message (for example, \"continue\") and AX Code will resume from where it left off.",
+      text: 'Autonomous mode reached its built-in safety limit for a single run and stopped. Any changes made so far have been kept. To keep going, send a follow-up message (for example, "continue") and AX Code will resume from where it left off.',
       variant: "info",
     }
   }

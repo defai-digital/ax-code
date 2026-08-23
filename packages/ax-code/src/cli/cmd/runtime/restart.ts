@@ -12,14 +12,16 @@ export const RestartCommand = cmd({
   command: "restart",
   describe: "restart the running ax-code server instance",
   builder: (yargs) =>
-    yargs.option("port", {
-      type: "number",
-      describe: "server port",
-      default: DEFAULT_SERVER_PORT,
-    }).check((args) => {
-      validateRuntimeRestartPort(args.port)
-      return true
-    }),
+    yargs
+      .option("port", {
+        type: "number",
+        describe: "server port",
+        default: DEFAULT_SERVER_PORT,
+      })
+      .check((args) => {
+        validateRuntimeRestartPort(args.port)
+        return true
+      }),
   handler: async (args) => {
     const port = validateRuntimeRestartPort(args.port)
     const url = `http://127.0.0.1:${port}/instance/restart`

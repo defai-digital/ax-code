@@ -91,7 +91,7 @@ describe("skills-catalog shared helpers", () => {
       source: "owner/repo",
       effectiveSubpath: "skills",
       skillDir: "skills/review-code",
-      skillMdContent: "---\nname: \"Review Code | \\u4ee3\\u7801\\u5ba1\\u67e5\"\n---\nBody\n",
+      skillMdContent: '---\nname: "Review Code | \\u4ee3\\u7801\\u5ba1\\u67e5"\n---\nBody\n',
     })
 
     expect(item.installable).toBe(false)

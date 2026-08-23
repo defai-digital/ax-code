@@ -13,10 +13,7 @@ export function isWorkAgentName(agent: string | undefined) {
   return agent === WORK_AGENT_NAME
 }
 
-export function workSessionSendBlockedReason(input: {
-  metadata?: Record<string, unknown>
-  agent?: string
-}) {
+export function workSessionSendBlockedReason(input: { metadata?: Record<string, unknown>; agent?: string }) {
   if (isWorkAgentName(input.agent) || isWorkSessionMetadata(input.metadata)) {
     return WORK_SESSION_SEND_DISABLED
   }

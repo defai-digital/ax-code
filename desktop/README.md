@@ -60,10 +60,10 @@ curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install 
 
 Then download a Desktop package from the [Releases page](https://github.com/defai-digital/ax-code/releases) under a `desktop-v*` tag:
 
-| Arch  | Recommended (`.deb`) | Portable (AppImage) |
-| ----- | -------------------- | ------------------- |
+| Arch  | Recommended (`.deb`)                | Portable (AppImage)                       |
+| ----- | ----------------------------------- | ----------------------------------------- |
 | amd64 | `AX-Code-<version>-linux-amd64.deb` | `AX-Code-<version>-linux-x86_64.AppImage` |
-| arm64 | `AX-Code-<version>-linux-arm64.deb` | `AX-Code-<version>-linux-arm64.AppImage` |
+| arm64 | `AX-Code-<version>-linux-arm64.deb` | `AX-Code-<version>-linux-arm64.AppImage`  |
 
 **Debian package (Ubuntu):**
 

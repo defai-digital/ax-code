@@ -19,9 +19,7 @@ describe("tool.task depth checks", () => {
       fn: async () => {
         const originalGet = Session.get
         const lookupFailure = new Error("database temporarily unavailable")
-        const getSpy = vi.spyOn(Session, "get").mockImplementation((async (
-          ...args: Parameters<typeof originalGet>
-        ) => {
+        const getSpy = vi.spyOn(Session, "get").mockImplementation((async (...args: Parameters<typeof originalGet>) => {
           const [sessionID] = args
           if (sessionID === SessionID.make("ses_unavailable")) throw lookupFailure
           return originalGet(...args)

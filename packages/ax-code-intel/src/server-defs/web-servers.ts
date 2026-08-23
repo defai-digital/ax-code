@@ -14,12 +14,7 @@ import {
   resolveTypescriptServer,
   spawnInfo,
 } from "../server-helpers"
-import {
-  PINNED_DIRECT_LSP_RELEASES,
-  installReleaseBin,
-  managedToolDir,
-  managedToolPath,
-} from "../server-releases"
+import { PINNED_DIRECT_LSP_RELEASES, installReleaseBin, managedToolDir, managedToolPath } from "../server-releases"
 import { OxlintSupport } from "../oxlint"
 import { which } from "../internal/which"
 import { Env } from "../internal/env"
@@ -27,7 +22,18 @@ import { Filesystem } from "../internal/filesystem"
 import { spawn } from "../launch"
 import { venvPython, venvBin } from "../server-helpers"
 import type { ServerInfo as Info } from "../server-helpers"
-import { JS_RUNTIME_EXTENSIONS, JS_PROJECT_EXTENSIONS, JS_FRAMEWORK_EXTENSIONS, PYTHON_EXTENSIONS, SQL_EXTENSIONS, ANSIBLE_EXTENSIONS, PYTHON_ROOT_MARKERS, TY_ROOT_MARKERS, ANSIBLE_ROOT_MARKERS, NearestRootWithMarker } from "./shared"
+import {
+  JS_RUNTIME_EXTENSIONS,
+  JS_PROJECT_EXTENSIONS,
+  JS_FRAMEWORK_EXTENSIONS,
+  PYTHON_EXTENSIONS,
+  SQL_EXTENSIONS,
+  ANSIBLE_EXTENSIONS,
+  PYTHON_ROOT_MARKERS,
+  TY_ROOT_MARKERS,
+  ANSIBLE_ROOT_MARKERS,
+  NearestRootWithMarker,
+} from "./shared"
 
 export const Deno: Info = {
   id: "deno",
@@ -191,8 +197,27 @@ export const Oxlint: Info = {
 export const Biome: Info = {
   id: "biome",
   semantic: false,
-  root: NearestRoot(["biome.json", "biome.jsonc", "package-lock.json", "bun.lockb", "bun.lock", "pnpm-lock.yaml", "yarn.lock"]),
-  extensions: [...JS_PROJECT_EXTENSIONS, ".json", ".jsonc", ".vue", ".astro", ".svelte", ".css", ".graphql", ".gql", ".html"],
+  root: NearestRoot([
+    "biome.json",
+    "biome.jsonc",
+    "package-lock.json",
+    "bun.lockb",
+    "bun.lock",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+  ]),
+  extensions: [
+    ...JS_PROJECT_EXTENSIONS,
+    ".json",
+    ".jsonc",
+    ".vue",
+    ".astro",
+    ".svelte",
+    ".css",
+    ".graphql",
+    ".gql",
+    ".html",
+  ],
   async spawn(root) {
     const localBin = path.join(root, "node_modules", ".bin", "biome")
     let bin: string | undefined

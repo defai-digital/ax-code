@@ -53,12 +53,12 @@ describe("download-progress", () => {
       kind: "progress",
       event: { event: "progress", done: 5, total: 100, file: "Downloading" },
     })
-    expect(
-      parseProgressJsonLine('{"schema_version":"ax.download_model.v1","dest":"/models/x","status":"ok"}'),
-    ).toEqual({
-      kind: "summary",
-      value: { schema_version: "ax.download_model.v1", dest: "/models/x", status: "ok" },
-    })
+    expect(parseProgressJsonLine('{"schema_version":"ax.download_model.v1","dest":"/models/x","status":"ok"}')).toEqual(
+      {
+        kind: "summary",
+        value: { schema_version: "ax.download_model.v1", dest: "/models/x", status: "ok" },
+      },
+    )
     expect(parseProgressJsonLine("not json")).toEqual({ kind: "ignore" })
     expect(parseProgressJsonLine("")).toEqual({ kind: "ignore" })
   })

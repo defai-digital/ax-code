@@ -22,15 +22,7 @@ export const AxEngineCapabilityStatus = z.object({
 export type AxEngineCapabilityStatus = z.infer<typeof AxEngineCapabilityStatus>
 
 export const LocalEngineLifecycleStatus = z.object({
-  phase: z.enum([
-    "unavailable",
-    "missing_dependency",
-    "missing_model",
-    "starting",
-    "ready",
-    "degraded",
-    "error",
-  ]),
+  phase: z.enum(["unavailable", "missing_dependency", "missing_model", "starting", "ready", "degraded", "error"]),
   backend: z.enum(["in_process", "sidecar_http"]),
   blockers: z.array(z.string()).default([]),
 })
@@ -150,9 +142,7 @@ export async function getAxEngineStatus(options: AxEngineRuntimeOptions = {}): P
   }
 }
 
-export async function getAxEngineLifecycle(
-  options: AxEngineRuntimeOptions = {},
-): Promise<LocalEngineLifecycle> {
+export async function getAxEngineLifecycle(options: AxEngineRuntimeOptions = {}): Promise<LocalEngineLifecycle> {
   return (await getAxEngineStatus(options)).lifecycle
 }
 

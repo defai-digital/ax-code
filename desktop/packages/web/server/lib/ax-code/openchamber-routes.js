@@ -32,12 +32,7 @@ const stripModelCostMetadata = (metadata) => {
 }
 
 export const registerOpenChamberRoutes = (app, dependencies) => {
-  const {
-    modelsDevApiUrl,
-    modelsMetadataCacheTtl,
-    fetchFreeZenModels,
-    getCachedZenModels,
-  } = dependencies
+  const { modelsDevApiUrl, modelsMetadataCacheTtl, fetchFreeZenModels, getCachedZenModels } = dependencies
 
   let cachedModelsMetadata = null
   let cachedModelsMetadataTimestamp = 0

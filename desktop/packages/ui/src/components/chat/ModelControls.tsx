@@ -1764,9 +1764,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             </DropdownMenuLabel>
             <DropdownMenuItem className="typography-meta" onSelect={() => handleVariantSelect(undefined)}>
               <div className="flex items-center justify-between gap-2 w-full min-w-0">
-                <span className="typography-meta font-medium text-foreground truncate min-w-0">
-                  {defaultLabel}
-                </span>
+                <span className="typography-meta font-medium text-foreground truncate min-w-0">{defaultLabel}</span>
                 {isDefault && <Icon name="check" className="size-4 text-primary flex-shrink-0" />}
               </div>
             </DropdownMenuItem>

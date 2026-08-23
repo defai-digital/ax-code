@@ -174,7 +174,8 @@ export const usePluginsStore = create<PluginsStore>()(
 
           const requestId = ++pluginsLoadSequence
           pluginsLoadRequestIds.set(cacheKey, requestId)
-          const isCurrentLoad = () => pluginsLoadSequence === requestId && pluginsLoadRequestIds.get(cacheKey) === requestId
+          const isCurrentLoad = () =>
+            pluginsLoadSequence === requestId && pluginsLoadRequestIds.get(cacheKey) === requestId
 
           const request = (async () => {
             set({ isLoading: true })
@@ -243,7 +244,9 @@ export const usePluginsStore = create<PluginsStore>()(
               }
             }
 
-            const currentResults = results.filter((result) => pluginRegistrySpecRequestIds.get(result.spec) === requestId)
+            const currentResults = results.filter(
+              (result) => pluginRegistrySpecRequestIds.get(result.spec) === requestId,
+            )
             if (currentResults.length > 0) {
               set((state) => {
                 const nextRegistryInfo: Record<string, RegistryResult> = { ...state.registryInfo }

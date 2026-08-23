@@ -21,7 +21,12 @@ describe("planReleaseUpdates", () => {
     const plan = planReleaseUpdates(
       [
         { tag_name: "v7.7.0", name: "v7.7.0", body: "**Full Changelog**: https://example", draft: false },
-        { tag_name: "desktop-v7.7.0", name: "v7.7.0", body: "## [7.7.0] - 2026-08-19\n\n### Added\n\n- Add scout subagent.\n", draft: false },
+        {
+          tag_name: "desktop-v7.7.0",
+          name: "v7.7.0",
+          body: "## [7.7.0] - 2026-08-19\n\n### Added\n\n- Add scout subagent.\n",
+          draft: false,
+        },
         { tag_name: "v1.5.0", name: "v1.5.0", body: "Security + Gemini + 57 bug fixes", draft: false },
         { tag_name: "sdk-v2.0.0", name: "v2.0.0", body: "SDK release", draft: false },
       ],

@@ -103,8 +103,7 @@ export function createDownloadToastTracker(deps: DownloadToastDeps) {
             ? Math.round(job.progress.percent)
             : undefined
         const advanced =
-          percent !== undefined &&
-          (info.lastPercent === undefined || percent >= info.lastPercent + 5 || percent >= 99)
+          percent !== undefined && (info.lastPercent === undefined || percent >= info.lastPercent + 5 || percent >= 99)
         if (advanced || (job.progress?.message && percent === undefined)) {
           if (percent !== undefined) info.lastPercent = percent
           deps.toast.loading(tr("axEngine.download.toast.downloading", { name: info.name }), {

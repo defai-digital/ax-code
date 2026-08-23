@@ -626,9 +626,7 @@ const FocusModeButton = React.memo(function FocusModeButton(props: FocusModeButt
           className={cn(
             footerIconButtonClass,
             "rounded-md",
-            isExpandedInput
-              ? "text-primary hover:text-primary"
-              : "text-muted-foreground hover:text-foreground",
+            isExpandedInput ? "text-primary hover:text-primary" : "text-muted-foreground hover:text-foreground",
           )}
           onMouseDown={(event) => {
             event.preventDefault()
@@ -1688,7 +1686,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
           toast.error(error instanceof Error ? error.message : t("chat.chatInput.toast.reviewFailed"))
         }
         return
-      } else if ((commandName === "plan" || commandName === "plan-feature") && (currentSessionId || newSessionDraftOpen)) {
+      } else if (
+        (commandName === "plan" || commandName === "plan-feature") &&
+        (currentSessionId || newSessionDraftOpen)
+      ) {
         try {
           await sessionActions.waitForConnectionOrThrow()
           const visibleText = await renderMagicPrompt("session.plan.visible")
@@ -3627,7 +3628,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                   <span className="typography-micro font-medium text-muted-foreground">
                     {t("chat.chatInput.reviewComments")}
                   </span>
-                  <span className="typography-micro font-semibold" style={{ color: currentTheme?.colors?.status?.info }}>
+                  <span
+                    className="typography-micro font-semibold"
+                    style={{ color: currentTheme?.colors?.status?.info }}
+                  >
                     {reviewCount}
                   </span>
                 </div>
@@ -3640,8 +3644,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     borderColor: currentTheme?.colors?.interactive?.border,
                   }}
                 >
-                  <span className="typography-micro font-medium text-muted-foreground">{t("chat.chatInput.devServerLogs")}</span>
-                  <span className="typography-micro font-semibold" style={{ color: currentTheme?.colors?.status?.info }}>
+                  <span className="typography-micro font-medium text-muted-foreground">
+                    {t("chat.chatInput.devServerLogs")}
+                  </span>
+                  <span
+                    className="typography-micro font-semibold"
+                    style={{ color: currentTheme?.colors?.status?.info }}
+                  >
                     {previewConsoleCount}
                   </span>
                   <button
@@ -3666,7 +3675,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                   <span className="typography-micro font-medium text-muted-foreground">
                     {t("chat.chatInput.previewAnnotations")}
                   </span>
-                  <span className="typography-micro font-semibold" style={{ color: currentTheme?.colors?.status?.info }}>
+                  <span
+                    className="typography-micro font-semibold"
+                    style={{ color: currentTheme?.colors?.status?.info }}
+                  >
                     {previewAnnotationCount}
                   </span>
                   <button
@@ -3798,16 +3810,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             showAssistantStatus={false}
             showTodos
             leftAccessory={
-              newSessionDraftOpen
-                ? null
-                : hasPendingChanges || showTurnNextSteps
-                  ? (
-                      <div className="flex flex-col gap-1">
-                        {hasPendingChanges ? <PendingChangesBar /> : null}
-                        {showTurnNextSteps ? <DoneNotCommittedNudge /> : null}
-                      </div>
-                    )
-                  : null
+              newSessionDraftOpen ? null : hasPendingChanges || showTurnNextSteps ? (
+                <div className="flex flex-col gap-1">
+                  {hasPendingChanges ? <PendingChangesBar /> : null}
+                  {showTurnNextSteps ? <DoneNotCommittedNudge /> : null}
+                </div>
+              ) : null
             }
           />
           {!message.trim() && !newSessionDraftOpen ? (
@@ -3910,8 +3918,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             )}
             style={{
               borderRadius: chatInputRadius,
-              backgroundColor:
-                currentTheme?.colors?.surface?.elevated ?? "var(--surface-elevated)",
+              backgroundColor: currentTheme?.colors?.surface?.elevated ?? "var(--surface-elevated)",
             }}
             ref={dropZoneRef}
             onDropCapture={handleDropCapture}

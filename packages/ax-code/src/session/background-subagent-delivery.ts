@@ -5,11 +5,7 @@ import { SessionPrompt } from "./prompt"
 import { MessageID, SessionID } from "./schema"
 import { TaskQueue } from "./task-queue"
 import { syntheticTextPart } from "./prompt-message-builders"
-import {
-  childVisibleText,
-  formatBackgroundTaskHandoff,
-  isEmptySubagentResultText,
-} from "./background-subagent-handoff"
+import { childVisibleText, formatBackgroundTaskHandoff, isEmptySubagentResultText } from "./background-subagent-handoff"
 
 const log = Log.create({ service: "session.background-subagent-delivery" })
 

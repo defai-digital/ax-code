@@ -2,11 +2,7 @@ import { Agent } from "../agent/agent"
 import { Config } from "../config/config"
 import { ScopedFlag } from "../flag/scoped"
 import type { MessageV2 } from "./message-v2"
-import {
-  autonomyBudgetDiagnostics,
-  formatAutonomyBudgetReport,
-  resolveAutonomyBudget,
-} from "./autonomy-budget"
+import { autonomyBudgetDiagnostics, formatAutonomyBudgetReport, resolveAutonomyBudget } from "./autonomy-budget"
 import { createStoppedAssistantTextResponse } from "./prompt-assistant-response"
 import { commandModel } from "./prompt-command-selection"
 import type { CommandInput } from "./prompt-input"
@@ -81,10 +77,7 @@ export async function executeLimitsCommand(input: CommandInput): Promise<Message
     autonomous: ScopedFlag.autonomous(),
   })
   const warnings = autonomyBudgetDiagnostics({ budget, agentSteps })
-  const text =
-    warnings.length === 0
-      ? report
-      : `${report}\n\nWarnings\n${warnings.map((w) => `  ! ${w}`).join("\n")}`
+  const text = warnings.length === 0 ? report : `${report}\n\nWarnings\n${warnings.map((w) => `  ! ${w}`).join("\n")}`
 
   return limitsControlMessage(input, text)
 }

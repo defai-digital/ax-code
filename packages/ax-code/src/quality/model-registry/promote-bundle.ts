@@ -370,9 +370,7 @@ export async function promoteBoardDecision(
     boardDecision,
   )
   if (boardDecisionReasons.length > 0) {
-    throw new Error(
-      `Cannot promote model ${boardDecision.source}: invalid board decision (${boardDecisionReasons[0]})`,
-    )
+    throw new Error(`Cannot promote model ${boardDecision.source}: invalid board decision (${boardDecisionReasons[0]})`)
   }
   await QualityPromotionBoardDecision.assertPersisted(boardDecision)
   assertPromotionSummaryPass(boardDecision.source, "board decision not ready", boardDecision.summary)

@@ -16,10 +16,12 @@ describe("buildRecordSignature", () => {
   })
 
   test("normalizes nullish fields to empty slots", () => {
-    expect(buildRecordSignature([{ name: "one", scope: null, description: undefined }], (record) => [
-      record.name,
-      record.scope,
-      record.description,
-    ])).toBe("one||")
+    expect(
+      buildRecordSignature([{ name: "one", scope: null, description: undefined }], (record) => [
+        record.name,
+        record.scope,
+        record.description,
+      ]),
+    ).toBe("one||")
   })
 })

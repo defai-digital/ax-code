@@ -36,9 +36,7 @@ export type LocalEngineLifecycle = {
 }
 
 function mostSevere(phases: LocalEnginePhase[]): LocalEnginePhase {
-  return phases.reduce((best, next) =>
-    LOCAL_ENGINE_PHASE_RANK[next] > LOCAL_ENGINE_PHASE_RANK[best] ? next : best,
-  )
+  return phases.reduce((best, next) => (LOCAL_ENGINE_PHASE_RANK[next] > LOCAL_ENGINE_PHASE_RANK[best] ? next : best))
 }
 
 /**
@@ -52,34 +50,24 @@ export function mapAxEngineStatusToLifecycle(status: AxEngineStatusCore): LocalE
   if (!status.eligibility.supported) {
     candidates.push("unavailable")
     blockers.push(
-      ...(status.eligibility.blockers.length
-        ? status.eligibility.blockers
-        : [AX_ENGINE_ERROR.UnsupportedPlatform]),
+      ...(status.eligibility.blockers.length ? status.eligibility.blockers : [AX_ENGINE_ERROR.UnsupportedPlatform]),
     )
   }
 
   if (!status.dependency.available) {
     candidates.push("missing_dependency")
-    blockers.push(
-      ...(status.dependency.blockers.length ? status.dependency.blockers : [AX_ENGINE_ERROR.BinaryMissing]),
-    )
+    blockers.push(...(status.dependency.blockers.length ? status.dependency.blockers : [AX_ENGINE_ERROR.BinaryMissing]))
   }
 
   const modelReady = status.model.present && status.model.complete
   if (!modelReady) {
     candidates.push("missing_model")
-    blockers.push(
-      ...(status.model.blockers.length ? status.model.blockers : [AX_ENGINE_ERROR.ModelNotPrepared]),
-    )
+    blockers.push(...(status.model.blockers.length ? status.model.blockers : [AX_ENGINE_ERROR.ModelNotPrepared]))
   }
 
   if (status.server.running && !status.server.ready) {
     candidates.push("starting")
-    blockers.push(
-      ...(status.server.blockers.length
-        ? status.server.blockers
-        : [AX_ENGINE_ERROR.ServerHealthFailed]),
-    )
+    blockers.push(...(status.server.blockers.length ? status.server.blockers : [AX_ENGINE_ERROR.ServerHealthFailed]))
   }
 
   if (!status.server.running && status.server.blockers.length > 0) {

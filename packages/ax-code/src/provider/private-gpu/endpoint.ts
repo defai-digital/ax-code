@@ -1,7 +1,13 @@
 import type { PrivateGpuPathStyle, PrivateGpuVendor } from "./presets"
 
 const TRAILING_SLASH = /\/+$/
-const INFERENCE_SUFFIXES = ["/v1/chat/completions", "/v1/completions", "/v1/models", "/chat/completions", "/completions"]
+const INFERENCE_SUFFIXES = [
+  "/v1/chat/completions",
+  "/v1/completions",
+  "/v1/models",
+  "/chat/completions",
+  "/completions",
+]
 const ARK_INFERENCE_SUFFIXES = [
   "/api/v3/chat/completions",
   "/api/v3/completions",

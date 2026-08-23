@@ -29,7 +29,10 @@ export function armPermissionLatchForRequest(state: PermissionSubmitLatch, reque
  * Attempt to begin a submit. Returns the next latch state, or null if a
  * submit is already in flight for this request.
  */
-export function tryBeginPermissionSubmit(state: PermissionSubmitLatch, requestId: string): PermissionSubmitLatch | null {
+export function tryBeginPermissionSubmit(
+  state: PermissionSubmitLatch,
+  requestId: string,
+): PermissionSubmitLatch | null {
   const armed = armPermissionLatchForRequest(state, requestId)
   if (armed.submitting) return null
   return { submitting: true, armedForId: requestId }

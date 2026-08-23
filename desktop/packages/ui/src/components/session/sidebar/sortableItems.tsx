@@ -143,11 +143,7 @@ export const SortableProjectItem: React.FC<SidebarSortableProjectItemProps> = ({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn(
-        "relative",
-        showTopDivider && "mt-2 border-t border-border/40 pt-2",
-        isDragging && "opacity-30",
-      )}
+      className={cn("relative", showTopDivider && "mt-2 border-t border-border/40 pt-2", isDragging && "opacity-30")}
     >
       {!hideHeader ? (
         <>
@@ -328,10 +324,7 @@ export const SortableProjectItem: React.FC<SidebarSortableProjectItemProps> = ({
                     </DropdownMenuItem>
                     {onTogglePin ? (
                       <DropdownMenuItem onClick={onTogglePin}>
-                        <Icon
-                          name={isPinned ? "pushpin-2-fill" : "pushpin-2"}
-                          className="mr-1.5 h-4 w-4"
-                        />
+                        <Icon name={isPinned ? "pushpin-2-fill" : "pushpin-2"} className="mr-1.5 h-4 w-4" />
                         {isPinned
                           ? t("sessions.sidebar.project.actions.unpin")
                           : t("sessions.sidebar.project.actions.pin")}

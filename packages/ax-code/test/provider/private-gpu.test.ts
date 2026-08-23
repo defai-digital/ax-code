@@ -57,9 +57,9 @@ describe("private-gpu endpoint", () => {
     expect(normalizePrivateGpuBaseURL("https://ark.cn-beijing.volces.com", vendor.pathStyle, vendor.name)).toBe(
       "https://ark.cn-beijing.volces.com/api/v3",
     )
-    expect(normalizePrivateGpuBaseURL("https://ark.cn-beijing.volces.com/api/v3/models", vendor.pathStyle, vendor.name)).toBe(
-      "https://ark.cn-beijing.volces.com/api/v3",
-    )
+    expect(
+      normalizePrivateGpuBaseURL("https://ark.cn-beijing.volces.com/api/v3/models", vendor.pathStyle, vendor.name),
+    ).toBe("https://ark.cn-beijing.volces.com/api/v3")
   })
 })
 

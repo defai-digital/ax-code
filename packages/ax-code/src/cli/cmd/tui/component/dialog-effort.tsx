@@ -40,12 +40,5 @@ export function DialogEffort() {
     return model ? `Effort · ${model}` : "Effort"
   })
 
-  return (
-    <DialogSelect
-      title={title()}
-      options={options()}
-      current={current()}
-      flat={true}
-    />
-  )
+  return <DialogSelect title={title()} options={options()} current={current()} flat={true} />
 }

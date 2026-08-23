@@ -10,8 +10,7 @@ export type BackgroundTaskHandoff = {
   recoveredResultNeedsReview: boolean
 }
 
-const HANDOFF_RE =
-  /<task\b([^>]*)>([\s\S]*?)<\/task>/gi
+const HANDOFF_RE = /<task\b([^>]*)>([\s\S]*?)<\/task>/gi
 const ATTR_RE = /([a-zA-Z_:][\w:.-]*)\s*=\s*"([^"]*)"/g
 const INNER_RE = {
   summary: /<summary>([\s\S]*?)<\/summary>/i,
@@ -68,11 +67,7 @@ export function formatBackgroundTaskHandoff(input: {
       ? `Background task completed without a usable final response: ${input.title || "Subagent"}`
       : `Background task completed: ${input.title || "Subagent"}`
   const bodyTag = failed ? "task_error" : "task_result"
-  const body = failed
-    ? resultText
-    : empty
-      ? resultText || "Subagent completed without a final response."
-      : resultText
+  const body = failed ? resultText : empty ? resultText || "Subagent completed without a final response." : resultText
   return [
     `<task id="${escapeAttr(input.taskID)}" state="${input.state}" empty="${empty ? "true" : "false"}"${
       recoveredResultNeedsReview ? ' needs_review="true"' : ""
@@ -97,8 +92,7 @@ export function parseBackgroundTaskHandoffs(text: string): BackgroundTaskHandoff
       innerMatch(inner, INNER_RE.result) ?? innerMatch(inner, INNER_RE.error) ?? "",
     ).trim()
     const failed = state === "error"
-    const empty =
-      attrs.empty === "true" || failed || isEmptySubagentResultText(resultText)
+    const empty = attrs.empty === "true" || failed || isEmptySubagentResultText(resultText)
     found.push({
       taskID,
       state,
@@ -140,5 +134,8 @@ function escapeBody(value: string) {
 }
 
 function unescapeBody(value: string) {
-  return value.replace(/&lt;/g, "<").replace(/&quot;/g, '"').replace(/&amp;/g, "&")
+  return value
+    .replace(/&lt;/g, "<")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
 }

@@ -282,9 +282,7 @@ export function isMutatingProgressTurn(parts: readonly ToolActivityPart[] | unde
   if (parts.some((part) => part.type === "patch")) return true
   return parts.some(
     (part) =>
-      part.type === "tool" &&
-      MUTATING_PROGRESS_TOOLS.has(part.tool ?? "") &&
-      part.state?.status === "completed",
+      part.type === "tool" && MUTATING_PROGRESS_TOOLS.has(part.tool ?? "") && part.state?.status === "completed",
   )
 }
 
@@ -344,9 +342,7 @@ export function hasUsableReadOnlyEvidence(parts: readonly ToolActivityPart[] | u
   if (!parts?.length) return false
   return parts.some(
     (part) =>
-      part.type === "tool" &&
-      READ_ONLY_EXPLORATION_TOOLS.has(part.tool ?? "") &&
-      part.state?.status === "completed",
+      part.type === "tool" && READ_ONLY_EXPLORATION_TOOLS.has(part.tool ?? "") && part.state?.status === "completed",
   )
 }
 
@@ -432,10 +428,7 @@ export function readOnlyExplorationDecision(input: {
  * preserve that contract — a lifetime counter would hard-stop the session on
  * the second forced-text trap no matter how much real work happened between.
  */
-const RECOVERABLE_UNEXECUTABLE_FORCE_REASONS = new Set<ForceTextReason>([
-  "ax_engine_read_only",
-  "tool_only_breaker",
-])
+const RECOVERABLE_UNEXECUTABLE_FORCE_REASONS = new Set<ForceTextReason>(["ax_engine_read_only", "tool_only_breaker"])
 
 export function unexecutableToolTextRecoveryDecision(input: {
   lastTurnWasForceTextOnly: boolean
@@ -520,10 +513,7 @@ export function toolCallingBackstopWrapUp(input: { finalCheckpointHits: number }
   }
 }
 
-export function toolOnlyStopMessage(input: {
-  consecutiveToolOnlyTurns: number
-  toolOnlyNudges: number
-}): string {
+export function toolOnlyStopMessage(input: { consecutiveToolOnlyTurns: number; toolOnlyNudges: number }): string {
   const reminderClause =
     input.toolOnlyNudges > 0
       ? `, despite ${input.toolOnlyNudges} checkpoint reminder${input.toolOnlyNudges === 1 ? "" : "s"}`

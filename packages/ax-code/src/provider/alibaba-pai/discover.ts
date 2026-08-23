@@ -1,4 +1,8 @@
-import { discoverPrivateGpuModels, privateGpuModelRecords, type PrivateGpuDiscoveredModel } from "../private-gpu/discover"
+import {
+  discoverPrivateGpuModels,
+  privateGpuModelRecords,
+  type PrivateGpuDiscoveredModel,
+} from "../private-gpu/discover"
 import { requirePrivateGpuVendor } from "../private-gpu/presets"
 import type { Provider } from "../provider"
 import { ALIBABA_PAI_PROVIDER_ID } from "./constants"

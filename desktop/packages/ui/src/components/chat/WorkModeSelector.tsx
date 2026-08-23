@@ -5,12 +5,7 @@ import { cn } from "@/lib/utils"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useWorkModeStore } from "@/stores/useWorkModeStore"
 import { normalizeDirectoryKey } from "@/stores/utils/directoryKey"
-import {
-  cycleWorkMode,
-  DEFAULT_WORK_MODE,
-  parseWorkMode,
-  type WorkModeId,
-} from "@/lib/workMode"
+import { cycleWorkMode, DEFAULT_WORK_MODE, parseWorkMode, type WorkModeId } from "@/lib/workMode"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 type ModeMeta = {

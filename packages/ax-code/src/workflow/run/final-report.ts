@@ -13,11 +13,7 @@ import {
   WorkflowRunDetail,
   WorkflowRunID,
 } from "../state"
-import {
-  countByStatus,
-  finalReportVerification,
-  uniqueEvidenceRefs,
-} from "./internal"
+import { countByStatus, finalReportVerification, uniqueEvidenceRefs } from "./internal"
 import { appendArtifact, getDetail } from "./index"
 
 const log = Log.create({ service: "workflow.run.final-report" })

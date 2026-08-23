@@ -27,10 +27,7 @@ export type VisionCapableModel = {
  * Returns up to `limit` candidates, preferring models from the same
  * provider as `currentProviderID` (listed first).
  */
-export async function findVisionCapableModels(
-  currentProviderID?: string,
-  limit = 5,
-): Promise<VisionCapableModel[]> {
+export async function findVisionCapableModels(currentProviderID?: string, limit = 5): Promise<VisionCapableModel[]> {
   const providers: Record<string, ProviderInfo> = await Provider.list()
   const candidates: VisionCapableModel[] = []
   const sameProvider: VisionCapableModel[] = []
@@ -83,7 +80,9 @@ export async function visualRoutingDiagnostic(input: {
  * capabilities. Returns the model and its visual capabilities on success,
  * or a diagnostic message on failure.
  */
-export async function checkVisualRouting(required: Partial<ModelVisualCapabilities>): Promise<
+export async function checkVisualRouting(
+  required: Partial<ModelVisualCapabilities>,
+): Promise<
   | { ok: true; model: ProviderModel; providerID: string; caps: ModelVisualCapabilities }
   | { ok: false; diagnostic: string }
 > {

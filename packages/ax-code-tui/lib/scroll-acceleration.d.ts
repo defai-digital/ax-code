@@ -1,10 +1,10 @@
 export interface ScrollAcceleration {
-    tick(now?: number): number;
-    reset(): void;
+  tick(now?: number): number
+  reset(): void
 }
 export declare class LinearScrollAccel implements ScrollAcceleration {
-    tick(_now?: number): number;
-    reset(): void;
+  tick(_now?: number): number
+  reset(): void
 }
 /**
  * macOS-inspired scroll acceleration.
@@ -27,17 +27,13 @@ export declare class LinearScrollAccel implements ScrollAcceleration {
  * - baseMultiplier: scale for relaxed scrolling; set to 1 for linear behaviour.
  */
 export declare class MacOSScrollAccel implements ScrollAcceleration {
-    private opts;
-    private lastTickTime;
-    private velocityHistory;
-    private readonly historySize;
-    private readonly streakTimeout;
-    private readonly minTickInterval;
-    constructor(opts?: {
-        A?: number;
-        tau?: number;
-        maxMultiplier?: number;
-    });
-    tick(now?: number): number;
-    reset(): void;
+  private opts
+  private lastTickTime
+  private velocityHistory
+  private readonly historySize
+  private readonly streakTimeout
+  private readonly minTickInterval
+  constructor(opts?: { A?: number; tau?: number; maxMultiplier?: number })
+  tick(now?: number): number
+  reset(): void
 }

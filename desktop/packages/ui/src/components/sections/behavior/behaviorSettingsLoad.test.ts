@@ -1,11 +1,7 @@
 import { describe, expect, test, vi } from "vitest"
 
 import { API_ENDPOINTS } from "@/lib/http"
-import {
-  fetchBehaviorSettings,
-  normalizeAgentsMdContent,
-  sanitizeResponseStylePreset,
-} from "./behaviorSettingsLoad"
+import { fetchBehaviorSettings, normalizeAgentsMdContent, sanitizeResponseStylePreset } from "./behaviorSettingsLoad"
 
 const jsonResponse = (body: unknown, ok = true): Response =>
   ({

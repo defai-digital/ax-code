@@ -14,7 +14,12 @@ describe("util.filelock", () => {
     const lock = await FileLock.acquire(filepath)
     lock[Symbol.dispose]()
 
-    expect(await fs.access(lockpath).then(() => true, () => false)).toBe(false)
+    expect(
+      await fs.access(lockpath).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false)
   })
 
   test("does not delete a lock after ownership changes", async () => {
@@ -74,7 +79,12 @@ describe("util.filelock", () => {
     try {
       const lock = await FileLock.acquire(filepath, { timeoutMs: 200, staleMs: 30_000 })
       lock[Symbol.dispose]()
-      expect(await fs.access(lockpath).then(() => true, () => false)).toBe(false)
+      expect(
+        await fs.access(lockpath).then(
+          () => true,
+          () => false,
+        ),
+      ).toBe(false)
     } finally {
       killSpy.mockRestore()
     }

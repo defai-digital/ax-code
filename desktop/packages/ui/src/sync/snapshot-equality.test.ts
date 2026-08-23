@@ -27,24 +27,22 @@ describe("haveEquivalentSyncSnapshots", () => {
 
   describe("session status snapshots", () => {
     test("idle statuses are equivalent", () => {
-      expect(
-        haveEquivalentSyncSnapshots({ type: "idle" } as SessionStatus, { type: "idle" } as SessionStatus),
-      ).toBe(true)
+      expect(haveEquivalentSyncSnapshots({ type: "idle" } as SessionStatus, { type: "idle" } as SessionStatus)).toBe(
+        true,
+      )
     })
 
     test("different status types are not equivalent", () => {
-      expect(
-        haveEquivalentSyncSnapshots({ type: "idle" } as SessionStatus, { type: "busy" } as SessionStatus),
-      ).toBe(false)
+      expect(haveEquivalentSyncSnapshots({ type: "idle" } as SessionStatus, { type: "busy" } as SessionStatus)).toBe(
+        false,
+      )
     })
 
     test("retry statuses compare attempt, message, and next", () => {
       const base = { type: "retry", attempt: 2, message: "boom", next: 1000 } as SessionStatus
       expect(haveEquivalentSyncSnapshots(base, { type: "retry", attempt: 2, message: "boom", next: 1000 })).toBe(true)
       expect(haveEquivalentSyncSnapshots(base, { type: "retry", attempt: 3, message: "boom", next: 1000 })).toBe(false)
-      expect(haveEquivalentSyncSnapshots(base, { type: "retry", attempt: 2, message: "other", next: 1000 })).toBe(
-        false,
-      )
+      expect(haveEquivalentSyncSnapshots(base, { type: "retry", attempt: 2, message: "other", next: 1000 })).toBe(false)
       expect(haveEquivalentSyncSnapshots(base, { type: "retry", attempt: 2, message: "boom", next: 2000 })).toBe(false)
     })
 
@@ -103,10 +101,16 @@ describe("haveEquivalentSyncSnapshots", () => {
     test("summary and share compare structurally", () => {
       const withSummary = createSession("s", { summary: { additions: 1, deletions: 2, files: 3 } })
       expect(
-        haveEquivalentSyncSnapshots(withSummary, createSession("s", { summary: { additions: 1, deletions: 2, files: 3 } })),
+        haveEquivalentSyncSnapshots(
+          withSummary,
+          createSession("s", { summary: { additions: 1, deletions: 2, files: 3 } }),
+        ),
       ).toBe(true)
       expect(
-        haveEquivalentSyncSnapshots(withSummary, createSession("s", { summary: { additions: 9, deletions: 2, files: 3 } })),
+        haveEquivalentSyncSnapshots(
+          withSummary,
+          createSession("s", { summary: { additions: 9, deletions: 2, files: 3 } }),
+        ),
       ).toBe(false)
       expect(haveEquivalentSyncSnapshots(withSummary, createSession("s"))).toBe(false)
 
@@ -125,9 +129,9 @@ describe("haveEquivalentSyncSnapshots", () => {
       const withMeta = createSession("s", { metadata: { origin: "tui" } })
       expect(haveEquivalentSyncSnapshots(withMeta, createSession("s", { metadata: { origin: "tui" } }))).toBe(true)
       expect(haveEquivalentSyncSnapshots(withMeta, createSession("s", { metadata: { origin: "web" } }))).toBe(false)
-      expect(
-        haveEquivalentSyncSnapshots(withMeta, createSession("s", { metadata: { origin: "tui", extra: 1 } })),
-      ).toBe(false)
+      expect(haveEquivalentSyncSnapshots(withMeta, createSession("s", { metadata: { origin: "tui", extra: 1 } }))).toBe(
+        false,
+      )
       expect(haveEquivalentSyncSnapshots(withMeta, createSession("s"))).toBe(false)
     })
 

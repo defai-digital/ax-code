@@ -34,16 +34,18 @@ const mockElectronUpdaterWindow = (invoke?: (command: string) => Promise<unknown
     __AX_CODE_DESKTOP_ELECTRON__: { runtime: "electron" },
     __TAURI__: {
       core: {
-        invoke: invoke ?? (async (command: string) => {
-          invokedCommands.push(command)
-          if (command === "desktop_check_for_updates") {
-            return {
-              available: false,
-              currentVersion: "1.1.1",
+        invoke:
+          invoke ??
+          (async (command: string) => {
+            invokedCommands.push(command)
+            if (command === "desktop_check_for_updates") {
+              return {
+                available: false,
+                currentVersion: "1.1.1",
+              }
             }
-          }
-          return null
-        }),
+            return null
+          }),
       },
     },
   }

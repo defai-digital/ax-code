@@ -155,10 +155,7 @@ async function main() {
     { arch: "arm64", file: `ax-code-windows-arm64.zip`, installerType: "zip" as const },
   ]
 
-  const assetsToHash = [
-    ...(writeDesktop ? desktopAssets : []),
-    ...(writeCli ? cliAssets : []),
-  ]
+  const assetsToHash = [...(writeDesktop ? desktopAssets : []), ...(writeCli ? cliAssets : [])]
 
   console.log(`Generating winget manifests for ${args.tag} (package=${args.package})`)
   console.log(`Output: ${args.out}`)

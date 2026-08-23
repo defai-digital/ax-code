@@ -1,10 +1,6 @@
 import { describe, expect, test } from "vitest"
 
-import {
-  buildRepoPlanPath,
-  resolvePlanProjectRefForDirectory,
-  toPlanDisplayPath,
-} from "./planViewPaths"
+import { buildRepoPlanPath, resolvePlanProjectRefForDirectory, toPlanDisplayPath } from "./planViewPaths"
 
 describe("PlanView path helpers", () => {
   test("displays Windows plan paths relative to the session directory when casing differs", () => {

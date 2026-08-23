@@ -14,7 +14,12 @@ describe("loadPluginFileContent", () => {
   })
 
   test("treats missing file content as a failed load", async () => {
-    await expect(loadPluginFileContent("plugin-file", vi.fn(async () => null))).resolves.toEqual({ ok: false })
+    await expect(
+      loadPluginFileContent(
+        "plugin-file",
+        vi.fn(async () => null),
+      ),
+    ).resolves.toEqual({ ok: false })
   })
 
   test("converts thrown reads into failed load results", async () => {

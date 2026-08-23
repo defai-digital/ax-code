@@ -369,7 +369,9 @@ export function LocalSetupScreen({ onBack, onCliAvailable }: LocalSetupScreenPro
 
         <div className="mx-auto w-full max-w-xl pt-4">
           <div className="space-y-2">
-            <div className="typography-ui-label text-muted-foreground">{t("onboarding.localSetup.field.alreadyInstalled")}</div>
+            <div className="typography-ui-label text-muted-foreground">
+              {t("onboarding.localSetup.field.alreadyInstalled")}
+            </div>
             <div className="flex gap-2">
               <Input
                 value={axCodeBinary}
@@ -390,7 +392,9 @@ export function LocalSetupScreen({ onBack, onCliAvailable }: LocalSetupScreenPro
                 {t("onboarding.localSetup.actions.apply")}
               </Button>
             </div>
-            <div className="typography-micro text-muted-foreground">{t("onboarding.localSetup.helper.saveAndReload")}</div>
+            <div className="typography-micro text-muted-foreground">
+              {t("onboarding.localSetup.helper.saveAndReload")}
+            </div>
           </div>
         </div>
       </div>
@@ -410,7 +414,9 @@ export function LocalSetupScreen({ onBack, onCliAvailable }: LocalSetupScreenPro
             <>
               <p className="typography-ui-label text-muted-foreground">{t("onboarding.localSetup.hint.ensurePath")}</p>
               <p className="typography-ui-label text-muted-foreground">{t("onboarding.localSetup.hint.setEnv")}</p>
-              <p className="typography-ui-label text-muted-foreground">{t("onboarding.localSetup.hint.missingRuntime")}</p>
+              <p className="typography-ui-label text-muted-foreground">
+                {t("onboarding.localSetup.hint.missingRuntime")}
+              </p>
             </>
           )}
         </div>

@@ -90,7 +90,10 @@ describe("LSP client cap wiring (source guardrails)", () => {
     expect(reuse).toContain("markClientUsed(s, match)")
 
     // Eviction must not poison the root for future spawns.
-    const evictBody = source.slice(source.indexOf("function evictExcessClients"), source.indexOf("async function resolveRoot"))
+    const evictBody = source.slice(
+      source.indexOf("function evictExcessClients"),
+      source.indexOf("async function resolveRoot"),
+    )
     expect(evictBody).not.toContain("markBroken")
     expect(evictBody).toContain("client.shutdown()")
   })

@@ -1,27 +1,20 @@
 import { describe, expect, test } from "vitest"
 import { WriteIsolation } from "../../src/session/write-isolation"
 
-function agent(
-  name: string,
-  rules: Array<{ permission: string; pattern: string; action: "allow" | "deny" | "ask" }>,
-) {
+function agent(name: string, rules: Array<{ permission: string; pattern: string; action: "allow" | "deny" | "ask" }>) {
   return { name, permission: rules }
 }
 
 describe("WriteIsolation.classifyAgentWriteClass", () => {
   test("explore is always read-only", () => {
     expect(
-      WriteIsolation.classifyAgentWriteClass(
-        agent("explore", [{ permission: "edit", pattern: "*", action: "allow" }]),
-      ),
+      WriteIsolation.classifyAgentWriteClass(agent("explore", [{ permission: "edit", pattern: "*", action: "allow" }])),
     ).toBe("read-only")
   })
 
   test("scout is always read-only", () => {
     expect(
-      WriteIsolation.classifyAgentWriteClass(
-        agent("scout", [{ permission: "bash", pattern: "*", action: "allow" }]),
-      ),
+      WriteIsolation.classifyAgentWriteClass(agent("scout", [{ permission: "bash", pattern: "*", action: "allow" }])),
     ).toBe("read-only")
   })
 
@@ -38,9 +31,7 @@ describe("WriteIsolation.classifyAgentWriteClass", () => {
 
   test("default allow agents are writers", () => {
     expect(
-      WriteIsolation.classifyAgentWriteClass(
-        agent("build", [{ permission: "*", pattern: "*", action: "allow" }]),
-      ),
+      WriteIsolation.classifyAgentWriteClass(agent("build", [{ permission: "*", pattern: "*", action: "allow" }])),
     ).toBe("writer")
   })
 })

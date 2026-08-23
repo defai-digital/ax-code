@@ -1,7 +1,4 @@
-import {
-  ProbabilisticRolloutSchema as Schema,
-  ProbabilisticRolloutReadiness as Readiness,
-} from "./helpers"
+import { ProbabilisticRolloutSchema as Schema, ProbabilisticRolloutReadiness as Readiness } from "./helpers"
 
 export namespace ProbabilisticRollout {
   // Schema re-exports

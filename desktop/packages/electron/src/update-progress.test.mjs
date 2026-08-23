@@ -21,9 +21,7 @@ describe("sendUpdateProgressToWindows", () => {
     const second = mockWindow()
     const destroyed = mockWindow({ destroyed: true })
 
-    expect(
-      sendUpdateProgressToWindows([first, destroyed, second], "Progress", { downloaded: 5, total: 10 }),
-    ).toBe(2)
+    expect(sendUpdateProgressToWindows([first, destroyed, second], "Progress", { downloaded: 5, total: 10 })).toBe(2)
 
     expect(first.sends).toEqual([
       {

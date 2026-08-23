@@ -18,11 +18,7 @@ export const DEFAULT_FULL_AGENT_FIXED_TOKENS_ESTIMATE = 40_000
  */
 export const DEFAULT_CORE_AGENT_FIXED_TOKENS_ESTIMATE = 12_000
 
-export function usableInputTokens(input: {
-  context?: number
-  input?: number
-  output?: number
-}): number {
+export function usableInputTokens(input: { context?: number; input?: number; output?: number }): number {
   if (typeof input.input === "number" && Number.isFinite(input.input) && input.input > 0) {
     return Math.floor(input.input)
   }

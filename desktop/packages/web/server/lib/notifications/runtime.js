@@ -411,8 +411,7 @@ export const createNotificationTriggerRuntime = (deps) => {
 
         const sessionTitle = payload.properties?.sessionTitle
         const permissionText = typeof permission === "string" && permission.length > 0 ? permission : ""
-        const fallbackMessage =
-          asTrimmedString(sessionTitle) || permissionText || "Agent is waiting for your approval"
+        const fallbackMessage = asTrimmedString(sessionTitle) || permissionText || "Agent is waiting for your approval"
 
         let title = "Permission required"
         let body = fallbackMessage

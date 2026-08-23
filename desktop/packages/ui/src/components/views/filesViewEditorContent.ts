@@ -24,7 +24,8 @@ export const detectFileLineEnding = (content: string): FileLineEnding => {
   return crlf > lf ? "\r\n" : "\n"
 }
 
-export const normalizeEditorLineEndings = (content: string): string => content.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+export const normalizeEditorLineEndings = (content: string): string =>
+  content.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
 
 export const serializeEditorContent = (content: string, lineEnding: FileLineEnding): string => {
   const normalized = normalizeEditorLineEndings(content)

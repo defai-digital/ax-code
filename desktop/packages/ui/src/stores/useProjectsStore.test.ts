@@ -119,10 +119,12 @@ describe("useProjectsStore path identity", () => {
 
   test("addProjects imports many roots without duplicates", () => {
     useProjectsStore.getState().addProject("/Users/Alice/Existing")
-    const added = useProjectsStore.getState().addProjects(
-      ["/Users/Alice/Existing", "/Users/Alice/NewA", "/Users/Alice/NewB"],
-      { labels: { "/Users/Alice/NewA": "Alpha" }, activateFirst: false },
-    )
+    const added = useProjectsStore
+      .getState()
+      .addProjects(["/Users/Alice/Existing", "/Users/Alice/NewA", "/Users/Alice/NewB"], {
+        labels: { "/Users/Alice/NewA": "Alpha" },
+        activateFirst: false,
+      })
 
     expect(added).toHaveLength(2)
     expect(added[0]?.label).toBe("Alpha")

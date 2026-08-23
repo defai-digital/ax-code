@@ -1,7 +1,13 @@
 import { describe, expect, test } from "vitest"
 import type { ToolPart } from "@ax-code/sdk/v2"
 
-import { extractChangedFiles, extractGitChangedFiles, getFileStats, isSyntheticDiffFile, toRelativePath } from "./changedFiles"
+import {
+  extractChangedFiles,
+  extractGitChangedFiles,
+  getFileStats,
+  isSyntheticDiffFile,
+  toRelativePath,
+} from "./changedFiles"
 
 type ToolFixtureOptions = {
   id?: string

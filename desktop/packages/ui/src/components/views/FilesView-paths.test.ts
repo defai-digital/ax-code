@@ -1,10 +1,6 @@
 import { describe, expect, test } from "vitest"
 
-import {
-  getFilesViewAncestorPaths,
-  getFilesViewDisplayPath,
-  isFilesViewPathWithinRoot,
-} from "./filesViewPathUtils"
+import { getFilesViewAncestorPaths, getFilesViewDisplayPath, isFilesViewPathWithinRoot } from "./filesViewPathUtils"
 
 describe("FilesView path helpers", () => {
   test("treats child paths under Windows drive roots as inside the root", () => {
@@ -25,8 +21,6 @@ describe("FilesView path helpers", () => {
   })
 
   test("displays Windows drive-root children as relative paths", () => {
-    expect(getFilesViewDisplayPath("C:/", "C:/Users/Alice/Project/src/app.ts")).toBe(
-      "Users/Alice/Project/src/app.ts",
-    )
+    expect(getFilesViewDisplayPath("C:/", "C:/Users/Alice/Project/src/app.ts")).toBe("Users/Alice/Project/src/app.ts")
   })
 })

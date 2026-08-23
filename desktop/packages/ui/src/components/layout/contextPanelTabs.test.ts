@@ -82,15 +82,13 @@ describe("getContextPanelTabLabel", () => {
 
   test("derives file tab labels from the target path", () => {
     expect(getContextPanelTabLabel({ mode: "file", label: null, targetPath: "/repo/app.ts" }, t)).toBe("app.ts")
-    expect(getContextPanelTabLabel({ mode: "file", label: null, targetPath: null }, t)).toBe(
-      "contextPanel.mode.files",
-    )
+    expect(getContextPanelTabLabel({ mode: "file", label: null, targetPath: null }, t)).toBe("contextPanel.mode.files")
   })
 
   test("derives preview tab labels from the URL host", () => {
-    expect(
-      getContextPanelTabLabel({ mode: "preview", label: null, targetPath: "http://localhost:3000/app" }, t),
-    ).toBe("localhost:3000")
+    expect(getContextPanelTabLabel({ mode: "preview", label: null, targetPath: "http://localhost:3000/app" }, t)).toBe(
+      "localhost:3000",
+    )
   })
 
   test("falls back to the preview label for missing or invalid URLs", () => {
@@ -119,9 +117,9 @@ describe("getContextPanelTabLabel", () => {
 describe("truncateContextPanelTabLabel", () => {
   test("keeps labels at or below the limit unchanged", () => {
     expect(truncateContextPanelTabLabel("short", CONTEXT_PANEL_TAB_LABEL_MAX_CHARS)).toBe("short")
-    expect(truncateContextPanelTabLabel("x".repeat(CONTEXT_PANEL_TAB_LABEL_MAX_CHARS), CONTEXT_PANEL_TAB_LABEL_MAX_CHARS)).toBe(
-      "x".repeat(CONTEXT_PANEL_TAB_LABEL_MAX_CHARS),
-    )
+    expect(
+      truncateContextPanelTabLabel("x".repeat(CONTEXT_PANEL_TAB_LABEL_MAX_CHARS), CONTEXT_PANEL_TAB_LABEL_MAX_CHARS),
+    ).toBe("x".repeat(CONTEXT_PANEL_TAB_LABEL_MAX_CHARS))
   })
 
   test("truncates longer labels with an ellipsis suffix", () => {

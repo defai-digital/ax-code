@@ -326,10 +326,7 @@ const recordStartupEvent = (name, details = {}, options = {}) => {
   return startupDiagnosticsRuntime.markOnce(name, details, options)
 }
 
-const REPEATABLE_DESKTOP_STARTUP_EVENTS = new Set([
-  "server.utilityProcess.launch",
-  "server.utilityProcess.ready",
-])
+const REPEATABLE_DESKTOP_STARTUP_EVENTS = new Set(["server.utilityProcess.launch", "server.utilityProcess.ready"])
 
 const projectConfigRuntime = createProjectConfigRuntime({
   fsPromises,

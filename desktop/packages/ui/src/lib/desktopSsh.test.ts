@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { createDesktopSshInstance, desktopSshInstancesGet, desktopSshLogs, normalizeDesktopSshBindHost } from "./desktopSsh"
+import {
+  createDesktopSshInstance,
+  desktopSshInstancesGet,
+  desktopSshLogs,
+  normalizeDesktopSshBindHost,
+} from "./desktopSsh"
 
 describe("desktopSsh", () => {
   afterEach(() => {

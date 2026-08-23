@@ -28,7 +28,11 @@ function resolveSyncStatus(
 
 const statusConfig: Record<
   SyncStatus,
-  { dotClass: string; pulse: boolean; labelKey: "syncStatus.connected" | "syncStatus.reconnecting" | "syncStatus.connecting" | "syncStatus.disconnected" }
+  {
+    dotClass: string
+    pulse: boolean
+    labelKey: "syncStatus.connected" | "syncStatus.reconnecting" | "syncStatus.connecting" | "syncStatus.disconnected"
+  }
 > = {
   connected: {
     dotClass: "bg-status-success",
@@ -78,12 +82,7 @@ export const SyncStatusIndicator: React.FC = React.memo(function SyncStatusIndic
                 )}
               />
             )}
-            <span
-              className={cn(
-                "relative inline-flex h-2.5 w-2.5 rounded-full",
-                config.dotClass,
-              )}
-            />
+            <span className={cn("relative inline-flex h-2.5 w-2.5 rounded-full", config.dotClass)} />
           </span>
         </button>
       </TooltipTrigger>

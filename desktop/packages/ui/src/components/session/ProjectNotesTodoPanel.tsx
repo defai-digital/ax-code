@@ -208,7 +208,6 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
 
     let cancelled = false
     setIsLoading(true)
-
     ;(async () => {
       try {
         const data = await getProjectContextData(projectRef)

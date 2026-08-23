@@ -54,9 +54,7 @@ describe("assistantMessageStats", () => {
   })
 
   test("omits cache hit when nothing was cached", () => {
-    const stats = assistantMessageStats(
-      message({ created: 0, completed: 10_000, tokensIn: 10_658, tokensOut: 368 }),
-    )
+    const stats = assistantMessageStats(message({ created: 0, completed: 10_000, tokensIn: 10_658, tokensOut: 368 }))
     expect(stats?.cacheHit).toBeUndefined()
   })
 

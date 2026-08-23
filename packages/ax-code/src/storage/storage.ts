@@ -224,11 +224,7 @@ export namespace Storage {
     // historically was also read via readJson, which JSON-decodes bare digits
     // to a number. Coerce both so value.trim is never called on a non-string.
     const text =
-      typeof value === "string"
-        ? value
-        : typeof value === "number" && Number.isFinite(value)
-          ? String(value)
-          : null
+      typeof value === "string" ? value : typeof value === "number" && Number.isFinite(value) ? String(value) : null
     if (text === null) return { value: 0, status: "not_numeric" }
 
     const trimmed = text.trim()

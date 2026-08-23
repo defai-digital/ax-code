@@ -13,10 +13,7 @@ import {
   type SessionMessageWithParts,
 } from "./taskToolSummary"
 
-function messageRecord(
-  info: Record<string, unknown>,
-  parts: Array<Record<string, unknown>>,
-): SessionMessageWithParts {
+function messageRecord(info: Record<string, unknown>, parts: Array<Record<string, unknown>>): SessionMessageWithParts {
   return { info, parts } as SessionMessageWithParts
 }
 
@@ -41,7 +38,9 @@ describe("parseTaskMetadataBlock", () => {
     const parsed = parseTaskMetadataBlock(output)
 
     expect(parsed.sessionId).toBe("session-1")
-    expect(parsed.summaryEntries).toEqual([{ id: undefined, tool: "bash", state: { status: "completed", title: "ls", input: undefined } }])
+    expect(parsed.summaryEntries).toEqual([
+      { id: undefined, tool: "bash", state: { status: "completed", title: "ls", input: undefined } },
+    ])
   })
 
   test("falls back to sessionID and alternate summary keys", () => {
@@ -56,7 +55,7 @@ describe("parseTaskMetadataBlock", () => {
 
 describe("stripTaskMetadataFromOutput", () => {
   test("strips a trailing metadata block and trailing whitespace", () => {
-    const output = "result text\n\n<task_metadata>{\"sessionId\":\"s\"}</task_metadata>\n  "
+    const output = 'result text\n\n<task_metadata>{"sessionId":"s"}</task_metadata>\n  '
 
     expect(stripTaskMetadataFromOutput(output)).toBe("result text")
   })

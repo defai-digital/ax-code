@@ -797,7 +797,9 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
                           <SortableFavoriteModelRow
                             key={`fav-sortable-${entry.providerID}-${entry.modelID}`}
                             id={`${entry.providerID}:${entry.modelID}`}
-                            disabled={disabled || Boolean(getProviderModelDisabledReason(entry.model, entry.providerID))}
+                            disabled={
+                              disabled || Boolean(getProviderModelDisabledReason(entry.model, entry.providerID))
+                            }
                           >
                             {(dragHandleProps) => renderRow(entry, "fav", true, rowIndex, dragHandleProps)}
                           </SortableFavoriteModelRow>

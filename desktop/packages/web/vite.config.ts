@@ -17,10 +17,7 @@ const nodeModulesSegment = "node_modules/"
 const configuredDevServerPort = Number.parseInt(process.env.AX_CODE_DESKTOP_RENDERER_PORT ?? "5173", 10)
 const devServerPort =
   Number.isFinite(configuredDevServerPort) && configuredDevServerPort > 0 ? configuredDevServerPort : 5173
-const highRiskBuildWarningPatterns = [
-  /will produce a circular dependency between chunks/i,
-  /broken execution order/i,
-]
+const highRiskBuildWarningPatterns = [/will produce a circular dependency between chunks/i, /broken execution order/i]
 
 process.noDeprecation = true
 

@@ -22,7 +22,7 @@ const createMemoryStorage = () => {
 
 type Deferred<T> = { promise: Promise<T>; resolve: (value: T) => void }
 
-const deferred = <T,>(): Deferred<T> => {
+const deferred = <T>(): Deferred<T> => {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((r) => {
     resolve = r
@@ -30,9 +30,7 @@ const deferred = <T,>(): Deferred<T> => {
   return { promise, resolve }
 }
 
-const importStore = async (options: {
-  pendingPermissions: Deferred<Array<{ id: string; sessionID: string }>>
-}) => {
+const importStore = async (options: { pendingPermissions: Deferred<Array<{ id: string; sessionID: string }>> }) => {
   vi.resetModules()
 
   const respondToPermissionMock = vi.fn(async () => undefined)

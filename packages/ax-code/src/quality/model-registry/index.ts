@@ -306,7 +306,11 @@ export namespace QualityModelRegistry {
   export const rollbackPromotion = _rollbackPromotion
 }
 
-import { promote as _promote, promoteDecisionBundle as _promoteDecisionBundle, finalizePromotion as _finalizePromotion } from "./promote"
+import {
+  promote as _promote,
+  promoteDecisionBundle as _promoteDecisionBundle,
+  finalizePromotion as _finalizePromotion,
+} from "./promote"
 import {
   promoteApprovedDecisionBundle as _promoteApprovedDecisionBundle,
   promoteSubmissionBundle as _promoteSubmissionBundle,

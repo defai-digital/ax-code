@@ -78,7 +78,8 @@ export function getCatalogItemFromSkillDocument({ source, effectiveSubpath, skil
   const skillName = path.posix.basename(skillDir)
   const parsedMd = parseSkillMd(skillMdContent)
   const warnings = [...(parsedMd.warnings || [])]
-  const description = typeof parsedMd.frontmatter?.description === "string" ? parsedMd.frontmatter.description : undefined
+  const description =
+    typeof parsedMd.frontmatter?.description === "string" ? parsedMd.frontmatter.description : undefined
   const frontmatterName = typeof parsedMd.frontmatter?.name === "string" ? parsedMd.frontmatter.name : undefined
 
   const installable = validateSkillName(skillName)

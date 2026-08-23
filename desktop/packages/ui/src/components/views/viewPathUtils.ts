@@ -6,7 +6,9 @@ export const viewPathsEqual = (left?: string | null, right?: string | null): boo
   const normalizedLeft = normalizeViewPath(left)
   const normalizedRight = normalizeViewPath(right)
   if (!normalizedLeft || !normalizedRight) return false
-  return projectPathMatchesRoot(normalizedLeft, normalizedRight) && projectPathMatchesRoot(normalizedRight, normalizedLeft)
+  return (
+    projectPathMatchesRoot(normalizedLeft, normalizedRight) && projectPathMatchesRoot(normalizedRight, normalizedLeft)
+  )
 }
 
 const isAbsolutePath = (value: string): boolean => {

@@ -1,5 +1,10 @@
 import { afterEach, expect, test, vi, type MockInstance } from "vitest"
-import { aggregateSessionStats, displayStats, validateStatsDays, validateStatsDisplayLimit } from "../../src/cli/cmd/stats"
+import {
+  aggregateSessionStats,
+  displayStats,
+  validateStatsDays,
+  validateStatsDisplayLimit,
+} from "../../src/cli/cmd/stats"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { tmpdir } from "../fixture/fixture"

@@ -38,10 +38,7 @@ export const useProjectSessionLists = (args: Args) => {
   const ownerProjectRootBySessionId = React.useMemo(() => {
     const owners = new Map<string, string | null>()
     for (const session of [...sessions, ...archivedSessions]) {
-      owners.set(
-        session.id,
-        resolveOwningProjectRoot(session, allProjectRoots, availableWorktreesByProject),
-      )
+      owners.set(session.id, resolveOwningProjectRoot(session, allProjectRoots, availableWorktreesByProject))
     }
     return owners
   }, [allProjectRoots, archivedSessions, availableWorktreesByProject, sessions])

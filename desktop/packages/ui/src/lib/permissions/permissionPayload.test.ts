@@ -19,9 +19,7 @@ describe("permission payload normalization", () => {
 
   test("falls back to metadata always patterns", () => {
     expect(getPermissionAlwaysPatterns({ always: { pattern: "/dev/*" }, metadata: {} })).toEqual(["/dev/*"])
-    expect(getPermissionAlwaysPatterns({ always: null, metadata: { always: { value: "bash *" } } })).toEqual([
-      "bash *",
-    ])
+    expect(getPermissionAlwaysPatterns({ always: null, metadata: { always: { value: "bash *" } } })).toEqual(["bash *"])
   })
 
   test("normalizes invalid permission names to unknown", () => {

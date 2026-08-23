@@ -99,9 +99,7 @@ describe("ui auth", () => {
       // The guard must fire before any destructive action.
       expect(res.statusCode).toBe(400)
       // The passkey store must never be rewritten (clearAllPasskeys not reached).
-      const touchedPasskeyStore = writeSpy.mock.calls.some(([target]) =>
-        String(target).includes("ui-passkeys"),
-      )
+      const touchedPasskeyStore = writeSpy.mock.calls.some(([target]) => String(target).includes("ui-passkeys"))
       expect(touchedPasskeyStore).toBe(false)
     } finally {
       auth.dispose()

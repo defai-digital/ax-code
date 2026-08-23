@@ -45,11 +45,7 @@ const ALLOWLIST: ReadonlyArray<readonly [a: string, b: string, reason: string]> 
     "stash_delete",
     "stash_delete is scoped to the stash dialog; app_exit's prompt handler is unreachable while a dialog is open",
   ],
-  [
-    "session_delete",
-    "stash_delete",
-    "session-list dialog and stash dialog are never open at the same time",
-  ],
+  ["session_delete", "stash_delete", "session-list dialog and stash dialog are never open at the same time"],
   [
     "session_delete",
     "input_delete",

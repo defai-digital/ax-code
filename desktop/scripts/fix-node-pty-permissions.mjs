@@ -18,10 +18,7 @@ if (process.platform === "win32") {
 const repoRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))))
 
 // Search only inside node-pty package trees to keep the walk cheap and bounded.
-const searchRoots = [
-  join(repoRoot, "node_modules", ".pnpm"),
-  join(repoRoot, "node_modules"),
-]
+const searchRoots = [join(repoRoot, "node_modules", ".pnpm"), join(repoRoot, "node_modules")]
 
 const isNodePtyDir = (name) => name === "node-pty" || name.startsWith("node-pty@") || name.startsWith("node-pty-")
 
@@ -72,5 +69,7 @@ for (const helper of new Set(helpers)) {
 }
 
 if (fixed > 0) {
-  console.log(`[fix-node-pty-permissions] made ${fixed} node-pty spawn-helper binar${fixed === 1 ? "y" : "ies"} executable`)
+  console.log(
+    `[fix-node-pty-permissions] made ${fixed} node-pty spawn-helper binar${fixed === 1 ? "y" : "ies"} executable`,
+  )
 }

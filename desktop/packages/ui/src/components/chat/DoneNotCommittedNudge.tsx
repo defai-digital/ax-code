@@ -36,10 +36,7 @@ export const DoneNotCommittedNudge: React.FC = React.memo(() => {
 
   // Show after an observed run-ended transition; stay dismissed until next run ends.
   const visible =
-    Boolean(currentSessionId) &&
-    runEndedAt !== null &&
-    isIdle &&
-    (dismissedAt === null || dismissedAt < runEndedAt)
+    Boolean(currentSessionId) && runEndedAt !== null && isIdle && (dismissedAt === null || dismissedAt < runEndedAt)
 
   if (!visible || !currentSessionId) return null
 

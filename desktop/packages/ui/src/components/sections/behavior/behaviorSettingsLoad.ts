@@ -1,4 +1,8 @@
-import { getResponseStylePresetInstructions, isResponseStylePreset, type ResponseStylePreset } from "@/lib/responseStyle"
+import {
+  getResponseStylePresetInstructions,
+  isResponseStylePreset,
+  type ResponseStylePreset,
+} from "@/lib/responseStyle"
 import { API_ENDPOINTS } from "@/lib/http"
 
 export type ResponseStyleValue = ResponseStylePreset | "custom"

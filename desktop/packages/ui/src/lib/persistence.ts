@@ -320,10 +320,7 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   if (typeof settings.notifyOnQuestion === "boolean" && settings.notifyOnQuestion !== store.notifyOnQuestion) {
     store.setNotifyOnQuestion(settings.notifyOnQuestion)
   }
-  if (
-    typeof settings.notifyOnPermission === "boolean" &&
-    settings.notifyOnPermission !== store.notifyOnPermission
-  ) {
+  if (typeof settings.notifyOnPermission === "boolean" && settings.notifyOnPermission !== store.notifyOnPermission) {
     store.setNotifyOnPermission(settings.notifyOnPermission)
   }
   if (settings.notificationTemplates && typeof settings.notificationTemplates === "object") {

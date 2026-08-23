@@ -8,10 +8,7 @@ describe("autocomplete group headers", () => {
   })
 
   test("returns options without headers when no groups are set", () => {
-    const opts: AutocompleteOption[] = [
-      { display: "file1.ts" },
-      { display: "file2.ts" },
-    ]
+    const opts: AutocompleteOption[] = [{ display: "file1.ts" }, { display: "file2.ts" }]
     const result = insertGroupHeaders(opts)
     expect(result).toEqual([
       { type: "option", option: opts[0], flatIndex: 0 },

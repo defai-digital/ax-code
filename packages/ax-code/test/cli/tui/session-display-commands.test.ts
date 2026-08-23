@@ -11,7 +11,9 @@ describe("tui session display command helpers", () => {
   })
 
   test("resolves export filenames whose first segment starts with dots", () => {
-    expect(resolveTranscriptExportPath("..exports/session.md")).toBe(path.join(process.cwd(), "..exports", "session.md"))
+    expect(resolveTranscriptExportPath("..exports/session.md")).toBe(
+      path.join(process.cwd(), "..exports", "session.md"),
+    )
   })
 
   test("rejects export filenames outside the workspace", () => {

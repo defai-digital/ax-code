@@ -142,8 +142,8 @@ describe("worker event stream lifecycle", () => {
     // stream is torn down — the workspace they belong to is gone.
     onEvent(delta("stale"))
     await rpc.shutdown()
-    expect(streamState.emitted.some((e) => (e as { properties?: { delta?: string } }).properties?.delta === "stale")).toBe(
-      false,
-    )
+    expect(
+      streamState.emitted.some((e) => (e as { properties?: { delta?: string } }).properties?.delta === "stale"),
+    ).toBe(false)
   })
 })

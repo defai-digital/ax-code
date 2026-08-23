@@ -108,8 +108,7 @@ export const IsolationRoutes = lazy(() =>
             // Preserve backend / protected / other isolation fields. Replacing
             // the whole object with { mode, network } dropped OS sandbox
             // backend and custom protected paths on every UI mode toggle.
-            const prev =
-              config.isolation && typeof config.isolation === "object" ? { ...config.isolation } : {}
+            const prev = config.isolation && typeof config.isolation === "object" ? { ...config.isolation } : {}
             config.isolation = { ...prev, mode, network }
           },
         })

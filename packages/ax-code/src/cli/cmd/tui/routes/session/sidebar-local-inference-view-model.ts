@@ -68,7 +68,9 @@ export function sidebarLocalInferenceView(input: {
 
   const now = input.now ?? Date.now()
   const completedAt =
-    typeof message.time?.completed === "number" && Number.isFinite(message.time.completed) ? message.time.completed : now
+    typeof message.time?.completed === "number" && Number.isFinite(message.time.completed)
+      ? message.time.completed
+      : now
   const inputTokens = message.tokens?.input ?? 0
   const outputTokens = message.tokens?.output ?? 0
 

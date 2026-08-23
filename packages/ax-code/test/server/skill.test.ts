@@ -140,5 +140,10 @@ test("POST /skill rejects absolute paths outside the worktree and home", async (
     }),
   })
   expect(response.status).toBe(400)
-  expect(await fs.access("/tmp/ax-code-skill-escape/evil/SKILL.md").then(() => true, () => false)).toBe(false)
+  expect(
+    await fs.access("/tmp/ax-code-skill-escape/evil/SKILL.md").then(
+      () => true,
+      () => false,
+    ),
+  ).toBe(false)
 })

@@ -5,15 +5,16 @@ export const withTimeout = <T>(
 ): Promise<T> => {
   return new Promise<T>((resolve, reject) => {
     let settled = false
-    const timeoutHandle = setTimeout(() => {
-      if (settled) {
-        return
-      }
-      settled = true
-      Promise.resolve()
-        .then(onTimeout)
-        .then(resolve, reject)
-    }, Math.max(0, timeoutMs))
+    const timeoutHandle = setTimeout(
+      () => {
+        if (settled) {
+          return
+        }
+        settled = true
+        Promise.resolve().then(onTimeout).then(resolve, reject)
+      },
+      Math.max(0, timeoutMs),
+    )
 
     operation.then(
       (value) => {

@@ -65,7 +65,10 @@ export function axEngineJobTransitions(
   return transitions
 }
 
-export function axEngineJobToast(transition: AxEngineJobTransition): { message: string; variant: "success" | "error" | "info" } {
+export function axEngineJobToast(transition: AxEngineJobTransition): {
+  message: string
+  variant: "success" | "error" | "info"
+} {
   const { job, to } = transition
   if (to === "complete") {
     return { message: `${job.modelID} download complete — the model is ready to use`, variant: "success" }

@@ -144,8 +144,7 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
   }) => BootstrapPhaseSequenceStep[]
 }) {
   const now = input.now ?? Date.now
-  const resolveClient = () =>
-    typeof input.client === "function" ? (input.client as () => TClient)() : input.client
+  const resolveClient = () => (typeof input.client === "function" ? (input.client as () => TClient)() : input.client)
   const createPhaseSequence = input.createPhaseSequence ?? createSyncBootstrapPhaseSequence
   const scheduleBackground = createLatestBootstrapBackgroundScheduler({
     onCoalesced() {

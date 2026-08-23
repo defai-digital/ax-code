@@ -577,9 +577,7 @@ export function GitHubIssuePickerDialog({
           </div>
         ) : null}
 
-        {isLoading ? (
-          <ViewLoadingSkeleton rows={4} label={t("session.githubIssuePicker.loading.issues")} />
-        ) : null}
+        {isLoading ? <ViewLoadingSkeleton rows={4} label={t("session.githubIssuePicker.loading.issues")} /> : null}
 
         {connected === false ? (
           <div className="text-center text-muted-foreground py-8 space-y-3">

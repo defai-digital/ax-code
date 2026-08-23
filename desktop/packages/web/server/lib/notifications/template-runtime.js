@@ -286,7 +286,8 @@ export const createNotificationTemplateRuntime = (deps) => {
         if (activeProject) {
           const activeProjectLabel = asTrimmedString(activeProject.label)
           projectName =
-            activeProjectLabel || (typeof activeProject.path === "string" ? activeProject.path.split("/").pop() || "" : "")
+            activeProjectLabel ||
+            (typeof activeProject.path === "string" ? activeProject.path.split("/").pop() || "" : "")
           worktreeDir = typeof activeProject.path === "string" ? activeProject.path : ""
         }
       }

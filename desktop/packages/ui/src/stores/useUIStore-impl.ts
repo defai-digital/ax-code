@@ -11,15 +11,7 @@ import type { TimeFormatPreference } from "@/lib/timeFormat"
 
 export type MainTab = "chat" | "plan" | "git" | "diff" | "terminal" | "files" | "context"
 export type RightSidebarTab = "git" | "files" | "context"
-export type ContextPanelMode =
-  | "diff"
-  | "file"
-  | "context"
-  | "plan"
-  | "chat"
-  | "preview"
-  | "browser"
-  | "dashboard"
+export type ContextPanelMode = "diff" | "file" | "context" | "plan" | "chat" | "preview" | "browser" | "dashboard"
 
 const CONTEXT_PANEL_MODES = new Set<ContextPanelMode>([
   "diff",
@@ -448,10 +440,7 @@ const sanitizeContextPanelByDirectory = (value: unknown): Record<string, Context
     let tabs = sanitizeContextPanelTabs(candidate.tabs)
     let activeTabId = typeof candidate.activeTabId === "string" ? candidate.activeTabId : null
 
-    if (
-      tabs.length === 0 &&
-      isContextPanelMode(candidate.mode)
-    ) {
+    if (tabs.length === 0 && isContextPanelMode(candidate.mode)) {
       tabs = [
         createContextPanelTab({
           mode: candidate.mode,

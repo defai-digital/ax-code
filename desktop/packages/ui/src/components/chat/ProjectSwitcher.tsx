@@ -143,7 +143,11 @@ export function ProjectSwitcher<TProject extends { id: string }>({
             <CommandSeparator />
 
             <CommandGroup>
-              <CommandItem value="__add_project__" onSelect={handleAddProject} className="gap-1.5 text-muted-foreground">
+              <CommandItem
+                value="__add_project__"
+                onSelect={handleAddProject}
+                className="gap-1.5 text-muted-foreground"
+              >
                 <Icon name="add" className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">{t("chat.chatInput.addProject")}</span>
               </CommandItem>

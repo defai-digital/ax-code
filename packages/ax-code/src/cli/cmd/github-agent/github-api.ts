@@ -18,9 +18,7 @@ export async function getOidcToken(): Promise<string> {
     return await core.getIDToken("ax-code-github-action")
   } catch (error) {
     console.error("Failed to get OIDC token:", error instanceof Error ? error.message : error)
-    throw new Error(
-      "Could not fetch an OIDC token. Make sure to add `id-token: write` to your workflow permissions.",
-    )
+    throw new Error("Could not fetch an OIDC token. Make sure to add `id-token: write` to your workflow permissions.")
   }
 }
 
@@ -191,13 +189,7 @@ export async function removeReaction(
 
 // --- Comments ---
 
-export async function createComment(
-  octoRest: Octokit,
-  owner: string,
-  repo: string,
-  issueId: number,
-  body: string,
-) {
+export async function createComment(octoRest: Octokit, owner: string, repo: string, issueId: number, body: string) {
   console.log("Creating comment...")
   return await octoRest.rest.issues.createComment({
     owner,

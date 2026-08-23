@@ -79,7 +79,9 @@ describe("createEventPipeline — UI-triggered retry now", () => {
 
       await Promise.race([
         secondAttemptStarted,
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("retry now did not wake retry sleep")), 250)),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("retry now did not wake retry sleep")), 250),
+        ),
       ])
 
       expect(sdkCallCount).toBe(2)

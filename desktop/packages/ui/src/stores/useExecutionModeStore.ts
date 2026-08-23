@@ -78,9 +78,7 @@ const applyMode = async (
     ? { ...modeFlags(previous) }
     : { autonomous: null, superLong: null }
   const settled = (): ExecutionMode | null =>
-    applied.autonomous === null || applied.superLong === null
-      ? null
-      : deriveMode(applied.autonomous, applied.superLong)
+    applied.autonomous === null || applied.superLong === null ? null : deriveMode(applied.autonomous, applied.superLong)
 
   try {
     return await axCodeClient.withDirectory(directory ?? null, async () => {

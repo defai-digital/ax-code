@@ -1,6 +1,13 @@
 import { describe, expect, test } from "vitest"
 import path from "node:path"
-import { capLines, detail, diagnostics, filetype, normalize, workdir } from "../../../src/cli/cmd/tui/routes/session/format"
+import {
+  capLines,
+  detail,
+  diagnostics,
+  filetype,
+  normalize,
+  workdir,
+} from "../../../src/cli/cmd/tui/routes/session/format"
 
 describe("tui session format", () => {
   test("normalizes paths inside and outside cwd", () => {

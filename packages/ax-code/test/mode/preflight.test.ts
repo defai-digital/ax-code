@@ -69,12 +69,10 @@ describe("EnsemblePreflight", () => {
   })
 
   test("assertTaskParallelAllowed blocks ensemble turns", () => {
-    expect(() =>
-      EnsemblePreflight.assertTaskParallelAllowed("Run a multi-provider council review"),
-    ).toThrow(/council or arena tool first/)
+    expect(() => EnsemblePreflight.assertTaskParallelAllowed("Run a multi-provider council review")).toThrow(
+      /council or arena tool first/,
+    )
     expect(() => EnsemblePreflight.assertTaskParallelAllowed("explore auth only")).not.toThrow()
-    expect(() =>
-      EnsemblePreflight.assertTaskParallelAllowed("Run multi-provider council", true),
-    ).not.toThrow()
+    expect(() => EnsemblePreflight.assertTaskParallelAllowed("Run multi-provider council", true)).not.toThrow()
   })
 })

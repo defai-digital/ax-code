@@ -67,7 +67,6 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({
 
     let cancelled = false
     setIsGitRepoLocal(null)
-
     ;(async () => {
       try {
         const repoStatus = await checkIsGitRepository(projectPath)
@@ -100,7 +99,6 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({
     let cancelled = false
     setIsLoadingWorktrees(true)
     setAvailableWorktrees([])
-
     ;(async () => {
       try {
         const worktrees = await listProjectWorktrees(projectRef)
@@ -126,7 +124,6 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({
 
     let cancelled = false
     setIsLoadingCommands(true)
-
     ;(async () => {
       try {
         const commands = await getWorktreeSetupCommands(projectRef)
@@ -350,9 +347,7 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({
             {t("settings.openchamber.worktrees.list.loading")}
           </p>
         ) : availableWorktrees.length === 0 ? (
-          <p className="typography-meta text-muted-foreground px-1">
-            {t("settings.openchamber.worktrees.list.empty")}
-          </p>
+          <p className="typography-meta text-muted-foreground px-1">{t("settings.openchamber.worktrees.list.empty")}</p>
         ) : (
           <div className="space-y-1 px-1 max-w-[32.5rem]">
             {availableWorktrees.map((worktree) => (

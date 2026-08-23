@@ -54,10 +54,7 @@ export function sortProjectsForDisplay<T extends ProjectEntry>(projects: readonl
   return projects
     .map((project, orderIndex) => ({ project, orderIndex }))
     .sort((a, b) =>
-      compareProjectsForDisplay(
-        { ...a.project, orderIndex: a.orderIndex },
-        { ...b.project, orderIndex: b.orderIndex },
-      ),
+      compareProjectsForDisplay({ ...a.project, orderIndex: a.orderIndex }, { ...b.project, orderIndex: b.orderIndex }),
     )
     .map(({ project }) => project)
 }

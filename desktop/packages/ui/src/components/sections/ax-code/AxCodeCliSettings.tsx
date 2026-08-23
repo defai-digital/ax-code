@@ -111,7 +111,8 @@ export const AxCodeCliSettings: React.FC = () => {
               <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
             </TooltipTrigger>
             <TooltipContent sideOffset={8} className="max-w-xs">
-              {t("settings.openchamber.axCodeCli.tooltipPrefix")} <code className="font-mono typography-micro">ax-code</code>
+              {t("settings.openchamber.axCodeCli.tooltipPrefix")}{" "}
+              <code className="font-mono typography-micro">ax-code</code>
               {t("settings.openchamber.axCodeCli.tooltipSuffix")}
             </TooltipContent>
           </Tooltip>

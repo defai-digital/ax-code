@@ -3,11 +3,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 
-import {
-  TERMINAL_SHELL_STARTUP_GRACE_MS,
-  createTerminalRuntime,
-  observeTerminalShellStartup,
-} from "./runtime.js"
+import { TERMINAL_SHELL_STARTUP_GRACE_MS, createTerminalRuntime, observeTerminalShellStartup } from "./runtime.js"
 import { createMockResponse, createRouteRegistry } from "../../test-helpers/route-harness.js"
 
 function createRuntime(server, overrides = {}) {
@@ -268,9 +264,11 @@ describe("terminal runtime error visibility", () => {
 
       expect(killRes.statusCode).toBe(200)
       expect(killRes.body).toEqual({ success: true, killedCount: 1 })
-      expect(warnings.some((line) => line.includes("Failed to kill terminal process") && line.includes("simulated kill failure"))).toBe(
-        true,
-      )
+      expect(
+        warnings.some(
+          (line) => line.includes("Failed to kill terminal process") && line.includes("simulated kill failure"),
+        ),
+      ).toBe(true)
     } finally {
       console.warn = originalWarn
       await runtime.shutdown()

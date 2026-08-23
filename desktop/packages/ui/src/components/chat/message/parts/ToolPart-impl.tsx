@@ -611,9 +611,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(
       null
     const diffEntries = React.useMemo(
       () =>
-        getDiffPatchEntries(metadata, diffContent ?? undefined, (path) =>
-          getToolRelativePath(path, currentDirectory),
-        ),
+        getDiffPatchEntries(metadata, diffContent ?? undefined, (path) => getToolRelativePath(path, currentDirectory)),
       [currentDirectory, diffContent, metadata],
     )
     const hasVisualDiffEntry = diffEntries.some((entry) => entry.renderMode === "diff")
@@ -912,9 +910,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(
 
             {state.status === "error" && "error" in state && (
               <div>
-                <div className="typography-meta font-medium text-muted-foreground mb-1">
-                  {t("chat.toolPart.error")}
-                </div>
+                <div className="typography-meta font-medium text-muted-foreground mb-1">{t("chat.toolPart.error")}</div>
                 <div
                   className="typography-meta p-2 rounded-xl border"
                   style={{

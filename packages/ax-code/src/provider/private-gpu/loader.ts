@@ -2,11 +2,7 @@ import { Auth } from "@/auth"
 import { Env } from "@/env"
 import type { Provider } from "../provider"
 import type { CustomLoader } from "../loaders"
-import {
-  DEDICATED_PRIVATE_GPU_VENDORS,
-  PRIVATE_GPU_REQUEST_TIMEOUT_MS,
-  type PrivateGpuVendor,
-} from "./presets"
+import { DEDICATED_PRIVATE_GPU_VENDORS, PRIVATE_GPU_REQUEST_TIMEOUT_MS, type PrivateGpuVendor } from "./presets"
 import { discoverPrivateGpuModels, privateGpuModelRecords } from "./discover"
 import { normalizeVendorBaseURL } from "./endpoint"
 

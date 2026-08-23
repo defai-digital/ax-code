@@ -545,7 +545,8 @@ async function createWindow() {
         type: "error",
         title: "AX Code window crashed",
         message: "The AX Code window crashed repeatedly.",
-        detail: "Reload to try again, or quit and reopen AX Code. If the problem continues, check the application logs.",
+        detail:
+          "Reload to try again, or quit and reopen AX Code. If the problem continues, check the application logs.",
         buttons: ["Reload", "Quit"],
       })
       .then(({ response }) => {

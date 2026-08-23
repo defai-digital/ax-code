@@ -17,11 +17,7 @@ const disposeUnlisten = (unlisten: TauriUnlisten) => {
   }
 }
 
-export const listenToTauriEvent = (
-  listen: TauriListen,
-  event: string,
-  handler: TauriEventHandler,
-): (() => void) => {
+export const listenToTauriEvent = (listen: TauriListen, event: string, handler: TauriEventHandler): (() => void) => {
   let disposed = false
   let unlisten: TauriUnlisten | null = null
 

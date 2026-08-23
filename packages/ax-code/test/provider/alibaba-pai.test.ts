@@ -18,7 +18,8 @@ import {
 } from "../../src/provider/alibaba-pai"
 
 const originalFetch = globalThis.fetch
-const EAS_URL = "http://5618677365194071.ap-southeast-1.pai-eas.aliyuncs.com/api/predict/quickstart_deploy_20260812_bn82"
+const EAS_URL =
+  "http://5618677365194071.ap-southeast-1.pai-eas.aliyuncs.com/api/predict/quickstart_deploy_20260812_bn82"
 
 afterEach(() => {
   globalThis.fetch = originalFetch

@@ -224,7 +224,11 @@ const removeIndexedSession = (routingIndex: EventRoutingIndex, sessionID: string
   routingIndex.sessionMessageIdsById.delete(sessionID)
 }
 
-export const ingestDirectoryStateIntoRoutingIndex = (routingIndex: EventRoutingIndex, directory: string, state: State) => {
+export const ingestDirectoryStateIntoRoutingIndex = (
+  routingIndex: EventRoutingIndex,
+  directory: string,
+  state: State,
+) => {
   const nextSessionIds = new Set<string>()
 
   for (const session of state.session) {

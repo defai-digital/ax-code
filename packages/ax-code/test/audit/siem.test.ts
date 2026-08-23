@@ -241,12 +241,7 @@ describe("R21: SIEM-compatible audit schema", () => {
         await new Promise((r) => setTimeout(r, 50))
 
         const records = [...AuditExport.stream(sid)].map((line) => JSON.parse(line))
-        expect(records.map((record) => record.result)).toEqual([
-          "switch from build (0.00)",
-          "stop",
-          "stop",
-          "0 parts",
-        ])
+        expect(records.map((record) => record.result)).toEqual(["switch from build (0.00)", "stop", "stop", "0 parts"])
         expect(records[1]).toMatchObject({
           duration_ms: 0,
           token_usage: { input: 0, output: 0 },

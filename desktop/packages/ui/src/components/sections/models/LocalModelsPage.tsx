@@ -277,8 +277,8 @@ export const LocalModelsPage: React.FC = () => {
           <div className="min-w-0 space-y-1">
             <h1 className="typography-ui-header font-semibold text-foreground">Models</h1>
             <p className="typography-meta text-muted-foreground">
-              Download and manage local AX Engine models with automatic MTP or Direct decode. The model list is served by
-              the live ax-code process (single source of truth in{" "}
+              Download and manage local AX Engine models with automatic MTP or Direct decode. The model list is served
+              by the live ax-code process (single source of truth in{" "}
               <code className="typography-micro">packages/ax-code/src/provider/ax-engine/constants.ts</code>
               ). AX Engine requires macOS 26+, Apple Silicon M2 or later.
             </p>
@@ -554,11 +554,8 @@ const DownloadProgressCell: React.FC<{
   const determinate = progress?.mode === "determinate" && Number.isFinite(progress.percent)
   const percent = determinate ? Math.max(0, Math.min(100, Math.round(progress.percent))) : 0
   const stalled =
-    job.status === "running" &&
-    progress?.updatedAt !== undefined &&
-    now - progress.updatedAt > STALL_HINT_MS
-  const statusLabel =
-    job.status === "queued" ? "Queued…" : determinate ? `Downloading… ${percent}%` : "Downloading…"
+    job.status === "running" && progress?.updatedAt !== undefined && now - progress.updatedAt > STALL_HINT_MS
+  const statusLabel = job.status === "queued" ? "Queued…" : determinate ? `Downloading… ${percent}%` : "Downloading…"
   const detail =
     stalled && !progress?.message
       ? "Still downloading…"
@@ -588,7 +585,11 @@ const DownloadProgressCell: React.FC<{
         )}
       </div>
       <div className="space-y-0.5 typography-micro leading-4 text-muted-foreground" aria-live="polite">
-        {detail ? <div className="truncate" title={detail}>{detail}</div> : null}
+        {detail ? (
+          <div className="truncate" title={detail}>
+            {detail}
+          </div>
+        ) : null}
         <div>
           {`≈${formatLocalModelBytes(minDiskBytes)}`}
           {job.status === "running" && job.startedAt ? ` · ${formatElapsed(now - job.startedAt)} elapsed` : ""}

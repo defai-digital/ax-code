@@ -13,9 +13,11 @@ const killLiveChildren = () => {
   for (const child of liveChildren) {
     // Best-effort cleanup during process exit. Logging is unreliable here
     // since the process is terminating, so we silently ignore kill failures.
-    void codeIntelHost().killTree(child).catch(() => {
-      // Intentionally silent: process is exiting, no opportunity to log.
-    })
+    void codeIntelHost()
+      .killTree(child)
+      .catch(() => {
+        // Intentionally silent: process is exiting, no opportunity to log.
+      })
   }
 }
 process.once("exit", killLiveChildren)

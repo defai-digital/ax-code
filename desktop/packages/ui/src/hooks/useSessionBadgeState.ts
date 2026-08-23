@@ -5,13 +5,7 @@ import type { QuestionRequest } from "@/types/question"
 import { useSessionHasError } from "@/sync/notification-store"
 import { useSessionRunEndedAt } from "@/sync/run-state-store"
 
-export type SessionBadgeState =
-  | "idle"
-  | "running"
-  | "waiting_for_input"
-  | "done_with_uncommitted"
-  | "error"
-  | "unread"
+export type SessionBadgeState = "idle" | "running" | "waiting_for_input" | "done_with_uncommitted" | "error" | "unread"
 
 export function computeSessionBadgeState(args: {
   status: SessionStatus | undefined
@@ -67,13 +61,6 @@ export function useSessionBadgeState(
         hasError,
         hasUnreadAttention: options.hasUnreadAttention,
       }),
-    [
-      options.status,
-      options.permissions,
-      options.questions,
-      ranWithUncommitted,
-      hasError,
-      options.hasUnreadAttention,
-    ],
+    [options.status, options.permissions, options.questions, ranWithUncommitted, hasError, options.hasUnreadAttention],
   )
 }

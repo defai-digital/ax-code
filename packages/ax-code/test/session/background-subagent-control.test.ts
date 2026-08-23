@@ -149,9 +149,7 @@ describe("background subagent control", () => {
         }
 
         await expect(
-          (
-            await TaskTool.init()
-          ).execute(
+          (await TaskTool.init()).execute(
             {
               description: "One more",
               prompt: "do more work",

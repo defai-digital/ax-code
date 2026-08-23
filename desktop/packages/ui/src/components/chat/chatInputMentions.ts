@@ -57,7 +57,10 @@ export const isMentionBoundaryChar = (charBefore: string | null): boolean =>
   !charBefore || MENTION_BOUNDARY_CHAR.test(charBefore)
 
 // Trailing punctuation is not part of the mention ("@file.ts," → "file.ts")
-export const trimMentionTokenEnd = (raw: string): string => String(raw || "").trim().replace(/[),.;:!?`"'>]+$/g, "")
+export const trimMentionTokenEnd = (raw: string): string =>
+  String(raw || "")
+    .trim()
+    .replace(/[),.;:!?`"'>]+$/g, "")
 
 // Both leading wrappers and trailing punctuation stripped (used when extracting
 // file mentions to attach)
@@ -156,7 +159,10 @@ export const resolveFileMentionDeletion = (
 
 // Convert an absolute path to a project-relative mention path when it lives
 // under the given root directory; otherwise return it unchanged.
-export const toProjectRelativeMentionPath = (absolutePath: string, rootDirectory: string | null | undefined): string => {
+export const toProjectRelativeMentionPath = (
+  absolutePath: string,
+  rootDirectory: string | null | undefined,
+): string => {
   const normalizedAbsolutePath = absolutePath.replace(/\\/g, "/").trim()
   const normalizedRoot = (rootDirectory || "").replace(/\\/g, "/").replace(/\/+$/, "")
   if (!normalizedRoot) {

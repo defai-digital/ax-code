@@ -146,10 +146,7 @@ export function effortOptions(variantKeys: readonly string[]): EffortOption[] {
  * Keep a stored variant only if the active model still exposes it.
  * Returns undefined when the key is missing (falls back to Auto).
  */
-export function clampEffort(
-  variant: string | undefined,
-  available: readonly string[],
-): string | undefined {
+export function clampEffort(variant: string | undefined, available: readonly string[]): string | undefined {
   if (variant === undefined || variant === "") return undefined
   if (available.includes(variant)) return variant
   return undefined

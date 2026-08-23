@@ -16,14 +16,7 @@ describe("buildBuiltInCommands", () => {
         canStartSessionCommand: true,
         t,
       }),
-    ).toEqual([
-      "init",
-      "undo",
-      "redo",
-      "timeline",
-      "compact",
-      "summary",
-    ])
+    ).toEqual(["init", "undo", "redo", "timeline", "compact", "summary"])
   })
 
   test("omits init after the session has messages", () => {
@@ -68,14 +61,17 @@ describe("filterCommandList", () => {
   ]
 
   test("filters by command name or description", () => {
-    expect(filterCommandList(commands, { searchQuery: "fail", allowInitCommand: true }).map((command) => command.name))
-      .toEqual(["debug"])
-    expect(filterCommandList(commands, { searchQuery: "doc", allowInitCommand: true }).map((command) => command.name))
-      .toEqual(["docs"])
+    expect(
+      filterCommandList(commands, { searchQuery: "fail", allowInitCommand: true }).map((command) => command.name),
+    ).toEqual(["debug"])
+    expect(
+      filterCommandList(commands, { searchQuery: "doc", allowInitCommand: true }).map((command) => command.name),
+    ).toEqual(["docs"])
   })
 
   test("hides init when the current session already has messages", () => {
-    expect(filterCommandList(commands, { searchQuery: "", allowInitCommand: false }).map((command) => command.name))
-      .toEqual(["debug", "docs"])
+    expect(
+      filterCommandList(commands, { searchQuery: "", allowInitCommand: false }).map((command) => command.name),
+    ).toEqual(["debug", "docs"])
   })
 })

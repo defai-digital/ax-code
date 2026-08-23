@@ -4,8 +4,11 @@ import { readFile } from "node:fs/promises"
 import { LSPServer } from "@ax-code/ax-code-intel/server"
 
 test("JDTLS cleanup is attached via process exit promise", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../../ax-code-intel/src/server-defs/jvm-llvm-servers.ts"), "utf-8")
-  
+  const src = await readFile(
+    path.join(import.meta.dirname, "../../../ax-code-intel/src/server-defs/jvm-llvm-servers.ts"),
+    "utf-8",
+  )
+
   expect(src).toMatch(/spawnJdtls[\s\S]*?JdtlsDataDir\.cleanupStale\(\)/)
   expect(src).toMatch(/spawnJdtls[\s\S]*?JdtlsDataDir\.create\(\)/)
   expect(src).toMatch(/spawnJdtls[\s\S]*?JdtlsDataDir\.remove\(dataDir\)/)
@@ -28,14 +31,20 @@ test("JDTLS startup prunes stale temp data directories", async () => {
 })
 
 test("JDTLS stderr logging is attached during process launch", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../../ax-code-intel/src/server-defs/jvm-llvm-servers.ts"), "utf-8")
-  
+  const src = await readFile(
+    path.join(import.meta.dirname, "../../../ax-code-intel/src/server-defs/jvm-llvm-servers.ts"),
+    "utf-8",
+  )
+
   expect(src).toMatch(/spawnJdtls[\s\S]*?onStderr: \(chunk: Buffer \| string\) =>/)
   expect(src).not.toMatch(/spawnJdtls[\s\S]*?proc\.stderr\.on\("data"/)
 })
 
 test("Oxlint LSP detection caches --lsp support check", async () => {
-  const defs = await readFile(path.join(import.meta.dirname, "../../../ax-code-intel/src/server-defs/web-servers.ts"), "utf-8")
+  const defs = await readFile(
+    path.join(import.meta.dirname, "../../../ax-code-intel/src/server-defs/web-servers.ts"),
+    "utf-8",
+  )
   const src = await readFile(path.join(import.meta.dirname, "../../../ax-code-intel/src/oxlint.ts"), "utf-8")
 
   expect(defs).toContain("OxlintSupport.supportsLsp(lintBin)")
@@ -57,7 +66,10 @@ test("Oxlint LSP detection retries after transient --help failures", async () =>
 })
 
 test("ZLS managed install uses the shared verified GitHub release installer", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../../ax-code-intel/src/server-defs/jvm-llvm-servers.ts"), "utf-8")
+  const src = await readFile(
+    path.join(import.meta.dirname, "../../../ax-code-intel/src/server-defs/jvm-llvm-servers.ts"),
+    "utf-8",
+  )
 
   expect(src).toMatch(/export const Zls[\s\S]*?installPinnedGitHubReleaseAsset\(\{[\s\S]*?id: "zls"/)
   expect(src).toMatch(/export const Zls[\s\S]*?repo: "zigtools\/zls"/)
@@ -89,8 +101,14 @@ test("JavaScript-family server extensions stay aligned", () => {
 })
 
 test("Python server extensions stay aligned while ty keeps its extra root marker", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../../ax-code-intel/src/server-defs/shared.ts"), "utf-8")
-  const webSrc = await readFile(path.join(import.meta.dirname, "../../../ax-code-intel/src/server-defs/web-servers.ts"), "utf-8")
+  const src = await readFile(
+    path.join(import.meta.dirname, "../../../ax-code-intel/src/server-defs/shared.ts"),
+    "utf-8",
+  )
+  const webSrc = await readFile(
+    path.join(import.meta.dirname, "../../../ax-code-intel/src/server-defs/web-servers.ts"),
+    "utf-8",
+  )
 
   expect(LSPServer.Ty.extensions).toEqual([".py", ".pyi"])
   expect(LSPServer.Pyright.extensions).toEqual([".py", ".pyi"])

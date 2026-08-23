@@ -30,7 +30,7 @@ describe("ClawdHub skill installation", () => {
     try {
       downloadClawdHubSkill.mockResolvedValueOnce(
         zipWithFiles({
-          "SKILL.md": "---\nname: \"Review Code | \\u4ee3\\u7801\\u5ba1\\u67e5\"\ndescription: Review code.\n---\n",
+          "SKILL.md": '---\nname: "Review Code | \\u4ee3\\u7801\\u5ba1\\u67e5"\ndescription: Review code.\n---\n',
         }),
       )
 

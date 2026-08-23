@@ -312,10 +312,7 @@ export const useDirectoryStore = create<DirectoryNavigationStore>()(
         const normalizedCurrentDirectory = normalizeDirectoryPath(currentDirectory)
         const normalizedHomeDirectory = normalizeDirectoryPath(homeDir)
 
-        if (
-          normalizedCurrentDirectory === normalizedHomeDirectory ||
-          isFilesystemRoot(normalizedCurrentDirectory)
-        ) {
+        if (normalizedCurrentDirectory === normalizedHomeDirectory || isFilesystemRoot(normalizedCurrentDirectory)) {
           return
         }
 

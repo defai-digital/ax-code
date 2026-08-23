@@ -8,8 +8,7 @@
 const ENDPOINT = "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
 const MODELS = ["qwen3.7-plus", "qwen3.8-max-preview", "qwen3.8-max"] as const
 // 32x32 PNG — Token Plan rejects images with height/width <= 10.
-const PIXEL =
-  "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAADUlEQVR4nGP4z8DwHwAFgwJ/lQ0T1gAAAABJRU5ErkJggg=="
+const PIXEL = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAADUlEQVR4nGP4z8DwHwAFgwJ/lQ0T1gAAAABJRU5ErkJggg=="
 
 type Probe = { name: string; model?: string; ok: boolean; detail: string }
 
@@ -18,11 +17,7 @@ function redact(text: string) {
 }
 
 function keyFromEnv() {
-  return (
-    process.env.ALIBABA_TOKEN_PLAN_INTL_API_KEY?.trim() ||
-    process.env.ALIBABA_TOKEN_PLAN_API_KEY?.trim() ||
-    ""
-  )
+  return process.env.ALIBABA_TOKEN_PLAN_INTL_API_KEY?.trim() || process.env.ALIBABA_TOKEN_PLAN_API_KEY?.trim() || ""
 }
 
 async function postChat(key: string, body: unknown) {

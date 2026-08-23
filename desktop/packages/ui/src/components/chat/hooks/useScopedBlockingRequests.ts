@@ -68,10 +68,7 @@ export function useScopedPermissions(
 /**
  * Subscribe only to question arrays for the given session IDs.
  */
-export function useScopedQuestions(
-  store: StoreApi<QuestionState>,
-  sessionIds: readonly string[],
-): QuestionRequest[] {
+export function useScopedQuestions(store: StoreApi<QuestionState>, sessionIds: readonly string[]): QuestionRequest[] {
   const idsKey = sessionIds.join("\0")
   const cacheRef = React.useRef<{
     idsKey: string

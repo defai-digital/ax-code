@@ -413,7 +413,11 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const CONNECTION_PROBE_TIMEOUT_MS = 800
 
 const probeAxCodeHealth = async (timeoutMs = CONNECTION_PROBE_TIMEOUT_MS): Promise<boolean> => {
-  return withTimeout(axCodeClient.checkHealth().catch(() => false), Math.max(1, timeoutMs), () => false)
+  return withTimeout(
+    axCodeClient.checkHealth().catch(() => false),
+    Math.max(1, timeoutMs),
+    () => false,
+  )
 }
 
 const DIRECTORY_KEY_GLOBAL = "__global__"
@@ -821,7 +825,8 @@ export const useConfigStore = create<ConfigStore>()(
                       state.settingsDefaultVariant,
                     )
                     if (!currentSelectionIsSelectable) {
-                      const fallback = resolved ?? resolveFirstSelectableSelection(processedProviders, state.currentProviderId)
+                      const fallback =
+                        resolved ?? resolveFirstSelectableSelection(processedProviders, state.currentProviderId)
                       const nextSelection =
                         fallback ??
                         (state.currentProviderId || state.currentModelId
@@ -941,7 +946,8 @@ export const useConfigStore = create<ConfigStore>()(
                   state.settingsDefaultVariant,
                 )
                 if (!currentSelectionIsSelectable) {
-                  const fallback = resolved ?? resolveFirstSelectableSelection(fallbackProviders, state.currentProviderId)
+                  const fallback =
+                    resolved ?? resolveFirstSelectableSelection(fallbackProviders, state.currentProviderId)
                   const nextSelection =
                     fallback ??
                     (state.currentProviderId || state.currentModelId
@@ -1390,9 +1396,7 @@ export const useConfigStore = create<ConfigStore>()(
                     resolvedModelId = parsed.modelId
 
                     if (openChamberDefaults.defaultVariant) {
-                      const model = defaultModel as
-                        | { variants?: Record<string, unknown> }
-                        | undefined
+                      const model = defaultModel as { variants?: Record<string, unknown> } | undefined
                       const variants = model?.variants
                       if (
                         variants &&

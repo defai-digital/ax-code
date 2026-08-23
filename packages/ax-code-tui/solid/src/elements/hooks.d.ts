@@ -1,14 +1,14 @@
-import { PasteEvent, Selection, Timeline, type CliRenderer, type KeyEvent, type TimelineOptions } from "@ax-code/tui";
-export declare const RendererContext: import("solid-js").Context<CliRenderer | undefined>;
-export declare const useRenderer: () => CliRenderer;
-export declare const onResize: (callback: (width: number, height: number) => void) => void;
+import { PasteEvent, Selection, Timeline, type CliRenderer, type KeyEvent, type TimelineOptions } from "@ax-code/tui"
+export declare const RendererContext: import("solid-js").Context<CliRenderer | undefined>
+export declare const useRenderer: () => CliRenderer
+export declare const onResize: (callback: (width: number, height: number) => void) => void
 export declare const useTerminalDimensions: () => import("solid-js").Accessor<{
-    width: number;
-    height: number;
-}>;
+  width: number
+  height: number
+}>
 export interface UseKeyboardOptions {
-    /** Include release events - callback receives events with eventType: "release" */
-    release?: boolean;
+  /** Include release events - callback receives events with eventType: "release" */
+  release?: boolean
 }
 /**
  * Subscribe to keyboard events.
@@ -26,13 +26,13 @@ export interface UseKeyboardOptions {
  *   else keys.add(e.name)
  * }, { release: true })
  */
-export declare const useKeyboard: (callback: (key: KeyEvent) => void, options?: UseKeyboardOptions) => void;
-export declare const usePaste: (callback: (event: PasteEvent) => void) => void;
+export declare const useKeyboard: (callback: (key: KeyEvent) => void, options?: UseKeyboardOptions) => void
+export declare const usePaste: (callback: (event: PasteEvent) => void) => void
 /**
  * @deprecated renamed to useKeyboard
  */
-export declare const useKeyHandler: (callback: (key: KeyEvent) => void, options?: UseKeyboardOptions) => void;
-export declare const onFocus: (callback: () => void) => void;
-export declare const onBlur: (callback: () => void) => void;
-export declare const useSelectionHandler: (callback: (selection: Selection) => void) => void;
-export declare const useTimeline: (options?: TimelineOptions) => Timeline;
+export declare const useKeyHandler: (callback: (key: KeyEvent) => void, options?: UseKeyboardOptions) => void
+export declare const onFocus: (callback: () => void) => void
+export declare const onBlur: (callback: () => void) => void
+export declare const useSelectionHandler: (callback: (selection: Selection) => void) => void
+export declare const useTimeline: (options?: TimelineOptions) => Timeline

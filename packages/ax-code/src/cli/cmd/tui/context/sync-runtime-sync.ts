@@ -129,17 +129,23 @@ export function createRuntimeSyncActions(input: {
 
   return {
     async syncWorkspaces() {
-      const result = await currentClient().worktree.list().catch(() => undefined)
+      const result = await currentClient()
+        .worktree.list()
+        .catch(() => undefined)
       if (!result?.data) return
       input.applyWorkspaceList(normalizeWorkspaceList(result.data))
     },
     async syncMcpStatus() {
-      const result = await currentClient().mcp.status().catch(() => undefined)
+      const result = await currentClient()
+        .mcp.status()
+        .catch(() => undefined)
       if (!result?.data) return
       input.applyMcp(normalizeMcpStatusState(result.data) as Record<string, McpStatus>)
     },
     async syncLspStatus() {
-      const result = await currentClient().lsp.status().catch(() => undefined)
+      const result = await currentClient()
+        .lsp.status()
+        .catch(() => undefined)
       if (!result?.data) return
       input.applyLsp(normalizeLspStatusState<LspStatus>(result.data))
     },

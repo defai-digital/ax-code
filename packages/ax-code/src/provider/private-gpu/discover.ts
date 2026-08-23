@@ -3,10 +3,7 @@ import { Ssrf } from "@/util/ssrf"
 import { isRecord } from "@/util/record"
 import type { Provider } from "../provider"
 import { ModelID, ProviderID } from "../schema"
-import {
-  PRIVATE_GPU_DISCOVERY_TIMEOUT_MS,
-  type PrivateGpuVendor,
-} from "./presets"
+import { PRIVATE_GPU_DISCOVERY_TIMEOUT_MS, type PrivateGpuVendor } from "./presets"
 import { normalizeVendorBaseURL, privateGpuModelsURL } from "./endpoint"
 
 export type PrivateGpuDiscoveredModel = {

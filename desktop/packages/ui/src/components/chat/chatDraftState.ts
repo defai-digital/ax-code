@@ -3,5 +3,4 @@ export const shouldAutoOpenChatDraft = (input: {
   currentSessionId: string | null
   draftOpen: boolean
   hasSessionRoute: boolean
-}): boolean =>
-  input.autoOpenDraft && !input.currentSessionId && !input.draftOpen && !input.hasSessionRoute
+}): boolean => input.autoOpenDraft && !input.currentSessionId && !input.draftOpen && !input.hasSessionRoute

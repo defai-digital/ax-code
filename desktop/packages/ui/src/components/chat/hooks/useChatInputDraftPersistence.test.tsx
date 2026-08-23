@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { createRoot, type Root } from "react-dom/client"
 
 import { useChatInputDraftPersistence } from "./useChatInputDraftPersistence"
-import { CHAT_DRAFT_PERSIST_DEBOUNCE_MS, getDraftKey, getStoredDraft, saveStoredDraft } from "../chatInputDraftPersistence"
+import {
+  CHAT_DRAFT_PERSIST_DEBOUNCE_MS,
+  getDraftKey,
+  getStoredDraft,
+  saveStoredDraft,
+} from "../chatInputDraftPersistence"
 import { getConfirmedMentionsKey, loadConfirmedMentions, saveConfirmedMentions } from "../chatInputMentions"
 
 // jsdom in this repo provides no localStorage — install the same Map-backed

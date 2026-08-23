@@ -1012,9 +1012,7 @@ export const AgentsPage: React.FC = () => {
                         <div className="flex items-center justify-between py-1">
                           <div className="flex items-center gap-2">
                             <span className="typography-ui-label text-foreground">{label}</span>
-                            <span className="typography-micro text-muted-foreground font-mono">
-                              {permissionName}
-                            </span>
+                            <span className="typography-micro text-muted-foreground font-mono">{permissionName}</span>
                           </div>
                           <div className="typography-micro text-muted-foreground">
                             {patternRulesCount > 0

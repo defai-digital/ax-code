@@ -6,11 +6,16 @@ import type { ProviderModel, ProviderWithModelList } from "@/types/providerModel
 // ~40k matches runtime default build/agent fixed budget (~38.8k observed in #379).
 const DEFAULT_FULL_AGENT_FIXED_TOKENS_ESTIMATE = 40_000
 
-export function usableInputTokensFromModelLimit(limit: {
-  context?: number
-  input?: number
-  output?: number
-} | null | undefined): number {
+export function usableInputTokensFromModelLimit(
+  limit:
+    | {
+        context?: number
+        input?: number
+        output?: number
+      }
+    | null
+    | undefined,
+): number {
   if (!limit || typeof limit !== "object") return 0
   if (typeof limit.input === "number" && Number.isFinite(limit.input) && limit.input > 0) {
     return Math.floor(limit.input)

@@ -799,9 +799,7 @@ export const ProvidersLogoutCommand = cmd({
     // crypto runtime changed). Those records still occupy auth.json and are
     // exactly the ones a user wants to log out of, so offer them for removal
     // instead of claiming no credential exists.
-    const undecryptable = (await Auth.decryptionFailures()).filter(
-      (id) => !credentials.some(([key]) => key === id),
-    )
+    const undecryptable = (await Auth.decryptionFailures()).filter((id) => !credentials.some(([key]) => key === id))
     prompts.intro("Remove credential")
     if (credentials.length === 0 && undecryptable.length === 0) {
       prompts.log.error("No credentials found")
@@ -897,7 +895,9 @@ export const ProvidersDisableCommand = cmd({
         // Persist globally so the provider stays off across projects; the
         // credential remains in auth.json for `providers enable` later.
         await Config.updateGlobal(disableProviderPatch(await Config.getGlobal(), providerID))
-        prompts.log.success(`Disabled ${providerID} — credentials kept, re-enable with \`providers enable ${providerID}\``)
+        prompts.log.success(
+          `Disabled ${providerID} — credentials kept, re-enable with \`providers enable ${providerID}\``,
+        )
         prompts.outro("Done")
       },
     })
@@ -945,7 +945,10 @@ export const ProvidersEnableCommand = cmd({
           providerID = selected
         }
 
-        if (!disabled.includes(providerID) && !(config.enabled_providers && !config.enabled_providers.includes(providerID))) {
+        if (
+          !disabled.includes(providerID) &&
+          !(config.enabled_providers && !config.enabled_providers.includes(providerID))
+        ) {
           prompts.log.info(`${providerID} is not disabled`)
           prompts.outro("Done")
           return

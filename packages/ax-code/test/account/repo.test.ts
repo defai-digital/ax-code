@@ -330,10 +330,8 @@ test("getRow logs when stored tokens are legacy plaintext instead of encrypted v
     const id = "user-plaintext"
     const now = Date.now()
     // Database.Client().run only accepts a SQL string (no bind params).
-    db.run(
-      /*sql*/ `INSERT INTO account (id, email, url, access_token, refresh_token, token_expiry, time_created, time_updated)
-       VALUES ('${id}', 'plain@example.com', 'https://control.example.com', 'plaintext-access', 'plaintext-refresh', ${now + 3600_000}, ${now}, ${now})`,
-    )
+    db.run(/*sql*/ `INSERT INTO account (id, email, url, access_token, refresh_token, token_expiry, time_created, time_updated)
+       VALUES ('${id}', 'plain@example.com', 'https://control.example.com', 'plaintext-access', 'plaintext-refresh', ${now + 3600_000}, ${now}, ${now})`)
 
     const row = await AccountRepo.getRow(AccountID.make(id))
     expect(row).toBeDefined()

@@ -30,7 +30,8 @@ export function DialogProviders() {
   async function disconnect(providerID: string, providerName: string, reenableFirst: boolean) {
     // A disabled provider must leave disabled_providers when its credential is
     // deleted, otherwise it lingers in the Disabled list with nothing to use.
-    if (reenableFirst) await setProviderDisabled({ sdk, sync, toast, dialog, providerID, providerName, disabled: false })
+    if (reenableFirst)
+      await setProviderDisabled({ sdk, sync, toast, dialog, providerID, providerName, disabled: false })
     const removed = await sdk.client.auth.remove({ providerID })
     if (removed.error) {
       toast.show({ variant: "error", message: JSON.stringify(removed.error) })

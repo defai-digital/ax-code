@@ -96,7 +96,11 @@ describe("confirmed mentions persistence", () => {
 describe("collectComposerMentionRanges", () => {
   test("highlights file mentions for paths and confirmed plain tokens", () => {
     const confirmed = new Set(["LICENSE"])
-    const ranges = collectComposerMentionRanges("open @src/app.ts and @LICENSE now", noAgents, makeIsConfirmedFilePath(confirmed))
+    const ranges = collectComposerMentionRanges(
+      "open @src/app.ts and @LICENSE now",
+      noAgents,
+      makeIsConfirmedFilePath(confirmed),
+    )
     expect(ranges).toEqual([
       { start: 5, end: 16, kind: "file" },
       { start: 21, end: 29, kind: "file" },
@@ -110,7 +114,11 @@ describe("collectComposerMentionRanges", () => {
   })
 
   test("ignores email addresses (no boundary before @)", () => {
-    const ranges = collectComposerMentionRanges("mail user@example.com today", noAgents, makeIsConfirmedFilePath(new Set()))
+    const ranges = collectComposerMentionRanges(
+      "mail user@example.com today",
+      noAgents,
+      makeIsConfirmedFilePath(new Set()),
+    )
     expect(ranges).toEqual([])
   })
 
@@ -369,9 +377,9 @@ describe("buildMentionDropInsertion", () => {
 
 describe("resolveFileMentionPath", () => {
   test("prefers a trimmed relativePath when present", () => {
-    expect(resolveFileMentionPath({ name: "app.ts", path: "/repo/src/app.ts", relativePath: " src/app.ts " }, "/repo")).toBe(
-      "src/app.ts",
-    )
+    expect(
+      resolveFileMentionPath({ name: "app.ts", path: "/repo/src/app.ts", relativePath: " src/app.ts " }, "/repo"),
+    ).toBe("src/app.ts")
   })
 
   test("falls back to the project-relative absolute path", () => {

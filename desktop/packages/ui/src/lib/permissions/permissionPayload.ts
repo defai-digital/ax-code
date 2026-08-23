@@ -30,8 +30,10 @@ export const normalizePermissionPatterns = (value: unknown): string[] => {
   return []
 }
 
-export const getPermissionPatterns = (permission: { patterns?: unknown; metadata?: Record<string, unknown> }): string[] =>
-  normalizePermissionPatterns(permission.patterns)
+export const getPermissionPatterns = (permission: {
+  patterns?: unknown
+  metadata?: Record<string, unknown>
+}): string[] => normalizePermissionPatterns(permission.patterns)
 
 export const getPermissionAlwaysPatterns = (permission: {
   always?: unknown

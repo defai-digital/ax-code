@@ -1,9 +1,4 @@
-import type {
-  PredictionFile,
-  ReplayItem,
-  ShadowFile,
-  ShadowSummary,
-} from "./helpers"
+import type { PredictionFile, ReplayItem, ShadowFile, ShadowSummary } from "./helpers"
 import {
   decisionFromItem,
   decisionFromPrediction,

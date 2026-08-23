@@ -1079,13 +1079,7 @@ const buildMarkdownComponents = ({
     const language = getCodeLanguage(className)
     const code = normalizeCodeBlockText(extractCodeText(child.props.children).replace(/\n$/, ""), language)
     if (language === "mermaid") {
-      return (
-        <MermaidBlock
-          source={code}
-          mode={useUIStore.getState().mermaidRenderingMode}
-          deferRender={isStreaming}
-        />
-      )
+      return <MermaidBlock source={code} mode={useUIStore.getState().mermaidRenderingMode} deferRender={isStreaming} />
     }
     return (
       <MarkdownCodeBlock
@@ -1819,10 +1813,7 @@ const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
   const { editor } = useRuntimeAPIs()
   const containerRef = React.useRef<HTMLDivElement>(null)
   const effectiveDirectory = useEffectiveDirectory() ?? ""
-  const mermaidBlocks = React.useMemo(
-    () => (isStreaming ? [] : extractMermaidBlocks(content)),
-    [content, isStreaming],
-  )
+  const mermaidBlocks = React.useMemo(() => (isStreaming ? [] : extractMermaidBlocks(content)), [content, isStreaming])
   useMermaidInlineInteractions({ containerRef, mermaidBlocks, onShowPopup })
   useFileReferenceInteractions({
     containerRef,

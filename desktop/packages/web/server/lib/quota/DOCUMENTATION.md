@@ -16,22 +16,22 @@ This module fetches quota and usage signals for supported providers in the web s
 
 These provider IDs are currently dispatchable via `fetchQuotaForProvider(providerId)` in `packages/web/server/lib/quota/providers/index.js`.
 
-| Provider ID              | Display name                       | Module                                | Auth aliases/keys                                                          |
-| ------------------------ | ---------------------------------- | ------------------------------------- | -------------------------------------------------------------------------- |
-| `claude`                 | Claude                             | `providers/claude.js`                 | `anthropic`, `claude`                                                      |
-| `codex`                  | Codex                              | `providers/codex.js`                  | `openai`, `codex`, `chatgpt`                                               |
-| `google`                 | Google                             | `providers/google/index.js`           | `google`, `google.oauth`, Antigravity accounts file                        |
-| `github-copilot`         | GitHub Copilot                     | `providers/copilot.js`                | `github-copilot`, `copilot`                                                |
-| `github-copilot-addon`   | GitHub Copilot Add-on              | `providers/copilot.js`                | `github-copilot`, `copilot`                                                |
-| `kimi-for-coding`        | Kimi for Coding                    | `providers/kimi.js`                   | `kimi-for-coding`, `kimi`                                                  |
-| `nano-gpt`               | NanoGPT                            | `providers/nanogpt.js`                | `nano-gpt`, `nanogpt`, `nano_gpt`                                          |
-| `openrouter`             | OpenRouter                         | `providers/openrouter.js`             | `openrouter`                                                               |
-| `zai-coding-plan`        | z.ai                               | `providers/zai.js`                    | `zai-coding-plan`, `zai`, `z.ai`                                           |
-| `zhipuai-coding-plan`    | Zhipu AI Coding Plan               | `providers/zhipuai-coding-plan.js`    | `zhipuai-coding-plan`, `zhipuai`, `zhipu`                                  |
-| `minimax-coding-plan`    | MiniMax Token Plan               | `providers/minimax-coding-plan.js`    | `minimax-coding-plan`                                                      |
-| `minimax-cn-coding-plan` | MiniMax Token Plan (China)       | `providers/minimax-cn-coding-plan.js` | `minimax-cn-coding-plan`                                                   |
-| `ollama-cloud`           | Ollama Cloud                       | `providers/ollama-cloud.js`           | Cookie file at `~/.config/ollama-quota/cookie` (raw session cookie string) |
-| `wafer`                  | Wafer.ai                           | `providers/wafer.js`                  | `wafer`, `wafer-ai`, `wafer_ai`, `wafer.ai`                                |
+| Provider ID              | Display name               | Module                                | Auth aliases/keys                                                          |
+| ------------------------ | -------------------------- | ------------------------------------- | -------------------------------------------------------------------------- |
+| `claude`                 | Claude                     | `providers/claude.js`                 | `anthropic`, `claude`                                                      |
+| `codex`                  | Codex                      | `providers/codex.js`                  | `openai`, `codex`, `chatgpt`                                               |
+| `google`                 | Google                     | `providers/google/index.js`           | `google`, `google.oauth`, Antigravity accounts file                        |
+| `github-copilot`         | GitHub Copilot             | `providers/copilot.js`                | `github-copilot`, `copilot`                                                |
+| `github-copilot-addon`   | GitHub Copilot Add-on      | `providers/copilot.js`                | `github-copilot`, `copilot`                                                |
+| `kimi-for-coding`        | Kimi for Coding            | `providers/kimi.js`                   | `kimi-for-coding`, `kimi`                                                  |
+| `nano-gpt`               | NanoGPT                    | `providers/nanogpt.js`                | `nano-gpt`, `nanogpt`, `nano_gpt`                                          |
+| `openrouter`             | OpenRouter                 | `providers/openrouter.js`             | `openrouter`                                                               |
+| `zai-coding-plan`        | z.ai                       | `providers/zai.js`                    | `zai-coding-plan`, `zai`, `z.ai`                                           |
+| `zhipuai-coding-plan`    | Zhipu AI Coding Plan       | `providers/zhipuai-coding-plan.js`    | `zhipuai-coding-plan`, `zhipuai`, `zhipu`                                  |
+| `minimax-coding-plan`    | MiniMax Token Plan         | `providers/minimax-coding-plan.js`    | `minimax-coding-plan`                                                      |
+| `minimax-cn-coding-plan` | MiniMax Token Plan (China) | `providers/minimax-cn-coding-plan.js` | `minimax-cn-coding-plan`                                                   |
+| `ollama-cloud`           | Ollama Cloud               | `providers/ollama-cloud.js`           | Cookie file at `~/.config/ollama-quota/cookie` (raw session cookie string) |
+| `wafer`                  | Wafer.ai                   | `providers/wafer.js`                  | `wafer`, `wafer-ai`, `wafer_ai`, `wafer.ai`                                |
 
 ## Internal-only provider module
 

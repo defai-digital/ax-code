@@ -351,7 +351,10 @@ test("project config takes precedence over AX_CODE_TUI_CONFIG (matches AX_CODE_C
 test("merges keybind overrides across precedence layers", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await fs.writeFile(path.join(Global.Path.config, "tui.json"), JSON.stringify({ keybinds: { app_exit: "ctrl+q" } }))
+      await fs.writeFile(
+        path.join(Global.Path.config, "tui.json"),
+        JSON.stringify({ keybinds: { app_exit: "ctrl+q" } }),
+      )
       await fs.writeFile(path.join(dir, "tui.json"), JSON.stringify({ keybinds: { theme_list: "ctrl+k" } }))
     },
   })
@@ -499,7 +502,10 @@ test("gracefully falls back when tui.json has invalid JSON", async () => {
     init: async (dir) => {
       await fs.writeFile(path.join(dir, "tui.json"), "{ invalid json }")
       await fs.mkdir(managedConfigDir, { recursive: true })
-      await fs.writeFile(path.join(managedConfigDir, "tui.json"), JSON.stringify({ theme: "managed-fallback" }, null, 2))
+      await fs.writeFile(
+        path.join(managedConfigDir, "tui.json"),
+        JSON.stringify({ theme: "managed-fallback" }, null, 2),
+      )
     },
   })
 

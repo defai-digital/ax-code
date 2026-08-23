@@ -1,8 +1,5 @@
 import { describe, expect, test } from "vitest"
-import {
-  applyHeadlessProjectionEvent,
-  createHeadlessProjectionState,
-} from "../../../src/runtime/headless"
+import { applyHeadlessProjectionEvent, createHeadlessProjectionState } from "../../../src/runtime/headless"
 import { streamPaintDecision } from "../../../src/cli/cmd/tui/routes/session/stream-paint"
 
 // Behavior test for the streaming pipeline (principle D of the 2026-08-13

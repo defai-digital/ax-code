@@ -125,9 +125,13 @@ describe("builder.indexFile syntactic fallback", () => {
         const filePath = path.join(tmp.path, "fallback.ts")
         await writeFile(
           filePath,
-          ["export class Parser {", "  parse(input: string) { return input }", "}", "export function run() {}", ""].join(
-            "\n",
-          ),
+          [
+            "export class Parser {",
+            "  parse(input: string) { return input }",
+            "}",
+            "export function run() {}",
+            "",
+          ].join("\n"),
         )
 
         const touchSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(0)

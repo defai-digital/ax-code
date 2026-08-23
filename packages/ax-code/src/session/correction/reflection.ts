@@ -82,8 +82,6 @@ export function build(signal: FailureSignal, recentContext?: string): string {
 export function quick(signal: FailureSignal): string {
   const cwdHint = sessionCwdHint()
   const cwdSuffix =
-    cwdHint && (signal.strategy === "search_alternative" || signal.strategy === "verify_first")
-      ? ` ${cwdHint}`
-      : ""
+    cwdHint && (signal.strategy === "search_alternative" || signal.strategy === "verify_first") ? ` ${cwdHint}` : ""
   return `The \`${signal.toolName}\` operation failed: ${signal.error}. This has happened ${signal.attempt} time(s). ${signal.suggestion}${cwdSuffix}`
 }

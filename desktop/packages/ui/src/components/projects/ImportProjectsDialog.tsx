@@ -176,9 +176,7 @@ export const ImportProjectsDialog: React.FC<ImportProjectsDialogProps> = ({ open
               </Button>
             </div>
           ) : candidates.length === 0 ? (
-            <div className="py-10 text-center typography-meta text-muted-foreground">
-              {t("projects.import.empty")}
-            </div>
+            <div className="py-10 text-center typography-meta text-muted-foreground">{t("projects.import.empty")}</div>
           ) : (
             <>
               <div className="mb-2 flex items-center justify-between gap-2">
@@ -216,7 +214,10 @@ export const ImportProjectsDialog: React.FC<ImportProjectsDialogProps> = ({ open
                         <span className="flex flex-wrap items-center gap-1.5">
                           <span className="truncate typography-ui-label font-medium text-foreground">{entry.name}</span>
                           <span className="rounded bg-muted px-1.5 py-0.5 typography-micro text-muted-foreground">
-                            {sourceLabel(entry.source, t as (key: string, params?: Record<string, string | number>) => string)}
+                            {sourceLabel(
+                              entry.source,
+                              t as (key: string, params?: Record<string, string | number>) => string,
+                            )}
                           </span>
                           {entry.alreadyImported ? (
                             <span className="typography-micro text-muted-foreground">

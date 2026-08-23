@@ -2880,22 +2880,22 @@ export type Config = {
    */
   computer?: {
     /**
-     * Computer-use backend: "axnative" (AX-owned ax-computer-driver, macOS) or "cua" (cua-driver, cross-platform). Unset = computer tools unavailable.
+     * Computer-use backend: "axnative" (macOS), "cua" (cross-platform), or "external" (any MCP stdio server speaking the canonical AX Computer protocol; requires computer.command). The aliases are dual-stack: they route through the ax-computer server bridge when one is resolvable (AX_COMPUTER_COMMAND or ax-computer on PATH) and fall back to the legacy direct drivers otherwise. Unset = computer tools unavailable.
      */
-    provider?: "cua" | "axnative"
+    provider?: "cua" | "axnative" | "external"
     /**
-     * Backend server command override. Precedence: this config > AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_AXNATIVE_COMMAND env > default command name.
+     * Backend server command override. Required when provider is "external" (or set AX_COMPUTER_COMMAND) — external has no default command. For "axnative"/"cua", setting this (or AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_AXNATIVE_COMMAND) forces the legacy direct-driver path — deprecated, will be removed in a future major release; unset it to route through the ax-computer server bridge.
      */
     command?: string
     /**
-     * Backend server command arguments (default: ["mcp"])
+     * Backend server command arguments (default: ["mcp", "--backend", <provider>] on the bridge path, ["mcp"] on the legacy direct path, [] for external)
      */
     args?: Array<string>
     /**
-     * Per-app provider overrides: map an application name (as observed by computer_snapshot) to "cua" or "axnative". Observations and element acts against a matching app route to the named provider; everything else uses `provider`. Element ids are only valid against the provider that issued them — crossing providers requires a fresh observation.
+     * Per-app provider overrides: map an application name (as observed by computer_snapshot) to "cua", "axnative", or "external". Observations and element acts against a matching app route to the named provider; everything else uses `provider`. Element ids are only valid against the provider that issued them — crossing providers requires a fresh observation.
      */
     overrides?: {
-      [key: string]: "cua" | "axnative"
+      [key: string]: "cua" | "axnative" | "external"
     }
     /**
      * Grounder fallback for natural-language computer_action targets. Optional; unset = describe targets unavailable.

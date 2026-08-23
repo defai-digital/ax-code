@@ -392,7 +392,9 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
               />
             </span>
             <div className="flex-1 min-w-0">
-              <div className="typography-ui-label text-foreground leading-tight">{t("onboarding.localSetup.status.watching")}</div>
+              <div className="typography-ui-label text-foreground leading-tight">
+                {t("onboarding.localSetup.status.watching")}
+              </div>
               <div className="typography-micro text-muted-foreground leading-tight mt-0.5">
                 {t("onboarding.localSetup.status.autoContinue")}
               </div>
@@ -435,7 +437,9 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
                   {t("onboarding.localSetup.actions.apply")}
                 </Button>
               </div>
-              <p className="typography-micro text-muted-foreground">{t("onboarding.localSetup.helper.saveAndReload")}</p>
+              <p className="typography-micro text-muted-foreground">
+                {t("onboarding.localSetup.helper.saveAndReload")}
+              </p>
             </div>
           </details>
 

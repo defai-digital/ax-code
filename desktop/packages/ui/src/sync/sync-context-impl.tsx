@@ -1010,10 +1010,7 @@ function handleEvent(
       // running-session status counts) keep serving stale data after a busy
       // session is archived or deleted.
       const lifecycleInfo = (payload.properties as { info?: Session } | undefined)?.info
-      if (
-        payload.type === "session.deleted" ||
-        (payload.type === "session.updated" && lifecycleInfo?.time?.archived)
-      ) {
+      if (payload.type === "session.deleted" || (payload.type === "session.updated" && lifecycleInfo?.time?.archived)) {
         draft.message = { ...current.message }
         draft.session_diff = { ...current.session_diff }
         draft.session_status = { ...(current.session_status ?? {}) }

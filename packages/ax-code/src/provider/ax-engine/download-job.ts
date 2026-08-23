@@ -2,11 +2,7 @@ import { randomUUID } from "crypto"
 import { AX_ENGINE_ERROR, AX_ENGINE_MODEL_DEFINITIONS, isAxEngineModelID } from "./constants"
 import type { AxEngineModelID, AxEngineQuantization } from "./constants"
 import { getDependencyStatus } from "./dependency"
-import {
-  completeProgress,
-  indeterminateProgress,
-  type AxEngineDownloadProgress,
-} from "./download-progress"
+import { completeProgress, indeterminateProgress, type AxEngineDownloadProgress } from "./download-progress"
 import { downloadModel, getDiskStatus, normalizeQuantization } from "./model-cache"
 import { requirePlatformEligibility } from "./platform"
 

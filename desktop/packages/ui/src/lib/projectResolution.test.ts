@@ -44,8 +44,8 @@ describe("resolveProjectForSessionDirectory", () => {
       ["C:/Users/Alice/Project", [worktree("C:/Users/Alice/Project/.worktrees/Feature", "C:/Users/Alice/Project")]],
     ])
 
-    expect(resolveProjectForSessionDirectory(projects, worktrees, "c:/Users/Alice/Project/.worktrees/Feature/src")?.id).toBe(
-      "app",
-    )
+    expect(
+      resolveProjectForSessionDirectory(projects, worktrees, "c:/Users/Alice/Project/.worktrees/Feature/src")?.id,
+    ).toBe("app")
   })
 })

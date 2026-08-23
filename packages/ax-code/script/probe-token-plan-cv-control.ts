@@ -53,12 +53,7 @@ function redact(text: string) {
   return text.replace(/sk-[A-Za-z0-9._-]+/g, "sk-[redacted]").replace(/Bearer\s+\S+/g, "Bearer [redacted]")
 }
 
-async function complete(input: {
-  key: string
-  model: string
-  prompt: string
-  imagePng: Buffer
-}) {
+async function complete(input: { key: string; model: string; prompt: string; imagePng: Buffer }) {
   const res = await fetch(`${ENDPOINT}/chat/completions`, {
     method: "POST",
     headers: {
@@ -195,7 +190,9 @@ async function main() {
   }
 
   await browser.close()
-  const ok = results.filter((row) => row.step === "control").every((row) => row.ok) && results.some((row) => row.step === "control")
+  const ok =
+    results.filter((row) => row.step === "control").every((row) => row.ok) &&
+    results.some((row) => row.step === "control")
   console.log(JSON.stringify({ endpoint: ENDPOINT, ok, results }, null, 2))
   process.exit(ok ? 0 : 2)
 }

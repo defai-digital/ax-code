@@ -99,14 +99,18 @@ export function classifyReleaseBody(body) {
 export function shouldReplaceWithChangelog(body, channel, version) {
   if (channel === "cli" && !changelogAppliesToCli(version)) return false
   const kind = classifyReleaseBody(body)
-  return kind === "empty" || kind === "full-changelog-only" || kind === "github-auto-prs" || kind === "changelog-section" || kind === "one-liner"
+  return (
+    kind === "empty" ||
+    kind === "full-changelog-only" ||
+    kind === "github-auto-prs" ||
+    kind === "changelog-section" ||
+    kind === "one-liner"
+  )
 }
 
 function productBlurb(channel, version, siblingTag) {
   const product =
-    channel === "desktop"
-      ? "Desktop app installers for macOS, Windows, and Linux."
-      : "Terminal CLI and TUI archives."
+    channel === "desktop" ? "Desktop app installers for macOS, Windows, and Linux." : "Terminal CLI and TUI archives."
   if (!siblingTag) return product
   const label = channel === "desktop" ? "CLI archives" : "Desktop installers"
   return `${product} ${label} are on [${siblingTag}](${REPO_RELEASES}/${siblingTag}).`
@@ -194,11 +198,13 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()) {
   const outputPath = path.resolve(cwd, options.out)
   const changelog = await readFile(changelogPath, "utf8")
   const section = extractChangelogSection(changelog, options.version)
-  const previous = options.previous ?? (() => {
-    const prior = previousChangelogVersion(changelog, options.version)
-    if (!prior || !options.channel) return undefined
-    return options.channel === "desktop" ? `desktop-v${prior}` : `v${prior}`
-  })()
+  const previous =
+    options.previous ??
+    (() => {
+      const prior = previousChangelogVersion(changelog, options.version)
+      if (!prior || !options.channel) return undefined
+      return options.channel === "desktop" ? `desktop-v${prior}` : `v${prior}`
+    })()
   const notes = options.channel
     ? formatReleaseNotes({
         channel: options.channel,

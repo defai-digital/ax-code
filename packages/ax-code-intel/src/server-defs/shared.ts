@@ -50,7 +50,14 @@ export const ANSIBLE_ROOT_MARKERS = [
   path.join("roles", "requirements.yaml"),
 ]
 
-export const JS_LOCKFILES = ["package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lockb", "bun.lock"]
+export const JS_LOCKFILES = [
+  "package.json",
+  "package-lock.json",
+  "pnpm-lock.yaml",
+  "yarn.lock",
+  "bun.lockb",
+  "bun.lock",
+]
 
 // ─── Shared Helpers ────────────────────────────────────────────────────────────
 

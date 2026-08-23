@@ -97,7 +97,13 @@ const createSmokeAppCopy = async ({ appPath, tmpDir }) => {
   // instance, even when --user-data-dir differs. Use an isolated app identity
   // so this smoke test can run while a normal AX Code installation is open.
   const infoPlist = path.join(smokeAppPath, "Contents", "Info.plist")
-  await execFileAsync("plutil", ["-replace", "CFBundleIdentifier", "-string", buildSmokeBundleIdentifier(randomUUID()), infoPlist])
+  await execFileAsync("plutil", [
+    "-replace",
+    "CFBundleIdentifier",
+    "-string",
+    buildSmokeBundleIdentifier(randomUUID()),
+    infoPlist,
+  ])
   await execFileAsync("codesign", ["--force", "--deep", "--sign", "-", smokeAppPath])
   return smokeAppPath
 }

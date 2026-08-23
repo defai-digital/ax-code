@@ -43,7 +43,9 @@ export function isLargeTruncatedCodePaste(text: string | undefined): boolean {
   // Unfenced but still a long source-looking dump (common after a bad tool name).
   const codeyLines = trimmed
     .split("\n")
-    .filter((line) => /^(def |class |import |from |function |const |export |package |using |#include )/i.test(line.trim()))
+    .filter((line) =>
+      /^(def |class |import |from |function |const |export |package |using |#include )/i.test(line.trim()),
+    )
   return codeyLines.length >= 8
 }
 

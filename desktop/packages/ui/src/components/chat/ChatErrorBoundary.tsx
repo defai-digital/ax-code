@@ -94,7 +94,9 @@ class ChatErrorBoundaryView extends React.Component<ChatErrorBoundaryViewProps, 
                 </Button>
               </div>
 
-              <div className="typography-micro text-muted-foreground text-center">{this.props.texts.persistentHint}</div>
+              <div className="typography-micro text-muted-foreground text-center">
+                {this.props.texts.persistentHint}
+              </div>
             </CardContent>
           </Card>
         </div>

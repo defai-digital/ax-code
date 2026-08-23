@@ -46,7 +46,9 @@ export function Bash(props: ToolProps<typeof BashTool>) {
 
   return (
     <Switch>
-      <Match when={bashDisplayMode({ running: isRunning(), hasOutput: props.metadata.output !== undefined }) === "block"}>
+      <Match
+        when={bashDisplayMode({ running: isRunning(), hasOutput: props.metadata.output !== undefined }) === "block"}
+      >
         <BlockTool
           title={title()}
           part={props.part}
@@ -161,11 +163,7 @@ export function Edit(props: ToolProps<typeof EditTool>) {
               </text>
             )}
           </Show>
-          <box
-            paddingLeft={1}
-            maxHeight={collapsed() ? 30 : undefined}
-            overflow={collapsed() ? "hidden" : undefined}
-          >
+          <box paddingLeft={1} maxHeight={collapsed() ? 30 : undefined} overflow={collapsed() ? "hidden" : undefined}>
             <SessionDiffRenderer
               diff={rawDiff()}
               display={view()}

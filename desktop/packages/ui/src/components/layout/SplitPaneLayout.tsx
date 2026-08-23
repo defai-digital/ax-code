@@ -30,16 +30,13 @@ export const SplitPaneLayout: React.FC<SplitPaneLayoutProps> = ({ children, righ
   const startXRef = React.useRef(0)
   const startRatioRef = React.useRef(splitRatio)
 
-  const handlePointerDown = React.useCallback(
-    (e: React.PointerEvent) => {
-      e.preventDefault()
-      ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-      setIsDragging(true)
-      startXRef.current = e.clientX
-      startRatioRef.current = useUIStore.getState().splitPaneRatio
-    },
-    [],
-  )
+  const handlePointerDown = React.useCallback((e: React.PointerEvent) => {
+    e.preventDefault()
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    setIsDragging(true)
+    startXRef.current = e.clientX
+    startRatioRef.current = useUIStore.getState().splitPaneRatio
+  }, [])
 
   const handlePointerMove = React.useCallback(
     (e: React.PointerEvent) => {
@@ -53,17 +50,14 @@ export const SplitPaneLayout: React.FC<SplitPaneLayoutProps> = ({ children, righ
     [isDragging, setSplitRatio],
   )
 
-  const handlePointerUp = React.useCallback(
-    (e: React.PointerEvent) => {
-      try {
-        ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
-      } catch {
-        /* ignore */
-      }
-      setIsDragging(false)
-    },
-    [],
-  )
+  const handlePointerUp = React.useCallback((e: React.PointerEvent) => {
+    try {
+      ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
+    } catch {
+      /* ignore */
+    }
+    setIsDragging(false)
+  }, [])
 
   // ArrowLeft narrows the left pane, ArrowRight widens it. Step is a ratio.
   const handleResizeKeyDown = React.useCallback(

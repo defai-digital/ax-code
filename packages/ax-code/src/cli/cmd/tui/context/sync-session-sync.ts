@@ -26,15 +26,9 @@ export interface SessionSyncStoreState<
   session_goal: Record<string, TGoal | null>
 }
 
-type SessionSyncSnapshot<
-  TSession,
-  TTodo,
-  TMessage,
-  TPart,
-  TDiff,
-  TRisk,
-  TGoal,
-> = NonNullable<ReturnType<typeof createSessionSyncSnapshot<TSession, TTodo, TMessage, TPart, TDiff, TRisk, TGoal>>>
+type SessionSyncSnapshot<TSession, TTodo, TMessage, TPart, TDiff, TRisk, TGoal> = NonNullable<
+  ReturnType<typeof createSessionSyncSnapshot<TSession, TTodo, TMessage, TPart, TDiff, TRisk, TGoal>>
+>
 
 export function createStoreBackedSessionSyncController<
   TSession extends { id: string },

@@ -230,7 +230,8 @@ export const toolServer = async (
 export const bunServerArgs = (script: string, args: string[] = []) =>
   codeIntelHost().runtime.kind() === "node" ? [script, ...args] : ["run", script, ...args]
 
-export const nodeModuleScript = (...segments: string[]) => path.join(codeIntelHost().binDir(), "node_modules", ...segments)
+export const nodeModuleScript = (...segments: string[]) =>
+  path.join(codeIntelHost().binDir(), "node_modules", ...segments)
 
 export const serverHandle = (process: ReturnType<typeof spawn> | undefined, initialization?: Record<string, any>) => {
   if (!process) return

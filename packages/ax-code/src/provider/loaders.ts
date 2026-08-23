@@ -16,17 +16,8 @@ import { axEngineLoader } from "./ax-engine/provider-loader"
 import { PRIVATE_GPU_LOADERS } from "./private-gpu/loader"
 import { isRecord } from "@/util/record"
 import { ModelsDev } from "./models"
-import {
-  claudeDisplayName,
-  claudeFamilyId,
-  latestAnthropicFamilyModels,
-} from "./anthropic-families"
-import {
-  grokDisplayName,
-  grokFallbackLatest,
-  grokFamilyId,
-  latestGrokFamilyModels,
-} from "./grok-families"
+import { claudeDisplayName, claudeFamilyId, latestAnthropicFamilyModels } from "./anthropic-families"
+import { grokDisplayName, grokFallbackLatest, grokFamilyId, latestGrokFamilyModels } from "./grok-families"
 import { kimiDisplayName, kimiFallbackModels, kimiFamilyId, latestKimiFamilyModels } from "./kimi-families"
 import { codexDisplayName, codexFallbackModels, codexFamilyId, latestCodexFamilyModels } from "./codex-families"
 

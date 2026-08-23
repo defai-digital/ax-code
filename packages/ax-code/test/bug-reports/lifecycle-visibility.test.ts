@@ -79,7 +79,9 @@ describe("bug report lifecycle visibility guards", () => {
 
     // Close/reconnect paths must record failed status with an error message.
     expect(mcp).toContain('s.status[name] = { status: "failed", error: "Server closed the connection" }')
-    expect(mcp).toContain('s.status[name] = {\n        status: "failed",\n        error: "Unknown error during connection",\n      }')
+    expect(mcp).toContain(
+      's.status[name] = {\n        status: "failed",\n        error: "Unknown error during connection",\n      }',
+    )
     // listTools failures must not clobber an intentionally disabled server.
     expect(mcp).toContain('if (s.status[clientName]?.status !== "disabled")')
     expect(mcp).toContain('s.status[clientName] = { status: "failed" as const')

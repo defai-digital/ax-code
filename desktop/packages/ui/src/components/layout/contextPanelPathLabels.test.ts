@@ -10,9 +10,9 @@ describe("context panel path labels", () => {
   })
 
   test("labels UNC child paths relative to the directory when casing differs", () => {
-    expect(
-      getContextPanelRelativePathLabel("//SERVER/Share/Project/src/app.ts", "//server/share/project"),
-    ).toBe("src/app.ts")
+    expect(getContextPanelRelativePathLabel("//SERVER/Share/Project/src/app.ts", "//server/share/project")).toBe(
+      "src/app.ts",
+    )
   })
 
   test("keeps POSIX root matching case-sensitive", () => {

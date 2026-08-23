@@ -1,10 +1,10 @@
-import type { ViewportBounds } from "../types.js";
+import type { ViewportBounds } from "../types.js"
 interface ViewportObject {
-    screenX: number;
-    screenY: number;
-    width: number;
-    height: number;
-    zIndex: number;
+  screenX: number
+  screenY: number
+  width: number
+  height: number
+  zIndex: number
 }
 /**
  * Returns objects that overlap with the viewport bounds.
@@ -20,5 +20,11 @@ interface ViewportObject {
  * Objects must be pre-sorted by their start screen position (screenY for column direction, screenX for row direction).
  * Unsorted input will produce incorrect results.
  */
-export declare function getObjectsInViewport<T extends ViewportObject>(viewport: ViewportBounds, objects: T[], direction?: "row" | "column", padding?: number, minTriggerSize?: number): T[];
-export {};
+export declare function getObjectsInViewport<T extends ViewportObject>(
+  viewport: ViewportBounds,
+  objects: T[],
+  direction?: "row" | "column",
+  padding?: number,
+  minTriggerSize?: number,
+): T[]
+export {}

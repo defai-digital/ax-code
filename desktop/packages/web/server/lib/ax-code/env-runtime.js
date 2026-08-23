@@ -377,8 +377,7 @@ export const createAxCodeEnvRuntime = (deps) => {
   }
 
   const buildWslExecArgs = (execArgs, distroOverride = null) => {
-    const distro =
-      asTrimmedString(distroOverride) || ENV_CONFIGURED_AX_CODE_WSL_DISTRO
+    const distro = asTrimmedString(distroOverride) || ENV_CONFIGURED_AX_CODE_WSL_DISTRO
 
     const prefix = distro ? ["-d", distro] : []
     return [...prefix, "--exec", ...execArgs]

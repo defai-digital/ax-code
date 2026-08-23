@@ -1036,7 +1036,10 @@ describe("progress-aware stall helpers", () => {
       ),
     ).toBe(false)
     expect(
-      isNoProgressToolTurn([{ type: "tool", tool: "edit", state: { status: "completed", input: { path: "a" } } }], prior),
+      isNoProgressToolTurn(
+        [{ type: "tool", tool: "edit", state: { status: "completed", input: { path: "a" } } }],
+        prior,
+      ),
     ).toBe(false)
     const after = new Set(['bash:{"command":"ls"}'])
     expect(

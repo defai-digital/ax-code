@@ -121,7 +121,9 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
           setHasMore(Boolean(result.hasMore))
         }
       } else if (loaded.status === "failed") {
-        setError(loaded.error instanceof Error ? loaded.error.message : t("session.githubIntegration.error.loadDataFailed"))
+        setError(
+          loaded.error instanceof Error ? loaded.error.message : t("session.githubIntegration.error.loadDataFailed"),
+        )
       }
     } else if (requestTab === "prs" && github.prsList) {
       const loaded = await loadCurrentGitHubIntegrationList({
@@ -139,7 +141,9 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
           setHasMore(Boolean(result.hasMore))
         }
       } else if (loaded.status === "failed") {
-        setError(loaded.error instanceof Error ? loaded.error.message : t("session.githubIntegration.error.loadDataFailed"))
+        setError(
+          loaded.error instanceof Error ? loaded.error.message : t("session.githubIntegration.error.loadDataFailed"),
+        )
       }
     }
     if (isCurrentRequest()) {
@@ -430,7 +434,12 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
 
                   {hasMore && !loadingMore && (
                     <div className="flex justify-center pt-2">
-                      <Button variant="ghost" size="sm" onClick={() => void loadMore()} className="h-7 typography-micro">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void loadMore()}
+                        className="h-7 typography-micro"
+                      >
                         {t("session.githubIntegration.actions.loadMore")}
                       </Button>
                     </div>
@@ -495,7 +504,12 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
 
                   {hasMore && !loadingMore && (
                     <div className="flex justify-center pt-2">
-                      <Button variant="ghost" size="sm" onClick={() => void loadMore()} className="h-7 typography-micro">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void loadMore()}
+                        className="h-7 typography-micro"
+                      >
                         {t("session.githubIntegration.actions.loadMore")}
                       </Button>
                     </div>

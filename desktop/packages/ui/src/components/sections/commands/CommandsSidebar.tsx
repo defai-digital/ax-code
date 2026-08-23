@@ -428,9 +428,7 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
           </div>
 
           {command.description && (
-            <div className="typography-micro text-muted-foreground truncate leading-tight">
-              {command.description}
-            </div>
+            <div className="typography-micro text-muted-foreground truncate leading-tight">{command.description}</div>
           )}
         </button>
 

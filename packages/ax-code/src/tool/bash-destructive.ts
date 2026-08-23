@@ -25,17 +25,16 @@
 // the `rm` found after skipping `-u`... `root` breaks the scan — see
 // findWrappedCommand), so a flag-with-value wrapper can slip a command
 // past this scan. The generic bash permission still covers those.
-const COMMAND_WRAPPERS: ReadonlySet<string> = new Set([
-  "sudo",
-  "doas",
-  "command",
-  "nohup",
-  "time",
-  "env",
-  "xargs",
-])
+const COMMAND_WRAPPERS: ReadonlySet<string> = new Set(["sudo", "doas", "command", "nohup", "time", "env", "xargs"])
 
-const SQL_CLIENTS: ReadonlySet<string> = new Set(["psql", "mysql", "mariadb", "sqlite3", "mongosh", "clickhouse-client"])
+const SQL_CLIENTS: ReadonlySet<string> = new Set([
+  "psql",
+  "mysql",
+  "mariadb",
+  "sqlite3",
+  "mongosh",
+  "clickhouse-client",
+])
 
 const SYSTEM_HALT_COMMANDS: ReadonlySet<string> = new Set(["shutdown", "reboot", "halt", "poweroff"])
 
@@ -127,7 +126,10 @@ function classifyGit(args: string[]): string | undefined {
   if (subcommand === "clean" && (hasShortFlag(rest, "f") || hasLongFlag(rest, "--force"))) {
     return "git clean -f permanently deletes untracked files"
   }
-  if (subcommand === "branch" && (rest.includes("-D") || (hasLongFlag(rest, "--delete") && hasLongFlag(rest, "--force")))) {
+  if (
+    subcommand === "branch" &&
+    (rest.includes("-D") || (hasLongFlag(rest, "--delete") && hasLongFlag(rest, "--force")))
+  ) {
     return "git branch -D force-deletes a branch"
   }
   return undefined

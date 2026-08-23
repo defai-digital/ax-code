@@ -221,7 +221,9 @@ export function buildSessionTargetOptions(input: {
   for (const wt of input.worktrees) {
     const normalizedPath = normalizePath(wt.path)
     if (projectRootNormalized && normalizedPath && projectPathsEqual(normalizedPath, projectRootNormalized)) continue
-    const isPending = Boolean(normalizedPath && pendingNormalized && projectPathsEqual(normalizedPath, pendingNormalized))
+    const isPending = Boolean(
+      normalizedPath && pendingNormalized && projectPathsEqual(normalizedPath, pendingNormalized),
+    )
     options.push({
       value: normalizedPath,
       label: wt.branch?.trim() || wt.label || normalizedPath.split("/").pop() || normalizedPath,

@@ -10,11 +10,7 @@ import {
   formatAutonomyBudgetReport,
   resolveAutonomyBudget,
 } from "../../src/session/autonomy-budget"
-import {
-  MAX_TOOL_ONLY_TURNS,
-  TOOL_ONLY_TURN_NUDGE,
-  promptLoopLimits,
-} from "../../src/session/prompt-loop-config"
+import { MAX_TOOL_ONLY_TURNS, TOOL_ONLY_TURN_NUDGE, promptLoopLimits } from "../../src/session/prompt-loop-config"
 
 describe("resolveAutonomyBudget", () => {
   test("ships standard defaults with no config", () => {

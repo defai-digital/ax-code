@@ -158,9 +158,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
         <div className="flex items-center mb-1">
           <DialogTitle className="flex items-center gap-2.5">
             <Icon name="download-cloud" className="h-5 w-5 text-[var(--primary-base)]" />
-            <span className="text-lg font-semibold text-foreground">
-              {t("updateDialog.header.updateAvailable")}
-            </span>
+            <span className="text-lg font-semibold text-foreground">{t("updateDialog.header.updateAvailable")}</span>
           </DialogTitle>
 
           {/* Version Diff */}
@@ -202,7 +200,9 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
                           <span className="typography-ui-label font-mono text-[var(--primary-base)] bg-[var(--primary-base)]/10 px-1.5 py-0.5 rounded">
                             v{section.version}
                           </span>
-                          <span className="typography-ui-label font-medium text-muted-foreground">{section.dateLabel}</span>
+                          <span className="typography-ui-label font-medium text-muted-foreground">
+                            {section.dateLabel}
+                          </span>
                         </div>
                         <div
                           className="typography-markdown-body text-foreground leading-relaxed break-words [&_a]:!text-[var(--primary-base)] [&_a]:!no-underline [&_a:hover]:!underline"
@@ -292,7 +292,6 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
                 {t("updateDialog.actions.restartToUpdate")}
               </button>
             )}
-
           </div>
         </div>
       </DialogContent>

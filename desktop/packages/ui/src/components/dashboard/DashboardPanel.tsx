@@ -95,7 +95,13 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({ directory }) => 
             <div className="hidden truncate typography-micro text-muted-foreground sm:block">{subtitle}</div>
           </div>
         </div>
-        <Button type="button" size="xs" variant="ghost" className="gap-1" onClick={() => setReloadKey((key) => key + 1)}>
+        <Button
+          type="button"
+          size="xs"
+          variant="ghost"
+          className="gap-1"
+          onClick={() => setReloadKey((key) => key + 1)}
+        >
           <Icon name="refresh" className="h-3.5 w-3.5" />
           Refresh
         </Button>

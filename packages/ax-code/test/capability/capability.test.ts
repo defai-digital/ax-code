@@ -169,8 +169,9 @@ test("keeps dotted project instruction paths relative in capability names", asyn
       directory: tmp.path,
       fn: async () => {
         const capabilities = await Capability.list()
-        expect(capabilities.find((item) => item.kind === "instruction" && item.name === "..instructions/AGENTS.md"))
-          .toBeDefined()
+        expect(
+          capabilities.find((item) => item.kind === "instruction" && item.name === "..instructions/AGENTS.md"),
+        ).toBeDefined()
       },
     })
   })

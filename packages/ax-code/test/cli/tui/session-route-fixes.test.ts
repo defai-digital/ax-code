@@ -125,7 +125,7 @@ describe("streaming tool-output fold stability", () => {
     expect(sessionIndex).toContain("function sameDisplayPart(")
     // Cache keys distinguish singles (part.id) from coalesced runs (first
     // callID) so the two kinds cannot collide.
-    expect(sessionIndex).toContain('`single:${entry.part.id}`')
+    expect(sessionIndex).toContain("`single:${entry.part.id}`")
     expect(sessionIndex).toContain("`coalesced:${entry.key}`")
   })
 })

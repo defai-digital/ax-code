@@ -135,12 +135,9 @@ describe("visual.viewport", () => {
 
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vp-test-"))
     try {
-      const result = await captureViewportMatrix(
-        tmpDir,
-        "run_test",
-        "http://localhost:3000",
-        [{ label: "desktop", width: 1440, height: 900 }],
-      )
+      const result = await captureViewportMatrix(tmpDir, "run_test", "http://localhost:3000", [
+        { label: "desktop", width: 1440, height: 900 },
+      ])
 
       expect(result.successCount).toBe(1)
       expect(result.failureCount).toBe(0)

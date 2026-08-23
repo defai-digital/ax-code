@@ -1,2 +1,2 @@
-import { ensureSolidTransformPlugin } from "./solid-plugin.js";
-ensureSolidTransformPlugin();
+import { ensureSolidTransformPlugin } from "./solid-plugin.js"
+ensureSolidTransformPlugin()

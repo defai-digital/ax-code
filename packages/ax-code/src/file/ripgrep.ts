@@ -413,9 +413,7 @@ export namespace Ripgrep {
 
   export async function tree(input: { cwd: string; limit?: number; signal?: AbortSignal }) {
     log.info("tree", input)
-    const files = await Array.fromAsync(
-      Ripgrep.files({ cwd: input.cwd, limit: input.limit, signal: input.signal }),
-    )
+    const files = await Array.fromAsync(Ripgrep.files({ cwd: input.cwd, limit: input.limit, signal: input.signal }))
     interface Node {
       name: string
       children: Map<string, Node>

@@ -66,7 +66,9 @@ describe("quality.dre-graph-risk-section", () => {
     expect(html).toContain(
       `<span class="signal-label">Validations</span><span class="signal-value high">1/2 passed</span>`,
     )
-    expect(html).toContain(`<span class="signal-label">Diff source</span><span class="signal-value medium">derived</span>`)
+    expect(html).toContain(
+      `<span class="signal-label">Diff source</span><span class="signal-value medium">derived</span>`,
+    )
   })
 
   test("renders flags, bars, and escaped evidence lists", () => {

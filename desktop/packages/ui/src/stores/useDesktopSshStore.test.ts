@@ -19,10 +19,7 @@ const remoteInstance: DesktopSshInstance = {
   portForwards: [],
 }
 
-const createStatus = (
-  phase: DesktopSshInstanceStatus["phase"],
-  updatedAtMs: number,
-): DesktopSshInstanceStatus => ({
+const createStatus = (phase: DesktopSshInstanceStatus["phase"], updatedAtMs: number): DesktopSshInstanceStatus => ({
   id: "remote-1",
   phase,
   detail: phase,

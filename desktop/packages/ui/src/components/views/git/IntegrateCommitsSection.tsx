@@ -367,7 +367,9 @@ export const IntegrateCommitsSection: React.FC<{
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1.5">
                 {t("gitView.integrate.target")}
-                <span className="max-w-[160px] truncate font-mono typography-micro text-muted-foreground">{targetBranch}</span>
+                <span className="max-w-[160px] truncate font-mono typography-micro text-muted-foreground">
+                  {targetBranch}
+                </span>
                 <Icon name="arrow-down-s" className="size-4 opacity-60" />
               </Button>
             </DropdownMenuTrigger>
@@ -474,7 +476,10 @@ export const IntegrateCommitsSection: React.FC<{
             </div>
             <div className="flex flex-wrap gap-1.5">
               {ui.details.unmergedFiles.slice(0, 6).map((file) => (
-                <span key={file} className="font-mono typography-micro px-2 py-0.5 rounded bg-muted/40 text-muted-foreground">
+                <span
+                  key={file}
+                  className="font-mono typography-micro px-2 py-0.5 rounded bg-muted/40 text-muted-foreground"
+                >
                   {file}
                 </span>
               ))}

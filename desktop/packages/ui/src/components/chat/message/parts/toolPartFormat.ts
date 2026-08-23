@@ -307,7 +307,9 @@ export const getToolDiagnosticSection = (
 
   const visible = diagnostics.slice(0, TOOL_DIAGNOSTICS_MAX_PER_FILE)
   return {
-    displayPath: normalizedPath.startsWith("/") ? getToolRelativePath(normalizedPath, currentDirectory) : normalizedPath,
+    displayPath: normalizedPath.startsWith("/")
+      ? getToolRelativePath(normalizedPath, currentDirectory)
+      : normalizedPath,
     diagnostics: visible,
     remaining: Math.max(0, diagnostics.length - visible.length),
   }

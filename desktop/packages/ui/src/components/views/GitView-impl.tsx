@@ -1193,7 +1193,15 @@ export const GitView: React.FC = () => {
     } finally {
       setIsGeneratingMessage(false)
     }
-  }, [changeEntries, currentDirectory, stagedChangeEntries, settingsGitmojiEnabled, gitmojiEmojis, scrollActionPanelToBottom, t])
+  }, [
+    changeEntries,
+    currentDirectory,
+    stagedChangeEntries,
+    settingsGitmojiEnabled,
+    gitmojiEmojis,
+    scrollActionPanelToBottom,
+    t,
+  ])
 
   const formatBlockingReason = (reason: ReturnType<typeof getMutationBlockingReasons>[number]): string => {
     if (reason.reason === "attention") {

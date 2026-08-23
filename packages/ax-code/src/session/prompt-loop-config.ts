@@ -78,9 +78,7 @@ export type PromptLoopLimits = {
   autonomy: ResolvedAutonomyBudget
 }
 
-export function promptLoopLimits(
-  config: Pick<Config.Info, "session" | "experimental" | "autonomy">,
-): PromptLoopLimits {
+export function promptLoopLimits(config: Pick<Config.Info, "session" | "experimental" | "autonomy">): PromptLoopLimits {
   const autonomy = resolveAutonomyBudget(config)
   return {
     sessionStepLimit: autonomy.modelTurnsPerSegment,

@@ -75,10 +75,7 @@ export function completeProgress(
   }
 }
 
-export function indeterminateProgress(
-  message?: string,
-  now: number = Date.now(),
-): AxEngineDownloadProgress {
+export function indeterminateProgress(message?: string, now: number = Date.now()): AxEngineDownloadProgress {
   return {
     mode: "indeterminate",
     percent: 0,
@@ -88,7 +85,9 @@ export function indeterminateProgress(
 }
 
 /** Parse one stdout line from ax-engine download with --progress-json. */
-export function parseProgressJsonLine(line: string):
+export function parseProgressJsonLine(
+  line: string,
+):
   | { kind: "progress"; event: AxEngineProgressEvent }
   | { kind: "summary"; value: Record<string, unknown> }
   | { kind: "ignore" } {

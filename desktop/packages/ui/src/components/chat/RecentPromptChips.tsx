@@ -11,11 +11,7 @@ type RecentPromptChipsProps = {
   className?: string
 }
 
-export const RecentPromptChips: React.FC<RecentPromptChipsProps> = ({
-  visible = true,
-  onSelect,
-  className,
-}) => {
+export const RecentPromptChips: React.FC<RecentPromptChipsProps> = ({ visible = true, onSelect, className }) => {
   const { t } = useI18n()
   const [prompts, setPrompts] = React.useState<string[]>(() => listRecentPrompts())
 

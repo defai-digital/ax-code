@@ -24,7 +24,8 @@ export function detectCycle(
     const left = entries[i]!
     const right = entries[j]!
     if (left.tool !== right.tool || left.input !== right.input) return false
-    if (options.compareOutput && left.output !== undefined && right.output !== undefined) return left.output === right.output
+    if (options.compareOutput && left.output !== undefined && right.output !== undefined)
+      return left.output === right.output
     return true
   }
   for (let k = 1; k <= maxCycleLen; k++) {

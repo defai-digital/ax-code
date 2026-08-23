@@ -194,6 +194,11 @@ export const TaskCommand = cmd({
   command: "task",
   describe: "inspect and control the durable task queue",
   builder: (yargs: Argv) =>
-    yargs.command(TaskListCommand).command(TaskShowCommand).command(TaskCancelCommand).command(TaskRetryCommand).demandCommand(),
+    yargs
+      .command(TaskListCommand)
+      .command(TaskShowCommand)
+      .command(TaskCancelCommand)
+      .command(TaskRetryCommand)
+      .demandCommand(),
   async handler() {},
 })

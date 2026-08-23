@@ -17,6 +17,37 @@ export {
 export type { ServerInfo } from "../server-helpers"
 
 // ─── Re-export all server definitions ──────────────────────────────────────────
-export { Deno, Typescript, Vue, ESLint, Oxlint, Biome, Svelte, Astro, Pyright, Ty, BashLS, PHPIntelephense, YamlLS, SQLLanguageServer, AnsibleLanguageServer, DockerfileLS, Prisma } from "./web-servers"
-export { Gopls, Rubocop, ElixirLS, Zls, CSharp, FSharp, SourceKit, RustAnalyzer, Clangd, JDTLS, KotlinLS, LuaLS } from "./jvm-llvm-servers"
+export {
+  Deno,
+  Typescript,
+  Vue,
+  ESLint,
+  Oxlint,
+  Biome,
+  Svelte,
+  Astro,
+  Pyright,
+  Ty,
+  BashLS,
+  PHPIntelephense,
+  YamlLS,
+  SQLLanguageServer,
+  AnsibleLanguageServer,
+  DockerfileLS,
+  Prisma,
+} from "./web-servers"
+export {
+  Gopls,
+  Rubocop,
+  ElixirLS,
+  Zls,
+  CSharp,
+  FSharp,
+  SourceKit,
+  RustAnalyzer,
+  Clangd,
+  JDTLS,
+  KotlinLS,
+  LuaLS,
+} from "./jvm-llvm-servers"
 export { Dart, Ocaml, TerraformLS, TexLab, Gleam, Clojure, Nixd, Tinymist, HLS, JuliaLS } from "./other-servers"

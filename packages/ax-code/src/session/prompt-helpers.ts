@@ -7,12 +7,7 @@ export { appendShellOutputChunk, shellArgs, shellOutputMetadata, type ShellOutpu
 export { agentInfo, modelInfo } from "./prompt-agent-model-info"
 export { sessionAssistantPath, syntheticTextPart, textPart, zeroTokenUsage } from "./prompt-message-builders"
 export { commandSetup } from "./prompt-command-setup"
-export {
-  cleanGeneratedTitle,
-  ensureTitle,
-  fallbackTitleFromUserText,
-  titleContextMessages,
-} from "./prompt-title"
+export { cleanGeneratedTitle, ensureTitle, fallbackTitleFromUserText, titleContextMessages } from "./prompt-title"
 export { systemPrompt } from "./prompt-system"
 export { appendNewerMessages, loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-loop-messages"
 export { createStructuredOutputTool, createStructuredOutputTurn } from "./prompt-structured-output"

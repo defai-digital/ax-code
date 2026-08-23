@@ -70,10 +70,7 @@ describe("visual.snapshot", () => {
       })
 
       // Verify the run summary was written
-      const summaryPath = path.join(
-        VisualArtifactStore.runDir(tmpDir, result.run.id),
-        "visual-run.json",
-      )
+      const summaryPath = path.join(VisualArtifactStore.runDir(tmpDir, result.run.id), "visual-run.json")
       const summaryContent = await fs.promises.readFile(summaryPath, "utf-8")
       const summary = JSON.parse(summaryContent)
       expect(summary.id).toBe(result.run.id)

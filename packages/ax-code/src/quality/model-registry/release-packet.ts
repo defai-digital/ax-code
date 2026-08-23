@@ -232,20 +232,15 @@ export async function promoteReleasePacket(
       promotion: auditManifestPromotionSnapshot(record),
     })
   await QualityPromotionAuditManifest.append(auditManifest)
-  const exportBundle =
-    preflight?.exportBundle ?? QualityPromotionExportBundle.create({ auditManifest })
+  const exportBundle = preflight?.exportBundle ?? QualityPromotionExportBundle.create({ auditManifest })
   await QualityPromotionExportBundle.append(exportBundle)
-  const archiveManifest =
-    preflight?.archiveManifest ?? QualityPromotionArchiveManifest.create({ exportBundle })
+  const archiveManifest = preflight?.archiveManifest ?? QualityPromotionArchiveManifest.create({ exportBundle })
   await QualityPromotionArchiveManifest.append(archiveManifest)
-  const handoffPackage =
-    preflight?.handoffPackage ?? QualityPromotionHandoffPackage.create({ archiveManifest })
+  const handoffPackage = preflight?.handoffPackage ?? QualityPromotionHandoffPackage.create({ archiveManifest })
   await QualityPromotionHandoffPackage.append(handoffPackage)
-  const portableExport =
-    preflight?.portableExport ?? QualityPromotionPortableExport.create({ handoffPackage })
+  const portableExport = preflight?.portableExport ?? QualityPromotionPortableExport.create({ handoffPackage })
   await QualityPromotionPortableExport.append(portableExport)
-  const packagedArchive =
-    preflight?.packagedArchive ?? QualityPromotionPackagedArchive.create({ portableExport })
+  const packagedArchive = preflight?.packagedArchive ?? QualityPromotionPackagedArchive.create({ portableExport })
   await QualityPromotionPackagedArchive.append(packagedArchive)
   const signedArchive =
     preflight?.signedArchive ??

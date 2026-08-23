@@ -88,10 +88,9 @@ describe("shipped browser snapshot/action tools", () => {
       (await BrowserActionTool.init()).execute({ action: "click", snapshotID, uid: "uid_1" }, ctx("ses_tool_b")),
     ).rejects.toThrow(/BROWSER_STALE_SNAPSHOT/)
 
-    const first = await (await BrowserActionTool.init()).execute(
-      { action: "click", snapshotID, uid: "uid_1" },
-      ctx("ses_tool_a"),
-    )
+    const first = await (
+      await BrowserActionTool.init()
+    ).execute({ action: "click", snapshotID, uid: "uid_1" }, ctx("ses_tool_a"))
     expect(first.metadata.consumedSnapshotID).toBe(snapshotID)
 
     await expect(

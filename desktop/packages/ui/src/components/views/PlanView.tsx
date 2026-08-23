@@ -375,7 +375,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
 
       try {
         const repoPath = buildRepoPlanPath(sessionDirectory, session.time.created, session.slug)
-        const homePath = resolveTildePlanPath(buildHomePlanPath(session.time.created, session.slug), homeDirectory || null)
+        const homePath = resolveTildePlanPath(
+          buildHomePlanPath(session.time.created, session.slug),
+          homeDirectory || null,
+        )
 
         let resolved: string | null = null
         let text: string | null = null
@@ -720,7 +723,9 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
                           <div className="mb-1 font-medium text-destructive">
                             {t("planView.error.previewUnavailable")}
                           </div>
-                          <div className="typography-ui-label text-muted-foreground">{t("planView.error.switchToEditMode")}</div>
+                          <div className="typography-ui-label text-muted-foreground">
+                            {t("planView.error.switchToEditMode")}
+                          </div>
                         </div>
                       }
                     >

@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest"
-import { GLOBAL_STEP_LIMIT, GOAL_TOTAL_STEP_HEADROOM, SUPER_LONG_TOTAL_STEP_HEADROOM } from "../../src/constants/session"
+import {
+  GLOBAL_STEP_LIMIT,
+  GOAL_TOTAL_STEP_HEADROOM,
+  SUPER_LONG_TOTAL_STEP_HEADROOM,
+} from "../../src/constants/session"
 import {
   MAX_EMPTY_MODEL_TURN_RETRIES,
   MAX_TRUNCATED_MODEL_TURN_RETRIES,

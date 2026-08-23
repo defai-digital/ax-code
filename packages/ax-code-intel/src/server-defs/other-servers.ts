@@ -1,12 +1,7 @@
 import { codeIntelHost } from "../host"
 import path from "path"
 import { which } from "../internal/which"
-import {
-  log,
-  NearestRoot,
-  resolveManagedToolBin,
-  spawnInfo,
-} from "../server-helpers"
+import { log, NearestRoot, resolveManagedToolBin, spawnInfo } from "../server-helpers"
 import {
   PINNED_CHECKSUM_LSP_RELEASES,
   PINNED_GITHUB_LSP_RELEASES,
@@ -81,11 +76,16 @@ export const TerraformLS: Info = {
       return
     }
     log.info("downloading pinned terraform-ls release", { version: pinned.version })
-    const bin = (await installPinnedChecksumReleaseAsset({
-      id: "terraform-ls", assetName, url: assetUrl,
-      checksumUrl: terraformLsChecksumUrl(pinned.version),
-      bin: managedBin, installDir: managedToolDir("terraform-ls", pinned.version, platform, arch), platform,
-    })) ?? null
+    const bin =
+      (await installPinnedChecksumReleaseAsset({
+        id: "terraform-ls",
+        assetName,
+        url: assetUrl,
+        checksumUrl: terraformLsChecksumUrl(pinned.version),
+        bin: managedBin,
+        installDir: managedToolDir("terraform-ls", pinned.version, platform, arch),
+        platform,
+      })) ?? null
     if (!bin) return
     return terraformLsHandle(bin, root)
   },
@@ -112,11 +112,17 @@ export const TexLab: Info = {
       return
     }
     log.info("downloading pinned texlab release", { tag: pinned.tag })
-    const bin = (await installPinnedGitHubReleaseAsset({
-      id: "texlab", repo: pinned.repo, tag: pinned.tag, assetName, bin: managedBin,
-      installDir: path.dirname(managedBin), platform,
-      tarArgs: platform === "win32" ? undefined : ["-xzf"],
-    })) ?? null
+    const bin =
+      (await installPinnedGitHubReleaseAsset({
+        id: "texlab",
+        repo: pinned.repo,
+        tag: pinned.tag,
+        assetName,
+        bin: managedBin,
+        installDir: path.dirname(managedBin),
+        platform,
+        tarArgs: platform === "win32" ? undefined : ["-xzf"],
+      })) ?? null
     if (!bin) return
     return spawnInfo(bin, root)
   },
@@ -157,7 +163,8 @@ export const Nixd: Info = {
   root: async (file) => {
     const flakeRoot = await NearestRoot(["flake.nix"])(file)
     if (flakeRoot && flakeRoot !== codeIntelHost().projectRoot()) return flakeRoot
-    if (codeIntelHost().worktreeRoot() && codeIntelHost().worktreeRoot() !== codeIntelHost().projectRoot()) return codeIntelHost().worktreeRoot()
+    if (codeIntelHost().worktreeRoot() && codeIntelHost().worktreeRoot() !== codeIntelHost().projectRoot())
+      return codeIntelHost().worktreeRoot()
     return codeIntelHost().projectRoot()
   },
   async spawn(root) {
@@ -191,11 +198,17 @@ export const Tinymist: Info = {
       return
     }
     log.info("downloading pinned tinymist release", { tag: pinned.tag })
-    const bin = (await installPinnedGitHubReleaseAsset({
-      id: "tinymist", repo: pinned.repo, tag: pinned.tag, assetName, bin: managedBin,
-      installDir: path.dirname(managedBin), platform,
-      tarArgs: platform === "win32" ? undefined : ["-xzf", "--strip-components=1"],
-    })) ?? null
+    const bin =
+      (await installPinnedGitHubReleaseAsset({
+        id: "tinymist",
+        repo: pinned.repo,
+        tag: pinned.tag,
+        assetName,
+        bin: managedBin,
+        installDir: path.dirname(managedBin),
+        platform,
+        tarArgs: platform === "win32" ? undefined : ["-xzf", "--strip-components=1"],
+      })) ?? null
     if (!bin) return
     return spawnInfo(bin, root)
   },

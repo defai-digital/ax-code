@@ -22,13 +22,16 @@ export function streamPaintIntervalMs(length: number) {
   )
 }
 
-export type StreamPaintDecision =
-  | { action: "paint-now" }
-  | { action: "schedule"; delayMs: number }
+export type StreamPaintDecision = { action: "paint-now" } | { action: "schedule"; delayMs: number }
 
 // Pure timing decision for one streaming update, kept separate from the Solid
 // hook so it stays unit-testable without a renderer.
-export function streamPaintDecision(input: { final: boolean; now: number; lastPaintAt: number; length: number }): StreamPaintDecision {
+export function streamPaintDecision(input: {
+  final: boolean
+  now: number
+  lastPaintAt: number
+  length: number
+}): StreamPaintDecision {
   if (input.final) return { action: "paint-now" }
   const remaining = Math.max(0, streamPaintIntervalMs(input.length) - (input.now - input.lastPaintAt))
   if (remaining === 0) return { action: "paint-now" }

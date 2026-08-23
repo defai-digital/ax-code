@@ -6,7 +6,9 @@ import type { SessionID } from "./schema"
 
 const log = Log.create({ service: "session.prompt" })
 
-type PromptLoopTotalStepLimitTransition = { action: "ignore" } | { action: "stop"; reason: "step_limit"; message: string }
+type PromptLoopTotalStepLimitTransition =
+  | { action: "ignore" }
+  | { action: "stop"; reason: "step_limit"; message: string }
 
 type PromptLoopTotalStepLimitGoal = {
   objective: string

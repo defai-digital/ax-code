@@ -369,9 +369,7 @@ export function GitHubPrPickerDialog({
           </div>
         ) : null}
 
-        {isLoading ? (
-          <ViewLoadingSkeleton rows={4} label={t("session.githubPrPicker.loading.pullRequests")} />
-        ) : null}
+        {isLoading ? <ViewLoadingSkeleton rows={4} label={t("session.githubPrPicker.loading.pullRequests")} /> : null}
 
         {connected === false ? (
           <div className="text-center text-muted-foreground py-8 space-y-3">

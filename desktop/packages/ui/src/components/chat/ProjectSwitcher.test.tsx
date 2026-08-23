@@ -91,7 +91,7 @@ describe("ProjectSwitcher", () => {
     expect(document.body.textContent).toContain("Beta")
 
     setSearch("beta")
-    const projectItems = [...document.querySelectorAll<HTMLElement>('[cmdk-item]')].filter(
+    const projectItems = [...document.querySelectorAll<HTMLElement>("[cmdk-item]")].filter(
       (item) => !item.textContent?.includes("Add project"),
     )
     expect(projectItems.map((item) => item.textContent)).toEqual(["Beta"])
@@ -109,7 +109,7 @@ describe("ProjectSwitcher", () => {
     setSearch("missing")
 
     expect(document.body.textContent).toContain("No projects found")
-    const addProject = [...document.querySelectorAll<HTMLElement>('[cmdk-item]')].find((item) =>
+    const addProject = [...document.querySelectorAll<HTMLElement>("[cmdk-item]")].find((item) =>
       item.textContent?.includes("Add project"),
     )
     expect(addProject).toBeDefined()

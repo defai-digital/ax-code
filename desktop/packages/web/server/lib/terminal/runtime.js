@@ -138,7 +138,10 @@ export function createTerminalRuntime({
         "cmd.exe",
       ]
 
-      return resolveExecutableCandidates(windowsCandidates, (candidate) => candidate.includes("\\") || candidate.includes("/"))
+      return resolveExecutableCandidates(
+        windowsCandidates,
+        (candidate) => candidate.includes("\\") || candidate.includes("/"),
+      )
     }
 
     const unixCandidates = [
@@ -204,9 +207,7 @@ export function createTerminalRuntime({
       const outcome = await observeTerminalShellStartup(ptyProcess, TERMINAL_SHELL_STARTUP_GRACE_MS)
 
       if (outcome.crashed) {
-        lastError = new Error(
-          `shell ${shell} exited on startup (code ${outcome.exitCode}, signal ${outcome.signal})`,
-        )
+        lastError = new Error(`shell ${shell} exited on startup (code ${outcome.exitCode}, signal ${outcome.signal})`)
         console.warn(`Terminal shell ${shell} crashed on startup; trying next candidate: ${lastError.message}`)
         try {
           ptyProcess.kill()
@@ -733,8 +734,8 @@ export function createTerminalRuntime({
       try {
         res.end()
       } catch (error) {
-            console.warn("Failed to end terminal SSE response:", error)
-          }
+        console.warn("Failed to end terminal SSE response:", error)
+      }
 
       console.log(`Client ${clientId} disconnected from terminal session ${sessionId}`)
     }
@@ -764,8 +765,8 @@ export function createTerminalRuntime({
         res.write(`data: ${JSON.stringify({ type: "exit", exitCode, signal })}\n\n`)
         res.end()
       } catch (error) {
-            console.warn("Failed to write terminal exit event to client:", error)
-          }
+        console.warn("Failed to write terminal exit event to client:", error)
+      }
       cleanup()
     }
 

@@ -8,7 +8,8 @@ export const dict = {
   "common.cancel": "Cancel",
   "common.confirmDialog.title": "Please confirm",
   "configUpdate.restarting": "AX Code is restarting",
-  "configUpdate.timeoutHint": "AX Code is taking longer than expected. Reload the app or dismiss this message and retry.",
+  "configUpdate.timeoutHint":
+    "AX Code is taking longer than expected. Reload the app or dismiss this message and retry.",
   "configUpdate.waitHint": "This can take a few minutes. AX Code will resume automatically.",
   "configUpdate.reloadApp": "Reload app",
   "configUpdate.dismiss": "Dismiss",
@@ -277,8 +278,7 @@ export const dict = {
   "projects.home.title": "Projects",
   "projects.home.subtitle": "Pick a workspace to continue. Pinned and recent projects stay on top.",
   "projects.home.empty.title": "Add a project to get started",
-  "projects.home.empty.description":
-    "Open a local folder, or import workspaces you already use in Codex or Kimi Code.",
+  "projects.home.empty.description": "Open a local folder, or import workspaces you already use in Codex or Kimi Code.",
   "projects.home.actions.addProject": "Add project",
   "projects.home.actions.import": "Import",
   "projects.home.actions.pin": "Pin project",
@@ -289,8 +289,7 @@ export const dict = {
   "projects.home.lastUsed.minutesAgo": "Last used {count}m ago",
   "projects.home.lastUsed.durationAgo": "Last used {duration} ago",
   "projects.import.title": "Import projects",
-  "projects.import.description":
-    "Bring in workspace folders already registered by Codex or Kimi Code on this machine.",
+  "projects.import.description": "Bring in workspace folders already registered by Codex or Kimi Code on this machine.",
   "projects.import.empty": "No external workspaces found. Add a project folder instead.",
   "projects.import.selectedCount": "{count} selected",
   "projects.import.source.codex": "Codex",

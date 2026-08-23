@@ -22,7 +22,9 @@ describe("tray permission actions", () => {
   test("rejects malformed permission response actions", () => {
     expect(normalizeTrayPermissionAction(null)).toBeNull()
     expect(normalizeTrayPermissionAction({ type: "focus-session" })).toBeNull()
-    expect(normalizeTrayPermissionAction({ type: "respond-permission", sessionId: "", id: "p", response: "once" })).toBeNull()
+    expect(
+      normalizeTrayPermissionAction({ type: "respond-permission", sessionId: "", id: "p", response: "once" }),
+    ).toBeNull()
     expect(
       normalizeTrayPermissionAction({
         type: "respond-permission",

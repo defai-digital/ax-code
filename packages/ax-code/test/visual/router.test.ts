@@ -50,7 +50,7 @@ const mockProviders: Record<string, any> = {
       },
     },
   },
-  "openai": {
+  openai: {
     id: "openai",
     name: "OpenAI",
     source: "config" as const,
@@ -90,11 +90,7 @@ vi.mock("@/provider/provider-impl", () => ({
 }))
 
 import { Provider } from "@/provider/provider-impl"
-import {
-  findVisionCapableModels,
-  visualRoutingDiagnostic,
-  checkVisualRouting,
-} from "../../src/visual/router"
+import { findVisionCapableModels, visualRoutingDiagnostic, checkVisualRouting } from "../../src/visual/router"
 
 const mockedProvider = vi.mocked(Provider)
 

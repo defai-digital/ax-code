@@ -23,10 +23,7 @@ export namespace WorktreePolicy {
    * - worktree: multi-writer allowed (caller must place each writer in its own worktree)
    * - serial: multi-writer rejected; must run one after another
    */
-  export function evaluate(input: {
-    agents: readonly WriteIsolation.AgentLike[]
-    isolation: IsolationMode
-  }): Decision {
+  export function evaluate(input: { agents: readonly WriteIsolation.AgentLike[]; isolation: IsolationMode }): Decision {
     const base = WriteIsolation.evaluateParallelAgents(input.agents)
     if (base.ok) {
       return { ok: true, mode: input.isolation, writers: base.writers, readers: base.readers }

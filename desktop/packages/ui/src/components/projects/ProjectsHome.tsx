@@ -70,7 +70,13 @@ export const ProjectsHome: React.FC<ProjectsHomeProps> = ({
 
   if (ordered.length === 0) {
     return (
-      <div className={cn("flex w-full flex-col items-center text-center", compact ? "gap-3 py-4" : "gap-5 py-2", className)}>
+      <div
+        className={cn(
+          "flex w-full flex-col items-center text-center",
+          compact ? "gap-3 py-4" : "gap-5 py-2",
+          className,
+        )}
+      >
         <div className={cn("flex flex-col items-center", compact ? "gap-1.5" : "gap-2")}>
           <span className={cn("font-medium text-foreground", compact ? "typography-ui-label" : "typography-ui-header")}>
             {t("projects.home.empty.title")}
@@ -206,14 +212,9 @@ export const ProjectsHome: React.FC<ProjectsHomeProps> = ({
                     }
                   }}
                   className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground"
-                  aria-label={
-                    project.pinned ? t("projects.home.actions.unpin") : t("projects.home.actions.pin")
-                  }
+                  aria-label={project.pinned ? t("projects.home.actions.unpin") : t("projects.home.actions.pin")}
                 >
-                  <Icon
-                    name={project.pinned ? "pushpin-2-fill" : "pushpin-2"}
-                    className="h-3.5 w-3.5"
-                  />
+                  <Icon name={project.pinned ? "pushpin-2-fill" : "pushpin-2"} className="h-3.5 w-3.5" />
                 </span>
                 {onNewSession ? (
                   <span

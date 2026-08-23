@@ -47,11 +47,7 @@ describe("winget manifest generator", () => {
         "DEFAI.AXCode.Desktop.locale.en-US.yaml",
         "DEFAI.AXCode.Desktop.yaml",
       ])
-      expect(cliFiles).toEqual([
-        "DEFAI.AXCode.installer.yaml",
-        "DEFAI.AXCode.locale.en-US.yaml",
-        "DEFAI.AXCode.yaml",
-      ])
+      expect(cliFiles).toEqual(["DEFAI.AXCode.installer.yaml", "DEFAI.AXCode.locale.en-US.yaml", "DEFAI.AXCode.yaml"])
 
       const installer = readFileSync(path.join(desktopDir, "DEFAI.AXCode.Desktop.installer.yaml"), "utf8")
       expect(installer).toContain("AX-Code-9.9.9-win-x64.exe")
@@ -123,16 +119,7 @@ describe("winget manifest generator", () => {
       expect(existsSync(path.join(out, "manifests", "d", "DEFAI", "AXCode", "Desktop", "1.4.0"))).toBe(true)
       expect(existsSync(path.join(out, "manifests", "d", "DEFAI", "AXCode", "1.4.0"))).toBe(false)
       const installer = readFileSync(
-        path.join(
-          out,
-          "manifests",
-          "d",
-          "DEFAI",
-          "AXCode",
-          "Desktop",
-          "1.4.0",
-          "DEFAI.AXCode.Desktop.installer.yaml",
-        ),
+        path.join(out, "manifests", "d", "DEFAI", "AXCode", "Desktop", "1.4.0", "DEFAI.AXCode.Desktop.installer.yaml"),
         "utf8",
       )
       expect(installer).toContain("/releases/download/desktop-v1.4.0/")

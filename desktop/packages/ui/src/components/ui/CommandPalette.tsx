@@ -523,9 +523,7 @@ export const CommandPalette: React.FC = () => {
             <span className="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 typography-micro font-medium text-primary">
               {t("commandPalette.searchMode.badge")}
             </span>
-            <span className="typography-meta text-muted-foreground">
-              {t("commandPalette.description")}
-            </span>
+            <span className="typography-meta text-muted-foreground">{t("commandPalette.description")}</span>
           </div>
         ) : null}
         <Command
@@ -535,7 +533,9 @@ export const CommandPalette: React.FC = () => {
           <CommandInput
             value={query}
             onValueChange={setQuery}
-            placeholder={isSearchMode ? t("commandPalette.searchMode.placeholder") : t("commandPalette.input.placeholder")}
+            placeholder={
+              isSearchMode ? t("commandPalette.searchMode.placeholder") : t("commandPalette.input.placeholder")
+            }
           />
           <CommandList>
             <CommandEmpty>{t("commandPalette.empty.noResults")}</CommandEmpty>

@@ -98,10 +98,7 @@ export const createWebFilesAPI = (): FilesAPI => ({
     }))
   },
 
-  async createDirectory(
-    path: string,
-    options?: DirectoryWriteOptions,
-  ): Promise<{ success: boolean; path: string }> {
+  async createDirectory(path: string, options?: DirectoryWriteOptions): Promise<{ success: boolean; path: string }> {
     const target = normalizePath(path)
     const response = await fetch(API_ENDPOINTS.files.fsMkdir, {
       method: HTTP_DEFAULTS.method.post,

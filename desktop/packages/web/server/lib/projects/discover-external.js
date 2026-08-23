@@ -98,10 +98,7 @@ export const parseKimiWorkspacesJson = (text) => {
     if (!root || seen.has(root)) continue
     seen.add(root)
 
-    const name =
-      typeof entry.name === "string" && entry.name.trim()
-        ? entry.name.trim()
-        : deriveName(root)
+    const name = typeof entry.name === "string" && entry.name.trim() ? entry.name.trim() : deriveName(root)
 
     let lastOpenedAt = null
     if (typeof entry.last_opened_at === "string") {
@@ -130,11 +127,7 @@ export const discoverExternalProjects = async (options = {}) => {
   const readFile = options.readFile || ((filePath) => fs.readFile(filePath, "utf8"))
   const exists = options.exists || pathExists
 
-  const existing = new Set(
-    (options.existingPaths || [])
-      .map((value) => normalizePath(value))
-      .filter(Boolean),
-  )
+  const existing = new Set((options.existingPaths || []).map((value) => normalizePath(value)).filter(Boolean))
 
   const codexConfigPath = path.join(homeDir, ".codex", "config.toml")
   const kimiWorkspacesPath = path.join(homeDir, ".kimi-code", "workspaces.json")

@@ -153,7 +153,8 @@ export const useAgentsStore = create<AgentsStore>()(
 
           const requestId = ++agentsLoadSequence
           agentsLoadRequestIds.set(cacheKey, requestId)
-          const isCurrentLoad = () => agentsLoadSequence === requestId && agentsLoadRequestIds.get(cacheKey) === requestId
+          const isCurrentLoad = () =>
+            agentsLoadSequence === requestId && agentsLoadRequestIds.get(cacheKey) === requestId
 
           const request = (async () => {
             set({ isLoading: true })

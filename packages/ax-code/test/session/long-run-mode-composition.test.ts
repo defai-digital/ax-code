@@ -7,7 +7,11 @@
  */
 import { describe, expect, test } from "vitest"
 import { AutonomousCompletionGate } from "../../src/control-plane/autonomous-completion-gate"
-import { GLOBAL_STEP_LIMIT, GOAL_TOTAL_STEP_HEADROOM, SUPER_LONG_TOTAL_STEP_HEADROOM } from "../../src/constants/session"
+import {
+  GLOBAL_STEP_LIMIT,
+  GOAL_TOTAL_STEP_HEADROOM,
+  SUPER_LONG_TOTAL_STEP_HEADROOM,
+} from "../../src/constants/session"
 import { GoalVerification } from "../../src/session/goal-verification"
 import {
   effectiveContinuationCap,

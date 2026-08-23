@@ -413,8 +413,7 @@ describe("browser runtime", () => {
     // Simulate element not found (stale UID)
     page._locator.count.mockResolvedValueOnce(0)
 
-    await expect(runtime.screenshot("latest", { uid: "uid_stale", format: "png" }))
-      .rejects.toThrow(/not found on page/)
+    await expect(runtime.screenshot("latest", { uid: "uid_stale", format: "png" })).rejects.toThrow(/not found on page/)
   })
 
   test("screenshot with jpeg format sets quality", async () => {
@@ -636,9 +635,7 @@ describe("browser runtime", () => {
     // Pre-populate with stale UIDs
     getInternals(runtime).uidRegistry.set("uid_99", { pageID: "page_1", uid: "uid_99" })
 
-    page.evaluate.mockResolvedValueOnce([
-      { uid: "uid_1", role: "button", name: "Click", value: undefined, depth: 0 },
-    ])
+    page.evaluate.mockResolvedValueOnce([{ uid: "uid_1", role: "button", name: "Click", value: undefined, depth: 0 }])
 
     await runtime.snapshot("latest", false)
 

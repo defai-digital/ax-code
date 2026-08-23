@@ -25,10 +25,7 @@ export namespace EnsemblePreflight {
     return ["Providers present but not eligible for arena/council:", ...lines].join("\n") + more
   }
 
-  export function arenaDisabledMessage(input: {
-    providers: ProviderSnapshot
-    projectConfigHint?: string
-  }): string {
+  export function arenaDisabledMessage(input: { providers: ProviderSnapshot; projectConfigHint?: string }): string {
     const lines = [
       "# Arena disabled",
       "",

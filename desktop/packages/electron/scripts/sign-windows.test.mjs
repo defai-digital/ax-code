@@ -2,8 +2,7 @@ import { createRequire } from "node:module"
 import { describe, expect, test } from "vitest"
 
 const require = createRequire(import.meta.url)
-const { buildSignArguments, normalizeThumbprint, resolveSigningConfiguration } =
-  require("./sign-windows.cjs").__test
+const { buildSignArguments, normalizeThumbprint, resolveSigningConfiguration } = require("./sign-windows.cjs").__test
 
 const signingEnv = {
   AZURE_CLIENT_ID: "client-id",
@@ -28,9 +27,7 @@ describe("Windows Azure Key Vault signing", () => {
   })
 
   test("normalizes and validates the pinned certificate thumbprint", () => {
-    expect(normalizeThumbprint(signingEnv.WINDOWS_CERTIFICATE_SHA1)).toBe(
-      "FC40F1109912C025E751E804AA9BD1538A2D12EF",
-    )
+    expect(normalizeThumbprint(signingEnv.WINDOWS_CERTIFICATE_SHA1)).toBe("FC40F1109912C025E751E804AA9BD1538A2D12EF")
     expect(() => normalizeThumbprint("not-a-thumbprint")).toThrow(/40-character/)
   })
 

@@ -1951,7 +1951,6 @@ export const Header: React.FC = () => {
           <WindowsWindowControls visible={isWindowsElectronDesktop} />
         </div>
       </div>
-
     </div>
   )
 

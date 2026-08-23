@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest"
-import {
-  parseCodexProjectsToml,
-  parseKimiWorkspacesJson,
-  discoverExternalProjects,
-} from "./discover-external.js"
+import { parseCodexProjectsToml, parseKimiWorkspacesJson, discoverExternalProjects } from "./discover-external.js"
 
 describe("parseCodexProjectsToml", () => {
   it("extracts project paths and trust levels", () => {

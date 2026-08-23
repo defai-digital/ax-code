@@ -91,8 +91,8 @@ import {
   WRAP_WRAP,
   WRAP_WRAP_REVERSE,
   Wrap,
-  yoga_default
-} from "./index-pcvh9d34.js";
+  yoga_default,
+} from "./index-pcvh9d34.js"
 export {
   yoga_default as default,
   Wrap,
@@ -186,7 +186,7 @@ export {
   ALIGN_FLEX_END,
   ALIGN_CENTER,
   ALIGN_BASELINE,
-  ALIGN_AUTO
-};
+  ALIGN_AUTO,
+}
 
 //# debugId=3DEE98A3AAE9E41E64756E2164756E21

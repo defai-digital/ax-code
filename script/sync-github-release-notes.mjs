@@ -6,11 +6,7 @@ import path from "node:path"
 import { spawnSync } from "node:child_process"
 import { pathToFileURL } from "node:url"
 import { readFile } from "node:fs/promises"
-import {
-  buildReleaseNotes,
-  parseReleaseTag,
-  releaseTitle,
-} from "./extract-changelog-notes.mjs"
+import { buildReleaseNotes, parseReleaseTag, releaseTitle } from "./extract-changelog-notes.mjs"
 
 const DEFAULT_REPO = "defai-digital/ax-code"
 const DEFAULT_CHANGELOG = "desktop/CHANGELOG.md"

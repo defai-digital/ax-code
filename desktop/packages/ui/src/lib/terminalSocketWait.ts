@@ -14,13 +14,16 @@ export const waitForOpenSocket = <T extends ReadyStateSocket>(
 
   return new Promise<T | null>((resolve) => {
     let settled = false
-    const timeoutHandle = setTimeout(() => {
-      if (settled) {
-        return
-      }
-      settled = true
-      resolve(null)
-    }, Math.max(0, waitMs))
+    const timeoutHandle = setTimeout(
+      () => {
+        if (settled) {
+          return
+        }
+        settled = true
+        resolve(null)
+      },
+      Math.max(0, waitMs),
+    )
 
     const settle = (socket: T | null) => {
       if (settled) {

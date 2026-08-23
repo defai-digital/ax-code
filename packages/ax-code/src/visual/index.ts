@@ -14,4 +14,3 @@ export * from "./findings"
 export * from "./viewport"
 export * from "./risk-summary"
 export * from "./repair"
-

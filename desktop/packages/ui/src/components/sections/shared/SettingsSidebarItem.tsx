@@ -80,9 +80,7 @@ export const SettingsSidebarItem: React.FC<SettingsSidebarItemProps> = ({
             <span className="typography-ui-label font-normal truncate text-foreground">{title}</span>
           </div>
 
-          {metadata && (
-            <div className="typography-micro text-muted-foreground truncate leading-tight">{metadata}</div>
-          )}
+          {metadata && <div className="typography-micro text-muted-foreground truncate leading-tight">{metadata}</div>}
         </button>
 
         {hasActions && (

@@ -133,9 +133,7 @@ describe("useGitStore", () => {
     await Promise.resolve()
 
     requests[1].resolve(
-      createStatus({ "new.ts": { insertions: 2, deletions: 0 } }, [
-        { path: "new.ts", index: " ", working_dir: "M" },
-      ]),
+      createStatus({ "new.ts": { insertions: 2, deletions: 0 } }, [{ path: "new.ts", index: " ", working_dir: "M" }]),
     )
     await fullPromise
 

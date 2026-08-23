@@ -46,7 +46,9 @@ declare global {
     }
     class Glob {
       constructor(pattern: string)
-      scan(options?: string | { cwd?: string; dot?: boolean; absolute?: boolean; onlyFiles?: boolean }): AsyncIterable<string>
+      scan(
+        options?: string | { cwd?: string; dot?: boolean; absolute?: boolean; onlyFiles?: boolean },
+      ): AsyncIterable<string>
       scanSync(options?: { cwd?: string; dot?: boolean; absolute?: boolean; onlyFiles?: boolean }): Iterable<string>
     }
     function spawnSync(input: { cmd: string[]; cwd?: string; env?: Record<string, string> }): {

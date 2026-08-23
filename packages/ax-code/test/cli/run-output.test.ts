@@ -31,9 +31,9 @@ test("run structured output allows aliases that resolve to the same path", async
   expect(resolveRunOutputFile({ outputFile: "result.json", outputLastMessage: "./result.json" }, tmp.path)).toBe(
     "result.json",
   )
-  expect(resolveRunOutputFile({ outputFile: "nested/../result.json", outputLastMessage: "result.json" }, tmp.path)).toBe(
-    "nested/../result.json",
-  )
+  expect(
+    resolveRunOutputFile({ outputFile: "nested/../result.json", outputLastMessage: "result.json" }, tmp.path),
+  ).toBe("nested/../result.json")
 })
 
 test("run structured output extracts text only from the current assistant message", () => {

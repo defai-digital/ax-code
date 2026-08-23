@@ -256,7 +256,8 @@ export namespace SyntacticExtractor {
           const name = nameOf(declarator)
           if (!name) continue
           const value = declarator.childForFieldName("value")
-          const kind: CodeNodeKind = value && JS_VALUE_FUNCTION_TYPES.has(value.type) ? "function" : isConst ? "constant" : "variable"
+          const kind: CodeNodeKind =
+            value && JS_VALUE_FUNCTION_TYPES.has(value.type) ? "function" : isConst ? "constant" : "variable"
           const sym =
             kind === "function" && value
               ? { ...declaration(declarator, kind, prefix, name), signature: signatureOf(value) }

@@ -23,12 +23,7 @@ export const isExecutable = (filePath, accessSync = fs.accessSync, statSync = fs
   }
 }
 
-export const searchPathFor = (
-  command,
-  env = process.env,
-  platform = process.platform,
-  deps = {},
-) => {
+export const searchPathFor = (command, env = process.env, platform = process.platform, deps = {}) => {
   const pathValue = env.PATH || ""
   const delimiter = deps.delimiter ?? path.delimiter
   const join = deps.join ?? path.join

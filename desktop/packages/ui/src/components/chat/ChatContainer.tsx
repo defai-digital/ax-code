@@ -52,7 +52,6 @@ import { getAllSyncSessions } from "@/sync/sync-refs"
 import { useI18n } from "@/lib/i18n"
 import { useProjectKnowledge, projectKnowledgeFileLabel } from "@/hooks/useProjectKnowledge"
 
-
 const EMPTY_MESSAGES: Array<{ info: Message; parts: Part[] }> = []
 const IDLE_SESSION_STATUS = { type: "idle" as const }
 const CHAT_FORCE_SCROLL_BOTTOM_EVENT = "openchamber:chat-force-scroll-bottom"
@@ -461,10 +460,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
 
   // Parent/child links only (string key) — title/share updates must not re-render chat shell.
   const sessionLinkKey = useDirectorySync(
-    React.useCallback(
-      (s) => s.session.map((session) => `${session.id}\t${session.parentID ?? ""}`).join("\n"),
-      [],
-    ),
+    React.useCallback((s) => s.session.map((session) => `${session.id}\t${session.parentID ?? ""}`).join("\n"), []),
   )
 
   const scopedSessionIds = React.useMemo(() => {

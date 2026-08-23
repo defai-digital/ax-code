@@ -19,7 +19,7 @@ const normalizeSearchDirectory = (input: string): string => normalizeProjectPath
 
 const normalizeSearchQuery = (input: string): string => input.trim().toLowerCase()
 
-const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> =>
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> =>
   new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(message)), timeoutMs)
     promise.then(

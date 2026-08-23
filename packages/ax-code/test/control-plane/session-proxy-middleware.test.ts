@@ -340,5 +340,4 @@ describe("control-plane/session-proxy-middleware", () => {
     expect(forwarded!["x-small-01"]).toBe("ok")
     expect(forwarded!["x-normal-metadata"]).toBeUndefined()
   })
-
 })

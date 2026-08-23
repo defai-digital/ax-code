@@ -126,9 +126,7 @@ describe("SuperLongPolicy.providerPacing", () => {
     expect(SuperLongPolicy.pacingGraceMs({ pacingGraceMs: Number.POSITIVE_INFINITY })).toBe(
       SuperLongPolicy.PACING_GRACE_DEFAULT_MS,
     )
-    expect(SuperLongPolicy.pacingGraceMs({ pacingGraceMs: 100 * 60 * 60 * 1000 })).toBe(
-      SuperLongPolicy.maxDurationMs(),
-    )
+    expect(SuperLongPolicy.pacingGraceMs({ pacingGraceMs: 100 * 60 * 60 * 1000 })).toBe(SuperLongPolicy.maxDurationMs())
   })
 
   test("skips pacing for self-hosted endpoints on a local hostname", () => {

@@ -345,7 +345,7 @@ describe("server route validation", () => {
           })
 
           expect(archived.status).toBe(200)
-          expect((await archived.json() as Session.Info).time.archived).toBe(50_000)
+          expect(((await archived.json()) as Session.Info).time.archived).toBe(50_000)
 
           const restored = await Server.Default().request(`/session/${session.id}`, {
             method: "PATCH",
@@ -354,7 +354,7 @@ describe("server route validation", () => {
           })
 
           expect(restored.status).toBe(200)
-          expect((await restored.json() as Session.Info).time.archived).toBeUndefined()
+          expect(((await restored.json()) as Session.Info).time.archived).toBeUndefined()
           expect((await Session.get(session.id)).time.archived).toBeUndefined()
         } finally {
           await Session.remove(session.id)

@@ -54,13 +54,16 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
       return normalized || null
     }, [activeProjectPath, currentDirectory])
     const projectTabs = useFilesViewTabsStore(
-      React.useCallback((state) => {
-        if (!projectRoot) return undefined
-        return (
-          state.byRoot[projectRoot] ??
-          Object.entries(state.byRoot).find(([root]) => filesViewPathsEqual(root, projectRoot))?.[1]
-        )
-      }, [projectRoot]),
+      React.useCallback(
+        (state) => {
+          if (!projectRoot) return undefined
+          return (
+            state.byRoot[projectRoot] ??
+            Object.entries(state.byRoot).find(([root]) => filesViewPathsEqual(root, projectRoot))?.[1]
+          )
+        },
+        [projectRoot],
+      ),
     )
     const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents)
     const searchFiles = useFileSearchStore((state) => state.searchFiles)

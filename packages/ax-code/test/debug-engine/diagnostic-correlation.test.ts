@@ -209,14 +209,7 @@ describe("DiagnosticCorrelation — findCrossFileRootCause", () => {
         })
 
         const sym = CodeIntelligence.getSymbol(projectID, symId)!
-        const result = __testFindCrossFileRootCause(
-          projectID,
-          fileA,
-          15,
-          "Type error",
-          1,
-          sym,
-        )
+        const result = __testFindCrossFileRootCause(projectID, fileA, 15, "Type error", 1, sym)
 
         expect(result.rootCauseFile).toBeNull()
         expect(result.rootCauseSymbol).toBeNull()
@@ -298,14 +291,7 @@ describe("DiagnosticCorrelation — findCrossFileRootCause", () => {
         seedCallEdge(projectID, sameFileCallerId, brokenFnId, fileA)
 
         const sym = CodeIntelligence.getSymbol(projectID, brokenFnId)!
-        const result = __testFindCrossFileRootCause(
-          projectID,
-          fileA,
-          15,
-          "Type error",
-          1,
-          sym,
-        )
+        const result = __testFindCrossFileRootCause(projectID, fileA, 15, "Type error", 1, sym)
 
         expect(result.rootCauseFile).toBeNull()
         expect(result.confidence).toBe("low")
@@ -324,24 +310,14 @@ describe("DiagnosticCorrelation — renderCorrelationBlock", () => {
 
   test("returns empty string when all correlations are low confidence", () => {
     const map = new Map<string, DebugEngine.CorrelatedDiagnostic[]>([
-      [
-        "/tmp/a.ts",
-        [
-            correlated({ confidence: "low" }),
-        ],
-      ],
+      ["/tmp/a.ts", [correlated({ confidence: "low" })]],
     ])
     expect(__testRenderCorrelationBlock("/tmp/a.ts", map)).toBe("")
   })
 
   test("renders correlation block for high-confidence matches", () => {
     const map = new Map<string, DebugEngine.CorrelatedDiagnostic[]>([
-      [
-        "/tmp/a.ts",
-        [
-            correlated({ rootCauseSymbol: "formatValue", rootCauseChain: ["broken", "formatValue"] }),
-        ],
-      ],
+      ["/tmp/a.ts", [correlated({ rootCauseSymbol: "formatValue", rootCauseChain: ["broken", "formatValue"] })]],
     ])
     const result = __testRenderCorrelationBlock("/tmp/a.ts", map)
     expect(result).toContain("<correlation")

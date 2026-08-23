@@ -136,10 +136,7 @@ describe("buildAssistantRetryPayload", () => {
 
   test("omits variant when neither message carried one", () => {
     const payload = buildAssistantRetryPayload({
-      messages: [
-        makeMessage("u1", "user", { providerID: "p", modelID: "m" }),
-        makeMessage("a1", "assistant"),
-      ],
+      messages: [makeMessage("u1", "user", { providerID: "p", modelID: "m" }), makeMessage("a1", "assistant")],
       partsByMessage: { u1: [textPart("hello")] },
       failedAssistantMessage: makeMessage("a1", "assistant"),
     })

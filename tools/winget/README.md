@@ -15,10 +15,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/d
 
 ## Packages planned
 
-| Package identifier           | Installer type                         | Arches        |
-| ---------------------------- | -------------------------------------- | ------------- |
-| `DEFAI.AXCode`               | Portable ZIP / nested install.ps1 flow | x64, arm64    |
-| `DEFAI.AXCode.Desktop`       | NSIS exe (`AX-Code-*-win-*.exe`)      | x64, arm64    |
+| Package identifier     | Installer type                         | Arches     |
+| ---------------------- | -------------------------------------- | ---------- |
+| `DEFAI.AXCode`         | Portable ZIP / nested install.ps1 flow | x64, arm64 |
+| `DEFAI.AXCode.Desktop` | NSIS exe (`AX-Code-*-win-*.exe`)       | x64, arm64 |
 
 Publisher: **DEFAI Private Limited** (matches Authenticode `publisherName`).
 

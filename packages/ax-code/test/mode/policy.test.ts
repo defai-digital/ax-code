@@ -3,10 +3,7 @@ import { ModePolicy } from "../../src/mode/policy"
 
 describe("ModePolicy.resolveMode", () => {
   test("defaults to hybrid when local available", () => {
-    const d = ModePolicy.resolveMode(
-      {},
-      { localAvailable: true, connectedProviderIDs: ["google"] },
-    )
+    const d = ModePolicy.resolveMode({}, { localAvailable: true, connectedProviderIDs: ["google"] })
     expect(d.mode).toBe("hybrid")
     expect(d.placement).toBe("local")
     expect(d.ensemble).toBe(false)
@@ -14,19 +11,13 @@ describe("ModePolicy.resolveMode", () => {
   })
 
   test("defaults to cloud when local unavailable", () => {
-    const d = ModePolicy.resolveMode(
-      {},
-      { localAvailable: false, connectedProviderIDs: ["google"] },
-    )
+    const d = ModePolicy.resolveMode({}, { localAvailable: false, connectedProviderIDs: ["google"] })
     expect(d.mode).toBe("cloud")
     expect(d.placement).toBe("cloud")
   })
 
   test("honors requested local with fallback", () => {
-    const d = ModePolicy.resolveMode(
-      {},
-      { localAvailable: false, connectedProviderIDs: [], requestedMode: "local" },
-    )
+    const d = ModePolicy.resolveMode({}, { localAvailable: false, connectedProviderIDs: [], requestedMode: "local" })
     expect(d.mode).toBe("cloud")
     expect(d.reasons.some((r) => r.includes("local_unavailable"))).toBe(true)
   })
