@@ -280,6 +280,69 @@ describe("AX_CODE_SHARD_SESSIONS=1 lifecycle cleanup", () => {
     })
   })
 
+  test("Session.remove deletes shard rows of schema-unrecoverable descendants", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const child = await Session.create({ parentID: parent.id })
+        const projectID = Instance.project.id
+
+        // Backfill the child's shard rows with a message.
+        await Session.updateMessage(userMessage(MessageID.ascending(), child.id))
+        expect(shardMessageCount(projectID, child.id)).toBe(1)
+
+        // Corrupt the child's registry row so Info.safeParse (and therefore
+        // parseRow) fails: metadata must be a record, a bare string is
+        // invalid. The cascading remove must still delete the row from the
+        // registry AND clean up its shard data via the raw id.
+        Database.use((db) =>
+          db
+            .update(SessionTable)
+            .set({ metadata: "corrupt" as never })
+            .where(eq(SessionTable.id, child.id))
+            .run(),
+        )
+
+        await Session.remove(parent.id)
+
+        expect(registrySessionCount(projectID)).toBe(0)
+        expect(shardMessageCount(projectID, child.id)).toBe(0)
+      },
+    })
+  })
+
+  test("Session.remove completes cleanup when the shard cascade throws", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await Session.updateMessage(userMessage(MessageID.ascending(), session.id))
+        const projectID = Instance.project.id
+        expect(shardMessageCount(projectID, session.id)).toBe(1)
+
+        const deleted: Session.Info[] = []
+        const unsubscribe = Bus.subscribe(Session.Event.Deleted, (event) => deleted.push(event.properties.info))
+        // The registry delete is already committed by the time the shard
+        // cascade runs; a shard failure must not abort events/hooks.
+        const spy = vi.spyOn(SessionShard, "deleteSessions").mockImplementation(() => {
+          throw new Error("injected shard failure")
+        })
+        try {
+          await expect(Session.remove(session.id)).resolves.toBeUndefined()
+        } finally {
+          spy.mockRestore()
+          unsubscribe()
+        }
+
+        expect(registrySessionCount(projectID)).toBe(0)
+        expect(deleted.map((info) => info.id)).toEqual([session.id])
+      },
+    })
+  })
+
   test("fork failure compensating delete leaves no orphaned child shard rows", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

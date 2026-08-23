@@ -145358,8 +145358,8 @@
             ]
           }
         ],
-        "tool_call": false,
-        "structured_output": false,
+        "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-12",
         "last_updated": "2026-08-22",

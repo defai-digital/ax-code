@@ -834,6 +834,7 @@ export namespace Session {
     const allDescendants: Info[] = []
     const allDescendantIDs = new Set<SessionID>()
     let protectedByRecentSession = false
+    let rootMissing = false
     Database.transaction((db) => {
       const root = db
         .select({ timeUpdated: SessionTable.time_updated })
@@ -841,7 +842,7 @@ export namespace Session {
         .where(and(eq(SessionTable.id, sessionID), eq(SessionTable.project_id, session.projectID)))
         .get()
       if (!root) {
-        protectedByRecentSession = true
+        rootMissing = true
         return
       }
       if (options.updatedBefore !== undefined && root.timeUpdated >= options.updatedBefore) {
@@ -883,22 +884,27 @@ export namespace Session {
       db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
     })
     if (protectedByRecentSession) return 0
+    if (rootMissing) {
+      // A concurrent remove() deleted the row between get() and this
+      // transaction; that call already cascaded the subtree and published
+      // events. Report "nothing removed" explicitly instead of masking the
+      // race as retention protection.
+      log.warn("session remove raced with concurrent delete", { sessionID })
+      return 0
+    }
     // Shard-side cascade (Slice 5): the registry FK cascade only covers the
     // global copies of message/part/todo/session_goal/event_log/task_queue.
     // Their `session_id` FKs were dropped in the shard (§5 of the plan), so
-    // delete the shard copies explicitly. Resolve each removed session's project
-    // from the `Info` we already hold (before the registry rows are gone) and
-    // batch per project so each shard runs a single transaction.
-    const removedByProject = new Map<ProjectID, SessionID[]>()
-    const trackRemoved = (info: Info) => {
-      const ids = removedByProject.get(info.projectID) ?? []
-      ids.push(info.id)
-      removedByProject.set(info.projectID, ids)
-    }
-    trackRemoved(session)
-    for (const desc of allDescendants) trackRemoved(desc)
-    for (const [projectID, ids] of removedByProject) {
-      SessionShard.deleteSessions(projectID, ids)
+    // delete the shard copies explicitly. The traversal above filters every
+    // descendant by session.projectID, so all deleted rows — including rows
+    // parseRow could not recover — live in this project's shard. Pass the raw
+    // ids so unrecoverable rows do not leak shard data. A failure here must
+    // not abort the remaining cleanup: the registry delete is already
+    // committed, and sweepOrphans reconciles leftover shard rows later.
+    try {
+      SessionShard.deleteSessions(session.projectID, [sessionID, ...allDescendantIDs])
+    } catch (err) {
+      log.warn("session shard cleanup failed", { sessionID, error: err })
     }
     // Cleanup ordering — every step before the final publish must finish
     // so subscribers can treat `session.deleted` as an "all resources
