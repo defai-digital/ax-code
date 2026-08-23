@@ -955,19 +955,19 @@ export const Info = z
           .enum(["cua", "axnative", "external"])
           .optional()
           .describe(
-            'Computer-use backend: "axnative" (macOS), "cua" (cross-platform), or "external" (any MCP stdio server speaking the canonical AX Computer protocol; requires computer.command). The aliases are dual-stack: they route through the ax-computer server bridge when one is resolvable (AX_COMPUTER_COMMAND or ax-computer on PATH) and fall back to the legacy direct drivers otherwise. Unset = computer tools unavailable.',
+            'Computer-use backend, served by the ax-computer server (canonical AX Computer protocol): "axnative" (macOS) or "cua" (cross-platform) select the server backend; "external" treats computer.command as a complete canonical-protocol MCP server. All values require a resolvable server command (computer.command, AX_COMPUTER_COMMAND, or ax-computer on PATH). Unset = computer tools unavailable.',
           ),
         command: z
           .string()
           .optional()
           .describe(
-            'Backend server command override. Required when provider is "external" (or set AX_COMPUTER_COMMAND) — external has no default command. For "axnative"/"cua", setting this (or AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_AXNATIVE_COMMAND) forces the legacy direct-driver path — deprecated, will be removed in a future major release; unset it to route through the ax-computer server bridge.',
+            'Computer-use server command. Precedence: this config > AX_COMPUTER_COMMAND env > ax-computer on PATH. For aliases this is the ax-computer server; for "external" it is the full canonical-protocol server command.',
           ),
         args: z
           .array(z.string())
           .optional()
           .describe(
-            'Backend server command arguments (default: ["mcp", "--backend", <provider>] on the bridge path, ["mcp"] on the legacy direct path, [] for external)',
+            'Server command arguments (default: ["mcp", "--backend", <provider>] for aliases, [] for external)',
           ),
         overrides: z
           .record(z.string(), z.enum(["cua", "axnative", "external"]))

@@ -1,11 +1,11 @@
-- Performs an action on the local computer through an external computer-use backend (OCU on macOS, cua-driver elsewhere)
+- Performs an action on the local computer through the ax-computer computer-use server (axnative backend on macOS, cua elsewhere)
 - Actions: click, type, keypress, scroll, drag, set_value, activate_window, launch_app
 - IMPORTANT: Always call computer_snapshot first and use element ids from its latest result. Ids are epoch-scoped and go stale after any new snapshot or backend failover; a stale id is rejected with re-observe guidance.
 - click: clicks an element id or a screenshot pixel point {x,y} (supports button and count)
 - Prefer element ids; a {describe: "..."} target is the fallback for elements without ids/bounds and requires computer.grounder configured (a grounding model resolves the description to coordinates)
 - type: types text into the focused element
 - keypress: presses keys or combinations (e.g. ["cmd", "s"], ["return"])
-- scroll: scrolls in a direction (up/down/left/right); prefer an element-id target (required for the macOS OCU/axnative backend)
+- scroll: scrolls in a direction (up/down/left/right); prefer an element-id target (required for the macOS axnative backend)
 - drag: drags from one element/point to another
 - set_value: sets an element's value directly by element id
 - activate_window: brings a window to the front by windowId

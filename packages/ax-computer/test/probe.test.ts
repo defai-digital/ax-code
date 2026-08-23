@@ -3,13 +3,13 @@ import { describe, expect, test, vi } from "vitest"
 import type { ActionResult, ComputerAction } from "../src/action"
 import { probeProvider } from "../src/probe"
 import type { ComputerUseProvider, ObserveScope, ProviderCapabilities } from "../src/provider"
+import { ExternalComputerProvider } from "../src/providers/external"
 import type { AppInfo, ComputerObservation } from "../src/types"
-import { UpstreamOcuReferenceProvider } from "./helpers/upstream-ocu"
 
-const server = fileURLToPath(new URL("./helpers/fake-mcp-server.mjs", import.meta.url))
+const server = fileURLToPath(new URL("./helpers/fake-ax-server.mjs", import.meta.url))
 
-function ocuOnFakeServer(mode: string) {
-  return new UpstreamOcuReferenceProvider({ command: process.execPath, args: [server, mode] })
+function externalOnFakeServer(mode: string) {
+  return new ExternalComputerProvider({ command: process.execPath, args: [server, mode] })
 }
 
 /** never answers listApps; records dispose so timeout cleanup is observable */
@@ -40,12 +40,12 @@ class HangingProvider implements ComputerUseProvider {
 
 describe("probeProvider", () => {
   test("ok path: real MCP round-trip (spawn + handshake + list_apps), apps counted", async () => {
-    const provider = ocuOnFakeServer("basic")
+    const provider = externalOnFakeServer("basic")
     const dispose = vi.spyOn(provider, "dispose")
     const report = await probeProvider(provider)
 
-    // the fake server answers list_apps with an empty catalog text
-    expect(report).toMatchObject({ ok: true, provider: "ocu", apps: 0 })
+    // the fake canonical server lists one app
+    expect(report).toMatchObject({ ok: true, provider: "external", apps: 1 })
     expect(report.latencyMs).toBeGreaterThanOrEqual(0)
     expect(report.error).toBeUndefined()
     // a successful probe must not leak the backend process either
@@ -53,12 +53,12 @@ describe("probeProvider", () => {
   })
 
   test("spawn failure: ok:false, error names the command", async () => {
-    const provider = new UpstreamOcuReferenceProvider({ command: "ax-code-definitely-not-a-real-binary" })
+    const provider = new ExternalComputerProvider({ command: "ax-code-definitely-not-a-real-binary" })
     const dispose = vi.spyOn(provider, "dispose")
     const report = await probeProvider(provider)
 
     expect(report.ok).toBe(false)
-    expect(report.provider).toBe("ocu")
+    expect(report.provider).toBe("external")
     expect(report.error).toContain("ax-code-definitely-not-a-real-binary")
     expect(dispose).toHaveBeenCalledTimes(1)
   })

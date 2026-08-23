@@ -1,73 +1,67 @@
 # @ax-code/computer
 
-An AX-Code-owned abstraction over computer-use backends, with two
-user-selectable backends and a shared protocol base.
+The **open client SDK and canonical protocol home** for AX computer use
+(desktop control). This package carries everything a client needs to drive a
+computer-use server; it contains **no engine** — the backend adapters, the
+Swift driver, and the canonical MCP server (`ax-computer mcp --backend
+axnative|cua`) live in the closed repo (`~/code/ax-computer`), which vendors
+the shared files from this package (this repo is the source of truth; sync
+with `script/sync-open.sh` there). See
+`.internal/adr/ADR-061-computer-use-closed-source-split.md` for the boundary
+and rationale.
 
-- **AX Native** (`ax-computer-driver`, AX-owned Swift driver under
-  `native/ax-computer-driver/`) — macOS-only, app-scoped. `get_app_state`
-  returns a screenshot plus a rendered accessibility tree; elements are
-  targeted by tree indices valid only for the latest snapshot.
-- **Cua Driver** (`cua-driver mcp`) — cross-platform, window-scoped, with
-  structured (`structuredContent`) results and background input delivery.
-  `CuaProvider` also supports `transport: "sdk"`, which embeds the pinned
-  `@trycua/cua-driver` native SDK in-process instead of spawning the MCP
-  server; both transports reach the same Rust tool registry, so tool names,
-  arguments, and refusal semantics are identical. The default transport is
-  `"mcp"`.
+## The canonical protocol
 
-Both backends are stdio MCP servers speaking newline-delimited JSON-RPC 2.0;
-`src/mcp/stdio-client.ts` is a minimal self-contained client (no MCP SDK
-dependency). The AX native driver and the upstream OCU binary speak the same
-app-scoped OCU tool dialect; the shared adapter for that dialect is the
-abstract `OcuProtocolProvider` in `src/providers/ocu-protocol.ts` (Cua is also
-MCP-based but a different, window-scoped dialect, so it does not derive from
-it). The upstream OCU backend itself (`open-computer-use mcp`) survives only
-as a test-only reference arm — `UpstreamOcuReferenceProvider` in
-`test/helpers/upstream-ocu.ts`, labeled `ocu` so A/B reports stay comparable
-with history — used by the live A/B and compat suites.
+`src/protocol.ts` defines the versioned AX Computer MCP contract:
 
-## Open SDK / closed engine split
+- `AX_COMPUTER_PROTOCOL_VERSION` / `AX_COMPUTER_PROTOCOL_MIN_VERSION`, with
+  version negotiation carried in the MCP `initialize` result
+  (`validateProtocolPeer()` produces a clear incompatible-version error).
+- Zod schemas for every payload — `ComputerObservation`, `ComputerAction`,
+  `ActionResult`, `ComputerElement`, `PixelImage`, `AppInfo`, `WindowInfo`,
+  `ObserveScope`, provider capabilities — validated on input AND output.
+- The five canonical tools served by one MCP stdio server:
+  `ax_capabilities`, `ax_list_apps`, `ax_list_windows`, `ax_observe`,
+  `ax_act`.
 
-This package is the **open client SDK and protocol home** for AX computer
-use. It owns the canonical, versioned AX Computer MCP contract
-(`src/protocol.ts` — `AX_COMPUTER_PROTOCOL_VERSION`, full zod input/output
-validation for every payload, the five canonical tools `ax_capabilities` /
-`ax_list_apps` / `ax_list_windows` / `ax_observe` / `ax_act`, and
-initialize-result version negotiation via `validateProtocolPeer()`) and the
-`ExternalComputerProvider` (`src/providers/external.ts`), which drives any
-MCP stdio server speaking that contract.
+## The client
 
-The computer-use **engine** — the backend adapters, the Swift driver, and
-the canonical MCP server (`ax-computer mcp --backend axnative|cua`) — lives
-in the closed repo `~/code/ax-computer`. That repo vendors the shared open
-files from this package (this repo is the source of truth; sync with
-`script/sync-open.sh` there). Configure it from `ax-code` with
-`computer.provider: "external"` plus `computer.command` pointing at the
-server. The legacy `axnative`/`cua` providers remain in this package until
-the dual-stack compatibility release; see
-`.internal/adr/ADR-061-computer-use-closed-source-split.md` for the
-boundary, rationale, and deferred steps.
+`ExternalComputerProvider` (`src/providers/external.ts`) implements
+`ComputerUseProvider` against any MCP stdio server speaking the canonical
+protocol: it spawns the configured `{ command, args }` via the minimal
+newline-delimited JSON-RPC client (`src/mcp/stdio-client.ts`, no MCP SDK
+dependency), negotiates the protocol version on connect, and validates every
+request/response payload. Backend refusals surface as `{ ok: false, refusal
+}` action results, or as `ComputerUseError`s carrying the server's
+`structuredContent.code` verbatim (e.g. `unsupported_scope`).
 
-## Status
+`ComputerSession` (`src/session.ts`) wraps a provider with the
+one-active-provider rule, epoch-tracked element targets, and failover — the
+open safety plane. `probeProvider` (`src/probe.ts`) is the generic preflight
+probe used by `ax-code doctor`.
 
-Wired into the `ax-code` core as two agent tools, `computer_snapshot` and
-`computer_action` (`packages/ax-code/src/tool/computer/`), gated on the
-`computer.provider` config (`"axnative"`, `"cua"`, or `"external"`). This
-supersedes the ADR-053 relocation of computer use to a separate product. The
-core delegates to the `Computer` namespace (`packages/ax-code/src/computer/`),
-which constructs the configured provider and wraps it in a `ComputerSession`;
-the legacy in-tree providers above remain here until the dual-stack release
-(see the split section).
-Known intentional gaps:
+## Usage from ax-code
 
-- `OcuProtocolProvider` parses element indices/roles/names out of the
-  accessibility tree text, but the tree carries no geometry — OCU-dialect
-  elements have no `bounds`.
-- Cua tool-call argument field names follow the driver source
-  (`rust/crates/platform-macos/src/tools/*.rs`). The click and scroll
-  coordinate semantics are verified live against cua-driver 0.21.0; the rest
-  remain assumed — all argument construction is isolated in
-  `CuaProvider.toCuaArgs` for correction.
+Computer use requires the closed `ax-computer` server. Configure:
+
+```jsonc
+{
+  "computer": {
+    "provider": "axnative", // or "cua"; "external" for any canonical server
+    // optional: path to the server if not on PATH
+    // "command": "/path/to/ax-computer",
+  },
+}
+```
+
+The aliases resolve the server via `computer.command` > `AX_COMPUTER_COMMAND`
+
+> `ax-computer` on PATH and spawn it as `ax-computer mcp --backend <alias>`.
+> The core delegates to the `Computer` namespace
+> (`packages/ax-code/src/computer/`), gated on `computer.provider`, exposing
+> the `computer_snapshot` / `computer_action` / `computer_watch` /
+> `computer_plan` tools. This supersedes the ADR-053 relocation of computer use
+> to a separate product.
 
 ## Layout
 
@@ -76,32 +70,19 @@ Known intentional gaps:
 - `src/session.ts` — `ComputerSession`: one active provider, epoch-tracked
   element targets, failover
 - `src/mcp/stdio-client.ts` — minimal MCP stdio client
-- `src/protocol.ts` — the versioned canonical AX Computer MCP contract (zod
-  schemas, canonical tool definitions, version negotiation)
+- `src/protocol.ts` — the versioned canonical AX Computer MCP contract
 - `src/providers/external.ts` — `ExternalComputerProvider`: canonical-protocol
   client over a configured MCP stdio server
-- `src/providers/ocu-protocol.ts` — abstract base for the app-scoped OCU tool
-  dialect; `src/providers/axnative.ts`, `src/providers/cua.ts` — the two
-  user-selectable backend adapters
+- `src/probe.ts` — provider-agnostic preflight probe
 - `test/compat/suite.ts` — CU-001..CU-010 compat suite, reusable against any
-  provider factory
+  provider factory (mock providers and an ExternalComputerProvider/fake-server
+  arm run in CI; live runs against real backends live in the closed repo)
 
 ## Tests
-
-Unit tests (no live backends needed):
 
 ```bash
 pnpm --dir packages/ax-computer test
 ```
 
-Live compat suite (macOS; requires the backend CLIs, uses TextEdit as a
-benign target app):
-
-```bash
-AX_COMPUTER_LIVE=1 pnpm --dir packages/ax-computer test
-```
-
-Overrides: `AX_COMPUTER_AXNATIVE_COMMAND`, `AX_COMPUTER_CUA_COMMAND` (backend
-commands), `AX_COMPUTER_LIVE_APP` (target app, default `TextEdit`).
-`AX_COMPUTER_OCU_COMMAND` selects the upstream OCU binary for the test-only
-reference arm in the live A/B and compat suites.
+All tests are hermetic (fake MCP servers); live backend tests moved to the
+closed repo with the engine.

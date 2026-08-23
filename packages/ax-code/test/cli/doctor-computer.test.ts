@@ -2,13 +2,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import type { ComputerUseProvider, ProbeReport } from "@ax-code/computer"
 import { getComputerUseCheck } from "../../src/cli/cmd/doctor-computer"
 
-// Computer.resolveBackend honors AX_COMPUTER_*_COMMAND host env overrides and
-// discovers the ax-computer bridge on PATH; the default-command assertions
-// below would fail on a machine that exports them. Pin them away (PATH points
-// at a directory without ax-computer) so the check output is host-independent.
+// Computer.resolveBackend honors the AX_COMPUTER_COMMAND host env override and
+// discovers the ax-computer server on PATH; the command assertions below would
+// fail on a machine that has either. Pin them away (PATH points at a directory
+// without ax-computer) so the check output is host-independent.
 beforeEach(() => {
-  vi.stubEnv("AX_COMPUTER_CUA_COMMAND", undefined)
-  vi.stubEnv("AX_COMPUTER_AXNATIVE_COMMAND", undefined)
   vi.stubEnv("AX_COMPUTER_COMMAND", undefined)
   vi.stubEnv("PATH", "/nonexistent-test-path")
 })
@@ -38,70 +36,68 @@ describe("doctor computer use check", () => {
     })
   })
 
+  test("no server command resolvable → fail with the install hint", async () => {
+    const probe = probeReturning({ ok: true })
+    const check = await getComputerUseCheck({ config: { provider: "cua" }, platform: "darwin", probe })
+    expect(check.status).toBe("fail")
+    expect(check.detail).toContain("requires the ax-computer server")
+    expect(check.detail).toContain("AX_COMPUTER_COMMAND")
+    expect(probe).not.toHaveBeenCalled()
+  })
+
   test("probe ok → ok with command, latency, and app count", async () => {
+    vi.stubEnv("AX_COMPUTER_COMMAND", process.execPath)
     const check = await getComputerUseCheck({
       config: { provider: "cua" },
       platform: "linux",
       probe: probeReturning({ ok: true, provider: "cua", latencyMs: 42, apps: 7 }),
     })
     expect(check.status).toBe("ok")
-    expect(check.detail).toBe("provider cua via cua-driver mcp — handshake ok in 42ms, 7 apps visible")
+    expect(check.detail).toBe(
+      `provider cua via ${process.execPath} mcp --backend cua — handshake ok in 42ms, 7 apps visible`,
+    )
   })
 
   test("probe ok on darwin appends the TCC host-process reminder", async () => {
     const check = await getComputerUseCheck({
-      config: { provider: "axnative", command: "ax-computer-driver" },
+      config: { provider: "axnative", command: "ax-computer" },
       platform: "darwin",
       probe: probeReturning({ ok: true, provider: "axnative", latencyMs: 30, apps: 3 }),
     })
-    // an explicit command pins the deprecated legacy shim → warn, not ok
-    expect(check.status).toBe("warn")
-    expect(check.detail).toContain("provider axnative via ax-computer-driver mcp")
+    expect(check.status).toBe("ok")
+    expect(check.detail).toContain("provider axnative via ax-computer mcp --backend axnative")
     expect(check.detail).toContain("Accessibility/Screen Recording")
-    expect(check.detail).toContain("DEPRECATED")
   })
 
   test("probe failure → fail with command tried, env override, and install hint", async () => {
     const check = await getComputerUseCheck({
-      config: { provider: "cua" },
+      config: { provider: "cua", command: "ax-computer" },
       platform: "darwin",
       probe: probeReturning({
         ok: false,
         provider: "cua",
-        error: 'McpClientError: failed to spawn MCP server "cua-driver": spawn ENOENT.',
+        error: 'McpClientError: failed to spawn MCP server "ax-computer": spawn ENOENT.',
       }),
     })
     expect(check.status).toBe("fail")
-    expect(check.detail).toContain('"cua-driver mcp"')
-    expect(check.detail).toContain("AX_COMPUTER_CUA_COMMAND")
-    expect(check.detail).toContain("Install cua-driver")
+    expect(check.detail).toContain('"ax-computer mcp --backend cua"')
+    expect(check.detail).toContain("AX_COMPUTER_COMMAND")
+    expect(check.detail).toContain("Install the ax-computer server")
     expect(check.detail).toContain("spawn ENOENT")
   })
 
   test("config command override is reflected in the reported command", async () => {
     const check = await getComputerUseCheck({
-      config: { provider: "cua", command: "/opt/cua/bin/cua-driver", args: ["serve"] },
+      config: { provider: "cua", command: process.execPath, args: ["serve"] },
       platform: "darwin",
       probe: probeReturning({ ok: true, provider: "cua", latencyMs: 5, apps: 1 }),
     })
-    expect(check.detail).toContain("via /opt/cua/bin/cua-driver serve")
-  })
-
-  test("legacy command override → deprecation warn with the migration hint, even when the probe succeeds", async () => {
-    const check = await getComputerUseCheck({
-      config: { provider: "cua", command: "/opt/cua/bin/cua-driver" },
-      platform: "darwin",
-      probe: probeReturning({ ok: true, provider: "cua", latencyMs: 5, apps: 1 }),
-    })
-    expect(check.status).toBe("warn")
-    expect(check.detail).toContain("via /opt/cua/bin/cua-driver mcp")
-    expect(check.detail).toContain("DEPRECATED")
-    expect(check.detail).toContain("unset it and install the ax-computer server")
+    expect(check.detail).toContain(`via ${process.execPath} serve`)
   })
 
   test("unexpected throw becomes a warn, never a crash", async () => {
     const check = await getComputerUseCheck({
-      config: { provider: "cua" },
+      config: { provider: "cua", command: "ax-computer" },
       platform: "darwin",
       probe: async () => {
         throw new Error("kaboom")
@@ -111,48 +107,10 @@ describe("doctor computer use check", () => {
     expect(check.detail).toContain("kaboom")
   })
 
-  test("axnative with a missing binary path fails fast with a swift-build hint", async () => {
+  test("missing server binary path fails fast, no probe spawned", async () => {
     const probe = probeReturning({ ok: true })
     const check = await getComputerUseCheck({
-      config: { provider: "axnative", command: "/nonexistent/ax-computer-driver" },
-      platform: "darwin",
-      probe,
-    })
-    expect(check.status).toBe("fail")
-    expect(check.detail).toContain("/nonexistent/ax-computer-driver")
-    expect(check.detail).toContain("build:native")
-    expect(probe).not.toHaveBeenCalled()
-  })
-
-  test("axnative probe ok with a legacy command override → deprecation warn", async () => {
-    const check = await getComputerUseCheck({
-      config: { provider: "axnative", command: process.execPath },
-      platform: "darwin",
-      probe: probeReturning({ ok: true, provider: "axnative", latencyMs: 9, apps: 2 }),
-    })
-    expect(check.status).toBe("warn")
-    expect(check.detail).toContain(`provider axnative via ${process.execPath} mcp`)
-    expect(check.detail).toContain("DEPRECATED")
-    expect(check.detail).toContain("future major release")
-  })
-
-  test("alias routes through the ax-computer bridge when AX_COMPUTER_COMMAND is resolvable", async () => {
-    vi.stubEnv("AX_COMPUTER_COMMAND", process.execPath)
-    const check = await getComputerUseCheck({
-      config: { provider: "cua" },
-      platform: "linux",
-      probe: probeReturning({ ok: true, provider: "cua", latencyMs: 15, apps: 2 }),
-    })
-    expect(check.status).toBe("ok")
-    expect(check.detail).toContain(`provider cua via ${process.execPath} mcp --backend cua`)
-    expect(check.detail).not.toContain("DEPRECATED")
-  })
-
-  test("alias bridge binary missing → fail fast, no probe spawned", async () => {
-    vi.stubEnv("AX_COMPUTER_COMMAND", "/nonexistent/ax-computer")
-    const probe = probeReturning({ ok: true })
-    const check = await getComputerUseCheck({
-      config: { provider: "axnative" },
+      config: { provider: "axnative", command: "/nonexistent/ax-computer" },
       platform: "darwin",
       probe,
     })
@@ -165,21 +123,12 @@ describe("doctor computer use check", () => {
   test("axnative on non-darwin → warn, no probe spawned", async () => {
     const probe = probeReturning({ ok: true })
     const check = await getComputerUseCheck({
-      config: { provider: "axnative" },
+      config: { provider: "axnative", command: "ax-computer" },
       platform: "linux",
       probe,
     })
     expect(check.status).toBe("warn")
     expect(check.detail).toContain("macOS-only")
-    expect(probe).not.toHaveBeenCalled()
-  })
-
-  test("external without a command → fail with the explicit-command requirement", async () => {
-    const probe = probeReturning({ ok: true })
-    const check = await getComputerUseCheck({ config: { provider: "external" }, platform: "darwin", probe })
-    expect(check.status).toBe("fail")
-    expect(check.detail).toContain("requires an explicit command")
-    expect(check.detail).toContain("AX_COMPUTER_COMMAND")
     expect(probe).not.toHaveBeenCalled()
   })
 

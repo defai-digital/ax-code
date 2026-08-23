@@ -1,14 +1,6 @@
 import fs from "node:fs"
 import path from "node:path"
-import {
-  AXNativeProvider,
-  ComputerSession,
-  ComputerUseError,
-  CuaProvider,
-  ExternalComputerProvider,
-  McpClientError,
-  defaultAxnativeCommand,
-} from "@ax-code/computer/index"
+import { ComputerSession, ComputerUseError, ExternalComputerProvider, McpClientError } from "@ax-code/computer/index"
 import type {
   ActionResult,
   AppInfo,
@@ -30,6 +22,13 @@ import type { SessionID, MessageID } from "@/session/schema"
  * instance. Provider selection is manual only — no auto-routing or failover
  * between backends (PRD-2026-08-22 non-goal for early phases).
  *
+ * Every provider value ("axnative", "cua", "external") routes through an
+ * MCP server speaking the canonical AX Computer protocol, driven by
+ * ExternalComputerProvider (ADR-061: the engine lives in the closed
+ * ax-computer repo; the open repo carries the client only). The aliases
+ * select the server's backend via `mcp --backend <alias>`; "external" treats
+ * the configured command as a complete canonical-protocol server.
+ *
  * The configured default provider is constructed lazily on first use and
  * wrapped in a ComputerSession. Optional `computer.overrides` adds one extra
  * session per distinct override value, so a single instance can route
@@ -47,31 +46,19 @@ import type { SessionID, MessageID } from "@/session/schema"
 export namespace Computer {
   const log = Log.create({ service: "computer" })
 
-  /** default backend commands and their env overrides, for resolution and diagnostics */
-  const BACKENDS = {
-    cua: { command: "cua-driver", env: "AX_COMPUTER_CUA_COMMAND" },
-    // built binary under packages/ax-computer/native (release, then debug), else PATH
-    axnative: { command: defaultAxnativeCommand(), env: "AX_COMPUTER_AXNATIVE_COMMAND" },
-    // no default: external requires an explicit computer.command / env override
-    external: { command: "", env: "AX_COMPUTER_COMMAND" },
-  } as const
+  /** recognized computer.provider values, for resolution and diagnostics */
+  const BACKENDS = ["cua", "axnative", "external"] as const
 
-  export type BackendName = keyof typeof BACKENDS
+  export type BackendName = (typeof BACKENDS)[number]
   export type ProviderName = BackendName | string
 
   export interface ResolvedBackend {
     provider: ProviderName
     command: string
     args: string[]
-    /** env var that overrides the command */
-    env: string
-    /** "bridge" routes through the ax-computer canonical server (ExternalComputerProvider); "direct" spawns a legacy in-repo driver */
-    via: "bridge" | "direct"
-    /** true when an explicit command/env override forced the deprecated legacy direct-driver path */
-    legacyOverride: boolean
   }
 
-  /** sync PATH lookup for the ax-computer bridge binary (access-based, no spawn) */
+  /** sync PATH lookup for the ax-computer server binary (access-based, no spawn) */
   function findExecutableOnPath(name: string): string | undefined {
     const extensions = process.platform === "win32" ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";") : [""]
     for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
@@ -89,84 +76,29 @@ export namespace Computer {
     return undefined
   }
 
-  let legacyOverrideWarned = false
-
-  /** one-time deprecation warning for the legacy direct-driver override path */
-  function warnLegacyOverrideOnce(provider: ProviderName, env: string): void {
-    if (legacyOverrideWarned) return
-    legacyOverrideWarned = true
-    log.warn(
-      `computer-use: the direct-driver override for "${provider}" (computer.command / ${env}) is deprecated and will be removed in a future major release; unset the override and install the ax-computer server ("ax-computer mcp") to route through the canonical protocol`,
-      { provider, env },
-    )
-  }
-
   /**
-   * Resolve the backend command for a computer config. Shared by the session
-   * provider construction and the doctor preflight so both report the exact
-   * command that would be spawned.
-   *
-   * "external" has no default command and must never silently inherit a
-   * backend alias, so it requires an explicit computer.command (or
-   * AX_COMPUTER_COMMAND) and throws otherwise.
-   *
-   * The "axnative"/"cua" aliases are dual-stack (ADR-061). An explicit
-   * override (computer.command or the legacy AX_COMPUTER_*_COMMAND env) pins
-   * the deprecated legacy direct-driver shim. Without an override, the
-   * ax-computer canonical server is preferred when resolvable
-   * (AX_COMPUTER_COMMAND, else ax-computer on PATH); when no server is found,
-   * the legacy default driver keeps OSS installs working.
+   * Resolve the server command for a computer config: computer.command >
+   * AX_COMPUTER_COMMAND > ax-computer on PATH. Aliases get canonical args
+   * `["mcp", "--backend", <alias>]`; "external" takes the user's args (or
+   * none). Throws a clear install hint when no command is resolvable. Shared
+   * by the session provider construction and the doctor preflight so both
+   * report the exact command that would be spawned.
    */
   export function resolveBackend(computer: Config.Info["computer"]): ResolvedBackend | undefined {
     if (!computer?.provider) return undefined
-    const backend = BACKENDS[computer.provider]
-    if (computer.provider === "external") {
-      const command = computer.command ?? process.env[backend.env]
-      if (!command) {
-        throw new Error(
-          'computer.provider "external" requires an explicit command: set computer.command (or AX_COMPUTER_COMMAND) to an MCP server speaking the canonical AX Computer protocol.',
-        )
-      }
-      return {
-        provider: computer.provider,
-        command,
-        // external commands are complete command lines; args default to none
-        args: computer.args ?? [],
-        env: backend.env,
-        via: "bridge",
-        legacyOverride: false,
-      }
-    }
-    const legacyOverride = computer.command ?? process.env[backend.env]
-    if (legacyOverride) {
-      warnLegacyOverrideOnce(computer.provider, backend.env)
-      return {
-        provider: computer.provider,
-        command: legacyOverride,
-        args: computer.args ?? ["mcp"],
-        env: backend.env,
-        via: "direct",
-        legacyOverride: true,
-      }
-    }
-    const bridge = process.env[BACKENDS.external.env] ?? findExecutableOnPath("ax-computer")
-    if (bridge) {
-      return {
-        provider: computer.provider,
-        command: bridge,
-        args: ["mcp", "--backend", computer.provider],
-        env: backend.env,
-        via: "bridge",
-        legacyOverride: false,
-      }
+    const command = computer.command ?? process.env.AX_COMPUTER_COMMAND ?? findExecutableOnPath("ax-computer")
+    if (!command) {
+      throw new Error(
+        `computer.provider "${computer.provider}" requires the ax-computer server: install it so "ax-computer" is on PATH, or set computer.command / AX_COMPUTER_COMMAND to the server command.`,
+      )
     }
     return {
       provider: computer.provider,
-      command: backend.command,
-      args: computer.args ?? ["mcp"],
-      env: backend.env,
-      via: "direct",
-      legacyOverride: false,
+      command,
+      args:
+        computer.provider === "external"
+          ? (computer.args ?? [])
+          : (computer.args ?? ["mcp", "--backend", computer.provider]),
     }
   }
 
@@ -355,36 +287,23 @@ export namespace Computer {
   function createProvider(computer: Config.Info["computer"], target: ProviderName): ComputerUseProvider {
     if (!computer?.provider) {
       throw new Error(
-        'Computer use is not configured. Set computer.provider ("cua" or "axnative") in ax-code.json to enable computer tools.',
+        'Computer use is not configured. Set computer.provider ("axnative", "cua", or "external") in ax-code.json to enable computer tools.',
       )
     }
-    // command/args fall through to the providers, which apply the
-    // AX_COMPUTER_*_COMMAND env override and then the default command name
-    // (precedence: config > env > default). The override values are the
-    // same pre-set names, so reusing the configured command/args is correct.
-    const options = { command: computer.command, args: computer.args }
     switch (target) {
       case "cua":
-      case "axnative": {
-        // dual-stack remap (ADR-061): resolveBackend decides per target whether
-        // the alias routes through the ax-computer canonical server or stays on
-        // the legacy direct-driver provider (explicit override, or no server found)
-        const resolved = resolveBackend({ ...computer, provider: target })
-        if (resolved?.via === "bridge") {
-          return new ExternalComputerProvider({ command: resolved.command, args: resolved.args })
-        }
-        return target === "cua" ? new CuaProvider(options) : new AXNativeProvider(options)
-      }
+      case "axnative":
       case "external": {
-        // resolveBackend owns the explicit-command rule (never inherits an
-        // alias); it throws a clear error when no command is configured
-        const resolved = resolveBackend({ ...computer, provider: "external" })
-        if (!resolved) throw new Error('computer.provider "external" requires an explicit computer.command.')
+        // every provider value routes through a canonical-protocol MCP server
+        // (ADR-061); resolveBackend throws a clear install hint when no server
+        // command is resolvable
+        const resolved = resolveBackend({ ...computer, provider: target as BackendName })
+        if (!resolved) throw new Error(`Computer use provider "${target}" could not be resolved.`)
         return new ExternalComputerProvider({ command: resolved.command, args: resolved.args })
       }
       default:
         throw new Error(
-          `Computer use override "${target}" is not a built-in backend; only "cua", "axnative", and "external" are recognized.`,
+          `Computer use override "${target}" is not a recognized backend; use "axnative", "cua", or "external".`,
         )
     }
   }
@@ -434,12 +353,17 @@ export namespace Computer {
   /** backend spawn/transport failures get an actionable diagnostic naming the command tried and the env override */
   async function unavailable(err: unknown, name: ProviderName): Promise<Error> {
     const cfg = await Config.get()
-    const resolved = resolveBackend(cfg.computer)
-    const command = resolved ? `${resolved.command} ${resolved.args.join(" ")}` : "unknown"
-    const env = resolved?.env ?? "AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_AXNATIVE_COMMAND"
+    let resolved: ResolvedBackend | undefined
+    try {
+      resolved = resolveBackend(cfg.computer)
+    } catch {
+      // no server command resolvable at all — the install hint in the detail matters more than the command
+      resolved = undefined
+    }
+    const command = resolved ? `${resolved.command} ${resolved.args.join(" ")}`.trim() : "unknown"
     const detail = err instanceof Error ? err.message : String(err)
     return new Error(
-      `Computer-use backend "${name}" is unavailable (tried "${command}"; override with ${env} or computer.command config). ${detail}`,
+      `Computer-use backend "${name}" is unavailable (tried "${command}"; override with AX_COMPUTER_COMMAND or computer.command config). ${detail}`,
       { cause: err },
     )
   }
@@ -489,7 +413,7 @@ export namespace Computer {
     const name = await resolveObserveProvider(s, scope)
     if (!name) {
       throw new Error(
-        'Computer use is not configured. Set computer.provider ("cua" or "axnative") in ax-code.json to enable computer tools.',
+        'Computer use is not configured. Set computer.provider ("axnative", "cua", or "external") in ax-code.json to enable computer tools.',
       )
     }
     const session = await sessionFor(name)
@@ -609,7 +533,7 @@ export namespace Computer {
     const name = await resolveObserveProvider(s, { desktop: true })
     if (!name) {
       throw new Error(
-        'Computer use is not configured. Set computer.provider ("cua" or "axnative") in ax-code.json to enable computer tools.',
+        'Computer use is not configured. Set computer.provider ("axnative", "cua", or "external") in ax-code.json to enable computer tools.',
       )
     }
     const session = await sessionFor(name)

@@ -1,4 +1,4 @@
-- Observes the local computer through an external computer-use backend (OCU on macOS, cua-driver elsewhere)
+- Observes the local computer through the ax-computer computer-use server (axnative backend on macOS, cua elsewhere)
 - Returns a screenshot attachment, a list of targetable elements, and the accessibility tree when available
 - Scope: pass app to observe one application, windowId for one window, or neither for the whole desktop (never both)
 - A desktop-scope snapshot also lists available apps and windows — use those exact names/ids to scope follow-up observations

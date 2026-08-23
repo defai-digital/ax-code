@@ -15,7 +15,6 @@ catalog:
   "@playwright/test": "1.51.0"
   "playwright-core": "1.51.0"
   "@standard-schema/spec": "1.0.0"
-  "@trycua/cua-driver": "0.21.0"
   "@tsconfig/node24": "24.0.4"
   "@types/luxon": "3.7.1"
   "@types/mime-types": "3.0.1"
