@@ -97,7 +97,9 @@ export function nativeResolverApplied(source: string) {
 }
 
 export function kittyKeyboardOptOutApplied(source: string) {
-  return source.includes("const kittyConfig = config.useKittyKeyboard === undefined ? {} : config.useKittyKeyboard;")
+  // No trailing semicolon in the anchor: bundle codegen differs across
+  // re-vendors (some emit `;`, some don't).
+  return source.includes("const kittyConfig = config.useKittyKeyboard === undefined ? {} : config.useKittyKeyboard")
 }
 
 export function zigParserDropped(source: string) {
@@ -310,13 +312,13 @@ function applyNativeResolver(source: string) {
 
 export function applyKittyKeyboardOptOut(source: string) {
   if (kittyKeyboardOptOutApplied(source)) return source
-  const anchor = "const kittyConfig = config.useKittyKeyboard ?? {};"
+  const anchor = "const kittyConfig = config.useKittyKeyboard ?? {}"
   if (!source.includes(anchor)) {
     throw new Error("kitty-keyboard-opt-out: missing renderer configuration anchor")
   }
   const next = source.replace(
     anchor,
-    "const kittyConfig = config.useKittyKeyboard === undefined ? {} : config.useKittyKeyboard;",
+    "const kittyConfig = config.useKittyKeyboard === undefined ? {} : config.useKittyKeyboard",
   )
   if (!kittyKeyboardOptOutApplied(next)) {
     throw new Error("kitty-keyboard-opt-out: apply did not satisfy the contract")
