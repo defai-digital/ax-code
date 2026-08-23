@@ -26,10 +26,12 @@
  * Observation-only events ignore the decoder entirely (fail-open preserved),
  * and entries without the field behave byte-identically to the legacy path.
  *
- * Security note: hook child processes receive the FULL `process.env`
- * (see the env spread in `runHookProcess` below). Hook commands must be
- * treated as trusted code — they can read every secret in the environment.
- * Scoping the env passed to hooks is future hardening (ADR-057 D4).
+ * Security note: hook child processes receive `Env.sanitize(process.env)` by
+ * default. This removes ambient secrets, credential helpers, credential-bearing
+ * URLs, and process-injection variables before repository-controlled hook code
+ * runs. Fully trusted legacy hooks can opt back into the complete environment
+ * with the host-only `AX_CODE_HOOKS_FULL_ENV=1` escape hatch (ADR-057 D4).
+ * Hooks remain arbitrary, unsandboxed shell code and must still be reviewed.
  */
 
 import { spawn } from "child_process"
@@ -38,6 +40,7 @@ import path from "path"
 import z from "zod"
 import { Log } from "@/util/log"
 import { parseJsonResult, parseJsonPayload } from "@/util/json-value"
+import { Env } from "@/util/env"
 import { Global } from "@/global"
 import { Instance } from "@/project/instance"
 import { ProjectConfigTrust } from "@/config/project-config-trust"
@@ -49,9 +52,11 @@ export namespace LifecycleHooks {
   const MAX_CONCURRENT_HOOKS = 4
   const MAX_CAPTURE_BYTES = 1024 * 1024
   const MAX_COMPAT_ENV_BYTES = 32 * 1024
+  const FULL_ENV_FLAG = "AX_CODE_HOOKS_FULL_ENV"
   const READ_HOOK_ARGS =
     "const fs=require('fs');const raw=process.env.HOOK_ARGS_JSON||fs.readFileSync(0,'utf8')||'{}';const a=JSON.parse(raw);"
   let activeHooks = 0
+  let fullEnvWarningShown = false
   const hookWaiters: Array<() => void> = []
 
   async function acquireHookSlot() {
@@ -290,10 +295,22 @@ export namespace LifecycleHooks {
     return current + Buffer.from(chunk).subarray(0, remaining).toString("utf8")
   }
 
+  function hookProcessEnv(): NodeJS.ProcessEnv {
+    if (Env.parseBoolean(process.env[FULL_ENV_FLAG]) !== true) return Env.sanitize(process.env)
+    if (!fullEnvWarningShown) {
+      fullEnvWarningShown = true
+      log.warn("lifecycle hooks are inheriting the full process environment", {
+        flag: FULL_ENV_FLAG,
+        risk: "hook commands can read ambient credentials and process-injection variables",
+      })
+    }
+    return { ...process.env }
+  }
+
   async function runHookProcess(hook: HookCommand, input: RunInput): Promise<RunResult["outputs"][number]> {
     const argsJson = JSON.stringify(input.args ?? {})
     const env = {
-      ...process.env,
+      ...hookProcessEnv(),
       HOOK_EVENT: input.event,
       HOOK_TOOL: input.tool ?? "",
       HOOK_SESSION_ID: input.sessionID ?? "",

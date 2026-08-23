@@ -8,6 +8,10 @@ import fs from "fs/promises"
 import os from "os"
 import path from "path"
 
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
+
 describe("LifecycleHooks official packs", () => {
   test("ships at least 5 builtin packs covering PreToolUse, PostToolUse, Stop", () => {
     const packs = LifecycleHooks.listBuiltinPacks()
@@ -72,6 +76,89 @@ describe("LifecycleHooks matcher and run", () => {
     expect(result.outputs).toHaveLength(1)
     expect(result.outputs[0]?.exit).toBe(0)
     expect(result.outputs[0]?.stdout).toBe(String(64 * 1024))
+  })
+
+  test("sanitizes inherited secrets while preserving hook protocol and platform variables", async () => {
+    vi.stubEnv("AX_TEST_SECRET_KEY", "top-secret")
+    vi.stubEnv("AX_TEST_SAFE", "visible")
+    vi.stubEnv("SSH_AUTH_SOCK", "/tmp/test-agent.sock")
+    vi.stubEnv("DATABASE_URL", "https://alice:secret@example.com/database")
+    vi.stubEnv("NODE_OPTIONS", "--trace-warnings")
+    vi.stubEnv("SYSTEMROOT", "C:\\Windows")
+    vi.stubEnv("COMSPEC", "C:\\Windows\\System32\\cmd.exe")
+    vi.stubEnv("USERPROFILE", "C:\\Users\\tester")
+    vi.stubEnv("TEMP", "C:\\Temp")
+    vi.stubEnv("PATHEXT", ".COM;.EXE")
+
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PreToolUse",
+          command: `node -e "const e=process.env;process.stdout.write([e.AX_TEST_SECRET_KEY||'',e.AX_TEST_SAFE||'',e.HOOK_EVENT||'',e.HOOK_ARGS_JSON||'',e.SSH_AUTH_SOCK||'',e.DATABASE_URL||'',e.NODE_OPTIONS||'',e.SYSTEMROOT||'',e.COMSPEC||'',e.USERPROFILE||'',e.TEMP||'',e.PATHEXT||''].join('\\n'))"`,
+        },
+      ],
+      { event: "PreToolUse", args: { command: "echo hi" }, cwd: process.cwd() },
+    )
+
+    expect(result.outputs[0]?.exit).toBe(0)
+    expect(result.outputs[0]?.stdout.split("\n")).toEqual([
+      "",
+      "visible",
+      "PreToolUse",
+      '{"command":"echo hi"}',
+      "",
+      "",
+      "",
+      "C:\\Windows",
+      "C:\\Windows\\System32\\cmd.exe",
+      "C:\\Users\\tester",
+      "C:\\Temp",
+      ".COM;.EXE",
+    ])
+  })
+
+  test("restores the legacy full environment only through the host escape hatch", async () => {
+    vi.stubEnv("AX_TEST_SECRET_KEY", "top-secret")
+    vi.stubEnv("AX_CODE_HOOKS_FULL_ENV", "1")
+
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PreToolUse",
+          command: `node -e "process.stdout.write(process.env.AX_TEST_SECRET_KEY||'')"`,
+        },
+      ],
+      { event: "PreToolUse", cwd: process.cwd() },
+    )
+
+    expect(result.outputs[0]?.exit).toBe(0)
+    expect(result.outputs[0]?.stdout).toBe("top-secret")
+  })
+
+  test("does not let project hooks request the legacy full environment", async () => {
+    vi.stubEnv("AX_TEST_SECRET_KEY", "top-secret")
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-hooks-env-bypass-"))
+    await fs.mkdir(path.join(dir, ".ax-code"), { recursive: true })
+    await fs.writeFile(
+      path.join(dir, ".ax-code", "hooks.json"),
+      JSON.stringify({
+        hooks: [
+          {
+            event: "PreToolUse",
+            command: `node -e "process.stdout.write(process.env.AX_TEST_SECRET_KEY||'')"`,
+            fullEnv: true,
+          },
+        ],
+      }),
+      "utf8",
+    )
+
+    const hooks = await LifecycleHooks.loadProjectHooks(dir, true)
+    const result = await LifecycleHooks.runHooks(hooks, { event: "PreToolUse", cwd: dir })
+
+    expect(hooks).toHaveLength(1)
+    expect(result.outputs[0]?.exit).toBe(0)
+    expect(result.outputs[0]?.stdout).toBe("")
   })
 
   test("loads packs from .ax-code/hooks.json", async () => {

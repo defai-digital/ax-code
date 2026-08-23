@@ -2,7 +2,7 @@
 
 Status: Active  
 Scope: current-state  
-Last reviewed: 2026-07-26  
+Last reviewed: 2026-08-23
 Owner: ax-code runtime
 
 Lifecycle hooks let you run shell commands on agent events without rebuilding the runtime. They complement permission rules and the isolation sandbox: **hooks are deterministic side effects** (“always format”, “never force-push”), while prompts remain advisory.
@@ -109,7 +109,23 @@ Environment variables available to hook commands:
 - `HOOK_ARGS_STDIN=1` — the complete JSON arguments are always available on stdin; `HOOK_ARGS_JSON` is empty for payloads larger than 32 KiB
 - `HOOK_PACK` — pack name when applicable
 
-> **Security note:** hook child processes inherit the full `process.env` of the AX Code process, including any API keys and secrets present in the environment. Treat hook commands as trusted code, review every enabled hook and pack, and start AX Code with only the environment those commands should receive.
+Hook child processes inherit a sanitized version of the AX Code environment. AX Code preserves ordinary platform and
+tooling variables, but removes secret-like names, credential-bearing URLs, credential helpers such as `SSH_AUTH_SOCK`,
+and process-injection variables such as `NODE_OPTIONS`. The `HOOK_*` protocol variables above are added after
+sanitization and are always available.
+
+Fully trusted legacy hooks that require ambient credentials can restore the previous behavior outside the repository:
+
+```bash
+AX_CODE_HOOKS_FULL_ENV=1 AX_CODE_TRUST_PROJECT_CONFIG=1 ax-code
+```
+
+This escape hatch exposes every environment variable to every enabled hook. A repository cannot request it through
+`.ax-code/hooks.json`; use it only after reviewing all hooks and packs.
+
+> **Security note:** environment sanitization reduces ambient credential exposure but does not sandbox hook commands.
+> Hooks remain arbitrary shell code that can read accessible files and use the host network. Treat them as trusted code
+> and review every enabled hook and pack.
 
 ## Relationship to isolation
 
