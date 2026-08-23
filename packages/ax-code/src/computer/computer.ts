@@ -1,8 +1,11 @@
+import fs from "node:fs"
+import path from "node:path"
 import {
   AXNativeProvider,
   ComputerSession,
   ComputerUseError,
   CuaProvider,
+  ExternalComputerProvider,
   McpClientError,
   defaultAxnativeCommand,
 } from "@ax-code/computer/index"
@@ -49,6 +52,8 @@ export namespace Computer {
     cua: { command: "cua-driver", env: "AX_COMPUTER_CUA_COMMAND" },
     // built binary under packages/ax-computer/native (release, then debug), else PATH
     axnative: { command: defaultAxnativeCommand(), env: "AX_COMPUTER_AXNATIVE_COMMAND" },
+    // no default: external requires an explicit computer.command / env override
+    external: { command: "", env: "AX_COMPUTER_COMMAND" },
   } as const
 
   export type BackendName = keyof typeof BACKENDS
@@ -60,22 +65,108 @@ export namespace Computer {
     args: string[]
     /** env var that overrides the command */
     env: string
+    /** "bridge" routes through the ax-computer canonical server (ExternalComputerProvider); "direct" spawns a legacy in-repo driver */
+    via: "bridge" | "direct"
+    /** true when an explicit command/env override forced the deprecated legacy direct-driver path */
+    legacyOverride: boolean
+  }
+
+  /** sync PATH lookup for the ax-computer bridge binary (access-based, no spawn) */
+  function findExecutableOnPath(name: string): string | undefined {
+    const extensions = process.platform === "win32" ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";") : [""]
+    for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+      if (!dir) continue
+      for (const extension of extensions) {
+        const candidate = path.join(dir, name + extension)
+        try {
+          fs.accessSync(candidate, fs.constants.X_OK)
+          return candidate
+        } catch {
+          // not in this entry — keep scanning
+        }
+      }
+    }
+    return undefined
+  }
+
+  let legacyOverrideWarned = false
+
+  /** one-time deprecation warning for the legacy direct-driver override path */
+  function warnLegacyOverrideOnce(provider: ProviderName, env: string): void {
+    if (legacyOverrideWarned) return
+    legacyOverrideWarned = true
+    log.warn(
+      `computer-use: the direct-driver override for "${provider}" (computer.command / ${env}) is deprecated and will be removed in a future major release; unset the override and install the ax-computer server ("ax-computer mcp") to route through the canonical protocol`,
+      { provider, env },
+    )
   }
 
   /**
-   * Resolve the backend command for a computer config. Precedence:
-   * config.command > env override > default command name; args default to
-   * the string `mcp`. Shared by the session provider construction and the
-   * doctor preflight so both report the exact command that would be spawned.
+   * Resolve the backend command for a computer config. Shared by the session
+   * provider construction and the doctor preflight so both report the exact
+   * command that would be spawned.
+   *
+   * "external" has no default command and must never silently inherit a
+   * backend alias, so it requires an explicit computer.command (or
+   * AX_COMPUTER_COMMAND) and throws otherwise.
+   *
+   * The "axnative"/"cua" aliases are dual-stack (ADR-061). An explicit
+   * override (computer.command or the legacy AX_COMPUTER_*_COMMAND env) pins
+   * the deprecated legacy direct-driver shim. Without an override, the
+   * ax-computer canonical server is preferred when resolvable
+   * (AX_COMPUTER_COMMAND, else ax-computer on PATH); when no server is found,
+   * the legacy default driver keeps OSS installs working.
    */
   export function resolveBackend(computer: Config.Info["computer"]): ResolvedBackend | undefined {
     if (!computer?.provider) return undefined
     const backend = BACKENDS[computer.provider]
+    if (computer.provider === "external") {
+      const command = computer.command ?? process.env[backend.env]
+      if (!command) {
+        throw new Error(
+          'computer.provider "external" requires an explicit command: set computer.command (or AX_COMPUTER_COMMAND) to an MCP server speaking the canonical AX Computer protocol.',
+        )
+      }
+      return {
+        provider: computer.provider,
+        command,
+        // external commands are complete command lines; args default to none
+        args: computer.args ?? [],
+        env: backend.env,
+        via: "bridge",
+        legacyOverride: false,
+      }
+    }
+    const legacyOverride = computer.command ?? process.env[backend.env]
+    if (legacyOverride) {
+      warnLegacyOverrideOnce(computer.provider, backend.env)
+      return {
+        provider: computer.provider,
+        command: legacyOverride,
+        args: computer.args ?? ["mcp"],
+        env: backend.env,
+        via: "direct",
+        legacyOverride: true,
+      }
+    }
+    const bridge = process.env[BACKENDS.external.env] ?? findExecutableOnPath("ax-computer")
+    if (bridge) {
+      return {
+        provider: computer.provider,
+        command: bridge,
+        args: ["mcp", "--backend", computer.provider],
+        env: backend.env,
+        via: "bridge",
+        legacyOverride: false,
+      }
+    }
     return {
       provider: computer.provider,
-      command: computer.command ?? process.env[backend.env] ?? backend.command,
+      command: backend.command,
       args: computer.args ?? ["mcp"],
       env: backend.env,
+      via: "direct",
+      legacyOverride: false,
     }
   }
 
@@ -274,12 +365,26 @@ export namespace Computer {
     const options = { command: computer.command, args: computer.args }
     switch (target) {
       case "cua":
-        return new CuaProvider(options)
-      case "axnative":
-        return new AXNativeProvider(options)
+      case "axnative": {
+        // dual-stack remap (ADR-061): resolveBackend decides per target whether
+        // the alias routes through the ax-computer canonical server or stays on
+        // the legacy direct-driver provider (explicit override, or no server found)
+        const resolved = resolveBackend({ ...computer, provider: target })
+        if (resolved?.via === "bridge") {
+          return new ExternalComputerProvider({ command: resolved.command, args: resolved.args })
+        }
+        return target === "cua" ? new CuaProvider(options) : new AXNativeProvider(options)
+      }
+      case "external": {
+        // resolveBackend owns the explicit-command rule (never inherits an
+        // alias); it throws a clear error when no command is configured
+        const resolved = resolveBackend({ ...computer, provider: "external" })
+        if (!resolved) throw new Error('computer.provider "external" requires an explicit computer.command.')
+        return new ExternalComputerProvider({ command: resolved.command, args: resolved.args })
+      }
       default:
         throw new Error(
-          `Computer use override "${target}" is not a built-in backend; only "cua" and "axnative" are recognized.`,
+          `Computer use override "${target}" is not a built-in backend; only "cua", "axnative", and "external" are recognized.`,
         )
     }
   }

@@ -1721,15 +1721,6 @@ final class AXComputerKitTests: XCTestCase {
         XCTAssertEqual(SoftwareCursorGlyphMetrics.windowSize, CGSize(width: 126, height: 126))
         XCTAssertEqual(SoftwareCursorGlyphMetrics.tipAnchor.x, 60.35, accuracy: 0.01)
         XCTAssertEqual(SoftwareCursorGlyphMetrics.tipAnchor.y, 70.3, accuracy: 0.01)
-        XCTAssertEqual(SoftwareCursorGlyphMetrics.referenceImageResourceName, "official-software-cursor-window-252")
-    }
-
-    func testSoftwareCursorGlyphLoadsCursorMotionReferenceImage() throws {
-        let image = try XCTUnwrap(loadReferenceCursorWindowImage())
-        let bitmap = try XCTUnwrap(image.representations.first)
-
-        XCTAssertEqual(bitmap.pixelsWide, 252)
-        XCTAssertEqual(bitmap.pixelsHigh, 252)
     }
 
     func testSoftwareCursorGlyphArtworkNeutralHeadingMatchesCursorMotionBaseline() {

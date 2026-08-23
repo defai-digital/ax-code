@@ -28,6 +28,17 @@ const require = createRequire(import.meta.url)
 const { version: electronVersion } = require("electron/package.json")
 const builderEnv = resolveAppleSigningEnv(args)
 
+// Stage the closed-source AX Computer computer-use server into
+// resources/ax-computer so electron-builder's extraResources entry resolves.
+// When the release artifact is absent (OSS/dev builds) the script stages a
+// README.txt placeholder instead — packaging succeeds either way.
+const stage = spawnSync("bash", [path.join(__dirname, "stage-ax-computer.sh")], {
+  stdio: "inherit",
+  cwd: electronDir,
+})
+if (stage.error) throw stage.error
+if (stage.status !== 0) process.exit(stage.status ?? 1)
+
 // Resolve electron-builder via npx (it's hoisted to the workspace root, not
 // packages/electron/node_modules/.bin), matching how the macOS job invokes it.
 // shell:true so `npx` resolves on the Windows runner.

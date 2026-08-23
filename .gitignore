@@ -18,6 +18,7 @@ dist
 dist-source
 ts-dist
 desktop/packages/electron/resources/web-dist/
+desktop/packages/electron/resources/ax-computer/
 .turbo
 .ruff_cache
 **/.serena

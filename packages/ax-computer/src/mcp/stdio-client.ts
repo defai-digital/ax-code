@@ -127,12 +127,14 @@ export class StdioMcpClient implements McpClient {
   /** serializes writes so we respect stream backpressure */
   private writePromise: Promise<void> = Promise.resolve()
   private writeError: Error | undefined
+  /** the server's initialize result, captured during start() (version negotiation input) */
+  initializeResult: unknown
 
   /** spawn the server and run the initialize/initialized handshake */
   static async start(options: StdioMcpClientOptions): Promise<StdioMcpClient> {
     const client = new StdioMcpClient(options)
     try {
-      await client.request("initialize", {
+      client.initializeResult = await client.request("initialize", {
         protocolVersion: PROTOCOL_VERSION,
         capabilities: {},
         clientInfo: { name: "ax-computer", version: "0.0.0" },

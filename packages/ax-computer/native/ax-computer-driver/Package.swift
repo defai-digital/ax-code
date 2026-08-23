@@ -20,8 +20,7 @@ let package = Package(
     targets: [
         .target(
             name: "AXComputerKit",
-            path: "Sources/AXComputerKit",
-            resources: [.process("Resources")]
+            path: "Sources/AXComputerKit"
         ),
         .executableTarget(
             name: "ax-computer-driver",

@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
 import { ComputerUseError, McpClientError } from "@ax-code/computer"
 import type { Permission } from "../../src/permission"
 import { Computer } from "../../src/computer/computer"
@@ -30,6 +33,7 @@ vi.mock("@/visual/router", () => ({
 beforeEach(() => {
   vi.stubEnv("AX_COMPUTER_CUA_COMMAND", undefined)
   vi.stubEnv("AX_COMPUTER_AXNATIVE_COMMAND", undefined)
+  vi.stubEnv("AX_COMPUTER_COMMAND", undefined)
 })
 
 afterEach(() => {
@@ -162,6 +166,9 @@ describe("computer_snapshot tool", () => {
   })
 
   test("unavailable backend fails with the command tried and the env override", async () => {
+    // pin PATH away from any host ax-computer bridge binary so the diagnostic
+    // names the legacy default driver
+    vi.stubEnv("PATH", "/nonexistent-test-path")
     await setup({ config: { computer: { provider: "cua" } } }, async ({ provider }) => {
       vi.spyOn(provider, "observe").mockRejectedValue(new McpClientError("spawn_failed", "command not found"))
       const tool = await ComputerSnapshotTool.init()
@@ -936,6 +943,160 @@ describe("computer audit emission (AX-Trust)", () => {
         await snapshot.execute({ includeScreenshot: false }, makeCtx([]))
         // observed and recorded with no error
         expect(await Computer.lastObservation()).toBeDefined()
+      },
+    })
+  })
+})
+
+describe("computer external backend", () => {
+  test("resolveBackend requires an explicit command for external (never inherits an alias)", () => {
+    expect(() => Computer.resolveBackend({ provider: "external" })).toThrow(/requires an explicit command/)
+  })
+
+  test("resolveBackend honors computer.command, then AX_COMPUTER_COMMAND, for external", () => {
+    expect(Computer.resolveBackend({ provider: "external", command: "/opt/ax/server", args: ["mcp"] })).toEqual({
+      provider: "external",
+      command: "/opt/ax/server",
+      args: ["mcp"],
+      env: "AX_COMPUTER_COMMAND",
+      via: "bridge",
+      legacyOverride: false,
+    })
+    // no default command: args fall back to [] rather than the alias ["mcp"]
+    vi.stubEnv("AX_COMPUTER_COMMAND", "/env/ax-server")
+    expect(Computer.resolveBackend({ provider: "external" })).toEqual({
+      provider: "external",
+      command: "/env/ax-server",
+      args: [],
+      env: "AX_COMPUTER_COMMAND",
+      via: "bridge",
+      legacyOverride: false,
+    })
+    // config wins over the env override
+    expect(Computer.resolveBackend({ provider: "external", command: "/cfg/ax-server" })?.command).toBe("/cfg/ax-server")
+  })
+
+  test("aliases route through the ax-computer bridge when AX_COMPUTER_COMMAND is set", () => {
+    vi.stubEnv("AX_COMPUTER_COMMAND", "/opt/ax/bin/ax-computer")
+    expect(Computer.resolveBackend({ provider: "cua" })).toEqual({
+      provider: "cua",
+      command: "/opt/ax/bin/ax-computer",
+      args: ["mcp", "--backend", "cua"],
+      env: "AX_COMPUTER_CUA_COMMAND",
+      via: "bridge",
+      legacyOverride: false,
+    })
+    expect(Computer.resolveBackend({ provider: "axnative" })).toMatchObject({
+      command: "/opt/ax/bin/ax-computer",
+      args: ["mcp", "--backend", "axnative"],
+      via: "bridge",
+      legacyOverride: false,
+    })
+  })
+
+  test("aliases discover the ax-computer bridge on PATH when no env override is set", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ax-bridge-path-"))
+    const bin = path.join(dir, "ax-computer")
+    fs.writeFileSync(bin, "#!/bin/sh\n", { mode: 0o755 })
+    vi.stubEnv("PATH", dir)
+    const resolved = Computer.resolveBackend({ provider: "cua" })
+    expect(resolved).toMatchObject({
+      command: bin,
+      args: ["mcp", "--backend", "cua"],
+      via: "bridge",
+      legacyOverride: false,
+    })
+  })
+
+  test("aliases fall back to the legacy direct driver when no ax-computer server is resolvable", () => {
+    vi.stubEnv("PATH", "/nonexistent-test-path")
+    expect(Computer.resolveBackend({ provider: "cua" })).toEqual({
+      provider: "cua",
+      command: "cua-driver",
+      args: ["mcp"],
+      env: "AX_COMPUTER_CUA_COMMAND",
+      via: "direct",
+      legacyOverride: false,
+    })
+    expect(Computer.resolveBackend({ provider: "axnative" })).toMatchObject({
+      env: "AX_COMPUTER_AXNATIVE_COMMAND",
+      args: ["mcp"],
+      via: "direct",
+      legacyOverride: false,
+    })
+  })
+
+  test("an explicit override pins the legacy shim and flags it deprecated", () => {
+    expect(Computer.resolveBackend({ provider: "cua", command: "/opt/cua/bin/cua-driver" })).toEqual({
+      provider: "cua",
+      command: "/opt/cua/bin/cua-driver",
+      args: ["mcp"],
+      env: "AX_COMPUTER_CUA_COMMAND",
+      via: "direct",
+      legacyOverride: true,
+    })
+    // the legacy env override forces the shim even when a bridge is resolvable
+    vi.stubEnv("AX_COMPUTER_COMMAND", "/opt/ax/bin/ax-computer")
+    vi.stubEnv("AX_COMPUTER_CUA_COMMAND", "/env/cua-driver")
+    expect(Computer.resolveBackend({ provider: "cua" })).toMatchObject({
+      command: "/env/cua-driver",
+      via: "direct",
+      legacyOverride: true,
+    })
+  })
+
+  test("external without a command rejects observe with the explicit-command error", async () => {
+    await using tmp = await tmpdir({ config: { computer: { provider: "external" } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect(await Computer.configured()).toBe(true)
+        await expect(Computer.observe({ desktop: true })).rejects.toThrow(/requires an explicit command/)
+      },
+    })
+  })
+
+  test("external serves computer tools once a command is configured", async () => {
+    await using tmp = await tmpdir({ config: { computer: { provider: "external", command: "/bin/true" } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const provider = new FakeComputerProvider("external")
+        await Computer.useProvider(provider)
+        const ids = await ToolRegistry.ids()
+        expect(ids).toContain("computer_snapshot")
+        expect(ids).toContain("computer_action")
+        const tool = await ComputerSnapshotTool.init()
+        const result = await tool.execute({ app: "TextEdit", includeScreenshot: false }, makeCtx([]))
+        expect(provider.scopes).toEqual([{ app: "TextEdit" }])
+        expect(result.output).toContain('[e1:save-btn] button "Save"')
+      },
+    })
+  })
+
+  test("per-app overrides accept external as a value", async () => {
+    await using tmp = await tmpdir({
+      config: { computer: { provider: "cua", overrides: { Finder: "external" } } },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const cua = new FakeComputerProvider("cua")
+        const external = new FakeComputerProvider("external")
+        await Computer.useProvider({
+          providers: new Map([
+            ["cua", cua],
+            ["external", external],
+          ]),
+          default: "cua",
+          overrides: { Finder: "external" },
+        })
+
+        await Computer.observe({ app: "TextEdit" })
+        await Computer.observe({ app: "Finder" })
+
+        expect(cua.scopes).toEqual([{ app: "TextEdit" }])
+        expect(external.scopes).toEqual([{ app: "Finder" }])
       },
     })
   })

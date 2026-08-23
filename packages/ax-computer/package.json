@@ -15,7 +15,8 @@
     "build:native:debug": "swift build --package-path native/ax-computer-driver"
   },
   "dependencies": {
-    "@trycua/cua-driver": "catalog:"
+    "@trycua/cua-driver": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "typescript": "catalog:",

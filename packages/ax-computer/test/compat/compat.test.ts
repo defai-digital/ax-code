@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vitest"
+import { fileURLToPath } from "node:url"
 import type { ActionResult, ComputerAction } from "../../src/action"
 import type { ComputerUseProvider, ObserveScope, ProviderCapabilities } from "../../src/provider"
 import { CuaProvider } from "../../src/providers/cua"
 import { AXNativeProvider } from "../../src/providers/axnative"
+import { ExternalComputerProvider } from "../../src/providers/external"
 import type { AppInfo, ComputerObservation, WindowInfo } from "../../src/types"
 import { runCompatSuite } from "./suite"
 import { PNG_BASE64 } from "../fixtures"
@@ -218,6 +220,17 @@ describe("compat suite: mock provider", () => {
 
 const live = process.env.AX_COMPUTER_LIVE === "1"
 const liveApp = process.env.AX_COMPUTER_LIVE_APP ?? "TextEdit"
+
+const axServer = fileURLToPath(new URL("../helpers/fake-ax-server.mjs", import.meta.url))
+
+describe("compat suite: external provider over the canonical protocol", () => {
+  test("CU-001..CU-010 all pass against a fake canonical MCP server", async () => {
+    const results = await runCompatSuite(
+      async () => new ExternalComputerProvider({ command: process.execPath, args: [axServer, "basic"] }),
+    )
+    expectAllPass(results)
+  })
+})
 
 describe.skipIf(!live)("compat suite: live ocu", () => {
   test("CU-001..CU-010 all pass", { timeout: 180_000 }, async () => {

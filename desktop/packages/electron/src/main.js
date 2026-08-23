@@ -30,6 +30,7 @@ const { sanitizeDesktopWindowTitle } = require("./desktop-window-title")
 const { shouldIncludeNativeSearchEntry, toNativeSearchRelativePath } = require("./desktop-file-search")
 const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support-urls")
 const { createServerRestartPolicy, shouldRecoverAfterServerExit } = require("./server-restart-policy")
+const { buildComputerUseServerEnv } = require("./computer-use-server-env")
 const { createRendererCrashPolicy } = require("./renderer-crash-policy")
 const { loadUrlWithTimeout } = require("./load-url-timeout")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
@@ -242,6 +243,14 @@ function launchServer() {
         AX_CODE_DESKTOP_RUNTIME: "desktop",
         AX_CODE_DESKTOP_SHUTDOWN_TIMEOUT_MS: "4000",
         AX_CODE_DESKTOP_STARTUP_SNAPSHOT: JSON.stringify(startupDiagnostics.snapshot()),
+        // Bundled computer-use server (packaged macOS builds with a staged
+        // artifact only); no-op in dev/OSS builds.
+        ...buildComputerUseServerEnv({
+          platform: process.platform,
+          isPackaged: app.isPackaged,
+          resourcesPath: process.resourcesPath,
+          execPath: process.execPath,
+        }),
       },
     })
 

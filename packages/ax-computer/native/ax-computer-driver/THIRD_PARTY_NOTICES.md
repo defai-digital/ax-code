@@ -1,5 +1,15 @@
 # Third-Party Notices
 
+## Removed assets
+
+The bundled reference cursor image
+(`Sources/AXComputerKit/Resources/official-software-cursor-window-252.png`)
+was removed on 2026-08-22 due to unlicensed provenance: the file was
+byte-identical to an asset extracted from a proprietary third-party
+application bundle and carried no license. Software-cursor rendering is now
+fully procedural (`SoftwareCursorGlyphRenderer`); no bundled image assets
+remain in this package.
+
 ## open-codex-computer-use
 
 AXComputerKit and the `ax-computer-driver` executable are ported from

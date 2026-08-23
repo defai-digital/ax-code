@@ -33,6 +33,10 @@ extraResources:
   # macOS menu-bar tray icons (template PNGs + status glyphs)
   - from: resources/icons
     to: icons
+  # Closed-source AX Computer computer-use server, staged by
+  # scripts/stage-ax-computer.sh (placeholder README.txt in OSS/dev builds).
+  - from: resources/ax-computer
+    to: ax-computer
 
 # Unpack native .node files — they cannot be required() from inside an asar.
 asarUnpack:
@@ -58,6 +62,11 @@ mac:
         LSHandlerRank: Alternate
         LSItemContentTypes:
           - public.folder
+    # TCC purpose strings for the bundled computer-use server. It runs as a
+    # child of the app, so macOS attributes screen recording / automation
+    # prompts to AX Code Desktop (no entitlements needed — not sandboxed).
+    NSScreenCaptureUsageDescription: AX Code Desktop uses screen capture to let the agent observe apps when computer-use is enabled.
+    NSAppleEventsUsageDescription: AX Code Desktop uses event control to let the agent operate apps when computer-use is enabled.
   notarize: true
 
 dmg:

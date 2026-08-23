@@ -1281,6 +1281,9 @@ importers:
       '@trycua/cua-driver':
         specifier: 'catalog:'
         version: 0.21.0
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
