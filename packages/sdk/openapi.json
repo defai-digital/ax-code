@@ -35693,6 +35693,15 @@
             "properties": {
               "message": {
                 "type": "string"
+              },
+              "metadata": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
               }
             },
             "required": [
@@ -35734,6 +35743,15 @@
             "properties": {
               "message": {
                 "type": "string"
+              },
+              "metadata": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
               }
             },
             "required": [
@@ -35758,6 +35776,15 @@
             "properties": {
               "message": {
                 "type": "string"
+              },
+              "metadata": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
               }
             },
             "required": [
@@ -35785,6 +35812,15 @@
               },
               "retries": {
                 "type": "number"
+              },
+              "metadata": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
               }
             },
             "required": [
@@ -44862,6 +44898,10 @@
               },
               "batch_tool": {
                 "description": "Enable the batch tool",
+                "type": "boolean"
+              },
+              "context_tools": {
+                "description": "Enable experimental context-introspection tools (context_status)",
                 "type": "boolean"
               },
               "openTelemetry": {

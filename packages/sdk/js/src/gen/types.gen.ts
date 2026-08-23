@@ -2880,22 +2880,22 @@ export type Config = {
    */
   computer?: {
     /**
-     * Computer-use backend: "axnative" (AX-owned ax-computer-driver, macOS), "cua" (cua-driver, cross-platform), or "external" (any MCP stdio server speaking the canonical AX Computer protocol; requires computer.command). Unset = computer tools unavailable.
+     * Computer-use backend: "axnative" (AX-owned ax-computer-driver, macOS) or "cua" (cua-driver, cross-platform). Unset = computer tools unavailable.
      */
-    provider?: "cua" | "axnative" | "external"
+    provider?: "cua" | "axnative"
     /**
-     * Backend server command override. Precedence: this config > AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_AXNATIVE_COMMAND env > default command name. Required when provider is "external" (or set AX_COMPUTER_COMMAND) — external has no default command.
+     * Backend server command override. Precedence: this config > AX_COMPUTER_CUA_COMMAND / AX_COMPUTER_AXNATIVE_COMMAND env > default command name.
      */
     command?: string
     /**
-     * Backend server command arguments (default: ["mcp"] for cua/axnative, [] for external)
+     * Backend server command arguments (default: ["mcp"])
      */
     args?: Array<string>
     /**
-     * Per-app provider overrides: map an application name (as observed by computer_snapshot) to "cua", "axnative", or "external". Observations and element acts against a matching app route to the named provider; everything else uses `provider`. Element ids are only valid against the provider that issued them — crossing providers requires a fresh observation.
+     * Per-app provider overrides: map an application name (as observed by computer_snapshot) to "cua" or "axnative". Observations and element acts against a matching app route to the named provider; everything else uses `provider`. Element ids are only valid against the provider that issued them — crossing providers requires a fresh observation.
      */
     overrides?: {
-      [key: string]: "cua" | "axnative" | "external"
+      [key: string]: "cua" | "axnative"
     }
     /**
      * Grounder fallback for natural-language computer_action targets. Optional; unset = describe targets unavailable.
