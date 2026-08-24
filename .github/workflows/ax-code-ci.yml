@@ -130,83 +130,27 @@ jobs:
       - name: Typecheck ax-code
         run: pnpm --dir packages/ax-code run typecheck
 
-      - name: Download coverage baseline
-        if: always() && github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          dest=".internal/reports/testing/coverage-baseline"
-          mkdir -p "$dest"
-
-          # Select the first successful run id inside jq. Avoid `cmd | head`
-          # under pipefail: gh may write multiple lines and get SIGPIPE (exit 141)
-          # when head closes the pipe after the first line.
-          run_id="$(
-            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ax-code-ci.yml/runs?branch=${GITHUB_REF_NAME}&event=push&status=completed&per_page=50" \
-              --jq '[.workflow_runs[] | select(.conclusion=="success") | .id] | first // empty'
-          )"
-
-          if [ -z "$run_id" ]; then
-            echo "No successful ${GITHUB_REF_NAME} coverage baseline found; this run will establish it."
-            exit 0
-          fi
-
-          # Successful runs may still lack this artifact (upload uses if-no-files-found: ignore).
-          # Treat a missing or empty baseline as "no baseline" so tests always run.
-          if ! gh run download "$run_id" -n ax-code-coverage-baseline-summary -D "$dest"; then
-            echo "Coverage baseline artifact missing from successful run $run_id; continuing without baseline."
-            exit 0
-          fi
-          baseline="$(find "$dest" -name '*.json' -print -quit)"
-          if [ -z "$baseline" ]; then
-            echo "Coverage baseline artifact from run $run_id contained no JSON summary; continuing without baseline."
-            exit 0
-          fi
-          find "$dest" -maxdepth 2 -type f -print
-
       - name: Run deterministic ax-code tests
         shell: bash
+        env:
+          AX_CODE_DISABLE_AUTOUPDATE: "1"
+          AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
+          AX_CODE_DISABLE_MODELS_FETCH: "1"
         run: |
           set -euo pipefail
 
-          cmd=(
-            pnpm
-            --dir
-            packages/ax-code
-            run
-            test:ci
-            --
-            deterministic
-          )
-
-          # Full V8 coverage is retained on post-merge dev pushes, where it
-          # produces the baseline artifact. Running it on every PR keeps
-          # hundreds of instrumented test files in memory and makes feedback
-          # unacceptably slow.
+          # PRs keep the default Vitest worker cap and a single process so
+          # feedback stays close to local `test:ci -- deterministic`.
+          # Post-merge pushes still shard (heap), but no longer pay for V8
+          # coverage in this required job. Coverage remains a local
+          # `test:ci` coverage run or a follow-up workflow.
           if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            export NODE_OPTIONS="--max-old-space-size=12288"
-            export AX_TEST_MAX_WORKERS="1"
+            export NODE_OPTIONS="--max-old-space-size=6144"
+            export AX_TEST_MAX_WORKERS="2"
             export AX_TEST_SHARD_SIZE="25"
-            cmd+=(
-              --coverage
-              --coverage-dir
-              ../../.internal/reports/testing/coverage
-              --coverage-summary-out
-              ../../.internal/reports/testing/coverage-summary.json
-              --coverage-report-out
-              ../../.internal/reports/testing/coverage-report.md
-            )
-
-            baseline="$(find .internal/reports/testing/coverage-baseline -name '*.json' | head -n1 || true)"
-            if [ -n "$baseline" ]; then
-              cmd+=(--coverage-baseline "../../${baseline}")
-            fi
           fi
 
-          "${cmd[@]}"
+          pnpm --dir packages/ax-code run test:ci -- deterministic
 
       - name: Summarize ax-code risk map
         if: always()
@@ -220,25 +164,6 @@ jobs:
           path: |
             .internal/reports/testing/junit/*.xml
             .internal/reports/testing/test-risk.md
-          if-no-files-found: ignore
-
-      - name: Upload coverage artifacts
-        if: always() && github.event_name == 'push'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ax-code-coverage-report
-          path: |
-            .internal/reports/testing/coverage/lcov.info
-            .internal/reports/testing/coverage-summary.json
-            .internal/reports/testing/coverage-report.md
-          if-no-files-found: ignore
-
-      - name: Upload coverage baseline summary
-        if: always() && github.event_name == 'push'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ax-code-coverage-baseline-summary
-          path: .internal/reports/testing/coverage-summary.json
           if-no-files-found: ignore
 
   live:

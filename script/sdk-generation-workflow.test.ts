@@ -25,20 +25,11 @@ describe("SDK generation workflow policy", () => {
     expect(testIndex).toBeGreaterThan(generationIndex)
   })
 
-  test("coverage baseline download selects the first successful run without pipe-to-head under pipefail", () => {
-    const stepMarker = "Download coverage baseline"
-    const stepStart = workflow.indexOf(stepMarker)
-    expect(stepStart).toBeGreaterThan(-1)
-    // Step body ends at the next top-level step name line after the run block.
-    const afterMarker = workflow.slice(stepStart + stepMarker.length)
-    const nextStep = afterMarker.search(/\n {6}- name:/)
-    const stepBody = nextStep === -1 ? afterMarker : afterMarker.slice(0, nextStep)
-
-    expect(stepBody).toContain("set -euo pipefail")
-    expect(stepBody).toContain("ax-code-coverage-baseline-summary")
-    // Selecting the first id must happen inside jq so SIGPIPE cannot fail the step
-    // when multiple successful runs exist (gh api | head -n1 under pipefail → exit 141).
-    expect(stepBody).toContain("first // empty")
-    expect(stepBody).not.toMatch(/\|\s*head\s+-n1/)
+  test("the required deterministic job does not run V8 coverage", () => {
+    const deterministicJob = workflow.slice(workflow.indexOf("\n  deterministic:"), workflow.indexOf("\n  live:"))
+    expect(deterministicJob).toContain("pnpm --dir packages/ax-code run test:ci -- deterministic")
+    expect(deterministicJob).not.toContain("--coverage")
+    expect(deterministicJob).not.toContain("Download coverage baseline")
+    expect(deterministicJob).not.toContain("ax-code-coverage-baseline-summary")
   })
 })

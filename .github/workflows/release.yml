@@ -68,7 +68,8 @@ jobs:
           AX_TEST_MAX_WORKERS: "2"
           # The session-heavy deterministic suite can exhaust a 6 GiB Node heap
           # within a 100-file worker group. Keep each fresh Vitest process below
-          # that limit while retaining the two-worker cap.
+          # that limit while retaining the two-worker cap. Two shards overlap
+          # when coverage is off (see resolveShardConcurrency).
           AX_TEST_SHARD_SIZE: "25"
           AX_CODE_DISABLE_AUTOUPDATE: "1"
           AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
