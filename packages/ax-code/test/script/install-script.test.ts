@@ -88,7 +88,8 @@ describe("install script", () => {
   test("does not link ax-code into the temporary bootstrap tool cache", async () => {
     const text = await readFile(installScript, "utf-8")
     expect(text).toContain('AX_CODE_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"')
-    expect(text).toContain('"$AX_CODE_CACHE_HOME"|"$AX_CODE_CACHE_HOME"/*) continue')
+    expect(text).toContain('"$HOME/.local/bin"|"$HOME/bin")')
+    expect(text).not.toContain('"$HOME"/*) ;;')
     expect(text).toContain("cleanup_bootstrap_cache_launcher")
     expect(text).toContain('if [ "$cached_target" = "${INSTALL_DIR}/ax-code" ]')
     expect(text).not.toContain("█▀▀█ █▀▀█ █▀▀█ █▀▀▄")

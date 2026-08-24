@@ -774,15 +774,13 @@ link_installed_binary_on_path() {
         [ -d "$path_entry" ] || continue
         [ -w "$path_entry" ] || continue
 
+        # Only use neutral user bin directories for convenience links. PATH
+        # often contains tool-owned writable directories such as rbenv shims,
+        # Qoder entrypoints, or bootstrap caches; placing ax-code there breaks
+        # ownership boundaries and can make the bundle root resolve incorrectly.
         case "$path_entry" in
-            "$HOME"/*) ;;
+            "$HOME/.local/bin"|"$HOME/bin") ;;
             *) continue ;;
-        esac
-
-        # Bootstrap tools are temporarily prepended to PATH during install.
-        # They are caches, not stable locations for the ax-code launcher.
-        case "$path_entry" in
-            "$AX_CODE_CACHE_HOME"|"$AX_CODE_CACHE_HOME"/*) continue ;;
         esac
 
         link_path="$path_entry/ax-code"
