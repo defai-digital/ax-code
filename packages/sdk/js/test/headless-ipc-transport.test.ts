@@ -6,6 +6,7 @@ import { join } from "node:path"
 import { rm } from "node:fs/promises"
 import { createIpcTransport } from "../src/headless/ipc-transport.js"
 import { readIpcMessages, writeIpcMessage } from "../src/headless/ipc-protocol.js"
+import { applyHeadlessProjectionEvent, createHeadlessProjectionState } from "../src/headless/projection.js"
 import type { IpcRequestMessage } from "../src/headless/ipc-protocol.js"
 
 describe("ipc transport client", () => {
@@ -200,6 +201,43 @@ describe("ipc transport client", () => {
       }
 
       expect(received).toEqual(events)
+    } finally {
+      await transport.close?.()
+    }
+  })
+
+  test("unwraps matching global event envelopes and filters other directories", async () => {
+    const directory = "/workspace/current/"
+    const transport = createIpcTransport({ socketPath, directory })
+    try {
+      await transport.requestJson<unknown>({ path: "/global/health", method: "GET" })
+
+      const subscription = transport.subscribe()[Symbol.asyncIterator]()
+      const nextEvent = subscription.next()
+      for (const socket of sockets) {
+        await writeIpcMessage(socket, {
+          type: "event",
+          event: {
+            directory: "/workspace/other",
+            payload: { type: "session.created", properties: { info: { id: "ignored" } } },
+          },
+        })
+        await writeIpcMessage(socket, {
+          type: "event",
+          event: {
+            directory: "/workspace/current",
+            payload: { type: "server.connected", properties: {} },
+          },
+        })
+      }
+
+      const next = await nextEvent
+      if (next.done) throw new Error("IPC event subscription ended unexpectedly")
+      expect(next.value).toEqual({ type: "server.connected", properties: {} })
+
+      const state = createHeadlessProjectionState()
+      expect(applyHeadlessProjectionEvent(state, next.value)).toEqual({ handled: true, effects: [] })
+      expect(state.stream_health).toBe("connected")
     } finally {
       await transport.close?.()
     }

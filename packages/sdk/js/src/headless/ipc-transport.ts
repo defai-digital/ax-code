@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { connect, type Socket } from "node:net"
+import { resolve as resolvePath } from "node:path"
 import { withDirectoryHeaders, withWorkspaceHeaders } from "../protocol.js"
 import type { Event } from "../v2/index.js"
 import type { HeadlessRuntimeCommand, HeadlessRuntimeCommandResult } from "./command.js"
@@ -164,7 +165,8 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
         break
       }
       case "event": {
-        const event = message.event as Event
+        const event = normalizeIpcEvent(message.event, options.directory)
+        if (!event) return
         const waiter = eventWaiters.shift()
         if (waiter) {
           waiter.resolve({ value: event, done: false })
@@ -319,6 +321,27 @@ export class IpcTransportError extends Error {
 
 function generateRequestId(): string {
   return randomUUID()
+}
+
+function normalizeIpcEvent(value: unknown, directory?: string): Event | undefined {
+  if (!isRecord(value)) return undefined
+
+  // Older IPC servers sent the runtime event directly. Keep accepting that
+  // shape before looking for the /global/event envelope.
+  if (typeof value.type === "string") return value as Event
+
+  const payload = value.payload
+  if (!isRecord(payload) || typeof payload.type !== "string") return undefined
+  if (directory !== undefined) {
+    if (typeof value.directory !== "string" || resolvePath(value.directory) !== resolvePath(directory)) {
+      return undefined
+    }
+  }
+  return payload as Event
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
 }
 
 function buildBaseHeaders(options: IpcTransportOptions): Record<string, string> {
