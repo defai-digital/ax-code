@@ -81176,7 +81176,7 @@
         "name": "Qwen3.5 122B A10B",
         "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
         "family": "qwen",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "reasoning_options": [
           {
@@ -81190,7 +81190,8 @@
         "last_updated": "2026-02-23",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -81198,8 +81199,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "output": 32768
+          "context": 256000,
+          "output": 64000
         }
       },
       "qwen/qwen3-coder-plus": {
@@ -152077,60 +152078,6 @@
         "limit": {
           "context": 262144,
           "output": 262144
-        }
-      },
-      "amazon/nvidia.nemotron-nano-9b-v2": {
-        "id": "amazon/nvidia.nemotron-nano-9b-v2",
-        "name": "Nemotron Nano 9B v2",
-        "description": "Compact Nemotron model for efficient reasoning and deployable AI agents",
-        "family": "nemotron",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2025-08-18",
-        "last_updated": "2025-08-18",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 128000,
-          "output": 131072
-        }
-      },
-      "amazon/nvidia.nemotron-nano-9b-v2@us": {
-        "id": "amazon/nvidia.nemotron-nano-9b-v2@us",
-        "name": "Nemotron Nano 9B v2 (US)",
-        "description": "Compact Nemotron model for efficient reasoning and deployable AI agents",
-        "family": "nemotron",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2025-08-18",
-        "last_updated": "2025-08-18",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 128000,
-          "output": 131072
         }
       },
       "cerebras/gpt-oss-120b": {

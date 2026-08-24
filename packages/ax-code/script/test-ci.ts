@@ -68,6 +68,26 @@ export function shardFiles(files: string[], size: number) {
   return shards
 }
 
+export function resolveCoverageEnabled(input: {
+  coverageFlag: boolean
+  githubActions: string | undefined
+  forceCoverage: string | undefined
+}) {
+  if (!input.coverageFlag) return false
+  // Required GitHub jobs still pass `--coverage`. V8 instrumentation is what
+  // forced workers=1 and serial shards on main. Opt back in with AX_TEST_COVERAGE=1.
+  if (input.githubActions === "true" && input.forceCoverage !== "1") return false
+  return true
+}
+
+function coverageOn() {
+  return resolveCoverageEnabled({
+    coverageFlag: flag("--coverage"),
+    githubActions: process.env.GITHUB_ACTIONS,
+    forceCoverage: process.env.AX_TEST_COVERAGE,
+  })
+}
+
 export function resolveShardConcurrency(input: {
   envValue: string | undefined
   coverage: boolean
@@ -164,7 +184,7 @@ async function run(
   shardCoverage?: ShardCoverage,
 ) {
   const file = path.join(dir, `${group}-${run}${shard ? `-shard-${shard}` : ""}.xml`)
-  const coverageDir = flag("--coverage")
+  const coverageDir = coverageOn()
     ? path.resolve(root, arg("--coverage-dir") ?? path.join(testingReports, "coverage"))
     : undefined
   // The 30s per-test timeout and setup/preload files come from vitest.config.ts.
@@ -323,6 +343,9 @@ async function main() {
     console.log(`No tests in group: ${group}`)
     return
   }
+  if (flag("--coverage") && !coverageOn()) {
+    console.log("Skipping V8 coverage on GitHub Actions (set AX_TEST_COVERAGE=1 to enable)")
+  }
 
   const dir = path.resolve(root, arg("--dir") ?? path.join(testingReports, "junit"))
   await fs.mkdir(dir, { recursive: true })
@@ -331,7 +354,7 @@ async function main() {
   const shards = shardFiles(files, shardSize)
   const runPass = async (runNumber: number): Promise<Result> => {
     const coverageWorkDir =
-      flag("--coverage") && shards.length > 1
+      coverageOn() && shards.length > 1
         ? await fs.mkdtemp(path.join(dir, `.coverage-${group}-${runNumber}-`))
         : undefined
     const blobDir = coverageWorkDir ? path.join(coverageWorkDir, "blobs") : undefined
@@ -340,7 +363,7 @@ async function main() {
     try {
       const concurrency = resolveShardConcurrency({
         envValue: process.env.AX_TEST_SHARD_CONCURRENCY,
-        coverage: flag("--coverage"),
+        coverage: coverageOn(),
         shardCount: shards.length,
       })
       if (shards.length > 1) {
@@ -375,7 +398,7 @@ async function main() {
 
   await summary(group, runs)
   const failed = runs.some((run) => run.code !== 0)
-  if (flag("--coverage") && !failed) {
+  if (coverageOn() && !failed) {
     const coverageDir = runs[runs.length - 1]?.coverageDir
     if (!coverageDir) throw new Error("Coverage was requested but the test run did not retain its output directory")
     const lcovFile = path.join(coverageDir, "lcov.info")

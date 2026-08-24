@@ -7,6 +7,7 @@ import {
   mapWithConcurrency,
   num,
   parseJUnit,
+  resolveCoverageEnabled,
   resolveShardConcurrency,
   resolveTestCIGroup,
   renderSummaryText,
@@ -39,6 +40,15 @@ describe("script.test-ci", () => {
   test("splits deterministic files into bounded sequential shards", () => {
     expect(shardFiles(["a", "b", "c", "d", "e"], 2)).toEqual([["a", "b"], ["c", "d"], ["e"]])
     expect(() => shardFiles(["a"], 0)).toThrow("Shard size must be a positive integer")
+  })
+
+  test("skips V8 coverage on GitHub Actions unless AX_TEST_COVERAGE=1", () => {
+    expect(resolveCoverageEnabled({ coverageFlag: true, githubActions: "true", forceCoverage: undefined })).toBe(false)
+    expect(resolveCoverageEnabled({ coverageFlag: true, githubActions: "true", forceCoverage: "1" })).toBe(true)
+    expect(resolveCoverageEnabled({ coverageFlag: true, githubActions: undefined, forceCoverage: undefined })).toBe(
+      true,
+    )
+    expect(resolveCoverageEnabled({ coverageFlag: false, githubActions: "true", forceCoverage: undefined })).toBe(false)
   })
 
   test("keeps coverage shards serial and overlaps plain shards by default", () => {
