@@ -126,17 +126,18 @@ export function useQueuedMessageAutoSend(enabledOrOptions?: boolean | { enabled?
       return
     }
 
+    // A transient hold means the busy/retry -> idle edge must stay armed rather
+    // than be consumed: if we advance the status baseline while an auto-send is
+    // deferred (in-flight dispatch, recent abort, or an unseen error), the head
+    // is stranded once the hold lifts with no further transition to re-trigger.
+    const isAutoSendDeferred = (sessionId: string): boolean =>
+      inFlightSessionsRef.current.has(sessionId) || hasRecentAbort(sessionId) || isQueuedAutoSendHeld(sessionId)
+
     const dispatchSessionQueue = async (sessionId: string, queueSnapshot: QueuedMessage[]) => {
       if (queueSnapshot.length === 0) {
         return
       }
-      if (inFlightSessionsRef.current.has(sessionId)) {
-        return
-      }
-      if (hasRecentAbort(sessionId)) {
-        return
-      }
-      if (isQueuedAutoSendHeld(sessionId)) {
+      if (isAutoSendDeferred(sessionId)) {
         return
       }
 
@@ -191,9 +192,17 @@ export function useQueuedMessageAutoSend(enabledOrOptions?: boolean | { enabled?
     queueEntries.forEach(([sessionId, queue]) => {
       const currentStatusType = (statusRecord[sessionId]?.type ?? "idle") as SessionStatusType
       const previousStatusType = previousStatusRef.current.get(sessionId)
+      const shouldDispatch = queue.length > 0 && shouldDispatchQueuedAutoSend(previousStatusType, currentStatusType)
 
-      if (queue.length > 0 && shouldDispatchQueuedAutoSend(previousStatusType, currentStatusType)) {
+      if (shouldDispatch && !isAutoSendDeferred(sessionId)) {
         void dispatchSessionQueue(sessionId, queue)
+      }
+
+      // Advance the baseline only when there is no deferred drain to preserve:
+      // an in-flight/abort/error-hold keeps the busy -> idle edge armed so it
+      // re-fires once the hold lifts instead of stranding the head.
+      if (shouldDispatch && isAutoSendDeferred(sessionId)) {
+        return
       }
 
       nextStatusMap.set(sessionId, currentStatusType)

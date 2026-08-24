@@ -180,14 +180,17 @@ export function reconcileFollowUpDrain(
       continue
     }
     // busy/retry -> idle edge. If a dispatch for this session is already in
-    // flight (e.g. a manual send-now), do NOT consume the edge: keep the
-    // baseline so the next status change retries, rather than stranding the
-    // head with no future transition to drain it.
+    // flight (e.g. a manual send-now) or the user just interrupted (recent
+    // abort), do NOT consume the edge: keep the baseline so the next status
+    // change retries, rather than stranding the head with no future transition
+    // to drain it. Consuming the edge here (advancing the baseline to idle)
+    // would leave the head stuck once the abort window lapses or the in-flight
+    // dispatch settles, because there would be no remaining busy/retry -> idle
+    // transition to re-trigger the drain.
     const head = headFollowUp(queues[sessionID])
-    if (head && !hasRecentFollowUpAbort(sessionID) && inflight.has(sessionID)) continue
+    if (head && (hasRecentFollowUpAbort(sessionID) || inflight.has(sessionID))) continue
     previousStatusBySession.set(sessionID, currentType)
     if (!head) continue
-    if (hasRecentFollowUpAbort(sessionID)) continue
     void dispatchFollowUp(sdk, sessionID, head).catch((error) => onError?.(sessionID, error))
   }
 }

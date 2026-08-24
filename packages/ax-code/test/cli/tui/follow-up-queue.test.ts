@@ -252,6 +252,36 @@ describe("reconcileFollowUpDrain", () => {
     clearFollowUpQueue(sid)
   })
 
+  test("a recent abort keeps the edge armed so the head drains once the window lapses", () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1000)
+      resetFollowUpDrainState()
+      const sid = "ses_drain_abort_armed"
+      clearFollowUpQueue(sid)
+      enqueueFollowUp(sid, { parts: [{ type: "text", text: "x" }] })
+      const calls: any[] = []
+      const sdk = fakeSdk(calls)
+
+      // Establish the busy baseline, then interrupt and observe the busy -> idle
+      // edge while the abort is still recent: it must not drain nor consume the
+      // edge.
+      reconcileFollowUpDrain(sdk, [[sid, "busy"]])
+      markFollowUpAbort(sid) // timestamp = 1000
+      reconcileFollowUpDrain(sdk, [[sid, "idle"]])
+      expect(calls).toHaveLength(0)
+
+      // After the abort window lapses, the still-armed edge must drain the head.
+      vi.setSystemTime(1000 + 2001)
+      reconcileFollowUpDrain(sdk, [[sid, "idle"]])
+      expect(calls).toHaveLength(1)
+      expect(calls[0].sessionID).toBe(sid)
+      clearFollowUpQueue(sid)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test("does not dispatch (or strand) the head while another dispatch is in flight", async () => {
     resetFollowUpDrainState()
     const sid = "ses_drain_inflight"
