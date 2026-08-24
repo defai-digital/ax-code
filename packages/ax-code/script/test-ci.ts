@@ -68,6 +68,48 @@ export function shardFiles(files: string[], size: number) {
   return shards
 }
 
+export function resolveShardConcurrency(input: {
+  envValue: string | undefined
+  coverage: boolean
+  shardCount: number
+}) {
+  if (input.envValue != null && input.envValue !== "") {
+    const parsed = Number.parseInt(input.envValue, 10)
+    if (Number.isNaN(parsed) || parsed < 1) {
+      throw new Error(`Invalid value for AX_TEST_SHARD_CONCURRENCY: ${input.envValue}`)
+    }
+    return parsed
+  }
+  if (input.shardCount <= 1) return 1
+  // V8 coverage keeps a large instrumented graph in each Vitest process.
+  // Overlapping those shards on one runner is what forced workers=1 on main.
+  if (input.coverage) return 1
+  return 2
+}
+
+export async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1) {
+    throw new Error(`Concurrency must be a positive integer: ${concurrency}`)
+  }
+  if (items.length === 0) return []
+  const results = new Array<R>(items.length)
+  let next = 0
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (true) {
+        const index = next++
+        if (index >= items.length) return
+        results[index] = await mapper(items[index]!, index)
+      }
+    }),
+  )
+  return results
+}
+
 function attrs(text: string) {
   return Object.fromEntries(Array.from(text.matchAll(/(\w+)="([^"]*)"/g)).map((part) => [part[1], part[2]]))
 }
@@ -288,7 +330,6 @@ async function main() {
   const shardSize = process.env.AX_TEST_SHARD_SIZE ? Number.parseInt(process.env.AX_TEST_SHARD_SIZE, 10) : files.length
   const shards = shardFiles(files, shardSize)
   const runPass = async (runNumber: number): Promise<Result> => {
-    const results: Result[] = []
     const coverageWorkDir =
       flag("--coverage") && shards.length > 1
         ? await fs.mkdtemp(path.join(dir, `.coverage-${group}-${runNumber}-`))
@@ -297,7 +338,15 @@ async function main() {
     if (blobDir) await fs.mkdir(blobDir, { recursive: true })
 
     try {
-      for (const [index, shard] of shards.entries()) {
+      const concurrency = resolveShardConcurrency({
+        envValue: process.env.AX_TEST_SHARD_CONCURRENCY,
+        coverage: flag("--coverage"),
+        shardCount: shards.length,
+      })
+      if (shards.length > 1) {
+        console.log(`Running ${shards.length} ${group} shards with concurrency ${concurrency}`)
+      }
+      const results = await mapWithConcurrency(shards, concurrency, async (shard, index) => {
         const shardNumber = shards.length > 1 ? index + 1 : undefined
         const shardCoverage = coverageWorkDir
           ? {
@@ -305,8 +354,8 @@ async function main() {
               reportsDirectory: path.join(coverageWorkDir, `shard-${shardNumber}`),
             }
           : undefined
-        results.push(await run(group, shard, dir, runNumber, shardNumber, shardCoverage))
-      }
+        return await run(group, shard, dir, runNumber, shardNumber, shardCoverage)
+      })
 
       const result = aggregateRunResults(group, runNumber, dir, results)
       if (blobDir && result.code === 0) await mergeCoverageReports(blobDir, result.coverageDir!, result.ignored)

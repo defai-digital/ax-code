@@ -4,8 +4,10 @@ import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import {
   aggregateRunResults,
+  mapWithConcurrency,
   num,
   parseJUnit,
+  resolveShardConcurrency,
   resolveTestCIGroup,
   renderSummaryText,
   shardFiles,
@@ -37,6 +39,28 @@ describe("script.test-ci", () => {
   test("splits deterministic files into bounded sequential shards", () => {
     expect(shardFiles(["a", "b", "c", "d", "e"], 2)).toEqual([["a", "b"], ["c", "d"], ["e"]])
     expect(() => shardFiles(["a"], 0)).toThrow("Shard size must be a positive integer")
+  })
+
+  test("keeps coverage shards serial and overlaps plain shards by default", () => {
+    expect(resolveShardConcurrency({ envValue: undefined, coverage: true, shardCount: 35 })).toBe(1)
+    expect(resolveShardConcurrency({ envValue: undefined, coverage: false, shardCount: 35 })).toBe(2)
+    expect(resolveShardConcurrency({ envValue: undefined, coverage: false, shardCount: 1 })).toBe(1)
+    expect(resolveShardConcurrency({ envValue: "4", coverage: true, shardCount: 35 })).toBe(4)
+    expect(() => resolveShardConcurrency({ envValue: "0", coverage: false, shardCount: 2 })).toThrow(
+      "Invalid value for AX_TEST_SHARD_CONCURRENCY: 0",
+    )
+  })
+
+  test("mapWithConcurrency preserves input order while overlapping work", async () => {
+    const seen: number[] = []
+    const results = await mapWithConcurrency([1, 2, 3, 4], 2, async (value) => {
+      seen.push(value)
+      await new Promise((resolve) => setTimeout(resolve, value === 1 ? 20 : 0))
+      return value * 10
+    })
+    expect(results).toEqual([10, 20, 30, 40])
+    expect(seen).toHaveLength(4)
+    expect(new Set(seen)).toEqual(new Set([1, 2, 3, 4]))
   })
 
   test("aggregates shard reports without dropping coverage metadata", () => {
