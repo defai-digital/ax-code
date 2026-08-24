@@ -82,6 +82,7 @@ describe("install script", () => {
     expect(text).toContain('ln -s "${INSTALL_DIR}/ax-code" "$link_path"')
     expect(text).toContain("warn_if_not_on_current_path")
     expect(text).toContain("Open a new shell, or run: export PATH=${INSTALL_DIR}:\\$PATH")
+    expect(text).not.toContain('elif [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]')
   })
 
   test("does not link ax-code into the temporary bootstrap tool cache", async () => {
