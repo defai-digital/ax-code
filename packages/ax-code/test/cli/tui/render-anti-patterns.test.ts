@@ -846,6 +846,7 @@ describe("AX Code TUI stability guardrails", () => {
       [session, "session-status-tick"],
       [session, "session-sync-retry"],
       [session, "session-scroll-to-bottom"],
+      [session, "session-pinned-input-geom"],
       [toast, "toast-auto-dismiss"],
       [keybind, "keybind-leader-timeout"],
       [pulse, "autonomous-pulse"],

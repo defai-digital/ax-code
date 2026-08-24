@@ -481,11 +481,10 @@ export function displayCommands(input: {
       },
     },
     {
-      title: "Jump to last user message",
+      title: "Jump to current input",
       value: "session.messages_last_user",
       keybind: "messages_last_user",
       category: "Session",
-      hidden: true,
       onSelect: (dialog: DialogContext) => {
         input.jumpToLastUser()
         dialog.clear()

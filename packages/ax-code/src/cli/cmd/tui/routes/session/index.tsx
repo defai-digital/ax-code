@@ -80,6 +80,13 @@ import { recoveredAssistantMessageIDs } from "./display"
 import { childAction, firstChildID, nextChildID } from "./child"
 import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
 import { messageScroll, messageTarget, nextVisibleMessage } from "./navigation"
+import { LastInputBanner } from "./last-input-banner"
+import {
+  derivePinnedInputBanner,
+  messagePreviewVisibility,
+  selectPinnedInputCandidate,
+  subagentPanelRows,
+} from "./last-input-view-model"
 import { RevertNotice } from "./revert-notice"
 import { IdleRecap } from "./idle-recap"
 import { revertState, hiddenMessageIDs } from "./revert"
@@ -565,6 +572,16 @@ export function Session() {
     }
   })
 
+  function jumpToUserMessage(id?: string) {
+    if (!isRenderableAlive(scroll)) return
+    const target = id ?? lastUserMessageID(messages(), sync.data.part)
+    const child = messageTarget(
+      renderableChildren<ScrollChild>(scroll, { name: "session-last-user-message-children" }),
+      target,
+    )
+    if (child) scroll.scrollBy(child.y - scroll.y - 1)
+  }
+
   const scrollToMessage = (direction: "next" | "prev", dialog: ReturnType<typeof useDialog>) => {
     if (!isRenderableAlive(scroll)) return
     const children = renderableChildren<ScrollChild>(scroll, { name: "session-scroll-message-children" })
@@ -837,15 +854,7 @@ export function Session() {
           />
         )),
       dialogReplaceRename: (dialog) => dialog.replace(() => <DialogSessionRename session={route.sessionID} />),
-      jumpToLastUser: () => {
-        const list = sync.data.message[route.sessionID] ?? []
-        const id = lastUserMessageID(list, sync.data.part)
-        const child = messageTarget(
-          renderableChildren<ScrollChild>(scroll, { name: "session-last-user-message-children" }),
-          id,
-        )
-        if (child) scroll.scrollBy(child.y - scroll.y - 1)
-      },
+      jumpToLastUser: () => jumpToUserMessage(),
       messages,
       parts: sync.data.part,
       renderer,
@@ -1180,6 +1189,80 @@ export function Session() {
 
   const revert = createMemo(() => revertState(revertInfo(), messages()))
   const hiddenIDs = createMemo(() => hiddenMessageIDs(messages(), revertMessageID()))
+  const pinnedInputCandidate = createMemo(() =>
+    selectPinnedInputCandidate({
+      messages: messages(),
+      partsByMessageID: sync.data.part,
+      hiddenIDs: hiddenIDs(),
+      revertMessageID: revertMessageID(),
+      historyTruncated: !!sync.data.message_truncated[route.sessionID],
+    }),
+  )
+  const [inputPreviewGeom, setInputPreviewGeom] = createSignal<{
+    y?: number
+    scrollTop: number
+    viewportHeight: number
+  }>({ scrollTop: 0, viewportHeight: 0 })
+  function readInputPreviewGeom(messageID: string | undefined) {
+    if (!isRenderableAlive(scroll) || !messageID) {
+      setInputPreviewGeom((prev) => {
+        if (prev.y === undefined && prev.scrollTop === 0 && prev.viewportHeight === 0) return prev
+        return { scrollTop: 0, viewportHeight: 0 }
+      })
+      return
+    }
+    const child = messageTarget(
+      renderableChildren<ScrollChild>(scroll, { name: "session-pinned-input-geom" }),
+      messageID,
+    )
+    const next = { y: child?.y, scrollTop: scroll.y, viewportHeight: scroll.height }
+    setInputPreviewGeom((prev) =>
+      prev.y === next.y && prev.scrollTop === next.scrollTop && prev.viewportHeight === next.viewportHeight
+        ? prev
+        : next,
+    )
+  }
+  createEffect(() => {
+    const candidate = pinnedInputCandidate()
+    void messages()
+    void statusTick()
+    void dimensions()
+    readInputPreviewGeom(candidate.state === "ready" ? candidate.messageID : undefined)
+  })
+  onMount(() => {
+    const cancel = scheduleTuiInterval(
+      () => {
+        const candidate = pinnedInputCandidate()
+        readInputPreviewGeom(candidate.state === "ready" ? candidate.messageID : undefined)
+      },
+      { name: "session-pinned-input-geom", delayMs: 200, unref: true },
+    )
+    onCleanup(cancel)
+  })
+  let lastPinnedInputOccupancy = 0
+  const pinnedInput = createMemo(() => {
+    const headerShown = showHeader() && (!sidebarVisible() || !wide())
+    const view = derivePinnedInputBanner({
+      candidate: pinnedInputCandidate(),
+      autonomousActive: autonomous().active,
+      contentColumns: Math.max(0, contentWidth() - 2),
+      terminalHeight: dimensions().height,
+      header: headerShown ? (session()?.parentID ? "subagent" : "session") : "hidden",
+      subagentRows: subagentPanelRows({
+        terminalHeight: dimensions().height,
+        activeCount: subagentTasks().items.filter((item) => item.active).length,
+        collapsed: subagentPanelCollapsed(),
+      }),
+      previewVisibility: messagePreviewVisibility({
+        y: inputPreviewGeom().y,
+        scrollTop: inputPreviewGeom().scrollTop,
+        viewportHeight: inputPreviewGeom().viewportHeight + lastPinnedInputOccupancy,
+        previewRows: 2,
+      }),
+    })
+    lastPinnedInputOccupancy = view.state === "visible" ? view.lineCount + 1 : 0
+    return view
+  })
   const firstCompactionID = createMemo(() => firstCompactionMessageID(messages(), sync.data.part))
   const dismissedCompactionNotice = createMemo(() => {
     const dismissed = kv.get("compaction_notice_dismissed", {}) as Record<string, boolean>
@@ -1276,6 +1359,7 @@ export function Session() {
               onOpen={openSubagent}
               onStop={stopSubagent}
             />
+            <LastInputBanner view={pinnedInput()} onJump={jumpToUserMessage} />
             <scrollbox
               ref={(r: ScrollBoxRenderable) => (scroll = r)}
               viewportOptions={{

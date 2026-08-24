@@ -16874,6 +16874,34 @@
           "output": 32768
         }
       },
+      "Gemma-4-31B-MeroMero-v2:thinking": {
+        "id": "Gemma-4-31B-MeroMero-v2:thinking",
+        "name": "Gemma 4 31B MeroMero v2 Thinking",
+        "description": "Gemma 4 31B MeroMero v2 with thinking enabled for more deliberate emotive dialogue, relationship scenes, creative writing, and multimodal roleplay.",
+        "family": "gemma",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": false,
+        "release_date": "2026-08-24",
+        "last_updated": "2026-08-24",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 65536,
+          "input": 65536,
+          "output": 32768
+        }
+      },
       "qvq-max": {
         "id": "qvq-max",
         "name": "Qwen: QvQ Max",
@@ -19707,6 +19735,34 @@
           "output": 65536
         }
       },
+      "google/gemma-4-26b-a4b-uncensored:thinking": {
+        "id": "google/gemma-4-26b-a4b-uncensored:thinking",
+        "name": "Gemma 4 26B A4B Uncensored Thinking",
+        "description": "Gemma 4 26B A4B Uncensored with thinking enabled for more deliberate coding, multimodal analysis, tool use, and long-context problem solving.",
+        "family": "gemma",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-24",
+        "last_updated": "2026-08-24",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "input": 131072,
+          "output": 32768
+        }
+      },
       "google/gemini-flash-latest": {
         "id": "google/gemini-flash-latest",
         "name": "Gemini Flash Latest",
@@ -19962,7 +20018,8 @@
         "description": "Gemma 4 26B A4B Uncensored is an NVFP4 open-weight multimodal mixture-of-experts model tuned for fewer refusals across chat, coding, tool use, and long-context work.",
         "family": "gemma",
         "attachment": true,
-        "reasoning": false,
+        "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "structured_output": true,
         "release_date": "2026-08-22",
@@ -24495,6 +24552,34 @@
           "output": 8192
         }
       },
+      "ornith-ai/ornith-1.5-397b": {
+        "id": "ornith-ai/ornith-1.5-397b",
+        "name": "Ornith 1.5 397B",
+        "description": "Ornith 1.5 397B is an open-weight mixture-of-experts model built for agentic coding, tool use, image understanding, and long-context workflows. This variant disables thinking for faster direct responses.",
+        "family": "ornith",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-24",
+        "last_updated": "2026-08-24",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
+        }
+      },
       "ornith-ai/ornith-1.5-35b-a3b": {
         "id": "ornith-ai/ornith-1.5-35b-a3b",
         "name": "Ornith 1.5 35B",
@@ -24551,6 +24636,34 @@
           "output": 32768
         }
       },
+      "ornith-ai/ornith-1.5-9b:thinking": {
+        "id": "ornith-ai/ornith-1.5-9b:thinking",
+        "name": "Ornith 1.5 9B Thinking",
+        "description": "Ornith 1.5 9B with thinking enabled for more deliberate agentic coding, tool use, visual understanding, and long-context work.",
+        "family": "ornith",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-24",
+        "last_updated": "2026-08-24",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "input": 131072,
+          "output": 32768
+        }
+      },
       "ornith-ai/ornith-1.5-9b": {
         "id": "ornith-ai/ornith-1.5-9b",
         "name": "Ornith 1.5 9B",
@@ -24576,6 +24689,34 @@
         "limit": {
           "context": 131072,
           "input": 131072,
+          "output": 32768
+        }
+      },
+      "ornith-ai/ornith-1.5-397b:thinking": {
+        "id": "ornith-ai/ornith-1.5-397b:thinking",
+        "name": "Ornith 1.5 397B Thinking",
+        "description": "Ornith 1.5 397B with thinking enabled for deeper agentic coding, reasoning, tool use, image understanding, and long-context workflows.",
+        "family": "ornith",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-24",
+        "last_updated": "2026-08-24",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "input": 262144,
           "output": 32768
         }
       },
@@ -24958,6 +25099,34 @@
           "output": 262144
         }
       },
+      "qwen/qwen3.8-27b-obliterated": {
+        "id": "qwen/qwen3.8-27b-obliterated",
+        "name": "Qwen 3.8 27B Obliterated",
+        "description": "Qwen 3.8 27B Obliterated is an open-weight multimodal model LoRA-tuned for fewer refusals across chat, coding, reasoning, tool use, and long-context work.",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-24",
+        "last_updated": "2026-08-24",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
+        }
+      },
       "qwen/Qwen3-VL-235B-A22B-Instruct": {
         "id": "qwen/Qwen3-VL-235B-A22B-Instruct",
         "name": "Qwen3 VL 235B A22B Instruct",
@@ -25249,33 +25418,6 @@
           "output": 32768
         }
       },
-      "qwen/qwen3.8-27b-uncensored": {
-        "id": "qwen/qwen3.8-27b-uncensored",
-        "name": "Qwen 3.8 27B Uncensored",
-        "description": "Qwen 3.8 27B Uncensored is an FP8 open-weight multimodal model tuned for fewer refusals across chat, coding, tool use, and long-context work.",
-        "family": "qwen",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": true,
-        "release_date": "2026-08-21",
-        "last_updated": "2026-08-21",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 131072,
-          "input": 131072,
-          "output": 32768
-        }
-      },
       "qwen/qwen3.5-plus-thinking": {
         "id": "qwen/qwen3.5-plus-thinking",
         "name": "Qwen3.5 Plus Thinking",
@@ -25548,7 +25690,8 @@
         "description": "Qwen 3.6 35B A3B Uncensored is an FP8 open-weight mixture-of-experts model tuned for fewer refusals across chat, coding, tool use, and multimodal tasks.",
         "family": "qwen3.6",
         "attachment": true,
-        "reasoning": false,
+        "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "structured_output": true,
         "release_date": "2026-08-21",
@@ -25596,6 +25739,62 @@
           "context": 262144,
           "input": 262144,
           "output": 16384
+        }
+      },
+      "qwen/qwen3.6-35b-a3b-uncensored:thinking": {
+        "id": "qwen/qwen3.6-35b-a3b-uncensored:thinking",
+        "name": "Qwen 3.6 35B A3B Uncensored Thinking",
+        "description": "Qwen 3.6 35B A3B Uncensored with thinking enabled for more deliberate coding, multimodal analysis, tool use, and complex chat tasks.",
+        "family": "qwen3.6",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-24",
+        "last_updated": "2026-08-24",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 65536,
+          "input": 65536,
+          "output": 32768
+        }
+      },
+      "qwen/qwen3.8-27b-obliterated:thinking": {
+        "id": "qwen/qwen3.8-27b-obliterated:thinking",
+        "name": "Qwen 3.8 27B Obliterated Thinking",
+        "description": "Qwen 3.8 27B Obliterated with thinking enabled for more deliberate creative work, coding, multimodal analysis, tool use, and long-context problem solving.",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-24",
+        "last_updated": "2026-08-24",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
         }
       },
       "qwen/qwen3-coder-plus": {
@@ -175724,7 +175923,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 262144,
+          "context": 1048576,
           "output": 262144
         }
       },
@@ -175806,7 +176005,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 262144,
+          "context": 1048576,
           "output": 262144
         }
       },
