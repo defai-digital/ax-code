@@ -90,12 +90,22 @@ The output format above is verbatim from these commands; the session IDs and tas
 
 ## Get started
 
-```bash
-# macOS (Apple Silicon) and Ubuntu 24.04+
-curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+### macOS (Apple Silicon)
 
-# Windows (CLI)
+```bash
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+```
+
+### Windows
+
+```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
+```
+
+### Ubuntu 24.04+
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 ```
 
 On macOS, Homebrew remains available as an alternative: `brew install defai-digital/tap/ax-code`.

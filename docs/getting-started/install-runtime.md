@@ -11,12 +11,22 @@ The root [README](../../README.md) keeps the primary install path. This page is 
 
 Use a supported packaged installer unless you are developing from a checkout. The release installer is the primary CLI path on macOS and Linux; use the native PowerShell installer on Windows.
 
-```bash
-# Bash release installer (macOS Apple Silicon and Linux glibc)
-curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+### macOS (Apple Silicon)
 
-# GitHub release installer (Windows PowerShell)
+```bash
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+```
+
+### Windows
+
+```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
+```
+
+### Ubuntu 24.04+
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 ```
 
 Homebrew remains a supported alternative for the macOS CLI:
