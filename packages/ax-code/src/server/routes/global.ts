@@ -487,8 +487,12 @@ export const GlobalRoutes = lazy(() =>
       ),
       async (c) => {
         const method = await Installation.method()
-        const rawTarget = c.req.valid("json").target || (await Installation.latest(method))
-        const target = semver.valid(semver.coerce(rawTarget))
+        const requested = c.req.valid("json").target
+        // Accept an optional leading "v" but require a complete, strict semver.
+        // semver.coerce would silently mangle partial inputs ("2" -> "2.0.0")
+        // and strip prerelease/build metadata ("2.0.0-rc.2" -> "2.0.0"),
+        // installing a different version than the caller pinned.
+        const target = semver.valid(requested ? requested.replace(/^v/, "") : await Installation.latest(method))
         if (!target) {
           return invalidRequest(c, { message: "Invalid version string", details: { resource: "version" } })
         }
