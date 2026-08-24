@@ -253,7 +253,7 @@ export namespace ProviderTransform {
     // be at the beginning" when any system turn is not messages[0]. AX Code
     // emits several system blocks (env, family prompt, craft, cache slices).
     if (requiresSingleLeadingSystem(model)) msgs = collapseToSingleLeadingSystem(msgs)
-    if (shouldApplyCaching(model, options)) {
+    if (shouldApplyCaching(model, options, msgs)) {
       msgs = applyCaching(msgs, model)
     }
     return msgs
@@ -346,12 +346,25 @@ export namespace ProviderTransform {
     return msgs
   }
 
-  function shouldApplyCaching(model: Provider.Model, options: Record<string, unknown>): boolean {
+  function hasExplicitCacheControl(msg: ModelMessage): boolean {
+    return Boolean(
+      msg.providerOptions?.["openaiCompatible"]?.["cache_control"] ||
+        msg.providerOptions?.["anthropic"]?.["cacheControl"] ||
+        msg.providerOptions?.["alibaba"]?.["cacheControl"],
+    )
+  }
+
+  function shouldApplyCaching(model: Provider.Model, options: Record<string, unknown>, msgs?: ModelMessage[]): boolean {
     const usesAnthropicAutomaticCaching =
       options.cacheControl !== undefined &&
       (model.api.npm === "@ai-sdk/anthropic" || model.api.npm === "@ai-sdk/google-vertex/anthropic")
     if (usesAnthropicAutomaticCaching) return false
     if (model.api.npm === "@ai-sdk/gateway") return false
+    // If the caller already attached explicit cache-control annotations (e.g.
+    // llm-impl.ts via PromptCachePolicy), do not overwrite them with the
+    // position-based heuristic. This keeps dynamic blocks from being incorrectly
+    // marked cacheable when the system prompt is collapsed.
+    if (msgs?.some((m) => m.role === "system" && hasExplicitCacheControl(m))) return false
     if (PromptCachePolicy.honorsExplicitCache(model.providerID)) return true
     return (
       model.providerID === "anthropic" ||
@@ -427,7 +440,7 @@ export namespace ProviderTransform {
   // system turn that is not messages[0]. Same 400 Ornith-397B hit on PAI.
   // Check the raw blob AND the separator-normalized form so dashed spellings
   // (`qwen-3-7-max`, `holo-3`) trigger the collapse exactly like `qwen3.7-max`.
-  function requiresSingleLeadingSystem(model: {
+  export function requiresSingleLeadingSystem(model: {
     id?: string
     providerID: string
     api: { id: string }

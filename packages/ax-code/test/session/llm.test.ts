@@ -1828,17 +1828,20 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
         }
 
         const capture = await request
-        const allSystemText = (capture.body.messages as Array<{ role: string; content: string }>)
-          .filter((m) => m.role === "system")
-          .map((m) => m.content)
-          .join("\n")
+        const messages = capture.body.messages as Array<{ role: string; content: string }>
+        const allSystemText = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n")
         // Supervision text is provider-agnostic and must fire for every
         // Super-Long run; only request shaping (preserve_thinking,
         // promptCacheKey) stays model-gated.
         expect(allSystemText).toContain("Super-Long mode")
-        expect(allSystemText).toContain("## Long-Agent Context Pack")
         expect(capture.body.preserve_thinking).toBeUndefined()
         expect(capture.body.promptCacheKey).toBeUndefined()
+        // Qwen 3.x family models collapse all system turns into a single leading
+        // system message, so the per-turn context pack is appended to the last
+        // user message to avoid invalidating the cached system prefix.
+        const lastUser = messages.findLast((m) => m.role === "user")
+        expect(lastUser?.content).toContain("## Long-Agent Context Pack")
+        expect(lastUser?.content).toContain("Refactor the module.")
       },
     })
   })
@@ -1996,13 +1999,17 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
         }
 
         const capture = await request
-        const systemMessages = (capture.body.messages as Array<{ role: string; content: string }>).filter(
-          (m) => m.role === "system",
-        )
+        const messages = capture.body.messages as Array<{ role: string; content: string }>
+        const systemMessages = messages.filter((m) => m.role === "system")
         const allSystemText = systemMessages.map((m) => m.content).join("\n")
-        expect(allSystemText).toContain("## Long-Agent Context Pack")
-        expect(allSystemText).toContain("Fix the regression in src/session/llm.ts.")
-        expect(allSystemText).toContain("src/session/llm.ts")
+        // The context pack is dynamic per-turn content; on Qwen-family models it
+        // must be appended to the user turn so the cached system prefix stays
+        // byte-stable.
+        expect(allSystemText).not.toContain("## Long-Agent Context Pack")
+        const lastUser = messages.findLast((m) => m.role === "user")
+        expect(lastUser?.content).toContain("## Long-Agent Context Pack")
+        expect(lastUser?.content).toContain("Fix the regression in src/session/llm.ts.")
+        expect(lastUser?.content).toContain("src/session/llm.ts")
       },
     })
   })

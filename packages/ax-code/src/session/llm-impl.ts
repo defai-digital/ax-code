@@ -156,14 +156,6 @@ export namespace LLM {
       `LLM setup timed out for ${input.model.providerID}/${input.model.id} — provider may be unreachable`,
     )
 
-    const system: string[] = []
-    const joined = SystemPrompt.request({
-      agent: input.agent,
-      model: input.model,
-      system: input.system,
-      userSystem: input.user.system,
-    }).join("\n")
-    if (joined) system.push(joined)
     const reasoningPolicyDecision = ReasoningPolicy.decide({
       small: input.small,
       autonomous: ScopedFlag.autonomous(),
@@ -209,11 +201,32 @@ export namespace LLM {
         }),
       )
     }
+
+    // Build labeled cache blocks up front so stable and dynamic system content
+    // can be cached independently. Stable blocks stay at the front so the
+    // provider-side cache prefix is not invalidated by per-turn dynamic text.
+    const cacheBlocks: PromptCachePolicy.CacheBlock[] = []
+    const system: string[] = []
+    const joined = SystemPrompt.request({
+      agent: input.agent,
+      model: input.model,
+      system: input.system,
+      userSystem: input.user.system,
+    }).join("\n")
+    if (joined) {
+      system.push(joined)
+      cacheBlocks.push({ kind: "stable", label: "system", content: joined })
+    }
     const reasoningPolicyReminder = ReasoningPolicy.systemReminder(reasoningPolicyDecision)
-    if (reasoningPolicyReminder) system.push(reasoningPolicyReminder)
+    if (reasoningPolicyReminder) {
+      system.push(reasoningPolicyReminder)
+      cacheBlocks.push({ kind: "dynamic", label: "transient", content: reasoningPolicyReminder })
+    }
 
     const longAgentProfile = longAgentProfileForModel(input.model.id, input.model.providerID)
     const autonomousEnabled = ScopedFlag.autonomous()
+    const SUPER_LONG_REMINDER =
+      "You are operating in Super-Long mode. Before declaring any task complete: run available tests or verification commands, confirm the build is clean, and surface any repeated failure patterns explicitly rather than retrying silently."
     const superLongEnabled =
       !input.small &&
       autonomousEnabled &&
@@ -233,25 +246,23 @@ export namespace LLM {
     // profile enables the extra request shaping below. Gating it on the
     // profile left Super-Long with no observable behavior on non-Qwen models.
     if (superLongEnabled) {
-      system.push(
-        "You are operating in Super-Long mode. Before declaring any task complete: run available tests or verification commands, confirm the build is clean, and surface any repeated failure patterns explicitly rather than retrying silently.",
-      )
+      system.push(SUPER_LONG_REMINDER)
+      cacheBlocks.push({ kind: "stable", label: "stable-rules", content: SUPER_LONG_REMINDER })
     }
 
-    const header = system[0]
-    const prePluginLength = system.length
+    const prePluginSystem = [...system]
     await Plugin.trigger(
       "experimental.chat.system.transform",
       { sessionID: input.sessionID, model: input.model },
       { system },
     )
-    // Rejoin to maintain 2-part structure for caching if header unchanged.
-    // Only apply this normalization if the plugin didn't modify the array
-    // (same length) — otherwise we'd overwrite plugin additions.
-    if (system.length > 2 && system.length === prePluginLength && system[0] === header) {
-      const rest = system.slice(1)
-      system.length = 0
-      system.push(header, rest.join("\n"))
+    // If the plugin modified the system array, we can no longer trust the
+    // original stable/dynamic labels, so treat the transformed content as stable.
+    if (system.length !== prePluginSystem.length || system.some((s, i) => s !== prePluginSystem[i])) {
+      cacheBlocks.length = 0
+      for (const [i, content] of system.entries()) {
+        cacheBlocks.push({ kind: "stable", label: i === 0 ? "system" : "stable-rules", content })
+      }
     }
 
     const variant =
@@ -291,7 +302,9 @@ export namespace LLM {
       })
       const renderedContext = LongAgentContextPacker.render(packResult)
       if (renderedContext) {
-        system.push(["## Long-Agent Context Pack", renderedContext].join("\n"))
+        const packText = ["## Long-Agent Context Pack", renderedContext].join("\n")
+        system.push(packText)
+        cacheBlocks.push({ kind: "dynamic", label: "transient", content: packText })
       }
       l.info("long-agent context pack", {
         debugSummary: packResult.debugSummary,
@@ -303,14 +316,31 @@ export namespace LLM {
     // annotations whenever the model reports prompt-cache support. Super-Long
     // used to be the only caller; that left ordinary PAI/Kimi turns sending
     // a 36k system prefix with cache.read = 0.
-    let systemMessages = system.map((content) => systemMessage(content))
+    //
+    // For providers whose chat template collapses all system turns into a single
+    // leading system message (Qwen 3.x / Ornith / Holo3), keep only the stable
+    // blocks in system. Append dynamic blocks to the last user message so they
+    // are not merged into the cached system prefix and re-written every turn.
     const cacheCaps = getModelCapabilities(input.model.id, input.model.providerID)
     const promptCacheEligible = cacheCaps.promptCache === "supported" || cacheCaps.promptCache === "experimental"
+    const collapseSystem = ProviderTransform.requiresSingleLeadingSystem(input.model)
+    let requestMessages = input.messages
+    let blocksForRender = cacheBlocks
+    if (collapseSystem) {
+      const dynamicText = cacheBlocks
+        .filter((b) => b.kind === "dynamic")
+        .map((b) => b.content)
+        .filter(Boolean)
+        .join("\n\n")
+      if (dynamicText) {
+        requestMessages = appendDynamicTextToLastUserMessage(input.messages, dynamicText)
+      }
+      blocksForRender = cacheBlocks.filter((b) => b.kind === "stable")
+    }
+
+    let systemMessages: ModelMessage[]
     if (promptCacheEligible) {
-      const cacheBlocks = PromptCachePolicy.buildBlocks(
-        system.map((content, i) => ({ label: i === 0 ? "system" : "stable-rules", content })),
-      )
-      const cacheResult = PromptCachePolicy.render(cacheBlocks, input.model.providerID)
+      const cacheResult = PromptCachePolicy.render(blocksForRender, input.model.providerID)
       systemMessages = cacheResult.blocks.map((block) =>
         systemMessage(block.content, cacheResult.mode, block.cacheControl),
       )
@@ -321,9 +351,11 @@ export namespace LLM {
           totalBlocks: cacheResult.blocks.length,
         })
       }
+    } else {
+      systemMessages = blocksForRender.map((block) => systemMessage(block.content))
     }
 
-    const messages = [...systemMessages, ...input.messages]
+    const messages = [...systemMessages, ...requestMessages]
 
     const params = await Plugin.trigger(
       "chat.params",
@@ -1063,6 +1095,35 @@ export namespace LLM {
     signal: AbortSignal,
   ) {
     return attachSuperLongPacingReservation(output, reservation, signal)
+  }
+
+  // Append dynamic system text to the last user message. This is used for
+  // providers whose chat template collapses all system turns into a single
+  // leading system message, so that per-turn dynamic content (reasoning-policy
+  // reminders, long-agent context packs) does not get merged into the cached
+  // stable prefix. A new text part is appended when the message already uses
+  // part arrays; string content is concatenated.
+  function appendDynamicTextToLastUserMessage(messages: ModelMessage[], text: string): ModelMessage[] {
+    let userIndex = -1
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i]?.role === "user") {
+        userIndex = i
+        break
+      }
+    }
+    if (userIndex === -1) {
+      return [...messages, { role: "user", content: text }]
+    }
+    const msg = messages[userIndex]
+    if (typeof msg.content === "string") {
+      const updated = { ...msg, content: [msg.content, text].filter(Boolean).join("\n\n") } as ModelMessage
+      return messages.map((m, i) => (i === userIndex ? updated : m))
+    }
+    if (Array.isArray(msg.content)) {
+      const updated = { ...msg, content: [...msg.content, { type: "text" as const, text }] } as ModelMessage
+      return messages.map((m, i) => (i === userIndex ? updated : m))
+    }
+    return messages
   }
 
   // Check if messages contain any tool-call content
