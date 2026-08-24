@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.8.0] - 2026-08-24
+
+### Changed
+
+- Stop tracking .internal files in the public repository.
+
+### Fixed
+
+- Fix CLI version resolution, sandbox toggle, and wait/move routing.
+- Fix TUI spinner dist drift and self-scan lifecycle finding.
+- Fix list tool only skipping top-level noise directories.
+- Fix session pagination ties, question reply race, and global SSE control frames.
+- Fix TUI subagent rail hiding a follow-up queue row behind a completed tool part.
+- Fix winget shared release tag, resign prompt, and release-notes JSON merge.
+- Fix superseded workflow children keeping their session alive after cancel.
+- Fix TaskQueue.stop clobbering a terminal status settled during the interrupt.
+- Fix upgrade route dropping prerelease targets via semver.coerce.
+- Fix desktop manual update check gated by auto-update flag.
+
 ## [7.7.9] - 2026-08-22
 
 ### Added
