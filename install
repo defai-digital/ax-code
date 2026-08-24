@@ -22,8 +22,8 @@ Options:
         --no-modify-path    Don't modify shell config files (.zshrc, .bashrc, etc.)
 
 Examples:
-    curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
-    curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash -s -- --version 1.0.180
+    curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+    curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash -s -- --version 1.0.180
     ./install --binary /path/to/ax-code
 EOF
 }
@@ -604,6 +604,29 @@ install_from_binary() {
     chmod 755 "${INSTALL_DIR}/ax-code"
 }
 
+write_node_bundle_launcher() {
+    local target="$1"
+    cat > "$target" <<'EOF'
+#!/bin/sh
+script="$0"
+while [ -L "$script" ]; do
+  target="$(readlink "$script")"
+  case "$target" in
+    /*) script="$target" ;;
+    *) script="$(dirname "$script")/$target" ;;
+  esac
+done
+dir="$(CDPATH= cd -- "$(dirname -- "$script")" && pwd -P)"
+if [ -z "$AX_CODE_SYSTEM_NODE" ] && [ -x "$dir/../node/bin/node" ]; then
+  exec "$dir/../node/bin/node" --experimental-ffi --disable-warning=ExperimentalWarning "$dir/../lib/index-node-tui.js" "$@"
+fi
+if [ -z "$AX_CODE_SYSTEM_NODE" ] && [ -x "$dir/../node/bin/node.exe" ]; then
+  exec "$dir/../node/bin/node.exe" --experimental-ffi --disable-warning=ExperimentalWarning "$dir/../lib/index-node-tui.js" "$@"
+fi
+exec node --experimental-ffi --disable-warning=ExperimentalWarning "$dir/../lib/index-node-tui.js" "$@"
+EOF
+}
+
 install_node_bundle_tree() {
     local bundle_root=$1
     local launcher="$bundle_root/bin/ax-code"
@@ -634,7 +657,7 @@ install_node_bundle_tree() {
     rm -rf "$INSTALL_LIB_DIR" "$INSTALL_NODE_DIR" "$INSTALL_NODE_MODULES_DIR"
     rm -f "$INSTALL_PACKAGE_JSON"
 
-    cp "$launcher" "${INSTALL_DIR}/ax-code"
+    write_node_bundle_launcher "${INSTALL_DIR}/ax-code"
     chmod 755 "${INSTALL_DIR}/ax-code"
     cp -R "$lib_dir" "$INSTALL_LIB_DIR"
     cp -R "$node_dir" "$INSTALL_NODE_DIR"
@@ -859,11 +882,13 @@ warn_path_precedence
 warn_if_not_on_current_path
 
 echo -e ""
-echo -e "${MUTED}    _    __  __   ${NC}  ____          _      "
-echo -e "${MUTED}   / \\   \\ \\/ /   ${NC} / ___|___   __| | ___ "
-echo -e "${MUTED}  / _ \\   \\  /    ${NC}| |   / _ \\ / _\` |/ _ \\"
-echo -e "${MUTED} / ___ \\  /  \\    ${NC}| |__| (_) | (_| |  __/"
-echo -e "${MUTED}/_/   \\_\\/_/\\_\\   ${NC} \\____\\___/ \\__,_|\\___|"
+# AX_CODE_LOGO_START
+echo -e "${MUTED}___________  __     _________________________________${NC}"
+echo -e "${MUTED}___    |_  |/ /     __  ____/_  __ \\__  __ \\__  ____/${NC}"
+echo -e "${MUTED}__  /| |_    /_______  /    _  / / /_  / / /_  __/   ${NC}"
+echo -e "${MUTED}_  ___ |    |_/_____/ /___  / /_/ /_  /_/ /_  /___   ${NC}"
+echo -e "${MUTED}/_/  |_/_/|_|       \\____/  \\____/ /_____/ /_____/   ${NC}"
+# AX_CODE_LOGO_END
 echo -e ""
 echo -e ""
 echo -e "${MUTED}AX Code includes free models, to start:${NC}"

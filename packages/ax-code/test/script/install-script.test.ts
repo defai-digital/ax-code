@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
 import { readFile } from "node:fs/promises"
+import { logo } from "../../src/cli/logo"
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 const installScript = path.join(repoRoot, "install")
@@ -46,6 +47,8 @@ describe("install script", () => {
     expect(text).toContain('cp -R "$node_dir" "$INSTALL_NODE_DIR"')
     expect(text).toContain('cp -R "$node_modules_dir" "$INSTALL_NODE_MODULES_DIR"')
     expect(text).toContain('install_node_bundle_tree "$bundle_root"')
+    expect(text).toContain('write_node_bundle_launcher "${INSTALL_DIR}/ax-code"')
+    expect(text).toContain('while [ -L "$script" ]; do')
     // Linux archives are tar.gz; macOS remains zip.
     expect(text).toContain('archive_ext=".tar.gz"')
     expect(text).toContain("linux-x64|linux-arm64|darwin-arm64|windows-x64|windows-arm64")
@@ -88,7 +91,16 @@ describe("install script", () => {
     expect(text).toContain("cleanup_bootstrap_cache_launcher")
     expect(text).toContain('if [ "$cached_target" = "${INSTALL_DIR}/ax-code" ]')
     expect(text).not.toContain("█▀▀█ █▀▀█ █▀▀█ █▀▀▄")
-    expect(text).toContain("/ ___|___")
+  })
+
+  test("uses the canonical AX Code startup logo", async () => {
+    const text = await readFile(installScript, "utf-8")
+    const block = text.match(/# AX_CODE_LOGO_START\n([\s\S]*?)# AX_CODE_LOGO_END/)?.[1]
+    expect(block).toBeDefined()
+    const installedLogo = [...block!.matchAll(/echo -e "\$\{MUTED\}(.*)\$\{NC\}"/g)].map((match) =>
+      match[1].replaceAll("\\\\", "\\"),
+    )
+    expect(installedLogo).toEqual(logo)
   })
 
   test("provides a native Windows PowerShell release installer", async () => {

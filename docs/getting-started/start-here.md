@@ -51,7 +51,7 @@ The rest of the documentation maps onto those layers.
 
 - Start with the [root README](../../README.md) for install and first launch.
 - Supported install paths use the compiled runtime:
-  - Bash release installer for macOS Apple Silicon and Linux: `curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash`
+  - Bash release installer for macOS Apple Silicon and Linux: `curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash`
   - Homebrew alternative for macOS CLI: `brew install defai-digital/tap/ax-code`
   - GitHub release installer for Windows PowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"`
 - The Bash installer is not the canonical Windows setup path.

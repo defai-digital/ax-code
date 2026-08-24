@@ -14,7 +14,7 @@ const INSTALL_DOCS_URLS: Record<OnboardingPlatform, string> = {
 export const MACOS_INSTALL_COMMAND = "brew install defai-digital/tap/ax-code"
 
 export const LINUX_INSTALL_COMMAND =
-  "curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash"
+  'curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash'
 
 export const WINDOWS_INSTALL_COMMAND =
   "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"

@@ -11,6 +11,7 @@ import { solidEsbuildPlugin } from "./esbuild-solid-plugin"
 import { readText, writeText } from "./fs-compat"
 import { resolveLegacyNodeGypPython } from "./node-gyp-python"
 import { WINDOWS_UTF8_WARNING } from "./source-launcher"
+import { unixNodeLauncherScript } from "./node-launcher"
 import { shouldCopyTuiDistPath, toTuiDistPackageJson, withoutTuiTransformDependencies } from "../../../script/tui-dist"
 import pkg from "../package.json"
 
@@ -285,21 +286,7 @@ if (process.arch === arch) {
 // runtime ships beside the bundle. --disable-warning=ExperimentalWarning
 // silences Node's "FFI is experimental" notice on every run.
 const nodeArgs = `--experimental-ffi --disable-warning=ExperimentalWarning`
-await writeText(
-  path.join(outBin, "ax-code"),
-  [
-    `#!/bin/sh`,
-    `dir="$(dirname "$0")"`,
-    `if [ -z "$AX_CODE_SYSTEM_NODE" ] && [ -x "$dir/../node/bin/node" ]; then`,
-    `  exec "$dir/../node/bin/node" ${nodeArgs} "$dir/../lib/index-node-tui.js" "$@"`,
-    `fi`,
-    `if [ -z "$AX_CODE_SYSTEM_NODE" ] && [ -x "$dir/../node/bin/node.exe" ]; then`,
-    `  exec "$dir/../node/bin/node.exe" ${nodeArgs} "$dir/../lib/index-node-tui.js" "$@"`,
-    `fi`,
-    `exec node ${nodeArgs} "$dir/../lib/index-node-tui.js" "$@"`,
-    ``,
-  ].join("\n"),
-)
+await writeText(path.join(outBin, "ax-code"), unixNodeLauncherScript())
 await fs.promises.chmod(path.join(outBin, "ax-code"), 0o755)
 await writeText(
   path.join(outBin, "ax-code.cmd"),

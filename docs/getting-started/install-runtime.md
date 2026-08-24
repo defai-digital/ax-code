@@ -14,7 +14,7 @@ Use a supported packaged installer unless you are developing from a checkout. Th
 ### macOS (Apple Silicon)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 ```
 
 ### Windows
@@ -26,7 +26,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/d
 ### Ubuntu 24.04+
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 ```
 
 Homebrew remains a supported alternative for the macOS CLI:
@@ -78,11 +78,11 @@ Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**.
 
 | Channel                              | Install or setup command                                                                                                                            | Expected runtime label | Support status       | Use when                                                           |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------ |
-| macOS bash release installer         | `curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install \| bash`                                                           | `node-bundled`         | Supported on macOS   | Primary Apple Silicon user-local install path                      |
+| macOS bash release installer         | `curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install \| bash`                              | `node-bundled`         | Supported on macOS   | Primary Apple Silicon user-local install path                      |
 | Homebrew formula                     | `brew install defai-digital/tap/ax-code`                                                                                                            | `node-bundled`         | Supported            | Alternative macOS package-manager install path                     |
 | Windows PowerShell release installer | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 \| iex"` | `node-bundled`         | Supported on Windows | Windows user-local install path                                    |
 | Windows release assets               | Download `ax-code-windows-*.zip` from GitHub releases                                                                                               | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
-| Linux bash release installer         | `curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install \| bash`                                                           | `node-bundled`         | Supported on Linux   | Ubuntu 24.04+ (glibc) amd64/arm64 user-local install path          |
+| Linux bash release installer         | `curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install \| bash`                              | `node-bundled`         | Supported on Linux   | Ubuntu 24.04+ (glibc) amd64/arm64 user-local install path          |
 | Linux release assets                 | Download `ax-code-linux-*.tar.gz` from GitHub releases                                                                                              | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
 | Local bundled launcher               | `pnpm install && pnpm run setup:cli`                                                                                                                | `node-bundled`         | Contributor          | Contributor parity with the packaged startup path                  |
 | Local source launcher                | `pnpm run setup:cli -- --source`                                                                                                                    | `source`               | Contributor          | Contributor-only source debugging                                  |
@@ -141,7 +141,7 @@ irm https://github.com/defai-digital/ax-code/releases/download/v$env:AX_CODE_VER
 Use the release installer for a user-local CLI installation without Homebrew:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 ```
 
 Managed Macs can use the Homebrew formula so CLI updates track the tap:
@@ -164,7 +164,7 @@ For supported packaged channels:
 ax-code upgrade
 brew upgrade ax-code
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
-curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 ```
 
 `brew upgrade` only updates the Homebrew keg. If `which ax-code` is `~/.local/bin/ax-code`, the shell keeps running that launcher until it is moved aside. `which -a ax-code` lists every match in PATH order.

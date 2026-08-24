@@ -53,7 +53,7 @@ set "AX_CODE_SOURCE_LOADER=${loader}"
 set "AX_CODE_SOURCE_NODE_FFI_RUNNER=${nodeFfiRunner}"
 if not exist "%AX_CODE_SOURCE_CWD%\\" (
   echo ax-code source launcher points at a missing checkout: %AX_CODE_SOURCE_CWD% 1>&2
-  echo Install the packaged runtime instead: curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install ^| bash 1>&2
+  echo Install the packaged runtime instead: curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install ^| bash 1>&2
   exit /b 127
 )
 if not exist "%AX_CODE_SOURCE_NODE_FFI_RUNNER%" (
@@ -73,7 +73,7 @@ AX_CODE_SOURCE_LOADER="${loader}"
 AX_CODE_SOURCE_NODE_FFI_RUNNER="${nodeFfiRunner}"
 if [ ! -d "$AX_CODE_SOURCE_CWD" ]; then
   echo "ax-code source launcher points at a missing checkout: $AX_CODE_SOURCE_CWD" >&2
-  echo "Install the packaged runtime instead: curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash" >&2
+  echo 'Install the packaged runtime instead: curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash' >&2
   exit 127
 fi
 if [ ! -f "$AX_CODE_SOURCE_NODE_FFI_RUNNER" ]; then

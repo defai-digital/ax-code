@@ -58,7 +58,8 @@ runs:
     - name: Install ax-code
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
-      run: curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+      run: |
+        curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 
     - name: Add ax-code to PATH
       shell: bash
