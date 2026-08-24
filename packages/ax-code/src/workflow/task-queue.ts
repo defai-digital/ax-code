@@ -172,11 +172,12 @@ async function cancelSupersededPhaseChildren(children: WorkflowChildRecord[]) {
     if (child.status === "completed" || child.status === "failed" || child.status === "cancelled") continue
     let cancelledQueue = false
     if (child.taskQueueID) {
-      await TaskQueue.setStatus({
-        id: child.taskQueueID,
-        status: "cancelled",
-        error: "Workflow phase merge strategy already satisfied.",
-      })
+      // stop() rather than a bare setStatus: a superseded item that is already
+      // running owns a live session, and setStatus would only flip the durable
+      // status — leaving the subagent executing (spending tokens, running tools,
+      // mutating the workspace) after the merge strategy was already satisfied.
+      // stop() interrupts running/blocked sessions and cancels everything else.
+      await TaskQueue.stop(child.taskQueueID)
         .then(() => {
           cancelledQueue = true
         })
