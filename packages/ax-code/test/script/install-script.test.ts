@@ -1,7 +1,9 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
-import { readFile } from "node:fs/promises"
+import { execFileSync } from "node:child_process"
+import { chmod, readFile, writeFile } from "node:fs/promises"
 import { logo } from "../../src/cli/logo"
+import { tmpdir } from "../fixture/fixture"
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 const installScript = path.join(repoRoot, "install")
@@ -84,7 +86,97 @@ describe("install script", () => {
     expect(text).toContain("Open a new shell, or run: export PATH=${INSTALL_DIR}:\\$PATH")
     expect(text).not.toContain('elif [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]')
     expect(text).toContain('zsh) secondary_config_file="${ZDOTDIR:-$HOME}/.zprofile"')
-    expect(text).toContain('bash) secondary_config_file="$HOME/.profile"')
+    expect(text).toContain("bash_login_config_file")
+    expect(text).toContain('current_shell=$(basename "${SHELL:-bash}")')
+    expect(text).toContain("bash) secondary_config_file=$(bash_login_config_file || true)")
+  })
+
+  test.each([
+    {
+      name: "updates .bash_profile when it shadows later login files",
+      existingLoginFiles: [".bash_profile", ".bash_login", ".profile"],
+      expectedLoginFile: ".bash_profile",
+      hasBashrc: true,
+      shell: "/bin/bash",
+    },
+    {
+      name: "updates .bash_login when no .bash_profile exists",
+      existingLoginFiles: [".bash_login", ".profile"],
+      expectedLoginFile: ".bash_login",
+      hasBashrc: true,
+      shell: "/bin/bash",
+    },
+    {
+      name: "uses .profile when no earlier login file exists",
+      existingLoginFiles: [],
+      expectedLoginFile: ".profile",
+      hasBashrc: true,
+      shell: "/bin/bash",
+    },
+    {
+      name: "creates .bashrc when only a login startup file exists",
+      existingLoginFiles: [".bash_profile"],
+      expectedLoginFile: ".bash_profile",
+      hasBashrc: false,
+      shell: "/bin/bash",
+    },
+    {
+      name: "defaults to Bash when SHELL is unset",
+      existingLoginFiles: [],
+      expectedLoginFile: ".profile",
+      hasBashrc: false,
+      shell: undefined,
+    },
+  ])("$name", async ({ existingLoginFiles, expectedLoginFile, hasBashrc, shell }) => {
+    await using tmp = await tmpdir()
+    const home = tmp.path
+    const fakeBinary = path.join(home, "fake-ax-code")
+    const bashrc = path.join(home, ".bashrc")
+    const installDir = path.join(home, ".ax-code", "bin")
+    const exportLine = `export PATH=${installDir}:$PATH`
+
+    await writeFile(fakeBinary, "#!/bin/sh\nexit 0\n")
+    await chmod(fakeBinary, 0o755)
+    for (const file of existingLoginFiles) await writeFile(path.join(home, file), "# existing\n")
+    if (hasBashrc) await writeFile(bashrc, "# existing\n")
+
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      HOME: home,
+      PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
+      XDG_CACHE_HOME: path.join(home, ".cache"),
+    }
+    if (shell === undefined) delete env.SHELL
+    else env.SHELL = shell
+
+    if (shell === undefined) {
+      execFileSync("bash", ["-c", 'unset SHELL; source "$1" --binary "$2"', "bash", installScript, fakeBinary], {
+        env,
+        stdio: "pipe",
+      })
+    } else {
+      execFileSync("bash", [installScript, "--binary", fakeBinary], { env, stdio: "pipe" })
+    }
+
+    expect(await readFile(bashrc, "utf-8")).toContain(exportLine)
+    expect(await readFile(path.join(home, expectedLoginFile), "utf-8")).toContain(exportLine)
+    for (const file of existingLoginFiles) {
+      if (file === expectedLoginFile) continue
+      expect(await readFile(path.join(home, file), "utf-8")).not.toContain(exportLine)
+    }
+
+    const loginResult = execFileSync("bash", ["--login", "-c", "command -v ax-code"], {
+      encoding: "utf-8",
+      env,
+    }).trim()
+    expect(loginResult).toBe(path.join(installDir, "ax-code"))
+
+    const interactiveResult = execFileSync(
+      "bash",
+      ["--noprofile", "--rcfile", bashrc, "-i", "-c", "command -v ax-code"],
+      { encoding: "utf-8", env },
+    ).trim()
+    expect(interactiveResult).toBe(path.join(installDir, "ax-code"))
   })
 
   test("does not link ax-code into the temporary bootstrap tool cache", async () => {
@@ -108,7 +200,6 @@ describe("install script", () => {
   })
 
   test("resolves the latest CLI version from the releases list, not /releases/latest", async () => {
-    const { execFileSync } = await import("node:child_process")
     const text = await readFile(installScript, "utf-8")
     expect(text).toContain("latest_cli_version")
     expect(text).toContain("https://api.github.com/repos/defai-digital/ax-code/releases?per_page=50")

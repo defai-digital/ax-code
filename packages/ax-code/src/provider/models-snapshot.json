@@ -188794,6 +188794,64 @@
     "name": "Ollama",
     "models": {}
   },
+  "kimi-cloud-plan": {
+    "id": "kimi-cloud-plan",
+    "name": "Kimi Cloud Plan",
+    "env": [
+      "KIMI_CLOUD_PLAN_API_KEY",
+      "MOONSHOT_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "https://api.moonshot.ai/v1",
+    "doc": "https://platform.moonshot.ai/docs/api/chat",
+    "models": {
+      "kimi-k2.7-code": {
+        "id": "kimi-k2.7-code",
+        "name": "Kimi K2.7 Code",
+        "family": "kimi-k2.7-code",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": false,
+        "release_date": "2026-06-12",
+        "last_updated": "2026-06-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        },
+        "status": "active",
+        "description": "Coding-focused Kimi model, stronger on long-horizon repo work with less overthinking",
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "knowledge": "2025-01"
+      }
+    }
+  },
   "openrouter": {
     "id": "openrouter",
     "name": "OpenRouter",
@@ -189184,53 +189242,6 @@
           "output": 32768
         },
         "status": "active"
-      }
-    }
-  },
-  "kimi-cloud-plan": {
-    "id": "kimi-cloud-plan",
-    "name": "Kimi Cloud Plan",
-    "env": [
-      "KIMI_CLOUD_PLAN_API_KEY",
-      "MOONSHOT_API_KEY"
-    ],
-    "npm": "@ai-sdk/openai-compatible",
-    "api": "https://api.moonshot.ai/v1",
-    "doc": "https://platform.moonshot.ai/docs/api/chat",
-    "models": {
-      "kimi-k2.7-code": {
-        "id": "kimi-k2.7-code",
-        "name": "Kimi K2.7 Code",
-        "family": "kimi-k2.7-code",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "structured_output": true,
-        "temperature": false,
-        "release_date": "2026-06-12",
-        "last_updated": "2026-06-12",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 262144,
-          "output": 262144
-        },
-        "status": "active",
-        "description": "Coding-focused Kimi model, stronger on long-horizon repo work with less overthinking",
-        "reasoning_options": [],
-        "knowledge": "2025-01"
       }
     }
   }

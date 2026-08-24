@@ -792,6 +792,21 @@ ensure_path_config_file_at() {
     return 1
 }
 
+bash_login_config_file() {
+    local file=""
+
+    # Bash reads only the first existing login startup file in this order.
+    # Updating .profile is ineffective when .bash_profile or .bash_login exists.
+    for file in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
+        if [[ -f $file ]]; then
+            echo "$file"
+            return 0
+        fi
+    done
+
+    ensure_path_config_file_at "$HOME/.profile"
+}
+
 link_installed_binary_on_path() {
     local resolved=""
     local path_entry=""
@@ -852,7 +867,7 @@ warn_if_not_on_current_path() {
 
 XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
 
-current_shell=$(basename "$SHELL")
+current_shell=$(basename "${SHELL:-bash}")
 case $current_shell in
     fish)
         config_files="$HOME/.config/fish/config.fish"
@@ -861,7 +876,9 @@ case $current_shell in
         config_files="${ZDOTDIR:-$HOME}/.zshrc ${ZDOTDIR:-$HOME}/.zshenv $XDG_CONFIG_HOME/zsh/.zshrc $XDG_CONFIG_HOME/zsh/.zshenv"
     ;;
     bash)
-        config_files="$HOME/.bashrc $HOME/.bash_profile $HOME/.profile $XDG_CONFIG_HOME/bash/.bashrc $XDG_CONFIG_HOME/bash/.bash_profile"
+        # Interactive Bash reads ~/.bashrc. Login startup files are handled
+        # separately below because Bash reads only the first one that exists.
+        config_files="$HOME/.bashrc"
     ;;
     ash)
         config_files="$HOME/.ashrc $HOME/.profile /etc/profile"
@@ -907,15 +924,17 @@ if [[ "$no_modify_path" != "true" ]]; then
         esac
 
         # Cover both interactive and login shells. A clean macOS Terminal
-        # normally reads both zprofile and zshrc; Linux login shells read
-        # profile while interactive shells read bashrc.
+        # normally reads both zprofile and zshrc; Bash login shells read only
+        # the first existing login startup file.
         secondary_config_file=""
         case $current_shell in
             zsh) secondary_config_file="${ZDOTDIR:-$HOME}/.zprofile" ;;
-            bash) secondary_config_file="$HOME/.profile" ;;
+            bash) secondary_config_file=$(bash_login_config_file || true) ;;
         esac
         if [ -n "$secondary_config_file" ] && [ "$secondary_config_file" != "$config_file" ]; then
-            secondary_config_file=$(ensure_path_config_file_at "$secondary_config_file" || true)
+            if [ "$current_shell" != "bash" ]; then
+                secondary_config_file=$(ensure_path_config_file_at "$secondary_config_file" || true)
+            fi
             if [ -n "$secondary_config_file" ]; then
                 add_to_path "$secondary_config_file" "export PATH=$INSTALL_DIR:\$PATH"
             fi
