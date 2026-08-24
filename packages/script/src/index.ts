@@ -31,12 +31,20 @@ const VERSION = await (async () => {
     const channel = CHANNEL.replace(/[^a-zA-Z0-9-]/g, "-")
     return `0.0.0-${channel}-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "")}`
   }
-  const version = await fetch("https://api.github.com/repos/defai-digital/ax-code/releases/latest")
+  const version = await fetch("https://api.github.com/repos/defai-digital/ax-code/releases?per_page=50")
     .then((res) => {
       if (!res.ok) throw new Error(res.statusText)
       return res.json()
     })
-    .then((data: any) => String(data.tag_name ?? "").replace(/^v/, ""))
+    .then((data: unknown) => {
+      if (!Array.isArray(data)) throw new Error("GitHub releases response was not an array")
+      for (const release of data) {
+        const tag =
+          release && typeof release === "object" && "tag_name" in release ? String(release.tag_name ?? "") : ""
+        if (/^v\d+\.\d+\.\d+$/.test(tag)) return tag.slice(1)
+      }
+      return ""
+    })
   if (!version) throw new Error("Could not resolve latest ax-code GitHub release version")
   const [major, minor, patch] = version.split(".").map((x: string) => Number(x) || 0)
   const t = env.AX_CODE_BUMP?.toLowerCase()

@@ -10,7 +10,7 @@ import {
   HOMEBREW_FORMULA_API_URL,
   INSTALL_SCRIPT_URL,
   INSTALL_PS1_SCRIPT_URL,
-  GITHUB_LATEST_RELEASE_API_URL,
+  GITHUB_RELEASES_API_URL,
 } from "@/constants/project"
 import { Flag } from "../flag/flag"
 import { Log } from "../util/log"
@@ -114,6 +114,8 @@ export namespace Installation {
 
   // Response schemas for external version APIs
   const GitHubRelease = z.object({ tag_name: z.string() })
+  const GitHubReleases = z.array(GitHubRelease)
+  const CLI_RELEASE_TAG = /^v\d+\.\d+\.\d+$/
   const BrewFormula = z.object({ versions: z.object({ stable: z.string() }) })
   const BrewInfoV2 = z.object({
     formulae: z.array(z.object({ versions: z.object({ stable: z.string() }) })),
@@ -337,8 +339,14 @@ export namespace Installation {
       return data.versions.stable
     }
 
-    const data = await fetchJson(GitHubRelease, GITHUB_LATEST_RELEASE_API_URL)
-    return data.tag_name.replace(/^v/, "")
+    // `/releases/latest` is whichever non-prerelease GitHub published last.
+    // CLI (`vX.Y.Z`) and Desktop (`desktop-vX.Y.Z`) are sibling releases, so a
+    // later Desktop publish would make self-update resolve a non-semver tag.
+    const data = await fetchJson(GitHubReleases, GITHUB_RELEASES_API_URL)
+    for (const release of data) {
+      if (CLI_RELEASE_TAG.test(release.tag_name)) return release.tag_name.slice(1)
+    }
+    throw new Error("No stable CLI GitHub release (vX.Y.Z) found")
   }
 
   export async function upgrade(m: Method, target: string): Promise<void> {

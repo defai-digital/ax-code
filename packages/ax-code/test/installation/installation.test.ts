@@ -52,7 +52,7 @@ describe("installation", () => {
     test("reads release version from GitHub releases", async () => {
       const result = await withTestDependencies(
         {
-          fetch: () => jsonResponse({ tag_name: "v1.2.3" }),
+          fetch: () => jsonResponse([{ tag_name: "v1.2.3" }]),
         },
         () => Installation.latest("unknown"),
       )
@@ -60,15 +60,27 @@ describe("installation", () => {
       expect(result).toBe("1.2.3")
     })
 
-    test("strips v prefix from GitHub release tag", async () => {
+    test("skips desktop-v and prerelease tags when resolving the CLI version", async () => {
       const result = await withTestDependencies(
         {
-          fetch: () => jsonResponse({ tag_name: "v4.0.0-beta.1" }),
+          fetch: () =>
+            jsonResponse([{ tag_name: "desktop-v4.0.0" }, { tag_name: "v4.0.0-beta.1" }, { tag_name: "v3.9.9" }]),
         },
         () => Installation.latest("curl"),
       )
 
-      expect(result).toBe("4.0.0-beta.1")
+      expect(result).toBe("3.9.9")
+    })
+
+    test("raises when GitHub only has desktop or prerelease tags", async () => {
+      const promise = withTestDependencies(
+        {
+          fetch: () => jsonResponse([{ tag_name: "desktop-v4.0.0" }, { tag_name: "v4.0.0-beta.1" }]),
+        },
+        () => Installation.latest("curl"),
+      )
+
+      await expect(promise).rejects.toThrow(/No stable CLI GitHub release/)
     })
 
     test("reads brew formulae API versions", async () => {

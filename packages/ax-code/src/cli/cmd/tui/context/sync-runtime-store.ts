@@ -97,15 +97,28 @@ export function normalizeRuntimeFlagState(body: unknown) {
   return isRecord(body) && body.enabled === true
 }
 
+function isolationMode(value: unknown): IsolationPayload["mode"] | undefined {
+  if (value === "read-only" || value === "workspace-write" || value === "full-access") return value
+  return undefined
+}
+
 export function normalizeIsolationState(body: unknown) {
   const record = isRecord(body) ? body : {}
-  const mode: IsolationPayload["mode"] =
-    record.mode === "read-only" || record.mode === "workspace-write" || record.mode === "full-access"
-      ? record.mode
-      : "workspace-write"
+  const mode = isolationMode(record.mode) ?? "workspace-write"
   return {
     mode,
     network: record.network === true,
+  }
+}
+
+/** Strict parse of a PUT /isolation response. Does not coerce unknown payloads. */
+export function parseIsolationState(body: unknown): IsolationPayload | undefined {
+  if (!isRecord(body)) return undefined
+  const mode = isolationMode(body.mode)
+  if (!mode) return undefined
+  return {
+    mode,
+    network: mode === "full-access" ? true : body.network === true,
   }
 }
 

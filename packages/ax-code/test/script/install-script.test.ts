@@ -107,6 +107,18 @@ describe("install script", () => {
     expect(installedLogo).toEqual(logo)
   })
 
+  test("resolves the latest CLI version from the releases list, not /releases/latest", async () => {
+    const text = await readFile(installScript, "utf-8")
+    expect(text).toContain("latest_cli_version")
+    expect(text).toContain("https://api.github.com/repos/defai-digital/ax-code/releases?per_page=50")
+    expect(text).toContain('"tag_name": "v[0-9]+\\.[0-9]+\\.[0-9]+"')
+    expect(text).toContain(
+      'url="https://github.com/defai-digital/ax-code/releases/download/v${specific_version}/$filename"',
+    )
+    expect(text).not.toContain("https://github.com/defai-digital/ax-code/releases/latest/download/$filename")
+    expect(text).not.toContain("https://api.github.com/repos/defai-digital/ax-code/releases/latest")
+  })
+
   test("provides a native Windows PowerShell release installer", async () => {
     const text = await readFile(installPowerShellScript, "utf-8")
     expect(text).toContain("param(")

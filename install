@@ -152,6 +152,24 @@ ensure_minisign_available() {
     return 0
 }
 
+# First stable CLI tag (`vX.Y.Z`) from the GitHub releases list. Skips
+# `desktop-v*` siblings that `/releases/latest` can otherwise select.
+latest_cli_version() {
+    local releases tag
+    releases="$(curl -fsSL -A "ax-code-installer" \
+      "https://api.github.com/repos/defai-digital/ax-code/releases?per_page=50")" || return 1
+    tag=""
+    local line
+    while IFS= read -r line; do
+        tag="$line"
+        break
+    done < <(printf '%s' "$releases" | grep -oE '"tag_name": "v[0-9]+\.[0-9]+\.[0-9]+"' || true)
+    if [ -z "$tag" ]; then
+        return 1
+    fi
+    printf '%s' "$tag" | sed -n 's/.*"v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p'
+}
+
 requested_version=${VERSION:-}
 no_modify_path=false
 binary_path=""
@@ -300,13 +318,16 @@ else
     fi
 
     if [ -z "$requested_version" ]; then
-        url="https://github.com/defai-digital/ax-code/releases/latest/download/$filename"
-        specific_version=$(curl -s https://api.github.com/repos/defai-digital/ax-code/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
-
-        if [[ $? -ne 0 || -z "$specific_version" ]]; then
+        # GitHub publishes CLI (`vX.Y.Z`) and Desktop (`desktop-vX.Y.Z`) as sibling
+        # releases. `/releases/latest` is whichever non-prerelease was published last,
+        # so a later Desktop workflow would 404 the CLI archive. List releases and
+        # take the first stable CLI tag (newest first), matching install.ps1.
+        specific_version="$(latest_cli_version)" || specific_version=""
+        if [ -z "$specific_version" ]; then
             echo -e "${RED}Failed to fetch version information${NC}"
             exit 1
         fi
+        url="https://github.com/defai-digital/ax-code/releases/download/v${specific_version}/$filename"
     else
         # Strip leading 'v' if present
         requested_version="${requested_version#v}"

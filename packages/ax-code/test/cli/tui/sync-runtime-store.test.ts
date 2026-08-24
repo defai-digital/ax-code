@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   normalizeDebugEngineState,
   normalizeIsolationState,
+  parseIsolationState,
   normalizeLspStatusState,
   normalizeMcpStatusState,
   normalizeRuntimeFlagState,
@@ -142,6 +143,24 @@ describe("tui sync runtime store", () => {
       mode: "workspace-write",
       network: false,
     })
+  })
+
+  test("parseIsolationState requires a recognized mode and does not coerce", () => {
+    expect(parseIsolationState({ mode: "read-only", network: false })).toEqual({
+      mode: "read-only",
+      network: false,
+    })
+    expect(parseIsolationState({ mode: "workspace-write", network: true })).toEqual({
+      mode: "workspace-write",
+      network: true,
+    })
+    expect(parseIsolationState({ mode: "full-access", network: false })).toEqual({
+      mode: "full-access",
+      network: true,
+    })
+    expect(parseIsolationState({ mode: "sudo", network: true })).toBeUndefined()
+    expect(parseIsolationState(null)).toBeUndefined()
+    expect(parseIsolationState({})).toBeUndefined()
   })
 
   test("normalizes runtime mcp and lsp status payload containers", () => {

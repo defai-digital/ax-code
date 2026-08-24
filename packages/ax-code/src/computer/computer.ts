@@ -399,6 +399,12 @@ export namespace Computer {
         if (action.from.kind === "element") count++
         if (action.to.kind === "element") count++
         break
+      case "move":
+        if (action.target.kind === "element") count++
+        break
+      case "wait":
+        if (action.condition.type !== "screen_stable" && action.condition.target.kind === "element") count++
+        break
     }
     return count
   }

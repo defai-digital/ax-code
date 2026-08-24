@@ -17,7 +17,14 @@ export const GITHUB_REPO_URL = `https://github.com/${GITHUB_REPO_SLUG}`
 /** New-issue page; callers append a `?template=` query as needed. */
 export const GITHUB_NEW_ISSUE_URL = `${GITHUB_REPO_URL}/issues/new`
 
-/** GitHub REST endpoint for the latest published release. */
+/** GitHub REST endpoint for recent published releases (newest first). */
+export const GITHUB_RELEASES_API_URL = `https://api.github.com/repos/${GITHUB_REPO_SLUG}/releases?per_page=50`
+
+/**
+ * GitHub REST endpoint for the latest published release.
+ * Prefer GITHUB_RELEASES_API_URL for CLI version resolution: `/latest` can be a
+ * desktop-v* sibling published after the matching CLI tag.
+ */
 export const GITHUB_LATEST_RELEASE_API_URL = `https://api.github.com/repos/${GITHUB_REPO_SLUG}/releases/latest`
 
 /** GitHub Action reference (`owner/repo/path`) used in generated workflow YAML. */

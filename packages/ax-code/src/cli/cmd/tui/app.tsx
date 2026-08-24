@@ -88,6 +88,8 @@ import { resolveSessionFirstRoute } from "./navigation/launch-policy"
 import { resolveDesktopHandoff } from "./navigation/desktop-handoff"
 import { launchWebUi } from "@/desktop/webui"
 import { formatTuiUpgradeCompleteMessage } from "./upgrade-check-view-model"
+import { parseIsolationState } from "./context/sync-runtime-store"
+import { parseJsonPayload } from "@/util/json-value"
 
 const FALLBACK_COLOR_MODE = "dark" as const
 
@@ -648,6 +650,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       if (!response.ok) {
         throw new Error(await responseErrorMessage(response))
       }
+      return parseJsonPayload(await response.text())
     } finally {
       cancelTimer()
       removeAbortListener?.()
@@ -1493,10 +1496,26 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         // the user send prompts during the async gap while the server still
         // enforces the previous mode, producing confusing isolation prompts.
         void putJsonWithTimeout("/isolation", { mode: next }, headers, { signal: controller.signal })
-          .then(() => {
+          .then((body) => {
             if (controller.signal.aborted || sandboxPutController !== controller) return
-            sync.set("isolation", "mode", next)
-            sync.set("isolation", "network", next === "full-access")
+            // PUT persists the project preference but reports the effective
+            // state: a CLI --sandbox / AX_CODE_ISOLATION_MODE override stays
+            // authoritative. Applying `next` would lie about the live sandbox.
+            const effective = parseIsolationState(body)
+            if (!effective) {
+              throw new Error("Sandbox setting was saved but the server returned an unexpected isolation state")
+            }
+            sync.set("isolation", "mode", effective.mode)
+            sync.set("isolation", "network", effective.network)
+            if (effective.mode !== next) {
+              toast.show({
+                message:
+                  "Sandbox stayed " +
+                  (effective.mode === "full-access" ? "off" : "on") +
+                  " because a CLI --sandbox or AX_CODE_ISOLATION_MODE override is in effect",
+                variant: "warning",
+              })
+            }
           })
           .catch((error) => {
             if (controller.signal.aborted || sandboxPutController !== controller) return

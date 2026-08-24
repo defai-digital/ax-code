@@ -288,6 +288,21 @@ describe("computer_action tool", () => {
     })
   })
 
+  test("element move and wait acts require a prior snapshot", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async ({ provider }) => {
+      await expect(Computer.act({ type: "move", target: { kind: "element", id: "e1:save-btn" } })).rejects.toThrow(
+        /computer_snapshot/,
+      )
+      await expect(
+        Computer.act({
+          type: "wait",
+          condition: { type: "element_visible", target: { kind: "element", id: "e1:save-btn" } },
+        }),
+      ).rejects.toThrow(/computer_snapshot/)
+      expect(provider.acts).toHaveLength(0)
+    })
+  })
+
   test("element id from another epoch is rejected as stale even when the raw id exists", async () => {
     await setup({ config: { computer: { provider: "cua" } } }, async ({ provider }) => {
       const snapshot = await ComputerSnapshotTool.init()
@@ -891,6 +906,43 @@ describe("computer routing overrides (Phase 3)", () => {
         // cua never received the act
         expect(cua.acts).toEqual([])
         expect(result.output).toContain("click element e1:save-btn: ok")
+      },
+    })
+  })
+
+  test("element move and wait acts are pinned to the observation's issuing session", async () => {
+    await using tmp = await tmpdir({
+      config: { computer: { provider: "cua", overrides: { Finder: "axnative" } } },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const cua = new FakeComputerProvider("cua")
+        const axnative = new FakeComputerProvider("axnative")
+        await Computer.useProvider({
+          providers: new Map([
+            ["cua", cua],
+            ["axnative", axnative],
+          ]),
+          default: "cua",
+          overrides: { Finder: "axnative" },
+        })
+
+        await Computer.observe({ app: "Finder" })
+        await Computer.act({ type: "move", target: { kind: "element", id: "e1:save-btn" } })
+        await Computer.act({
+          type: "wait",
+          condition: { type: "element_visible", target: { kind: "element", id: "e1:save-btn" } },
+        })
+
+        expect(axnative.acts).toEqual([
+          { type: "move", target: { kind: "element", id: "save-btn" } },
+          {
+            type: "wait",
+            condition: { type: "element_visible", target: { kind: "element", id: "save-btn" } },
+          },
+        ])
+        expect(cua.acts).toEqual([])
       },
     })
   })
