@@ -755,6 +755,21 @@ ensure_path_config_file() {
     return 1
 }
 
+ensure_path_config_file_at() {
+    local file="$1"
+
+    case "$file" in
+        "$HOME"/*|"$XDG_CONFIG_HOME"/*)
+            mkdir -p "$(dirname "$file")"
+            touch "$file"
+            echo "$file"
+            return 0
+        ;;
+    esac
+
+    return 1
+}
+
 link_installed_binary_on_path() {
     local resolved=""
     local path_entry=""
@@ -868,6 +883,21 @@ if [[ "$no_modify_path" != "true" ]]; then
                 print_message info "  export PATH=$INSTALL_DIR:\$PATH"
             ;;
         esac
+
+        # Cover both interactive and login shells. A clean macOS Terminal
+        # normally reads both zprofile and zshrc; Linux login shells read
+        # profile while interactive shells read bashrc.
+        secondary_config_file=""
+        case $current_shell in
+            zsh) secondary_config_file="${ZDOTDIR:-$HOME}/.zprofile" ;;
+            bash) secondary_config_file="$HOME/.profile" ;;
+        esac
+        if [ -n "$secondary_config_file" ] && [ "$secondary_config_file" != "$config_file" ]; then
+            secondary_config_file=$(ensure_path_config_file_at "$secondary_config_file" || true)
+            if [ -n "$secondary_config_file" ]; then
+                add_to_path "$secondary_config_file" "export PATH=$INSTALL_DIR:\$PATH"
+            fi
+        fi
     fi
 fi
 

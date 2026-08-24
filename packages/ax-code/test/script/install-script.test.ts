@@ -83,6 +83,8 @@ describe("install script", () => {
     expect(text).toContain("warn_if_not_on_current_path")
     expect(text).toContain("Open a new shell, or run: export PATH=${INSTALL_DIR}:\\$PATH")
     expect(text).not.toContain('elif [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]')
+    expect(text).toContain('zsh) secondary_config_file="${ZDOTDIR:-$HOME}/.zprofile"')
+    expect(text).toContain('bash) secondary_config_file="$HOME/.profile"')
   })
 
   test("does not link ax-code into the temporary bootstrap tool cache", async () => {

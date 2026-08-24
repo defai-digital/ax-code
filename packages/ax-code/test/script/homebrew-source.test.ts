@@ -13,6 +13,7 @@ const validateInstallMatrixInputsScript = path.join(repoRoot, ".github/scripts/v
 const assertRuntimeModeScript = path.join(repoRoot, ".github/scripts/assert-runtime-mode.sh")
 const axCodePackageJson = path.join(repoRoot, "packages/ax-code/package.json")
 const axCodeNodeTuiBuildScript = path.join(repoRoot, "packages/ax-code/script/build-node-tui.ts")
+const axCodeNodeLauncherScript = path.join(repoRoot, "packages/ax-code/script/node-launcher.ts")
 const axCodeCiWorkflow = path.join(repoRoot, ".github/workflows/ax-code-ci.yml")
 
 const retiredNpmDistributionFiles = [
@@ -335,10 +336,14 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("- homebrew")
     expect(text).toContain("- windows")
     expect(text).toContain("- linux")
-    expect(text).toContain("bash ./install --version")
+    expect(text).toContain("application/vnd.github.raw+json")
+    expect(text).toContain('| SHELL=/bin/zsh bash -s -- --version "$VERSION"')
+    expect(text).toContain('| SHELL=/bin/bash bash -s -- --version "$VERSION"')
     expect(text).toContain("ubuntu-24.04")
     expect(text).toContain("ubuntu-24.04-arm")
     expect(text).toContain("expected bundled Node runtime")
+    expect(text).toContain("expected a fresh login zsh")
+    expect(text).toContain("expected a fresh login bash")
     expect(text).toContain("brew install defai-digital/tap/ax-code")
     // Regression guard for issue #342: installing the Desktop cask next to
     // the CLI formula must not unlink the ax-code command. The cask installs
@@ -409,9 +414,11 @@ describe("distribution support guardrails", () => {
     expect(linuxJob![0]).toContain("set-isolated-home-env.sh")
     expect(linuxJob![0]).toContain("ubuntu-24.04")
     expect(linuxJob![0]).toContain("ubuntu-24.04-arm")
-    expect(linuxJob![0]).toContain("bash ./install --version")
+    expect(linuxJob![0]).toContain("application/vnd.github.raw+json")
+    expect(linuxJob![0]).toContain("/bin/bash -lic 'command -v ax-code'")
 
     expect(isolatedHome).toContain("AX_CODE_TEST_HOME")
+    expect(isolatedHome).toContain('echo "HOME=$BASE_HOME"')
     expect(isolatedHome).toContain("XDG_CONFIG_HOME")
     expect(isolatedHome).toContain("XDG_DATA_HOME")
     expect(text).toContain("AX_CODE_DISABLE_PROJECT_CONFIG")
@@ -466,7 +473,7 @@ describe("distribution support guardrails", () => {
   })
 
   test("release Unix launcher can use bundled node.exe from Windows zips", async () => {
-    const text = await readFile(axCodeNodeTuiBuildScript, "utf-8")
+    const text = await readFile(axCodeNodeLauncherScript, "utf-8")
     expect(text).toContain('"$dir/../node/bin/node"')
     expect(text).toContain('"$dir/../node/bin/node.exe"')
   })

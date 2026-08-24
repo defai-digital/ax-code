@@ -71,7 +71,7 @@ jobs:
       - name: Set isolated home paths
         shell: bash
         run: |
-          bash .github/scripts/set-isolated-home-env.sh "$RUNNER_TEMP/ax-code-macos-installer-smoke-home"
+          bash .github/scripts/set-isolated-home-env.sh "$RUNNER_TEMP/ax-code-macos-installer-smoke-home" true
 
       - name: Resolve version under test
         id: version
@@ -89,18 +89,25 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
-          bash ./install --version "$VERSION"
-          export PATH="$HOME/.ax-code/bin:$PATH"
-          RESOLVED="$(command -v ax-code)"
+          mkdir -p "$HOME/.rbenv/shims" "$HOME/.qoder/entry" "$HOME/.cache/ax-code/tools"
+          export PATH="$HOME/.rbenv/shims:$HOME/.qoder/entry:$HOME/.cache/ax-code/tools:$PATH"
+          INSTALLER_URL="https://api.github.com/repos/${{ github.repository }}/contents/install?ref=main"
+          curl -fsSL -H "Accept: application/vnd.github.raw+json" "$INSTALLER_URL" \
+            | SHELL=/bin/zsh bash -s -- --version "$VERSION"
+          RESOLVED="$(HOME="$HOME" /bin/zsh -lic 'command -v ax-code')"
           EXPECTED="$HOME/.ax-code/bin/ax-code"
           if [ "$RESOLVED" != "$EXPECTED" ]; then
-            echo "FAIL: expected installer-linked ax-code at $EXPECTED, got $RESOLVED"
+            echo "FAIL: expected a fresh login zsh to resolve $EXPECTED, got $RESOLVED"
             exit 1
           fi
+          test ! -e "$HOME/.rbenv/shims/ax-code"
+          test ! -e "$HOME/.qoder/entry/ax-code"
+          test ! -e "$HOME/.cache/ax-code/tools/ax-code"
           if [ ! -x "$HOME/.ax-code/node/bin/node" ]; then
             echo "FAIL: expected bundled Node runtime at $HOME/.ax-code/node/bin/node"
             exit 1
           fi
+          HOME="$HOME" /bin/zsh -lic 'ax-code --version'
           echo "$HOME/.ax-code/bin" >> "$GITHUB_PATH"
 
       - name: ax-code --version
@@ -264,7 +271,7 @@ jobs:
       - name: Set isolated home paths
         shell: bash
         run: |
-          bash .github/scripts/set-isolated-home-env.sh "$RUNNER_TEMP/ax-code-windows-smoke-home"
+          bash .github/scripts/set-isolated-home-env.sh "$RUNNER_TEMP/ax-code-windows-smoke-home" true
 
       - name: Resolve version under test
         id: version
@@ -392,7 +399,7 @@ jobs:
       - name: Set isolated home paths
         shell: bash
         run: |
-          bash .github/scripts/set-isolated-home-env.sh "$RUNNER_TEMP/ax-code-linux-smoke-home"
+          bash .github/scripts/set-isolated-home-env.sh "$RUNNER_TEMP/ax-code-linux-smoke-home" true
 
       - name: Resolve version under test
         id: version
@@ -410,26 +417,21 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
-          # Installer is repo-sourced so smoke tracks the current install script.
-          # It downloads the published Linux release archive and verifies with
-          # minisign (bootstraps pinned minisign when missing from PATH).
-          bash ./install --version "$VERSION"
-          RESOLVED="$(command -v ax-code)"
+          INSTALLER_URL="https://api.github.com/repos/${{ github.repository }}/contents/install?ref=main"
+          curl -fsSL -H "Accept: application/vnd.github.raw+json" "$INSTALLER_URL" \
+            | SHELL=/bin/bash bash -s -- --version "$VERSION"
+          RESOLVED="$(HOME="$HOME" /bin/bash -lic 'command -v ax-code')"
           echo "Resolved ax-code to $RESOLVED"
           EXPECTED="$HOME/.ax-code/bin/ax-code"
           if [ "$RESOLVED" != "$EXPECTED" ]; then
-            # Installer may not be first on PATH until a new shell; force PATH.
-            export PATH="$HOME/.ax-code/bin:$PATH"
-            RESOLVED="$(command -v ax-code)"
-          fi
-          if [ "$RESOLVED" != "$EXPECTED" ]; then
-            echo "FAIL: expected installer-linked ax-code at $EXPECTED, got $RESOLVED"
+            echo "FAIL: expected a fresh login bash to resolve $EXPECTED, got $RESOLVED"
             exit 1
           fi
           if [ ! -x "$HOME/.ax-code/node/bin/node" ]; then
             echo "FAIL: expected bundled Node runtime at $HOME/.ax-code/node/bin/node"
             exit 1
           fi
+          HOME="$HOME" /bin/bash -lic 'ax-code --version'
           echo "$HOME/.ax-code/bin" >> "$GITHUB_PATH"
 
       - name: ax-code --version
