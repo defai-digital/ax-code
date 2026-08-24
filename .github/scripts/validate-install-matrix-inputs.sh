@@ -10,9 +10,9 @@ if ! [[ "$VERSION" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z-]+)*$ ]]; then
 fi
 
 case "$CHANNEL" in
-  all|homebrew|windows|linux) ;;
+  all|macos|homebrew|windows|linux) ;;
   *)
-    echo "FAIL: channel must be one of [all, homebrew, windows, linux], got '$CHANNEL'"
+    echo "FAIL: channel must be one of [all, macos, homebrew, windows, linux], got '$CHANNEL'"
     exit 1
     ;;
 esac

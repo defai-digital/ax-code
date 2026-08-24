@@ -20,7 +20,7 @@ export type PublishGithubReleaseOptions = {
   allowNonMain: boolean
   skipWatch: boolean
   skipInstallSmoke: boolean
-  installChannel?: "all" | "homebrew" | "windows" | "linux"
+  installChannel?: "all" | "macos" | "homebrew" | "windows" | "linux"
 }
 
 type RunOptions = {
@@ -151,8 +151,15 @@ export function parsePublishGithubReleaseArgs(
 
   const version = normalizeVersion(parsed.values.version ?? packageVersion)
   const channel = parsed.values["install-channel"]
-  if (channel && channel !== "all" && channel !== "homebrew" && channel !== "windows" && channel !== "linux") {
-    throw new Error("--install-channel must be one of: all, homebrew, windows, linux")
+  if (
+    channel &&
+    channel !== "all" &&
+    channel !== "macos" &&
+    channel !== "homebrew" &&
+    channel !== "windows" &&
+    channel !== "linux"
+  ) {
+    throw new Error("--install-channel must be one of: all, macos, homebrew, windows, linux")
   }
 
   return {
@@ -185,7 +192,7 @@ Options:
   --allow-non-main            Allow publishing from a non-main branch
   --skip-watch                Do not watch the tag-driven release workflow
   --skip-install-smoke        Do not dispatch install-matrix-smoke.yml
-  --install-channel <channel> Install smoke channel: all, homebrew, windows, linux
+  --install-channel <channel> Install smoke channel: all, macos, homebrew, windows, linux
   --dry-run                   Print commands without mutating git or GitHub state
   -h, --help                  Show this help
 

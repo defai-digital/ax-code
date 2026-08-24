@@ -91,16 +91,14 @@ The output format above is verbatim from these commands; the session IDs and tas
 ## Get started
 
 ```bash
-# macOS
-brew install defai-digital/tap/ax-code
-brew install --cask defai-digital/tap/ax-code-desktop
+# macOS (Apple Silicon) and Ubuntu 24.04+
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 
 # Windows (CLI)
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
-
-# Ubuntu 24.04+ (CLI)
-curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 ```
+
+On macOS, Homebrew remains available as an alternative: `brew install defai-digital/tap/ax-code`.
 
 Then:
 
@@ -111,8 +109,6 @@ ax-code                  # open the terminal UI
 Connect a provider from the Desktop onboarding flow, with `/connect` in the terminal UI, or with `ax-code providers login`. No project setup or config file is required.
 
 Release archives are verified with minisign. Platform support, update paths, signature verification, contributor source builds, and troubleshooting live in [Installation and Runtime Channels](docs/getting-started/install-runtime.md).
-
-![Install AX Code with Homebrew](docs/images/install-homebrew-ax-code.gif)
 
 ## When AX Code fits
 

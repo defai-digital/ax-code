@@ -326,11 +326,12 @@ describe("distribution support guardrails", () => {
     expect(text).not.toContain("release workflow dispatches")
   })
 
-  test("install matrix supports Homebrew, Windows, and Linux without npm channels", async () => {
+  test("install matrix supports macOS installer, Homebrew, Windows, and Linux without npm channels", async () => {
     const text = await readFile(installMatrixWorkflow, "utf-8")
     const filterDispatchChannel = await readFile(filterDispatchChannelScript, "utf-8")
     const validateInputs = await readFile(validateInstallMatrixInputsScript, "utf-8")
-    // Supported non-npm channels: Homebrew (macOS), Windows install.ps1, Linux bash install.
+    // Supported non-npm channels: macOS/Linux bash installers, Homebrew, and Windows install.ps1.
+    expect(text).toContain("- macos")
     expect(text).toContain("- homebrew")
     expect(text).toContain("- windows")
     expect(text).toContain("- linux")
@@ -371,7 +372,7 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("id: channel")
     expect(filterDispatchChannel).toContain("enabled=false")
     expect(filterDispatchChannel).toContain('"all"')
-    expect(validateInputs).toContain("all|homebrew|windows|linux")
+    expect(validateInputs).toContain("all|macos|homebrew|windows|linux")
     expect(text).toContain("steps.channel.outputs.enabled == 'true'")
     expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "homebrew" doctor')
     expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "homebrew" backend')

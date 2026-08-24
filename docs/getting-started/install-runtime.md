@@ -2,24 +2,27 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-10
+Last reviewed: 2026-08-24
 Owner: ax-code runtime
 
 The root [README](../../README.md) keeps the primary install path. This page is the source of truth for supported CLI installer channels, `ax-code doctor` runtime labels, local launcher behavior, and how those channels relate to Desktop installers.
 
 ## Recommended Path
 
-Use a supported packaged installer unless you are developing from a checkout. Prefer Homebrew on macOS and the native PowerShell installer on Windows for the CLI.
+Use a supported packaged installer unless you are developing from a checkout. The release installer is the primary CLI path on macOS and Linux; use the native PowerShell installer on Windows.
 
 ```bash
-# Homebrew (macOS CLI)
-brew install defai-digital/tap/ax-code
+# Bash release installer (macOS Apple Silicon and Linux glibc)
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 
 # GitHub release installer (Windows PowerShell)
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
+```
 
-# Bash installer (Linux glibc, Ubuntu 24.04+ amd64/arm64)
-curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+Homebrew remains a supported alternative for the macOS CLI:
+
+```bash
+brew install defai-digital/tap/ax-code
 ```
 
 One-line remote execution is a convenience path. The Windows installer verifies the downloaded CLI ZIP with minisign after it starts, but `irm | iex` does not verify `install.ps1` itself before execution.
@@ -47,7 +50,7 @@ Verify the installed runtime:
 ax-code doctor
 ```
 
-Supported user installs should report `Runtime: Node vX.Y.Z (node-bundled)` on macOS Homebrew, Windows, and Linux (glibc).
+Supported user installs should report `Runtime: Node vX.Y.Z (node-bundled)` on macOS, Windows, and Linux (glibc).
 
 Desktop is installed through separate platform-specific channels:
 
@@ -65,7 +68,8 @@ Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**.
 
 | Channel                              | Install or setup command                                                                                                                            | Expected runtime label | Support status       | Use when                                                           |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------ |
-| Homebrew formula                     | `brew install defai-digital/tap/ax-code`                                                                                                            | `node-bundled`         | Supported            | Normal macOS package-manager install path                          |
+| macOS bash release installer         | `curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install \| bash`                                                           | `node-bundled`         | Supported on macOS   | Primary Apple Silicon user-local install path                      |
+| Homebrew formula                     | `brew install defai-digital/tap/ax-code`                                                                                                            | `node-bundled`         | Supported            | Alternative macOS package-manager install path                     |
 | Windows PowerShell release installer | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 \| iex"` | `node-bundled`         | Supported on Windows | Windows user-local install path                                    |
 | Windows release assets               | Download `ax-code-windows-*.zip` from GitHub releases                                                                                               | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
 | Linux bash release installer         | `curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install \| bash`                                                           | `node-bundled`         | Supported on Linux   | Ubuntu 24.04+ (glibc) amd64/arm64 user-local install path          |
@@ -83,9 +87,9 @@ Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**.
 
 ## Platform Policy
 
-- macOS: use Homebrew as the documented user path. Contributor builds use `pnpm run setup:cli`.
+- macOS: use the bash release installer as the primary documented CLI path. It installs under `~/.ax-code`, bootstraps pinned Minisign when needed, verifies the release archive, and does not require Homebrew. Contributor builds use `pnpm run setup:cli`.
 - Use fully qualified shared-tap commands such as `brew install defai-digital/tap/ax-code`. Homebrew taps
-  `defai-digital/tap` automatically, so the same one-line form works for users and CI.
+  `defai-digital/tap` automatically; this remains the supported package-manager alternative.
 - Linux CLI: use the bash installer for Ubuntu Desktop/Server **24.04 LTS** and newer on **amd64** and **arm64** (glibc). Release builds produce `ax-code-linux-x64.tar.gz` and `ax-code-linux-arm64.tar.gz` on Ubuntu 24.04 runners so the glibc baseline stays compatible with 24.04+. Musl (Alpine) is not supported by current release archives.
 - Linux Desktop: `desktop-v*` releases publish `.deb` and AppImage for **amd64/x86_64** and **arm64** (Ubuntu 24.04 glibc baseline). AppImage is the Linux auto-update channel (`latest-linux.yml` / `latest-linux-arm64.yml`). Install the CLI separately; Desktop sessions still require the local AX Code runtime.
 - macOS CLI archives: release builds publish `darwin-arm64` only (Apple Silicon). Intel macOS is not a supported install target for current CLI/Desktop packages.
@@ -122,13 +126,18 @@ irm https://github.com/defai-digital/ax-code/releases/download/v$env:AX_CODE_VER
 # Then add %USERPROFILE%\.ax-code\bin to the machine/user PATH via your MDM.
 ```
 
-### macOS (Homebrew / MDM)
+### macOS (user-local / Homebrew / MDM)
 
-Prefer the Homebrew formula and cask on managed Macs so updates track the taps:
+Use the release installer for a user-local CLI installation without Homebrew:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+```
+
+Managed Macs can use the Homebrew formula so CLI updates track the tap:
 
 ```bash
 brew install defai-digital/tap/ax-code
-brew install --cask defai-digital/tap/ax-code-desktop
 ```
 
 For MDM-packaged DMG installs, use the notarized `AX-Code-*-mac-arm64.dmg` from GitHub Releases and verify the detached `.minisig` when policy requires supply-chain checks.
