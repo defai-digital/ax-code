@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.8.1] - 2026-08-24
+
+### Changed
+
+- Invalidate coalesced auth reads after credential writes.
+- Make Desktop UI build wait for generated SDK types.
+- Speed CI with pnpm cache, cancel-in-progress, and Desktop split.
+- Treat --rerun-on-fail as last-run-wins.
+- Drop V8 coverage from the required deterministic CI job.
+- Persist per-agent model overrides across TUI restarts.
+- Skip V8 coverage on GitHub Actions unless AX_TEST_COVERAGE=1.
+- Overlap deterministic shards when coverage is off.
+
+### Fixed
+
+- Fix prompt-cache token waste by separating stable/dynamic system blocks.
+
 ## [7.8.0] - 2026-08-24
 
 ### Changed
