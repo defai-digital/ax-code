@@ -54,7 +54,12 @@ function matchesIgnore(rule: IgnoreRule, entry: ListedEntry) {
   const rel = entry.path
   if (normalized.endsWith("/")) {
     const dir = normalized.slice(0, -1)
-    return rel === dir || rel.startsWith(`${dir}/`)
+    if (rel === dir || rel.startsWith(`${dir}/`)) return true
+    // Noise directories must be skipped at ANY depth — ls.txt documents
+    // them as "always skipped". A top-level-only match would let a DFS
+    // expand nested node_modules/target/dist trees in monorepos and eat
+    // the 100-entry budget before real source directories are listed.
+    return rel.split("/").includes(dir)
   }
   if (rel === normalized || rel.startsWith(`${normalized}/`)) return true
   if (minimatch(rel, normalized, { dot: true })) return true
