@@ -4,6 +4,8 @@ node_modules
 .sst
 .env
 .idea
+# Personal VS Code files stay local. settings.json is shared workspace config
+# (TS heap, workspace tsdk, tsgo, rust-analyzer crate root) and has no secrets.
 .vscode/*
 !.vscode/settings.json
 .codex

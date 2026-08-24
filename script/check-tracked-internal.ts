@@ -13,10 +13,10 @@ const tracked = result.stdout
   .map((line) => line.trim())
   .filter(Boolean)
 const unapproved = unapprovedTrackedInternalPaths(tracked)
-if (unapproved.length > 0) {
-  console.error("Unapproved internal-only files are tracked:")
-  for (const file of unapproved) console.error(`- ${file}`)
+if (unapproved.length > 0 || tracked.length > 0) {
+  console.error("Internal-only files must not be tracked:")
+  for (const file of unapproved.length > 0 ? unapproved : tracked) console.error(`- ${file}`)
   process.exit(1)
 }
 
-console.log(`Tracked internal architecture allowlist verified (${tracked.length} files)`)
+console.log("No .internal files are tracked")

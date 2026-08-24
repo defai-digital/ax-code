@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process"
+import { readFileSync } from "node:fs"
 import { describe, expect, test } from "vitest"
 import {
   APPROVED_TRACKED_INTERNAL_FILES,
@@ -22,19 +24,29 @@ describe("repository internal-only path policy", () => {
     expect(isInternalOnlyPath(".internal\\reports\\qa\\self-scan.md")).toBe(true)
   })
 
-  test("allows only the explicitly approved architecture records", () => {
-    expect(APPROVED_TRACKED_INTERNAL_FILES).toHaveLength(14)
-    expect(isApprovedTrackedInternalPath("./.internal/adr/ADR-058-ax-code-tui.md")).toBe(true)
-    expect(isApprovedTrackedInternalPath(".internal\\prd\\PRD-2026-08-20-ax-code-tui.md")).toBe(true)
-    expect(isApprovedTrackedInternalPath("./.internal/adr/ADR-060-instance-scoped-tool-execution.md")).toBe(true)
-    expect(isApprovedTrackedInternalPath(".internal\\spec\\SPEC-2026-08-21-tool-execution-integrity.md")).toBe(true)
+  test("approves no .internal paths for version control", () => {
+    expect(APPROVED_TRACKED_INTERNAL_FILES).toEqual([])
+    expect(isApprovedTrackedInternalPath(".internal/adr/ADR-058-ax-code-tui.md")).toBe(false)
+    expect(isApprovedTrackedInternalPath(".internal\\prd\\PRD-2026-08-20-ax-code-tui.md")).toBe(false)
+    expect(unapprovedTrackedInternalPaths([".internal/reports/qa/self-scan.md"])).toEqual([
+      ".internal/reports/qa/self-scan.md",
+    ])
+  })
+})
+
+describe("shared editor config", () => {
+  test("publishes only workspace VS Code settings, with no secret-like keys", () => {
+    const result = spawnSync("git", ["ls-files", ".vscode"], { encoding: "utf8" })
+    expect(result.status).toBe(0)
     expect(
-      isApprovedTrackedInternalPath(".internal/prd/complete/PRD-2026-08-21-ax-code-intel-stabilization-acceleration.md"),
-    ).toBe(true)
-    expect(isApprovedTrackedInternalPath(".internal/prd/complete/PRD-2026-08-22-ax-code-reason-stabilization.md")).toBe(true)
-    expect(isApprovedTrackedInternalPath(".internal/reports/qa/self-scan.md")).toBe(false)
-    expect(
-      unapprovedTrackedInternalPaths([...APPROVED_TRACKED_INTERNAL_FILES, ".internal/reports/qa/self-scan.md"]),
-    ).toEqual([".internal/reports/qa/self-scan.md"])
+      result.stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean),
+    ).toEqual([".vscode/settings.json"])
+    const settings = readFileSync(".vscode/settings.json", "utf8")
+    expect(settings).toContain("typescript.tsdk")
+    expect(settings).toContain("rust-analyzer.linkedProjects")
+    expect(settings).not.toMatch(/token|password|secret|api[_-]?key/i)
   })
 })
