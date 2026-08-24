@@ -323,19 +323,20 @@ export function mergeSubagentRollupTasks(
   // task (running/pending) supersedes an ended one for the same key, so a
   // completed/error tool part never shadows a newly queued or running row.
   // Between two equally-live entries the tool part (listed first) wins.
-  const best = new Map<string, SubagentRollupTask>()
+  // Local scratch keyed by the finite input; not a long-lived cache.
+  const best: Record<string, SubagentRollupTask> = Object.create(null)
   for (const task of ordered) {
     const key = task.sessionID ?? `unbound:${task.id}`
-    const current = best.get(key)
+    const current = best[key]
     if (!current) {
-      best.set(key, task)
+      best[key] = task
       continue
     }
-    if (taskIsActive(task.status) && !taskIsActive(current.status)) best.set(key, task)
+    if (taskIsActive(task.status) && !taskIsActive(current.status)) best[key] = task
   }
   return ordered.filter((task) => {
     const key = task.sessionID ?? `unbound:${task.id}`
-    return best.get(key) === task
+    return best[key] === task
   })
 }
 
