@@ -146,6 +146,40 @@ describe("coalesceStreamEvents", () => {
     expect(merged[0]?.properties?.delta).toBe("ab")
     expect(merged[1]?.properties?.delta).toBe("cd")
   })
+
+  test("keeps a backwards-jump delta separate instead of dropping its text", () => {
+    const merged = coalesceStreamEvents([
+      {
+        type: "message.part.delta",
+        properties: { messageID: "m1", partID: "p1", field: "text", delta: "abc", offset: 5 },
+      },
+      {
+        type: "message.part.delta",
+        properties: { messageID: "m1", partID: "p1", field: "text", delta: "hello", offset: 0 },
+      },
+    ])
+
+    expect(merged).toHaveLength(2)
+    expect(merged[0]?.properties?.delta).toBe("abc")
+    expect(merged[1]?.properties?.delta).toBe("hello")
+  })
+
+  test("keeps a mixed-offset delta separate instead of duplicating text", () => {
+    const merged = coalesceStreamEvents([
+      {
+        type: "message.part.delta",
+        properties: { messageID: "m1", partID: "p1", field: "text", delta: "abc", offset: 0 },
+      },
+      {
+        type: "message.part.delta",
+        properties: { messageID: "m1", partID: "p1", field: "text", delta: "abc" },
+      },
+    ])
+
+    expect(merged).toHaveLength(2)
+    expect(merged[0]?.properties?.delta).toBe("abc")
+    expect(merged[1]?.properties?.delta).toBe("abc")
+  })
 })
 
 describe("createStreamDeltaCoalescer", () => {

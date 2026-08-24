@@ -47,7 +47,7 @@ function mergeDelta(into: StreamEventLike, from: StreamEventLike): StreamEventLi
   const fromDelta = String(fromProps.delta ?? "")
   const intoOffset = typeof intoProps.offset === "number" ? intoProps.offset : undefined
   const fromOffset = typeof fromProps.offset === "number" ? fromProps.offset : undefined
-  if (intoOffset === undefined || fromOffset === undefined) {
+  if (intoOffset === undefined && fromOffset === undefined) {
     // Legacy producers without offsets: concatenate as before.
     return {
       ...into,
@@ -57,8 +57,17 @@ function mergeDelta(into: StreamEventLike, from: StreamEventLike): StreamEventLi
       },
     }
   }
+  if (intoOffset === undefined || fromOffset === undefined) {
+    // Mixed producers (one side carries an offset, the other doesn't): the
+    // offset and text disagree on where the delta lives, so blind concat would
+    // duplicate text. Keep both events so the projection sees the extra one.
+    return undefined
+  }
   const intoEnd = intoOffset + intoDelta.length
-  if (fromOffset > intoEnd) return undefined
+  // A delta that starts before the accumulated window (retransmit / rewind)
+  // is a backwards gap: merging it would compute a bogus overlap and silently
+  // drop its text. Treat forward and backward gaps alike as non-mergeable.
+  if (fromOffset > intoEnd || fromOffset < intoOffset) return undefined
   const overlap = intoEnd - fromOffset
   const appended = overlap >= fromDelta.length ? "" : fromDelta.slice(overlap)
   return {
