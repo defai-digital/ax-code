@@ -1,4 +1,9 @@
-import { providerModelKey, providerModelList, type ProviderModelKeyInput } from "@/provider/model-key"
+import {
+  isProviderModelKeyInput,
+  providerModelKey,
+  providerModelList,
+  type ProviderModelKeyInput,
+} from "@/provider/model-key"
 import { modelSelectableForProvider } from "@/provider/model-selectability"
 
 export const RECENT_MODEL_LIMIT = 5
@@ -20,6 +25,7 @@ export function modelPreferenceStatus(
 }
 
 export type ModelPreferenceStore = {
+  model: Record<string, ProviderModelKeyInput>
   recent: ProviderModelKeyInput[]
   favorite: ProviderModelKeyInput[]
   variant: Record<string, string | undefined>
@@ -58,6 +64,16 @@ export function modelIdentity(model: ProviderModelKeyInput) {
 
 export function normalizeRecentModels(input: unknown): ProviderModelKeyInput[] {
   return providerModelList(input).slice(0, RECENT_MODEL_LIMIT).map(modelIdentity)
+}
+
+export function normalizeModelOverrides(input: unknown): Record<string, ProviderModelKeyInput> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {}
+  return Object.fromEntries(
+    Object.entries(input).filter((entry): entry is [string, ProviderModelKeyInput] => {
+      const [key, value] = entry
+      return typeof key === "string" && key.length > 0 && isProviderModelKeyInput(value)
+    }),
+  )
 }
 
 export function rememberRecentModel(
@@ -118,11 +134,26 @@ function sameVariantStore(left: Record<string, string | undefined>, right: Recor
   return leftEntries.every(([key, value]) => right[key] === value)
 }
 
+function sameModelOverrides(left: Record<string, ProviderModelKeyInput>, right: Record<string, ProviderModelKeyInput>) {
+  const leftEntries = Object.entries(left)
+  const rightEntries = Object.entries(right)
+  if (leftEntries.length !== rightEntries.length) return false
+  return leftEntries.every(([key, value]) => {
+    const other = right[key]
+    return other !== undefined && value.providerID === other.providerID && value.modelID === other.modelID
+  })
+}
+
 export function pruneModelPreferences(
   input: ModelPreferenceStore,
   modelStatus: (model: ProviderModelKeyInput) => ModelPreferenceStatus,
   variantStatus: (model: ProviderModelKeyInput, variant: string | undefined) => ModelPreferenceStatus = modelStatus,
 ): ModelPreferenceStore & { changed: boolean } {
+  const model = Object.fromEntries(
+    Object.entries(input.model)
+      .filter(([_, value]) => modelStatus(value) !== "invalid")
+      .map(([key, value]) => [key, modelIdentity(value)]),
+  )
   const recent = filterKnownModels(input.recent, modelStatus, RECENT_MODEL_LIMIT)
   const favorite = filterKnownModels(input.favorite, modelStatus)
   const variant = Object.fromEntries(
@@ -132,10 +163,12 @@ export function pruneModelPreferences(
     }),
   )
   return {
+    model,
     recent,
     favorite,
     variant,
     changed:
+      !sameModelOverrides(input.model, model) ||
       !sameModelList(input.recent, recent) ||
       !sameModelList(input.favorite, favorite) ||
       !sameVariantStore(input.variant, variant),

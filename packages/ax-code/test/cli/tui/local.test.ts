@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   RECENT_MODEL_LIMIT,
   modelPreferenceStatus,
+  normalizeModelOverrides,
   normalizeModelVariantStore,
   normalizeRecentModels,
   pruneModelPreferences,
@@ -72,6 +73,27 @@ describe("tui local model preferences", () => {
     expect(normalizeModelVariantStore("openai/gpt-5")).toEqual({})
   })
 
+  test("normalizes stored per-agent model overrides to valid entries", () => {
+    expect(
+      normalizeModelOverrides({
+        build: model(1),
+        plan: { providerID: "provider", modelID: "model-2" },
+        bad: "not-an-object",
+        empty: "",
+        nested: { value: "bad" },
+      }),
+    ).toEqual({
+      build: model(1),
+      plan: { providerID: "provider", modelID: "model-2" },
+    })
+  })
+
+  test("rejects non-object or array model override stores", () => {
+    expect(normalizeModelOverrides(null)).toEqual({})
+    expect(normalizeModelOverrides([model(1)])).toEqual({})
+    expect(normalizeModelOverrides("openai/gpt-5")).toEqual({})
+  })
+
   test("normalizes stored recent models to the most recent five entries", () => {
     expect(normalizeRecentModels([model(1), model(2), model(3), model(4), model(5), model(6)])).toEqual([
       model(1),
@@ -93,6 +115,11 @@ describe("tui local model preferences", () => {
     const valid = new Set(["provider/model-1", "provider/model-3", "openrouter/vendor/model"])
     const result = pruneModelPreferences(
       {
+        model: {
+          build: model(1),
+          plan: { providerID: "missing", modelID: "model-2" },
+          explore: model(3),
+        },
         recent: [model(1), { providerID: "missing", modelID: "model-2" }, model(3), model(1)],
         favorite: [model(3), { providerID: "missing", modelID: "model-4" }],
         variant: {
@@ -105,6 +132,10 @@ describe("tui local model preferences", () => {
       (item) => (valid.has(`${item.providerID}/${item.modelID}`) ? "valid" : "invalid"),
     )
 
+    expect(result.model).toEqual({
+      build: model(1),
+      explore: model(3),
+    })
     expect(result.recent).toEqual([model(1), model(3)])
     expect(result.favorite).toEqual([model(3)])
     expect(result.variant).toEqual({
@@ -133,6 +164,10 @@ describe("tui local model preferences", () => {
     ]
     const result = pruneModelPreferences(
       {
+        model: {
+          build: discovered,
+          plan: invalid,
+        },
         recent: [discovered, invalid, model(1)],
         favorite: [discovered, invalid],
         variant: {
@@ -144,6 +179,9 @@ describe("tui local model preferences", () => {
       (item) => modelPreferenceStatus(providers, item),
     )
 
+    expect(result.model).toEqual({
+      build: discovered,
+    })
     expect(result.recent).toEqual([discovered, model(1)])
     expect(result.favorite).toEqual([discovered])
     expect(result.variant).toEqual({
@@ -160,6 +198,9 @@ describe("tui local model preferences", () => {
     ])
     const result = pruneModelPreferences(
       {
+        model: {
+          build: model(1),
+        },
         recent: [model(1), model(2), model(3)],
         favorite: [model(1)],
         variant: {
@@ -175,6 +216,9 @@ describe("tui local model preferences", () => {
       },
     )
 
+    expect(result.model).toEqual({
+      build: model(1),
+    })
     expect(result.recent).toEqual([model(1), model(2), model(3)])
     expect(result.favorite).toEqual([model(1)])
     expect(result.variant).toEqual({

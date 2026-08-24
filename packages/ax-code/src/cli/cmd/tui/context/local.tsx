@@ -24,6 +24,7 @@ import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui
 import {
   modelIdentity,
   modelPreferenceStatus as resolveModelPreferenceStatus,
+  normalizeModelOverrides,
   normalizeModelVariantStore,
   normalizeRecentModels,
   pruneModelPreferences,
@@ -218,6 +219,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         }
         state.pending = false
         void Filesystem.writeJson(filePath, {
+          model: modelStore.model,
           recent: modelStore.recent,
           favorite: modelStore.favorite,
           variant: modelStore.variant,
@@ -257,6 +259,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             }
             return
           }
+          setModelStore("model", normalizeModelOverrides(result.value?.model))
           setModelStore("recent", normalizeRecentModels(result.value?.recent))
           setModelStore("favorite", providerModelList(result.value?.favorite))
           setModelStore("variant", normalizeModelVariantStore(result.value?.variant))
@@ -318,28 +321,14 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         )
       })
 
-      // Re-validate per-agent model overrides when providers finish loading.
+      // Re-validate stored model preferences when providers finish loading.
       // Models set before `provider_loaded` were stored without validation;
       // this clears any that turned out to be invalid once provider data arrives.
       createEffect(() => {
         if (!sync.data.provider_loaded) return
-        for (const [agentName, storedModel] of Object.entries(modelStore.model)) {
-          if (!storedModel) continue
-          if (modelPreferenceStatus(storedModel) === "invalid") {
-            log.info("removing invalid model override after providers loaded", {
-              agentName,
-              providerID: storedModel.providerID,
-              modelID: storedModel.modelID,
-            })
-            setModelStore("model", (prev) => {
-              const next = { ...prev }
-              delete next[agentName]
-              return next
-            })
-          }
-        }
         const pruned = pruneModelPreferences(
           {
+            model: modelStore.model,
             recent: modelStore.recent,
             favorite: modelStore.favorite,
             variant: modelStore.variant,
@@ -348,12 +337,24 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           variantPreferenceStatus,
         )
         if (pruned.changed) {
+          for (const agentName of Object.keys(modelStore.model)) {
+            if (Object.hasOwn(pruned.model, agentName)) continue
+            const storedModel = modelStore.model[agentName]
+            log.info("removing invalid model override after providers loaded", {
+              agentName,
+              providerID: storedModel?.providerID,
+              modelID: storedModel?.modelID,
+            })
+          }
           log.info("removing invalid stored model preferences after providers loaded", {
+            modelBefore: Object.keys(modelStore.model).length,
+            modelAfter: Object.keys(pruned.model).length,
             recentBefore: modelStore.recent.length,
             recentAfter: pruned.recent.length,
             favoriteBefore: modelStore.favorite.length,
             favoriteAfter: pruned.favorite.length,
           })
+          setModelStore("model", pruned.model)
           setModelStore("recent", pruned.recent)
           setModelStore("favorite", pruned.favorite)
           setModelStore("variant", pruned.variant)
