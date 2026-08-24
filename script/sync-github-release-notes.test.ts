@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { planReleaseUpdates } from "./sync-github-release-notes.mjs"
+import { parseReleasesNdjson, planReleaseUpdates } from "./sync-github-release-notes.mjs"
 
 const changelog = `# Changelog
 
@@ -15,6 +15,27 @@ const changelog = `# Changelog
 
 - Finish upgrade verification.
 `
+
+describe("parseReleasesNdjson", () => {
+  test("parses paginated NDJSON without touching bracket sequences in bodies", () => {
+    const body = "Compare [CLI][cli] with [Desktop][desktop].\nSee [notes][ref] too."
+    const raw = [
+      JSON.stringify({ tag_name: "v7.7.0", name: "v7.7.0", body, draft: false }),
+      JSON.stringify({ tag_name: "desktop-v7.7.0", name: "v7.7.0", body: "ok", draft: false }),
+    ].join("\n")
+    const releases = parseReleasesNdjson(raw)
+    expect(releases).toHaveLength(2)
+    expect(releases[0].body).toBe(body)
+  })
+
+  test("parses a single line and ignores blank lines", () => {
+    const releases = parseReleasesNdjson(
+      `\n${JSON.stringify({ tag_name: "v1.0.0", name: "v1.0.0", body: "", draft: false })}\n\n`,
+    )
+    expect(releases).toHaveLength(1)
+    expect(releases[0].tag_name).toBe("v1.0.0")
+  })
+})
 
 describe("planReleaseUpdates", () => {
   test("titles CLI and Desktop releases and fills missing changelog notes", () => {

@@ -206,13 +206,33 @@ function requireKeyFiles(options: ResignOptions) {
   if (!fs.existsSync(options.publicKey)) throw new Error(`Public key not found: ${options.publicKey}`)
 }
 
+function readStdinLine(): string {
+  // `read` cannot be spawned portably: on Linux it is a shell builtin (no
+  // executable on PATH), and macOS's /usr/bin/read stores the line in a
+  // variable inside the child process — either way spawnSync("read") never
+  // returns the user's answer. Read the inherited stdin fd directly instead.
+  const buffer = Buffer.alloc(256)
+  let length = 0
+  try {
+    while (length < buffer.length) {
+      const bytesRead = fs.readSync(0, buffer, length, 1, null)
+      if (bytesRead === 0) break
+      length += bytesRead
+      const byte = buffer[length - 1]
+      if (byte === 0x0a || byte === 0x0d) break
+    }
+  } catch {
+    // stdin unavailable (closed or non-blocking); treat as no answer
+  }
+  return buffer.subarray(0, length).toString("utf8")
+}
+
 function confirmDestructive(options: ResignOptions, tags: string[]): boolean {
   if (options.yes || options.dryRun || options.skipUpload) return true
   process.stdout.write(
     `This will overwrite published .minisig assets for ${tags.length} release(s): ${tags.join(", ")}.\nContinue? [y/N] `,
   )
-  const answer = childProcess.spawnSync("read", ["line"], { stdio: ["inherit", "pipe", "inherit"], encoding: "utf8" })
-  const reply = typeof answer.stdout === "string" ? answer.stdout.trim().toLowerCase() : ""
+  const reply = readStdinLine().trim().toLowerCase()
   return reply === "y" || reply === "yes"
 }
 

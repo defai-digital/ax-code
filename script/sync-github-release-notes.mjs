@@ -46,9 +46,23 @@ function runGh(args, options = {}) {
   return result.stdout
 }
 
+export function parseReleasesNdjson(raw) {
+  // gh api --paginate --jq '.[]' emits one compact JSON object per line
+  // across all pages. Line-wise JSON.parse keeps release bodies verbatim.
+  return raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+}
+
 function loadReleases(repo) {
-  const raw = runGh(["api", `repos/${repo}/releases?per_page=100`, "--paginate"])
-  const parsed = JSON.parse(raw.replace(/\]\s*\[/g, ","))
+  // The previous page merge (`raw.replace(/\]\s*\[/g, ",")`) was not
+  // JSON-aware: any "][" inside a release body (e.g. Markdown reference
+  // links like [text][ref]) was rewritten to "," before parsing, silently
+  // corrupting notes that --apply would then write back to GitHub.
+  const raw = runGh(["api", `repos/${repo}/releases?per_page=100`, "--paginate", "--jq", ".[]"])
+  const parsed = parseReleasesNdjson(raw)
   if (!Array.isArray(parsed)) throw new Error("GitHub releases response was not an array")
   return parsed
 }

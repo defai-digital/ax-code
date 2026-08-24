@@ -12,10 +12,14 @@ describe("winget manifest generator", () => {
     expect(parseArgs(["--version", "1.2.3", "--package", "desktop", "--tag", "desktop-v1.2.3-rc"]).tag).toBe(
       "desktop-v1.2.3-rc",
     )
+    // "all" mode derives per-package tags in main() instead of one shared tag.
+    expect(parseArgs(["--version", "7.7.9"]).tag).toBe("")
     expect(shouldWriteCli("cli")).toBe(true)
     expect(shouldWriteDesktop("cli")).toBe(false)
     expect(shouldWriteCli("desktop")).toBe(false)
     expect(shouldWriteDesktop("desktop")).toBe(true)
+    expect(shouldWriteCli("all")).toBe(true)
+    expect(shouldWriteDesktop("all")).toBe(true)
   })
 
   test("writes Desktop and CLI manifest folders with --skip-download", () => {
@@ -54,11 +58,16 @@ describe("winget manifest generator", () => {
       expect(installer).toContain("AX-Code-9.9.9-win-arm64.exe")
       expect(installer).toContain("InstallerType: nullsoft")
       expect(installer).toContain("silent")
+      // Regression: "all" mode must derive desktop-v* for desktop assets…
+      expect(installer).toContain("/releases/download/desktop-v9.9.9/")
+      expect(installer).not.toContain("/releases/download/v9.9.9/")
 
       const cliInstaller = readFileSync(path.join(cliDir, "DEFAI.AXCode.installer.yaml"), "utf8")
       expect(cliInstaller).toContain("ax-code-windows-x64.zip")
       expect(cliInstaller).toContain("ax-code-windows-arm64.zip")
       expect(cliInstaller).toContain("PortableCommandAlias: ax-code")
+      // …while CLI assets stay on v*.
+      expect(cliInstaller).toContain("/releases/download/v9.9.9/")
     } finally {
       rmSync(out, { recursive: true, force: true })
     }

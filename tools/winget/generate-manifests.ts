@@ -32,7 +32,11 @@ export type Args = {
   out: string
   skipDownload: boolean
   package: PackageKind
-  /** GitHub release tag for asset URLs (e.g. v7.1.0 or desktop-v1.3.0). */
+  /**
+   * Explicit GitHub release tag override for asset URLs (e.g. v7.1.0 or
+   * desktop-v1.3.0). Empty unless --tag was passed; in "all" mode each
+   * package derives its own tag (CLI: v*, desktop: desktop-v*) in main().
+   */
   tag: string
 }
 
@@ -70,8 +74,11 @@ export function parseArgs(argv: string[]): Args {
   }
   const normalizedVersion = version.replace(/^v/, "").replace(/^desktop-v/, "")
   if (!tag) {
-    // Desktop releases use desktop-v*; CLI releases use v*.
-    tag = pkg === "desktop" ? `desktop-v${normalizedVersion}` : `v${normalizedVersion}`
+    // Desktop releases use desktop-v*; CLI releases use v*. In "all" mode
+    // leave the tag empty here so main() derives one per package — a single
+    // derived tag would point desktop installer URLs at the CLI release tag.
+    if (pkg === "desktop") tag = `desktop-v${normalizedVersion}`
+    else if (pkg === "cli") tag = `v${normalizedVersion}`
   }
   return { version: normalizedVersion, out, skipDownload, package: pkg, tag }
 }
@@ -142,7 +149,13 @@ function packageLocale(opts: {
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   const version = args.version
-  const releaseBase = `https://github.com/${REPO}/releases/download/${args.tag}`
+  // Desktop assets publish under desktop-v* and CLI assets under v*. Derive
+  // a per-package base so "all" mode does not point desktop installers at
+  // the CLI release tag (which 404s on download and writes wrong
+  // InstallerUrl values under --skip-download).
+  const cliBase = `https://github.com/${REPO}/releases/download/${args.tag || `v${version}`}`
+  const desktopBase = `https://github.com/${REPO}/releases/download/${args.tag || `desktop-v${version}`}`
+  const releaseBaseFor = (pkg: PackageKind) => (pkg === "desktop" ? desktopBase : cliBase)
   const writeCli = shouldWriteCli(args.package)
   const writeDesktop = shouldWriteDesktop(args.package)
 
@@ -155,15 +168,19 @@ async function main() {
     { arch: "arm64", file: `ax-code-windows-arm64.zip`, installerType: "zip" as const },
   ]
 
-  const assetsToHash = [...(writeDesktop ? desktopAssets : []), ...(writeCli ? cliAssets : [])]
+  const assetsToHash: Array<{ pkg: PackageKind; file: string }> = [
+    ...(writeDesktop ? desktopAssets.map((asset) => ({ pkg: "desktop" as const, file: asset.file })) : []),
+    ...(writeCli ? cliAssets.map((asset) => ({ pkg: "cli" as const, file: asset.file })) : []),
+  ]
 
-  console.log(`Generating winget manifests for ${args.tag} (package=${args.package})`)
+  const tagSummary = args.tag || `cli tag v${version}, desktop tag desktop-v${version}`
+  console.log(`Generating winget manifests for ${tagSummary} (package=${args.package})`)
   console.log(`Output: ${args.out}`)
 
   const hashes = new Map<string, string>()
   if (!args.skipDownload) {
     for (const asset of assetsToHash) {
-      const url = `${releaseBase}/${asset.file}`
+      const url = `${releaseBaseFor(asset.pkg)}/${asset.file}`
       process.stdout.write(`  hashing ${asset.file} ... `)
       const hash = await sha256Url(url)
       hashes.set(asset.file, hash)
@@ -208,7 +225,7 @@ async function main() {
 
     const desktopInstallers = desktopAssets
       .map((asset) => {
-        const url = `${releaseBase}/${asset.file}`
+        const url = `${desktopBase}/${asset.file}`
         const hash = hashes.get(asset.file)!
         return [
           `  - Architecture: ${asset.arch}`,
@@ -280,7 +297,7 @@ async function main() {
 
     const cliInstallers = cliAssets
       .map((asset) => {
-        const url = `${releaseBase}/${asset.file}`
+        const url = `${cliBase}/${asset.file}`
         const hash = hashes.get(asset.file)!
         return [
           `  - Architecture: ${asset.arch}`,
