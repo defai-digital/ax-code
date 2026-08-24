@@ -656,8 +656,14 @@ handleCommand("desktop_set_launch_at_login", async (args) => {
   return { enabled: Boolean(enabled), supported: true }
 })
 
-handleCommand("desktop_check_for_updates", async () => {
-  if (!shouldCheckForUpdatesOnStartup()) {
+handleCommand("desktop_check_for_updates", async (args) => {
+  // The startup auto-update policy only gates automatic checks (the startup
+  // warm-up below and the renderer's periodic poll). A manual "Check for
+  // updates" click must still run, otherwise managed fleets would silently
+  // lose the ability to update at all — and the renderer would misreport "up
+  // to date" because it drops the `disabled` flag.
+  const manual = Boolean(args?.manual)
+  if (!manual && !shouldCheckForUpdatesOnStartup()) {
     return { available: false, currentVersion: app.getVersion(), disabled: true }
   }
   try {

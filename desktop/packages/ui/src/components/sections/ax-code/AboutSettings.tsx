@@ -70,7 +70,7 @@ export const AboutSettings: React.FC = () => {
 
           {canCheckNativeUpdates && !updateStore.available && !updateStore.error && (
             <button
-              onClick={() => updateStore.checkForUpdates()}
+              onClick={() => updateStore.checkForUpdates({ manual: true })}
               disabled={isChecking}
               className={cn(
                 "typography-meta text-muted-foreground/60 hover:text-muted-foreground disabled:cursor-default",
@@ -183,7 +183,7 @@ export const AboutSettings: React.FC = () => {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => updateStore.checkForUpdates()}
+                onClick={() => updateStore.checkForUpdates({ manual: true })}
                 disabled={updateStore.checking}
               >
                 {t("settings.openchamber.about.actions.checkForUpdates")}

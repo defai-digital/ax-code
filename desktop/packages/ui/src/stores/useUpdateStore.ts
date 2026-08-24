@@ -30,7 +30,7 @@ export type UpdateState = {
 }
 
 interface UpdateStore extends UpdateState {
-  checkForUpdates: () => Promise<number | null>
+  checkForUpdates: (opts?: { manual?: boolean }) => Promise<number | null>
   downloadUpdate: () => Promise<void>
   restartToUpdate: () => Promise<void>
   dismiss: () => void
@@ -68,7 +68,7 @@ const initialState: UpdateState = {
 export const useUpdateStore = create<UpdateStore>()((set, get) => ({
   ...initialState,
 
-  checkForUpdates: async () => {
+  checkForUpdates: async (opts) => {
     const runtime = detectRuntimeType()
     if (!runtime) return null
 
@@ -84,7 +84,7 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
         // update API here, or the dialog would surface OpenChamber's package
         // version and changelog instead of AX Code's.
         const desktopInfo = await withTimeout(
-          checkForDesktopUpdates(),
+          checkForDesktopUpdates(opts),
           UPDATE_CHECK_TIMEOUT_MS,
           (): UpdateInfo => ({ available: false, currentVersion: "", error: "Update check timed out" }),
         )

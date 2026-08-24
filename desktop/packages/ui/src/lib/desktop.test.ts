@@ -172,6 +172,25 @@ describe("desktop updater IPC", () => {
     restoreWindow()
   })
 
+  test("forwards the manual flag so user-initiated checks bypass the startup auto-update gate", async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = []
+    mockDesktopWindow({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        return { available: true, version: "1.1.2", currentVersion: "1.1.1" }
+      },
+    })
+
+    await checkForDesktopUpdates({ manual: true })
+    await checkForDesktopUpdates()
+
+    expect(calls).toEqual([
+      { command: "desktop_check_for_updates", args: { manual: true } },
+      { command: "desktop_check_for_updates", args: { manual: false } },
+    ])
+    restoreWindow()
+  })
+
   test("downloads updates through the Electron desktop bridge", async () => {
     const commands: string[] = []
     mockDesktopWindow({

@@ -457,14 +457,14 @@ export const stopAccessingDirectory = async (directoryPath: string): Promise<{ s
   return { success: true }
 }
 
-export const checkForDesktopUpdates = async (): Promise<UpdateInfo | null> => {
+export const checkForDesktopUpdates = async (opts?: { manual?: boolean }): Promise<UpdateInfo | null> => {
   if (!hasDesktopInvoke() || !isDesktopLocalOriginActive()) {
     return null
   }
 
   try {
     const tauri = getTauriGlobal()
-    const info = await tauri?.core?.invoke?.("desktop_check_for_updates")
+    const info = await tauri?.core?.invoke?.("desktop_check_for_updates", { manual: Boolean(opts?.manual) })
     return (info ?? null) as UpdateInfo | null
   } catch (error) {
     console.warn("Failed to check for updates (desktop)", error)

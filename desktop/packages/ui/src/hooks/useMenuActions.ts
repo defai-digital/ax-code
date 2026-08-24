@@ -119,7 +119,7 @@ export const useMenuActions = (onToggleMemoryDebug?: () => void) => {
     }
     checkUpdatesInFlightRef.current = true
 
-    void checkForUpdates()
+    void checkForUpdates({ manual: true })
       .then(() => {
         const { available, error } = useUpdateStore.getState()
         if (error) {
