@@ -56,10 +56,9 @@ export namespace ProviderError {
   /** Classifies context overflow shapes outside the standard APICallError. */
   export function isContextOverflow(input: unknown) {
     if (typeof input === "string") return isOverflow(input)
-    if (input instanceof Error) return isOverflow(input.message)
     if (!isRecord(input)) return false
     const nested = isRecord(input.error) ? input.error : undefined
-    if (nested?.code === "context_length_exceeded") return true
+    if (input.code === "context_length_exceeded" || nested?.code === "context_length_exceeded") return true
     const message =
       typeof nested?.message === "string" ? nested.message : typeof input.message === "string" ? input.message : ""
     return isOverflow(message)
@@ -68,21 +67,19 @@ export namespace ProviderError {
   /** Classifies non-standard SDK errors that did not arrive as APICallError. */
   export function isRequestTooLarge(input: unknown) {
     if (typeof input === "string") return isRequestTooLargeMessage(input)
-    if (input instanceof Error) {
-      if (isOverflow(input.message)) return false
-      const error = input as Error & { status?: unknown; statusCode?: unknown }
-      return isHttp413(error.statusCode) || isHttp413(error.status) || isRequestTooLargeMessage(input.message)
-    }
     if (!isRecord(input)) return false
     const nested = isRecord(input.error) ? input.error : undefined
     const message =
       typeof nested?.message === "string" ? nested.message : typeof input.message === "string" ? input.message : ""
-    if (isOverflow(message)) return false
+    if (input.code === "context_length_exceeded" || nested?.code === "context_length_exceeded" || isOverflow(message)) {
+      return false
+    }
     return (
       isHttp413(input.statusCode) ||
       isHttp413(input.status) ||
       isHttp413(nested?.statusCode) ||
       isHttp413(nested?.status) ||
+      input.code === "request_too_large" ||
       nested?.code === "request_too_large" ||
       isRequestTooLargeMessage(message)
     )

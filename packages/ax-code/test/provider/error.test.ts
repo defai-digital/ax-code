@@ -152,6 +152,18 @@ describe("provider error decoding", () => {
     ).toMatchObject({ type: "request_too_large" })
   })
 
+  test("classifies direct SDK error codes on Error instances", () => {
+    const contextOverflow = Object.assign(new Error("request failed"), {
+      code: "context_length_exceeded",
+      statusCode: 413,
+    })
+    const requestTooLarge = Object.assign(new Error("request failed"), { code: "request_too_large" })
+
+    expect(ProviderError.isContextOverflow(contextOverflow)).toBe(true)
+    expect(ProviderError.isRequestTooLarge(contextOverflow)).toBe(false)
+    expect(ProviderError.isRequestTooLarge(requestTooLarge)).toBe(true)
+  })
+
   test("classifies a stream context-overflow message without an error code", () => {
     const parsed = ProviderError.parseStreamError({
       type: "error",

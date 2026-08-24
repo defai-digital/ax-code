@@ -1222,6 +1222,14 @@ export namespace MessageV2 {
     return typeof maybe.toObject === "function" ? maybe.toObject() : e
   }
 
+  function providerRecordMessage(input: unknown, fallback: string) {
+    if (!isRecord(input)) return toErrorMessage(input, fallback)
+    const nested = isRecord(input.error) ? input.error : undefined
+    if (typeof nested?.message === "string" && nested.message.length > 0) return nested.message
+    if (typeof input.message === "string" && input.message.length > 0) return input.message
+    return fallback
+  }
+
   export function fromError(e: unknown, ctx: { providerID: ProviderID }): NonNullable<Assistant["error"]> {
     switch (true) {
       case e instanceof DOMException && e.name === "AbortError":
@@ -1378,6 +1386,27 @@ export namespace MessageV2 {
               {
                 cause: e,
               },
+            ).toObject()
+          }
+          // Some provider adapters throw plain records rather than Error
+          // instances or standard `{ type: "error" }` stream envelopes.
+          // Preserve parseStreamError priority above so canonical stream
+          // records retain their serialized responseBody, then classify the
+          // remaining record shapes before falling back to UnknownError.
+          if (ProviderError.isContextOverflow(e)) {
+            return new MessageV2.ContextOverflowError(
+              {
+                message: providerRecordMessage(e, "Input exceeds context window of this model"),
+              },
+              { cause: e },
+            ).toObject()
+          }
+          if (ProviderError.isRequestTooLarge(e)) {
+            return new MessageV2.RequestTooLargeError(
+              {
+                message: providerRecordMessage(e, "Provider rejected the request body as too large"),
+              },
+              { cause: e },
             ).toObject()
           }
         } catch {

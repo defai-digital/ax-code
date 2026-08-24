@@ -1102,11 +1102,42 @@ describe("session.message-v2.fromError", () => {
     expect(result.data.message).toContain("413")
   })
 
+  test("serializes a plain SDK record carrying HTTP 413", () => {
+    const result = MessageV2.fromError(
+      { statusCode: 413, message: "Provider request payload exceeded its limit" },
+      { providerID },
+    )
+
+    expect(MessageV2.RequestTooLargeError.isInstance(result)).toBe(true)
+    expect(result.data.message).toBe("Provider request payload exceeded its limit")
+  })
+
   test("serializes a non-standard SDK context-overflow Error", () => {
     const result = MessageV2.fromError(new Error("Prompt is too long for this model"), { providerID })
 
     expect(MessageV2.ContextOverflowError.isInstance(result)).toBe(true)
     expect(result.data.message).toContain("Prompt is too long")
+  })
+
+  test("serializes a non-standard SDK Error carrying a context-overflow code", () => {
+    const error = Object.assign(new Error("Provider request failed"), { code: "context_length_exceeded" })
+    const result = MessageV2.fromError(error, { providerID })
+
+    expect(MessageV2.ContextOverflowError.isInstance(result)).toBe(true)
+    expect(result.data.message).toBe("Provider request failed")
+  })
+
+  test("serializes a plain SDK record carrying nested context overflow", () => {
+    const result = MessageV2.fromError(
+      {
+        message: "Provider request failed",
+        error: { code: "context_length_exceeded", message: "Prompt is too long for this provider" },
+      },
+      { providerID },
+    )
+
+    expect(MessageV2.ContextOverflowError.isInstance(result)).toBe(true)
+    expect(result.data.message).toBe("Prompt is too long for this provider")
   })
 
   test("detects context overflow from context_length_exceeded code in response body", () => {
