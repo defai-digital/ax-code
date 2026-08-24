@@ -4,6 +4,7 @@ import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import {
   aggregateRunResults,
+  didLastRunFail,
   mapWithConcurrency,
   num,
   parseJUnit,
@@ -232,6 +233,22 @@ describe("script.test-ci", () => {
     expect(summary).toContain("- ignored harmless errors: 1")
     expect(summary).toContain("- max skipped across runs: 2")
     expect(summary).toContain("- recovery-2.xml (passed)")
+  })
+
+  test("treats --rerun-on-fail as last-run-wins", () => {
+    expect(didLastRunFail([])).toBe(true)
+    expect(
+      didLastRunFail([
+        { code: 1, file: "/tmp/a.xml", ignored: 0, stats: { tests: 1, failures: 0, skipped: 0, time: 1 } },
+        { code: 0, file: "/tmp/b.xml", ignored: 0, stats: { tests: 1, failures: 0, skipped: 0, time: 1 } },
+      ]),
+    ).toBe(false)
+    expect(
+      didLastRunFail([
+        { code: 1, file: "/tmp/a.xml", ignored: 0, stats: { tests: 1, failures: 0, skipped: 0, time: 1 } },
+        { code: 1, file: "/tmp/b.xml", ignored: 0, stats: { tests: 1, failures: 1, skipped: 0, time: 1 } },
+      ]),
+    ).toBe(true)
   })
 
   test("defaults to deterministic when no positional group is provided", () => {

@@ -262,6 +262,10 @@ async function mergeCoverageReports(blobDir: string, coverageDir: string, ignore
   if (!existsSync(lcovFile)) throw new Error(`Vitest coverage merge did not create ${lcovFile}`)
 }
 
+export function didLastRunFail(runs: Result[]) {
+  return (runs.at(-1)?.code ?? 1) !== 0
+}
+
 export function aggregateRunResults(group: string, run: number, dir: string, results: Result[]): Result {
   if (results.length === 0) throw new Error("Cannot aggregate an empty test run")
   const coverageDirs = new Set(results.flatMap((result) => (result.coverageDir ? [result.coverageDir] : [])))
@@ -397,7 +401,7 @@ async function main() {
   }
 
   await summary(group, runs)
-  const failed = runs.some((run) => run.code !== 0)
+  const failed = didLastRunFail(runs)
   if (coverageOn() && !failed) {
     const coverageDir = runs[runs.length - 1]?.coverageDir
     if (!coverageDir) throw new Error("Coverage was requested but the test run did not retain its output directory")

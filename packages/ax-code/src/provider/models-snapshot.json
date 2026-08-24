@@ -140259,6 +140259,31 @@
           "output": 0
         }
       },
+      "bytedance/seedance-2.0-mini": {
+        "id": "bytedance/seedance-2.0-mini",
+        "name": "Seedance 2.0 Mini",
+        "description": "Video model for prompt-guided generation, editing, and motion workflows",
+        "family": "seed",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": false,
+        "release_date": "2026-06-22",
+        "last_updated": "2026-06-22",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "video"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
       "bytedance/seedance-v1.0-pro-fast": {
         "id": "bytedance/seedance-v1.0-pro-fast",
         "name": "Seedance v1.0 Pro Fast",
@@ -176184,6 +176209,34 @@
         "limit": {
           "context": 128000,
           "output": 128000
+        }
+      },
+      "mistralai/devstral-2512": {
+        "id": "mistralai/devstral-2512",
+        "name": "Devstral 2",
+        "description": "Devstral 2 is a state-of-the-art open-source model by Mistral AI specializing in agentic coding. It is a 123B-parameter dense transformer model supporting a 256K context window. Devstral 2 supports exploring...",
+        "family": "devstral",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-12",
+        "release_date": "2025-12-09",
+        "last_updated": "2025-12-09",
+        "modalities": {
+          "input": [
+            "text",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
         }
       },
       "mistralai/mistral-small-2603": {
